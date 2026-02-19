@@ -230,5 +230,10 @@
 - **WorkspaceScoped**: This is a **custom context** managed via `InjectableContext`. It is NOT a standard bean.
 - **Injection**: Never `@Inject WorkspaceScopeContext`. Use `Arc.container().getActiveContext(WorkspaceScoped.class)`.
 
+### 9.4 Concurrency
+- **Synchronized Blocks**: We use regular `synchronized` blocks for critical sections (e.g., `WorkspaceScopeContext`) relying on **JDK 25 JEP 491** to prevent virtual thread pinning.
+- **Risk**: On JDK 21 runtimes, this will pin carrier threads. This is an accepted trade-off to keep the code idiomatic for the target platform (JDK 25).
+
+
 
 

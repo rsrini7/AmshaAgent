@@ -23,8 +23,12 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **Rationale:** To prevent "Split Package" warnings and ensure native-image safety, we prioritized Quarkus's static build-time augmentation over legacy CDI portable extensions. This allows Maven to correctly index the custom scope without requiring a manual `services` file.
 
 ### 2. Locking Strategy
-*   **Deviation:** Retained **`ReentrantLock`** in `WorkspaceScopeContext` despite JDK 25 offering a fix for `synchronized` pinning (JEP 491).
-*   **Rationale:** To ensure "Hybrid Stability." While JEP 491 fixes pinning in JDK 25, many production environments still run JDK 21/23. Keeping `ReentrantLock` ensures the virtual threads do not pin the carrier across all LTS versions.
+*   **Deviation:** Uses **`synchronized`** blocks instead of `ReentrantLock`.
+*   **Rationale:** Aligned with **JDK 25 (JEP 491)** which eliminates virtual thread pinning on synchronized monitors. **Risk:** On JDK 21 runtimes, this *will* cause thread pinning. The architecture assumes a forward-looking JDK 25 deployment target or accepts the pinning penalty on JDK 21.
+
+### 2a. OTel Stub (`AgentOtelContext`)
+*   **Deviation:** `AgentOtelContext` is now a CDI bean (`@ApplicationScoped`) but methods still return `Span.getInvalid()` (No-op).
+*   **Rationale:** Deferred full OTel instrumentation to Phase 9. Structural refactor completed in Phase 7 to support dependency injection.
 
 ### 3. Module Boundaries & Jandex
 *   **Deviation:** Explicit implementation of **Jandex Indexing** (via `jandex-maven-plugin`) for the `arcclaw-core` module.
