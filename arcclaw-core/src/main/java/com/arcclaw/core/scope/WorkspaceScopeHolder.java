@@ -50,6 +50,7 @@ public final class WorkspaceScopeHolder {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("sessionId must not be null or blank");
         }
+        System.out.println("[ArcClaw Holder] Setting session: " + sessionId + " on thread: " + Thread.currentThread());
         CURRENT_SESSION.set(sessionId);
     }
 
@@ -58,7 +59,10 @@ public final class WorkspaceScopeHolder {
      * if no session is active.
      */
     public static String get() {
-        return CURRENT_SESSION.get();
+        String s = CURRENT_SESSION.get();
+        // System.out.println("[ArcClaw Holder] Getting session: " + s + " on thread: "
+        // + Thread.currentThread());
+        return s;
     }
 
     /**

@@ -27,9 +27,12 @@ class WorkspaceScopeTest {
     @Inject
     ScopedCounter counter;
 
+    @Inject
+    WorkspaceScopeManager scopeManager;
+
     @AfterEach
     void cleanup() {
-        WorkspaceScopeHolder.clear();
+        scopeManager.clear();
     }
 
     @Test
@@ -44,13 +47,13 @@ class WorkspaceScopeTest {
         for (int i = 0; i < threadCount; i++) {
             Thread.ofVirtual().name("ws-test-", i).start(() -> {
                 try {
-                    WorkspaceScopeHolder.set(sessionId);
+                    scopeManager.setSessionId(sessionId);
                     barrier.await(); // synchronize start
                     counter.increment();
                 } catch (Throwable t) {
                     failure.compareAndSet(null, t);
                 } finally {
-                    WorkspaceScopeHolder.clear();
+                    scopeManager.clear();
                     done.countDown();
                 }
             });
@@ -60,12 +63,12 @@ class WorkspaceScopeTest {
         assertNull(failure.get(), () -> "Thread failed: " + failure.get());
 
         // Verify: all increments hit the same instance
-        WorkspaceScopeHolder.set(sessionId);
+        scopeManager.setSessionId(sessionId);
         try {
             assertEquals(threadCount, counter.getCount(),
                     "All threads should share the same @WorkspaceScoped bean instance");
         } finally {
-            WorkspaceScopeHolder.clear();
+            scopeManager.clear();
         }
     }
 
@@ -75,31 +78,31 @@ class WorkspaceScopeTest {
         final String sessionB = "session-B";
 
         // Increment in session A
-        WorkspaceScopeHolder.set(sessionA);
+        scopeManager.setSessionId(sessionA);
         counter.increment();
         counter.increment();
-        WorkspaceScopeHolder.clear();
+        scopeManager.clear();
 
         // Increment in session B
-        WorkspaceScopeHolder.set(sessionB);
+        scopeManager.setSessionId(sessionB);
         counter.increment();
         int countB = counter.getCount();
-        WorkspaceScopeHolder.clear();
+        scopeManager.clear();
 
         // Session B should have its own counter starting from 0
         assertEquals(1, countB,
                 "Different sessions must have isolated @WorkspaceScoped bean instances");
 
         // Session A should still have count 2
-        WorkspaceScopeHolder.set(sessionA);
+        scopeManager.setSessionId(sessionA);
         assertEquals(2, counter.getCount());
-        WorkspaceScopeHolder.clear();
+        scopeManager.clear();
     }
 
     @Test
     void noSession_throwsContextNotActive() {
-        // No WorkspaceScopeHolder.set() — scope is inactive
-        WorkspaceScopeHolder.clear();
+        // No set() — scope is inactive
+        scopeManager.clear();
         assertThrows(ContextNotActiveException.class, () -> counter.increment(),
                 "Accessing @WorkspaceScoped bean without active session should throw ContextNotActiveException");
     }

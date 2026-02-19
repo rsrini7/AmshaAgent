@@ -88,6 +88,7 @@
 **Resolution:**
 - Switch to `InheritableThreadLocal` in `WorkspaceScopeHolder`.
 - Ensure `isActive()` explicitly checks `WorkspaceScopeHolder.get() != null`.
+- Add `Thread.yield()` after `set()` in tests to ensure propagation before proxy access.
 
 ### 🟡 Warning: Thread Pinning
 **Symptom:** Performance drop on high concurrency.
