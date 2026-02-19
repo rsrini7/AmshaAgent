@@ -9,6 +9,11 @@ quarkus:
     name: arcclaw
     version: "4.1.0"
 
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
+
   # ---------------------------------------------------------------------------
   # HTTP / REST
   # ---------------------------------------------------------------------------

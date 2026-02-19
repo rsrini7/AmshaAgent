@@ -1,6 +1,5 @@
 package com.arcclaw.core.security;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
@@ -13,7 +12,7 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "encrypted_secrets")
-public class EncryptedSecret extends PanacheEntityBase {
+public class EncryptedSecret {
 
     @EmbeddedId
     public EncryptedSecretId id;
@@ -28,10 +27,6 @@ public class EncryptedSecret extends PanacheEntityBase {
 
     @Column(nullable = false)
     public int version;
-
-    public static EncryptedSecret findByKey(String sessionId, String keyName) {
-        return find("id.sessionId = ?1 and id.keyName = ?2", sessionId, keyName).firstResult();
-    }
 
     // Composite Key Class
     @Embeddable

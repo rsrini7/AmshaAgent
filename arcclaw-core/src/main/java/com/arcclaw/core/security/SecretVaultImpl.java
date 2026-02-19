@@ -16,6 +16,9 @@ public class SecretVaultImpl implements SecretVault {
     @Inject
     AesGcmSivCipher cipher;
 
+    @Inject
+    EncryptedSecretRepository repository;
+
     @Override
     public void init(String sessionId) {
         // Validation only - key derivation happens on demand to avoid holding keys in
@@ -39,7 +42,7 @@ public class SecretVaultImpl implements SecretVault {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
 
             // 3. Persist
-            EncryptedSecret entity = EncryptedSecret.findByKey(sessionId, keyName);
+            EncryptedSecret entity = repository.findByKey(sessionId, keyName);
             if (entity == null) {
                 entity = new EncryptedSecret();
                 entity.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
@@ -48,7 +51,7 @@ public class SecretVaultImpl implements SecretVault {
             entity.nonce = result.nonce();
             entity.version = 1;
 
-            entity.persist();
+            repository.persist(entity);
         } // sessionKey auto-closed (wiped) here
     }
 
@@ -60,7 +63,7 @@ public class SecretVaultImpl implements SecretVault {
         }
 
         // 1. Fetch
-        EncryptedSecret entity = EncryptedSecret.findByKey(sessionId, keyName);
+        EncryptedSecret entity = repository.findByKey(sessionId, keyName);
         if (entity == null) {
             return Optional.empty();
         }
@@ -81,8 +84,6 @@ public class SecretVaultImpl implements SecretVault {
     @Transactional
     public void rotateSecrets(String sessionId, String oldPepper, String newPepper) {
         // Not implemented in Phase 2 iteration 1
-        // Requires separating Pepper injection logic to allow "old" and "new" peppers
-        // simultaneously.
         throw new UnsupportedOperationException("Key rotation not yet implemented in Phase 2");
     }
 }

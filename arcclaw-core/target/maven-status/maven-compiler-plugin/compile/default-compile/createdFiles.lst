@@ -12,4 +12,5 @@ com\arcclaw\core\scope\WorkspaceScopeContext.class
 com\arcclaw\core\scope\WorkspaceScopeContext$SessionStore.class
 com\arcclaw\core\scope\WorkspaceScopeContext$WorkspaceContextState.class
 com\arcclaw\core\scope\WorkspaceScopeHolder.class
+com\arcclaw\core\security\EncryptedSecretRepository.class
 com\arcclaw\core\security\EncryptedSecret.class

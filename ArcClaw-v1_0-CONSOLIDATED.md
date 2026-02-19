@@ -3143,7 +3143,7 @@ public class WorkspaceContextProducer {
     <quarkus.version>3.8.3</quarkus.version>
     <langchain4j.version>1.0.0-beta5</langchain4j.version>
     <langchain4j.quarkus.version>3.8.3</langchain4j.quarkus.version>
-    <bouncycastle.version>1.78.1</bouncycastle.version>
+    <bouncycastle.version>1.83</bouncycastle.version>
   </properties>
 
   <dependencyManagement>

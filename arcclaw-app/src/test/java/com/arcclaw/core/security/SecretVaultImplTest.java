@@ -22,6 +22,9 @@ public class SecretVaultImplTest {
     @Inject
     AesGcmSivCipher cipher;
 
+    @Inject
+    EncryptedSecretRepository repository;
+
     private static final String TEST_SESSION_ID = "test-session-auth";
     private static final String API_KEY_NAME = "OPENAI_API_KEY";
     private static final byte[] SECRET_PAYLOAD = "sk-live-test-1234567890".getBytes(StandardCharsets.UTF_8);
@@ -36,7 +39,7 @@ public class SecretVaultImplTest {
     @AfterEach
     @Transactional
     void cleanup() {
-        EncryptedSecret.delete("id.sessionId", TEST_SESSION_ID);
+        repository.deleteBySessionId(TEST_SESSION_ID);
         WorkspaceScopeHolder.clear();
     }
 
@@ -60,7 +63,7 @@ public class SecretVaultImplTest {
         vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
         // 2. Tamper: Direct DB access to flip a bit in ciphertext
-        EncryptedSecret entity = EncryptedSecret.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+        EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
         assertNotNull(entity);
 
         // Flip the last bit of the ciphertext
@@ -83,7 +86,7 @@ public class SecretVaultImplTest {
         vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
         // 2. Steal ciphertext/nonce
-        EncryptedSecret sorceEntity = EncryptedSecret.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+        EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
 
         // 3. Inject into GITHUB_TOKEN slot
         insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.ciphertext, sorceEntity.nonce);
@@ -94,7 +97,7 @@ public class SecretVaultImplTest {
 
     @Transactional
     void saveEntity(EncryptedSecret entity) {
-        entity.persist();
+        repository.persist(entity);
     }
 
     @Transactional
@@ -104,6 +107,6 @@ public class SecretVaultImplTest {
         forged.ciphertext = ciphertext;
         forged.nonce = nonce;
         forged.version = 1;
-        forged.persist();
+        repository.persist(forged);
     }
 }
