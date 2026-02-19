@@ -81,6 +81,14 @@
 - Add `jandex-maven-plugin` or empty `beans.xml` to `arcclaw-core`.
 - Ensure `quarkus-extension.properties` is in `src/main/resources/META-INF`.
 
+
+### 🔴 Failure: `ContextNotActiveException` in Tests
+**Symptom:** `ContextNotActiveException` when running tests, even if `WorkspaceScopeHolder.set()` seems to be called.
+**Root Cause:** Thread isolation. Tests or frameworks may spawn child threads (or virtual threads acting as such) where standard `ThreadLocal` context is lost.
+**Resolution:**
+- Switch to `InheritableThreadLocal` in `WorkspaceScopeHolder`.
+- Ensure `isActive()` explicitly checks `WorkspaceScopeHolder.get() != null`.
+
 ### 🟡 Warning: Thread Pinning
 **Symptom:** Performance drop on high concurrency.
 **Root Cause:** `synchronized` used on older JDKs.

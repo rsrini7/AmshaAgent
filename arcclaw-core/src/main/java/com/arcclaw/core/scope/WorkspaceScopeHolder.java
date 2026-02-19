@@ -34,7 +34,7 @@ package com.arcclaw.core.scope;
  */
 public final class WorkspaceScopeHolder {
 
-    private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
+    private static final InheritableThreadLocal<String> CURRENT_SESSION = new InheritableThreadLocal<>();
 
     private WorkspaceScopeHolder() {
         // utility class — no instantiation
@@ -50,7 +50,7 @@ public final class WorkspaceScopeHolder {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("sessionId must not be null or blank");
         }
-        CURRENT.set(sessionId);
+        CURRENT_SESSION.set(sessionId);
     }
 
     /**
@@ -58,7 +58,7 @@ public final class WorkspaceScopeHolder {
      * if no session is active.
      */
     public static String get() {
-        return CURRENT.get();
+        return CURRENT_SESSION.get();
     }
 
     /**
@@ -69,6 +69,6 @@ public final class WorkspaceScopeHolder {
      * unnecessary.
      */
     public static void clear() {
-        CURRENT.remove();
+        CURRENT_SESSION.remove();
     }
 }
