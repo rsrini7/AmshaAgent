@@ -1,0 +1,14 @@
+Compiled from "InjectableContext.java"
+public interface io.quarkus.arc.InjectableContext extends jakarta.enterprise.context.spi.AlterableContext {
+  public abstract void destroy();
+  public abstract io.quarkus.arc.InjectableContext$ContextState getState();
+  public default io.quarkus.arc.InjectableContext$ContextState getStateIfActive();
+  public default <T> T getIfActive(jakarta.enterprise.context.spi.Contextual<T>, java.util.function.Function<jakarta.enterprise.context.spi.Contextual<T>, jakarta.enterprise.context.spi.CreationalContext<T>>);
+  public default void destroy(io.quarkus.arc.InjectableContext$ContextState);
+  public default boolean isNormal();
+}
+Compiled from "InjectableContext.java"
+public interface io.quarkus.arc.InjectableContext$ContextState {
+  public abstract java.util.Map<io.quarkus.arc.InjectableBean<?>, java.lang.Object> getContextualInstances();
+  public default boolean isValid();
+}

@@ -1,0 +1,20 @@
+Compiled from "ContextConfigurator.java"
+public final class io.quarkus.arc.processor.ContextConfigurator {
+  java.lang.Class<? extends java.lang.annotation.Annotation> scopeAnnotation;
+  boolean isNormal;
+  java.util.function.Function<io.quarkus.gizmo.MethodCreator, io.quarkus.gizmo.ResultHandle> creator;
+  final java.util.Map<java.lang.String, java.lang.Object> params;
+  io.quarkus.arc.processor.ContextConfigurator(java.lang.Class<? extends java.lang.annotation.Annotation>, java.util.function.Consumer<io.quarkus.arc.processor.ContextConfigurator>);
+  public io.quarkus.arc.processor.ContextConfigurator param(java.lang.String, java.lang.Class<?>);
+  public io.quarkus.arc.processor.ContextConfigurator param(java.lang.String, int);
+  public io.quarkus.arc.processor.ContextConfigurator param(java.lang.String, long);
+  public io.quarkus.arc.processor.ContextConfigurator param(java.lang.String, double);
+  public io.quarkus.arc.processor.ContextConfigurator param(java.lang.String, java.lang.String);
+  public io.quarkus.arc.processor.ContextConfigurator param(java.lang.String, boolean);
+  public io.quarkus.arc.processor.ContextConfigurator normal();
+  public io.quarkus.arc.processor.ContextConfigurator normal(boolean);
+  public io.quarkus.arc.processor.ContextConfigurator contextClass(java.lang.Class<? extends io.quarkus.arc.InjectableContext>);
+  public io.quarkus.arc.processor.ContextConfigurator creator(java.lang.Class<? extends io.quarkus.arc.ContextCreator>);
+  public io.quarkus.arc.processor.ContextConfigurator creator(java.util.function.Function<io.quarkus.gizmo.MethodCreator, io.quarkus.gizmo.ResultHandle>);
+  public void done();
+}

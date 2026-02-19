@@ -1,0 +1,8 @@
+Compiled from "ContextRegistrar.java"
+public interface io.quarkus.arc.processor.ContextRegistrar extends io.quarkus.arc.processor.BuildExtension {
+  public abstract void register(io.quarkus.arc.processor.ContextRegistrar$RegistrationContext);
+}
+Compiled from "ContextRegistrar.java"
+public interface io.quarkus.arc.processor.ContextRegistrar$RegistrationContext extends io.quarkus.arc.processor.BuildExtension$BuildContext {
+  public abstract io.quarkus.arc.processor.ContextConfigurator configure(java.lang.Class<? extends java.lang.annotation.Annotation>);
+}
