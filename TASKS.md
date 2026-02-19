@@ -44,6 +44,7 @@
 ---
 
 ## Phase 3 — Sandbox Layer (Process Isolation)
+- [x] `AgentOtelContext` stub (no-op `Span.getInvalid()`, Phase 9 placeholder) <!-- id: 27 -->
 - [x] `@RequiresSecret` + `@RequiresSecrets` repeatable annotations <!-- id: 17 -->
 - [x] `ProcessIsolationExecutor` (`@ApplicationScoped`) <!-- id: 18 -->
   - [x] Podman strategy: resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`) <!-- id: 19 -->
@@ -54,6 +55,7 @@
   - [x] Named containers + `activeContainerNames` tracking <!-- id: 25 -->
   - [x] `@PreDestroy` graceful container shutdown (10s grace) <!-- id: 26 -->
   - [x] OTel child span integration <!-- id: 20 -->
+- [x] `ProcessIsolationExecutorTest` (NONE strategy, 3 tests passing) <!-- id: 28 -->
 
 ---
 
