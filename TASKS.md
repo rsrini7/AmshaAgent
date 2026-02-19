@@ -14,19 +14,20 @@
 - [x] Create `native-image.properties` (fine-grained BouncyCastle build/run-time flags)
 - [x] Write complete `application.yaml` (HTTP, SQLite, LangChain4J, OTel, health, scheduler, profiles)
 - [x] Validate Maven build succeeds: `mvnw clean compile`
+- [x] Create `TROUBLESHOOTING.md` (Master Architecture, Design Decisions, & Failure Recovery Guide)
 
 ---
 
 ## Phase 1 — Core Scope Layer (`@WorkspaceScoped` CDI)
-- [ ] `@WorkspaceScoped` annotation (`@NormalScope(passivating = false)`)
-- [ ] `WorkspaceScopeHolder` (ThreadLocal holder, JDK 25 ScopedValue migration comments)
-- [ ] `WorkspaceScopeContext` (Arc `InjectableContext`, per-session `ReentrantLock`, `ConcurrentHashMap` store)
-- [ ] `WorkspaceScopeExtension` (CDI Portable Extension + `META-INF/services/jakarta.enterprise.inject.spi.Extension`)
-- [ ] `WorkspaceScopeProcessor` (Quarkus `@BuildStep` — in deployment module)
-- [ ] `WorkspaceScopeRecorder` (`@Recorder` — in deployment module)
-- [ ] `WorkspaceContext` bean (`@WorkspaceScoped`, non-record, no-arg constructor)
-- [ ] `WorkspaceContextProducer` (`@Produces @WorkspaceScoped`)
-- [ ] Verify: `@WorkspaceScoped` beans resolve correctly in JVM dev mode
+- [x] `@WorkspaceScoped` annotation (`@NormalScope(passivating = false)`)
+- [x] `WorkspaceScopeHolder` (ThreadLocal holder, JDK 25 ScopedValue migration comments)
+- [x] `WorkspaceScopeContext` (Arc `InjectableContext`, `synchronized` per-session store — JEP 491)
+- [x] ~~`WorkspaceScopeExtension`~~ Not needed — Quarkus CDI Lite uses @BuildStep
+- [x] `WorkspaceScopeProcessor` (Quarkus `@BuildStep` — in deployment module)
+- [x] ~~`WorkspaceScopeRecorder`~~ Not needed — ContextConfigurator.contextClass() handles it
+- [ ] `WorkspaceContext` bean (`@WorkspaceScoped`, non-record, no-arg constructor) — Phase 2
+- [ ] `WorkspaceContextProducer` (`@Produces @WorkspaceScoped`) — Phase 2
+- [x] Verify: `@WorkspaceScoped` beans resolve correctly via JUnit test
 
 ---
 
