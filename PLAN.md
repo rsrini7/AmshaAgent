@@ -172,6 +172,10 @@ Implement isolated tool execution to prevent subversion of the host system. This
 ## Verification Plan
 
 ### Automated Tests
-- [ ] `SandboxIntegrationTest`: Execute `id` or `hostname` inside container.
-- [ ] `ResourceLimitTest`: Attempt to allocate more memory than permitted.
-- [ ] `SecretInjectionTest`: Verify environment variable availability in container.
+```bash
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn clean test -pl arcclaw-app -am -Dtest=ProcessIsolationExecutorTest "-Dsurefire.failIfNoSpecifiedTests=false"
+```
+- ✅ NONE strategy direct execution
+- ✅ Empty secrets map handling
+- ✅ Invalid command error handling

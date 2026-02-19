@@ -1,4 +1,6 @@
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\ArcClawInfo.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\observability\AgentOtelContext.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\sandbox\ProcessIsolationExecutor.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\scope\ScopedCounter.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\scope\WorkspaceContext.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\scope\WorkspaceContextProducer.java
@@ -11,6 +13,8 @@ H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\AutonomyLevel
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\AutonomyPolicy.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\EncryptedSecret.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\EncryptedSecretRepository.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\RequiresSecret.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\RequiresSecrets.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\SecretVault.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\SecretVaultImpl.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\ToolOperation.java

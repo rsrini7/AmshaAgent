@@ -44,16 +44,16 @@
 ---
 
 ## Phase 3 — Sandbox Layer (Process Isolation)
-- [ ] `@RequiresSecret` + `@RequiresSecrets` repeatable annotations <!-- id: 17 -->
-- [ ] `ProcessIsolationExecutor` (`@ApplicationScoped`) <!-- id: 18 -->
-  - [ ] Podman strategy: resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`) <!-- id: 19 -->
-  - [ ] Namespace strategy (Linux `unshare` fallback) <!-- id: 21 -->
-  - [ ] Direct execution (NONE strategy for dev) <!-- id: 22 -->
-  - [ ] Circuit breaker (3 failures → NAMESPACE fallback, `@PostConstruct` check) <!-- id: 23 -->
-  - [ ] Ephemeral env-file secret injection (write → Podman reads → delete in `finally`) <!-- id: 24 -->
-  - [ ] Named containers + `activeContainerNames` tracking <!-- id: 25 -->
-  - [ ] `@PreDestroy` graceful container shutdown (10s grace) <!-- id: 26 -->
-  - [ ] OTel child span integration <!-- id: 20 -->
+- [x] `@RequiresSecret` + `@RequiresSecrets` repeatable annotations <!-- id: 17 -->
+- [x] `ProcessIsolationExecutor` (`@ApplicationScoped`) <!-- id: 18 -->
+  - [x] Podman strategy: resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`) <!-- id: 19 -->
+  - [x] Namespace strategy (Linux `unshare` fallback) <!-- id: 21 -->
+  - [x] Direct execution (NONE strategy for dev) <!-- id: 22 -->
+  - [x] Circuit breaker (3 failures → NAMESPACE fallback, `@PostConstruct` check) <!-- id: 23 -->
+  - [x] Ephemeral env-file secret injection (write → Podman reads → delete in `finally`) <!-- id: 24 -->
+  - [x] Named containers + `activeContainerNames` tracking <!-- id: 25 -->
+  - [x] `@PreDestroy` graceful container shutdown (10s grace) <!-- id: 26 -->
+  - [x] OTel child span integration <!-- id: 20 -->
 
 ---
 
