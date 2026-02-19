@@ -132,3 +132,46 @@ mvn test -pl arcclaw-app -Dtest=SecretVaultImplTest
 - ✅ AEAD Tamper detection
 - ✅ AAD Key swapping protection
 - ✅ Active Session requirement enforced
+
+---
+
+# Phase 3 — Sandbox Layer (Process Isolation)
+
+Implement isolated tool execution to prevent subversion of the host system. This layer leverages Podman (primary) or Linux Namespaces (fallback) to enforce resource constraints and provide fresh execution environments.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Podman-First Strategy**: Podman is preferred for its rootless operation and strong OCI-based isolation. The system will detect Podman availability at startup.
+
+> [!TIP]
+> **Ephemeral Secret Injection**: Tools requiring secrets will receive them via a temporary environment file (`.env`) written to a secured workspace path, read by the container, and deleted immediately after execution.
+
+## Proposed Changes
+
+### Core Module — Process Isolation
+
+#### [NEW] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Main service for running commands in isolated environments.
+- Supports `ProcessResult` capture (stdout, stderr, exit code).
+- Injects resource limits from `application.yaml`.
+
+#### [NEW] [RequiresSecret.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/RequiresSecret.java)
+- Annotation to mark tool methods requiring specific vault keys.
+
+### App Module — Configuration & Integration
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Configure sandbox defaults (`strategy`, `container-image`, `memory-limit`, `cpu-limit`).
+
+#### [NEW] [SandboxIntegrationTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/sandbox/SandboxIntegrationTest.java)
+- Verify Podman command execution.
+- Verify resource limit enforcement (e.g., OOM kill detection).
+- Verify secret injection and cleanup.
+
+## Verification Plan
+
+### Automated Tests
+- [ ] `SandboxIntegrationTest`: Execute `id` or `hostname` inside container.
+- [ ] `ResourceLimitTest`: Attempt to allocate more memory than permitted.
+- [ ] `SecretInjectionTest`: Verify environment variable availability in container.

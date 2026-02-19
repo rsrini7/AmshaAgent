@@ -25,36 +25,35 @@
 - [x] ~~`WorkspaceScopeExtension`~~ Not needed — Quarkus CDI Lite uses @BuildStep
 - [x] `WorkspaceScopeProcessor` (Quarkus `@BuildStep` — in deployment module)
 - [x] ~~`WorkspaceScopeRecorder`~~ Not needed — ContextConfigurator.contextClass() handles it
-- [ ] `WorkspaceContext` bean (`@WorkspaceScoped`, non-record, no-arg constructor) — Phase 2
-- [ ] `WorkspaceContextProducer` (`@Produces @WorkspaceScoped`) — Phase 2
-- [x] Verify: `@WorkspaceScoped` beans resolve correctly via JUnit test
+- [x] Verify: `@WorkspaceScoped` beans resolve correctly via JUnit test <!-- id: 4 -->
 
 ---
 
 ## Phase 2 — Security Layer (Vault & Crypto)
-- [x] `VaultKey` (AutoCloseable, 32-byte AES-256 key, wipe-on-close)
-- [x] `Argon2idKeyDerivation` (64 MB memory, 3 iterations, 16-byte salt)
-- [x] `AesGcmSivCipher` (encrypt/decrypt/reEncrypt with nonce-misuse resistance)
-- [x] `EncryptedSecret` (Panache entity) + `EncryptedSecretId` (composite key)
-- [x] `SecretVault` interface
-- [x] `SecretVaultImpl` (`@Dependent`, Argon2id init, batch rotation via `reEncrypt()`, memory wipe)
-- [x] `AutonomyPolicy` interface + `AutonomyLevel` / `ToolOperation` enums
-- [x] Unit tests: `SecretVaultImplTest` (store/retrieve, nonce misuse, AAD swap, rotation, tamper detection)
-- [x] Unit tests: `WorkspaceGovernanceTest` (context injection, policy logic)
+- [x] `VaultKey` (Auto-wiping wrapper) <!-- id: 6 -->
+- [x] `Argon2idKeyDerivation` (Key stretching) <!-- id: 7 -->
+- [x] `AesGcmSivCipher` (Encryption) <!-- id: 8 -->
+- [x] `EncryptedSecret` (JPA Entity) <!-- id: 9 -->
+- [x] `SecretVault` interface <!-- id: 14 -->
+- [x] `SecretVaultImpl` (Iteration 1) <!-- id: 11 -->
+- [x] `WorkspaceContext` bean (`@WorkspaceScoped`, no-arg constructor) <!-- id: 1 -->
+- [x] `WorkspaceContextProducer` (`@Produces @WorkspaceScoped`) <!-- id: 2 -->
+- [x] `SecretVaultImplTest` (Iteration 1) <!-- id: 10 -->
+- [x] `WorkspaceGovernanceTest` (context injection, policy logic) <!-- id: 12 -->
 
 ---
 
-## Phase 3 — Sandbox Layer (ProcessIsolation)
-- [ ] `@RequiresSecret` + `@RequiresSecrets` repeatable annotations
-- [ ] `ProcessIsolationExecutor` (`@ApplicationScoped`)
-  - [ ] Podman strategy: resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`)
-  - [ ] Namespace strategy (Linux `unshare` fallback)
-  - [ ] Direct execution (NONE strategy for dev)
-  - [ ] Circuit breaker (3 failures → NAMESPACE fallback, `@PostConstruct` check)
-  - [ ] Ephemeral env-file secret injection (write → Podman reads → delete in `finally`)
-  - [ ] Named containers + `activeContainerNames` tracking
-  - [ ] `@PreDestroy` graceful container shutdown (10s grace)
-  - [ ] OTel child span integration
+## Phase 3 — Sandbox Layer (Process Isolation)
+- [ ] `@RequiresSecret` + `@RequiresSecrets` repeatable annotations <!-- id: 17 -->
+- [ ] `ProcessIsolationExecutor` (`@ApplicationScoped`) <!-- id: 18 -->
+  - [ ] Podman strategy: resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`) <!-- id: 19 -->
+  - [ ] Namespace strategy (Linux `unshare` fallback) <!-- id: 21 -->
+  - [ ] Direct execution (NONE strategy for dev) <!-- id: 22 -->
+  - [ ] Circuit breaker (3 failures → NAMESPACE fallback, `@PostConstruct` check) <!-- id: 23 -->
+  - [ ] Ephemeral env-file secret injection (write → Podman reads → delete in `finally`) <!-- id: 24 -->
+  - [ ] Named containers + `activeContainerNames` tracking <!-- id: 25 -->
+  - [ ] `@PreDestroy` graceful container shutdown (10s grace) <!-- id: 26 -->
+  - [ ] OTel child span integration <!-- id: 20 -->
 
 ---
 
