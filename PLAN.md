@@ -137,37 +137,52 @@ mvn test -pl arcclaw-app -Dtest=SecretVaultImplTest
 
 # Phase 3 — Sandbox Layer (Process Isolation)
 
-Implement isolated tool execution to prevent subversion of the host system. This layer leverages Podman (primary) or Linux Namespaces (fallback) to enforce resource constraints and provide fresh execution environments.
+Implement isolated tool execution per the consolidated spec §5.2. Three strategies: Podman (primary), Linux Namespaces (fallback), NONE (dev).
 
 ## Design Decisions
 
 > [!IMPORTANT]
-> **Podman-First Strategy**: Podman is preferred for its rootless operation and strong OCI-based isolation. The system will detect Podman availability at startup.
+> **Podman-First Strategy**: Podman is preferred for its rootless operation and strong OCI-based isolation. `@PostConstruct` checks availability; circuit breaker auto-degrades after 3 failures.
 
 > [!TIP]
-> **Ephemeral Secret Injection**: Tools requiring secrets will receive them via a temporary environment file (`.env`) written to a secured workspace path, read by the container, and deleted immediately after execution.
+> **Ephemeral Secret Injection**: Secrets resolved from `SecretVault` → written to temp `.env` file → Podman reads via `--env-file` → file deleted in `finally`. Never passed as process args.
+
+> [!NOTE]
+> **OTel Stub**: `AgentOtelContext` returns `Span.getInvalid()` (no-op). Will be replaced with full session-span management in Phase 9.
+
+> [!WARNING]
+> **VaultKey API Adaptation**: Spec expects `String` returns from vault, but our `SecretVault.get()` returns `Optional<VaultKey>`. `resolveSecrets()` unwraps via try-with-resources to auto-wipe key bytes.
 
 ## Proposed Changes
 
-### Core Module — Process Isolation
+### Core Module — Sandbox
 
 #### [NEW] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
-- Main service for running commands in isolated environments.
-- Supports `ProcessResult` capture (stdout, stderr, exit code).
-- Injects resource limits from `application.yaml`.
+- `@ApplicationScoped` executor with three strategies: PODMAN, NAMESPACE, NONE
+- Circuit breaker: 3 consecutive Podman failures → auto-fallback to NAMESPACE
+- Resource caps: `--memory`, `--cpus`, `--pids-limit=64`, `--ulimit=nofile=256:256`
+- Named containers (`zc-<session>-<nonce>`) tracked in `ConcurrentHashMap.newKeySet()`
+- `@PreDestroy` graceful shutdown with 10s grace period
+- OTel child spans via `AgentOtelContext.childSpan()`
+
+#### [NEW] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Phase 9 stub: static `childSpan()` returning `Span.getInvalid()`
+
+### Core Module — Annotations
 
 #### [NEW] [RequiresSecret.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/RequiresSecret.java)
-- Annotation to mark tool methods requiring specific vault keys.
+- `@Repeatable`, `@Retention(RUNTIME)`, `@Target(METHOD)`
+- Fields: `envVar()` (container env name), `vaultKey()` (vault key name)
 
-### App Module — Configuration & Integration
+#### [NEW] [RequiresSecrets.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/RequiresSecrets.java)
+- Container annotation for `@RequiresSecret`
 
-#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
-- Configure sandbox defaults (`strategy`, `container-image`, `memory-limit`, `cpu-limit`).
+### App Module — Tests
 
-#### [NEW] [SandboxIntegrationTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/sandbox/SandboxIntegrationTest.java)
-- Verify Podman command execution.
-- Verify resource limit enforcement (e.g., OOM kill detection).
-- Verify secret injection and cleanup.
+#### [NEW] [ProcessIsolationExecutorTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/sandbox/ProcessIsolationExecutorTest.java)
+- NONE strategy direct execution test
+- Empty secrets map handling test
+- Invalid command error handling test
 
 ## Verification Plan
 

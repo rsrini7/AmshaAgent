@@ -41,8 +41,16 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **0** | Build Infrastructure | **Complete** | Quarkus 3.23.0 + Multi-module setup verified. |
 | **1** | Core Scope Layer | **Complete** | `@WorkspaceScoped` fully functional with virtual thread support. |
 | **2** | Security & Governance | **Complete** | Vault (Argon2id/AES-GCM-SIV) and Autonomy policy verified. |
-| **3** | Sandbox Layer | **Planned** | Not yet implementation. |
+| **3** | Sandbox Layer | **Complete** | `ProcessIsolationExecutor` (PODMAN/NAMESPACE/NONE), circuit breaker, ephemeral env-file injection, `@PreDestroy` graceful shutdown. `AgentOtelContext` stub for Phase 9. |
 | **4** | Tool Layer | **Planned** | Only `ToolOperation` enums exist; registry and tools pending. |
+
+### 5. OTel Stub for Sandbox Layer
+*   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.
+*   **Rationale:** `ProcessIsolationExecutor` requires OTel child spans for tracing, but the full `AgentOtelContext` is Phase 9. The stub allows compilation and testing without pulling in unimplemented dependencies.
+
+### 6. VaultKey API Adaptation
+*   **Deviation:** `resolveSecrets()` in `ProcessIsolationExecutor` unwraps `Optional<VaultKey>` via try-with-resources instead of the spec's `String`-based API.
+*   **Rationale:** Our `SecretVault.get()` returns `Optional<VaultKey>` (auto-wiping byte wrapper), not `String`. The adaptation ensures zero-copy secret handling with automatic memory clearing.
 
 ## Technical Debt & Decisions
 
@@ -50,6 +58,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **SQLite Blob Handling:** Removed `@Lob` annotations from JPA entities. SQLite's JDBC driver prefers native `byte[]` mapping to avoid OOMs on large secret payloads.
 *   **CDI Producer Scopes:** Resolved `DefinitionException` by removing redundant `@Dependent` on `@WorkspaceScoped` producers (only one scope is legal).
 *   **Jandex Requirement**: Every new module added to ArcClaw MUST include the Jandex plugin, or ArC will skip bean discovery for that module.
+*   **Stale Class Files**: `mvn clean` required when switching between incremental builds across modules (deployment module classpath can become stale).
 
 ---
 *Internal Audit Trail sync complete.*

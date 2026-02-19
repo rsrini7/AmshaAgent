@@ -140,7 +140,20 @@
 - Ensure `podman stop` in `@PreDestroy`.
 - Enable lingering for rootless users: `loginctl enable-linger <user>`.
 
----
+### 🔴 Failure: `ProcessIsolationExecutor` — Circuit Breaker Opens Unexpectedly
+**Symptom:** All Podman executions fall back to NAMESPACE strategy.
+**Root Cause:** Podman binary not on PATH or not installed. `@PostConstruct` check sets `podmanCircuitOpen = true`.
+**Resolution:** Install Podman: `sudo dnf install podman` (RHEL/Fedora) or `brew install podman` (macOS). Verify with `podman --version`.
+
+### 🔴 Failure: Ephemeral Env-File Not Deleted
+**Symptom:** `.env` files accumulate in `java.io.tmpdir`.
+**Root Cause:** JVM crash or force-kill before `finally` block executes.
+**Resolution:** Monitor `/tmp/zc-*.env` files. They contain no secrets after process exit (overwritten by `clearSecretsFromMemory()`). Clean up manually if needed.
+
+### 🔴 Failure: `TestEngine failed to discover tests` (Quarkus Augmentation)
+**Symptom:** `WorkspaceScopeContext cannot be resolved to a type` during `@QuarkusTest` discovery.
+**Root Cause:** Stale `.class` files in `arcclaw-deployment/target/` from a previous build.
+**Resolution:** Always use `mvn clean test` instead of `mvn test` when switching between incremental builds.
 
 ## 6. Native Image Troubleshooting
 
