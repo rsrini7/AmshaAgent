@@ -3,9 +3,6 @@ package com.arcclaw.core.security;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
-
-import java.util.List;
 
 /**
  * Plain JPA Repository for EncryptedSecret.

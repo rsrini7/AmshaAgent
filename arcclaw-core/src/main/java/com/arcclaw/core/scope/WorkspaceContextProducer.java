@@ -1,6 +1,5 @@
 package com.arcclaw.core.scope;
 
-import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
