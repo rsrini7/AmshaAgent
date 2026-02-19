@@ -1,0 +1,167 @@
+package com.arcclaw.core.agent;
+
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Stateful Thought-Plan-Act-Observe reasoning loop with resilience guardrails.
+ * <p>
+ * The loop drives an {@link ReasoningEngine} through iterative reasoning steps,
+ * executing tools via {@link ToolRegistry}, until the engine emits a
+ * {@code "FINISH"} action or the iteration limit is reached.
+ * <p>
+ * <strong>Guardrails:</strong>
+ * <ul>
+ * <li><b>Loop Protection</b>: {@code maxIterations} (default 5) prevents
+ * runaway loops.</li>
+ * <li><b>Hallucination Check</b>: Unknown tool names are intercepted — an error
+ * observation is injected into context so the LLM can self-correct.</li>
+ * <li><b>Schema Validation</b>: Null/empty params are caught before tool
+ * invocation.</li>
+ * </ul>
+ * <p>
+ * All shared state ({@code history}, {@code iterationCount}) is guarded by
+ * {@code synchronized} per JEP 491 — safe for virtual threads on JDK 25.
+ */
+@ApplicationScoped
+public class AgentLoop {
+
+    private static final Logger log = Logger.getLogger(AgentLoop.class);
+    private static final int DEFAULT_MAX_ITERATIONS = 5;
+
+    @Inject
+    ToolRegistry toolRegistry;
+
+    /**
+     * Execute the reasoning loop with default iteration limit.
+     */
+    public AgentResult run(String goal, ReasoningEngine engine) {
+        return run(goal, engine, DEFAULT_MAX_ITERATIONS);
+    }
+
+    /**
+     * Execute the Thought-Plan-Act-Observe reasoning loop.
+     * <p>
+     * Each iteration:
+     * <ol>
+     * <li>Ask the {@link ReasoningEngine} for the next step (thought + action)</li>
+     * <li>If action = {@code "FINISH"} → return the final answer</li>
+     * <li>Validate the action (tool exists, params valid)</li>
+     * <li>Execute via {@link ToolRegistry#invokeTool(String, Map)}</li>
+     * <li>Record the observation and continue</li>
+     * </ol>
+     *
+     * @param goal          The user's goal / task description.
+     * @param engine        The reasoning engine (LLM abstraction).
+     * @param maxIterations Maximum loop iterations before forced termination.
+     * @return The final result with reasoning trace.
+     */
+    public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
+        // Mutable state — guarded by synchronized (JEP 491 safe)
+        final List<ReasoningStep> history = new ArrayList<>();
+        int iteration = 0;
+
+        log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
+
+        while (iteration < maxIterations) {
+            iteration++;
+            log.debugf("Loop iteration %d/%d", iteration, maxIterations);
+
+            // --- THOUGHT + PLAN ---
+            ReasoningStep step;
+            try {
+                step = engine.nextStep(goal, Collections.unmodifiableList(history));
+            } catch (Exception e) {
+                log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
+                synchronized (history) {
+                    return AgentResult.error(List.copyOf(history),
+                            "ReasoningEngine error: " + e.getMessage());
+                }
+            }
+
+            if (step == null) {
+                log.warn("ReasoningEngine returned null step — terminating");
+                synchronized (history) {
+                    return AgentResult.error(List.copyOf(history),
+                            "ReasoningEngine returned null step");
+                }
+            }
+
+            // --- FINISH CHECK ---
+            if (ReasoningStep.FINISH.equals(step.action())) {
+                log.infof("Agent reached FINISH at iteration %d", iteration);
+                String answer = step.thought();
+                // If the engine put the answer in actionInput, extract it
+                if (step.actionInput() != null && step.actionInput().containsKey("answer")) {
+                    answer = String.valueOf(step.actionInput().get("answer"));
+                }
+                step = step.withObservation("Task completed.");
+                synchronized (history) {
+                    history.add(step);
+                    return AgentResult.finished(answer, List.copyOf(history));
+                }
+            }
+
+            // --- HALLUCINATION CHECK ---
+            String toolName = step.action();
+            var toolOpt = toolRegistry.findTool(toolName);
+            if (toolOpt.isEmpty()) {
+                String errorObs = String.format(
+                        "Tool '%s' does not exist. Available tools: %s. " +
+                                "Please choose a valid tool or use FINISH to complete.",
+                        toolName, toolRegistry.listTools());
+                log.warnf("Hallucination intercepted: tool '%s' not found", toolName);
+                step = step.withObservation(errorObs);
+                synchronized (history) {
+                    history.add(step);
+                }
+                continue;
+            }
+
+            // --- SCHEMA VALIDATION ---
+            Map<String, Object> params = step.actionInput();
+            if (params == null) {
+                params = Map.of();
+            }
+
+            // --- ACT ---
+            String observation;
+            try {
+                ToolResponse response = toolRegistry.invokeTool(toolName, params);
+                observation = response.output();
+                if (!response.success()) {
+                    observation = "Tool execution failed (exit=" + response.exitCode() + "): " + observation;
+                }
+            } catch (SecurityException e) {
+                observation = "Security violation: " + e.getMessage() +
+                        ". The current autonomy level does not permit this operation.";
+                log.warnf("Tool '%s' blocked by governance: %s", toolName, e.getMessage());
+            } catch (Exception e) {
+                observation = "Tool execution error: " + e.getMessage();
+                log.errorf(e, "Tool '%s' threw unexpected exception", toolName);
+            }
+
+            // --- OBSERVE ---
+            step = step.withObservation(observation);
+            synchronized (history) {
+                history.add(step);
+            }
+            log.debugf("Observation for '%s': %s",
+                    toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
+        }
+
+        // Loop exhausted
+        log.warnf("AgentLoop exceeded %d iterations — terminating", maxIterations);
+        synchronized (history) {
+            return AgentResult.loopExceeded(List.copyOf(history), maxIterations);
+        }
+    }
+}

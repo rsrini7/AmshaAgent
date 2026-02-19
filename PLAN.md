@@ -253,3 +253,71 @@ mvn clean test -pl arcclaw-app -am -Dtest=ToolRegistryTest "-Dsurefire.failIfNoS
 - ✅ Governance: FULL allows tool invocation
 - ✅ `@RequiresSecret` extraction from GithubTool
 - ✅ Unknown tool invocation throws `IllegalArgumentException`
+
+---
+
+# Phase 5 — Agent & Orchestration Layer
+
+Stateful Thought-Plan-Act-Observe reasoning loop with resilience guardrails and specialized agent personas.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Testability**: `ReasoningEngine` interface abstracts LLM calls. Tests inject mock engines with scripted responses — no Ollama/OpenAI needed for CI.
+
+> [!NOTE]
+> **`synchronized` per JEP 491**: Loop state (`history`, `iterationCount`) uses `synchronized` blocks — safe for virtual threads on JDK 25.
+
+> [!TIP]
+> **Three guardrails**: Loop protection (maxIterations=5), hallucination interception (unknown tool → error observation), schema validation (null params → guard).
+
+## Proposed Changes
+
+### Core Module — Loop Architecture
+
+#### [NEW] [ReasoningStep.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ReasoningStep.java)
+- Record: `thought`, `action`, `actionInput`, `observation`
+- Factory: `pending()`, `withObservation()`
+
+#### [NEW] [AgentResult.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentResult.java)
+- Record: `finalAnswer`, `steps`, `success`, `terminationReason`
+- Factory: `finished()`, `loopExceeded()`, `error()`
+
+#### [NEW] [ReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ReasoningEngine.java)
+- Interface: `nextStep(goal, history)` → `ReasoningStep`
+
+#### [NEW] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- `@ApplicationScoped`, Thought-Plan-Act-Observe pattern
+- 3 guardrails: loop protection, hallucination check, schema validation
+
+### Core Module — Agent Personas
+
+#### [NEW] [Agent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/Agent.java) + [AgentRole.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRole.java)
+- Interface + CDI `@Qualifier` for persona discovery
+
+#### [NEW] [GrokAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/GrokAgent.java)
+- `@AgentRole("grok")` — Coordinator with task decomposition prompt
+
+#### [NEW] [HarperAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/HarperAgent.java)
+- `@AgentRole("researcher")` — Research & Facts, github-only
+
+#### [NEW] [BenjaminAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/BenjaminAgent.java)
+- `@AgentRole("coder")` — Code/Logic, github-only
+
+### App Module — Tests
+
+#### [NEW] [AgentResilienceTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/agent/AgentResilienceTest.java)
+- 5 tests: hallucination, loop limit, FINISH, null step, engine exception
+
+## Verification Plan
+
+### Automated Tests
+```bash
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn clean test -pl arcclaw-app -am -Dtest=AgentResilienceTest "-Dsurefire.failIfNoSpecifiedTests=false"
+```
+- ✅ Hallucinated tool handled gracefully (self-correction)
+- ✅ maxIterations terminates runaway loop
+- ✅ FINISH action returns correct result
+- ✅ Null step terminates gracefully
+- ✅ Engine exception handled

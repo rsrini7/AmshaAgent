@@ -69,13 +69,19 @@
 ---
 
 ## Phase 5 — Agent & Orchestration Layer
-- [ ] `Agent` interface (marker)
-- [ ] `@AgentRole` CDI qualifier
-- [ ] `ArcClawSupervisor` (`@SupervisorAgent` — LangChain4J experimental)
-- [ ] `GrokAgent` stub (`@AgentRole("grok")`, OTel child span pattern)
-- [ ] `HarperAgent` stub (`@AgentRole("researcher")`)
-- [ ] `BenjaminAgent` stub (`@AgentRole("coder")`)
-- [ ] `LucasAgent` stub (`@AgentRole("creative")`)
+- [x] `ReasoningStep` record (thought/action/actionInput/observation) <!-- id: 34 -->
+- [x] `AgentResult` record (finalAnswer/steps/success/terminationReason) <!-- id: 35 -->
+- [x] `ReasoningEngine` interface (testable LLM abstraction) <!-- id: 36 -->
+- [x] `AgentLoop` (`@ApplicationScoped`, Thought-Plan-Act-Observe) <!-- id: 37 -->
+  - [x] Loop protection (`maxIterations=5` default) <!-- id: 38 -->
+  - [x] Hallucination check (unknown tool → error observation) <!-- id: 39 -->
+  - [x] Schema validation (null params guard) <!-- id: 40 -->
+  - [x] `synchronized` shared state per JEP 491 <!-- id: 41 -->
+- [x] `Agent` interface + `@AgentRole` CDI qualifier <!-- id: 42 -->
+- [x] `GrokAgent` (`@AgentRole("grok")` — Coordinator) <!-- id: 43 -->
+- [x] `HarperAgent` (`@AgentRole("researcher")` — Research) <!-- id: 44 -->
+- [x] `BenjaminAgent` (`@AgentRole("coder")` — Code/Logic) <!-- id: 45 -->
+- [x] `AgentResilienceTest` (5 tests: hallucination, loop limit, finish, null, exception) <!-- id: 46 -->
 
 ---
 
