@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.arcclaw</groupId>
+    <artifactId>arcclaw-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>arcclaw-core</artifactId>
+
+  <dependencies>
+    <!-- Quarkus Arc CDI -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-arc</artifactId></dependency>
+
+    <!-- REST -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest</artifactId></dependency>
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest-jackson</artifactId></dependency>
+
+    <!-- WebSocket -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-websockets-next</artifactId></dependency>
+
+    <!-- Vert.x async -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-vertx</artifactId></dependency>
+
+    <!-- Scheduler (@Scheduled for WorkspaceManager GC) -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-scheduler</artifactId></dependency>
+
+    <!-- Config -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-config-yaml</artifactId></dependency>
+
+    <!-- SQLite (pure-Java, native-image safe) -->
+    <dependency>
+      <groupId>io.quarkiverse.jdbc</groupId>
+      <artifactId>quarkus-jdbc-sqlite</artifactId>
+      <version>3.0.2</version>
+    </dependency>
+
+    <!-- Hibernate ORM + Panache -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-hibernate-orm-panache</artifactId></dependency>
+    <dependency><groupId>org.hibernate.orm</groupId><artifactId>hibernate-community-dialects</artifactId></dependency>
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-narayana-jta</artifactId></dependency>
+
+    <!-- LangChain4J -->
+    <dependency><groupId>dev.langchain4j</groupId><artifactId>langchain4j</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-core</artifactId>
+      <version>${langchain4j.quarkus.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-ollama</artifactId>
+      <version>${langchain4j.quarkus.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-openai</artifactId>
+      <version>${langchain4j.quarkus.version}</version>
+    </dependency>
+    <dependency><groupId>dev.langchain4j</groupId><artifactId>langchain4j-core</artifactId></dependency>
+
+    <!-- BouncyCastle — Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
+      <exclusions>
+        <exclusion><groupId>org.bouncycastle</groupId><artifactId>bc-fips</artifactId></exclusion>
+        <exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-ext-jdk18on</artifactId></exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Observability -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-micrometer-registry-prometheus</artifactId></dependency>
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-opentelemetry</artifactId></dependency>
+
+    <!-- Context propagation (CDI across ManagedExecutor threads) -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-context-propagation</artifactId></dependency>
+
+    <!-- Health -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-health</artifactId></dependency>
+
+    <!-- OpenAPI -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-openapi</artifactId></dependency>
+
+    <!-- CDI API (for Extension SPI) -->
+    <dependency>
+      <groupId>jakarta.enterprise</groupId>
+      <artifactId>jakarta.enterprise.cdi-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Test -->
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-junit5</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>io.rest-assured</groupId><artifactId>rest-assured</artifactId><scope>test</scope></dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource><directory>src/main/resources</directory><filtering>false</filtering></resource>
+    </resources>
+  </build>
+</project>

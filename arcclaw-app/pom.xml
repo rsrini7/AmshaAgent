@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.arcclaw</groupId>
+    <artifactId>arcclaw-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>arcclaw-app</artifactId>
+
+  <dependencies>
+    <!-- Runtime module only — NOT deployment -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-core</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.quarkus.platform</groupId>
+        <artifactId>quarkus-maven-plugin</artifactId>
+        <version>${quarkus.version}</version>
+        <extensions>true</extensions>
+        <executions>
+          <execution>
+            <goals>
+              <goal>build</goal>
+              <goal>generate-code</goal>
+              <goal>generate-code-tests</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.2.5</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+            <configuration>
+              <systemPropertyVariables>
+                <native.image.path>
+                  ${project.build.directory}/${project.build.finalName}-runner
+                </native.image.path>
+              </systemPropertyVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>native</id>
+      <activation>
+        <property><name>native</name></property>
+      </activation>
+      <properties>
+        <skipITs>false</skipITs>
+        <quarkus.package.type>native</quarkus.package.type>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
+        <quarkus.native.container-build>true</quarkus.native.container-build>
+        <quarkus.native.builder-image>
+          quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
+        </quarkus.native.builder-image>
+        <!--
+          CORRECTED (Fix C6 + Pending P1):
+          - Broad initialize-at-build-time=org.bouncycastle REMOVED from here.
+            It now lives in native-image.properties with fine-grained class-level control.
+          - -H:+InlineBeforeAnalysis: inlines LangChain4J reflection paths before points-to
+            analysis, reducing cold-start by ~10-15 ms.
+          - -J-Xmx8g: prevents OOM during GraalVM analysis phase.
+        -->
+        <quarkus.native.additional-build-args>
+          -H:+InlineBeforeAnalysis,
+          -H:+ReportExceptionStackTraces,
+          -J-Xmx8g
+        </quarkus.native.additional-build-args>
+      </properties>
+    </profile>
+
+    <profile>
+      <id>jvm</id>
+      <activation><activeByDefault>true</activeByDefault></activation>
+      <properties>
+        <quarkus.package.type>fast-jar</quarkus.package.type>
+      </properties>
+    </profile>
+  </profiles>
+</project>
