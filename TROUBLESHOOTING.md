@@ -206,4 +206,29 @@
 **Root Cause:** Classloader separation between the app module and the core library module prevents package-private access, even if packages match.
 **Resolution:** Make the `@Observes` method `public`.
 
+---
+
+## 9. Architectural Context for Future LLMs
+
+> **Prompt Context**: If you are an AI assistant working on this codebase, read this section first to avoid common pitfalls.
+
+### 9.1 Critical Constraints
+- **JDK Version**: We target **JDK 25** (JEP 491 `synchronized` fix, JEP 506 `ScopedValue`). Ensure code is forward-compatible. Use `--add-opens` for tests.
+- **Quarkus Version**: Pinned to **3.23.0**. Do **not** upgrade without verifying ByteBuddy/Java 25 compatibility (`-Dnet.bytebuddy.experimental=true`).
+- **Native Image**: All reflection must be registered. BouncyCastle needs explicit `native-image.properties` flags.
+
+### 9.2 Module Separation Rules
+- **arcclaw-core**:
+  - **No Panache Bytecode**: Entities here MUST be plain `@Entity` + `EntityManager`. Do not extend `PanacheEntity`.
+  - **Jandex Index**: Required for bean discovery.
+  - **Testability**: Package-private methods are **not** visible to tests in `arcclaw-app`. Use `public` for `@Observes` or test hooks.
+- **arcclaw-app**:
+  - **Runtime Only**: Contains configuration, `@QuarkusTest` classes, and the `main` runner.
+  - **Hibernate Config**: Must explicitly list `quarkus.hibernate-orm.packages` to find entities in core.
+
+### 9.3 Custom scopes
+- **WorkspaceScoped**: This is a **custom context** managed via `InjectableContext`. It is NOT a standard bean.
+- **Injection**: Never `@Inject WorkspaceScopeContext`. Use `Arc.container().getActiveContext(WorkspaceScoped.class)`.
+
+
 

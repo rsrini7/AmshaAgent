@@ -1,3 +1,39 @@
+# Phase 0 — Project Scaffolding & Build Infrastructure
+
+Establish the multi-module Maven reactor, build profiles, and core dependency management (Quarkus 3.23.0 + JDK 25 + LangChain4J).
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Multi-Module Architecture**:
+> - `arcclaw-parent`: BOMs and compiler definitions
+> - `arcclaw-deployment`: Quarkus build-time processors (CDI extensions)
+> - `arcclaw-core`: Business logic, domain entities, CDI implementation
+> - `arcclaw-app`: Runtime runner, configuration, and tests
+
+> [!NOTE]
+> **JDK 25 Alignment**: Build configured with `-Dnet.bytebuddy.experimental=true` and `--add-opens` to support Java 25 preview features during tests.
+
+## Completed Changes
+
+### Build Configuration
+
+#### [NEW] [pom.xml (Parent)](file:///h:/ws/ArcClaw/pom.xml)
+- `quarkus-bom`: 3.23.0
+- `maven-compiler-plugin`: source/target 21 (tested on 25)
+
+#### [NEW] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Profiles: `dev`, `test`, `prod`
+- Config: HTTP, SQLite, OTel, LangChain4J, Scheduler
+
+## Verification
+
+- ✅ `mvn clean compile` succeeds
+- ✅ `mvn test` runs Failsafe/Surefire correctly
+- ✅ Native image build config (`native-image.properties`) valid
+
+---
+
 # Phase 1 — Core CDI Scope Layer
 
 Implement `@WorkspaceScoped` custom CDI scope for ArcClaw. This scope ties bean lifecycle to a workspace session ID, enabling per-session bean isolation across concurrent virtual threads.
