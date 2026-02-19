@@ -17,11 +17,9 @@ public class EncryptedSecret {
     @EmbeddedId
     public EncryptedSecretId id;
 
-    @Lob
     @Column(nullable = false)
     public byte[] ciphertext;
 
-    @Lob
     @Column(nullable = false)
     public byte[] nonce;
 

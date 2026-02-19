@@ -25,22 +25,30 @@ public class SecretVaultImplTest {
     @Inject
     EncryptedSecretRepository repository;
 
+    @Inject
+    jakarta.persistence.EntityManager entityManager;
+
     private static final String TEST_SESSION_ID = "test-session-auth";
     private static final String API_KEY_NAME = "OPENAI_API_KEY";
     private static final byte[] SECRET_PAYLOAD = "sk-live-test-1234567890".getBytes(StandardCharsets.UTF_8);
 
     @BeforeEach
     void setup() {
+        // Ensure clean state for DB
+        cleanDb();
+        // Set session *after* cleanup might have cleared it (if we reused logic)
         WorkspaceScopeHolder.set(TEST_SESSION_ID);
-        // Clean slate (handled by rollback usually, but explicit here for safety)
-        cleanup();
     }
 
     @AfterEach
-    @Transactional
-    void cleanup() {
-        repository.deleteBySessionId(TEST_SESSION_ID);
+    void tearDown() {
+        cleanDb();
         WorkspaceScopeHolder.clear();
+    }
+
+    @Transactional
+    void cleanDb() {
+        repository.deleteBySessionId(TEST_SESSION_ID);
     }
 
     @Test
@@ -97,7 +105,7 @@ public class SecretVaultImplTest {
 
     @Transactional
     void saveEntity(EncryptedSecret entity) {
-        repository.persist(entity);
+        entityManager.merge(entity);
     }
 
     @Transactional
