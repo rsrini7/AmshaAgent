@@ -82,6 +82,18 @@
 - [x] `HarperAgent` (`@AgentRole("researcher")` — Research) <!-- id: 44 -->
 - [x] `BenjaminAgent` (`@AgentRole("coder")` — Code/Logic) <!-- id: 45 -->
 - [x] `AgentResilienceTest` (5 tests: hallucination, loop limit, finish, null, exception) <!-- id: 46 -->
+- [x] `LucasAgent` (`@AgentRole("creative")` — Creative & Balance) <!-- id: 47 -->
+- [x] `ArcClawSupervisor` (`@ApplicationScoped` — CDI agent roster) <!-- id: 48 -->
+
+---
+
+## Phase 6 — State Layer (Checkpointing)
+- [x] `CheckpointStatus` enum (IN_PROGRESS, COMPLETED, FAILED) <!-- id: 49 -->
+- [x] `AgentCheckpoint` JPA entity (unique sessionId+agentRole, TEXT stateJson) <!-- id: 50 -->
+- [x] `StatefulAgentStore` interface + `StatefulAgentStoreImpl` (EntityManager, Jackson) <!-- id: 51 -->
+- [x] `SqliteWalConfigurer` (WAL/NORMAL/busy_timeout PRAGMAs) <!-- id: 52 -->
+- [x] `StatefulAgentStoreTest` (4 tests: save+load, markFailed, markCompleted, upsert) <!-- id: 53 -->
+- [x] Hibernate `packages` config for cross-module entity discovery <!-- id: 54 -->
 
 ---
 

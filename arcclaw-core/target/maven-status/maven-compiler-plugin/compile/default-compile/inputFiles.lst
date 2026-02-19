@@ -3,9 +3,11 @@ H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\Agent.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\AgentLoop.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\AgentResult.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\AgentRole.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\ArcClawSupervisor.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\BenjaminAgent.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\GrokAgent.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\HarperAgent.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\LucasAgent.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\ReasoningEngine.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\ReasoningStep.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\observability\AgentOtelContext.java
@@ -28,6 +30,11 @@ H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\SecretVault.j
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\SecretVaultImpl.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\ToolOperation.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\security\VaultKey.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\state\AgentCheckpoint.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\state\CheckpointStatus.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\state\SqliteWalConfigurer.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\state\StatefulAgentStore.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\state\StatefulAgentStoreImpl.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\tools\AgentTool.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\tools\GithubTool.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\tools\ToolRegistry.java

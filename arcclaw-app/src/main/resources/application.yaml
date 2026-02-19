@@ -44,6 +44,8 @@ quarkus:
     dialect: org.hibernate.community.dialect.SQLiteDialect
     database:
       generation: update
+    packages:
+      - com.arcclaw.core.state
     log:
       sql: false
 

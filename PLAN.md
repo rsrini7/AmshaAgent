@@ -321,3 +321,65 @@ mvn clean test -pl arcclaw-app -am -Dtest=AgentResilienceTest "-Dsurefire.failIf
 - ✅ FINISH action returns correct result
 - ✅ Null step terminates gracefully
 - ✅ Engine exception handled
+
+---
+
+# Phase 6 — State Layer (Checkpointing)
+
+Make the AgentLoop stateful and resilient to crashes via JPA + SQLite checkpointing.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **No PanacheEntity / PanacheRepository**: Both require Quarkus bytecode enhancement which only runs in the app module. Since the entity lives in `arcclaw-core`, we use plain `@Entity` + `EntityManager` for cross-module compatibility.
+
+> [!NOTE]
+> **No `@Lob`**: SQLite handles `@Column(columnDefinition = "TEXT")` better than `@Lob`.
+
+> [!TIP]
+> **`hibernate-orm.packages`**: Added `com.arcclaw.core.state` to `application.yaml` so Hibernate discovers entities in the library module.
+
+## Proposed Changes
+
+### Core Module — Entity & Store
+
+#### [NEW] [CheckpointStatus.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CheckpointStatus.java)
+- Enum: `IN_PROGRESS`, `COMPLETED`, `FAILED`
+
+#### [NEW] [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java)
+- JPA `@Entity` with unique constraint on `(sessionId, agentRole)`
+- `@Column(columnDefinition = "TEXT")` for `stateJson`
+- `@PrePersist` / `@PreUpdate` lifecycle timestamps
+
+#### [NEW] [StatefulAgentStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStore.java) + [StatefulAgentStoreImpl.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java)
+- Plain `EntityManager` (not Panache) with JPQL queries
+- Jackson `ObjectMapper` for `List<ReasoningStep>` ↔ `stateJson`
+- `@Transactional` on save/markFailed/markCompleted
+
+#### [NEW] [SqliteWalConfigurer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/SqliteWalConfigurer.java)
+- `@Observes StartupEvent` → WAL/NORMAL/busy_timeout PRAGMAs via `AgroalDataSource`
+
+### Phase 5 Backfills
+
+#### [NEW] [LucasAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LucasAgent.java)
+- `@AgentRole("creative")` — blind-spot detection and creative alternatives
+
+#### [NEW] [ArcClawSupervisor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ArcClawSupervisor.java)
+- CDI `Instance<Agent>` agent roster with listing, lookup, and delegation
+
+### Config Changes
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Added `hibernate-orm.packages: [com.arcclaw.core.state]`
+
+### Tests
+
+#### [NEW] [StatefulAgentStoreTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/state/StatefulAgentStoreTest.java)
+- 4 tests: save+load+deserialize, markFailed, markCompleted, upsert
+
+## Verification
+
+- ✅ Save and load checkpoint with deserialized ReasoningSteps
+- ✅ Mark failed with reason and timestamp
+- ✅ Mark completed status transition
+- ✅ Upsert: save twice → same entity ID, updated steps
