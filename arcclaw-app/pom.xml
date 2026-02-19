@@ -33,13 +33,7 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Force OTel deployment artifact onto test classpath -->
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-opentelemetry-deployment</artifactId>
-      <version>${quarkus.version}</version>
-      <scope>test</scope>
-    </dependency>
+
 
     <!-- Force local deployment module onto test classpath -->
     <dependency>
@@ -57,6 +51,15 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-hibernate-orm</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.jdbc</groupId>
+      <artifactId>quarkus-jdbc-sqlite</artifactId>
+      <version>3.0.2</version>
     </dependency>
   </dependencies>
 
@@ -76,6 +79,7 @@
             </goals>
           </execution>
         </executions>
+
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
