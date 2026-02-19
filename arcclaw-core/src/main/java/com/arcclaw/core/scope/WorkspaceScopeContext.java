@@ -44,6 +44,11 @@ public class WorkspaceScopeContext implements InjectableContext {
      * ConcurrentHashMap provides safe concurrent access across sessions
      * without a global lock.
      */
+    public WorkspaceScopeContext() {
+        System.out.println("[ArcClaw Context] WorkspaceScopeContext INSTANTIATED! " + this);
+        // throw new RuntimeException("Context Verified");
+    }
+
     private final ConcurrentHashMap<String, SessionStore> sessions = new ConcurrentHashMap<>();
 
     // ── InjectableContext contract ──────────────────────────────────────────

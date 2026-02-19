@@ -60,8 +60,7 @@ public final class WorkspaceScopeHolder {
      */
     public static String get() {
         String s = CURRENT_SESSION.get();
-        // System.out.println("[ArcClaw Holder] Getting session: " + s + " on thread: "
-        // + Thread.currentThread());
+        System.out.println("[ArcClaw Holder] Getting session: " + s + " on thread: " + Thread.currentThread());
         return s;
     }
 
