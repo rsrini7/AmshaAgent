@@ -1,0 +1,19 @@
+quarkus:
+  http:
+    host: "localhost"
+    port: 8081
+  management:
+    host: "localhost"
+    port: 9000
+    enabled: true
+
+  langchain4j:
+    openai:
+      api-key: "demo-key"
+      model-name: "gpt-4o"
+    ollama:
+      base-url: "http://localhost:11434"
+      model-id: "llama3.1:8b"
+
+  log:
+    level: INFO
