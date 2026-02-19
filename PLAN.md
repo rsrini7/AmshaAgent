@@ -70,9 +70,59 @@ Implement `@WorkspaceScoped` custom CDI scope for ArcClaw. This scope ties bean 
 ## Verification Plan
 
 ### Automated Tests
+
+---
+
+# Phase 2 — Security Layer (Vault & Crypto)
+
+Implement the encryption and secret storage layer using AES-GCM-SIV for nonce-misuse resistance and Argon2id for key derivation.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **No `@Lob` for SQLite**: Standard `@Lob` on `byte[]` causes the Hibernate SQLite dialect to use `getBlob()`, which the driver does not support. Using standard `VARBINARY` (no `@Lob`) allows `getBytes()` which works correctly.
+
+> [!TIP]
+> **AES-GCM-SIV**: Chosen to prevent catastrophic security failure if a nonce is ever reused (though we use random 12-byte nonces).
+
+> [!NOTE]
+> **`VaultKey` Memory Management**: Implements `AutoCloseable` and uses `Arrays.fill(key, (byte) 0)` to clear sensitive material from memory as soon as possible.
+
+## Proposed Changes
+
+### Core Module — Crypto & Repository
+
+#### [NEW] [VaultKey.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/VaultKey.java)
+- Wrapper for `byte[]` AES keys with auto-wiping on `close()`.
+
+#### [NEW] [Argon2idKeyDerivation.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/Argon2idKeyDerivation.java)
+- Uses BouncyCastle to derive 256-bit keys from session IDs.
+
+#### [NEW] [AesGcmSivCipher.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/AesGcmSivCipher.java)
+- Encapsulates encryption/decryption logic.
+
+#### [NEW] [EncryptedSecret.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/EncryptedSecret.java)
+- JPA Entity with composite key (`sessionId`, `keyName`). `byte[]` fields mapped without `@Lob`.
+
+#### [NEW] [EncryptedSecretRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/EncryptedSecretRepository.java)
+- Panache repository for secret storage.
+
+### App Module — Service & Tests
+
+#### [NEW] [SecretVaultImpl.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
+- Core service orchestration: `store`, `get`, `reEncrypt`.
+
+#### [NEW] [SecretVaultImplTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/security/SecretVaultImplTest.java)
+- Verification: cycle, tamper detection (AEAD), key swapping protection (AAD).
+
+## Verification Plan
+
+### Automated Tests
 ```bash
-mvn test -pl arcclaw-app -Dtest=WorkspaceScopeTest
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn test -pl arcclaw-app -Dtest=SecretVaultImplTest
 ```
-- ✅ Same instance within same session across threads
-- ✅ Different instances for different sessions
-- ✅ `ContextNotActiveException` when no session active
+- ✅ Encryption/Decryption round trip
+- ✅ AEAD Tamper detection
+- ✅ AAD Key swapping protection
+- ✅ Active Session requirement enforced

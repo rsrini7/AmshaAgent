@@ -25,7 +25,13 @@
   - *Resolution:* Removed the BOM import. Relied on the Quarkiverse extension to transitively manage the compatible LangChain4J core version (0.26.1).
 - **OpenTelemetry Test Dependencies:**
   - *Challenge:* `ClassNotFoundException: TracerEnabled` during tests.
-  - *Resolution:* Explicitly added `quarkus-opentelemetry-deployment` to `arcclaw-app` test scope to ensure augmentation classpath completeness.
+  - *Resolution:* Explicitly removed redundant `quarkus-opentelemetry-deployment` test dependency from `arcclaw-app/pom.xml`. The core module already transitively provides the runtime requirement.
+- **ByteBuddy & Java 25 Compatibility:**
+  - *Challenge:* `java.lang.IllegalArgumentException: Java 25 (69) is not supported...`
+  - *Resolution:* Set `net.bytebuddy.experimental=true` in `MAVEN_OPTS` and Surefire configuration.
+- **SQLite JDBC Driver:**
+  - *Challenge:* `Unable to find a JDBC driver corresponding to the database kind 'sqlite'`.
+  - *Resolution:* Explicitly added `quarkus-jdbc-sqlite` to `arcclaw-app/pom.xml`.
 
 ---
 
@@ -34,7 +40,9 @@
 | Category | Symptom | Root Cause | Resolution |
 | --- | --- | --- | --- |
 | **CDI** | `ContextNotActiveException` | `WorkspaceScopeHolder` not activated before agent entry. | Ensure `activate()` is called in the `finally` block of the `AgentLoop`. |
-| **Security** | `NoSuchMethodError` (GCMSIV) | Conflicting `bc-fips` or `bcprov-ext` artifacts on classpath. | Enforce exclusions in `pom.xml` to keep only `bcprov-jdk18on`. |
+| **Security** | `IllegalStateException` | Active session required to store secrets. | Verify `WorkspaceScopeHolder.set()` is called BEFORE test logic in `@BeforeEach`. |
+| **Security** | `GenericJDBCException` | `getBlob` not implemented by SQLite. | Remove `@Lob` from entity `byte[]` fields to use `getBytes()`. |
+| **Security** | `HibernateException` | ManagedEntity in two persistence contexts. | Use `entityManager.merge()` instead of `persist()` for existing entities in tests. |
 | **Sandbox** | Zombie Containers | JVM `SIGTERM` didn't signal the Podman process. | Verify the `@PreDestroy` method in `ProcessIsolationExecutor` is calling `podman stop`. |
 | **Native** | Predictable Nonces | BC initialized at build-time instead of run-time. | Verify fine-grained `native-image.properties` flags are correctly applied. |
 
@@ -54,8 +62,28 @@
 
 ### 🔴 Failure: `ClassNotFoundException: TracerEnabled` (OTel)
 **Symptom:** Quarkus test bootstrap fails.
-**Root Cause:** Missing `quarkus-opentelemetry-deployment` artifact on the test augmentation classpath.
-**Resolution:** Add `quarkus-opentelemetry-deployment` to `arcclaw-app` test dependencies.
+**Root Cause:** Redundant or conflicting `quarkus-opentelemetry-deployment` artifact on the test augmentation classpath.
+**Resolution:** Remove the explicit dependency if it conflicts with the core runtime extension.
+
+### 🔴 Failure: `java.lang.IllegalArgumentException: Java 25 (69) is not supported...`
+**Symptom:** ByteBuddy fails during Hibernate proxy generation.
+**Root Cause:** JDK 25 is too new for the current ByteBuddy version.
+**Resolution:** Set `-Dnet.bytebuddy.experimental=true`.
+
+### 🔴 Failure: `SQLFeatureNotSupportedException: not implemented by SQLite JDBC driver`
+**Symptom:** `GenericJDBCException` when loading `byte[]` fields.
+**Root Cause:** `@Lob` forces Hibernate to use `ResultSet.getBlob()`.
+**Resolution:** Remove `@Lob` from the entity field.
+
+### 🔴 Failure: `HibernateException: Illegal attempt to associate a ManagedEntity with two open persistence contexts`
+**Symptom:** Test error during `saveEntity`.
+**Root Cause:** Calling `persist()` on an object that Hibernate thinks is detached or already managed by another session.
+**Resolution:** Use `entityManager.merge(entity)`.
+
+### 🔴 Failure: `java.lang.IllegalAccessError: module java.base does not open java.lang...`
+**Symptom:** NoClassDefFoundError for JBoss Threads.
+**Root Cause:** JDK 25 requires explicit opens for reflection on some core classes.
+**Resolution:** Add `--add-opens java.base/java.lang=ALL-UNNAMED` to `MAVEN_OPTS`.
 
 ### 🔴 Failure: BouncyCastle SecurityException
 **Symptom:** `JCE cannot authenticate the provider BC`.

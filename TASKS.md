@@ -32,14 +32,14 @@
 ---
 
 ## Phase 2 — Security Layer (Vault & Crypto)
-- [ ] `VaultKey` (AutoCloseable, 32-byte AES-256 key, wipe-on-close)
-- [ ] `Argon2idKeyDerivation` (64 MB memory, 3 iterations, 16-byte salt)
-- [ ] `AesGcmSivCipher` (encrypt/decrypt/reEncrypt with nonce-misuse resistance)
-- [ ] `EncryptedSecret` (Panache entity) + `EncryptedSecretId` (composite key)
-- [ ] `SecretVault` interface
-- [ ] `SecretVaultImpl` (`@Dependent`, Argon2id init, batch rotation via `reEncrypt()`, memory wipe)
+- [x] `VaultKey` (AutoCloseable, 32-byte AES-256 key, wipe-on-close)
+- [x] `Argon2idKeyDerivation` (64 MB memory, 3 iterations, 16-byte salt)
+- [x] `AesGcmSivCipher` (encrypt/decrypt/reEncrypt with nonce-misuse resistance)
+- [x] `EncryptedSecret` (Panache entity) + `EncryptedSecretId` (composite key)
+- [x] `SecretVault` interface
+- [x] `SecretVaultImpl` (`@Dependent`, Argon2id init, batch rotation via `reEncrypt()`, memory wipe)
 - [ ] `AutonomyPolicy` interface + `AutonomyLevel` / `ToolOperation` enums
-- [ ] Unit tests: `SecretVaultImplTest` (store/retrieve, nonce misuse, AAD swap, rotation, tamper detection)
+- [x] Unit tests: `SecretVaultImplTest` (store/retrieve, nonce misuse, AAD swap, rotation, tamper detection)
 
 ---
 
