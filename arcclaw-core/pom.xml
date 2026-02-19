@@ -45,8 +45,7 @@
     <dependency><groupId>org.hibernate.orm</groupId><artifactId>hibernate-community-dialects</artifactId></dependency>
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-narayana-jta</artifactId></dependency>
 
-    <!-- LangChain4J -->
-    <dependency><groupId>dev.langchain4j</groupId><artifactId>langchain4j</artifactId></dependency>
+    <!-- LangChain4J (Quarkiverse extensions — they manage langchain4j core transitively) -->
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-core</artifactId>
@@ -62,7 +61,6 @@
       <artifactId>quarkus-langchain4j-openai</artifactId>
       <version>${langchain4j.quarkus.version}</version>
     </dependency>
-    <dependency><groupId>dev.langchain4j</groupId><artifactId>langchain4j-core</artifactId></dependency>
 
     <!-- BouncyCastle — Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
     <dependency>
@@ -102,7 +100,22 @@
 
   <build>
     <resources>
-      <resource><directory>src/main/resources</directory><filtering>false</filtering></resource>
+      <resource><directory>src/main/resources</directory><filtering>true</filtering></resource>
     </resources>
+    <plugins>
+      <plugin>
+        <groupId>io.smallrye</groupId>
+        <artifactId>jandex-maven-plugin</artifactId>
+        <version>3.1.6</version>
+        <executions>
+          <execution>
+            <id>make-index</id>
+            <goals>
+              <goal>jandex</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 </project>

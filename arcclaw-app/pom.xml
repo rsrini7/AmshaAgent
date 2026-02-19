@@ -19,6 +19,34 @@
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-core</artifactId>
     </dependency>
+
+    <!-- Test -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.rest-assured</groupId>
+      <artifactId>rest-assured</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Force OTel deployment artifact onto test classpath -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry-deployment</artifactId>
+      <version>${quarkus.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Force local deployment module onto test classpath -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-deployment</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
