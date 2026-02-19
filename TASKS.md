@@ -38,8 +38,9 @@
 - [x] `EncryptedSecret` (Panache entity) + `EncryptedSecretId` (composite key)
 - [x] `SecretVault` interface
 - [x] `SecretVaultImpl` (`@Dependent`, Argon2id init, batch rotation via `reEncrypt()`, memory wipe)
-- [ ] `AutonomyPolicy` interface + `AutonomyLevel` / `ToolOperation` enums
+- [x] `AutonomyPolicy` interface + `AutonomyLevel` / `ToolOperation` enums
 - [x] Unit tests: `SecretVaultImplTest` (store/retrieve, nonce misuse, AAD swap, rotation, tamper detection)
+- [x] Unit tests: `WorkspaceGovernanceTest` (context injection, policy logic)
 
 ---
 

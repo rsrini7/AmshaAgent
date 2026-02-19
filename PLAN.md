@@ -112,8 +112,14 @@ Implement the encryption and secret storage layer using AES-GCM-SIV for nonce-mi
 #### [NEW] [SecretVaultImpl.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
 - Core service orchestration: `store`, `get`, `reEncrypt`.
 
-#### [NEW] [SecretVaultImplTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/security/SecretVaultImplTest.java)
-- Verification: cycle, tamper detection (AEAD), key swapping protection (AAD).
+#### [NEW] [WorkspaceContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceContext.java)
+- Session-scoped bean holding `AutonomyLevel` and attributes.
+
+#### [NEW] [AutonomyPolicy.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/AutonomyPolicy.java)
+- Interface and default logic for tool permission enforcement.
+
+#### [NEW] [WorkspaceGovernanceTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/security/WorkspaceGovernanceTest.java)
+- Verification: context injection, state isolation, policy checks.
 
 ## Verification Plan
 

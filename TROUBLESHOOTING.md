@@ -65,6 +65,11 @@
 **Root Cause:** Redundant or conflicting `quarkus-opentelemetry-deployment` artifact on the test augmentation classpath.
 **Resolution:** Remove the explicit dependency if it conflicts with the core runtime extension.
 
+### 🔴 Failure: `jakarta.enterprise.inject.spi.DefinitionException` (multiple scope annotations)
+**Symptom:** Build fails during CDI augmentation.
+**Root Cause:** A producer method (e.g., `WorkspaceContextProducer`) had multiple scope annotations (e.g., `@Dependent` and `@WorkspaceScoped`).
+**Resolution:** Remove the redundant annotation. The producer determines the scope of the produced bean.
+
 ### 🔴 Failure: `java.lang.IllegalArgumentException: Java 25 (69) is not supported...`
 **Symptom:** ByteBuddy fails during Hibernate proxy generation.
 **Root Cause:** JDK 25 is too new for the current ByteBuddy version.
