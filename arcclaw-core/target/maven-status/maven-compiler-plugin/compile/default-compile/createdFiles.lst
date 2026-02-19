@@ -5,4 +5,3 @@ com\arcclaw\core\scope\WorkspaceScopeContext$WorkspaceContextState.class
 com\arcclaw\core\scope\WorkspaceScopeHolder.class
 com\arcclaw\core\scope\ScopedCounter.class
 com\arcclaw\ArcClawInfo.class
-com\arcclaw\core\scope\WorkspaceScopeManager.class

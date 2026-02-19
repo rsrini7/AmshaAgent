@@ -59,9 +59,7 @@ public final class WorkspaceScopeHolder {
      * if no session is active.
      */
     public static String get() {
-        String s = CURRENT_SESSION.get();
-        System.out.println("[ArcClaw Holder] Getting session: " + s + " on thread: " + Thread.currentThread());
-        return s;
+        return CURRENT_SESSION.get();
     }
 
     /**

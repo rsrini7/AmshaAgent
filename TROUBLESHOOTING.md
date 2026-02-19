@@ -80,7 +80,7 @@
 **Resolution:**
 - Add `jandex-maven-plugin` or empty `beans.xml` to `arcclaw-core`.
 - Ensure `quarkus-extension.properties` is in `src/main/resources/META-INF`.
-
+- **CRITICAL**: Ensure `quarkus-extension-processor` is a provided dependency in the deployment module. Without it, `@BuildStep` methods are ignored, and the context is never registered.
 
 ### 🔴 Failure: `ContextNotActiveException` in Tests
 **Symptom:** `ContextNotActiveException` when running tests, even if `WorkspaceScopeHolder.set()` seems to be called.
