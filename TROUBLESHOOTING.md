@@ -176,3 +176,34 @@
 - Found `contextClass()` method in `ContextConfigurator` (avoiding the need for a `BytecodeRecorder`).
 **Result:** Successfully implemented `WorkspaceScopeContext` matches the internal Arc expectations.
 
+---
+
+## 8. State & Lifecycle Layer Troubleshooting
+
+### 🔴 Failure: `PanacheRepository` Bytecode Enhancement
+**Symptom:** `java.lang.NoClassDefFoundError` or `Method not found` when using `PanacheRepository` in a library module (`arcclaw-core`).
+**Root Cause:** Quarkus Panache bytecode enhancement only runs in the application module (`arcclaw-app`). It does not instrument classes in external library jars during the build of the app.
+**Resolution:**
+- Use plain `EntityManager` and JPQL in library modules (`arcclaw-core`).
+- Avoid `extends PanacheEntity` or `implements PanacheRepository` in libraries.
+
+### 🔴 Failure: `UnknownEntityException` (Hibernate)
+**Symptom:** Entities in `arcclaw-core` are not discovered by Hibernate in `arcclaw-app`.
+**Root Cause:** Hibernate ORM in Quarkus only scans the main app package by default.
+**Resolution:**
+- Config: `quarkus.hibernate-orm.packages=com.arcclaw.core.state` in `application.yaml`.
+- Ensure `jandex` index exists in `arcclaw-core` (via `jandex-maven-plugin` or `beans.xml`).
+
+### 🔴 Failure: `UnsatisfiedResolutionException` for `WorkspaceScopeContext`
+**Symptom:** `@Inject WorkspaceScopeContext context` fails.
+**Root Cause:** `WorkspaceScopeContext` implements `InjectableContext` (Arc SPI) but is **not** a CDI bean itself (no scope annotation).
+**Resolution:**
+- Do not inject it directly.
+- Use `Arc.container().getActiveContext(WorkspaceScoped.class)` to retrieve the active context instance.
+
+### 🔴 Failure: `IllegalAccessError` in Tests
+**Symptom:** Test in `arcclaw-app` cannot access package-private `@Observes` method in `arcclaw-core`.
+**Root Cause:** Classloader separation between the app module and the core library module prevents package-private access, even if packages match.
+**Resolution:** Make the `@Observes` method `public`.
+
+

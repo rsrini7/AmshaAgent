@@ -45,6 +45,9 @@ public class ProcessIsolationExecutor {
     @Inject
     SecretVault secretVault;
 
+    @Inject
+    AgentOtelContext otelContext;
+
     @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
     String sandboxStrategy;
 
@@ -186,7 +189,7 @@ public class ProcessIsolationExecutor {
         String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                 + "-" + Long.toHexString(System.nanoTime());
 
-        Span span = AgentOtelContext.childSpan(sessionId, "tool.container_exec");
+        Span span = otelContext.childSpan(sessionId, "tool.container_exec");
         span.setAttribute("container.image", containerImage);
         span.setAttribute("container.name", containerName);
         span.setAttribute("sandbox.strategy", "PODMAN");

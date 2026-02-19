@@ -1,10 +1,15 @@
 package com.arcclaw.core.agent;
 
+import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import io.opentelemetry.api.trace.Span;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,11 +45,83 @@ public class AgentLoop {
     @Inject
     ToolRegistry toolRegistry;
 
+    @Inject
+    StatefulAgentStore agentStore;
+
+    @Inject
+    AgentOtelContext otelContext;
+
     /**
-     * Execute the reasoning loop with default iteration limit.
+     * Execute the reasoning loop with default iteration limit (no lifecycle
+     * context).
      */
     public AgentResult run(String goal, ReasoningEngine engine) {
         return run(goal, engine, DEFAULT_MAX_ITERATIONS);
+    }
+
+    /**
+     * Lifecycle-aware entry point — sets up context, resumes from checkpoint,
+     * and tears down on completion.
+     * <p>
+     * Context setup (try):
+     * <ol>
+     * <li>{@code WorkspaceScopeHolder.set(sessionId)} — activates CDI scope</li>
+     * <li>MDC: pushes {@code sessionId} for structured logging</li>
+     * <li>OTel: starts a session root span</li>
+     * <li>Checkpoint: loads existing history from {@code StatefulAgentStore}</li>
+     * </ol>
+     * <p>
+     * Context teardown (finally):
+     * <ol>
+     * <li>Clear MDC</li>
+     * <li>Clear {@code WorkspaceScopeHolder}</li>
+     * <li>End OTel session span</li>
+     * </ol>
+     *
+     * @param sessionId     The workspace session ID.
+     * @param agentRole     The agent role identifier.
+     * @param goal          The user's goal / task description.
+     * @param engine        The reasoning engine (LLM abstraction).
+     * @param maxIterations Maximum loop iterations before forced termination.
+     * @return The final result with reasoning trace.
+     */
+    public AgentResult run(String sessionId, String agentRole, String goal,
+            ReasoningEngine engine, int maxIterations) {
+        // --- CONTEXT SETUP ---
+        WorkspaceScopeHolder.set(sessionId);
+        MDC.put("sessionId", sessionId);
+        MDC.put("agentRole", agentRole);
+        Span sessionSpan = otelContext.startSessionSpan(sessionId);
+
+        try {
+            // --- CHECKPOINT RESUME ---
+            List<ReasoningStep> resumedHistory = List.of();
+            var existingCheckpoint = agentStore.load(sessionId, agentRole);
+            if (existingCheckpoint.isPresent()) {
+                resumedHistory = agentStore.deserializeSteps(existingCheckpoint.get());
+                log.infof("Resumed %d steps from checkpoint (session=%s, role=%s)",
+                        resumedHistory.size(), sessionId, agentRole);
+            }
+
+            AgentResult result = runLoop(goal, engine, maxIterations, resumedHistory);
+
+            // --- CHECKPOINT FINAL STATE ---
+            if (result.success()) {
+                var cp = agentStore.save(sessionId, agentRole, result.steps());
+                agentStore.markCompleted(cp.id);
+            } else {
+                var cp = agentStore.save(sessionId, agentRole, result.steps());
+                agentStore.markFailed(cp.id, result.terminationReason());
+            }
+
+            return result;
+        } finally {
+            // --- CONTEXT TEARDOWN ---
+            MDC.remove("sessionId");
+            MDC.remove("agentRole");
+            WorkspaceScopeHolder.clear();
+            otelContext.endSessionSpan(sessionId);
+        }
     }
 
     /**
@@ -65,8 +142,22 @@ public class AgentLoop {
      * @return The final result with reasoning trace.
      */
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
+        return runLoop(goal, engine, maxIterations, List.of());
+    }
+
+    /**
+     * Core reasoning loop — drives the Thought-Plan-Act-Observe pattern.
+     *
+     * @param goal           The user's goal.
+     * @param engine         The reasoning engine.
+     * @param maxIterations  Iteration limit.
+     * @param resumedHistory Pre-existing steps from a checkpoint (empty if fresh).
+     * @return The final result.
+     */
+    private AgentResult runLoop(String goal, ReasoningEngine engine,
+            int maxIterations, List<ReasoningStep> resumedHistory) {
         // Mutable state — guarded by synchronized (JEP 491 safe)
-        final List<ReasoningStep> history = new ArrayList<>();
+        final List<ReasoningStep> history = new ArrayList<>(resumedHistory);
         int iteration = 0;
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);

@@ -45,6 +45,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **4** | Tool Layer | **Complete** | `AgentTool` interface, `ToolRegistry` (CDI discovery + governance), `GithubTool` (`@RequiresSecret`), 7 tests passing. |
 | **5** | Agent & Orchestration | **Complete** | `AgentLoop` (Thought-Plan-Act-Observe, 3 guardrails), `ReasoningEngine` interface, 3 agent personas, 5 tests passing. |
 | **6** | State Layer (Checkpointing) | **Complete** | `AgentCheckpoint` entity (plain JPA, not Panache), `StatefulAgentStore` (EntityManager + Jackson), `SqliteWalConfigurer` (WAL PRAGMAs), 4 tests passing. |
+| **7** | Lifecycle Layer | **Complete** | `WorkspaceManager` (Heartbeats, GC, Termination), `AgentLoop` lifecycle upgrade. deviation: `WorkspaceScopeContext` injected via `Arc.container()` lookup (custom context). |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.

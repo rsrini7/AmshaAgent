@@ -1,17 +1,44 @@
 package com.arcclaw.core.observability;
 
 import io.opentelemetry.api.trace.Span;
+import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stub for OTel session-level span management.
+ * OTel session-level span management.
  * <p>
- * Full implementation in Phase 9. Currently returns no-op spans
- * so that {@code ProcessIsolationExecutor} compiles without the
- * full observer layer.
+ * Phase 9 will replace these stubs with real OpenTelemetry SDK span creation.
+ * Currently returns no-op spans so that dependent classes compile and test
+ * without the full observer layer.
+ * <p>
+ * <strong>Phase 7 refactor:</strong> Converted from static utility to
+ * {@code @ApplicationScoped} bean for CDI injection into
+ * {@code ProcessIsolationExecutor} and {@code AgentLoop}.
  */
-public final class AgentOtelContext {
+@ApplicationScoped
+public class AgentOtelContext {
 
-    private AgentOtelContext() {
+    /**
+     * Start a session-level root span.
+     * <p>
+     * Phase 9: will create a real root span for the entire agent session.
+     *
+     * @param sessionId The workspace session ID.
+     * @return A no-op {@link Span} (stub).
+     */
+    public Span startSessionSpan(String sessionId) {
+        // Phase 9: create real root span for the session
+        return Span.getInvalid();
+    }
+
+    /**
+     * End a session-level root span.
+     * <p>
+     * Phase 9: will close the root span and flush telemetry.
+     *
+     * @param sessionId The workspace session ID.
+     */
+    public void endSessionSpan(String sessionId) {
+        // Phase 9: end the root span
     }
 
     /**
@@ -24,7 +51,7 @@ public final class AgentOtelContext {
      * @param operationName The span operation name (e.g., "tool.container_exec").
      * @return A no-op {@link Span} (stub).
      */
-    public static Span childSpan(String sessionId, String operationName) {
+    public Span childSpan(String sessionId, String operationName) {
         // Phase 9: will create real child span under the session root
         return Span.getInvalid();
     }

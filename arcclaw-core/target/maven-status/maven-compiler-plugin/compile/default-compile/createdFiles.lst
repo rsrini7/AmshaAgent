@@ -18,8 +18,8 @@ com\arcclaw\core\scope\WorkspaceScopeHolder.class
 com\arcclaw\core\observability\AgentOtelContext.class
 com\arcclaw\core\agent\HarperAgent.class
 com\arcclaw\core\agent\AgentResult.class
-com\arcclaw\core\security\Argon2idKeyDerivation.class
 com\arcclaw\core\state\StatefulAgentStore.class
+com\arcclaw\core\security\Argon2idKeyDerivation.class
 com\arcclaw\core\state\SqliteWalConfigurer.class
 com\arcclaw\core\agent\LucasAgent.class
 com\arcclaw\core\scope\WorkspaceScoped.class
@@ -33,7 +33,9 @@ com\arcclaw\core\tools\AgentTool.class
 com\arcclaw\core\security\ToolOperation.class
 com\arcclaw\core\security\AesGcmSivCipher$CipherResult.class
 com\arcclaw\core\agent\BenjaminAgent.class
+com\arcclaw\core\lifecycle\WorkspaceManager.class
 com\arcclaw\core\security\AesGcmSivCipher.class
+com\arcclaw\core\lifecycle\WorkspaceManager$1.class
 com\arcclaw\core\security\VaultKey.class
 com\arcclaw\core\security\RequiresSecret.class
 com\arcclaw\core\security\AutonomyPolicy$Default.class

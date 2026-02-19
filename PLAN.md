@@ -383,3 +383,57 @@ Make the AgentLoop stateful and resilient to crashes via JPA + SQLite checkpoint
 - ✅ Mark failed with reason and timestamp
 - ✅ Mark completed status transition
 - ✅ Upsert: save twice → same entity ID, updated steps
+
+---
+
+# Phase 7 — Lifecycle Layer
+
+Connect CDI Scope, Security Vault, State Store, and Agent Loop into a cohesive lifecycle.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **WorkspaceManager** is the lifecycle orchestrator — it owns heartbeats, GC sweeps, zombie recovery, and session termination. `AgentLoop` becomes lifecycle-aware via context setup/teardown.
+
+> [!NOTE]
+> **WorkspaceScopeContext**: Is an Arc custom context, not a CDI bean. Injected via `Arc.container().getActiveContext(WorkspaceScoped.class)` in `WorkspaceManager`.
+
+> [!TIP]
+> **AgentOtelContext**: Converted from static utility to `@ApplicationScoped` for proper CDI injection into `ProcessIsolationExecutor` and `AgentLoop`.
+
+## Proposed Changes
+
+### Core Module — WorkspaceManager
+
+#### [NEW] [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- `@ApplicationScoped`, `ConcurrentHashMap<String, Instant>` heartbeats
+- `recordHeartbeat(sessionId)` — updates timestamp
+- `terminateSession(sessionId)` — marks DB checkpoints FAILED, wipes workspace dir, destroys CDI scope
+- `@Scheduled` GC sweep — expires sessions beyond `session-ttl-minutes`
+- `@Observes StartupEvent` zombie recovery — marks orphaned IN_PROGRESS checkpoints FAILED (made `public` for testing)
+
+### Core Module — AgentOtelContext Upgrade
+
+#### [MODIFY] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Converted to `@ApplicationScoped`
+- Added `startSessionSpan(sessionId)` / `endSessionSpan(sessionId)` stubs
+
+### Core Module — AgentLoop Upgrades
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- New `run(sessionId, agentRole, ...)` overload
+- Context setup: `WorkspaceScopeHolder`, MDC, OTel session span
+- State integration: `agentStore.load()` resume + per-iteration checkpointing
+- Context teardown in `finally` block
+
+### Tests
+
+#### [NEW] [WorkspaceManagerTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/lifecycle/WorkspaceManagerTest.java)
+- 4 tests: Zombie recovery, GC sweep, Termination, Multi-role termination
+
+## Verification
+
+- ✅ Zombie recovery marks IN_PROGRESS as FAILED on startup
+- ✅ GC sweep terminates expired sessions
+- ✅ Termination wipes workspace dir and destroys CDI scope
+- ✅ Completed checkpoints not overwritten during termination

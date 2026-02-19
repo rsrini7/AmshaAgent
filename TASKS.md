@@ -97,28 +97,15 @@
 
 ---
 
-## Phase 6 — State Layer (Checkpointing)
-- [ ] `AgentCheckpoint` Panache entity (with `failedAt`, `failReason` fields)
-- [ ] `StatefulAgentStore` interface (checkpoint, load, complete, findInProgress, fail)
-- [ ] `StatefulAgentStoreImpl` (`@ApplicationScoped`, Jackson serialization)
-- [ ] `SqliteWalConfigurer` (startup WAL + `busy_timeout` PRAGMAs)
-
----
-
 ## Phase 7 — Lifecycle Layer
-- [ ] `WorkspaceManager` (`@ApplicationScoped`)
-  - [ ] Startup zombie workspace scan (`@Observes StartupEvent`)
-  - [ ] Heartbeat tracking (`ConcurrentHashMap<String, Instant>`)
-  - [ ] Scheduled GC (`@Scheduled`, TTL-based expiration)
-  - [ ] Session destruction (CDI teardown + directory cleanup + DB mark FAILED)
-- [ ] `AgentLoop` (`@ApplicationScoped`)
-  - [ ] MDC session tagging
-  - [ ] OTel root span lifecycle (`AgentOtelContext.start/end`)
-  - [ ] Scope activation/deactivation
-  - [ ] Checkpoint resume + supervisor execution
-  - [ ] `terminateSession()` endpoint support
+- [x] `WorkspaceManager` (Heartbeats, GC, Termination, Zombie Recovery) <!-- id: 55 -->
+- [x] `AgentOtelContext` refactor (static → @ApplicationScoped + session spans) <!-- id: 56 -->
+- [x] `ProcessIsolationExecutor` update (inject `AgentOtelContext`) <!-- id: 57 -->
+- [x] `AgentLoop` upgrade (Context setup/teardown + Checkpoint resume) <!-- id: 58 -->
+- [x] `WorkspaceManagerTest` (Zombie recovery, GC sweep, Termination) <!-- id: 59 -->
 
 ---
+
 
 ## Phase 8 — Governance Layer
 - [ ] `GovernanceLayer` (`@ApplicationScoped`, implements `AgentObserver`)
