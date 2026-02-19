@@ -42,7 +42,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **1** | Core Scope Layer | **Complete** | `@WorkspaceScoped` fully functional with virtual thread support. |
 | **2** | Security & Governance | **Complete** | Vault (Argon2id/AES-GCM-SIV) and Autonomy policy verified. |
 | **3** | Sandbox Layer | **Complete** | `ProcessIsolationExecutor` (PODMAN/NAMESPACE/NONE), circuit breaker, ephemeral env-file injection, `@PreDestroy` graceful shutdown. `AgentOtelContext` stub for Phase 9. |
-| **4** | Tool Layer | **Planned** | Only `ToolOperation` enums exist; registry and tools pending. |
+| **4** | Tool Layer | **Complete** | `AgentTool` interface, `ToolRegistry` (CDI discovery + governance), `GithubTool` (`@RequiresSecret`), 7 tests passing. |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.

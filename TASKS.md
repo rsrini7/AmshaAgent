@@ -60,9 +60,11 @@
 ---
 
 ## Phase 4 — Tool Layer
-- [ ] `AgentTool` interface (`name()`, `description()`)
-- [ ] `ToolRegistry` (`@ApplicationScoped`, CDI `Instance<AgentTool>`, autonomy check, secret collection)
-- [ ] `GithubTool` example (`@RequiresSecret` annotations, `@Tool` LangChain4J method)
+- [x] `ToolResponse` record (`exitCode`, `output`, `success`) <!-- id: 29 -->
+- [x] `AgentTool` interface (`name()`, `description()`, `requiredOperation()`, `execute()`) <!-- id: 30 -->
+- [x] `ToolRegistry` (`@ApplicationScoped`, CDI `Instance<AgentTool>`, autonomy check, secret extraction) <!-- id: 31 -->
+- [x] `GithubTool` (`@RequiresSecret(GITHUB_TOKEN)`, `ProcessIsolationExecutor` delegation) <!-- id: 32 -->
+- [x] `ToolRegistryTest` (7 tests: discovery, governance, reflection, error handling) <!-- id: 33 -->
 
 ---
 

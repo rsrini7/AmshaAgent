@@ -1,4 +1,5 @@
 com\arcclaw\core\security\Argon2idKeyDerivation.class
+com\arcclaw\core\tools\ToolResponse.class
 com\arcclaw\core\scope\WorkspaceScoped.class
 com\arcclaw\core\security\EncryptedSecret$EncryptedSecretId.class
 com\arcclaw\core\security\AutonomyLevel.class
@@ -7,6 +8,7 @@ com\arcclaw\core\security\AutonomyPolicy.class
 com\arcclaw\core\scope\WorkspaceScopeContext.class
 com\arcclaw\core\scope\WorkspaceContext.class
 com\arcclaw\core\sandbox\ProcessIsolationExecutor.class
+com\arcclaw\core\tools\AgentTool.class
 com\arcclaw\core\security\AesGcmSivCipher$CipherResult.class
 com\arcclaw\core\security\ToolOperation.class
 com\arcclaw\core\security\AesGcmSivCipher.class
@@ -17,6 +19,8 @@ com\arcclaw\core\security\SecretVaultImpl.class
 com\arcclaw\core\security\VaultKey.class
 com\arcclaw\core\security\RequiresSecret.class
 com\arcclaw\core\security\AutonomyPolicy$Default.class
+com\arcclaw\core\tools\ToolRegistry.class
+com\arcclaw\core\tools\GithubTool.class
 com\arcclaw\core\scope\WorkspaceContextProducer.class
 com\arcclaw\core\scope\WorkspaceScopeContext$SessionStore.class
 com\arcclaw\core\scope\WorkspaceScopeContext$WorkspaceContextState.class

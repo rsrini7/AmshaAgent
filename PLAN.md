@@ -194,3 +194,62 @@ mvn clean test -pl arcclaw-app -am -Dtest=ProcessIsolationExecutorTest "-Dsurefi
 - ✅ NONE strategy direct execution
 - ✅ Empty secrets map handling
 - ✅ Invalid command error handling
+
+---
+
+# Phase 4 — Tool Layer
+
+Build the tool abstraction, CDI-based discovery registry with governance enforcement, and a reference `GithubTool` implementation.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **`AutonomyPolicy.Default` not CDI-managed**: Instantiated directly in `ToolRegistry` — stateless logic, no injection needed. Can be refactored to `@Produces` later.
+
+> [!NOTE]
+> **`@RequiresSecret` reflection**: `ToolRegistry.extractRequiredSecrets()` reads annotations from the tool's `execute(Map)` method to build the env-var → vault-key mapping for `ProcessIsolationExecutor`.
+
+> [!TIP]
+> **`ToolResponse` as `record`**: Immutable, native-image safe, with `success()`/`failure()` factory methods.
+
+## Proposed Changes
+
+### Core Module — Tool Abstraction
+
+#### [NEW] [ToolResponse.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolResponse.java)
+- Java record: `exitCode`, `output`, `success`
+- Factory methods: `success(String)`, `failure(int, String)`
+
+#### [NEW] [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java)
+- Interface: `name()`, `description()`, `requiredOperation()` → `ToolOperation`, `execute(Map)`
+
+#### [NEW] [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java)
+- `@ApplicationScoped`, CDI `Instance<AgentTool>` discovery
+- `invokeTool()`: governance check → tool execution
+- `extractRequiredSecrets()`: reflective `@RequiresSecret` annotation reading
+
+### Core Module — Reference Tool
+
+#### [NEW] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- `@ApplicationScoped`, `@RequiresSecret(envVar="GITHUB_TOKEN", vaultKey="GITHUB_TOKEN")`
+- Runs `gh repo view <repo>` via `ProcessIsolationExecutor`
+- `requiredOperation()` → `NETWORK_OUTBOUND`
+
+### App Module — Tests
+
+#### [NEW] [ToolRegistryTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/tools/ToolRegistryTest.java)
+- 7 tests: discovery, findTool, unknown tool, governance block/allow, secret extraction, invocation error
+
+## Verification Plan
+
+### Automated Tests
+```bash
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn clean test -pl arcclaw-app -am -Dtest=ToolRegistryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+```
+- ✅ Tool discovery via CDI `Instance<AgentTool>`
+- ✅ `findTool()` returns correct tool / empty for unknown
+- ✅ Governance: READ_ONLY blocks NETWORK_OUTBOUND
+- ✅ Governance: FULL allows tool invocation
+- ✅ `@RequiresSecret` extraction from GithubTool
+- ✅ Unknown tool invocation throws `IllegalArgumentException`
