@@ -67,6 +67,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
         return findBySessionAndRole(sessionId, agentRole);
     }
