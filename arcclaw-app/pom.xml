@@ -188,6 +188,7 @@
         <quarkus.package.type>native</quarkus.package.type>
         <quarkus.native.enabled>true</quarkus.native.enabled>
         <quarkus.native.container-build>true</quarkus.native.container-build>
+        <quarkus.native.container-runtime>podman</quarkus.native.container-runtime>
         <quarkus.native.builder-image>
           quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
         </quarkus.native.builder-image>
