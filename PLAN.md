@@ -662,11 +662,12 @@ Provide local containerized execution scaffolding via Docker Compose and rootles
 
 #### [NEW] [docker-compose.yaml](file:///h:/ws/ArcClaw/docker-compose.yaml)
 - Defines services for `arcclaw`, `ollama`, `otel-collector`, and `jaeger`.
+- **`init-perms`**: Ephemeral container to `chown 1000:1000 /app/data` avoiding rootless Podman SQLite `Permission denied` errors on default `root:root` named volumes.
 - Exposes necessary ports and mounts data volumes.
 
 #### [NEW] [Dockerfile.native](file:///h:/ws/ArcClaw/Dockerfile.native)
 - Uses `ubi-minimal:9.3` to provide a container native runner.
-- Configures `arcclaw` standard user, subuids/subgids, and installs `podman` for embedded tool isolation execution.
+- Configures `arcclaw` standard user (UID 1000), subuids/subgids, and installs `podman` for embedded tool isolation execution.
 
 #### [NEW] [containers.conf](file:///h:/ws/ArcClaw/containers.conf)
 - Forces `vfs` storage driver inside the UBI container to bridge rootless podman.
