@@ -1,6 +1,5 @@
 package com.arcclaw.core.agent;
 
-import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -16,6 +15,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +25,8 @@ import java.util.Collections;
 
 @ApplicationScoped
 public class LangChainReasoningEngine implements ReasoningEngine {
+
+    private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
 
     @Inject
     ChatLanguageModel chatLanguageModel;
@@ -68,7 +70,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         Collections.singletonList(request)));
 
                 if (step.observation() != null) {
-                    messages.add(ToolExecutionResultMessage.from(callId, step.action(), step.observation()));
+                    String safeObs = step.observation();
+                    if (safeObs.length() > 4000) {
+                        safeObs = safeObs.substring(0, 4000) + "... [TRUNCATED FOR LENGTH]";
+                    }
+                    messages.add(ToolExecutionResultMessage.from(callId, step.action(), safeObs));
                 }
             } else {
                 if (step.thought() != null && !step.thought().isEmpty()) {
@@ -107,7 +113,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     });
                 }
             } catch (Exception e) {
-                // fallback to empty map
+                log.warn("LLM provided invalid JSON arguments: " + req.arguments());
+                return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, Map.of("error",
+                        "System Error: You provided invalid JSON formatting for the tool arguments. Please ensure strict JSON compliance without trailing commas."),
+                        inputTokens, outputTokens);
             }
             return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
         } else {
