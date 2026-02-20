@@ -123,7 +123,7 @@ Your `Dockerfile.native` expects the GraalVM native binary to already exist on y
 
 # OR, if you want Docker to build the native Linux binary for you:
 # (Note: Windows PowerShell users MUST quote the -D arguments, otherwise PS interprets them as malformed paths)
-.\mvnw.cmd clean package -pl arcclaw-app -Pnative "-Dquarkus.native.container-build=true" -DskipTests
+.\mvnw.cmd clean package -pl arcclaw-app -Pnative "-Dquarkus.native.container-build=true" "-Dquarkus.native.container-runtime=podman" -DskipTests
 ```
 
 ### Step 3: Boot the Stack
