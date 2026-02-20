@@ -66,7 +66,8 @@
               </execution>
           </executions>
           <configuration>
-              <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED</jvmArgs>
+              <!-- Netty requires sun.misc.Unsafe Memory Access which is restricted default in JDK 22/25 (JEP 471) -->
+              <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</jvmArgs>
           </configuration>
         </plugin>
         <plugin>

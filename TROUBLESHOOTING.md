@@ -443,6 +443,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Root Cause:** The SQLite JDBC driver does NOT automatically create missing parent directories. On Linux/Docker, `root:root` volume mapping hides this, but naked Windows filesystems block Hibernate ORM from initializing its DDL scripts.
 **Resolution:** Replaced the empty `ArcClawApp` with a customized `@QuarkusMain` entry method that boots prior to Hibernate. It uses `ConfigProvider` to natively parse `ARCCLAW_DATA_DIR` and runs `Files.createDirectories()` securely.
 
+### 🔴 Failure: Netty crashes with `sun.misc.Unsafe unavailable` on REST API request
+**Symptom:** The Quarkus app boots correctly, but the first incoming HTTP request to `/api/v1/sessions` throws a massive `UnsupportedOperationException: sun.misc.Unsafe unavailable` from `io.netty.util.internal.CleanerJava9`.
+**Root Cause:** In JDK 25, JEP 471 terminally deprecated and restrictively blocked the `sun.misc.Unsafe` memory-access methods by default. Netty heavily relies on these methods to allocate low-level byte buffers (especially on Windows where native epoll isn't available).
+**Resolution:** Hardcoded `<jvmArgs>--sun-misc-unsafe-memory-access=allow</jvmArgs>` into both the `quarkus-maven-plugin` and `maven-surefire-plugin` within `arcclaw-app/pom.xml`. This explicitly re-enables `Unsafe` memory allocations for Netty until the library formally migrates to the Foreign Function & Memory API (FFM).
+
 ---
 
 ## 15. LLM Operations Troubleshooting (Phase 14.1)
