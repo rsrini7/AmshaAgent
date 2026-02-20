@@ -395,3 +395,16 @@ mvn test -pl arcclaw-app -am -Dtest=TestClassName -Dsurefire.failIfNoSpecifiedTe
 # Run all tests
 mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 ```
+
+---
+
+## 13. API & Channel Troubleshooting (Phase 11)
+
+### 🔴 Failure: HTTP 404 on RestAssured Setup for Application Endpoints
+**Symptom:** Integration tests targeting REST endpoints unexpectedly return `404 Not Found`. Wait, didn't `quarkus-rest` load correctly? Yes it did.
+**Root Cause:** Two distinct causes exist for this:
+1. **API Prefix configuration:** `application.yaml` defined a base path (`quarkus.rest.path=/api/v1`). Hardcoded endpoints checking `/sessions` missed this redirect.
+2. **Missing Transitive Serialization Extensions:** Defining extensions such as `quarkus-rest-jackson` or `quarkus-hibernate-validator` strictly inside library modules like `arcclaw-core` will *not* reliably enable them in Quarkus HTTP processing if the primary `arcclaw-app` module doesn't include them directly.
+**Resolution:**
+- Always ensure `quarkus.rest.path` reflects your expected request URL.
+- Force inclusion of critical serialization and validation dependencies inside the leaf `arcclaw-app/pom.xml`.

@@ -136,12 +136,16 @@
 ---
 
 ## Phase 11 — Channel / REST Layer
-- [ ] `AgentResource` (JAX-RS `@Path("/sessions")`)
-  - [ ] `POST /sessions` — create session (201)
-  - [ ] `POST /sessions/{id}/run` — sync execution
-  - [ ] `POST /sessions/{id}/run-async` — async (202 Accepted)
-  - [ ] `GET /sessions/{id}/status` — query status
-  - [ ] `DELETE /sessions/{id}` — terminate
+- [x] Add `quarkus-hibernate-validator` dependency to `arcclaw-core` <!-- id: 65 -->
+- [x] DTOs: `CreateSessionResponse`, `RunAgentRequest`, `SessionStatusResponse` <!-- id: 66 -->
+- [x] `DefaultReasoningEngine` stub for testing <!-- id: 67 -->
+- [x] `AgentResource` (`@Path("/sessions")`, `@RunOnVirtualThread`) <!-- id: 68 -->
+  - [x] `POST /sessions` — create session (201) <!-- id: 69 -->
+  - [x] `POST /sessions/{id}/run` — sync execution (200) <!-- id: 70 -->
+  - [x] `POST /sessions/{id}/run-async` — async execution (202) <!-- id: 71 -->
+  - [x] `GET /sessions/{id}/status/{role}` — load state (200/404) <!-- id: 72 -->
+  - [x] `DELETE /sessions/{id}` — terminate session (204) <!-- id: 73 -->
+- [x] `AgentResourceTest` in `arcclaw-app` <!-- id: 74 -->
   - [ ] All endpoints `@RunOnVirtualThread`
   - [ ] Bean validation on request records
 

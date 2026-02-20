@@ -1,0 +1,96 @@
+package com.arcclaw.core.api;
+
+import com.arcclaw.core.api.dto.RunAgentRequest;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
+import org.junit.jupiter.api.Test;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.*;
+
+@QuarkusTest
+class AgentResourceTest {
+
+        @Test
+        void testFullAgentLifecycle() {
+                // 1. Create Session
+                String sessionId = given()
+                                .contentType(ContentType.JSON)
+                                .when().post("/api/v1/sessions")
+                                .then()
+                                .statusCode(201)
+                                .body("sessionId", notNullValue())
+                                .extract().path("sessionId");
+
+                // 2. Sync Run (Should use the DefaultReasoningEngine stub returning FINISH)
+                RunAgentRequest request = new RunAgentRequest("Hello, World!", "COORDINATOR", 3);
+
+                given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when().post("/api/v1/sessions/{id}/run", sessionId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(200)
+                                .body("success", is(true))
+                                .body("finalAnswer", notNullValue());
+
+                // 3. Check Status
+                given()
+                                .when().get("/api/v1/sessions/{id}/status/COORDINATOR", sessionId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(200)
+                                .body("sessionId", equalTo(sessionId))
+                                .body("status", equalTo("COMPLETED"))
+                                .body("steps.size()", greaterThanOrEqualTo(1));
+
+                // 4. Terminate Session
+                given()
+                                .when().delete("/api/v1/sessions/{id}", sessionId)
+                                .then()
+                                .statusCode(204);
+
+                // 5. Verify cleanup (WorkspaceManager should have cleared the heartbeats,
+                // though the DB checkpoint remains)
+                // A GET should still return 200 since the state is persisted in SQLite,
+                // but let's test a non-existent session for 404 compliance.
+                given()
+                                .when().get("/api/v1/sessions/fake-id-123/status/COORDINATOR")
+                                .then()
+                                .statusCode(404);
+        }
+
+        @Test
+        void testValidationFailure() {
+                // Missing goal and role
+                RunAgentRequest invalidRequest = new RunAgentRequest(null, "", null);
+
+                given()
+                                .contentType(ContentType.JSON)
+                                .body(invalidRequest)
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(400); // Bad Request from Validator
+        }
+
+        @Test
+        void testAsyncRun() {
+                String sessionId = given()
+                                .contentType(ContentType.JSON)
+                                .when().post("/api/v1/sessions")
+                                .then()
+                                .statusCode(201)
+                                .extract().path("sessionId");
+
+                RunAgentRequest request = new RunAgentRequest("Async task", "CODER", 5);
+
+                given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when().post("/api/v1/sessions/{id}/run-async", sessionId)
+                                .then()
+                                .statusCode(202); // Accepted immediately
+        }
+}

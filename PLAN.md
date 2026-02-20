@@ -581,3 +581,52 @@ Implement Podman liveness and readiness checks using MicroProfile Health.
 3. **Always check the management port** — Quarkus 3.x serves health endpoints on port 9001 (test mode). Use `.port(9001)` in RestAssured.
 4. **Never `@Mock extends` a class with `@ConfigProperty` fields** — ArC's generated `_Bean.doCreate()` code runs in a different classloader and cannot access parent fields.
 5. **Always run `mvn clean install -DskipTests`** when adding new beans or annotations to `arcclaw-core` before running tests in `arcclaw-app`.
+
+---
+
+
+# Phase 11 — Channel / REST Layer ✅
+
+Expose the agentic kernel via a resilient, virtual-thread-powered REST API using Quarkus RESTEasy Reactive and Hibernate Validator.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Virtual Threads**: The REST resource uses `@RunOnVirtualThread` to ensure that long-running LLM calls (synchronous) or process executions do not block the Quarkus event loop or carrier threads. This is critical for scalability.
+
+> [!NOTE]
+> **REST Subpaths**: Endpoints tested via `/api/v1/sessions` per `quarkus.rest.path` configured in `application.yaml`. Tests hitting `/sessions` will receive a 404.
+
+> [!WARNING]
+> **RESTEasy Extensions**: Extensions tracking Jackson validation (`quarkus-rest-jackson` and `quarkus-hibernate-validator`) must explicitly be declared in the runtime `arcclaw-app` module to be discovered by Quarkus. Declaring them only in `arcclaw-core` does not reliably carry over into the test lifecycle execution environment without configuration.
+
+## Completed Changes
+
+#### [MODIFY] [pom.xml](file:///h:/ws/ArcClaw/arcclaw-core/pom.xml) / [pom.xml](file:///h:/ws/ArcClaw/arcclaw-app/pom.xml)
+- Included `quarkus-rest-jackson` and `quarkus-hibernate-validator` dependencies.
+
+#### [NEW] [CreateSessionResponse.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/dto/CreateSessionResponse.java)
+- `record CreateSessionResponse(String sessionId)`
+
+#### [NEW] [RunAgentRequest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/dto/RunAgentRequest.java)
+- `record RunAgentRequest(@NotBlank String goal, @NotBlank String agentRole, Integer maxIterations)`
+
+#### [NEW] [SessionStatusResponse.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/dto/SessionStatusResponse.java)
+- `record SessionStatusResponse(String sessionId, String status, java.util.List<com.arcclaw.core.agent.ReasoningStep> steps)`
+
+#### [NEW] [DefaultReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/DefaultReasoningEngine.java)
+- `@ApplicationScoped` stub implementation of `ReasoningEngine`. Returns a hardcoded `FINISH` step to allow the REST layer to be tested before LangChain4J is fully wired.
+
+#### [NEW] [AgentResource.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResource.java)
+- `@Path("/sessions")`, `@Consumes(MediaType.APPLICATION_JSON)`, `@Produces(MediaType.APPLICATION_JSON)`
+- `@RunOnVirtualThread` on the class level.
+- `POST /` -> Creates session, records heartbeat, returns `201 Created`.
+- `POST /{id}/run` -> Sync agent run, returns `200 OK` with `AgentResult`.
+- `POST /{id}/run-async` -> Spawns virtual thread for agent run, returns `202 Accepted`.
+- `GET /{id}/status/{role}` -> Loads checkpoint, returns `200 OK` with `SessionStatusResponse` or `404 Not Found`.
+- `DELETE /{id}` -> Terminates session, returns `204 No Content`.
+
+## Verification
+- ✅ `AgentResourceTest`: Used RestAssured to test all 5 endpoints via `/api/v1/sessions/...`. Verified HTTP statuses 201, 200, 202, 404, 204. Verified sync output behavior and validation (400) failures logic.
+
+---

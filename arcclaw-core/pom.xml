@@ -19,7 +19,15 @@
 
     <!-- REST -->
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest</artifactId></dependency>
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest-jackson</artifactId></dependency>
+    <!-- REST Data Binding & Validation -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-rest-jackson</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-hibernate-validator</artifactId>
+    </dependency>
 
     <!-- WebSocket -->
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-websockets-next</artifactId></dependency>
