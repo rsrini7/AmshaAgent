@@ -18,11 +18,12 @@ RUN echo "arcclaw:100000:65536" > /etc/subuid && \
 
 WORKDIR /app
 
+# Create internal mount points and assign ownership before dropping privileges
+RUN mkdir -p /home/arcclaw/.config/containers /home/arcclaw/.local/share/containers /app/data && \
+    chown -R arcclaw:arcclaw /app /home/arcclaw
+
 # Switch to standard user
 USER arcclaw
-
-# Create sub-directories and local mount points
-RUN mkdir -p /home/arcclaw/.config/containers /home/arcclaw/.local/share/containers /app/data
 
 # Copy the Quarkus native binary
 COPY arcclaw-app/target/*-runner /app/application

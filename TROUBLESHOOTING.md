@@ -438,6 +438,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Root Cause:** Docker daemon creates named volumes as `root:root` by default, preventing the rootless `arcclaw` user (UID 1000) inside the container from writing the database.
 **Resolution:** We implemented an `init-perms` service in `docker-compose.yaml` to automatically `chown` the volume to UID 1000 before startup.
 
+### 🔴 Failure: Dockerfile.native Build Fails with `mkdir: cannot create directory '/app/data': Permission denied`
+**Symptom:** During `docker compose up --build`, the build halts at the `RUN mkdir -p /home/arcclaw/... /app/data` step.
+**Root Cause:** The `WORKDIR /app` directive implicitly creates `/app` as `root:root`. In `Dockerfile.native`, the user was switched to `USER arcclaw` *before* creating the `/app/data` subdirectory, which blocked access.
+**Resolution:** Moved the `RUN mkdir -p` block higher in `Dockerfile.native` (while still executing as root) and appended `&& chown -R arcclaw:arcclaw /app /home/arcclaw` before explicitly dropping privileges down to `USER arcclaw`.
+
 ### 🔴 Failure: Docker Compose `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`
 **Symptom:** Running `docker compose up` on Windows with Podman Desktop installed returns a connection error for `dockerDesktopLinuxEngine`.
 **Root Cause:** Podman Desktop exposes its API socket at `//./pipe/podman-machine-default`. The standalone `docker compose` binary defaults to searching for Docker Desktop's named pipe unless explicitly instructed otherwise or unless Podman Desktop's API compatibility routing is enabled.

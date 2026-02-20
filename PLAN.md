@@ -754,5 +754,10 @@ Hardening the local Quarkus Hot-Reload Test Runner (`quarkus:dev`) against JDK 2
 > **JUnit Jupiter Loading Anomaly**: Quarkus `DevModeMain` tries to load legacy JUnit 4 interceptors to handle transitive exceptions like `AssumptionViolatedException` natively. On strict module-path boundaries, Jupiter complains loudly via `ClassNotFoundException`.
 > **Fix**: Extracted `<groupId>junit</groupId><artifactId>junit</artifactId>` explicitly into the `<scope>test</scope>` block of `arcclaw-app` to silence the loading anomaly.
 
+> [!CAUTION]
+> **Podman Rootless Isolation Context**: The native Dockerfile switches to `USER arcclaw` (UID 1000) for security, but the default `WORKDIR /app` establishes file ownership as root. Subsequent `RUN mkdir -p /app/data` crashed the build sequence with `Permission denied`.
+> **Fix**: Executed internal `/app` and `.config/` directory mounts and explicitly `chown -R arcclaw:arcclaw` while still impersonating `root` before committing to the lower privileged `USER arcclaw`.
+
 ## Verification
 - ✅ Executing `r` in the `quarkus:dev` console successfully runs all 43 tests without `ClassNotFoundException` clutter and cleanly terminates without `IllegalAccessError`.
+- ✅ `docker compose up -d --build` successfully creates `/app/data` and launches the rootless container via Podman Desktop.

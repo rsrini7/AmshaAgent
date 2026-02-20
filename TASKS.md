@@ -197,6 +197,7 @@
 - [x] Unblock Netty Unsafe Memory buffers via `maven-surefire-plugin` and `quarkus-maven-plugin` JVM args
 - [x] Unblock JBoss Threads thread-local-resets by opening `java.base/java.lang`
 - [x] Silence DevMode JUnit framework loader exceptions by restoring `junit` in test scope
+- [x] Correct rootless `Permission denied` failure inside `Dockerfile.native` by mapping `chown` over `/app` before switching user contexts
 
 ---
 
