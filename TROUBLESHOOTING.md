@@ -2,7 +2,9 @@
 
 > **Consolidated Design Decisions, Known Failure Modes, and "Missing Think" Resolutions**
 >
-> This document serves as the single source of truth for architectural decisions, version alignments, and troubleshooting across the Build, CDI, Security, and Sandbox layers.
+> This document serves as the single source of truth for architectural decisions, version alignments, and troubleshooting across ALL phases (0–10).
+>
+> **Cross-Reference**: [PLAN.md](./PLAN.md) | [TASKS.md](./TASKS.md) | [DEVIATIONS.md](./DEVIATIONS.md) | [WALKTHROUGH.md](./WALKTHROUGH.md)
 
 ---
 
@@ -211,8 +213,9 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 | `@Alternative @Priority(1) implements HealthCheck` | ✅ | Clean CDI override, no classloader issues |
 | `RestAssured.get("/q/health/live")` | ❌ | Hits main HTTP port, not management port |
 | `given().port(9001).get("/q/health/live")` | ✅ | Correctly targets management interface |
+---
 
-## 5. Security & Sandbox Troubleshooting
+## 5. Security & Sandbox Troubleshooting (Phases 2–3)
 
 ### 🔴 Failure: `NoSuchMethodError` (AES-GCM-SIV)
 **Resolution:** Check for `bcprov-jdk18on` version 1.78.1+.
@@ -236,8 +239,7 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 **Symptom:** `WorkspaceScopeContext cannot be resolved to a type` during `@QuarkusTest` discovery.
 **Root Cause:** Stale `.class` files in `arcclaw-deployment/target/` from a previous build.
 **Resolution:** Always use `mvn clean test` instead of `mvn test` when switching between incremental builds.
-
-## 6. Native Image Troubleshooting
+## 6. Native Image Troubleshooting (Phase 0+)
 
 ### 🔴 Failure: OOM During Analysis
 **Resolution:** Increase heap: `-J-Xmx10g`.
@@ -246,8 +248,26 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 **Resolution:** `native-image.properties`: `--initialize-at-run-time=org.bouncycastle...DRBG`.
 
 ---
+## 7. Agent & Orchestration Troubleshooting (Phase 5)
 
-## 7. Search & Reverse Engineering Techniques
+### 🔴 Failure: `AgentLoop` Infinite Cycling
+**Symptom:** Agent never terminates, consuming all LLM budget.
+**Root Cause:** `ReasoningEngine.nextStep()` never returns a step with `action = "FINISH"`. The mock/LLM keeps generating tool calls.
+**Resolution:** `AgentLoop` enforces `maxIterations` (default 5). After exceeding, it returns `AgentResult.loopExceeded()`. Always test with a `ReasoningEngine` mock that eventually returns `FINISH`.
+
+### 🔴 Failure: Hallucinated Tool Names
+**Symptom:** Agent tries to call a tool that doesn't exist in the `ToolRegistry`.
+**Root Cause:** LLM generates an action name not matching any registered `AgentTool.name()`.
+**Resolution:** `AgentLoop` catches unresolved tools and injects an error observation: `"Tool 'foo' not found. Available: [bar, baz]"`. The loop continues with corrected context.
+
+### 🟡 Warning: `ArcClawSupervisor` CDI Qualifier Ambiguity
+**Symptom:** `AmbiguousResolutionException` when injecting `Agent` without `@AgentRole`.
+**Root Cause:** Multiple `Agent` implementations exist. CDI needs a qualifier.
+**Resolution:** Always inject via `@AgentRole(COORDINATOR)`, `@AgentRole(CODER)`, etc. `ArcClawSupervisor` uses `Instance<Agent>` with programmatic lookup.
+
+---
+
+## 8. State & Lifecycle Layer Troubleshooting (Phases 6–7)
 
 ### "Missing Think" Resolution: API Surface Discovery
 **Scenario:** Implementing custom CDI scopes (`InjectableContext`) without comprehensive official docs for internal SPIs.
@@ -287,35 +307,91 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 **Symptom:** Test in `arcclaw-app` cannot access package-private `@Observes` method in `arcclaw-core`.
 **Root Cause:** Classloader separation between the app module and the core library module prevents package-private access, even if packages match.
 **Resolution:** Make the `@Observes` method `public`.
+---
+
+## 9. Governance & OTel Troubleshooting (Phases 8–9)
+
+### 🔴 Failure: Budget Not Enforced
+**Symptom:** Agent continues beyond budget USD limit without downgrading to `READ_ONLY`.
+**Root Cause:** `GovernanceLayer.recordLlmCall()` not invoked by `AgentLoop`. The observer list injection is missing.
+**Resolution:** `AgentLoop` must inject `Instance<AgentObserver>` and iterate through all observers after each `ReasoningEngine.nextStep()` call. Verify both `GovernanceLayer` and `AgentOtelContext` are in the observer list.
+
+### 🔴 Failure: `SessionBudget` Memory Leak
+**Symptom:** `ConcurrentHashMap<String, SessionBudget>` in `GovernanceLayer` grows unbounded.
+**Root Cause:** Terminated sessions are never cleared from the budget map.
+**Resolution:** `WorkspaceManager.terminateWorkspace()` must call `governanceLayer.clearSession(sessionId)` during cleanup.
+
+### 🔴 Failure: `InMemorySpanExporter` Not Available in Tests
+**Symptom:** `UnsatisfiedResolutionException` when trying to inject `InMemorySpanExporter` in `@QuarkusTest`.
+**Root Cause:** Quarkus's OTel extension doesn't automatically expose test exporters as CDI beans.
+**Resolution:** Use `@InjectMock Tracer` instead. Verify spans via `verify(tracer).spanBuilder(...)` rather than examining exported spans.
+
+### 🟡 Warning: OTel Span Leaks
+**Symptom:** Spans accumulate without being ended.
+**Root Cause:** `AgentOtelContext.startSessionSpan()` creates a span and scope, but `endSessionSpan()` is never called.
+**Resolution:** Ensure `WorkspaceManager.terminateWorkspace()` calls `agentOtelContext.endSessionSpan(sessionId)` as part of cleanup.
 
 ---
 
-## 9. Architectural Context for Future LLMs
+
+## 10. Health Layer Troubleshooting (Phase 10)
+
+> [!CAUTION]
+> **Phase 10 Cost: 52 Iterations.** Read the full section in the block above (lines 145–213) for the complete decision matrix. This is the most common failure area in the project.
+
+---
+
+## 11. Search & Reverse Engineering Techniques
+
+### "Missing Think" Resolution: API Surface Discovery
+**Scenario:** Implementing custom CDI scopes (`InjectableContext`) without comprehensive official docs for internal SPIs.
+**Technique:** Inspecting decompiled class definitions to understand the non-public API surface.
+**Command:** `javap -p -cp <jar-path> io.quarkus.arc.InjectableContext`
+**Discovery:**
+- Found `ContextState` inner interface in `InjectableContext`.
+- Found `contextClass()` method in `ContextConfigurator` (avoiding `BytecodeRecorder`).
+
+---
+
+## 12. Architectural Context for Future LLMs
 
 > **Prompt Context**: If you are an AI assistant working on this codebase, read this section first to avoid common pitfalls.
 
-### 9.1 Critical Constraints
-- **JDK Version**: We target **JDK 25** (JEP 491 `synchronized` fix, JEP 506 `ScopedValue`). Ensure code is forward-compatible. Use `--add-opens` for tests.
-- **Quarkus Version**: Pinned to **3.23.0**. Do **not** upgrade without verifying ByteBuddy/Java 25 compatibility (`-Dnet.bytebuddy.experimental=true`).
-- **Native Image**: All reflection must be registered. BouncyCastle needs explicit `native-image.properties` flags.
+### 12.1 Critical Constraints
+- **JDK Version**: Target **JDK 25** (JEP 491, JEP 506). Use `--add-opens` for tests.
+- **Quarkus Version**: Pinned to **3.23.0**. Do not upgrade without verifying ByteBuddy compatibility.
+- **Native Image**: All reflection must be registered. BouncyCastle needs `native-image.properties`.
 
-### 9.2 Module Separation Rules
-- **arcclaw-core**:
-  - **No Panache Bytecode**: Entities here MUST be plain `@Entity` + `EntityManager`. Do not extend `PanacheEntity`.
-  - **Jandex Index**: Required for bean discovery.
-  - **Testability**: Package-private methods are **not** visible to tests in `arcclaw-app`. Use `public` for `@Observes` or test hooks.
-- **arcclaw-app**:
-  - **Runtime Only**: Contains configuration, `@QuarkusTest` classes, and the `main` runner.
-  - **Hibernate Config**: Must explicitly list `quarkus.hibernate-orm.packages` to find entities in core.
+### 12.2 Module Separation Rules
+- **arcclaw-core**: No Panache, Jandex required, package-private is invisible to app tests. Health beans: `@Liveness`/`@Readiness` + `@ApplicationScoped` only.
+- **arcclaw-app**: Runtime config, `@QuarkusTest` classes, `quarkus.hibernate-orm.packages` must be explicit.
+- **arcclaw-deployment**: `@BuildStep` processors only. Must have `quarkus-extension-processor` as provided dependency.
 
-### 9.3 Custom scopes
-- **WorkspaceScoped**: This is a **custom context** managed via `InjectableContext`. It is NOT a standard bean.
-- **Injection**: Never `@Inject WorkspaceScopeContext`. Use `Arc.container().getActiveContext(WorkspaceScoped.class)`.
+### 12.3 Custom Scopes
+- **Never** `@Inject WorkspaceScopeContext`. Use `Arc.container().getActiveContext(WorkspaceScoped.class)`.
 
-### 9.4 Concurrency
-- **Synchronized Blocks**: We use regular `synchronized` blocks for critical sections (e.g., `WorkspaceScopeContext`) relying on **JDK 25 JEP 491** to prevent virtual thread pinning.
-- **Risk**: On JDK 21 runtimes, this will pin carrier threads. This is an accepted trade-off to keep the code idiomatic for the target platform (JDK 25).
+### 12.4 Concurrency
+- `synchronized` blocks are correct for JDK 25 (JEP 491). On JDK 21, these will pin carrier threads.
 
+### 12.5 Testing Patterns Decision Matrix
 
+| Bean Type | Mock Strategy | Port |
+|-----------|---------------|------|
+| Regular CDI beans | `@InjectMock` | 8081 |
+| HealthCheck beans | `@Alternative` + `@Priority` standalone impl | 9001 |
+| OTel Tracer | `@InjectMock Tracer` | N/A |
+| Extension-managed beans | `@Alternative` + `@Priority` | 8081 |
+| Custom context (`WorkspaceScopeContext`) | `Arc.container()` lookup | N/A |
 
+### 12.6 Build Commands Cheat Sheet
+```bash
+# Full clean build (REQUIRED when adding new beans/modules)
+mvn clean install -DskipTests
 
+# Run specific test
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn test -pl arcclaw-app -am -Dtest=TestClassName -Dsurefire.failIfNoSpecifiedTests=false
+
+# Run all tests
+mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
+```

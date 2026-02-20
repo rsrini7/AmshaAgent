@@ -1,4 +1,20 @@
-# Phases 0–7 — Walkthrough
+# ArcClaw v1.0 — Phases 0–10 Walkthrough
+
+> **Cross-Reference**: [PLAN.md](file:///h:/ws/ArcClaw/PLAN.md) | [TASKS.md](file:///h:/ws/ArcClaw/TASKS.md) | [DEVIATIONS.md](file:///h:/ws/ArcClaw/DEVIATIONS.md) | [TROUBLESHOOTING.md](file:///h:/ws/ArcClaw/TROUBLESHOOTING.md)
+
+| Phase | Name | Tests | Key Deviation |
+|-------|------|-------|---------------|
+| 0 | Project Scaffolding | N/A | JDK 25 + ByteBuddy experimental flag |
+| 1 | Core Scope Layer | 3 | `synchronized` per JEP 491 (no `ReentrantLock`) |
+| 2 | Security Layer | 4 | `@Lob` removed for SQLite, `merge()` over `persist()` |
+| 3 | Sandbox Layer | 3 | OTel stub, VaultKey API adaptation |
+| 4 | Tool Layer | 7 | CDI `Instance<AgentTool>` discovery |
+| 5 | Agent & Orchestration | 5 | Guardrails (hallucination, loop, null) |
+| 6 | State Layer | 4 | Plain `@Entity` + `EntityManager` (no Panache) |
+| 7 | Lifecycle Layer | 4 | `Arc.container()` for custom context lookup |
+| 8 | Governance Layer | 3 | `AtomicInteger` + `ConcurrentHashMap` thread safety |
+| 9 | Observer / OTel Layer | 2 | `@InjectMock Tracer` (no `InMemorySpanExporter`) |
+| 10 | Health Layer | 2 | `@Alternative` + `@Priority` mocks, port 9001 (52 iterations!) |
 
 ## Phase 0: Project Scaffolding ✅
 
@@ -39,22 +55,32 @@
 
 ## Phase 3: Sandbox Layer ✅
 
+> [!NOTE]
+> **Deviation**: Created `AgentOtelContext` stub (returns `Span.getInvalid()`) as Phase 9 placeholder. `ProcessIsolationExecutor` secret injection uses `Optional<VaultKey>` (auto-wiping) instead of plain `String`.
+
 | File | Purpose |
 |------|---------|
-| [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java) | PODMAN/NAMESPACE/NONE, circuit breaker, graceful shutdown |
-| [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java) | OTel stub (Phase 9) |
+| [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java) | PODMAN/NAMESPACE/NONE strategies, circuit breaker, `@PreDestroy` shutdown |
+| [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java) | OTel stub (replaced in Phase 9) |
 | [RequiresSecret.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/RequiresSecret.java) | `@Repeatable` vault secret annotation |
+
+**ProcessIsolationExecutorTest**: 3/3 ✅ (NONE strategy)
 
 ---
 
 ## Phase 4: Tool Layer ✅
 
+> [!NOTE]
+> **Key Pattern**: Tools are discovered via CDI `Instance<AgentTool>`. Each tool declares `requiredOperation()` for autonomy governance and can be annotated with `@RequiresSecret` for vault-injected credentials.
+
 | File | Purpose |
 |------|---------|
 | [ToolResponse.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolResponse.java) | `record(exitCode, output, success)` |
-| [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java) | Tool interface |
-| [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java) | CDI discovery + governance |
-| [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java) | Reference tool: `gh repo view` |
+| [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java) | Tool interface (`name`, `description`, `requiredOperation`, `execute`) |
+| [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java) | CDI discovery + autonomy enforcement + secret extraction |
+| [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java) | Reference tool: `gh repo view` with `@RequiresSecret(GITHUB_TOKEN)` |
+
+**ToolRegistryTest**: 7/7 ✅ (discovery, governance, reflection, error handling)
 
 ---
 
@@ -122,22 +148,31 @@ graph TD
 
 ## Phase 8: Governance Layer ✅
 
+> [!NOTE]
+> **Thread Safety**: `SessionBudget` uses `AtomicInteger` for token counts and `synchronized` for USD cost accumulation. Budget map uses `ConcurrentHashMap`. Session cleanup is handled by `WorkspaceManager.terminateWorkspace()`.
+
 | File | Purpose |
 |------|---------|
-| [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java) | Token tracking and budget enforcement |
-| [BudgetExceededException.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/BudgetExceededException.java) | Runtime limit termination |
+| [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java) | Token tracking, USD cost calculation, `READ_ONLY` downgrade |
+| [BudgetExceededException.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/BudgetExceededException.java) | Runtime exception for budget violation |
+| [AgentObserver.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentObserver.java) | Observer interface (`recordLlmCall`) |
 
-**GovernanceLayerTest**: 3/3 ✅
+**GovernanceLayerTest**: 3/3 ✅ (cost accumulation, READ_ONLY trigger, BudgetExceededException)
 
 ---
 
 ## Phase 9: Observer / OTel Layer ✅
 
+> [!NOTE]
+> **Deviation**: Used `@InjectMock Tracer` for testing instead of `InMemorySpanExporter` because Quarkus doesn't auto-expose test exporters as CDI beans.
+
 | File | Purpose |
 |------|---------|
-| [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java) | OpenTelemetry Tracer integration |
+| [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java) | Full OTel `Tracer` integration, root span per session |
+| [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) | Expanded to iterate `Instance<AgentObserver>` list |
+| [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java) | Added `GovernanceLayer.clearSession()` cleanup |
 
-**AgentOtelContextTest**: 2/2 ✅
+**AgentOtelContextTest**: 2/2 ✅ (span creation, attribute tagging)
 
 ---
 
