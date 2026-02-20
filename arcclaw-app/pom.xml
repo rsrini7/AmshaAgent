@@ -111,6 +111,10 @@
       <artifactId>quarkus-opentelemetry</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-openapi</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.quarkiverse.jdbc</groupId>
       <artifactId>quarkus-jdbc-sqlite</artifactId>
       <version>3.0.2</version>
@@ -203,7 +207,8 @@
         <quarkus.native.additional-build-args>
           -H:+InlineBeforeAnalysis,
           -H:+ReportExceptionStackTraces,
-          -J-Xmx8g
+          -J-Xmx8g,
+          --initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder
         </quarkus.native.additional-build-args>
       </properties>
     </profile>

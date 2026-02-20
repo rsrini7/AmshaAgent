@@ -437,7 +437,9 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 ### 🔴 Failure: `ContextNotActiveException` on `/api/v1/sessions/{id}/run-async`
 **Symptom:** When triggering the asynchronous agent execution endpoint, the server immediately logs a `ContextNotActiveException: Cannot use the EntityManager/Session because neither a transaction nor a CDI request context is active`.
 **Root Cause:** The `/run-async` endpoint manually spawns a virtual thread using `Thread.ofVirtual().start()`. In Quarkus, threads spawned outside the managed executor pool do **not** automatically inherit or instantiate a CDI RequestContext. When `AgentLoop` attempts to invoke DB operations via Panache (e.g., `agentStore.load()`), it crashes because there is no context to bind the Hibernate session to.
-**Resolution:** Explicitly annotated the `AgentLoop.run()` method with `@ActivateRequestContext`. This forces Quarkus to bind a fresh request context lifecycle specifically around the agent execution loop, allowing safe, thread-isolated database operations.
+**Resolution:** 
+1. **JVM Mode**: Attaching `@ActivateRequestContext` to the `AgentLoop.run()` method typically ensures a request lifecycle.
+2. **Native Mode (Mandatory)**: In AOT binaries, unmanaged threads may bypass library interceptors. We implemented explicit **Programmatic Activation** in `AgentResource.java` using `Arc.container().requestContext()` to guarantee lifecycle availability for asynchronous virtual threads.
 
 ---
 
@@ -463,6 +465,12 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Symptom:** During `docker compose up --build`, the build halts at the `RUN mkdir -p /home/arcclaw/... /app/data` step.
 **Root Cause:** The `WORKDIR /app` directive implicitly creates `/app` as `root:root`. In `Dockerfile.native`, the user was switched to `USER arcclaw` *before* creating the `/app/data` subdirectory, which blocked access.
 **Resolution:** Moved the `RUN mkdir -p` block higher in `Dockerfile.native` (while still executing as root) and appended `&& chown -R arcclaw:arcclaw /app /home/arcclaw` before explicitly dropping privileges down to `USER arcclaw`.
+
+### 🔴 Failure: Native Build Exception `Class initialization of io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder failed`
+**Symptom:** During the `Performing analysis` step of a native build, the process halts with a `NullPointerException` inside `QuarkusJsonCodecFactory$ObjectMapperHolder.<clinit>` because `Arc.container()` is null.
+**Root Cause:** GraalVM's AOT analysis sometimes attempts to initialize LangChain4J's internal JSON codec factory at build-time. However, this class requires the CDI container, which only exists at run-time.
+**Resolution:** Explicitly defer the initialization of this holder to run-time via a native build argument in your `pom.xml` or `native-image.properties`:
+`--initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder`
 
 ### 🔴 Failure: Docker Compose `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`
 **Symptom:** Running `docker compose up` on Windows with Podman Desktop installed returns a connection error for `dockerDesktopLinuxEngine`.

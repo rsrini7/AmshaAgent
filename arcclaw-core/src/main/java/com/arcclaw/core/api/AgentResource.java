@@ -10,6 +10,8 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -75,10 +77,14 @@ public class AgentResource {
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         Thread.ofVirtual().name("arcclaw-agent-" + sessionId).start(() -> {
+            ManagedContext requestContext = Arc.container().requestContext();
+            requestContext.activate();
             try {
                 agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
             } catch (Exception e) {
                 log.error("Async agent run failed for session {}: {}", sessionId, e.getMessage(), e);
+            } finally {
+                requestContext.terminate();
             }
         });
 
