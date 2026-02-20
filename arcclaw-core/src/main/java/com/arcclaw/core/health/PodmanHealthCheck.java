@@ -6,13 +6,9 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 
 import java.util.concurrent.TimeUnit;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.Startup;
 
-@Startup
 @Liveness
 @ApplicationScoped
-@Unremovable
 public class PodmanHealthCheck implements HealthCheck {
 
     @Override

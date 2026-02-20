@@ -125,10 +125,10 @@
 ---
 
 ## Phase 10 — Health Layer
-- [/] `PodmanHealthCheck` (`@Liveness` — Podman binary availability) <!-- id: 60 -->
-- [/] `PodmanImageHealthCheck` (`@Readiness` — tool-runner image presence) <!-- id: 61 -->
-- [/] `PodmanHealthCheckTest` (RestAssured health endpoint verification) <!-- id: 62 -->
-- [ ] **BLOCKER**: `@InjectMock` resolution failure for cross-module HealthCheck beans. <!-- id: 63 -->
+- [x] `PodmanHealthCheck` (`@Liveness` — Podman binary availability) <!-- id: 60 -->
+- [x] `PodmanImageHealthCheck` (`@Readiness` — tool-runner image presence) <!-- id: 61 -->
+- [x] `PodmanHealthCheckTest` (RestAssured health endpoint verification) <!-- id: 62 -->
+- [x] `@Alternative` + `@Priority` mock pattern for cross-module health checks <!-- id: 63 -->
 
 ---
 

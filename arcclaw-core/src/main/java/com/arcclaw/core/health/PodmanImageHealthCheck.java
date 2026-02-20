@@ -7,17 +7,13 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
 
 import java.util.concurrent.TimeUnit;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.Startup;
 
-@Startup
 @Readiness
 @ApplicationScoped
-@Unremovable
 public class PodmanImageHealthCheck implements HealthCheck {
 
     @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "docker.io/library/alpine:latest")
-    String containerImage;
+    protected String containerImage;
 
     @Override
     public HealthCheckResponse call() {

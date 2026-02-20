@@ -141,11 +141,16 @@ graph TD
 
 ---
 
-## Phase 10: Health Layer (WIP) 🚧
+## Phase 10: Health Layer ✅
+
+> [!IMPORTANT]
+> **Deviation**: Used `@Alternative` + `@Priority` standalone `HealthCheck` mocks instead of `@Mock extends` due to ArC classloader boundaries. Health endpoints served on management port 9001.
 
 | File | Purpose |
 |------|---------|
 | [PodmanHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanHealthCheck.java) | Liveness probe (Podman version) |
 | [PodmanImageHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanImageHealthCheck.java) | Readiness probe (OCI image) |
+| [MockPodmanHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/health/MockPodmanHealthCheck.java) | `@Alternative` test mock |
+| [MockPodmanImageHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/health/MockPodmanImageHealthCheck.java) | `@Alternative` test mock |
 
-**Status**: 46 iterations deep. Blocked by cross-module CDI discovery in tests.
+**PodmanHealthCheckTest**: 2/2 ✅ (liveness, readiness)

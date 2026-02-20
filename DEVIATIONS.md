@@ -52,7 +52,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **7** | Lifecycle Layer | **Complete** | `WorkspaceManager` (Heartbeats, GC, Termination), `AgentLoop` lifecycle upgrade. deviation: `WorkspaceScopeContext` injected via `Arc.container()` lookup (custom context). |
 | **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). |
 | **9** | Observer / OTel Layer | **Complete** | `AgentOtelContext` OpenTelemetry implementation. deviation: Replaced `InMemorySpanExporter` with `@InjectMock Tracer` for testing due to Quarkus OTLP extension limitations in unit tests. |
-| **10** | Health Layer | **Blocked** | Implement `PodmanHealthCheck` and `PodmanImageHealthCheck`. deviation: Added `@Startup` and `@Unremovable` to force discovery across module boundaries for tests. |
+| **10** | Health Layer | **Complete** | `PodmanHealthCheck`/`PodmanImageHealthCheck` implemented. deviation: Used `@Alternative`+`@Priority` standalone `HealthCheck` mocks instead of `@Mock extends` due to ArC classloader boundary preventing `@ConfigProperty` injection across module boundaries. Management port 9001 required for health endpoint tests. |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.

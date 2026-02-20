@@ -531,7 +531,7 @@ Replace observability stubs with a full OpenTelemetry implementation.
 
 ---
 
-# Phase 10 — Health Layer (IN PROGRESS / BLOCKED)
+# Phase 10 — Health Layer ✅
 
 Implement Podman liveness and readiness checks using MicroProfile Health.
 
@@ -541,11 +541,14 @@ Implement Podman liveness and readiness checks using MicroProfile Health.
 > **Process-Based Checks**: Both liveness and readiness checks execute sub-processes (`podman --version` and `podman image exists`) with a strict 2-second timeout to avoid health-probe hanging.
 
 > [!WARNING]
-> **Testing Limitations**: Testing health checks across module boundaries (`arcclaw-core` beans tested in `arcclaw-app`) requires careful CDI indexing and `@Unremovable` annotations.
+> **Management Port**: Quarkus 3.x serves health/metrics/openapi endpoints on a separate management interface (port 9001 in test mode). RestAssured tests must explicitly target `.port(9001)` instead of the default HTTP port.
 
-## Proposed Changes
+> [!NOTE]
+> **Cross-Module Mock Pattern**: `@Mock extends ParentClass` fails across classloader boundaries due to ArC-generated bean code attempting to inject `@ConfigProperty` fields in the parent. Used standalone `@Alternative` + `@Priority` implementations of `HealthCheck` interface instead.
 
-### Core Module — Health Verification
+## Completed Changes
+
+### Core Module — Health Checks
 
 #### [NEW] [PodmanHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanHealthCheck.java)
 - `@Liveness` probe for Podman engine availability.
@@ -553,8 +556,15 @@ Implement Podman liveness and readiness checks using MicroProfile Health.
 #### [NEW] [PodmanImageHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanImageHealthCheck.java)
 - `@Readiness` probe for sandbox image presence.
 
-## Verification Plan
+### App Module — Test Mocks
 
-### Automated Tests
-- `PodmanHealthCheckTest`: Verification of `/q/health/live` and `/q/health/ready` endpoints via RestAssured.
-- **STATUS**: Blocked by `@InjectMock` resolution issues in `arcclaw-app`.
+#### [NEW] [MockPodmanHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/health/MockPodmanHealthCheck.java)
+- `@Alternative` + `@Priority(1)` standalone `HealthCheck` for liveness test.
+
+#### [NEW] [MockPodmanImageHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/health/MockPodmanImageHealthCheck.java)
+- `@Alternative` + `@Priority(1)` standalone `HealthCheck` for readiness test.
+
+## Verification
+
+- ✅ `/q/health/live` returns HTTP 200 with `{"status": "UP"}`
+- ✅ `/q/health/ready` returns HTTP 200 with `{"status": "UP"}`
