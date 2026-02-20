@@ -437,3 +437,17 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Symptom:** The `arcclaw` container crashes on startup complaining that SQLite cannot write to `/app/data` due to a `Permission denied` error.
 **Root Cause:** Docker daemon creates named volumes as `root:root` by default, preventing the rootless `arcclaw` user (UID 1000) inside the container from writing the database.
 **Resolution:** We implemented an `init-perms` service in `docker-compose.yaml` to automatically `chown` the volume to UID 1000 before startup.
+
+---
+
+## 15. LLM Operations Troubleshooting (Phase 14.1)
+
+### 🔴 Failure: Silent Context Window Exhaustion (HTTP 400)
+**Symptom:** The Agent loop crashes silently or throws an unhandled LangChain4J HTTP 400 exception after a tool executes successfully.
+**Root Cause:** The agent executed a tool (e.g. `cat`) that returned >10k characters. Our `AgentLoop` blindly appended the entire raw String to the `ToolExecutionResultMessage`. On the next reasoning tick, this bloated history blew past the local `llama3.1:8b` context limit.
+**Resolution:** Implemented explicit 4000-character defensive truncation on `step.observation()` directly inside `LangChainReasoningEngine.java`.
+
+### 🔴 Failure: Infinite Hallucination Loop on Bad Arguments
+**Symptom:** The Agent continuously attempts to call the exact same tool, failing instantly, burning through tokens until hitting the `maxIterations` circuit breaker. 
+**Root Cause:** The local LLM hallucinated invalid JSON structure (e.g., trailing commas) for the Tool arguments payload. The `LangChainReasoningEngine` caught the `JsonParseException`, swallowed it, and mapped it to an empty `Map.of()`. The tool validated the empty map, failed for missing arguments, and the generic failure prompted the LLM to simply "try again", reproducing the identical malformed JSON structure.
+**Resolution:** Stopped swallowing the exception. Now actively catching `JsonParseException` and returning a `FINISH` `ReasoningStep` injected with `"System Error: You provided invalid JSON formatting... Please ensure strict JSON compliance."` which halts the loop or allows explicit LLM self-correction.

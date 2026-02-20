@@ -178,6 +178,14 @@
 
 ---
 
+## Phase 14.1 — Day 2 Operations (Hardening)
+- [x] JSON Parsing Circuit Breaker (`LangChainReasoningEngine`)
+- [x] Context Window Observation Truncation (`4000` chars max)
+- [x] Cleaned up unused imports
+- [x] Verified `mvn clean test` suite integrity
+
+---
+
 ## Phase 15 — JDK 25 LTS Alignment (Future-Ready)
 - [ ] All JDK 25 JEP notes documented inline (JEP 491, 506, 505, 473)
 - [ ] ScopedValue migration path in `WorkspaceScopeHolder` comments

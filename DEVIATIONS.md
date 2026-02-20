@@ -91,6 +91,8 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **Virtual Thread Context Propagation**: explicitly required `mp.context.propagators=Quarkus, CDI, JAX-RS` inside `application.yaml` to successfully span `@WorkspaceScoped` attributes or OpenTelemetry context onto `@RunOnVirtualThread` handlers.
 *   **Integration Test Map Leakage**: integration tests with static Maps like `ConcurrentHashMap` (`WorkspaceManager` or `StatefulAgentStore`) will leak references across boundaries when running the full test suite (`mvn clean verify`). We solved this by executing a teardown inside the test via `clearAll()`.
 *   **LLM Provider Mocking**: Injecting the real `ReasoningEngine` mapped to services like Ollama triggers a `Connection refused` when testing REST endpoints independently. Mock via `@InjectMock ReasoningEngine`.
+*   **JSON Trap Mitigation**: Replaced passive Jackson exception swallowing in `LangChainReasoningEngine` with an active `ReasoningStep.FINISH` error generation to prevent infinite LLM hallucination loops on malformed Tool arguments.
+*   **Context Window Protection**: Implemented a hard 4000-character truncation limit on tool `observation` strings to prevent silent `HTTP 400` crashes from Ollama when exceeding local context limits during verbose operations.
 
 ---
 *Internal Audit Trail sync complete.*

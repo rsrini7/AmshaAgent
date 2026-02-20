@@ -698,3 +698,23 @@ Ensures all modules (`arcclaw-core`, `arcclaw-deployment`, `arcclaw-app`) fully 
 ## Verification
 - ✅ `mvn clean verify -pl arcclaw-app -am` completed successfully, executing 43 unit and integration tests across all modules.
 - ✅ `TESTING_GUIDE.md` produced for local developers providing E2E `curl` and Jaeger commands.
+
+---
+
+# Phase 14.1 — Day 2 Operations (Hardening) ✅
+
+Harden the LangChain4J execution pipeline against real-world LLM chaos.
+
+## Design Decisions
+
+> [!WARNING]
+> **Context Window Exhaustion**: Verbose tools (e.g., fetching a huge file or running a bash script) can return 30k+ character `ToolOutput` observations. Feeding this back into `llama3.1:8b` via `AiMessage` instantly blows past the 8k context window, silently crashing the process.
+> **Fix**: Observations are strictly truncated to `4000` characters before serialization.
+
+> [!CAUTION]
+> **JSON Parsing Death-Spirals**: Local models occasionally hallucinate invalid Tool Argument JSON configurations. Swallowing Jackson `JsonParseException`s results in an empty `Map.of()`, causing the tool to fail validation, returning an error to the LLM, which the LLM then attempts to resolve by generating the *exact same bad JSON array* in an infinite loop.
+> **Fix**: Catch parsing exceptions explicitly and return a `FINISH` ReasoningStep with a strict "System Error: Invalid JSON" directive to force the system to halt or self-correct.
+
+## Verification
+- ✅ Modified `LangChainReasoningEngine.java` to inject truncation logic and Jackson interceptors.
+- ✅ Re-ran `mvn clean test -pl arcclaw-core` to ensure `LangChainReasoningEngineTest` is unaffected by the new loop conditionals.
