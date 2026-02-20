@@ -718,3 +718,18 @@ Harden the LangChain4J execution pipeline against real-world LLM chaos.
 ## Verification
 - ✅ Modified `LangChainReasoningEngine.java` to inject truncation logic and Jackson interceptors.
 - ✅ Re-ran `mvn clean test -pl arcclaw-core` to ensure `LangChainReasoningEngineTest` is unaffected by the new loop conditionals.
+
+---
+
+# Phase 14.2 — Day 2 Operations (Windows Dev Ex) ✅
+
+Fix initialization crashes for Windows developers running `quarkus:dev` natively.
+
+## Design Decisions
+
+> [!CAUTION]
+> **SQLite Parent Directory Creation**: SQLite's JDBC driver drops a `GenericJDBCException` if the `ARCCLAW_DATA_DIR` (default `./data`) does not exist on the filesystem prior to Hibernate DDL boot. Linux container mapped volumes hide this requirement by implicitly creating directories.
+> **Fix**: Dropped a custom `@QuarkusMain` entrypoint in `ArcClawApp.java`. It invokes Eclipse MicroProfile's `ConfigProvider` to natively locate `ARCCLAW_DATA_DIR` from `.env` and provisions the host directory via `Files.createDirectories()` *before* control is handed to `Quarkus.run()`.
+
+## Verification
+- ✅ `.\mvnw.cmd quarkus:dev -pl arcclaw-app -am` no longer crashes on Windows. Hibernate cleanly executes DDL.

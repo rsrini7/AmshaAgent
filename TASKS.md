@@ -186,6 +186,12 @@
 
 ---
 
+## Phase 14.2 — Day 2 Operations (Windows Dev Ex)
+- [x] Implement `@QuarkusMain` to provision `ARCCLAW_DATA_DIR` natively
+- [x] Prevent `GenericJDBCException` on missing `./data` target path
+
+---
+
 ## Phase 15 — JDK 25 LTS Alignment (Future-Ready)
 - [ ] All JDK 25 JEP notes documented inline (JEP 491, 506, 505, 473)
 - [ ] ScopedValue migration path in `WorkspaceScopeHolder` comments

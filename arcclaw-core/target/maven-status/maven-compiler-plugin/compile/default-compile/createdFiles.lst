@@ -2,8 +2,8 @@ com\arcclaw\core\governance\GovernanceLayer$SessionBudget.class
 com\arcclaw\core\api\AgentResource.class
 com\arcclaw\core\state\AgentCheckpoint.class
 com\arcclaw\core\agent\LangChainReasoningEngine$1.class
-com\arcclaw\core\tools\ToolResponse.class
 com\arcclaw\core\state\StatefulAgentStoreImpl$1.class
+com\arcclaw\core\tools\ToolResponse.class
 com\arcclaw\core\health\PodmanImageHealthCheck.class
 com\arcclaw\core\config\ReflectionConfig.class
 com\arcclaw\core\security\AutonomyLevel.class
@@ -26,8 +26,8 @@ com\arcclaw\core\scope\WorkspaceScopeHolder.class
 com\arcclaw\core\observability\AgentOtelContext.class
 com\arcclaw\core\agent\HarperAgent.class
 com\arcclaw\core\agent\AgentResult.class
-com\arcclaw\core\state\StatefulAgentStore.class
 com\arcclaw\core\security\Argon2idKeyDerivation.class
+com\arcclaw\core\state\StatefulAgentStore.class
 com\arcclaw\core\state\SqliteWalConfigurer.class
 com\arcclaw\core\agent\LucasAgent.class
 com\arcclaw\core\api\dto\CreateSessionResponse.class
@@ -53,8 +53,8 @@ com\arcclaw\core\security\VaultKey.class
 com\arcclaw\core\security\RequiresSecret.class
 com\arcclaw\core\security\AutonomyPolicy$Default.class
 com\arcclaw\core\tools\ToolRegistry.class
-com\arcclaw\core\tools\GithubTool.class
 com\arcclaw\core\state\CheckpointStatus.class
+com\arcclaw\core\tools\GithubTool.class
 com\arcclaw\core\agent\GrokAgent.class
 com\arcclaw\core\scope\WorkspaceContextProducer.class
 com\arcclaw\core\scope\WorkspaceScopeContext$SessionStore.class
