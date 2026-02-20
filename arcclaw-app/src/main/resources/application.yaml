@@ -68,7 +68,7 @@ quarkus:
       log-requests: false
       log-responses: false
     openai:
-      api-key: "${OPENAI_API_KEY:}"
+      api-key: "${OPENAI_API_KEY:dummy-key-to-bypass-validation}"
       model-name: "${OPENAI_MODEL:gpt-4o}"
       timeout: 60s
     chat-memory:
