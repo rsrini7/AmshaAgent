@@ -3,16 +3,12 @@
 POST http://localhost:8080/api/v1/sessions
 Content-Type: application/json
 
-> {%
-    // Capture the generated sessionId from the response and store it as a global script variable
-    client.global.set("SESSION_ID", response.body.sessionId);
-%}
 
 ###
 
 ### Run the Grok Agent (Asynchronous)
-# Requires the SESSION_ID from the previous request
-POST http://localhost:8080/api/v1/sessions/{SESSION_ID}/run-async
+# Requires the sessionId from the createSession request
+POST http://localhost:8080/api/v1/sessions/{{createSession.response.body.sessionId}}/run-async
 Content-Type: application/json
 
 {
@@ -24,14 +20,14 @@ Content-Type: application/json
 ###
 
 ### Check the Agent's Execution Status
-# Requires the SESSION_ID from the previous request
-GET http://localhost:8080/api/v1/sessions/{SESSION_ID}/status/grok
+# Requires the sessionId from the createSession request
+GET http://localhost:8080/api/v1/sessions/{{createSession.response.body.sessionId}}/status/grok
 
 ###
 
 ### (Optional) Run the Agent Synchronously (Blocking)
 # This will block the HTTP request until the agent finishes (or hits maxIterations)
-POST http://localhost:8080/api/v1/sessions/{SESSION_ID}/run
+POST http://localhost:8080/api/v1/sessions/{{createSession.response.body.sessionId}}/run
 Content-Type: application/json
 
 {
