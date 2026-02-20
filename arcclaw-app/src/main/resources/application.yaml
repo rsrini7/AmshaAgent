@@ -14,6 +14,10 @@ quarkus:
       group-id: com.arcclaw
       artifact-id: arcclaw-core
 
+  swagger-ui:
+    path: /q/swagger-ui
+    always-include: true
+
   # ---------------------------------------------------------------------------
   # HTTP / REST
   # ---------------------------------------------------------------------------
@@ -58,7 +62,7 @@ quarkus:
       provider: ollama
     ollama:
       base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
-      model-id: "${OLLAMA_MODEL:llama3.1:8b}"
+      model-id: "${OLLAMA_MODEL:gemma:2b}"
       timeout: 120s
       log-requests: false
       log-responses: false
@@ -236,7 +240,7 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-id: "llama3.1:8b"
+        model-id: "gemma:2b"
       log-requests: true
       log-responses: true
     hibernate-orm:
@@ -260,7 +264,7 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-id: "llama3.1:8b"
+        model-id: "gemma:2b"
   arcclaw:
     sandbox:
       strategy: NONE

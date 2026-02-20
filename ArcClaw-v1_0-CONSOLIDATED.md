@@ -3537,7 +3537,7 @@ quarkus:
   langchain4j:
     ollama:
       base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
-      model-id: "${OLLAMA_MODEL:llama3.1:8b}"
+      model-id: "${OLLAMA_MODEL:gemma:2b}"
       timeout: 120s
       log-requests: false
       log-responses: false
@@ -3720,7 +3720,7 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-id: "llama3.1:8b"
+        model-id: "gemma:2b"
       log-requests: true
       log-responses: true
     hibernate-orm:
@@ -3744,7 +3744,7 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-id: "llama3.1:8b"
+        model-id: "gemma:2b"
   arcclaw:
     sandbox:
       strategy: NONE
@@ -3933,7 +3933,7 @@ services:
     healthcheck:
       # FIX A4: Probe the API endpoint, not `ollama list`.
       # Verifies daemon is up AND HTTP API is responsive.
-      # Model pulled separately via `docker exec ollama ollama pull llama3.1:8b`.
+      # Model pulled separately via `docker exec ollama ollama pull gemma:2b`.
       test: ["CMD", "curl", "-sf", "http://localhost:11434/api/version"]
       interval: 10s
       timeout: 5s
@@ -4095,8 +4095,8 @@ ARCCLAW_VAULT_PEPPER=your_generated_hex_pepper_here
 ARCCLAW_SESSION_BUDGET_USD=10.00
 
 # LLM model (must be pulled in Ollama before first use)
-# Pull with: docker exec -it ollama ollama pull llama3.1:8b
-OLLAMA_MODEL=llama3.1:8b
+# Pull with: docker exec -it ollama ollama pull gemma:2b
+OLLAMA_MODEL=gemma:2b
 
 # Deployment environment (stamped on all OTel spans)
 ARCCLAW_ENV=production
@@ -4120,7 +4120,7 @@ docker-compose up -d jaeger otel-collector
 
 # Step 4: Start Ollama and pull the model
 docker-compose up -d ollama
-docker exec -it ollama ollama pull llama3.1:8b
+docker exec -it ollama ollama pull gemma:2b
 # Wait for pull to complete — several minutes on first run
 
 # Step 5: Start the ArcClaw agent kernel

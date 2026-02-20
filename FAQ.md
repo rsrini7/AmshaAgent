@@ -24,7 +24,7 @@ Agent loops are fundamentally I/O bound. They spend 95% of their time waiting fo
 ## ⚙️ Runtime & AI Operations
 
 ### Q: My Agent loop randomly failed with: *"System Error: You provided invalid JSON formatting"*. What happened?
-You encountered a **JSON Hallucination**. LLMs (especially smaller local models like `llama3.1:8b`) sometimes generate invalid JSON when requesting a tool (e.g., leaving a trailing comma or unescaped quote). 
+You encountered a **JSON Hallucination**. LLMs (especially smaller local models like `gemma:2b`) sometimes generate invalid JSON when requesting a tool (e.g., leaving a trailing comma or unescaped quote). 
 Instead of ArcClaw swallowing the Jackson `JsonParseException` and crashing, the `LangChainReasoningEngine` intercepts the bad JSON and returns this specific error back to the LLM as a "System Error" observation. This allows the LLM to realize its mistake and self-correct the JSON on the next iteration.
 
 ### Q: What happens if a Sandbox tool returns a massive payload (e.g., reading a 10,000-line file)?

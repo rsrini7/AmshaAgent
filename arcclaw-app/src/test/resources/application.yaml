@@ -13,7 +13,7 @@ quarkus:
       model-name: "gpt-4o"
     ollama:
       base-url: "http://localhost:11434"
-      model-id: "llama3.1:8b"
+      model-id: "gemma:2b"
 
   log:
     level: INFO
