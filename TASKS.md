@@ -198,6 +198,7 @@
 - [x] Unblock JBoss Threads thread-local-resets by opening `java.base/java.lang`
 - [x] Silence DevMode JUnit framework loader exceptions by restoring `junit` in test scope
 - [x] Correct rootless `Permission denied` failure inside `Dockerfile.native` by mapping `chown` over `/app` before switching user contexts
+- [x] Fix unmanaged `Thread.ofVirtual()` CDI context leakage by explicitly annotating `AgentLoop.run` with `@ActivateRequestContext`
 
 ---
 

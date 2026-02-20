@@ -429,6 +429,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 - Always ensure `quarkus.rest.path` reflects your expected request URL.
 - Force inclusion of critical serialization and validation dependencies inside the leaf `arcclaw-app/pom.xml`.
 
+### 🔴 Failure: `ContextNotActiveException` on `/api/v1/sessions/{id}/run-async`
+**Symptom:** When triggering the asynchronous agent execution endpoint, the server immediately logs a `ContextNotActiveException: Cannot use the EntityManager/Session because neither a transaction nor a CDI request context is active`.
+**Root Cause:** The `/run-async` endpoint manually spawns a virtual thread using `Thread.ofVirtual().start()`. In Quarkus, threads spawned outside the managed executor pool do **not** automatically inherit or instantiate a CDI RequestContext. When `AgentLoop` attempts to invoke DB operations via Panache (e.g., `agentStore.load()`), it crashes because there is no context to bind the Hibernate session to.
+**Resolution:** Explicitly annotated the `AgentLoop.run()` method with `@ActivateRequestContext`. This forces Quarkus to bind a fresh request context lifecycle specifically around the agent execution loop, allowing safe, thread-isolated database operations.
+
 ---
 
 ## 14. Deployment & Container Troubleshooting

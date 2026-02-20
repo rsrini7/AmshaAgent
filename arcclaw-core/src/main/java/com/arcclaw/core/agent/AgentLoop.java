@@ -6,6 +6,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -88,6 +89,7 @@ public class AgentLoop {
      * @param maxIterations Maximum loop iterations before forced termination.
      * @return The final result with reasoning trace.
      */
+    @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
         // --- CONTEXT SETUP ---

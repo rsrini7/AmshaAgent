@@ -758,6 +758,11 @@ Hardening the local Quarkus Hot-Reload Test Runner (`quarkus:dev`) against JDK 2
 > **Podman Rootless Isolation Context**: The native Dockerfile switches to `USER arcclaw` (UID 1000) for security, but the default `WORKDIR /app` establishes file ownership as root. Subsequent `RUN mkdir -p /app/data` crashed the build sequence with `Permission denied`.
 > **Fix**: Executed internal `/app` and `.config/` directory mounts and explicitly `chown -R arcclaw:arcclaw` while still impersonating `root` before committing to the lower privileged `USER arcclaw`.
 
+> [!CAUTION]
+> **Virtual Thread Context Leaks**: The `/run-async` API endpoint manually spawns unmanaged `Thread.ofVirtual()`. This instantly drops the Quarkus CDI RequestContext, triggering `ContextNotActiveException` upon Hibernate DB calls during the agent loop.
+> **Fix**: Annotated `AgentLoop.run` natively with `@ActivateRequestContext` so independent virtual thread executions safely instantiate their own RequestContext boundaries.
+
 ## Verification
 - ✅ Executing `r` in the `quarkus:dev` console successfully runs all 43 tests without `ClassNotFoundException` clutter and cleanly terminates without `IllegalAccessError`.
 - ✅ `docker compose up -d --build` successfully creates `/app/data` and launches the rootless container via Podman Desktop.
+- ✅ Making POST requests to `/api/v1/sessions/{id}/run-async` safely initializes asynchronous DB accesses without `ContextNotActiveException`.
