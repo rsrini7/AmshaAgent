@@ -67,7 +67,8 @@
           </executions>
           <configuration>
               <!-- Netty requires sun.misc.Unsafe Memory Access which is restricted default in JDK 22/25 (JEP 471) -->
-              <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</jvmArgs>
+              <!-- JBoss Threads requires java.lang opens for thread-local-reset in JDK 24+ -->
+            <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</jvmArgs>
           </configuration>
         </plugin>
         <plugin>

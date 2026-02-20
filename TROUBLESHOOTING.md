@@ -453,6 +453,16 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Root Cause:** In JDK 25, JEP 471 terminally deprecated and restrictively blocked the `sun.misc.Unsafe` memory-access methods by default. Netty heavily relies on these methods to allocate low-level byte buffers (especially on Windows where native epoll isn't available).
 **Resolution:** Hardcoded `<jvmArgs>--sun-misc-unsafe-memory-access=allow</jvmArgs>` into both the `quarkus-maven-plugin` and `maven-surefire-plugin` within `arcclaw-app/pom.xml`. This explicitly re-enables `Unsafe` memory allocations for Netty until the library formally migrates to the Foreign Function & Memory API (FFM).
 
+### 🔴 Failure: Test Teardown Crashes with `java.lang.IllegalAccessError` (JBoss Threads)
+**Symptom:** When running Quarkus tests continuously (via `quarkus:dev` 'r' command), the testing thread abruptly faults with `module java.base does not open java.lang to unnamed module... to use the thread-local-reset capability on Java 24 or later`.
+**Root Cause:** JBoss Threads dynamically handles thread pooling lifecycle resets by accessing private internals of `java.lang.Thread`. JDK 24+ explicitly encapsulates `java.lang`, rejecting these reflection calls natively.
+**Resolution:** Explicitly added `--add-opens java.base/java.lang=ALL-UNNAMED` into the `<jvmArgs>` configuration tree for the `quarkus-maven-plugin` in both `arcclaw-parent/pom.xml` and `arcclaw-app/pom.xml`. 
+
+### 🔴 Failure: `ClassNotFoundException for org.junit.internal.AssumptionViolatedException` in Quarkus Test Runner
+**Symptom:** When initializing tests in Quarkus Dev Mode, an exception `Failed to load class org.junit.internal.AssumptionViolatedException: only supporting org.opentest4j.TestAbortedException for aborted execution` blocks the log stream.
+**Root Cause:** The `quarkus-junit5` integration attempts to reflectively load legacy JUnit 4 violation interceptors natively because they occasionally bubble up through third-party dependencies. If `junit:junit` is missing from the test scope, the Jupiter classloader drops an ugly but harmless exception.
+**Resolution:** Merged `<groupId>junit</groupId><artifactId>junit</artifactId>` back into the `<scope>test</scope>` block within `arcclaw-app/pom.xml` to immediately fulfill the classloader constraint.
+
 ---
 
 ## 15. LLM Operations Troubleshooting (Phase 14.1)

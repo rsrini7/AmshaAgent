@@ -737,3 +737,22 @@ Fix initialization crashes for Windows developers running `quarkus:dev` natively
 
 ## Verification
 - ✅ `.\mvnw.cmd quarkus:dev -pl arcclaw-app -am` no longer crashes on Windows. Hibernate cleanly executes DDL and boot succeeds.
+
+---
+
+# Phase 14.3 — Day 2 Operations (JDK 25 Edge Cases) ✅
+
+Hardening the local Quarkus Hot-Reload Test Runner (`quarkus:dev`) against JDK 25 encapsulation.
+
+## Design Decisions
+
+> [!CAUTION]
+> **JBoss Threads Teardown Exception**: When `quarkus:dev` re-runs tests or drops the event loop, JBoss attempts to perform thread-local-resets via private internals in `java.lang.Thread`. JDK 25 aggressively blocks this, throwing an `IllegalAccessError: module java.base does not open java.lang`.
+> **Fix**: Injected `<jvmArgs>--add-opens java.base/java.lang=ALL-UNNAMED</jvmArgs>` into the `quarkus-maven-plugin` configuration for both `arcclaw-app` and `arcclaw-parent`.
+
+> [!NOTE]
+> **JUnit Jupiter Loading Anomaly**: Quarkus `DevModeMain` tries to load legacy JUnit 4 interceptors to handle transitive exceptions like `AssumptionViolatedException` natively. On strict module-path boundaries, Jupiter complains loudly via `ClassNotFoundException`.
+> **Fix**: Extracted `<groupId>junit</groupId><artifactId>junit</artifactId>` explicitly into the `<scope>test</scope>` block of `arcclaw-app` to silence the loading anomaly.
+
+## Verification
+- ✅ Executing `r` in the `quarkus:dev` console successfully runs all 43 tests without `ClassNotFoundException` clutter and cleanly terminates without `IllegalAccessError`.

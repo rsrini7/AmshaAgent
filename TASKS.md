@@ -193,6 +193,13 @@
 
 ---
 
+## Phase 14.3 — Day 2 Operations (JDK 25 Edge Cases)
+- [x] Unblock Netty Unsafe Memory buffers via `maven-surefire-plugin` and `quarkus-maven-plugin` JVM args
+- [x] Unblock JBoss Threads thread-local-resets by opening `java.base/java.lang`
+- [x] Silence DevMode JUnit framework loader exceptions by restoring `junit` in test scope
+
+---
+
 ## Phase 15 — JDK 25 LTS Alignment (Future-Ready)
 - [ ] All JDK 25 JEP notes documented inline (JEP 491, 506, 505, 473)
 - [ ] ScopedValue migration path in `WorkspaceScopeHolder` comments
