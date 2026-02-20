@@ -1,6 +1,6 @@
 # ArcClaw v1.0 — Phases 0–10 Walkthrough
 
-> **Cross-Reference**: [PLAN.md](file:///h:/ws/ArcClaw/PLAN.md) | [TASKS.md](file:///h:/ws/ArcClaw/TASKS.md) | [DEVIATIONS.md](file:///h:/ws/ArcClaw/DEVIATIONS.md) | [TROUBLESHOOTING.md](file:///h:/ws/ArcClaw/TROUBLESHOOTING.md)
+> **Cross-Reference**: [PLAN.md](./PLAN.md) | [TASKS.md](./TASKS.md) | [DEVIATIONS.md](./DEVIATIONS.md) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
 
 | Phase | Name | Tests | Key Deviation |
 |-------|------|-------|---------------|

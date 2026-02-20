@@ -1,5 +1,7 @@
 # Phase 0 — Project Scaffolding & Build Infrastructure
 
+> **Cross-Reference**: [TASKS.md](./TASKS.md) | [DEVIATIONS.md](./DEVIATIONS.md) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | [WALKTHROUGH.md](./WALKTHROUGH.md)
+
 Establish the multi-module Maven reactor, build profiles, and core dependency management (Quarkus 3.23.0 + JDK 25 + LangChain4J).
 
 ## Design Decisions

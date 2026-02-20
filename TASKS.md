@@ -1,6 +1,8 @@
 # ArcClaw v1.0 — Implementation Task Checklist
 
-> Tracking all implementation phases derived from the [ArcClaw-v1_0-CONSOLIDATED.md](file:///h:/ws/ArcClaw/ArcClaw-v1_0-CONSOLIDATED.md) specification.
+> Tracking all implementation phases derived from the [ArcClaw-v1_0-CONSOLIDATED.md](./ArcClaw-v1_0-CONSOLIDATED.md) specification.
+
+> **Cross-Reference**: [PLAN.md](./PLAN.md) | [DEVIATIONS.md](./DEVIATIONS.md) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | [WALKTHROUGH.md](./WALKTHROUGH.md)
 
 ---
 
