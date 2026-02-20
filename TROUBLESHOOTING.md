@@ -500,7 +500,7 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 
 ### 🔴 Failure: Silent Context Window Exhaustion (HTTP 400)
 **Symptom:** The Agent loop crashes silently or throws an unhandled LangChain4J HTTP 400 exception after a tool executes successfully.
-**Root Cause:** The agent executed a tool (e.g. `cat`) that returned >10k characters. Our `AgentLoop` blindly appended the entire raw String to the `ToolExecutionResultMessage`. On the next reasoning tick, this bloated history blew past the local `gemma:2b` context limit.
+**Root Cause:** The agent executed a tool (e.g. `cat`) that returned >10k characters. Our `AgentLoop` blindly appended the entire raw String to the `ToolExecutionResultMessage`. On the next reasoning tick, this bloated history blew past the local `llama3.2:1b` context limit.
 **Resolution:** Implemented explicit 4000-character defensive truncation on `step.observation()` directly inside `LangChainReasoningEngine.java`.
 
 ### 🔴 Failure: Infinite Hallucination Loop on Bad Arguments

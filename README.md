@@ -103,7 +103,7 @@ cp .env.example .env
 
 # Configure your secrets
 # E.g., GITHUB_TOKEN=ghp_...
-# Note: The local stack provisions Ollama (gemma:2b)—test the framework 100% offline and free of charge!
+# Note: The local stack provisions Ollama (llama3.2:1b)—test the framework 100% offline and free of charge!
 # E.g., OLLAMA_BASE_URL=http://ollama:11434
 ```
 

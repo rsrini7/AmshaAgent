@@ -708,7 +708,7 @@ Harden the LangChain4J execution pipeline against real-world LLM chaos.
 ## Design Decisions
 
 > [!WARNING]
-> **Context Window Exhaustion**: Verbose tools (e.g., fetching a huge file or running a bash script) can return 30k+ character `ToolOutput` observations. Feeding this back into `gemma:2b` via `AiMessage` instantly blows past the 8k context window, silently crashing the process.
+> **Context Window Exhaustion**: Verbose tools (e.g., fetching a huge file or running a bash script) can return 30k+ character `ToolOutput` observations. Feeding this back into `llama3.2:1b` via `AiMessage` instantly blows past the 8k context window, silently crashing the process.
 > **Fix**: Observations are strictly truncated to `4000` characters before serialization.
 
 > [!CAUTION]
