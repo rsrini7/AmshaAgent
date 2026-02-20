@@ -39,8 +39,8 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 
 ### Step 1: Clone & Configure
 ```bash
-git clone https://github.com/your-org/arcclaw.git
-cd arcclaw
+git clone https://github.com/rsrini7/ArcClaw.git
+cd ArcClaw
 
 # Copy the environment template
 cp .env.example .env
@@ -50,15 +50,32 @@ cp .env.example .env
 # E.g., OLLAMA_BASE_URL=http://ollama:11434
 ```
 
-### Step 2: Boot the Infrastructure
-Launch the observability stack, LLM engine, and isolation scaffolding securely:
-```bash
-docker compose up -d
-```
-*(Note: A custom `init-perms` container will automatically run to ensure your rootless SQLite volumes are properly permissioned).*
+### Step 2: Compile the Native Binary (CRITICAL)
+Your `Dockerfile.native` expects the GraalVM native binary to already exist on your host machine. Docker will **not** compile your Java code; if you deploy without this step, the container will fail looking for `*-runner`.
 
-### Step 3: Run the Kernel
-You can run the kernel on the JVM using Quarkus dev mode:
+*(Note: You must have GraalVM/Mandrel installed locally, or use Quarkus's built-in container builder if on Windows/Mac)*
+```bash
+# If you have GraalVM installed locally:
+mvn clean package -pl arcclaw-app -Pnative -DskipTests
+
+# OR, if you want Docker to build the native Linux binary for you:
+mvn clean package -pl arcclaw-app -Pnative -Dquarkus.native.container-build=true -DskipTests
+```
+
+### Step 3: Boot the Stack
+Once the `.env` is populated, the native binary is sitting in `target/`, and the compose file is updated with the `init-perms` block, you are ready for liftoff:
+```bash
+docker compose up -d --build
+```
+**What to expect next:**
+* Docker will download the images (Ollama, Jaeger, UBI 9).
+* `init-perms` will boot instantly, change the permissions of the data volume to UID 1000 (`arcclaw`), and exit.
+* `arcclaw` will boot, safely initialize its SQLite DB, and bind to port 8080.
+
+You can then run the `curl` commands from your `TESTING_GUIDE.md`!
+
+### Step 4: Run the Kernel (JVM Mode)
+If you prefer to run the kernel locally on the JVM using Quarkus dev mode instead of Docker:
 ```bash
 # Ensure you are using JDK 21+ (Designed for JDK 25)
 $env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
