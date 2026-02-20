@@ -116,14 +116,13 @@ cp .env.example .env
 ### Step 2: Compile the Native Binary (CRITICAL)
 Your `Dockerfile.native` expects the GraalVM native binary to already exist on your host machine. Docker will **not** compile your Java code; if you deploy without this step, the container will instantly fail with `failed to solve: lstat /arcclaw-app/target: no such file or directory` or cannot find `*-runner`.
 
+> [!NOTE]
+> The final native executable will be approximately **118MB**, containing the entire statically-linked Quarkus runtime and ArcClaw kernel logic.
+
 *(Note: You must have GraalVM/Mandrel installed locally, or use Quarkus's built-in container builder if on Windows/Mac)*
 ```bash
 # If you have GraalVM installed locally:
 .\mvnw.cmd clean package -pl arcclaw-app -Pnative -DskipTests
-
-# OR, if you want Docker to build the native Linux binary for you:
-# (Note: Windows PowerShell users MUST quote the -D arguments, otherwise PS interprets them as malformed paths)
-.\mvnw.cmd clean package -pl arcclaw-app -Pnative "-Dquarkus.native.container-build=true" "-Dquarkus.native.container-runtime=podman" -DskipTests
 
 # OR, if you want Docker/Podman to build the native Linux binary for you:
 # (Configuration is baked into arcclaw-app/pom.xml native profile)
