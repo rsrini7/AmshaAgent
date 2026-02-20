@@ -130,6 +130,9 @@ Once the `.env` is populated, the native binary is sitting in `target/`, and the
 ```bash
 docker compose up -d --build
 ```
+> [!CAUTION]
+> **Windows Podman Desktop Users**: Standalone `docker compose` binary defaults to Docker Desktop's named pipe. If you receive an error `open //./pipe/dockerDesktopLinuxEngine`, you must either enable "Docker API compatibility" in Podman Settings, or set the following environment variable before running the compose command:
+> `$env:DOCKER_HOST="npipe:////./pipe/podman-machine-default"`
 **What to expect next:**
 * Docker will download the images (Ollama, Jaeger, UBI 9).
 * `init-perms` will boot instantly, change the permissions of the data volume to UID 1000 (`arcclaw`), and exit.

@@ -438,6 +438,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Root Cause:** Docker daemon creates named volumes as `root:root` by default, preventing the rootless `arcclaw` user (UID 1000) inside the container from writing the database.
 **Resolution:** We implemented an `init-perms` service in `docker-compose.yaml` to automatically `chown` the volume to UID 1000 before startup.
 
+### 🔴 Failure: Docker Compose `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`
+**Symptom:** Running `docker compose up` on Windows with Podman Desktop installed returns a connection error for `dockerDesktopLinuxEngine`.
+**Root Cause:** Podman Desktop exposes its API socket at `//./pipe/podman-machine-default`. The standalone `docker compose` binary defaults to searching for Docker Desktop's named pipe unless explicitly instructed otherwise or unless Podman Desktop's API compatibility routing is enabled.
+**Resolution:** Open Podman Desktop -> Go to Settings -> Resources -> Podman Provider -> click "Setup" next to "Docker API compatibility". Alternatively, set the environment variable directly in your terminal before running compose: `$env:DOCKER_HOST="npipe:////./pipe/podman-machine-default"`.
+
 ### 🔴 Failure: Unable to open JDBC Connection for DDL execution on Windows (`quarkus:dev`)
 **Symptom:** Running `.\mvnw.cmd quarkus:dev` on Windows fails with `Unable to open JDBC Connection` because the `.db` parent path `./data` does not exist.
 **Root Cause:** The SQLite JDBC driver does NOT automatically create missing parent directories. On Linux/Docker, `root:root` volume mapping hides this, but naked Windows filesystems block Hibernate ORM from initializing its DDL scripts.
