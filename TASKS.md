@@ -146,8 +146,8 @@
   - [x] `GET /sessions/{id}/status/{role}` — load state (200/404) <!-- id: 72 -->
   - [x] `DELETE /sessions/{id}` — terminate session (204) <!-- id: 73 -->
 - [x] `AgentResourceTest` in `arcclaw-app` <!-- id: 74 -->
-  - [ ] All endpoints `@RunOnVirtualThread`
-  - [ ] Bean validation on request records
+  - [x] All endpoints `@RunOnVirtualThread`
+  - [x] Bean validation on request records
 
 ---
 
