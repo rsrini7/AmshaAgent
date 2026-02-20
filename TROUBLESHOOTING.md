@@ -429,6 +429,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 - Always ensure `quarkus.rest.path` reflects your expected request URL.
 - Force inclusion of critical serialization and validation dependencies inside the leaf `arcclaw-app/pom.xml`.
 
+### 🔴 Failure: LangChain4j Exception `gemma:2b does not support tools`
+**Symptom:** When running an agent, the logs emit a `ReasoningEngine failed` error containing the string: `{"error":"registry.ollama.ai/library/gemma:2b does not support tools"}`.
+**Root Cause:** The ArcClaw architecture relies heavily on LLM Tool Calling (function calling) capabilities. Local/lightweight LLMs (like Google's base 2B Gemma model) often do not inherently understand JSON schema tool invocation formats. When LangChain4j attempts to pass the schema, the backend provider (e.g. Ollama) legally rejects the payload.
+**Resolution:** You must use an LLM trained intrinsically for tool usage. Download a tool-capable model (like `llama3.2` or `mistral`) via `docker exec -it arcclaw-ollama-1 ollama run llama3.2`, and then update your Quarkus deployment configurations to use that model id (e.g. `quarkus.langchain4j.ollama.chat-model.model-id=llama3.2`).
+
 ### 🔴 Failure: `ContextNotActiveException` on `/api/v1/sessions/{id}/run-async`
 **Symptom:** When triggering the asynchronous agent execution endpoint, the server immediately logs a `ContextNotActiveException: Cannot use the EntityManager/Session because neither a transaction nor a CDI request context is active`.
 **Root Cause:** The `/run-async` endpoint manually spawns a virtual thread using `Thread.ofVirtual().start()`. In Quarkus, threads spawned outside the managed executor pool do **not** automatically inherit or instantiate a CDI RequestContext. When `AgentLoop` attempts to invoke DB operations via Panache (e.g., `agentStore.load()`), it crashes because there is no context to bind the Hibernate session to.
