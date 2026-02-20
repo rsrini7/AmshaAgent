@@ -473,3 +473,67 @@ Connect CDI Scope, Security Vault, State Store, and Agent Loop into a cohesive l
 - ✅ GC sweep terminates expired sessions
 - ✅ Termination wipes workspace dir and destroys CDI scope
 - ✅ Completed checkpoints not overwritten during termination
+
+---
+
+# Phase 8 — Governance Layer
+
+Implement hard financial limits on agent reasoning loops to prevent budget exhaustion.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Token Tracking Strategy**: Input and output tokens are tracked at the `ReasoningStep` level and aggregated natively in the `AgentResult`.
+
+> [!NOTE]
+> **Autonomy Downgrade**: When a session exceeds its budget (`arcclaw.governance.budget-usd`), the session's autonomy is immediately downgraded to `READ_ONLY` and a `BudgetExceededException` is thrown, aborting the thought loop.
+
+> [!TIP]
+> **Thread Safety (JEP 491)**: `SessionBudget` accumulator uses concurrency primitives (`AtomicInteger`, `synchronized`) to safely update shared budget maps without race conditions from parallel tool execution.
+
+## Proposed Changes
+
+### Core Module — Data Model Upgrades
+
+#### [MODIFY] [ReasoningStep.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ReasoningStep.java)
+- Add `int inputTokens` and `int outputTokens` to the record. Update factories.
+
+#### [MODIFY] [AgentResult.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentResult.java)
+- Add `int totalInputTokens` and `int totalOutputTokens` to the record. 
+
+#### [NEW] [BudgetExceededException.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/BudgetExceededException.java)
+- RuntimeException triggered when a session's LLM consumption crosses the USD threshold.
+
+### Core Module — Governance Logic
+
+#### [NEW] [AgentObserver.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentObserver.java)
+- Interface for interception. Method: `void recordLlmCall(String sessionId, int inputTokens, int outputTokens);`
+
+#### [NEW] [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java)
+- `@ApplicationScoped` implementing `AgentObserver`
+- State: `ConcurrentHashMap<String, SessionBudget> budgets`
+- USD logic: calculates cost based on `application.yaml` prices (`arcclaw.governance.price-per-1k-input` and `output`).
+- Enforcement: If `cost > budget-usd`, lookup `WorkspaceContext` via `Arc.container()`, set `AutonomyLevel.READ_ONLY`, and throw `BudgetExceededException`.
+
+### Core Module — Loop Integration
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- Inject `GovernanceLayer`.
+- Invoke `recordLlmCall` after `ReasoningEngine.nextStep`.
+- Catch `BudgetExceededException` and terminate loop via `AgentResult.error` or `loopExceeded` with budget reason.
+
+### App Module — Verification
+
+#### [NEW] [GovernanceLayerTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/governance/GovernanceLayerTest.java)
+- Inject `GovernanceLayer` and verify cost calculation, `READ_ONLY` downgrade, and exception throwing.
+
+## Verification Plan
+
+### Automated Tests
+```bash
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn test -pl arcclaw-app -Dtest=GovernanceLayerTest
+```
+- ✅ Verify `recordLlmCall` correctly accumulates tokens and cost.
+- ✅ Verify `BudgetExceededException` is thrown when budget triggers.
+- ✅ Verify AutonomyLevel correctly downgraded to `READ_ONLY`.

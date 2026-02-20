@@ -1,3 +1,4 @@
+com\arcclaw\core\governance\GovernanceLayer$SessionBudget.class
 com\arcclaw\core\state\AgentCheckpoint.class
 com\arcclaw\core\tools\ToolResponse.class
 com\arcclaw\core\state\StatefulAgentStoreImpl$1.class
@@ -6,6 +7,7 @@ com\arcclaw\core\security\AutonomyPolicy.class
 com\arcclaw\core\agent\AgentLoop.class
 com\arcclaw\core\agent\AgentRole.class
 com\arcclaw\core\sandbox\ProcessIsolationExecutor.class
+com\arcclaw\core\governance\BudgetExceededException.class
 com\arcclaw\core\agent\ReasoningEngine.class
 com\arcclaw\core\agent\ReasoningStep.class
 com\arcclaw\core\scope\ScopedCounter.class
@@ -24,7 +26,9 @@ com\arcclaw\core\state\SqliteWalConfigurer.class
 com\arcclaw\core\agent\LucasAgent.class
 com\arcclaw\core\scope\WorkspaceScoped.class
 com\arcclaw\core\security\EncryptedSecret$EncryptedSecretId.class
+com\arcclaw\core\governance\GovernanceLayer.class
 com\arcclaw\core\security\RequiresSecrets.class
+com\arcclaw\core\observability\AgentObserver.class
 com\arcclaw\core\state\StatefulAgentStoreImpl.class
 com\arcclaw\core\scope\WorkspaceScopeContext.class
 com\arcclaw\core\agent\Agent.class

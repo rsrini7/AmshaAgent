@@ -46,6 +46,7 @@ quarkus:
       generation: update
     packages:
       - com.arcclaw.core.state
+      - com.arcclaw.core.security
     log:
       sql: false
 

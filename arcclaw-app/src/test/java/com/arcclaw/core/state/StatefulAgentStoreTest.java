@@ -44,9 +44,9 @@ class StatefulAgentStoreTest {
     void testSaveAndLoadCheckpoint() {
         var steps = List.of(
                 new ReasoningStep("Analyzing the repo", "github",
-                        Map.of("repo", "test/repo"), "Repository has 10 files"),
+                        Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
                 new ReasoningStep("Done analyzing", ReasoningStep.FINISH,
-                        Map.of("answer", "Analysis complete"), "Task completed."));
+                        Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
 
         // Save
         var checkpoint = store.save(SESSION, ROLE, steps);
@@ -78,7 +78,7 @@ class StatefulAgentStoreTest {
     void testMarkFailed() {
         var steps = List.of(
                 new ReasoningStep("Trying something", "github",
-                        Map.of("repo", "fail/repo"), "Error occurred"));
+                        Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
 
         var checkpoint = store.save(SESSION + "-fail", ROLE, steps);
         store.markFailed(checkpoint.id, "LLM API timeout");
@@ -97,7 +97,7 @@ class StatefulAgentStoreTest {
     void testMarkCompleted() {
         var steps = List.of(
                 new ReasoningStep("All done", ReasoningStep.FINISH,
-                        Map.of("answer", "42"), "Task completed."));
+                        Map.of("answer", "42"), "Task completed.", 0, 0));
 
         var checkpoint = store.save(SESSION + "-complete", ROLE, steps);
         store.markCompleted(checkpoint.id);
@@ -114,10 +114,10 @@ class StatefulAgentStoreTest {
     @Test
     void testUpsertBehavior() {
         var steps1 = List.of(
-                new ReasoningStep("Step 1", "github", Map.of(), "obs1"));
+                new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0));
         var steps2 = List.of(
-                new ReasoningStep("Step 1", "github", Map.of(), "obs1"),
-                new ReasoningStep("Step 2", "github", Map.of(), "obs2"));
+                new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0),
+                new ReasoningStep("Step 2", "github", Map.of(), "obs2", 0, 0));
 
         var cp1 = store.save(SESSION + "-upsert", ROLE, steps1);
         var cp2 = store.save(SESSION + "-upsert", ROLE, steps2);

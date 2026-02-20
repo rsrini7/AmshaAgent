@@ -115,6 +115,11 @@
 - Ensure `quarkus-extension.properties` is in `src/main/resources/META-INF`.
 - **CRITICAL**: Ensure `quarkus-extension-processor` is a provided dependency in the deployment module. Without it, `@BuildStep` methods are ignored, and the context is never registered.
 
+### 🔴 Failure: `Unsatisfied dependency for type` in Cross-Module Tests
+**Symptom:** Tests in `arcclaw-app` fail to start with `Unsatisfied dependency` referring to beans in `arcclaw-core`, despite those beans being correctly annotated.
+**Root Cause:** Stale `.class` files or missing Jandex index updates in `arcclaw-core`. The `arcclaw-app` test runner may be relying on an older compilation output or local repository artifact of `arcclaw-core` that doesn't include newly added beans.
+**Resolution:** Always run `mvn clean install` across the entire project (e.g., `mvn clean install -DskipTests`) when adding new beans across module boundaries to ensure the Jandex index is fully rebuilt and accessible to the app runner.
+
 ### 🔴 Failure: `ContextNotActiveException` in Tests
 **Symptom:** `ContextNotActiveException` when running tests, even if `WorkspaceScopeHolder.set()` seems to be called.
 **Root Cause:** Thread isolation. Tests or frameworks may spawn child threads (or virtual threads acting as such) where standard `ThreadLocal` context is lost.

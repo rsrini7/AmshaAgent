@@ -57,7 +57,7 @@ class WorkspaceManagerTest {
         // Arrange: create an IN_PROGRESS checkpoint (simulates a crash)
         WorkspaceScopeHolder.set("zombie-session-1");
         try {
-            var steps = List.of(new ReasoningStep("thinking", "action", Map.of(), null));
+            var steps = List.of(new ReasoningStep("thinking", "action", Map.of(), null, 0, 0));
             agentStore.save("zombie-session-1", "grok", steps);
         } finally {
             WorkspaceScopeHolder.clear();
@@ -102,7 +102,7 @@ class WorkspaceManagerTest {
         // Arrange: create a checkpoint for this session
         WorkspaceScopeHolder.set(sessionId);
         try {
-            var steps = List.of(new ReasoningStep("step1", "action1", Map.of(), null));
+            var steps = List.of(new ReasoningStep("step1", "action1", Map.of(), null, 0, 0));
             agentStore.save(sessionId, "harper", steps);
         } finally {
             WorkspaceScopeHolder.clear();
@@ -151,9 +151,9 @@ class WorkspaceManagerTest {
         WorkspaceScopeHolder.set(sessionId);
         try {
             agentStore.save(sessionId, "grok",
-                    List.of(new ReasoningStep("t1", "a1", Map.of(), null)));
+                    List.of(new ReasoningStep("t1", "a1", Map.of(), null, 0, 0)));
             agentStore.save(sessionId, "harper",
-                    List.of(new ReasoningStep("t2", "a2", Map.of(), null)));
+                    List.of(new ReasoningStep("t2", "a2", Map.of(), null, 0, 0)));
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -186,7 +186,7 @@ class WorkspaceManagerTest {
         WorkspaceScopeHolder.set(sessionId);
         try {
             var cp = agentStore.save(sessionId, "benjamin",
-                    List.of(new ReasoningStep("done", "FINISH", Map.of("answer", "42"), "Task completed.")));
+                    List.of(new ReasoningStep("done", "FINISH", Map.of("answer", "42"), "Task completed.", 0, 0)));
             agentStore.markCompleted(cp.id);
         } finally {
             WorkspaceScopeHolder.clear();

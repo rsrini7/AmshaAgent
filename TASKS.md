@@ -108,11 +108,11 @@
 
 
 ## Phase 8 — Governance Layer
-- [ ] `GovernanceLayer` (`@ApplicationScoped`, implements `AgentObserver`)
-  - [ ] Per-session `AtomicLong` token counter + `Double` cost accumulator
-  - [ ] `recordLlmCall()` with token + USD math
-  - [ ] Budget enforcement → `AutonomyLevel.READONLY` + `BudgetExceededException`
-- [ ] `BudgetExceededException` (RuntimeException)
+- [x] `GovernanceLayer` (`@ApplicationScoped`, implements `AgentObserver`)
+  - [x] Per-session `AtomicInteger` token counter + `Double` cost accumulator
+  - [x] `recordLlmCall()` with token + USD math
+  - [x] Budget enforcement → `AutonomyLevel.READONLY` + `BudgetExceededException`
+- [x] `BudgetExceededException` (RuntimeException)
 
 ---
 

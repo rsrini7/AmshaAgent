@@ -51,6 +51,9 @@ public class AgentLoop {
     @Inject
     AgentOtelContext otelContext;
 
+    @Inject
+    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle
      * context).
@@ -170,6 +173,26 @@ public class AgentLoop {
             ReasoningStep step;
             try {
                 step = engine.nextStep(goal, Collections.unmodifiableList(history));
+
+                // --- GOVERNANCE INTERCEPTION ---
+                if (step != null) {
+                    try {
+                        governanceLayer.recordLlmCall(
+                                WorkspaceScopeHolder.get(),
+                                step.inputTokens(),
+                                step.outputTokens());
+                    } catch (com.arcclaw.core.governance.BudgetExceededException be) {
+                        log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
+                        String observationMessage = "System Intervention: " + be.getMessage() +
+                                ". Further actions blocked. Ending loop.";
+                        step = step.withObservation(observationMessage);
+                        synchronized (history) {
+                            history.add(step);
+                            return AgentResult.error(List.copyOf(history), "Budget Exceeded");
+                        }
+                    }
+                }
+
             } catch (Exception e) {
                 log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
                 synchronized (history) {

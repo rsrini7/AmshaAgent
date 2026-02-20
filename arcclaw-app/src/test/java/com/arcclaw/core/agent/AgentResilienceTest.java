@@ -59,13 +59,13 @@ class AgentResilienceTest {
                 return ReasoningStep.pending(
                         "I need to search the web for this.",
                         "web_search", // <-- does NOT exist
-                        Map.of("query", "test query"));
+                        Map.of("query", "test query"), 0, 0);
             }
             // Second call: after receiving the error observation, LLM self-corrects
             return ReasoningStep.pending(
                     "The web_search tool doesn't exist. I'll finish with what I know.",
                     ReasoningStep.FINISH,
-                    Map.of("answer", "Self-corrected after tool not found."));
+                    Map.of("answer", "Self-corrected after tool not found."), 0, 0);
         };
 
         AgentResult result = agentLoop.run("test hallucination", engine);
@@ -93,7 +93,7 @@ class AgentResilienceTest {
         ReasoningEngine engine = (goal, history) -> ReasoningStep.pending(
                 "I'll keep trying the github tool.",
                 "github",
-                Map.of("repo", "test/repo"));
+                Map.of("repo", "test/repo"), 0, 0);
 
         int maxIterations = 3;
         AgentResult result = agentLoop.run("infinite loop test", engine, maxIterations);
@@ -114,7 +114,7 @@ class AgentResilienceTest {
         ReasoningEngine engine = (goal, history) -> ReasoningStep.pending(
                 "I already know the answer.",
                 ReasoningStep.FINISH,
-                Map.of("answer", "42 is the answer."));
+                Map.of("answer", "42 is the answer."), 0, 0);
 
         AgentResult result = agentLoop.run("what is the answer?", engine);
 
