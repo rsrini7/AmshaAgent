@@ -114,7 +114,7 @@ cp .env.example .env
 | `ARCCLAW_DATA_DIR` | `./data` | The host path where SQLite DBs and Workspaces are saved. |
 
 ### Step 2: Compile the Native Binary (CRITICAL)
-Your `Dockerfile.native` expects the GraalVM native binary to already exist on your host machine. Docker will **not** compile your Java code; if you deploy without this step, the container will fail looking for `*-runner`.
+Your `Dockerfile.native` expects the GraalVM native binary to already exist on your host machine. Docker will **not** compile your Java code; if you deploy without this step, the container will instantly fail with `failed to solve: lstat /arcclaw-app/target: no such file or directory` or cannot find `*-runner`.
 
 *(Note: You must have GraalVM/Mandrel installed locally, or use Quarkus's built-in container builder if on Windows/Mac)*
 ```bash
@@ -134,6 +134,9 @@ docker compose up -d --build
 > [!CAUTION]
 > **Windows Podman Desktop Users**: Standalone `docker compose` binary defaults to Docker Desktop's named pipe. If you receive an error `open //./pipe/dockerDesktopLinuxEngine`, you must either enable "Docker API compatibility" in Podman Settings, or set the following environment variable before running the compose command:
 > `$env:DOCKER_HOST="npipe:////./pipe/podman-machine-default"`
+
+> [!CAUTION]
+> **Local Ollama Port Collisions**: If you already have Ollama installed naturally on your host machine (Mac/Windows), Docker Compose will likely crash with `bind: address already in use` for TCP port `11434`. You must either quit your local Ollama application entirely before booting `docker compose`, or remap the Ollama port inside `docker-compose.yaml` (e.g., `"11435:11434"`).
 **What to expect next:**
 * Docker will download the images (Ollama, Jaeger, UBI 9).
 * `init-perms` will boot instantly, change the permissions of the data volume to UID 1000 (`arcclaw`), and exit.

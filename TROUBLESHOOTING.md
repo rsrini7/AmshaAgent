@@ -433,6 +433,17 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 
 ## 14. Deployment & Container Troubleshooting
 
+### 🔴 Failure: Docker Build Fails with `lstat /arcclaw-app/target/... no such file or directory`
+**Symptom:** Running `docker compose up --build` instantly crashes during the `COPY arcclaw-app/target/*-runner` step.
+**Root Cause:** The `Dockerfile.native` is intentionally lightweight and does *not* contain Java compilation instructions. It expects the GraalVM native binary to already exist on the host machine before Docker is invoked. The user skipped Step 2 of the `README.md` (Native compilation).
+**Resolution:** Run the Maven package command locally *before* running `docker compose`:
+`.\mvnw.cmd clean package -pl arcclaw-app -Pnative "-Dquarkus.native.container-build=true" "-Dquarkus.native.container-runtime=podman" -DskipTests`
+
+### 🔴 Failure: Docker Compose Fails with `bind: address already in use` for TCP port `11434`
+**Symptom:** During `docker compose up`, the startup halts with `Error response from daemon: cannot listen on the TCP port: listen tcp4 :11434: bind: address already in use`.
+**Root Cause:** You likely have the official Windows/Mac Ollama application installed naturally on your host machine. The background desktop daemon is already occupying port `11434`, preventing Docker from binding the internal Ollama container to the same host port.
+**Resolution:** Quit the local Ollama desktop application via the system tray, OR remap the container's exposed port in `docker-compose.yaml` (e.g. `11435:11434`).
+
 ### 🔴 Failure: SQLite Permission denied in Docker.
 **Symptom:** The `arcclaw` container crashes on startup complaining that SQLite cannot write to `/app/data` due to a `Permission denied` error.
 **Root Cause:** Docker daemon creates named volumes as `root:root` by default, preventing the rootless `arcclaw` user (UID 1000) inside the container from writing the database.
