@@ -15,6 +15,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
@@ -70,19 +72,20 @@ public class AgentResource {
 
     @POST
     @Path("/{id}/run-async")
-    public Response runAgentAsync(@PathParam("id") String sessionId, @Valid RunAgentRequest request) {
-        log.info("Spawning virtual thread for async agent run, session: {}", sessionId);
+    public void runAgentAsync(@PathParam("id") String sessionId, @Valid RunAgentRequest request,
+            @Suspended AsyncResponse response) {
+        log.info("Spawning virtual thread for async agent run via AsyncResponse, session: {}", sessionId);
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         Thread.ofVirtual().name("arcclaw-agent-" + sessionId).start(() -> {
             try {
                 agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
+                response.resume(Response.accepted().build());
             } catch (Exception e) {
                 log.error("Async agent run failed for session {}: {}", sessionId, e.getMessage(), e);
+                response.resume(Response.serverError().entity(e.getMessage()).build());
             }
         });
-
-        return Response.accepted().build();
     }
 
     @GET
