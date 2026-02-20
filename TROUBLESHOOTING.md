@@ -428,3 +428,12 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Resolution:**
 - Always ensure `quarkus.rest.path` reflects your expected request URL.
 - Force inclusion of critical serialization and validation dependencies inside the leaf `arcclaw-app/pom.xml`.
+
+---
+
+## 14. Deployment & Container Troubleshooting
+
+### 🔴 Failure: SQLite Permission denied in Docker.
+**Symptom:** The `arcclaw` container crashes on startup complaining that SQLite cannot write to `/app/data` due to a `Permission denied` error.
+**Root Cause:** Docker daemon creates named volumes as `root:root` by default, preventing the rootless `arcclaw` user (UID 1000) inside the container from writing the database.
+**Resolution:** We implemented an `init-perms` service in `docker-compose.yaml` to automatically `chown` the volume to UID 1000 before startup.

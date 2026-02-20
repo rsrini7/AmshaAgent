@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  init-perms:
+    image: registry.access.redhat.com/ubi9/ubi-minimal:9.3
+    user: "0:0"
+    command: chown -R 1000:1000 /app/data
+    volumes:
+      - arcclaw_data:/app/data
+    networks:
+      - arcclaw-net
+
   arcclaw:
     build: 
       context: .
@@ -18,8 +27,12 @@ services:
       - arcclaw_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock # Optional fallback for process isolation
     depends_on:
-      - otel-collector
-      - ollama
+      init-perms:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+      ollama:
+        condition: service_started
     networks:
       - arcclaw-net
     privileged: true # Required for nested rootless Podman to create namespaces
