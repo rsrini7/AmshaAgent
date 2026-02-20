@@ -119,10 +119,11 @@ Your `Dockerfile.native` expects the GraalVM native binary to already exist on y
 *(Note: You must have GraalVM/Mandrel installed locally, or use Quarkus's built-in container builder if on Windows/Mac)*
 ```bash
 # If you have GraalVM installed locally:
-mvn clean package -pl arcclaw-app -Pnative -DskipTests
+.\mvnw.cmd clean package -pl arcclaw-app -Pnative -DskipTests
 
 # OR, if you want Docker to build the native Linux binary for you:
-mvn clean package -pl arcclaw-app -Pnative -Dquarkus.native.container-build=true -DskipTests
+# (Note: Windows PowerShell users MUST quote the -D arguments, otherwise PS interprets them as malformed paths)
+.\mvnw.cmd clean package -pl arcclaw-app -Pnative "-Dquarkus.native.container-build=true" -DskipTests
 ```
 
 ### Step 3: Boot the Stack
