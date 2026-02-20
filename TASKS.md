@@ -152,18 +152,18 @@
 ---
 
 ## Phase 12 — Cross-Cutting Concerns
-- [ ] `ReflectionConfig` (package-level `@RegisterForReflection`)
-- [ ] MicroProfile context propagation config (`mp.context.propagators`)
+- [x] `ReflectionConfig` (package-level `@RegisterForReflection`)
+- [x] MicroProfile context propagation config (`mp.context.propagators`)
 
 ---
 
 ## Phase 13 — Deployment Artifacts
-- [ ] `docker-compose.yaml` (arcclaw, ollama, otel-collector, jaeger)
-- [ ] `otel-collector-config.yaml`
-- [ ] `Dockerfile.native` (UBI 9 minimal + embedded rootless Podman)
-- [ ] `containers.conf` (rootless Podman storage config)
-- [ ] `.env` template
-- [ ] `.gitignore`
+- [x] `docker-compose.yaml` (arcclaw, ollama, otel-collector, jaeger)
+- [x] `otel-collector-config.yaml`
+- [x] `Dockerfile.native` (UBI 9 minimal + embedded rootless Podman)
+- [x] `containers.conf` (rootless Podman storage config)
+- [x] `.env` template
+- [x] `.gitignore`
 
 ---
 

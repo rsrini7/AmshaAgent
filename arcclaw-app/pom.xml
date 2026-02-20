@@ -69,6 +69,23 @@
       <artifactId>quarkus-hibernate-validator</artifactId>
     </dependency>
 
+    <!-- Explicitly add langchain4j extensions so beans are generated -->
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-core</artifactId>
+      <version>${langchain4j.quarkus.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-ollama</artifactId>
+      <version>${langchain4j.quarkus.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-openai</artifactId>
+      <version>${langchain4j.quarkus.version}</version>
+    </dependency>
+
     <!-- Explicit Jackson dependency for LangChain4J guardrails -->
     <dependency>
       <groupId>io.quarkus</groupId>

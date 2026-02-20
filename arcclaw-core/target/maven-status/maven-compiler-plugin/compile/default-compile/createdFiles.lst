@@ -1,9 +1,11 @@
 com\arcclaw\core\governance\GovernanceLayer$SessionBudget.class
 com\arcclaw\core\api\AgentResource.class
 com\arcclaw\core\state\AgentCheckpoint.class
+com\arcclaw\core\agent\LangChainReasoningEngine$1.class
 com\arcclaw\core\tools\ToolResponse.class
 com\arcclaw\core\state\StatefulAgentStoreImpl$1.class
 com\arcclaw\core\health\PodmanImageHealthCheck.class
+com\arcclaw\core\config\ReflectionConfig.class
 com\arcclaw\core\security\AutonomyLevel.class
 com\arcclaw\core\security\AutonomyPolicy.class
 com\arcclaw\core\agent\AgentLoop.class
@@ -12,7 +14,6 @@ com\arcclaw\core\api\dto\RunAgentRequest.class
 com\arcclaw\core\sandbox\ProcessIsolationExecutor.class
 com\arcclaw\core\governance\BudgetExceededException.class
 com\arcclaw\core\health\PodmanHealthCheck.class
-com\arcclaw\core\agent\DefaultReasoningEngine.class
 com\arcclaw\core\agent\ReasoningEngine.class
 com\arcclaw\core\agent\ReasoningStep.class
 com\arcclaw\core\scope\ScopedCounter.class
@@ -39,7 +40,9 @@ com\arcclaw\core\state\StatefulAgentStoreImpl.class
 com\arcclaw\core\scope\WorkspaceScopeContext.class
 com\arcclaw\core\agent\Agent.class
 com\arcclaw\core\scope\WorkspaceContext.class
+META-INF\jandex.idx
 com\arcclaw\core\tools\AgentTool.class
+com\arcclaw\core\agent\LangChainReasoningEngine.class
 com\arcclaw\core\security\ToolOperation.class
 com\arcclaw\core\security\AesGcmSivCipher$CipherResult.class
 com\arcclaw\core\agent\BenjaminAgent.class

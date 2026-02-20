@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  arcclaw:
+    build: 
+      context: .
+      dockerfile: Dockerfile.native
+    ports:
+      - "8080:8080"
+    environment:
+      - QUARKUS_PROFILE=prod
+      - ARCCLAW_DATA_DIR=/app/data
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
+      # GITHUB_TOKEN should be provided via .env file or environment
+      - "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
+    volumes:
+      - arcclaw_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock # Optional fallback for process isolation
+    depends_on:
+      - otel-collector
+      - ollama
+    networks:
+      - arcclaw-net
+    privileged: true # Required for nested rootless Podman to create namespaces
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - arcclaw-net
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.95.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    depends_on:
+      - jaeger
+    networks:
+      - arcclaw-net
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Web UI
+      - "4317"        # OTLP gRPC port (internal)
+    networks:
+      - arcclaw-net
+
+volumes:
+  arcclaw_data:
+  ollama_data:
+
+networks:
+  arcclaw-net:
+    driver: bridge

@@ -5,9 +5,9 @@ H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\AgentResult.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\AgentRole.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\ArcClawSupervisor.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\BenjaminAgent.java
-H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\DefaultReasoningEngine.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\GrokAgent.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\HarperAgent.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\LangChainReasoningEngine.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\LucasAgent.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\ReasoningEngine.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\agent\ReasoningStep.java
@@ -15,6 +15,7 @@ H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\api\AgentResource.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\api\dto\CreateSessionResponse.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\api\dto\RunAgentRequest.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\api\dto\SessionStatusResponse.java
+H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\config\ReflectionConfig.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\governance\BudgetExceededException.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\governance\GovernanceLayer.java
 H:\ws\ArcClaw\arcclaw-core\src\main\java\com\arcclaw\core\health\PodmanHealthCheck.java

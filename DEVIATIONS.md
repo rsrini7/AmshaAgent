@@ -79,6 +79,9 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 ## Technical Debt & Decisions
 
 *   **ByteBuddy Experimental Flag:** Required `-Dnet.bytebuddy.experimental=true` for JDK 25. This is documented in `TROUBLESHOOTING.md`.
+*   **Mockito JDK 21 Reflection:** Required `--add-opens java.base/java.lang=ALL-UNNAMED` for tests to allow Mockito to self-attach the inline mock-maker on modern JDKs.
+*   **LangChain4J Provider Ambiguity:** Explicitly configured `quarkus.langchain4j.chat-model.provider=ollama` in `application.yaml` to allow multiple provider extensions (like `openai` and `ollama`) on the classpath without failing CDI resolution.
+*   **LangChain4J Version Management:** Removed manual `langchain4j-bom` import. Always let the Quarkus extension (`0.26.1` in Quarkus `3.23.0`) transitively manage the core library version to prevent `NoClassDefFoundError` caused by API package migrations.
 *   **SQLite Blob Handling:** Removed `@Lob` annotations from JPA entities. SQLite's JDBC driver prefers native `byte[]` mapping to avoid OOMs on large secret payloads.
 *   **CDI Producer Scopes:** Resolved `DefinitionException` by removing redundant `@Dependent` on `@WorkspaceScoped` producers (only one scope is legal).
 *   **Jandex Requirement**: Every new module added to ArcClaw MUST include the Jandex plugin, or ArC will skip bean discovery for that module.

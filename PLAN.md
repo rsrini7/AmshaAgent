@@ -630,3 +630,49 @@ Expose the agentic kernel via a resilient, virtual-thread-powered REST API using
 - ✅ `AgentResourceTest`: Used RestAssured to test all 5 endpoints via `/api/v1/sessions/...`. Verified HTTP statuses 201, 200, 202, 404, 204. Verified sync output behavior and validation (400) failures logic.
 
 ---
+
+# Phase 12 — Cross-Cutting Concerns ✅
+
+Integrates LangChain4J's `ReasoningEngine` and addresses CDI reflection constraints for testing on JDK 21+.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Provider Ambiguity**: When multiple LangChain4J provider extensions (e.g., `openai` and `ollama`) are present on the classpath, Quarkus cannot unambiguously autowire `ChatLanguageModel`. This requires explicitly setting `quarkus.langchain4j.chat-model.provider` in `application.yaml`.
+
+> [!WARNING]
+> **Mockito on JDK 21+**: Mockito's inline mock-maker requires a dynamic agent to attach. On JDK 21, this requires `--add-opens=java.base/java.lang=ALL-UNNAMED` in the test execution environment to prevent attachment failures during test initialization.
+
+## Completed Changes
+
+#### [NEW] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- `@ApplicationScoped` implementation of `ReasoningEngine` using `ChatLanguageModel`.
+- Configured to use the `0.26.1` Quarkus extension API, utilizing `chatLanguageModel.chat()`.
+
+## Verification
+- ✅ `LangChainReasoningEngineTest`: Verifies behavior using Mockito on the `@Inject`ed chat model successfully.
+
+---
+
+# Phase 13 — Deployment Artifacts ✅
+
+Provide local containerized execution scaffolding via Docker Compose and rootless Podman execution contexts.
+
+## Completed Changes
+
+#### [NEW] [docker-compose.yaml](file:///h:/ws/ArcClaw/docker-compose.yaml)
+- Defines services for `arcclaw`, `ollama`, `otel-collector`, and `jaeger`.
+- Exposes necessary ports and mounts data volumes.
+
+#### [NEW] [Dockerfile.native](file:///h:/ws/ArcClaw/Dockerfile.native)
+- Uses `ubi-minimal:9.3` to provide a container native runner.
+- Configures `arcclaw` standard user, subuids/subgids, and installs `podman` for embedded tool isolation execution.
+
+#### [NEW] [containers.conf](file:///h:/ws/ArcClaw/containers.conf)
+- Forces `vfs` storage driver inside the UBI container to bridge rootless podman.
+
+#### [NEW] [.env.example](file:///h:/ws/ArcClaw/.env.example)
+- Environment variable template containing `GITHUB_TOKEN`, Model configurations, etc.
+
+## Verification
+- ✅ Deployment artifacts created and `.gitignore` updated to ignore real `.env` files.

@@ -59,8 +59,18 @@
 
 ### 🔴 Failure: `NoClassDefFoundError: ChatLanguageModel`
 **Symptom:** Runtime crash or test failure loading LangChain4J classes.
-**Root Cause:** Using `langchain4j-bom:1.0.0-beta4` + `quarkus-langchain4j:0.26.1`. The BOM forces a newer, incompatible core library.
+**Root Cause:** Using `langchain4j-bom:1.0.0-beta4` + `quarkus-langchain4j:0.26.1`. The BOM forces a newer, incompatible core library where `ChatLanguageModel` was moved to a new package.
 **Resolution:** Remove `langchain4j-bom` import. Let Quarkus extension manage versions.
+
+### 🔴 Failure: `ConfigurationException: A ChatLanguageModel ... bean was requested, but since there are multiple available providers ... needs to be set`
+**Symptom:** Build fails during Quarkus augmentation when multiple LangChain4J extensions (e.g. `openai` and `ollama`) are on the classpath.
+**Root Cause:** Quarkus cannot unambiguously wire `ChatLanguageModel` because multiple provider extensions offer it.
+**Resolution:** Explicitly set `quarkus.langchain4j.chat-model.provider=ollama` (or `openai`) in `application.yaml`.
+
+### 🔴 Failure: Mockito inline-mocker fails to attach on JDK 21+
+**Symptom:** `Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK` followed by test failures when mocking complex classes like `ChatLanguageModel`.
+**Root Cause:** JDK 21+ heavily restricts dynamic agent loading and reflection which Mockito relies on.
+**Resolution:** Add `--add-opens=java.base/java.lang=ALL-UNNAMED` to `MAVEN_OPTS` or Surefire configuration for test execution.
 
 ### 🔴 Failure: `ClassNotFoundException: TracerEnabled` (OTel)
 **Symptom:** Quarkus test bootstrap fails.

@@ -1,0 +1,37 @@
+## Native Image build using UBI 9 Minimal mapped with Podman rootless isolation
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
+
+# Install Podman and dependencies for rootless storage (shadow-utils for userns)
+RUN microdnf update -y && \
+    microdnf install -y podman shadow-utils slirp4netns fuse-overlayfs iptables && \
+    microdnf clean all
+
+# Create 'arcclaw' user for rootless podman
+RUN useradd -m -s /bin/bash arcclaw
+
+# Apply the custom containers.conf for vfs storage driver inside the container
+COPY containers.conf /etc/containers/containers.conf
+
+# Setup required Subuid/Subgid maps for rootless mode
+RUN echo "arcclaw:100000:65536" > /etc/subuid && \
+    echo "arcclaw:100000:65536" > /etc/subgid
+
+WORKDIR /app
+
+# Switch to standard user
+USER arcclaw
+
+# Create sub-directories and local mount points
+RUN mkdir -p /home/arcclaw/.config/containers /home/arcclaw/.local/share/containers /app/data
+
+# Copy the Quarkus native binary
+COPY arcclaw-app/target/*-runner /app/application
+
+# Ensure execution permission
+USER root
+RUN chmod +x /app/application
+USER arcclaw
+
+EXPOSE 8080
+
+CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]
