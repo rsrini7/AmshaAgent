@@ -150,6 +150,10 @@ If you prefer to run the kernel locally on the JVM using Quarkus dev mode instea
 # Ensure you are using JDK 21+ (Designed for JDK 25)
 $env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
 ./mvnw quarkus:dev -pl arcclaw-app
+
+(or)
+
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am
 ```
 
 ---

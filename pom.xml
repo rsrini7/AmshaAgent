@@ -55,6 +55,19 @@
           <groupId>io.quarkus.platform</groupId>
           <artifactId>quarkus-maven-plugin</artifactId>
           <version>${quarkus.version}</version>
+          <extensions>true</extensions>
+          <executions>
+              <execution>
+                  <goals>
+                      <goal>build</goal>
+                      <goal>generate-code</goal>
+                      <goal>generate-code-tests</goal>
+                  </goals>
+              </execution>
+          </executions>
+          <configuration>
+              <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED</jvmArgs>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>

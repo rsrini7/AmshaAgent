@@ -126,7 +126,9 @@
             </goals>
           </execution>
         </executions>
-
+        <configuration>
+            <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED</jvmArgs>
+        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
