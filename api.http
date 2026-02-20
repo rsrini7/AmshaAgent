@@ -1,0 +1,40 @@
+### Create a new Workspace Session
+# @name createSession
+POST http://localhost:8080/api/v1/sessions
+Content-Type: application/json
+
+> {%
+    // Capture the generated sessionId from the response and store it as a global script variable
+    client.global.set("SESSION_ID", response.body.sessionId);
+%}
+
+###
+
+### Run the Grok Agent (Asynchronous)
+# Requires the SESSION_ID from the previous request
+POST http://localhost:8080/api/v1/sessions/{SESSION_ID}/run-async
+Content-Type: application/json
+
+{
+    "goal": "Analyze the openclaw repository on github and tell me what it does",
+    "agentRole": "grok",
+    "maxIterations": 5
+}
+
+###
+
+### Check the Agent's Execution Status
+# Requires the SESSION_ID from the previous request
+GET http://localhost:8080/api/v1/sessions/{SESSION_ID}/status/grok
+
+###
+
+### (Optional) Run the Agent Synchronously (Blocking)
+# This will block the HTTP request until the agent finishes (or hits maxIterations)
+POST http://localhost:8080/api/v1/sessions/{SESSION_ID}/run
+Content-Type: application/json
+
+{
+    "goal": "Analyze the arcclaw repository statistics",
+    "agentRole": "grok"
+}

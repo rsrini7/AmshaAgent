@@ -187,8 +187,29 @@ curl -v -X POST http://localhost:8080/api/v1/sessions/abcd-1234-.../run-async \
       }'
 ```
 
+> [!TIP]
+> **Pro Tip: Use `api.http` instead!**
+> If you are using **IntelliJ IDEA** or **VSCode** (with the REST Client extension), you can skip manual `curl` commands and just use the provided [`api.http`](./api.http) file.
+> 1. Run the first request to create the session.
+> 2. The script will automatically capture the `SESSION_ID`.
+> 3. Run the subsequent "Async" or "Sync" requests immediately without copying IDs!
+
 **3. Observe the Trace:**
 Open the [Jaeger UI](http://localhost:16686) in your browser to watch the agent think, execute tools in Podman, and persist its thoughts.
+
+**4. End-to-End Verification (Reading the Logs):**
+When the asynchronous agent executes successfully, you will see a precise sequence of events in your Quarkus terminal that perfectly matches our architecture diagram:
+
+1. **Virtual Thread Initialization:** `Spawning virtual thread for async agent run, session: e8d8...`
+   *ArcClaw receives the REST payload and instantly offloads the workload to a lightweight JDK 25 Virtual Thread so the HTTP worker isn't blocked.*
+2. **Context Hydration:** `AgentLoop starting for goal... (maxIterations=5)`
+   *The `@ActivateRequestContext` binds a fresh CDI lifecycle to the unmanaged thread, and the `WorkspaceScopeHolder` activates the isolated workspace session.*
+3. **LLM Delegation:** `HTTP request: - url: http://localhost:11434/api/chat`
+   *LangChain4j serializes the tools and your prompt, then executes a synchronous REST payload to your local Ollama `llama3.2:1b` container.*
+4. **Tool/Reasoning Execution:** `Agent reached FINISH at iteration 1`
+   *The LLM decides it has satisfied your goal (or emitted a final hallucinated JSON string) and commands the parser to halt the Thought-Action-Observation loop.*
+5. **State Checkpointing:** `Created checkpoint for session=e8d8... role=grok` followed immediately by `Checkpoint id=2 marked COMPLETED`
+   *Hibernate ORM commits the final reasoning step history as a JSON CLOB into the SQLite database, marking the virtual thread's lifecycle complete.*
 
 ---
 
