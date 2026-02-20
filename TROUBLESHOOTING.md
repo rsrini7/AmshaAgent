@@ -443,6 +443,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Root Cause:** The SQLite JDBC driver does NOT automatically create missing parent directories. On Linux/Docker, `root:root` volume mapping hides this, but naked Windows filesystems block Hibernate ORM from initializing its DDL scripts.
 **Resolution:** Replaced the empty `ArcClawApp` with a customized `@QuarkusMain` entry method that boots prior to Hibernate. It uses `ConfigProvider` to natively parse `ARCCLAW_DATA_DIR` and runs `Files.createDirectories()` securely.
 
+### 🔴 Failure: SQLITE_ERROR (index already exists) during DDL Update
+**Symptom:** When running `quarkus:dev` on a fresh database, Hibernate ORM throws `[SQLITE_ERROR] SQL error or missing database (index idx_checkpoint_session_role already exists)`.
+**Root Cause:** `AgentCheckpoint` defined both a `@UniqueConstraint` and a redundant secondary `@Index` on `(sessionId, agentRole)`. SQLite automatically creates an index to enforce unique constraints. When Hibernate's schema generation (`update`) ran, it blindly issued `CREATE INDEX` for the duplicate index without the `IF NOT EXISTS` dialect syntax, crashing the boot sequence.
+**Resolution:** Removed the explicit `@Index` definition from `AgentCheckpoint.java` since the `@UniqueConstraint` natively guarantees indexing.
+
 ### 🔴 Failure: Netty crashes with `sun.misc.Unsafe unavailable` on REST API request
 **Symptom:** The Quarkus app boots correctly, but the first incoming HTTP request to `/api/v1/sessions` throws a massive `UnsupportedOperationException: sun.misc.Unsafe unavailable` from `io.netty.util.internal.CleanerJava9`.
 **Root Cause:** In JDK 25, JEP 471 terminally deprecated and restrictively blocked the `sun.misc.Unsafe` memory-access methods by default. Netty heavily relies on these methods to allocate low-level byte buffers (especially on Windows where native epoll isn't available).

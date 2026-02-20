@@ -22,7 +22,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "agent_checkpoint", uniqueConstraints = @UniqueConstraint(name = "uq_checkpoint_session_role", columnNames = {
         "sessionId",
-        "agentRole" }), indexes = @Index(name = "idx_checkpoint_session_role", columnList = "sessionId, agentRole"))
+        "agentRole" }))
 public class AgentCheckpoint {
 
     @Id

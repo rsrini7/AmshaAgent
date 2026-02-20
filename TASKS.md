@@ -189,6 +189,7 @@
 ## Phase 14.2 — Day 2 Operations (Windows Dev Ex)
 - [x] Implement `@QuarkusMain` to provision `ARCCLAW_DATA_DIR` natively
 - [x] Prevent `GenericJDBCException` on missing `./data` target path
+- [x] Remove redundant `@Index` colliding with `@UniqueConstraint` in `AgentCheckpoint` (fixing SQLite DDL exception)
 
 ---
 
