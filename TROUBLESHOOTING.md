@@ -120,6 +120,11 @@
 **Root Cause:** Stale `.class` files or missing Jandex index updates in `arcclaw-core`. The `arcclaw-app` test runner may be relying on an older compilation output or local repository artifact of `arcclaw-core` that doesn't include newly added beans.
 **Resolution:** Always run `mvn clean install` across the entire project (e.g., `mvn clean install -DskipTests`) when adding new beans across module boundaries to ensure the Jandex index is fully rebuilt and accessible to the app runner.
 
+### 🔴 Failure: `Unsatisfied dependency for type InMemorySpanExporter` in Tests
+**Symptom:** Injecting `InMemorySpanExporter` in `@QuarkusTest` fails with `UnsatisfiedResolutionException`.
+**Root Cause:** The `quarkus-opentelemetry` extension does not automatically expose `InMemorySpanExporter` as a CDI bean unless explicitly configured or wired for testing. Adding `opentelemetry-sdk-testing` dependency manually can cause test discovery failures or classpath conflicts on some setups.
+**Resolution:** Bypass the `InMemorySpanExporter` entirely. Use `quarkus-junit5-mockito` and `@InjectMock Tracer tracer` to mock the OpenTelemetry SDK. Verify `Tracer` and `Span` interactions natively (e.g. `verify(tracer).spanBuilder(...)`) instead of relying on the exporter sink.
+
 ### 🔴 Failure: `ContextNotActiveException` in Tests
 **Symptom:** `ContextNotActiveException` when running tests, even if `WorkspaceScopeHolder.set()` seems to be called.
 **Root Cause:** Thread isolation. Tests or frameworks may spawn child threads (or virtual threads acting as such) where standard `ThreadLocal` context is lost.

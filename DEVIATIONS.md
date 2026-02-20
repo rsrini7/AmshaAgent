@@ -51,6 +51,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **6** | State Layer (Checkpointing) | **Complete** | `AgentCheckpoint` entity (plain JPA, not Panache), `StatefulAgentStore` (EntityManager + Jackson), `SqliteWalConfigurer` (WAL PRAGMAs), 4 tests passing. |
 | **7** | Lifecycle Layer | **Complete** | `WorkspaceManager` (Heartbeats, GC, Termination), `AgentLoop` lifecycle upgrade. deviation: `WorkspaceScopeContext` injected via `Arc.container()` lookup (custom context). |
 | **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). |
+| **9** | Observer / OTel Layer | **Complete** | `AgentOtelContext` OpenTelemetry implementation. deviation: Replaced `InMemorySpanExporter` with `@InjectMock Tracer` for testing due to Quarkus OTLP extension limitations in unit tests. |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.

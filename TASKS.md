@@ -117,8 +117,10 @@
 ---
 
 ## Phase 9 — Observer / OTel Layer
-- [ ] `AgentObserver` interface (`onSessionStart`, `onSessionEnd`, `onError`)
-- [ ] `AgentOtelContext` (static session root span manager, child span factory)
+- [x] Fix Phase 8 Memory Leak (`WorkspaceManager` clearing `GovernanceLayer` budget)
+- [x] `AgentOtelContext` (OpenTelemetry `Tracer` integration, root `Span` and `Scope` tracking)
+- [x] Expand `AgentObserver` list in `AgentLoop`
+- [x] `AgentOtelContextTest` (Mockito-based trace verification)
 
 ---
 

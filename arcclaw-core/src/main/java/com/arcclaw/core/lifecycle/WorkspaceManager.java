@@ -59,6 +59,9 @@ public class WorkspaceManager {
     @Inject
     EntityManager em;
 
+    @Inject
+    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
@@ -177,6 +180,9 @@ public class WorkspaceManager {
 
         // 1. Remove from heartbeat tracking
         heartbeats.remove(sessionId);
+
+        // 1a. Clear budget memory
+        governanceLayer.clearSession(sessionId);
 
         // 2. Mark checkpoints FAILED (in a transaction)
         markCheckpointsFailed(sessionId);

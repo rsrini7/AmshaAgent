@@ -537,3 +537,39 @@ mvn test -pl arcclaw-app -Dtest=GovernanceLayerTest
 - ✅ Verify `recordLlmCall` correctly accumulates tokens and cost.
 - ✅ Verify `BudgetExceededException` is thrown when budget triggers.
 - ✅ Verify AutonomyLevel correctly downgraded to `READ_ONLY`.
+
+---
+
+# Phase 9 — Observer / OTel Layer
+
+Replace observability stubs with a full OpenTelemetry implementation, enabling proper tracing of agent sessions and LLM usage cost semantics, along with resolving small Phase 8 tech debt.
+
+## Proposed Changes
+
+### Core Module — OpenTelemetry Tracing
+#### [MODIFY] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Injected `io.opentelemetry.api.trace.Tracer`.
+- `startSessionSpan`: Creates an `arcclaw.session` root span, stores it and its `Scope` in `ConcurrentHashMap`.
+- `recordLlmCall`: Implements `AgentObserver` to attach `llm.usage.prompt_tokens` and `llm.usage.completion_tokens` directly to the active root span.
+
+### Core Module — Lifecycle Integration
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- Inject `Instance<AgentObserver>` to aggregate all observers (Governance + Telemetry).
+- Iterate through observers to record LLM calls.
+
+#### [MODIFY] [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Call `governanceLayer.clearSession(sessionId)` during termination to plug a budget map memory leak.
+
+### App Module — Testing
+#### [NEW] [AgentOtelContextTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/observability/AgentOtelContextTest.java)
+- Uses `@InjectMock Tracer` due to Quarkus 3 test constraints to verify span attribution without complex OTLP exporters.
+
+## Verification Plan
+
+### Automated Tests
+```bash
+$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
+mvn test -pl arcclaw-app -Dtest=AgentOtelContextTest
+```
+- ✅ Verify `Tracer` creates span with `sessionId` attribute.
+- ✅ Verify `AgentObserver.recordLlmCall` successfully populates semantic metrics.

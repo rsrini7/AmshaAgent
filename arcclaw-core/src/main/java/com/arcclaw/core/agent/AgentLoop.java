@@ -7,6 +7,7 @@ import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import io.opentelemetry.api.trace.Span;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -52,7 +53,7 @@ public class AgentLoop {
     AgentOtelContext otelContext;
 
     @Inject
-    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+    Instance<com.arcclaw.core.observability.AgentObserver> observers;
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle
@@ -174,13 +175,15 @@ public class AgentLoop {
             try {
                 step = engine.nextStep(goal, Collections.unmodifiableList(history));
 
-                // --- GOVERNANCE INTERCEPTION ---
+                // --- GOVERNANCE & OBSERVABILITY INTERCEPTION ---
                 if (step != null) {
                     try {
-                        governanceLayer.recordLlmCall(
-                                WorkspaceScopeHolder.get(),
-                                step.inputTokens(),
-                                step.outputTokens());
+                        for (var observer : observers) {
+                            observer.recordLlmCall(
+                                    WorkspaceScopeHolder.get(),
+                                    step.inputTokens(),
+                                    step.outputTokens());
+                        }
                     } catch (com.arcclaw.core.governance.BudgetExceededException be) {
                         log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
                         String observationMessage = "System Intervention: " + be.getMessage() +
