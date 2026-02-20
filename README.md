@@ -34,6 +34,27 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 5.  **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 
 ```mermaid
+graph TD
+    Client([Client / UI]) -->|HTTP POST| REST[AgentResource REST API]
+    REST --> Loop[AgentLoop Orchestrator]
+    
+    subgraph Core Kernel
+        Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB)]
+        Loop <-->|Prompt & History| AI[LangChain4J ReasoningEngine]
+        Loop -->|Execute Tool Request| ToolReg[Tool Registry]
+    end
+    
+    AI <-->|Local Inference| Ollama((Ollama: llama3.1))
+    
+    subgraph Sandbox Layer
+        ToolReg --> Isolator[ProcessIsolationExecutor]
+        Isolator -->|Rootless Mounts| Podman[(Podman Container)]
+    end
+```
+
+Sequece Flow:
+
+```mermaid
 sequenceDiagram
     participant C as Client
     participant API as AgentResource
@@ -86,6 +107,12 @@ cp .env.example .env
 # E.g., OLLAMA_BASE_URL=http://ollama:11434
 ```
 
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Points to the local or remote Ollama LLM provider. |
+| `GITHUB_TOKEN` | `(empty)` | Required if using the `HarperAgent` or GitHub tools. |
+| `ARCCLAW_DATA_DIR` | `./data` | The host path where SQLite DBs and Workspaces are saved. |
+
 ### Step 2: Compile the Native Binary (CRITICAL)
 Your `Dockerfile.native` expects the GraalVM native binary to already exist on your host machine. Docker will **not** compile your Java code; if you deploy without this step, the container will fail looking for `*-runner`.
 
@@ -109,6 +136,13 @@ docker compose up -d --build
 * `arcclaw` will boot, safely initialize its SQLite DB, and bind to port 8080.
 
 You can then run the `curl` commands from your `TESTING_GUIDE.md`!
+
+### 🧪 Running the Test Suite
+ArcClaw includes 40+ unit and integration tests covering the CDI scopes, LLM reasoning logic, and SQLite checkpoints. To run the full suite across all modules, use:
+```bash
+mvn clean verify -pl arcclaw-app -am
+```
+*(Note: Mockito requires JDK 21+ inline mock attachments. This is handled automatically by the `--add-opens` flags in the `arcclaw-app` pom.xml).*
 
 ### Step 4: Run the Kernel (JVM Mode)
 If you prefer to run the kernel locally on the JVM using Quarkus dev mode instead of Docker:
