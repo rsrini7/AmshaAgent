@@ -225,7 +225,7 @@ mp:
   context:
     # CRITICAL: propagate CDI context across ManagedExecutor/Vert.x threads
     # Without this, @WorkspaceScoped beans are null on worker threads.
-    propagators: "Contexts.CDI,Contexts.APPLICATION,Contexts.TRANSACTION"
+    propagators: "Quarkus, CDI, JAX-RS"
 
 # =============================================================================
 # PROFILES

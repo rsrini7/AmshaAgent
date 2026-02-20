@@ -168,13 +168,13 @@
 ---
 
 ## Phase 14 — Verification & Integration Testing
-- [ ] JVM dev mode: `mvnw quarkus:dev -pl arcclaw-app` starts without errors
-- [ ] Unit tests pass: `mvnw test -pl arcclaw-core`
-- [ ] REST endpoint smoke test via `curl`
-- [ ] Health endpoints: `/q/health/live`, `/q/health/ready`
-- [ ] OTel traces visible in Jaeger UI (docker-compose stack)
-- [ ] Native image builds successfully (optional — requires GraalVM or container builder)
-- [ ] DRBG verification: two native runs produce different nonces
+- [x] JVM dev mode: `mvnw quarkus:dev -pl arcclaw-app` starts without errors
+- [x] Unit tests pass: `mvnw test -pl arcclaw-core`
+- [x] REST endpoint smoke test via `curl`
+- [x] Health endpoints: `/q/health/live`, `/q/health/ready`
+- [x] OTel traces visible in Jaeger UI (docker-compose stack)
+- [x] Native image builds successfully (optional — requires GraalVM or container builder)
+- [x] DRBG verification: two native runs produce different nonces
 
 ---
 

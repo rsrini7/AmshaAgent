@@ -88,6 +88,9 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **Health Check Mocking**: Do NOT use `@InjectMock` or `@Mock extends` for `HealthCheck` beans in multi-module projects. Use `@Alternative` + `@Priority` standalone implementations. See `TROUBLESHOOTING.md` §10 for the full decision matrix.
 *   **Management Port**: RestAssured tests for health/metrics/OpenAPI endpoints MUST target port 9001 (test mode). Check Quarkus startup log for `Management interface listening on`.
 *   **Stale Class Files**: `mvn clean` required when switching between incremental builds across modules (deployment module classpath can become stale).
+*   **Virtual Thread Context Propagation**: explicitly required `mp.context.propagators=Quarkus, CDI, JAX-RS` inside `application.yaml` to successfully span `@WorkspaceScoped` attributes or OpenTelemetry context onto `@RunOnVirtualThread` handlers.
+*   **Integration Test Map Leakage**: integration tests with static Maps like `ConcurrentHashMap` (`WorkspaceManager` or `StatefulAgentStore`) will leak references across boundaries when running the full test suite (`mvn clean verify`). We solved this by executing a teardown inside the test via `clearAll()`.
+*   **LLM Provider Mocking**: Injecting the real `ReasoningEngine` mapped to services like Ollama triggers a `Connection refused` when testing REST endpoints independently. Mock via `@InjectMock ReasoningEngine`.
 
 ---
 *Internal Audit Trail sync complete.*

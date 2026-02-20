@@ -150,6 +150,16 @@
 **Root Cause:** `synchronized` used on older JDKs.
 **Resolution:** Upgrade to JDK 25 (JEP 491 compliant) or use `ReentrantLock`.
 
+### 🔴 Failure: Null Contexts on Virtual Threads
+**Symptom:** `@WorkspaceScoped` attributes or CDI contexts resolve to `null` silently during `@RunOnVirtualThread` execution.
+**Root Cause:** Quarkus detaches `ThreadLocal` storage when swapping execution to asynchronous virtual threads.
+**Resolution:** Add `mp.context.propagators=Quarkus, CDI, JAX-RS` to `application.yaml` to ensure transparent propagation across thread boundaries.
+
+### 🔴 Failure: Integration Test Leakage across Suites
+**Symptom:** An integration test checking `activeSessionCount()` passes in isolation but throws `expected: <1> but was: <3>` on a full suite build `mvn clean verify -pl arcclaw-app -am`.
+**Root Cause:** Static/Application-scoped maps like `ConcurrentHashMap` in `WorkspaceManager` linger throughout the entire test classloader lifecycle unless strictly cleared explicitly.
+**Resolution:** Inject a hermetic teardown method `clearAll()` manually inside the test (`@BeforeEach` or `@AfterEach`).
+
 ---
 
 ## 10. Health Layer Troubleshooting

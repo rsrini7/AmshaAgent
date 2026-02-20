@@ -40,7 +40,6 @@ com\arcclaw\core\state\StatefulAgentStoreImpl.class
 com\arcclaw\core\scope\WorkspaceScopeContext.class
 com\arcclaw\core\agent\Agent.class
 com\arcclaw\core\scope\WorkspaceContext.class
-META-INF\jandex.idx
 com\arcclaw\core\tools\AgentTool.class
 com\arcclaw\core\agent\LangChainReasoningEngine.class
 com\arcclaw\core\security\ToolOperation.class

@@ -94,6 +94,13 @@ public class WorkspaceManager {
         return heartbeats.size();
     }
 
+    /**
+     * Clear all tracked sessions (for testing).
+     */
+    public void clearAll() {
+        heartbeats.clear();
+    }
+
     // -------------------------------------------------------------------------
     // Zombie Recovery (Startup)
     // -------------------------------------------------------------------------

@@ -1,15 +1,32 @@
 package com.arcclaw.core.api;
 
 import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.ReasoningStep;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @QuarkusTest
 class AgentResourceTest {
+
+        @InjectMock
+        ReasoningEngine reasoningEngine;
+
+        @BeforeEach
+        void setupMock() {
+                ReasoningStep finishStep = new ReasoningStep("Calculated final answer", ReasoningStep.FINISH,
+                                java.util.Map.of("response", "42"), null, 0, 0);
+                Mockito.when(reasoningEngine.nextStep(anyString(), any())).thenReturn(finishStep);
+        }
 
         @Test
         void testFullAgentLifecycle() {

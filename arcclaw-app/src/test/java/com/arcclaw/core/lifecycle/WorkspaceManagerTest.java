@@ -39,6 +39,7 @@ class WorkspaceManagerTest {
     void cleanup() {
         // Clear all checkpoints between tests
         em.createQuery("DELETE FROM AgentCheckpoint").executeUpdate();
+        workspaceManager.clearAll();
     }
 
     /**

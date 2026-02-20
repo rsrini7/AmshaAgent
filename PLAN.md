@@ -676,3 +676,24 @@ Provide local containerized execution scaffolding via Docker Compose and rootles
 
 ## Verification
 - ✅ Deployment artifacts created and `.gitignore` updated to ignore real `.env` files.
+
+---
+
+# Phase 14 — Verification & Integration Testing ✅
+
+Ensures all modules (`arcclaw-core`, `arcclaw-deployment`, `arcclaw-app`) fully compile, wire successfully via CDI, and pass their unit/integration tests natively under the Quarkus JVM and Surefire providers.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **MicroProfile Context Propagation**: Virtual thread execution (`@RunOnVirtualThread`) completely detaches the `ThreadLocal` storage from the parent carrier. Without explicitly adding `mp.context.propagators=Quarkus, CDI, JAX-RS` to `application.yaml`, any request-scoped or `@WorkspaceScoped` attributes resolve to null inside the asynchronous agent loop or sandbox executions.
+
+> [!NOTE]
+> **Test State Leakage**: In-memory static maps (like `ConcurrentHashMap` in `WorkspaceManager` or `StatefulAgentStore`) will leak across `@QuarkusTest` class boundaries when running a full suite (`mvn clean verify`). A hermetic clear/teardown method (e.g., `workspaceManager.clearAll()`) MUST be invoked in an `@AfterEach` or `@BeforeEach` to isolate integration tests.
+
+> [!WARNING]
+> **Provider Isolation in Tests**: Injecting the *real* `ReasoningEngine` mapped to an external Ollama or OpenAI service will fail integration tests with `Connection refused`. Tests validating the REST layer should strictly use `@InjectMock ReasoningEngine` to isolate API testing from the LLM execution layer.
+
+## Verification
+- ✅ `mvn clean verify -pl arcclaw-app -am` completed successfully, executing 43 unit and integration tests across all modules.
+- ✅ `TESTING_GUIDE.md` produced for local developers providing E2E `curl` and Jaeger commands.
