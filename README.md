@@ -33,6 +33,41 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 4.  **ProcessIsolationExecutor:** The Sandbox layer dynamically spins up a rootless Podman container, passing credentials securely and capping CPU/Memory.
 5.  **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as AgentResource
+    participant AL as AgentLoop
+    participant LLM as ReasoningEngine
+    participant Sandbox as IsolationExecutor
+    participant DB as SQLite WAL
+
+    C->>API: POST /sessions/{id}/run-async
+    API->>AL: Spawn Virtual Thread
+    loop maxIterations (Thought → Plan → Act → Observe)
+        AL->>LLM: 🧠 Thought & Plan
+        LLM-->>AL: Action (Tool Name + Args)
+        AL->>Sandbox: ⚡ Act (Rootless Podman)
+        Sandbox-->>AL: 🔍 Observe (ToolOutput)
+        AL->>DB: 💾 Checkpoint Sequence
+    end
+    AL-->>C: 🏁 AgentResult (Completion)
+```
+
+---
+
+### 📋 Prerequisites
+Before compiling the kernel, ensure your environment meets these strict requirements:
+* **JDK 25** (or JDK 21+ with `--add-opens` flags for Mockito/Virtual Thread compatibility).
+* **Maven 3.9+**
+* **Docker or Podman** (for the observability stack and embedded tool isolation).
+* **GraalVM / Mandrel** (Only required if building the native binary yourself).
+
+### 🪟 Windows Setup Note (WSL2)
+Because ArcClaw leverages advanced rootless container isolation for its tools, **WSL2 (Windows Subsystem for Linux) is highly recommended** for Windows developers.
+* Install **Podman Desktop** (which automatically configures the WSL2 backend and injects the `podman` CLI into your Windows PATH), or do your development entirely inside a WSL2 Ubuntu distro using VS Code Remote.
+* `.env` files work identically across OS boundaries. If you need to set temporary variables directly in the terminal, use standard PowerShell syntax (e.g., `$env:SESSION_ID="<uuid>"`).
+
 ---
 
 ## ⚡ Quick Start (Zero to Agent in 60 seconds)
@@ -47,6 +82,7 @@ cp .env.example .env
 
 # Configure your secrets
 # E.g., GITHUB_TOKEN=ghp_...
+# Note: The local stack provisions Ollama (llama3.1:8b)—test the framework 100% offline and free of charge!
 # E.g., OLLAMA_BASE_URL=http://ollama:11434
 ```
 
@@ -108,6 +144,20 @@ curl -v -X POST http://localhost:8080/api/v1/sessions/abcd-1234-.../run-async \
 
 **3. Observe the Trace:**
 Open the [Jaeger UI](http://localhost:16686) in your browser to watch the agent think, execute tools in Podman, and persist its thoughts.
+
+---
+
+---
+
+## 🧩 Extending ArcClaw
+
+ArcClaw is designed as a modular kernel. Adding new capabilities requires minimal boilerplate:
+
+**1. Create a New Tool:**
+Implement the `AgentTool` interface, register it as an `@ApplicationScoped` bean, and ArcClaw handles the LangChain4J specification mapping and Sandbox isolation automatically.
+
+**2. Define a New Persona:**
+Create a new class implementing `Agent`. Define its `role()`, supply your custom `systemPrompt()`, and return a list of `allowedTools()`. Tag it with `@AgentRole("your_role")` to make it instantly available to the REST API.
 
 ---
 
