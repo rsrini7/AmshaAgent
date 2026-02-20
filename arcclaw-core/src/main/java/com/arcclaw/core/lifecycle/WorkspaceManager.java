@@ -2,7 +2,6 @@ package com.arcclaw.core.lifecycle;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -22,7 +21,6 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 

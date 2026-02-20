@@ -1,7 +1,6 @@
 package com.arcclaw.core.security;
 
 import java.util.Arrays;
-import java.util.Base64;
 
 /**
  * A secure wrapper for sensitive key material (secrets, salts, derived keys).

@@ -2,7 +2,6 @@ package com.arcclaw.core.api;
 
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 

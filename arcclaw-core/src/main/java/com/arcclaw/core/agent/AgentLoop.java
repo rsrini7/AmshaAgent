@@ -95,7 +95,7 @@ public class AgentLoop {
         WorkspaceScopeHolder.set(sessionId);
         MDC.put("sessionId", sessionId);
         MDC.put("agentRole", agentRole);
-        Span sessionSpan = otelContext.startSessionSpan(sessionId);
+        // Span sessionSpan = otelContext.startSessionSpan(sessionId);
 
         try {
             // --- CHECKPOINT RESUME ---
