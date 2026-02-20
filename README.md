@@ -215,3 +215,4 @@ Our codebase was engineered for Future AI and Human contributors. Don't guess—
 *   **[`DEVIATIONS.md`](./DEVIATIONS.md)** — The audit trail of every architectural pivot made during v1.0 implementation.
 *   **[`PLAN.md`](./PLAN.md)** & **[`TASKS.md`](./TASKS.md)** — The original, granular specification and the milestone checklist.
 *   **[`WALKTHROUGH.md`](./WALKTHROUGH.md)** — 14 phases of linear development history, capturing "why" we did things, not just "what" we did.
+*  **[FAQ.md](./FAQ.md)** - Frequently Asked Questions - Answered
