@@ -568,3 +568,14 @@ Implement Podman liveness and readiness checks using MicroProfile Health.
 
 - ✅ `/q/health/live` returns HTTP 200 with `{"status": "UP"}`
 - ✅ `/q/health/ready` returns HTTP 200 with `{"status": "UP"}`
+
+## Lessons for Future Phases
+
+> [!CAUTION]
+> **52 iterations were consumed on this phase.** The following rules MUST be followed for any future health/metrics/non-application endpoint work:
+
+1. **Never use `@InjectMock` for `HealthCheck` beans** — ArC indexes them by interface, not concrete class.
+2. **Always use `@Alternative` + `@Priority`** for test replacements of cross-module beans with `@ConfigProperty` fields.
+3. **Always check the management port** — Quarkus 3.x serves health endpoints on port 9001 (test mode). Use `.port(9001)` in RestAssured.
+4. **Never `@Mock extends` a class with `@ConfigProperty` fields** — ArC's generated `_Bean.doCreate()` code runs in a different classloader and cannot access parent fields.
+5. **Always run `mvn clean install -DskipTests`** when adding new beans or annotations to `arcclaw-core` before running tests in `arcclaw-app`.

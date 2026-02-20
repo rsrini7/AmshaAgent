@@ -124,11 +124,12 @@
 
 ---
 
-## Phase 10 — Health Layer
+## Phase 10 — Health Layer (⚠️ 52 iterations — see TROUBLESHOOTING.md §10)
 - [x] `PodmanHealthCheck` (`@Liveness` — Podman binary availability) <!-- id: 60 -->
 - [x] `PodmanImageHealthCheck` (`@Readiness` — tool-runner image presence) <!-- id: 61 -->
-- [x] `PodmanHealthCheckTest` (RestAssured health endpoint verification) <!-- id: 62 -->
+- [x] `PodmanHealthCheckTest` (RestAssured health endpoint verification, port 9001) <!-- id: 62 -->
 - [x] `@Alternative` + `@Priority` mock pattern for cross-module health checks <!-- id: 63 -->
+- [x] `MockPodmanHealthCheck` + `MockPodmanImageHealthCheck` (standalone `HealthCheck` impls) <!-- id: 64 -->
 
 ---
 

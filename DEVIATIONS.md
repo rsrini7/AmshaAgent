@@ -62,13 +62,26 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **Deviation:** `resolveSecrets()` in `ProcessIsolationExecutor` unwraps `Optional<VaultKey>` via try-with-resources instead of the spec's `String`-based API.
 *   **Rationale:** Our `SecretVault.get()` returns `Optional<VaultKey>` (auto-wiping byte wrapper), not `String`. The adaptation ensures zero-copy secret handling with automatic memory clearing.
 
+### 7. Health Check Testing Pattern (Phase 10 — 52 Iterations)
+*   **Deviation:** Used `@Alternative` + `@Priority(1)` standalone `HealthCheck` implementations instead of `@Mock extends` or `@InjectMock`.
+*   **Rationale:** Three layered Quarkus issues prevented simpler approaches:
+    1. **ArC Interface Indexing**: `quarkus-smallrye-health` indexes beans by `HealthCheck` interface, not concrete class — `@InjectMock ConcreteClass` fails.
+    2. **Management Port Separation**: Quarkus 3.x serves health endpoints on port 9001 (test mode), not the main HTTP port 8081 — RestAssured must use `.port(9001)`.
+    3. **Classloader Boundary**: ArC-generated bean code (`_Bean.doCreate()`) cannot access `@ConfigProperty` fields in parent classes across module classloaders — `@Mock extends Parent` throws `IllegalAccessError`.
+*   **Rule for Future Work:** When testing `HealthCheck` beans in multi-module Quarkus projects, ALWAYS use standalone `@Alternative` implementations. Never use `@InjectMock` or `@Mock extends`.
+
+### 8. Quarkus Management Interface
+*   **Deviation:** Health endpoint tests target port 9001 instead of the main HTTP port.
+*   **Rationale:** Quarkus 3.x separates non-application endpoints (health, metrics, OpenAPI) onto a dedicated management interface. This is transparent in production (Kubernetes probes target the management port), but catches test authors off-guard.
+
 ## Technical Debt & Decisions
 
 *   **ByteBuddy Experimental Flag:** Required `-Dnet.bytebuddy.experimental=true` for JDK 25. This is documented in `TROUBLESHOOTING.md`.
 *   **SQLite Blob Handling:** Removed `@Lob` annotations from JPA entities. SQLite's JDBC driver prefers native `byte[]` mapping to avoid OOMs on large secret payloads.
 *   **CDI Producer Scopes:** Resolved `DefinitionException` by removing redundant `@Dependent` on `@WorkspaceScoped` producers (only one scope is legal).
 *   **Jandex Requirement**: Every new module added to ArcClaw MUST include the Jandex plugin, or ArC will skip bean discovery for that module.
-*   **Health Check Discovery**: Phase 10 health beans in `arcclaw-core` required `@Unremovable` and `@Startup` to be reliably picked up by `@InjectMock` in the `arcclaw-app` test suite.
+*   **Health Check Mocking**: Do NOT use `@InjectMock` or `@Mock extends` for `HealthCheck` beans in multi-module projects. Use `@Alternative` + `@Priority` standalone implementations. See `TROUBLESHOOTING.md` §10 for the full decision matrix.
+*   **Management Port**: RestAssured tests for health/metrics/OpenAPI endpoints MUST target port 9001 (test mode). Check Quarkus startup log for `Management interface listening on`.
 *   **Stale Class Files**: `mvn clean` required when switching between incremental builds across modules (deployment module classpath can become stale).
 
 ---

@@ -142,23 +142,75 @@
 
 ## 10. Health Layer Troubleshooting
 
-### 🔴 Failure: `TestInstantiationException` for HealthCheck Beans
-**Symptom:** `could not resolve the bean of type: com.arcclaw.core.health.PodmanHealthCheck` during `@QuarkusTest`.
-**Root Cause:** CDI beans in library modules (`core`) with Qualifiers (`@Liveness`, `@Readiness`) may be optimized away by ArC if not explicitly used in the main application, or may fail resolution due to ambiguous dependencies if mocked via interface.
-**Resolution:**
-- Annotate beans with `@io.quarkus.arc.Unremovable`.
-- Annotate beans with `@jakarta.ejb.Startup` or `@io.quarkus.runtime.Startup` to force early initialization.
-- Re-run `mvn clean install -DskipTests` to sync the Jandex index.
+> [!CAUTION]
+> **Phase 10 Cost: 52 Iterations.** This section documents the hardest debugging cycle in the project. Read the entire section before attempting any health check work.
 
-### 🔴 Failure: HTTP 404 on `/q/health/live`
-**Symptom:** RestAssured receives 404 while the test is running.
-**Root Cause:**
-- Port mismatch: Quarkus tests might run on a different port than expected if `quarkus.http.test-port` is set or if multiple tests conflict.
-- Extension mismatch: `quarkus-smallrye-health` not present in the runtime classpath of `arcclaw-app`.
-- JSON binding: Missing `quarkus-rest-jackson` can sometimes cause issues with health response serialization in specific Quarkus versions.
-**Resolution:**
-- Verify `quarkus-smallrye-health` is in `arcclaw-app/pom.xml`.
-- Add `quarkus-rest-jackson` if endpoint returns 404 despite the extension being present.
+### 🔴 Failure: `@InjectMock` Cannot Resolve Cross-Module HealthCheck Beans
+**Symptom:** `TestInstantiationException: could not resolve the bean of type: com.arcclaw.core.health.PodmanHealthCheck`.
+**Root Cause:** When `quarkus-smallrye-health` runs during the build phase, it indexes health beans by their **interface type** (`HealthCheck`) rather than their **concrete class type**. When `@InjectMock` in the test asks for the concrete class, ArC cannot find it in its bean graph.
+**Failed Approaches (40+ iterations wasted):**
+1. `@InjectMock PodmanHealthCheck` — ArC doesn't index the concrete class
+2. `@InjectMock @Liveness HealthCheck` — Ambiguous resolution with built-in `DataSourceHealthCheck`
+3. `@Startup` + `@Unremovable` on production beans — Doesn't fix the indexing problem
+4. `@Mock extends PodmanHealthCheck` (Quarkus `io.quarkus.test.Mock`) — Fails with `IllegalAccessError` on `@ConfigProperty` field injection across classloader boundaries
+5. `@Mock extends PodmanImageHealthCheck` with `protected` field — Still fails because ArC-generated `_Bean.doCreate()` runs in a different classloader
+**Resolution:** Use `@Alternative` + `@Priority(1)` standalone implementations of `HealthCheck` interface. Do NOT extend the production class.
+
+```java
+// ✅ CORRECT — standalone implementation
+@Alternative @Priority(1) @Readiness @ApplicationScoped
+public class MockPodmanImageHealthCheck implements HealthCheck {
+    @Override public HealthCheckResponse call() {
+        return HealthCheckResponse.named("Podman Image: test-image").up().build();
+    }
+}
+
+// ❌ WRONG — extends production class
+@Mock @Readiness @ApplicationScoped
+public class MockPodmanImageHealthCheck extends PodmanImageHealthCheck { ... }
+```
+
+### 🔴 Failure: HTTP 404 on `/q/health/live` and `/q/health/ready`
+**Symptom:** RestAssured receives 404, even though `smallrye-health` is in `Installed features`.
+**Root Cause:** **Quarkus 3.x Management Interface.** Health, metrics, and OpenAPI endpoints are served on a **separate management port** (default: 9000 in prod, **9001 in test mode**), NOT the main HTTP port (8080/8081). RestAssured defaults to the main HTTP port.
+**Failed Approaches:**
+1. Setting `RestAssured.baseURI = "http://127.0.0.1"` — Hits the wrong port entirely
+2. Checking `quarkus.http.non-application-root-path` — Not the issue in Quarkus 3.x
+**Resolution:** Explicitly set `.port(9001)` in RestAssured calls:
+```java
+given().port(9001).when().get("/q/health/live").then().statusCode(200);
+```
+**Detection:** Look for `Management interface listening on http://localhost:9001` in Quarkus startup logs.
+
+### 🔴 Failure: `IllegalAccessError` on `@ConfigProperty` Field Across Modules
+**Symptom:** `MockPodmanImageHealthCheck_Bean tried to access protected field PodmanImageHealthCheck.containerImage`.
+**Root Cause:** ArC generates bean proxy code (`_Bean.doCreate()`) in the **app module's classloader**, but the parent class lives in the **core module's classloader**. Even `protected` fields cannot be accessed across Quarkus classloader boundaries. This is NOT a Java visibility issue — it's a classloader isolation issue.
+**Failed Approaches:**
+1. Making field `protected` — Still fails across classloaders
+2. Making field `public` — Would work but is poor API design
+3. Null-safe access in `call()` — Irrelevant, the error occurs in bean **creation**, not in `call()`
+**Resolution:** Do NOT extend production classes with `@ConfigProperty` fields in mock beans. Implement the interface directly.
+
+### 🔴 Failure: `AmbiguousResolutionException` for `@Readiness HealthCheck`
+**Symptom:** `Ambiguous dependencies for type HealthCheck and qualifiers [@Readiness]`.
+**Root Cause:** Multiple beans implement `HealthCheck` with `@Readiness`: our `PodmanImageHealthCheck` AND the built-in `DataSourceHealthCheck` from Agroal.
+**Resolution:** Do not use `@InjectMock @Readiness HealthCheck`. Use `@Alternative` with concrete mock classes instead.
+
+### 🟡 Warning: Duplicate Dependencies in `pom.xml`
+**Symptom:** Maven warning `'dependencies.dependency.(groupId:artifactId)' must be unique: io.quarkus:quarkus-smallrye-health`.
+**Root Cause:** Copy-paste error during Phase 10 setup.
+**Resolution:** Always check for duplicates after adding new dependencies.
+
+### 📋 Phase 10 Decision Matrix (For Future LLMs)
+
+| Approach | Works? | Why |
+|----------|--------|-----|
+| `@InjectMock ConcreteHealthCheck` | ❌ | ArC indexes by interface, not concrete class |
+| `@InjectMock @Liveness HealthCheck` | ❌ | Ambiguous with built-in health checks |
+| `@Mock extends ConcreteHealthCheck` | ❌ | ArC classloader boundary on `@ConfigProperty` fields |
+| `@Alternative @Priority(1) implements HealthCheck` | ✅ | Clean CDI override, no classloader issues |
+| `RestAssured.get("/q/health/live")` | ❌ | Hits main HTTP port, not management port |
+| `given().port(9001).get("/q/health/live")` | ✅ | Correctly targets management interface |
 
 ## 5. Security & Sandbox Troubleshooting
 
