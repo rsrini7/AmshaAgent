@@ -476,7 +476,7 @@ Connect CDI Scope, Security Vault, State Store, and Agent Loop into a cohesive l
 
 ---
 
-# Phase 8 — Governance Layer
+# Phase 8 — Governance Layer ✅
 
 Implement hard financial limits on agent reasoning loops to prevent budget exhaustion.
 
@@ -491,85 +491,70 @@ Implement hard financial limits on agent reasoning loops to prevent budget exhau
 > [!TIP]
 > **Thread Safety (JEP 491)**: `SessionBudget` accumulator uses concurrency primitives (`AtomicInteger`, `synchronized`) to safely update shared budget maps without race conditions from parallel tool execution.
 
-## Proposed Changes
+## Completed Changes
 
-### Core Module — Data Model Upgrades
-
-#### [MODIFY] [ReasoningStep.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ReasoningStep.java)
-- Add `int inputTokens` and `int outputTokens` to the record. Update factories.
-
-#### [MODIFY] [AgentResult.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentResult.java)
-- Add `int totalInputTokens` and `int totalOutputTokens` to the record. 
+### Core Module — Governance Logic
 
 #### [NEW] [BudgetExceededException.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/BudgetExceededException.java)
 - RuntimeException triggered when a session's LLM consumption crosses the USD threshold.
 
-### Core Module — Governance Logic
-
 #### [NEW] [AgentObserver.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentObserver.java)
-- Interface for interception. Method: `void recordLlmCall(String sessionId, int inputTokens, int outputTokens);`
+- Interface for interception. Method: `recordLlmCall`.
 
 #### [NEW] [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java)
-- `@ApplicationScoped` implementing `AgentObserver`
-- State: `ConcurrentHashMap<String, SessionBudget> budgets`
-- USD logic: calculates cost based on `application.yaml` prices (`arcclaw.governance.price-per-1k-input` and `output`).
-- Enforcement: If `cost > budget-usd`, lookup `WorkspaceContext` via `Arc.container()`, set `AutonomyLevel.READ_ONLY`, and throw `BudgetExceededException`.
+- Implementation of `AgentObserver` with USD calculation and enforcement.
 
-### Core Module — Loop Integration
-
-#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
-- Inject `GovernanceLayer`.
-- Invoke `recordLlmCall` after `ReasoningEngine.nextStep`.
-- Catch `BudgetExceededException` and terminate loop via `AgentResult.error` or `loopExceeded` with budget reason.
-
-### App Module — Verification
-
-#### [NEW] [GovernanceLayerTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/governance/GovernanceLayerTest.java)
-- Inject `GovernanceLayer` and verify cost calculation, `READ_ONLY` downgrade, and exception throwing.
-
-## Verification Plan
-
-### Automated Tests
-```bash
-$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
-mvn test -pl arcclaw-app -Dtest=GovernanceLayerTest
-```
-- ✅ Verify `recordLlmCall` correctly accumulates tokens and cost.
-- ✅ Verify `BudgetExceededException` is thrown when budget triggers.
-- ✅ Verify AutonomyLevel correctly downgraded to `READ_ONLY`.
+## Verification
+- ✅ `GovernanceLayerTest`: Verified cost accumulation and `READ_ONLY` trigger.
 
 ---
 
-# Phase 9 — Observer / OTel Layer
+# Phase 9 — Observer / OTel Layer ✅
 
-Replace observability stubs with a full OpenTelemetry implementation, enabling proper tracing of agent sessions and LLM usage cost semantics, along with resolving small Phase 8 tech debt.
+Replace observability stubs with a full OpenTelemetry implementation.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Mock-First Verification**: Due to complex OTLP setup in CI, tests use `@InjectMock Tracer` to verify span creation and attribute attribution.
+
+## Completed Changes
+
+#### [MODIFY] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Full OTel `Tracer` integration for session and LLM spans.
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) / [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Integrated `AgentObserver` list and budget cleanup.
+
+## Verification
+- ✅ `AgentOtelContextTest`: Verified span creation and attribute tagging.
+
+---
+
+# Phase 10 — Health Layer (IN PROGRESS / BLOCKED)
+
+Implement Podman liveness and readiness checks using MicroProfile Health.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Process-Based Checks**: Both liveness and readiness checks execute sub-processes (`podman --version` and `podman image exists`) with a strict 2-second timeout to avoid health-probe hanging.
+
+> [!WARNING]
+> **Testing Limitations**: Testing health checks across module boundaries (`arcclaw-core` beans tested in `arcclaw-app`) requires careful CDI indexing and `@Unremovable` annotations.
 
 ## Proposed Changes
 
-### Core Module — OpenTelemetry Tracing
-#### [MODIFY] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
-- Injected `io.opentelemetry.api.trace.Tracer`.
-- `startSessionSpan`: Creates an `arcclaw.session` root span, stores it and its `Scope` in `ConcurrentHashMap`.
-- `recordLlmCall`: Implements `AgentObserver` to attach `llm.usage.prompt_tokens` and `llm.usage.completion_tokens` directly to the active root span.
+### Core Module — Health Verification
 
-### Core Module — Lifecycle Integration
-#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
-- Inject `Instance<AgentObserver>` to aggregate all observers (Governance + Telemetry).
-- Iterate through observers to record LLM calls.
+#### [NEW] [PodmanHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanHealthCheck.java)
+- `@Liveness` probe for Podman engine availability.
 
-#### [MODIFY] [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
-- Call `governanceLayer.clearSession(sessionId)` during termination to plug a budget map memory leak.
-
-### App Module — Testing
-#### [NEW] [AgentOtelContextTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/observability/AgentOtelContextTest.java)
-- Uses `@InjectMock Tracer` due to Quarkus 3 test constraints to verify span attribution without complex OTLP exporters.
+#### [NEW] [PodmanImageHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanImageHealthCheck.java)
+- `@Readiness` probe for sandbox image presence.
 
 ## Verification Plan
 
 ### Automated Tests
-```bash
-$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
-mvn test -pl arcclaw-app -Dtest=AgentOtelContextTest
-```
-- ✅ Verify `Tracer` creates span with `sessionId` attribute.
-- ✅ Verify `AgentObserver.recordLlmCall` successfully populates semantic metrics.
+- `PodmanHealthCheckTest`: Verification of `/q/health/live` and `/q/health/ready` endpoints via RestAssured.
+- **STATUS**: Blocked by `@InjectMock` resolution issues in `arcclaw-app`.

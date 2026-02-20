@@ -98,7 +98,6 @@ quarkus:
   smallrye-health:
     ui:
       enable: true
-    root-path: /q/health
 
   # ---------------------------------------------------------------------------
   # SCHEDULER

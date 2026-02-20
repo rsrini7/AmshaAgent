@@ -117,3 +117,35 @@ graph TD
 | [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java) | Updated to inject `AgentOtelContext` |
 
 **WorkspaceManagerTest**: 4/4 ✅ (Zombie recovery, GC sweep, Termination, Multi-role)
+
+---
+
+## Phase 8: Governance Layer ✅
+
+| File | Purpose |
+|------|---------|
+| [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java) | Token tracking and budget enforcement |
+| [BudgetExceededException.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/BudgetExceededException.java) | Runtime limit termination |
+
+**GovernanceLayerTest**: 3/3 ✅
+
+---
+
+## Phase 9: Observer / OTel Layer ✅
+
+| File | Purpose |
+|------|---------|
+| [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java) | OpenTelemetry Tracer integration |
+
+**AgentOtelContextTest**: 2/2 ✅
+
+---
+
+## Phase 10: Health Layer (WIP) 🚧
+
+| File | Purpose |
+|------|---------|
+| [PodmanHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanHealthCheck.java) | Liveness probe (Podman version) |
+| [PodmanImageHealthCheck.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/PodmanImageHealthCheck.java) | Readiness probe (OCI image) |
+
+**Status**: 46 iterations deep. Blocked by cross-module CDI discovery in tests.

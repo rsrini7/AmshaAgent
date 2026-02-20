@@ -52,6 +52,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **7** | Lifecycle Layer | **Complete** | `WorkspaceManager` (Heartbeats, GC, Termination), `AgentLoop` lifecycle upgrade. deviation: `WorkspaceScopeContext` injected via `Arc.container()` lookup (custom context). |
 | **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). |
 | **9** | Observer / OTel Layer | **Complete** | `AgentOtelContext` OpenTelemetry implementation. deviation: Replaced `InMemorySpanExporter` with `@InjectMock Tracer` for testing due to Quarkus OTLP extension limitations in unit tests. |
+| **10** | Health Layer | **Blocked** | Implement `PodmanHealthCheck` and `PodmanImageHealthCheck`. deviation: Added `@Startup` and `@Unremovable` to force discovery across module boundaries for tests. |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.
@@ -67,6 +68,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **SQLite Blob Handling:** Removed `@Lob` annotations from JPA entities. SQLite's JDBC driver prefers native `byte[]` mapping to avoid OOMs on large secret payloads.
 *   **CDI Producer Scopes:** Resolved `DefinitionException` by removing redundant `@Dependent` on `@WorkspaceScoped` producers (only one scope is legal).
 *   **Jandex Requirement**: Every new module added to ArcClaw MUST include the Jandex plugin, or ArC will skip bean discovery for that module.
+*   **Health Check Discovery**: Phase 10 health beans in `arcclaw-core` required `@Unremovable` and `@Startup` to be reliably picked up by `@InjectMock` in the `arcclaw-app` test suite.
 *   **Stale Class Files**: `mvn clean` required when switching between incremental builds across modules (deployment module classpath can become stale).
 
 ---

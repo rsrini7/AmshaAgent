@@ -140,6 +140,26 @@
 
 ---
 
+## 10. Health Layer Troubleshooting
+
+### 🔴 Failure: `TestInstantiationException` for HealthCheck Beans
+**Symptom:** `could not resolve the bean of type: com.arcclaw.core.health.PodmanHealthCheck` during `@QuarkusTest`.
+**Root Cause:** CDI beans in library modules (`core`) with Qualifiers (`@Liveness`, `@Readiness`) may be optimized away by ArC if not explicitly used in the main application, or may fail resolution due to ambiguous dependencies if mocked via interface.
+**Resolution:**
+- Annotate beans with `@io.quarkus.arc.Unremovable`.
+- Annotate beans with `@jakarta.ejb.Startup` or `@io.quarkus.runtime.Startup` to force early initialization.
+- Re-run `mvn clean install -DskipTests` to sync the Jandex index.
+
+### 🔴 Failure: HTTP 404 on `/q/health/live`
+**Symptom:** RestAssured receives 404 while the test is running.
+**Root Cause:**
+- Port mismatch: Quarkus tests might run on a different port than expected if `quarkus.http.test-port` is set or if multiple tests conflict.
+- Extension mismatch: `quarkus-smallrye-health` not present in the runtime classpath of `arcclaw-app`.
+- JSON binding: Missing `quarkus-rest-jackson` can sometimes cause issues with health response serialization in specific Quarkus versions.
+**Resolution:**
+- Verify `quarkus-smallrye-health` is in `arcclaw-app/pom.xml`.
+- Add `quarkus-rest-jackson` if endpoint returns 404 despite the extension being present.
+
 ## 5. Security & Sandbox Troubleshooting
 
 ### 🔴 Failure: `NoSuchMethodError` (AES-GCM-SIV)

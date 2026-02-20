@@ -2,12 +2,14 @@ com\arcclaw\core\governance\GovernanceLayer$SessionBudget.class
 com\arcclaw\core\state\AgentCheckpoint.class
 com\arcclaw\core\tools\ToolResponse.class
 com\arcclaw\core\state\StatefulAgentStoreImpl$1.class
+com\arcclaw\core\health\PodmanImageHealthCheck.class
 com\arcclaw\core\security\AutonomyLevel.class
 com\arcclaw\core\security\AutonomyPolicy.class
 com\arcclaw\core\agent\AgentLoop.class
 com\arcclaw\core\agent\AgentRole.class
 com\arcclaw\core\sandbox\ProcessIsolationExecutor.class
 com\arcclaw\core\governance\BudgetExceededException.class
+com\arcclaw\core\health\PodmanHealthCheck.class
 com\arcclaw\core\agent\ReasoningEngine.class
 com\arcclaw\core\agent\ReasoningStep.class
 com\arcclaw\core\scope\ScopedCounter.class
