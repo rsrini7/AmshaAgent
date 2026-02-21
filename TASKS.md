@@ -200,10 +200,3 @@
 - [x] Correct rootless `Permission denied` failure inside `Dockerfile.native` by mapping `chown` over `/app` before switching user contexts
 - [x] Fix unmanaged `Thread.ofVirtual()` CDI context leakage by explicitly annotating `AgentLoop.run` with `@ActivateRequestContext`
 
----
-
-## Phase 15 — JDK 25 LTS Alignment (Future-Ready)
-- [ ] All JDK 25 JEP notes documented inline (JEP 491, 506, 505, 473)
-- [ ] ScopedValue migration path in `WorkspaceScopeHolder` comments
-- [ ] ReentrantLock vs synchronized documented (optional on JDK 25)
-- [ ] Structured Concurrency noted as preview-only (avoid in stable kernel)
