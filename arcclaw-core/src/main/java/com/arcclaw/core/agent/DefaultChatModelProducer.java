@@ -5,6 +5,9 @@ import dev.langchain4j.model.ollama.OllamaChatModel;
 import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+import jakarta.enterprise.inject.Alternative;
+import jakarta.annotation.Priority;
+import jakarta.interceptor.Interceptor;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Duration;
@@ -23,6 +26,8 @@ public class DefaultChatModelProducer {
 
     @Produces
     @ApplicationScoped
+    @Alternative
+    @Priority(Interceptor.Priority.APPLICATION + 1)
     public ChatLanguageModel createChatLanguageModel() {
         return OllamaChatModel.builder()
                 .httpClientBuilder(new JaxRsHttpClientBuilder())
