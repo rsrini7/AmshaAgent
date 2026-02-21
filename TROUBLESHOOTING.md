@@ -644,6 +644,14 @@ podman machine start
 - In `TelegramChannelRouteTest`, call `camelContext.addRoutes(route)` and `camelContext.start()` before asserting route existence.
 **Notes:** When running with a mock Telegram token in tests, the Telegram consumer will log 404 polling warnings; these are expected and do not fail the test.
 
+### 🔴 Failure: Telegram polling 404 noise during unrelated JUnit tests
+**Symptom:** Running any `@QuarkusTest` (even non-Telegram tests) logs repeated `TelegramConsumer` 404 warnings because the Telegram route starts with a mock token.
+**Root Cause:** The Telegram route is registered and its polling consumer starts in the test profile, which triggers real HTTP calls against Telegram.
+**Resolution:**
+- Add a config toggle (e.g., `arcclaw.channel.telegram.enabled`) in the route and set it to `false` in `%test`.
+- Use a `QuarkusTestProfile` in `TelegramChannelRouteTest` to re-enable the route only for that test.
+- Optionally reduce the Telegram component log level to `ERROR` in that profile to keep output clean.
+
 ### 🔴 Failure: `IllegalStateException: Invalid use of @InjectMock` on @Dependent Beans
 **Symptom:** Test crashes with `Invalid use of io.quarkus.test.InjectMock - the injected bean does not declare a CDI normal scope but: jakarta.enterprise.context.Dependent`.
 **Root Cause:** `@InjectMock` only works on beans with a normal scope (like `@ApplicationScoped`). Common framework beans like `ProducerTemplate` (Camel) and `ManagedExecutor` (MicroProfile) are often `@Dependent`.

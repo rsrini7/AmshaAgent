@@ -7,11 +7,17 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class TelegramChannelRoute extends RouteBuilder {
 
+    @ConfigProperty(name = "arcclaw.channel.telegram.enabled", defaultValue = "true")
+    boolean enabled;
+
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token", defaultValue = "mock-token")
     String botToken;
 
     @Override
     public void configure() throws Exception {
+        if (!enabled) {
+            return;
+        }
         if (botToken == null || botToken.isBlank() || "mock-token".equals(botToken)) {
             // In tests or if not configured, we might want to skip or use a mock.
             // But for the sake of the testRouteExists, we MUST register it if it's
