@@ -10,6 +10,7 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.virtual.threads.VirtualThreads;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -48,6 +49,10 @@ public class AgentResource {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    @VirtualThreads
+    java.util.concurrent.ExecutorService vThreads;
+
     @POST
     public Response createSession() {
         String sessionId = UUID.randomUUID().toString();
@@ -74,10 +79,13 @@ public class AgentResource {
     @Path("/{id}/run-async")
     public void runAgentAsync(@PathParam("id") String sessionId, @Valid RunAgentRequest request,
             @Suspended AsyncResponse response) {
-        log.info("Spawning virtual thread for async agent run via AsyncResponse, session: {}", sessionId);
+        log.info("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-        Thread.ofVirtual().name("arcclaw-agent-" + sessionId).start(() -> {
+        // Use Quarkus-managed @VirtualThreads executor to propagate Vert.x duplicated
+        // context
+        // (which carries CDI RequestScope) into the spawned virtual thread.
+        vThreads.execute(() -> {
             try {
                 agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
                 response.resume(Response.accepted().build());

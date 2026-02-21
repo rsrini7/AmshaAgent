@@ -134,6 +134,14 @@ Once the `.env` is populated, the native binary is sitting in `target/`, and the
 ```bash
 docker compose up -d --build
 ```
+
+(or)
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
 > [!CAUTION]
 > **Windows Podman Desktop Users**: Standalone `docker compose` binary defaults to Docker Desktop's named pipe. If you receive an error `open //./pipe/dockerDesktopLinuxEngine`, you must either enable "Docker API compatibility" in Podman Settings, or set the following environment variable before running the compose command:
 > `$env:DOCKER_HOST="npipe:////./pipe/podman-machine-default"`
