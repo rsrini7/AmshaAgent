@@ -654,10 +654,14 @@ podman machine start
 
 ## 18. Pending Issues & Sprint 2A Backlog
 
-### 🟡 Pending: `TelegramAgentHandlerTest` Exit Code 1 (Stubborn Mocking)
-**Status:** In Progress.
-**Observation:** Even with `QuarkusMock` in `@BeforeAll`, some mock interactions are not being correctly captured, or the SUT (`TelegramAgentHandler`) is retaining references to the original beans. 
-**Next Steps:** Verify if `@ApplicationScoped` on the SUT needs a more aggressive proxying strategy or if `QuarkusMock` effectively replaces the bean if it was already created by the Jandex index.
+### ✅ Solved: `TelegramAgentHandlerTest` Stubborn Mocking
+**Status:** Resolved.
+**Solution:** The issue stemmed from `QuarkusMock` failing to consistently replace beans that were already proxied or instantiated, particularly with mixed scopes (`Dependent` vs `ApplicationScoped`).
+**Approach:**
+1.  Replaced `QuarkusMock` in `@BeforeAll` with `@InjectMock` for normal-scoped beans (`AgentLoop`, `WorkspaceManager`, `StatefulAgentStore`, `ReasoningEngine`).
+2.  Manually mocked `Dependent` beans (`ProducerTemplate`, `ManagedExecutor`) in `@BeforeEach` to avoid scope conversion issues.
+3.  **Critical Fix:** Unwrapped the `ClientProxy` of `TelegramAgentHandler` to inject these manual mocks directly into the underlying instance's private fields, bypassing the proxy's limitations.
+4.  Ensured correct scope handling for `StatefulAgentStore` by using `@InjectMock` which handles the proxy delegation correctly.
 
 ### 🟡 Pending: YAML Profile Parsing Nuance
 **Observation:** Ensure that the `%test` profile in `application.yaml` is correctly structured and doesn't conflict with legacy `.properties` files that might still exist in the target directory after a non-clean build.

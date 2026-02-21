@@ -8,7 +8,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import io.quarkus.test.junit.QuarkusMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.apache.camel.Exchange;
@@ -17,7 +17,6 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.apache.camel.component.telegram.model.User;
 import org.eclipse.microprofile.context.ManagedExecutor;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -37,39 +36,34 @@ public class TelegramAgentHandlerTest {
     @Inject
     TelegramAgentHandler handler;
 
-    static AgentLoop agentLoopMock;
-    static WorkspaceManager workspaceManagerMock;
-    static StatefulAgentStore statefulAgentStoreMock;
-    static ReasoningEngine reasoningEngineMock;
-    static ProducerTemplate producerTemplateMock;
-    static ManagedExecutor executorMock;
+    @InjectMock
+    AgentLoop agentLoopMock;
 
-    @BeforeAll
-    public static void setupMocks() {
-        agentLoopMock = mock(AgentLoop.class);
-        QuarkusMock.installMockForType(agentLoopMock, AgentLoop.class);
+    @InjectMock
+    WorkspaceManager workspaceManagerMock;
 
-        workspaceManagerMock = mock(WorkspaceManager.class);
-        QuarkusMock.installMockForType(workspaceManagerMock, WorkspaceManager.class);
+    @InjectMock
+    StatefulAgentStore statefulAgentStoreMock;
 
-        statefulAgentStoreMock = mock(StatefulAgentStore.class);
-        QuarkusMock.installMockForType(statefulAgentStoreMock, StatefulAgentStore.class);
+    @InjectMock
+    ReasoningEngine reasoningEngineMock;
 
-        reasoningEngineMock = mock(ReasoningEngine.class);
-        QuarkusMock.installMockForType(reasoningEngineMock, ReasoningEngine.class);
+    ProducerTemplate producerTemplateMock;
 
-        producerTemplateMock = mock(ProducerTemplate.class);
-        QuarkusMock.installMockForType(producerTemplateMock, ProducerTemplate.class);
-
-        executorMock = mock(ManagedExecutor.class);
-        QuarkusMock.installMockForType(executorMock, ManagedExecutor.class);
-    }
+    ManagedExecutor executorMock;
 
     @BeforeEach
     void setup() {
-        // Reset mocks before each test
-        reset(agentLoopMock, workspaceManagerMock, statefulAgentStoreMock, reasoningEngineMock, producerTemplateMock,
-                executorMock);
+        producerTemplateMock = mock(ProducerTemplate.class);
+        executorMock = mock(ManagedExecutor.class);
+
+        // Unwrap proxy to inject mocks into private fields
+        TelegramAgentHandler instance = handler;
+        if (handler instanceof io.quarkus.arc.ClientProxy) {
+             instance = (TelegramAgentHandler)((io.quarkus.arc.ClientProxy) handler).arc_contextualInstance();
+        }
+        instance.producerTemplate = producerTemplateMock;
+        instance.executor = executorMock;
 
         // Force synchronous execution of the submitted runnable
         doAnswer(invocation -> {
