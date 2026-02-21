@@ -2,6 +2,7 @@ package com.arcclaw.core.state;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.LocalDateTime;
 
 /**
  * JPA entity for persisting agent reasoning loop state.
@@ -57,23 +58,61 @@ public class AgentCheckpoint {
     @Column(length = 1024)
     public String failReason;
 
+    @Column(name = "pending_tool_name")
+    private String pendingToolName;
+
+    @Column(name = "pending_tool_parameters", columnDefinition = "TEXT")
+    private String pendingToolParametersJson;
+
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
-    public Instant createdAt;
+    public LocalDateTime createdAt;
 
     /** When this checkpoint was last updated. */
     @Column(nullable = false)
-    public Instant updatedAt;
+    public LocalDateTime updatedAt;
 
     @PrePersist
     void onPersist() {
-        var now = Instant.now();
+        var now = LocalDateTime.now();
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    public String getPendingToolName() {
+        return pendingToolName;
+    }
+
+    public void setPendingToolName(String pendingToolName) {
+        this.pendingToolName = pendingToolName;
+    }
+
+    public String getPendingToolParametersJson() {
+        return pendingToolParametersJson;
+    }
+
+    public void setPendingToolParametersJson(String pendingToolParametersJson) {
+        this.pendingToolParametersJson = pendingToolParametersJson;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public CheckpointStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(CheckpointStatus status) {
+        this.status = status;
     }
 }

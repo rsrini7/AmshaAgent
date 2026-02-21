@@ -101,6 +101,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **Groq Cloud API Migration**: **CRITICAL CHANGE**. Replaced local Ollama with Groq Cloud (`llama-3.3-70b-versatile`) as the default LLM provider in the production profile. This utilizes the `openai` compatibility layer but repoints the `base-url` to Groq. 
 *   **AutonomyLevel Renaming**: Renamed `READ_ONLY` -> `READONLY` and `PARTIAL` -> `SUPERVISED` across the entire codebase (Java core, handlers, and tests) to align with enterprise configuration standards and provide clearer operational semantics.
 *   **Telegram Handler Default Level**: The `TelegramAgentHandler` now explicitly injects and applies the `arcclaw.autonomy.default-level` (defaulting to `SUPERVISED`) to the active workspace session at runtime.
+*   **Autonomy Enforcement Location**: **ARCHITECTURE DECISION**. Autonomy policy enforcement was moved from `GovernanceLayer` (which focuses on financial token/budget tracking) to `ToolRegistry.java`. This preserves separation of concerns as `ToolRegistry` already acts as the gatekeeper for tool discovery and invocation security. `RequiresApprovalException` is thrown directly from the registry for `SUPERVISED` accounts.
 
 ### 9. Dual-Mode Binary Picocli Lifecycle (Phase 15)
 *   **Deviation:** `Quarkus.waitForExit()` is omitted from the top-level `ArcClawCli.run()` dispatch method. 

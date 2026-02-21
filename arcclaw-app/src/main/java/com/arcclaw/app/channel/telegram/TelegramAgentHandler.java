@@ -21,12 +21,13 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+/**
+ * Handles Telegram messages using Camel and Camel-Quarkus-Telegram.
+ * Offloads long-running agent loops to a ManagedExecutor to avoid blocking
+ * Vert.x threads.
+ */
 @ApplicationScoped
 public class TelegramAgentHandler {
-
-    public TelegramAgentHandler() {
-        System.out.println("DEBUG: TelegramAgentHandler constructor called!");
-    }
 
     @Inject
     AgentLoop agentLoop;
@@ -88,10 +89,19 @@ public class TelegramAgentHandler {
      */
     @ActivateRequestContext
     void runAgent(String chatId, String userId, String text) {
-        // Derive base UUID deterministically so we map identically on restart
+        // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
-        // Mutable wrapper to allow updating inside the lambda
+        // Handle commands first
+        if (text.equalsIgnoreCase("/approve")) {
+            reply(chatId, handleApprovalDecision(chatId, userId, baseId, true));
+            return;
+        }
+        if (text.equalsIgnoreCase("/deny")) {
+            reply(chatId, handleApprovalDecision(chatId, userId, baseId, false));
+            return;
+        }
+
         final String[] activeSessionId = { baseId };
 
         // Session Continuity Check (REQ-V11-CLI-11)
@@ -106,8 +116,6 @@ public class TelegramAgentHandler {
         try {
             // Activate CDI Workspace Scope manually
             WorkspaceScopeHolder.set(activeSessionId[0]);
-
-            // ADD THIS LINE: Apply the YAML config to the active workspace session
             workspaceContext.setAutonomyLevel(autonomyLevel);
 
             log.infof(
@@ -121,22 +129,53 @@ public class TelegramAgentHandler {
                     reasoningEngine,
                     5);
 
-            log.infof(
-                    "[TelegramHandler] Session %s | Agent completed | Answer length: %d chars",
-                    activeSessionId[0], result.finalAnswer().length());
+            reply(chatId, result.finalAnswer());
 
-            // Use ProducerTemplate to reply directly to the originating Chat ID
-            // without needing an outgoing Camel route
-            producerTemplate.sendBodyAndHeader(
-                    "telegram:bots?authorizationToken=" + botToken,
-                    result.finalAnswer(),
-                    "CamelTelegramChatId",
-                    chatId);
+        } finally {
+            WorkspaceScopeHolder.clear();
+        }
+    }
+
+    private String handleApprovalDecision(String chatId, String userId, String sessionId, boolean approved) {
+        var checkpoint = statefulAgentStore.load(sessionId, "coordinator");
+
+        if (checkpoint.isEmpty() || checkpoint.get().status != CheckpointStatus.AWAITING_APPROVAL) {
+            return "❌ No pending approval found for your session.";
+        }
+
+        if (!approved) {
+            statefulAgentStore.markFailed(checkpoint.get().id, "Denied by user via Telegram");
+            return "🚫 Operation denied. The task has been terminated.";
+        }
+
+        log.infof("[TelegramHandler] User %s approved operation for session %s. Elevating to FULL.",
+                userId, sessionId);
+
+        try {
+            WorkspaceScopeHolder.set(sessionId);
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+
+            AgentResult result = agentLoop.run(
+                    sessionId,
+                    "coordinator",
+                    "Resuming task after approval",
+                    reasoningEngine,
+                    5);
+
+            return "✅ Approved. Resuming...\n\n" + result.finalAnswer();
 
         } finally {
             // Memory cleanup ONLY — session remains IN_PROGRESS indefinitely for
             // conversation memory
             WorkspaceScopeHolder.clear();
         }
+    }
+
+    private void reply(String chatId, String text) {
+        producerTemplate.sendBodyAndHeader(
+                "telegram:bots?authorizationToken=" + botToken,
+                text,
+                "CamelTelegramChatId",
+                chatId);
     }
 }

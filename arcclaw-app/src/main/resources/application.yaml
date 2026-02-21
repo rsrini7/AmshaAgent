@@ -279,6 +279,7 @@ mp:
         bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
     governance:
       budget-usd: 999.99
+      approval-timeout-minutes: 60
     vault:
       pepper: "dev-pepper-not-for-production-0000000000000000000000000000"
 

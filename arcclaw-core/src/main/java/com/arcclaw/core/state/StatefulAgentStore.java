@@ -24,6 +24,14 @@ public interface StatefulAgentStore {
     AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps);
 
     /**
+     * Update an existing checkpoint directly.
+     *
+     * @param checkpoint The checkpoint to save.
+     * @return The updated checkpoint.
+     */
+    AgentCheckpoint save(AgentCheckpoint checkpoint);
+
+    /**
      * Load the most recent checkpoint for a session and agent role.
      *
      * @param sessionId The workspace session ID.

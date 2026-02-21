@@ -68,6 +68,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     @Transactional
+    public AgentCheckpoint save(AgentCheckpoint checkpoint) {
+        if (checkpoint.id == null) {
+            em.persist(checkpoint);
+            return checkpoint;
+        } else {
+            return em.merge(checkpoint);
+        }
+    }
+
+    @Override
+    @Transactional
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
         return findBySessionAndRole(sessionId, agentRole);
     }

@@ -66,6 +66,9 @@ public class WorkspaceManager {
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
 
+    @ConfigProperty(name = "arcclaw.governance.approval-timeout-minutes", defaultValue = "60")
+    long approvalTimeoutMinutes;
+
     // -------------------------------------------------------------------------
     // Heartbeat Management
     // -------------------------------------------------------------------------
@@ -158,11 +161,46 @@ public class WorkspaceManager {
 
         heartbeats.forEach((sessionId, lastHeartbeat) -> {
             if (lastHeartbeat.isBefore(cutoff)) {
+                // Step 6: Sprint 2B - Skip GC if session is AWAITING_APPROVAL
+                boolean awaitingApproval = em.createQuery(
+                        "SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status",
+                        Long.class)
+                        .setParameter("sid", sessionId)
+                        .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                        .getSingleResult() > 0;
+
+                if (awaitingApproval) {
+                    log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
+                    return;
+                }
+
                 log.warnf("GC sweep: session=%s expired (last heartbeat=%s, cutoff=%s)",
                         sessionId, lastHeartbeat, cutoff);
                 terminateSession(sessionId);
             }
         });
+    }
+
+    /**
+     * Terminate sessions that have been AWAITING_APPROVAL for too long.
+     */
+    @Scheduled(every = "5m")
+    @Transactional
+    public void sweepTimedOutApprovals() {
+        var cutoff = java.time.LocalDateTime.now().minus(java.time.Duration.ofMinutes(approvalTimeoutMinutes));
+
+        List<AgentCheckpoint> timedOut = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("cutoff", cutoff)
+                .getResultList();
+
+        for (var cp : timedOut) {
+            log.warnf("Approval timeout: session=%s (updatedAt=%s, cutoff=%s). Terminating.",
+                    cp.sessionId, cp.getUpdatedAt(), cutoff);
+            terminateSession(cp.sessionId);
+        }
     }
 
     // -------------------------------------------------------------------------
