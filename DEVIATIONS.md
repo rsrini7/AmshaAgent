@@ -93,6 +93,8 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **LLM Provider Mocking**: Injecting the real `ReasoningEngine` mapped to services like Ollama triggers a `Connection refused` when testing REST endpoints independently. Mock via `@InjectMock ReasoningEngine`.
 *   **JSON Trap Mitigation**: Replaced passive Jackson exception swallowing in `LangChainReasoningEngine` with an active `ReasoningStep.FINISH` error generation to prevent infinite LLM hallucination loops on malformed Tool arguments.
 *   **Context Window Protection**: Implemented a hard 4000-character truncation limit on tool `observation` strings to prevent silent `HTTP 400` crashes from Ollama when exceeding local context limits during verbose operations.
+*   **Native AOT A.I Compilation (Quarkus 0.26.1)**: **CRITICAL DEVIATION**. The `quarkus-langchain4j-ollama` extension is fundamentally broken for Native mode in `0.26.1`. It locks the `model-id` at build time forcing a rigid `.env` dependency, and if bypassed, GraalVM strips its JSON reflection schemas causing `model is required` errors. **We explicitly use `provider: openai` mapping to `http://ollama:11434/v1` natively.** This provides 100% Ollama compatibility while allowing the `openai` extension to dynamically assign the model name at runtime without native reflection issues. Do NOT revert to the `ollama` provider natively.
+*   **Native Maven Compilation (`-am`)**: When building the native binary via `mvnw clean package -pl arcclaw-app -Pnative`, you MUST include the `-am` flag (Also Make) to ensure changes in `arcclaw-core` are recompiled before the `-app` binary is linked.
 
 ---
 *Internal Audit Trail sync complete.*
