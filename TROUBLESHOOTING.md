@@ -625,3 +625,39 @@ podman machine start
 **Symptom:** The Quarkus application fails to start during tests, complaining that a method with an interceptor (like `@ActivateRequestContext`) is `private`.
 **Root Cause:** The Quarkus ArC container uses proxies for intercepted methods. Proxies require that intercepted methods be overridable (i.e., not `private` and not `final`).
 **Resolution:** Change method visibility from `private` to package-private (default) or `protected`. (e.g., Change `private void runAgent(...)` to `void runAgent(...)`).
+### 🔴 Failure: `NoSuchElementException` for `Optional<String>` Bot Token
+**Symptom:** Quarkus crashes during Camel route registration with `java.util.NoSuchElementException` when using `@ConfigProperty Optional<String> botToken`.
+**Root Cause:** Even if declared as `Optional`, Camel's endpoint URI construction (e.g., `from("telegram:bots?authorizationToken=" + botToken.get())`) will trigger `get()` before the container has verified the presence of the configuration.
+**Resolution:** Always provide a `defaultValue = ""` in the `@ConfigProperty` annotation, or standardize to a required `String` and check for `isBlank()` inside the `configure()` method.
+
+### 🔴 Failure: Camel Route Discovery Failure (`AssertionError: expected <true> but was <false>`)
+**Symptom:** `TelegramChannelRouteTest` fails because the `CamelContext` contains zero routes, despite the `RouteBuilder` being annotated with `@ApplicationScoped`.
+**Root Cause:**
+1. **Missing Jandex Index:** In multi-module projects, Quarkus only scans modules with a `META-INF/jandex.idx` or a `META-INF/beans.xml`.
+2. **Lazy Initialization:** The bean may not be instantiated if not explicitly injected or used.
+**Resolution:** 
+- Add `jandex-maven-plugin` to the module's `pom.xml`.
+- Add an empty `beans.xml` to `src/main/resources/META-INF` to force discovery.
+- Use `mvn clean test` to ensure the index is not stale.
+
+### 🔴 Failure: `IllegalStateException: Invalid use of @InjectMock` on @Dependent Beans
+**Symptom:** Test crashes with `Invalid use of io.quarkus.test.InjectMock - the injected bean does not declare a CDI normal scope but: jakarta.enterprise.context.Dependent`.
+**Root Cause:** `@InjectMock` only works on beans with a normal scope (like `@ApplicationScoped`). Common framework beans like `ProducerTemplate` (Camel) and `ManagedExecutor` (MicroProfile) are often `@Dependent`.
+**Resolution:** Use `QuarkusMock.installMockForType(mockInstance, BeanType.class)` in the test setup instead.
+
+### 🔴 Failure: `QuarkusMock` fails because "bean is already in use"
+**Symptom:** `java.lang.IllegalStateException: Actually, the bean is already in use` when calling `QuarkusMock.installMock(...)`.
+**Root Cause:** The bean being mocked has already been injected into the System Under Test (SUT) or used by the container during the initial boot sequence before the test's `@BeforeEach` method had a chance to install the mock.
+**Resolution:** Move `QuarkusMock` installation to a static **`@BeforeAll`** method. This ensures the mocks are registered with the CDI container *before* it starts wiring the beans for the test class.
+
+---
+
+## 18. Pending Issues & Sprint 2A Backlog
+
+### 🟡 Pending: `TelegramAgentHandlerTest` Exit Code 1 (Stubborn Mocking)
+**Status:** In Progress.
+**Observation:** Even with `QuarkusMock` in `@BeforeAll`, some mock interactions are not being correctly captured, or the SUT (`TelegramAgentHandler`) is retaining references to the original beans. 
+**Next Steps:** Verify if `@ApplicationScoped` on the SUT needs a more aggressive proxying strategy or if `QuarkusMock` effectively replaces the bean if it was already created by the Jandex index.
+
+### 🟡 Pending: YAML Profile Parsing Nuance
+**Observation:** Ensure that the `%test` profile in `application.yaml` is correctly structured and doesn't conflict with legacy `.properties` files that might still exist in the target directory after a non-clean build.

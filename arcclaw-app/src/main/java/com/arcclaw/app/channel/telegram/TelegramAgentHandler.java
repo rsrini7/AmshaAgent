@@ -22,6 +22,10 @@ import java.util.UUID;
 @ApplicationScoped
 public class TelegramAgentHandler {
 
+    public TelegramAgentHandler() {
+        System.out.println("DEBUG: TelegramAgentHandler constructor called!");
+    }
+
     @Inject
     AgentLoop agentLoop;
 
