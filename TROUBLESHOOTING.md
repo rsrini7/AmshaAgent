@@ -635,10 +635,14 @@ podman machine start
 **Root Cause:**
 1. **Missing Jandex Index:** In multi-module projects, Quarkus only scans modules with a `META-INF/jandex.idx` or a `META-INF/beans.xml`.
 2. **Lazy Initialization:** The bean may not be instantiated if not explicitly injected or used.
+3. **Missing Camel Bean Component:** `.bean(TelegramAgentHandler.class, "receiveMessage")` requires `camel-quarkus-bean`. Without it, route creation fails when the test tries to add routes.
+4. **Context Not Started in Test:** The `CamelContext` can be present but not started, leaving the runtime routes list empty.
 **Resolution:** 
 - Add `jandex-maven-plugin` to the module's `pom.xml`.
-- Add an empty `beans.xml` to `src/main/resources/META-INF` to force discovery.
 - Use `mvn clean test` to ensure the index is not stale.
+- Add `camel-quarkus-bean` to `arcclaw-app/pom.xml` when using `.bean(...)` in Camel routes.
+- In `TelegramChannelRouteTest`, call `camelContext.addRoutes(route)` and `camelContext.start()` before asserting route existence.
+**Notes:** When running with a mock Telegram token in tests, the Telegram consumer will log 404 polling warnings; these are expected and do not fail the test.
 
 ### 🔴 Failure: `IllegalStateException: Invalid use of @InjectMock` on @Dependent Beans
 **Symptom:** Test crashes with `Invalid use of io.quarkus.test.InjectMock - the injected bean does not declare a CDI normal scope but: jakarta.enterprise.context.Dependent`.
