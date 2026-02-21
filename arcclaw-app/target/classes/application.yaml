@@ -63,7 +63,11 @@ quarkus:
     ollama:
       base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
       chat-model:
-        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+        # ⚠️ CRITICAL NATIVE BUILD NOTE for v0.26.1 ⚠️
+        # In this version of Quarkus LangChain4j, `model-id` is read from `FixedRuntimeConfig`.
+        # This makes it a BUILD-TIME property. Whatever value evaluates here during `mvnw package`
+        # is permanently embedded in the native binary. Runtime env vars are IGNORED.
+        model-id: "${OLLAMA_MODEL:llama3.2:1b}"
       timeout: 120s
       log-requests: false
       log-responses: false
@@ -242,7 +246,7 @@ mp:
       ollama:
         base-url: "http://localhost:11434"
         chat-model:
-          model-name: "llama3.2:1b"
+          model-id: "llama3.2:1b"
       log-requests: true
       log-responses: true
     hibernate-orm:
@@ -267,7 +271,7 @@ mp:
       ollama:
         base-url: "http://localhost:11434"
         chat-model:
-          model-name: "llama3.2:1b"
+          model-id: "llama3.2:1b"
   arcclaw:
     sandbox:
       strategy: NONE

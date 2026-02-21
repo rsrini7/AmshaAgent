@@ -787,8 +787,8 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 
 > [!CAUTION]
 > **Ollama `model is required` HttpException in Native Container**: Triggering an agent natively resulted in the Ollama container throwing an HTTP 400 `model is required` exception, despite `.env` injection.
-> **Root Cause**: The application configuration was using the property `quarkus.langchain4j.ollama.chat-model.model-id`. The Quarkiverse LangChain4j Ollama extension explicitly requires `model-name`. The extension silently ignored the `model-id` property, sending an empty `model` JSON field to the Ollama API during chat requests.
-> **The Fix**: Migrated all YAML properties from `model-id` to `model-name` across `application.yaml` (default, `%dev`, and `%test`).
+> **Root Cause**: In Quarkus LangChain4j version `0.26.1`, the property `quarkus.langchain4j.ollama.chat-model.model-id` is read natively from `LangChain4jOllamaFixedRuntimeConfig`. This means the property is **strictly evaluated at build time**. Whatever the value of `OLLAMA_MODEL` is in the host's `.env` during the `mvnw package -Pnative` execution gets permanently embedded into the binary. Any runtime environment variables passed in `docker-compose.yaml` are completely ignored, leading to a blank `model` payload if the host machine lacked the environment variable during build.
+> **The Fix**: Re-established `model-id` as the property and documented the strict requirement to ensure `OLLAMA_MODEL=...` exists locally before compiling to native. (My initial attempt to rename it to `model-name` failed because `model-name` was introduced in a newer extension version).
 
 ## Verification
 - ✅ Native Docker image booted correctly via Compose without "model is required" HTTP crashes.
