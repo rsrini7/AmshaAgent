@@ -18,7 +18,7 @@ services:
     environment:
       - QUARKUS_PROFILE=prod
       - ARCCLAW_DATA_DIR=/app/data
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - ARCCLAW_AI_OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
       # Dynamic runtime override via custom arcclaw.ai provider
       - ARCCLAW_AI_OLLAMA_MODEL_NAME=${OLLAMA_MODEL:-llama3.2:1b}
