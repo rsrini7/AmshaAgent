@@ -795,3 +795,22 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 - ✅ Native `/run-async` endpoint correctly executes `AgentLoop` tasks against the SQLite database using Virtual Threads without throwing `ContextNotActiveException`.
 - ✅ Asynchronous JAX-RS `@Suspended AsyncResponse` gracefully handles error tracking and HTTP 202/500 signaling.
 - ✅ Reverted `AgentLoop` exception mapping back to native REST API string propagation.
+
+---
+
+# Phase 15 — Dual-Mode Binary Upgrade ✅
+
+Upgrade ArcClaw from a single-mode REST daemon into a dual-mode binary using `quarkus-picocli`. This enables CLI usage alongside daemon API processing.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Daemon vs CLI Separation**: The top-level `ArcClawCli` intercepts Quarkus bootstrap to provision `ARCCLAW_DATA_DIR` before handing over execution to Picocli. CLI one-shot mode (`AskCommand`) manages its own `WorkspaceScopeHolder` and CDI RequestContext, bypassing `Quarkus.waitForExit()` to allow seamless termination. Daemon mode (`ServeCommand`) explicitly waits for exit.
+
+> [!NOTE]
+> **Guarded Sub-Observer**: `CliAgentObserver` acts as an `AgentObserver` but relies on a `volatile boolean enabled` flag, conditionally activated by `AskCommand`, to prevent log-spamming during background daemon mode execution.
+
+## Verification
+- ✅ Single executable provides both daemon (`arcclaw serve`) and CLI (`arcclaw ask`) capabilities.
+- ✅ Compiled via `mvn compile` with 0 warnings/errors.
+

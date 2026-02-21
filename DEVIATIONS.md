@@ -55,6 +55,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). |
 | **9** | Observer / OTel Layer | **Complete** | `AgentOtelContext` OpenTelemetry implementation. deviation: Replaced `InMemorySpanExporter` with `@InjectMock Tracer` for testing due to Quarkus OTLP extension limitations in unit tests. |
 | **10** | Health Layer | **Complete** | `PodmanHealthCheck`/`PodmanImageHealthCheck` implemented. deviation: Used `@Alternative`+`@Priority` standalone `HealthCheck` mocks instead of `@Mock extends` due to ArC classloader boundary preventing `@ConfigProperty` injection across module boundaries. Management port 9001 required for health endpoint tests. |
+| **15** | Dual-Mode Binary | **Complete** | Migrated to `quarkus-picocli` entry point. deviation: Adjusted `AgentObserver.recordLlmCall` signature (omitted `modelName`) to align with existing implementations. |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.
@@ -98,5 +99,12 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **Cosmic Pantheon (Grok 4.20) Agents**: Renamed `GrokAgent` -> `VishnuAgent`, `HarperAgent` -> `SaraswatiAgent`, `BenjaminAgent` -> `BrahmaAgent`, `LucasAgent` -> `ShivaAgent` to establish a distinct mythological agentic framework for the kernel.
 *   **Native Maven Compilation (`-am`)**: When building the native binary via `mvnw clean package -pl arcclaw-app -Pnative`, you MUST include the `-am` flag (Also Make) to ensure changes in `arcclaw-core` are recompiled before the `-app` binary is linked.
 
+### 9. Dual-Mode Binary Picocli Lifecycle (Phase 15)
+*   **Deviation:** `Quarkus.waitForExit()` is omitted from the top-level `ArcClawCli.run()` dispatch method. 
+*   **Rationale:** Calling `waitForExit()` at the parent level hangs the one-shot `ask` CLI mode indefinitely. Instead, the `serve` subcommand explicitly owns its own daemon hold via `Quarkus.waitForExit()`.
+*   **Deviation:** The `AgentLoop` `forEach` observer loop captured an effectively non-final variable (`step`), which `AgentObserver.onStepComplete` rejected.
+*   **Rationale:** Fixed explicitly assigning `final ReasoningStep completedStep = step` directly preceding the stream logic to satisfy Java's closure scopes.
+
 ---
 *Internal Audit Trail sync complete.*
+

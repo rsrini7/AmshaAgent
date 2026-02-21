@@ -200,3 +200,15 @@
 - [x] Correct rootless `Permission denied` failure inside `Dockerfile.native` by mapping `chown` over `/app` before switching user contexts
 - [x] Fix unmanaged `Thread.ofVirtual()` CDI context leakage by explicitly annotating `AgentLoop.run` with `@ActivateRequestContext`
 
+---
+
+## Phase 15 — Dual-Mode Binary Upgrade (quarkus-picocli)
+- [x] Add `quarkus-picocli` dependency
+- [x] Add `onStepComplete` default method to `AgentObserver.java`
+- [x] Update `AgentLoop.runLoop()` to call `onStepComplete` with `agentRole` and `completedStep` (effectively-final fix)
+- [x] Create `ArcClawCli.java` mapped via `@QuarkusMain` to boot Picocli (replaces `ArcClawApp.java`)
+- [x] Create `ServeCommand.java` (`arcclaw serve`) for daemon mode (`Quarkus.waitForExit()`)
+- [x] Create `AskCommand.java` (`arcclaw ask "<goal>"`) for CLI one-shot execution (`@ActivateRequestContext`)
+- [x] Create `CliAgentObserver.java` static-guarded CLI output observer
+- [x] Compile verified: `mvn compile` exit code 0
+

@@ -16,6 +16,7 @@
 | 9 | Observer / OTel | AgentOtelContextTest (2/2) | `@InjectMock Tracer instead of Memory Span Exporter` |
 | 10 | Health Checks | PodmanHealthCheckTest (2/2) | `@Alternative mock standalone interface on port 9001` |
 | 11 | REST API API | AgentResourceTest (3/3) | Explicitly added `quarkus-rest-jackson` to app module |
+| 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
 
 ## Phase 0: Project Scaffolding ✅
 
@@ -256,3 +257,22 @@ Created all necessary local and native environment configuration files to host A
 | [.env.example](file:///h:/ws/ArcClaw/.env.example) | Secure template for local secrets like `GITHUB_TOKEN` |
 
 **Verification**: Artifacts are checked in, ready for deployment test loops in Phase 14.
+
+---
+
+## Phase 15: Dual-Mode Binary Upgrade ✅
+
+ArcClaw upgraded from a single-mode REST daemon into a dual-mode binary using `quarkus-picocli`.
+
+**Key Changes:**
+1. `ArcClawCli.java` acts as the new `@QuarkusMain` dispatcher.
+2. `ServeCommand.java` (`arcclaw serve`) invokes `Quarkus.waitForExit()`.
+3. `AskCommand.java` (`arcclaw ask`) manages its own lifecycle natively (no `waitForExit()`).
+4. `CliAgentObserver.java` prints real-time CLI output.
+
+**Signature Mismatches Corrected:**
+- **`AgentObserver.recordLlmCall`**: The expected `modelName` parameter wasn't part of the existing signature, defaulting back to the known 3-argument API.
+- **`AgentLoop.run`**: Modified `runLoop` to require injecting `ReasoningEngine` correctly.
+- **`WorkspaceManager`**: Specified `terminateSession` instead of the conceptual `terminateWorkspace`.
+
+**Runtime Defect Fixed**: Added `final ReasoningStep completedStep = step` around the observer `.forEach` lambda to resolve Java's internal "effectively-final" compile error before dispatch. 

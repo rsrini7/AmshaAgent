@@ -409,7 +409,6 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 mvn clean install -DskipTests
 
 # Run specific test
-$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
 mvn test -pl arcclaw-app -am -Dtest=TestClassName -Dsurefire.failIfNoSpecifiedTests=false
 
 # Run all tests
@@ -588,3 +587,18 @@ podman machine start
 **Symptom:** Running `quarkus:dev` locally and triggering the agent API returns `ReasoningEngine error: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: localhost/127.0.0.1:11434`.
 **Root Cause:** The application's `%dev` profile in `application.yaml` connects to `localhost:11434` for the Ollama inference engine. This error means there is no local process listening on that port. This typically happens if you haven't started your `ollama` Docker container via `docker compose up -d ollama` or if you quit the local Windows/Mac Ollama desktop app.
 **Resolution:** Either start the local background Ollama application (from the system tray) or rely purely on the project's Docker stack by running `docker compose up -d` before booting `quarkus:dev`.
+
+---
+
+## 16. CLI Dual-Mode Operations Troubleshooting (Phase 15)
+
+### 🔴 Failure: CLI Command `ask` Hangs Indefinitely after Completion
+**Symptom:** Typing `arcclaw ask "goal"` correctly runs the agent, solves the task, prints the final result, but the terminal cursor hangs permanently instead of exiting back to bash. 
+**Root Cause:** The top-level `ArcClawCli.java` (or main method dispatch block) contained `Quarkus.waitForExit()`. This function holds the Quarkus thread open waiting for a daemon stop signal, which directly conflicts with Picocli's desired application exit boundary.
+**Resolution:** Remove `Quarkus.waitForExit()` from the root Picocli `CommandLine.execute()` scope. Re-assign `Quarkus.waitForExit()` explicitly *only* inside the background-intended `ServeCommand.run()` block.
+
+### 🔴 Failure: `Variable used in lambda expression should be final or effectively final`
+**Symptom:** Compilation fails inside `AgentLoop.java` during observer stream iterations. 
+**Root Cause:** The `step` variable was reassigned via `withObservation` before attempting to inject it into `.forEach(o -> o.onStepComplete(..., step))`.
+**Resolution:** Capture the mutated state inside a strictly defined block-local variable prior to the lambda: `final ReasoningStep completedStep = step; observers.forEach(o -> o.onStepComplete(..., completedStep));`.
+

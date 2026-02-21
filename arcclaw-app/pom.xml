@@ -119,6 +119,12 @@
       <artifactId>quarkus-jdbc-sqlite</artifactId>
       <version>3.0.2</version>
     </dependency>
+
+    <!-- CLI dual-mode: picocli subcommand routing -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-picocli</artifactId>
+    </dependency>
   </dependencies>
 
   <build>

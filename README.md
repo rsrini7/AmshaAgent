@@ -181,17 +181,24 @@ mvn clean verify -pl arcclaw-app -am
 ```
 *(Note: Mockito requires JDK 21+ inline mock attachments. This is handled automatically by the `--add-opens` flags in the `arcclaw-app` pom.xml).*
 
-### Step 4: Run the Kernel (JVM Mode)
+### Step 4: Run the Kernel (Dual-Mode)
+ArcClaw v1.0 functions as a dual-mode binary. You can run it as a long-lived REST daemon or execute a single task directly from the CLI.
+
+**Option A: Daemon Mode (REST API)**
 If you prefer to run the kernel locally on the JVM using Quarkus dev mode instead of Docker:
 ```bash
 # Ensure you are using JDK 21+ (Designed for JDK 25)
-$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
-./mvnw quarkus:dev -pl arcclaw-app
-
-(or)
-
-.\mvnw.cmd quarkus:dev -pl arcclaw-app -am
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
 ```
+*(Note: Or using the built JAR: `java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve`)*
+
+**Option B: CLI One-Shot Mode**
+Run a single agentic task and exit immediately. Agent loop output and token costs are streamed directly to your terminal.
+```bash
+# Using the built JAR
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar ask "Analyze the codebase and list all design patterns used" --role coordinator
+```
+*(Note: If running purely natively, simply execute the compiled binary: `./arcclaw-app-1.0.0-SNAPSHOT-runner ask "your goal"`)*
 
 ---
 

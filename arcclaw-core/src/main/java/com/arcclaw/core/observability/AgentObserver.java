@@ -1,5 +1,7 @@
 package com.arcclaw.core.observability;
 
+import com.arcclaw.core.agent.ReasoningStep;
+
 /**
  * Observer interface for the Agent reasoning engine.
  * Receives lifecycle events and consumption metrics.
@@ -14,5 +16,19 @@ public interface AgentObserver {
      * @param outputTokens The number of output tokens generated.
      */
     void recordLlmCall(String sessionId, int inputTokens, int outputTokens);
+
+    /**
+     * Called after each reasoning step completes (observation appended, before
+     * checkpoint save). Allows observers to opt into step-level events without
+     * breaking existing implementations.
+     *
+     * @param sessionId The workspace session ID.
+     * @param role      The agent role identifier.
+     * @param step      The completed reasoning step (with observation filled).
+     */
+    default void onStepComplete(String sessionId, String role, ReasoningStep step) {
+        // no-op by default — existing implementations (GovernanceLayer,
+        // AgentOtelContext) are unaffected.
+    }
 
 }

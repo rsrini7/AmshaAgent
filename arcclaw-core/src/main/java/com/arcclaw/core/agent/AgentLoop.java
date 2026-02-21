@@ -108,7 +108,7 @@ public class AgentLoop {
                         resumedHistory.size(), sessionId, agentRole);
             }
 
-            AgentResult result = runLoop(goal, engine, maxIterations, resumedHistory);
+            AgentResult result = runLoop(goal, engine, maxIterations, resumedHistory, agentRole);
 
             // --- CHECKPOINT FINAL STATE ---
             if (result.success()) {
@@ -147,7 +147,7 @@ public class AgentLoop {
      * @return The final result with reasoning trace.
      */
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
-        return runLoop(goal, engine, maxIterations, List.of());
+        return runLoop(goal, engine, maxIterations, List.of(), null);
     }
 
     /**
@@ -160,7 +160,7 @@ public class AgentLoop {
      * @return The final result.
      */
     private AgentResult runLoop(String goal, ReasoningEngine engine,
-            int maxIterations, List<ReasoningStep> resumedHistory) {
+            int maxIterations, List<ReasoningStep> resumedHistory, String agentRole) {
         // Mutable state — guarded by synchronized (JEP 491 safe)
         final List<ReasoningStep> history = new ArrayList<>(resumedHistory);
         int iteration = 0;
@@ -222,8 +222,13 @@ public class AgentLoop {
                     answer = String.valueOf(step.actionInput().get("answer"));
                 }
                 step = step.withObservation("Task completed.");
+                final ReasoningStep completedStep = step;
                 synchronized (history) {
-                    history.add(step);
+                    history.add(completedStep);
+                }
+                observers.forEach(o -> o.onStepComplete(
+                        WorkspaceScopeHolder.get(), agentRole, completedStep));
+                synchronized (history) {
                     return AgentResult.finished(answer, List.copyOf(history));
                 }
             }
@@ -238,9 +243,12 @@ public class AgentLoop {
                         toolName, toolRegistry.listTools());
                 log.warnf("Hallucination intercepted: tool '%s' not found", toolName);
                 step = step.withObservation(errorObs);
+                final ReasoningStep completedStep = step;
                 synchronized (history) {
-                    history.add(step);
+                    history.add(completedStep);
                 }
+                observers.forEach(o -> o.onStepComplete(
+                        WorkspaceScopeHolder.get(), agentRole, completedStep));
                 continue;
             }
 
@@ -269,9 +277,12 @@ public class AgentLoop {
 
             // --- OBSERVE ---
             step = step.withObservation(observation);
+            final ReasoningStep completedStep = step;
             synchronized (history) {
-                history.add(step);
+                history.add(completedStep);
             }
+            observers.forEach(o -> o.onStepComplete(
+                    WorkspaceScopeHolder.get(), agentRole, completedStep));
             log.debugf("Observation for '%s': %s",
                     toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
         }
