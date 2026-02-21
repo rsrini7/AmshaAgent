@@ -577,3 +577,8 @@ podman machine start
 **Symptom:** The Agent continuously attempts to call the exact same tool, failing instantly, burning through tokens until hitting the `maxIterations` circuit breaker. 
 **Root Cause:** The local LLM hallucinated invalid JSON structure (e.g., trailing commas) for the Tool arguments payload. The `LangChainReasoningEngine` caught the `JsonParseException`, swallowed it, and mapped it to an empty `Map.of()`. The tool validated the empty map, failed for missing arguments, and the generic failure prompted the LLM to simply "try again", reproducing the identical malformed JSON structure.
 **Resolution:** Stopped swallowing the exception. Now actively catching `JsonParseException` and returning a `FINISH` `ReasoningStep` injected with `"System Error: You provided invalid JSON formatting... Please ensure strict JSON compliance."` which halts the loop or allows explicit LLM self-correction.
+
+### 🔴 Failure: HTTP 500 `Connection refused` in Dev Mode
+**Symptom:** Running `quarkus:dev` locally and triggering the agent API returns `ReasoningEngine error: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: localhost/127.0.0.1:11434`.
+**Root Cause:** The application's `%dev` profile in `application.yaml` connects to `localhost:11434` for the Ollama inference engine. This error means there is no local process listening on that port. This typically happens if you haven't started your `ollama` Docker container via `docker compose up -d ollama` or if you quit the local Windows/Mac Ollama desktop app.
+**Resolution:** Either start the local background Ollama application (from the system tray) or rely purely on the project's Docker stack by running `docker compose up -d` before booting `quarkus:dev`.
