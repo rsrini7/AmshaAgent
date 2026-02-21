@@ -505,6 +505,20 @@ quarkus:
 </quarkus.native.additional-build-args>
 ```
 
+### 🔴 Failure: Docker Compose Build Fails at `microdnf update`
+**Symptom:** Running `docker compose build --no-cache` fails during the `Dockerfile.native` build step at `RUN microdnf update -y` with an exit code of 1.
+**Root Cause:** On Windows, the Podman virtual machine's network stack can sometimes lose internet connectivity or become de-synchronized from the host OS network (e.g. after waking from sleep, VPN changes, or long periods of idle time). This prevents the build container from reaching the RedHat UBI repositories.
+**Resolution:** Force a hard reset of the Podman machine to re-initialize its network connection to the host:
+```powershell
+podman machine stop
+podman machine start
+```
+
+### 🔴 Failure: Docker Compose `cannot listen on the TCP port... bind: address already in use`
+**Symptom:** Running `docker compose up -d` fails with `Error response from daemon: cannot listen on the TCP port: listen tcp4 :11434: bind: address already in use`.
+**Root Cause:** The native Windows Ollama application is running in the background (usually in the system tray) and is already bound to port 11434 on the host machine. This prevents the Docker container `ollama` service from binding its exposed port to the host.
+**Resolution:** Right-click the Ollama icon in the Windows system tray and select "Quit Ollama". Then run `docker compose up -d` again.
+
 ### 🔴 Failure: Docker Compose `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`
 **Symptom:** Running `docker compose up` on Windows with Podman Desktop installed returns a connection error for `dockerDesktopLinuxEngine`.
 **Root Cause:** Podman Desktop exposes its API socket at `//./pipe/podman-machine-default`. The standalone `docker compose` binary defaults to searching for Docker Desktop's named pipe unless explicitly instructed otherwise or unless Podman Desktop's API compatibility routing is enabled.
