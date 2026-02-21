@@ -5,7 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
 
 /**
- * Benjamin — Math/Code/Logic Expert agent.
+ * Brahma — Math/Code Creator and Logic Expert agent.
  * <p>
  * Specializes in code analysis, generation, and logical reasoning.
  * Refuses non-technical requests.
@@ -20,10 +20,10 @@ import java.util.List;
  */
 @ApplicationScoped
 @AgentRole("coder")
-public class BenjaminAgent implements Agent {
+public class BrahmaAgent implements Agent {
 
     private static final String SYSTEM_PROMPT = """
-            You are Benjamin, a Coder and Logic Expert of the ArcClaw team.
+            You are Brahma, the Math/Code Creator and Logic Expert of the ArcClaw team.
 
             YOUR RESPONSIBILITIES:
             - Analyze code structure, identify bugs, and suggest improvements.

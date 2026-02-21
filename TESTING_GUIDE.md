@@ -34,18 +34,18 @@ export SESSION_ID="<extracted-uuid-here>"
 ```
 
 ### 2. Run an Agent (Asynchronous)
-Execute the Grok coordinator agent with a specific goal. This endpoint is non-blocking.
+Execute the Vishnu coordinator agent with a specific goal. This endpoint is non-blocking.
 
 ```bash
 # Windows
 curl -X POST http://localhost:8080/api/v1/sessions/$SESSION_ID/run-async `
      -H "Content-Type: application/json" `
-     -d '{ "goal": "Analyze the openclaw repository on github and tell me what it does", "agentRole": "grok" }'
+     -d '{ "goal": "Analyze the openclaw repository on github and tell me what it does", "agentRole": "coordinator" }'
 
 # Linux/macOS
 curl -X POST http://localhost:8080/api/v1/sessions/$SESSION_ID/run-async \
      -H "Content-Type: application/json" \
-     -d '{"goal": "Analyze the openclaw repository on github and tell me what it does", "agentRole": "grok"}'
+     -d '{"goal": "Analyze the openclaw repository on github and tell me what it does", "agentRole": "coordinator"}'
 ```
 *Expected Response:* `HTTP 202 Accepted`
 
@@ -54,10 +54,10 @@ Check the status of the asynchronous agent execution. Run this repeatedly to wat
 
 ```bash
 # Windows
-curl http://localhost:8080/api/v1/sessions/$SESSION_ID/status/grok
+curl http://localhost:8080/api/v1/sessions/$SESSION_ID/status/coordinator
 
 # Linux/macOS
-curl http://localhost:8080/api/v1/sessions/$SESSION_ID/status/grok
+curl http://localhost:8080/api/v1/sessions/$SESSION_ID/status/coordinator
 ```
 *Expected Response:* JSON payload containing the current `status` (e.g., `IN_PROGRESS`, `COMPLETED`) and a `steps` array detailing the agent's thoughts and actions.
 

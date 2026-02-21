@@ -54,7 +54,7 @@ class WorkspaceManagerTest {
         WorkspaceScopeHolder.set("zombie-session-1");
         try {
             var steps = List.of(new ReasoningStep("thinking", "action", Map.of(), null, 0, 0));
-            agentStore.save("zombie-session-1", "grok", steps);
+            agentStore.save("zombie-session-1", "coordinator", steps);
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -62,7 +62,7 @@ class WorkspaceManagerTest {
         // Verify it's IN_PROGRESS
         WorkspaceScopeHolder.set("zombie-session-1");
         try {
-            var loaded = agentStore.load("zombie-session-1", "grok");
+            var loaded = agentStore.load("zombie-session-1", "coordinator");
             assertTrue(loaded.isPresent(), "Checkpoint should exist");
             assertEquals(CheckpointStatus.IN_PROGRESS, loaded.get().status);
         } finally {
@@ -75,7 +75,7 @@ class WorkspaceManagerTest {
         // Assert: checkpoint should now be FAILED
         WorkspaceScopeHolder.set("zombie-session-1");
         try {
-            var afterRecovery = agentStore.load("zombie-session-1", "grok");
+            var afterRecovery = agentStore.load("zombie-session-1", "coordinator");
             assertTrue(afterRecovery.isPresent(), "Checkpoint should still exist");
             assertEquals(CheckpointStatus.FAILED, afterRecovery.get().status);
             assertNotNull(afterRecovery.get().failedAt, "failedAt should be set");
@@ -99,7 +99,7 @@ class WorkspaceManagerTest {
         WorkspaceScopeHolder.set(sessionId);
         try {
             var steps = List.of(new ReasoningStep("step1", "action1", Map.of(), null, 0, 0));
-            agentStore.save(sessionId, "harper", steps);
+            agentStore.save(sessionId, "debugger", steps);
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -126,7 +126,7 @@ class WorkspaceManagerTest {
         // Assert: checkpoint should be marked FAILED
         WorkspaceScopeHolder.set(sessionId);
         try {
-            var cp = agentStore.load(sessionId, "harper");
+            var cp = agentStore.load(sessionId, "debugger");
             assertTrue(cp.isPresent());
             assertEquals(CheckpointStatus.FAILED, cp.get().status);
             assertTrue(cp.get().failReason.contains("WorkspaceManager"));
@@ -146,9 +146,9 @@ class WorkspaceManagerTest {
         // Arrange: create checkpoints for multiple agent roles
         WorkspaceScopeHolder.set(sessionId);
         try {
-            agentStore.save(sessionId, "grok",
+            agentStore.save(sessionId, "coordinator",
                     List.of(new ReasoningStep("t1", "a1", Map.of(), null, 0, 0)));
-            agentStore.save(sessionId, "harper",
+            agentStore.save(sessionId, "debugger",
                     List.of(new ReasoningStep("t2", "a2", Map.of(), null, 0, 0)));
         } finally {
             WorkspaceScopeHolder.clear();
@@ -160,12 +160,12 @@ class WorkspaceManagerTest {
         // Assert: both checkpoints should be FAILED
         WorkspaceScopeHolder.set(sessionId);
         try {
-            var grokCp = agentStore.load(sessionId, "grok");
-            var harperCp = agentStore.load(sessionId, "harper");
-            assertTrue(grokCp.isPresent());
-            assertTrue(harperCp.isPresent());
-            assertEquals(CheckpointStatus.FAILED, grokCp.get().status);
-            assertEquals(CheckpointStatus.FAILED, harperCp.get().status);
+            var coordinatorCp = agentStore.load(sessionId, "coordinator");
+            var debuggerCp = agentStore.load(sessionId, "debugger");
+            assertTrue(coordinatorCp.isPresent());
+            assertTrue(debuggerCp.isPresent());
+            assertEquals(CheckpointStatus.FAILED, coordinatorCp.get().status);
+            assertEquals(CheckpointStatus.FAILED, debuggerCp.get().status);
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -181,7 +181,7 @@ class WorkspaceManagerTest {
         // Arrange: create and mark COMPLETED
         WorkspaceScopeHolder.set(sessionId);
         try {
-            var cp = agentStore.save(sessionId, "benjamin",
+            var cp = agentStore.save(sessionId, "researcher",
                     List.of(new ReasoningStep("done", "FINISH", Map.of("answer", "42"), "Task completed.", 0, 0)));
             agentStore.markCompleted(cp.id);
         } finally {
@@ -202,7 +202,7 @@ class WorkspaceManagerTest {
             // This is actually correct behavior — when a session is terminated, ALL
             // checkpoints
             // should be invalidated, even completed ones.
-            var cp = agentStore.load(sessionId, "benjamin");
+            var cp = agentStore.load(sessionId, "researcher");
             assertTrue(cp.isPresent());
             assertEquals(CheckpointStatus.FAILED, cp.get().status,
                     "Terminated sessions should mark ALL non-FAILED checkpoints as FAILED");

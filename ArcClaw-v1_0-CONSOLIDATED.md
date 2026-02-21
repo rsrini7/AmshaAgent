@@ -80,7 +80,7 @@ The name was finalized after confirming no existing project occupies the `ArcCla
 7. [Agent & Orchestration Layer](#agents)
    - Agent interface + AgentRole qualifier
    - ArcClawSupervisor
-   - GrokAgent / HarperAgent / BenjaminAgent / LucasAgent (stubs)
+   - CoordinatorAgent / DebuggerAgent / ResearcherAgent / WriterAgent (stubs)
 8. [State Layer](#state)
    - AgentCheckpoint entity (with failedAt/failReason)
    - StatefulAgentStore interface
@@ -238,7 +238,7 @@ environment, ensuring that autonomy never comes at the cost of host security.
 └──────┬──────────────────────────────────────┬────────────┘
        │                                       │
 ┌──────▼──────┐  ┌───────────┐  ┌─────────────▼──────────┐
-│  GrokAgent  │  │HarperAgent│  │BenjaminAgent / LucasAgent│
+│CoordinatorAgent│  │DebuggerAgent│  │ResearcherAgent / CoderAgent│
 │(Orchestrate)│  │(Research) │  │(Code/Logic / Creative)   │
 └──────┬──────┘  └─────┬─────┘  └─────────────┬───────────┘
        │               │                       │
@@ -279,7 +279,7 @@ arcclaw-parent/
 │       ├── core/scope/              (WorkspaceScoped, Context, Holder, Extension)
 │       ├── security/                (SecretVault, VaultKey, AesGcmSivCipher, etc.)
 │       ├── tools/                   (ProcessIsolationExecutor, ToolRegistry, etc.)
-│       ├── agents/                  (Agent, AgentLoop, GrokAgent, etc.)
+│       ├── agents/                  (Agent, AgentLoop, VishnuAgent, etc.)
 │       ├── state/                   (StatefulAgentStore, AgentCheckpoint)
 │       ├── lifecycle/               (WorkspaceManager)
 │       ├── governance/              (GovernanceLayer)
@@ -443,7 +443,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * Thread safety: ConcurrentHashMap at both levels.
  * Multiple threads can safely participate in the SAME workspace session
- * (e.g. HarperAgent and BenjaminAgent running in parallel sub-agent threads).
+ * (e.g. SaraswatiAgent and BrahmaAgent running in parallel sub-agent threads).
  *
  * Locking strategy (Fix G1 — cross-version default):
  * - Per-session ReentrantLock (not synchronized) for the double-checked locking
@@ -1876,7 +1876,7 @@ package com.arcclaw.agents;
 import dev.langchain4j.experimental.agent.supervisor.SupervisorAgent;
 
 @SupervisorAgent(
-    subAgents = {GrokAgent.class, HarperAgent.class, BenjaminAgent.class, LucasAgent.class},
+    subAgents = {VishnuAgent.class, SaraswatiAgent.class, BrahmaAgent.class, ShivaAgent.class},
     outputKey = "finalDecision"
 )
 public interface ArcClawSupervisor {
@@ -1899,20 +1899,20 @@ import io.quarkus.arc.RegisterForReflection;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
-@AgentRole("grok")
+@AgentRole("coordinator")
 @RegisterForReflection
-public class GrokAgent implements Agent {
+public class VishnuAgent implements Agent {
 
-    @SystemMessage("You are Grok, the coordinating agent. Decompose the task.")
+    @SystemMessage("You are Coordinator, the coordinating agent. Decompose the task.")
     @UserMessage("{{input}}")
     @Override
     public String execute(String input) {
         // Sub-agents wrap their work in a child span
-        Span span = AgentOtelContext.childSpan(currentSessionId(), "grok.decompose");
+        Span span = AgentOtelContext.childSpan(currentSessionId(), "coordinator.decompose");
         try (Scope scope = span.makeCurrent()) {
             // ... LangChain4J @AiService invocation ...
             span.setStatus(StatusCode.OK);
-            return "grok-result";
+            return "coordinator-result";
         } catch (Exception e) {
             span.recordException(e);
             span.setStatus(StatusCode.ERROR, e.getMessage());
@@ -1928,7 +1928,7 @@ public class GrokAgent implements Agent {
     }
 }
 
-// HarperAgent, BenjaminAgent, LucasAgent follow same pattern with their own @SystemMessage
+// SaraswatiAgent, BrahmaAgent, ShivaAgent follow same pattern with their own @SystemMessage
 ```
 
 ---
@@ -1958,7 +1958,7 @@ public class AgentCheckpoint extends PanacheEntityBase {
     @Column(columnDefinition = "TEXT")
     public String messageHistoryJson;  // serialized List<ChatMessage>
 
-    public String currentStep;         // e.g. "harper_research", "benjamin_validation"
+    public String currentStep;         // e.g. "saraswati_research", "brahma_validation"
 
     public String status;              // IN_PROGRESS | COMPLETED | FAILED | RESUMABLE
 
@@ -2546,9 +2546,9 @@ public final class AgentOtelContext {
     /**
      * Open a child span for a sub-agent or tool operation.
      *
-     * Usage (in HarperAgent, GrokAgent, ProcessIsolationExecutor, etc.):
+     * Usage (in SaraswatiAgent, VishnuAgent, ProcessIsolationExecutor, etc.):
      *   try (var scope = span.makeCurrent()) {
-     *       Span span = AgentOtelContext.childSpan(sessionId, "harper.web_search");
+     *       Span span = AgentOtelContext.childSpan(sessionId, "saraswati.web_search");
      *       // ... do work ...
      *   } finally { span.end(); }
      */
@@ -2604,7 +2604,7 @@ import java.sql.SQLException;
 
 /**
  * Enables WAL mode on every workspace SQLite connection at startup.
- * Required when parallel sub-agents (e.g. Grok + Harper) write to the same session DB.
+ * Required when parallel sub-agents (e.g. Vishnu + Saraswati) write to the same session DB.
  * WAL allows concurrent reads during writes — eliminates most write-lock contention.
  * busy_timeout=10000 gives rotateBatch() 10s per batch on large vaults.
  */
@@ -3689,17 +3689,17 @@ arcclaw:
 
   agents:
     roles:
-      - name: grok
-        class: com.arcclaw.agents.GrokAgent
+      - name: coordinator
+        class: com.arcclaw.agents.VishnuAgent
         description: "Captain/Coordinator — task decomposition and synthesis"
       - name: researcher
-        class: com.arcclaw.agents.HarperAgent
+        class: com.arcclaw.agents.SaraswatiAgent
         description: "Research & Facts Expert — real-time search and evidence"
       - name: coder
-        class: com.arcclaw.agents.BenjaminAgent
+        class: com.arcclaw.agents.BrahmaAgent
         description: "Math/Code/Logic Expert — rigorous validation"
       - name: creative
-        class: com.arcclaw.agents.LucasAgent
+        class: com.arcclaw.agents.ShivaAgent
         description: "Creative & Balance Expert — blind-spot detection"
 
 # =============================================================================

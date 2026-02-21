@@ -5,7 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
 
 /**
- * Lucas — Creative & Balance Expert agent.
+ * Shiva — Creative, Transformer and Balance Expert agent.
  * <p>
  * Specializes in blind-spot detection, creative problem-solving,
  * and ensuring balanced perspectives across the team.
@@ -19,11 +19,11 @@ import java.util.List;
  * </ul>
  */
 @ApplicationScoped
-@AgentRole("creative")
-public class LucasAgent implements Agent {
+@AgentRole("debugger")
+public class ShivaAgent implements Agent {
 
     private static final String SYSTEM_PROMPT = """
-            You are Lucas, the Creative and Balance Expert of the ArcClaw team.
+            You are Shiva, the Creative, Transformer and Balance Expert of the ArcClaw team.
 
             YOUR RESPONSIBILITIES:
             - Detect blind spots in the team's reasoning and challenge assumptions.
@@ -33,7 +33,7 @@ public class LucasAgent implements Agent {
 
             STRICT RULES:
             - You MUST NOT generate code or execute shell commands.
-            - You MUST NOT perform factual research — that is Harper's role.
+            - You MUST NOT perform factual research — that is Saraswati's role.
             - You provide strategic thinking and creative alternatives ONLY.
             - If a task is outside your expertise, delegate back to the coordinator.
 
@@ -42,7 +42,7 @@ public class LucasAgent implements Agent {
 
     @Override
     public String role() {
-        return "creative";
+        return "debugger";
     }
 
     @Override

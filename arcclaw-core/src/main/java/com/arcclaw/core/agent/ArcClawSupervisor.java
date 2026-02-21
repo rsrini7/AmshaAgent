@@ -16,7 +16,7 @@ import java.util.stream.StreamSupport;
  * and provides lookup, listing, and delegation capabilities.
  * <p>
  * In future phases, this will orchestrate multi-agent conversations
- * where Grok delegates sub-tasks to specialized agents.
+ * where Vishnu delegates sub-tasks to specialized agents.
  */
 @ApplicationScoped
 public class ArcClawSupervisor {

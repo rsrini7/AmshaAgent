@@ -80,11 +80,11 @@
   - [x] Schema validation (null params guard) <!-- id: 40 -->
   - [x] `synchronized` shared state per JEP 491 <!-- id: 41 -->
 - [x] `Agent` interface + `@AgentRole` CDI qualifier <!-- id: 42 -->
-- [x] `GrokAgent` (`@AgentRole("grok")` — Coordinator) <!-- id: 43 -->
-- [x] `HarperAgent` (`@AgentRole("researcher")` — Research) <!-- id: 44 -->
-- [x] `BenjaminAgent` (`@AgentRole("coder")` — Code/Logic) <!-- id: 45 -->
+- [x] `VishnuAgent` (`@AgentRole("coordinator")` — Coordinator) <!-- id: 43 -->
+- [x] `SaraswatiAgent` (`@AgentRole("researcher")` — Research) <!-- id: 44 -->
+- [x] `BrahmaAgent` (`@AgentRole("coder")` — Code/Logic) <!-- id: 45 -->
 - [x] `AgentResilienceTest` (5 tests: hallucination, loop limit, finish, null, exception) <!-- id: 46 -->
-- [x] `LucasAgent` (`@AgentRole("creative")` — Creative & Balance) <!-- id: 47 -->
+- [x] `ShivaAgent` (`@AgentRole("creative")` — Creative & Balance) <!-- id: 47 -->
 - [x] `ArcClawSupervisor` (`@ApplicationScoped` — CDI agent roster) <!-- id: 48 -->
 
 ---

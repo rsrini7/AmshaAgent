@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class StatefulAgentStoreTest {
 
     private static final String SESSION = "test-checkpoint-session";
-    private static final String ROLE = "grok";
+    private static final String ROLE = "coordinator";
 
     @Inject
     StatefulAgentStore store;

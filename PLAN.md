@@ -333,13 +333,13 @@ Stateful Thought-Plan-Act-Observe reasoning loop with resilience guardrails and 
 #### [NEW] [Agent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/Agent.java) + [AgentRole.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRole.java)
 - Interface + CDI `@Qualifier` for persona discovery
 
-#### [NEW] [GrokAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/GrokAgent.java)
-- `@AgentRole("grok")` — Coordinator with task decomposition prompt
+#### [NEW] [VishnuAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/VishnuAgent.java)
+- `@AgentRole("coordinator")` — Coordinator with task decomposition prompt
 
-#### [NEW] [HarperAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/HarperAgent.java)
+#### [NEW] [SaraswatiAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/SaraswatiAgent.java)
 - `@AgentRole("researcher")` — Research & Facts, github-only
 
-#### [NEW] [BenjaminAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/BenjaminAgent.java)
+#### [NEW] [BrahmaAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/BrahmaAgent.java)
 - `@AgentRole("coder")` — Code/Logic, github-only
 
 ### App Module — Tests
@@ -399,7 +399,7 @@ Make the AgentLoop stateful and resilient to crashes via JPA + SQLite checkpoint
 
 ### Phase 5 Backfills
 
-#### [NEW] [LucasAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LucasAgent.java)
+#### [NEW] [ShivaAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ShivaAgent.java)
 - `@AgentRole("creative")` — blind-spot detection and creative alternatives
 
 #### [NEW] [ArcClawSupervisor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ArcClawSupervisor.java)

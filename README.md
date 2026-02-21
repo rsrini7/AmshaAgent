@@ -110,7 +110,7 @@ cp .env.example .env
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Points to the local or remote Ollama LLM provider. |
-| `GITHUB_TOKEN` | `(empty)` | Required if using the `HarperAgent` or GitHub tools. |
+| `GITHUB_TOKEN` | `(empty)` | Required if using the `SaraswatiAgent` or GitHub tools. |
 | `ARCCLAW_DATA_DIR` | `./data` | The host path where SQLite DBs and Workspaces are saved. |
 
 ### Step 2: Compile the Native Binary (CRITICAL)
@@ -186,13 +186,13 @@ curl -X POST http://localhost:8080/api/v1/sessions
 ```
 
 **2. Trigger an Agent (Asynchronous):**
-Delegate a task to the `grok` (Coordinator) agent fully asynchronously:
+Delegate a task to the `coordinator` (Vishnu) agent fully asynchronously:
 ```bash
 curl -v -X POST http://localhost:8080/api/v1/sessions/abcd-1234-.../run-async \
   -H "Content-Type: application/json" \
   -d '{
         "goal": "Analyze the arcclaw repository statistics",
-        "agentRole": "grok",
+        "agentRole": "coordinator",
         "maxIterations": 3
       }'
 ```
@@ -218,7 +218,7 @@ When the asynchronous agent executes successfully, you will see a precise sequen
    *LangChain4j serializes the tools and your prompt, then executes a synchronous REST payload to your local Ollama `llama3.2:1b` container.*
 4. **Tool/Reasoning Execution:** `Agent reached FINISH at iteration 1`
    *The LLM decides it has satisfied your goal (or emitted a final hallucinated JSON string) and commands the parser to halt the Thought-Action-Observation loop.*
-5. **State Checkpointing:** `Created checkpoint for session=e8d8... role=grok` followed immediately by `Checkpoint id=2 marked COMPLETED`
+5. **State Checkpointing:** `Created checkpoint for session=e8d8... role=coordinator` followed immediately by `Checkpoint id=2 marked COMPLETED`
    *Hibernate ORM commits the final reasoning step history as a JSON CLOB into the SQLite database, marking the virtual thread's lifecycle complete.*
 
 ---

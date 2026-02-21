@@ -212,18 +212,18 @@ arcclaw:
 
   agents:
     roles:
-      - name: grok
-        class: com.arcclaw.agents.GrokAgent
-        description: "Captain/Coordinator — task decomposition and synthesis"
+      - name: coordinator
+        class: com.arcclaw.core.agent.VishnuAgent
+        description: "Preserver and Captain/Coordinator — task decomposition and synthesis"
       - name: researcher
-        class: com.arcclaw.agents.HarperAgent
-        description: "Research & Facts Expert — real-time search and evidence"
+        class: com.arcclaw.core.agent.SaraswatiAgent
+        description: "Research & Knowledge, Wisdom, and Facts — real-time search and evidence"
       - name: coder
-        class: com.arcclaw.agents.BenjaminAgent
-        description: "Math/Code/Logic Expert — rigorous validation"
-      - name: creative
-        class: com.arcclaw.agents.LucasAgent
-        description: "Creative & Balance Expert — blind-spot detection"
+        class: com.arcclaw.core.agent.BrahmaAgent
+        description: "Math/Code Creator and Logic Expert — rigorous validation"
+      - name: debugger
+        class: com.arcclaw.core.agent.ShivaAgent
+        description: "Creative, Transformer and Balance Expert — blind-spot detection"
 
 # =============================================================================
 # MICROPROFILE CONTEXT PROPAGATION

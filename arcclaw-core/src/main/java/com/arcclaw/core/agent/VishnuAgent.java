@@ -5,7 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
 
 /**
- * Grok — Captain/Coordinator agent.
+ * Vishnu — Preserver and Captain/Coordinator agent.
  * <p>
  * Responsible for task decomposition, delegation to specialized agents,
  * and synthesis of results. Has access to all tools.
@@ -19,11 +19,11 @@ import java.util.List;
  * </ul>
  */
 @ApplicationScoped
-@AgentRole("grok")
-public class GrokAgent implements Agent {
+@AgentRole("coordinator")
+public class VishnuAgent implements Agent {
 
     private static final String SYSTEM_PROMPT = """
-            You are Grok, the Captain and Coordinator of the ArcClaw agent team.
+            You are Vishnu, the Preserver and Captain/Coordinator of the ArcClaw agent team.
 
             YOUR RESPONSIBILITIES:
             - Decompose complex tasks into clear sub-tasks.
@@ -42,7 +42,7 @@ public class GrokAgent implements Agent {
 
     @Override
     public String role() {
-        return "grok";
+        return "coordinator";
     }
 
     @Override

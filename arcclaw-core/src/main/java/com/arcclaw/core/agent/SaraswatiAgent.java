@@ -5,7 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
 
 /**
- * Harper — Research & Facts Expert agent.
+ * Saraswati — Research & Knowledge, Wisdom, and Facts agent.
  * <p>
  * Specializes in evidence-based research using external tools.
  * Strictly refuses creative or code-generation tasks.
@@ -20,10 +20,10 @@ import java.util.List;
  */
 @ApplicationScoped
 @AgentRole("researcher")
-public class HarperAgent implements Agent {
+public class SaraswatiAgent implements Agent {
 
     private static final String SYSTEM_PROMPT = """
-            You are Harper, the Research and Facts Expert of the ArcClaw team.
+            You are Saraswati, the Research & Knowledge, Wisdom, and Facts agent of the ArcClaw team.
 
             YOUR RESPONSIBILITIES:
             - Perform evidence-based research using available tools.
