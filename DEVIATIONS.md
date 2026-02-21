@@ -52,7 +52,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **5** | Agent & Orchestration | **Complete** | `AgentLoop` (Thought-Plan-Act-Observe, 3 guardrails), `ReasoningEngine` interface, 3 agent personas, 5 tests passing. |
 | **6** | State Layer (Checkpointing) | **Complete** | `AgentCheckpoint` entity (plain JPA, not Panache), `StatefulAgentStore` (EntityManager + Jackson), `SqliteWalConfigurer` (WAL PRAGMAs), 4 tests passing. |
 | **7** | Lifecycle Layer | **Complete** | `WorkspaceManager` (Heartbeats, GC, Termination), `AgentLoop` lifecycle upgrade. deviation: `WorkspaceScopeContext` injected via `Arc.container()` lookup (custom context). |
-| **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). |
+| **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). Rename: READ_ONLY -> READONLY. |
 | **9** | Observer / OTel Layer | **Complete** | `AgentOtelContext` OpenTelemetry implementation. deviation: Replaced `InMemorySpanExporter` with `@InjectMock Tracer` for testing due to Quarkus OTLP extension limitations in unit tests. |
 | **10** | Health Layer | **Complete** | `PodmanHealthCheck`/`PodmanImageHealthCheck` implemented. deviation: Used `@Alternative`+`@Priority` standalone `HealthCheck` mocks instead of `@Mock extends` due to ArC classloader boundary preventing `@ConfigProperty` injection across module boundaries. Management port 9001 required for health endpoint tests. |
 | **15** | Dual-Mode Binary | **Complete** | Migrated to `quarkus-picocli` entry point. deviation: Adjusted `AgentObserver.recordLlmCall` signature (omitted `modelName`) to align with existing implementations. |
@@ -98,6 +98,9 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **YAML OpenAI Model Property**: To stop `openai` falling back to `gpt-4o-mini`, the model injection MUST be prefixed exclusively at `quarkus.langchain4j.openai.chat-model.model-name`, NOT `quarkus.langchain4j.openai.model-name`.
 *   **Cosmic Pantheon (Grok 4.20) Agents**: Renamed `GrokAgent` -> `VishnuAgent`, `HarperAgent` -> `SaraswatiAgent`, `BenjaminAgent` -> `BrahmaAgent`, `LucasAgent` -> `ShivaAgent` to establish a distinct mythological agentic framework for the kernel.
 *   **Native Maven Compilation (`-am`)**: When building the native binary via `mvnw clean package -pl arcclaw-app -Pnative`, you MUST include the `-am` flag (Also Make) to ensure changes in `arcclaw-core` are recompiled before the `-app` binary is linked.
+*   **Groq Cloud API Migration**: **CRITICAL CHANGE**. Replaced local Ollama with Groq Cloud (`llama-3.3-70b-versatile`) as the default LLM provider in the production profile. This utilizes the `openai` compatibility layer but repoints the `base-url` to Groq. 
+*   **AutonomyLevel Renaming**: Renamed `READ_ONLY` -> `READONLY` and `PARTIAL` -> `SUPERVISED` across the entire codebase (Java core, handlers, and tests) to align with enterprise configuration standards and provide clearer operational semantics.
+*   **Telegram Handler Default Level**: The `TelegramAgentHandler` now explicitly injects and applies the `arcclaw.autonomy.default-level` (defaulting to `SUPERVISED`) to the active workspace session at runtime.
 
 ### 9. Dual-Mode Binary Picocli Lifecycle (Phase 15)
 *   **Deviation:** `Quarkus.waitForExit()` is omitted from the top-level `ArcClawCli.run()` dispatch method. 

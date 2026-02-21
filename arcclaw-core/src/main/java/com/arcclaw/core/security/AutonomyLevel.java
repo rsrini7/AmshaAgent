@@ -7,13 +7,13 @@ public enum AutonomyLevel {
     /**
      * Agent can only read data and perform non-side-effecting operations.
      */
-    READ_ONLY,
+    READONLY,
 
     /**
      * Agent requires explicit human approval for all side-effecting operations
      * (e.g., file writes, shell commands).
      */
-    PARTIAL,
+    SUPERVISED,
 
     /**
      * Agent can perform side-effecting operations without per-operation approval,

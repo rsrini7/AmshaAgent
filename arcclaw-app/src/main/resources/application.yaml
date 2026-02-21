@@ -70,14 +70,20 @@ quarkus:
         enabled: false
     openai:
       # Ollama provides native OpenAI compatibility on /v1
-      base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
-      api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
+      # base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
+      # api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
       # The OpenAI extension properly parses model-name DYNAMICALLY at runtime!
+      
+      # Groq is OpenAI API-compatible
+      base-url: "https://api.groq.com/openai/v1"
+      api-key: "${GROQ_API_KEY}"
       chat-model:
-        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+        #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+        model-name: "llama-3.3-70b-versatile"
+        temperature: 0.1
+        log-requests: true
+        log-responses: true
       timeout: 120s
-      log-requests: true
-      log-responses: true
     chat-memory:
       max-messages: 100
 

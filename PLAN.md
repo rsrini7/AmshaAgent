@@ -158,6 +158,7 @@ Implement the encryption and secret storage layer using AES-GCM-SIV for nonce-mi
 
 #### [NEW] [WorkspaceGovernanceTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/security/WorkspaceGovernanceTest.java)
 - Verification: context injection, state isolation, policy checks.
+- AutonomyLevels: READONLY, SUPERVISED, FULL.
 
 ## Verification Plan
 
@@ -488,7 +489,7 @@ Implement hard financial limits on agent reasoning loops to prevent budget exhau
 > **Token Tracking Strategy**: Input and output tokens are tracked at the `ReasoningStep` level and aggregated natively in the `AgentResult`.
 
 > [!NOTE]
-> **Autonomy Downgrade**: When a session exceeds its budget (`arcclaw.governance.budget-usd`), the session's autonomy is immediately downgraded to `READ_ONLY` and a `BudgetExceededException` is thrown, aborting the thought loop.
+> **Autonomy Downgrade**: When a session exceeds its budget (`arcclaw.governance.budget-usd`), the session's autonomy is immediately downgraded to `READONLY` and a `BudgetExceededException` is thrown, aborting the thought loop.
 
 > [!TIP]
 > **Thread Safety (JEP 491)**: `SessionBudget` accumulator uses concurrency primitives (`AtomicInteger`, `synchronized`) to safely update shared budget maps without race conditions from parallel tool execution.
@@ -795,6 +796,38 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 - ✅ Native `/run-async` endpoint correctly executes `AgentLoop` tasks against the SQLite database using Virtual Threads without throwing `ContextNotActiveException`.
 - ✅ Asynchronous JAX-RS `@Suspended AsyncResponse` gracefully handles error tracking and HTTP 202/500 signaling.
 - ✅ Reverted `AgentLoop` exception mapping back to native REST API string propagation.
+
+---
+
+# Phase 17 — Groq Cloud Migration
+
+Repoint the default LLM provider from local Ollama to Groq Cloud for production workloads while maintaining dev-mode flexibility and hardening the autonomy governance framework.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **LLM Provider Pivot**: Migrated from `ollama` as default to `openai` extension mapped to Groq Cloud (`llama-3.3-70b-versatile`). This provides higher reasoning stability and enterprise-grade performance.
+> **Autonomy Logic Refinement**: Renamed `READ_ONLY` to `READONLY` and `PARTIAL` to `SUPERVISED` to align with the enterprise configuration keys and provide clearer semantics for human-in-the-loop oversight.
+
+## Proposed Changes
+
+### Core Module — Governance
+
+#### [MODIFY] [AutonomyLevel.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/AutonomyLevel.java)
+- Renamed constants: `READ_ONLY` -> `READONLY`, `PARTIAL` -> `SUPERVISED`.
+
+### App Module — Channel
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Injected `arcclaw.autonomy.default-level` and applied it to active sessions.
+- Added diagnostic logging for `AutonomyLevel` and completion status.
+
+## Verification
+
+- ✅ All tests updated to use renamed constants.
+- ✅ Verified `SUPERVISED` injection in Telegram diagnostic logs.
+- ✅ Verified Groq Cloud routing via OpenAI compatibility layer.
+
 
 ---
 

@@ -63,8 +63,8 @@ class GovernanceLayerTest {
         assertTrue(ex.getMessage().contains("exceeded"), "Exception should state budget was exceeded");
 
         // Key logic: Autonomy must be downgraded
-        assertEquals(AutonomyLevel.READ_ONLY, workspaceContext.getAutonomyLevel(),
-                "Autonomy level should be downgraded to READ_ONLY instantly");
+        assertEquals(AutonomyLevel.READONLY, workspaceContext.getAutonomyLevel(),
+                "Autonomy level should be downgraded to READONLY instantly");
     }
 
     @Test

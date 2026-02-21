@@ -7,6 +7,8 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -48,6 +50,12 @@ public class TelegramAgentHandler {
     String botToken;
 
     @Inject
+    WorkspaceContext workspaceContext;
+
+    @ConfigProperty(name = "arcclaw.autonomy.default-level", defaultValue = "SUPERVISED")
+    AutonomyLevel autonomyLevel;
+
+    @Inject
     org.jboss.logging.Logger log;
 
     /**
@@ -65,7 +73,7 @@ public class TelegramAgentHandler {
         String text = msg.getText();
         String userId = String.valueOf(msg.getFrom().getId());
         String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
-        
+
         log.infof("Received Telegram message from user %s in chat %s: %s", userId, chatId, text);
 
         // Offload execution specifically to allow the Vert.x networking thread
@@ -99,12 +107,23 @@ public class TelegramAgentHandler {
             // Activate CDI Workspace Scope manually
             WorkspaceScopeHolder.set(activeSessionId[0]);
 
+            // ADD THIS LINE: Apply the YAML config to the active workspace session
+            workspaceContext.setAutonomyLevel(autonomyLevel);
+
+            log.infof(
+                    "[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq",
+                    activeSessionId[0], autonomyLevel);
+
             AgentResult result = agentLoop.run(
                     activeSessionId[0],
                     "coordinator",
                     text,
                     reasoningEngine,
                     5);
+
+            log.infof(
+                    "[TelegramHandler] Session %s | Agent completed | Answer length: %d chars",
+                    activeSessionId[0], result.finalAnswer().length());
 
             // Use ProducerTemplate to reply directly to the originating Chat ID
             // without needing an outgoing Camel route

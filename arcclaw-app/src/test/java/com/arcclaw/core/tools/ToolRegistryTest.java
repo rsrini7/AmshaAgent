@@ -76,14 +76,14 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceBlocksNetworkOutbound() {
-        workspaceContext.setAutonomyLevel(AutonomyLevel.READ_ONLY);
+        workspaceContext.setAutonomyLevel(AutonomyLevel.READONLY);
 
         var ex = assertThrows(SecurityException.class,
                 () -> registry.invokeTool("github", Map.<String, Object>of("repo", "test/repo")));
 
         assertTrue(ex.getMessage().contains("NETWORK_OUTBOUND"),
                 "SecurityException should mention the blocked operation");
-        assertTrue(ex.getMessage().contains("READ_ONLY"),
+        assertTrue(ex.getMessage().contains("READONLY"),
                 "SecurityException should mention the autonomy level");
     }
 

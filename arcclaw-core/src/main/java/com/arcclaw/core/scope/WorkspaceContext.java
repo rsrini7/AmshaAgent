@@ -14,7 +14,7 @@ import java.util.Map;
 public class WorkspaceContext {
 
     private final String sessionId;
-    private AutonomyLevel autonomyLevel = AutonomyLevel.READ_ONLY;
+    private AutonomyLevel autonomyLevel = AutonomyLevel.READONLY;
     private final Map<String, Object> attributes = new HashMap<>();
 
     public WorkspaceContext(String sessionId) {

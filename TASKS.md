@@ -225,3 +225,17 @@
   - [x] Create `TelegramChannelRouteTest.java` (Route discovery check)
   - [x] Document test failures and pending issues in `TROUBLESHOOTING.md`
   - [x] Verification: Resolve remaining exit-code-1 in `TelegramAgentHandlerTest`
+- [x] Step 6: Diagnostic Logging & Autonomy Level Rename
+  - [x] Rename `READ_ONLY` -> `READONLY` and `PARTIAL` -> `SUPERVISED` in all modules
+  - [x] Inject default autonomy level into `TelegramAgentHandler`
+  - [x] Add log statements to verify session autonomy and completion in Telegram flow
+
+---
+
+## Phase 17 — Groq Cloud Migration
+- [x] Repoint LangChain4J OpenAI extension to Groq API
+- [x] Update `.env.example` with `GROQ_API_KEY`
+- [x] Configure `application.yaml` with `llama-3.3-70b-versatile` as default
+- [x] Pass `GROQ_API_KEY` through `docker-compose.yaml`
+- [x] Verify production profile boots with Groq configuration
+
