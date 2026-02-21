@@ -443,7 +443,11 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 3. **Native Mode (Failed Attempt 2 - ManagedExecutor)**: We tried migrating the manual `Thread.ofVirtual()` to Quarkus's injected `ManagedExecutor` expecting the `smallrye-context-propagation` extension to forward the context, but this still produced the exact same exception under Native AOT.
 4. **Native Mode (Failed Attempt 3 - Mutiny Uni)**: We attempted to leverage Quarkus's native reactive engine by returning a `Uni<Response>` and emitting the block on the Mutiny worker infrastructure. However, context propagation was still lost in the native binary.
 5. **Native Mode (Mitigation - AsyncResponse)**: Due to the aggressive interceptor stripping in GraalVM for unmanaged threads, Native isolated contexts remain elusive for this specific architecture. We reverted to the original `Thread.ofVirtual().start()` model, but replaced the immediate return with a JAX-RS `@Suspended AsyncResponse`. This ensures that when the native context inevitably fails, the API correctly surfaces a `500 Server Error` back to the client instead of a misleading `202 Accepted`.
-6. **Native Mode (The Fix - `@VirtualThreads` ExecutorService)**: The [Quarkus Virtual Threads guide](https://quarkus.io/guides/virtual-threads#inject-the-virtual-thread-executor) documents the canonical solution. Quarkus stores CDI request scope inside a Vert.x *duplicated context*. Raw `Thread.ofVirtual()`, `ManagedExecutor`, and Mutiny workers all create threads that do NOT inherit this duplicated context. The solution is to inject `@VirtualThreads ExecutorService` and submit tasks via `vThreads.execute(...)`. This Quarkus-managed executor properly propagates the duplicated context (and therefore the CDI RequestScope) into spawned virtual threads.
+6. **Native Mode (The Fix - `@VirtualThreads` ExecutorService)**: The [Quarkus Virtual Threads guide](https://quarkus.io/guides/virtual-threads#inject-the-virtual-thread-executor) documents the canonical solution. Quarkus stores CDI request scope inside a Vert.x *duplicated context*. Raw `Thread.ofVirtual()`, `ManagedExecutor`, and Mutiny workers all create threads that do NOT inherit this duplicated context. The solution is to inject `@VirtualThreads ExecutorService` and submit tasks via `vThreads.execute(...)`. This Quarkus-managed executor properly propagates the duplicated context (and therefore the CDI RequestScope) into spawned virtual threads. ✅ **Confirmed working in native mode.**
+
+> [!CAUTION]
+> **Critical Maven Build Flag**: All fixes for this issue appeared to fail because the native build command used `-pl arcclaw-app` without `-am` (also-make). This meant `arcclaw-core` (where the fixes lived) was never recompiled into the native binary. Always use:
+> `mvnw clean package -pl arcclaw-app -am -Pnative -DskipTests`
 
 ---
 
@@ -454,6 +458,14 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 **Root Cause:** The `Dockerfile.native` is intentionally lightweight and does *not* contain Java compilation instructions. It expects the GraalVM native binary to already exist on the host machine before Docker is invoked. The user skipped Step 2 of the `README.md` (Native compilation).
 **Resolution:** Run the Maven package command locally *before* running `docker compose`:
 `.\mvnw.cmd clean package -pl arcclaw-app -Pnative "-Dquarkus.native.container-build=true" "-Dquarkus.native.container-runtime=podman" -DskipTests`
+
+### 🔴 Failure: Maven Native Build Fails with `Cannot get an executable name when no container runtime is available`
+**Symptom:** When running `.\mvnw.cmd clean package -Pnative`, the Maven build immediately crashes with `java.lang.IllegalStateException: Cannot get an executable name when no container runtime is available`.
+**Root Cause:** On Windows, simply opening the Podman Desktop GUI does not automatically boot the underlying Linux virtual machine or export the Docker daemon API endpoints to the host PowerShell session. Quarkus cannot find a running container engine to orchestrate the GraalVM compile step.
+**Resolution:** You must manually start the Podman machine and bind the named pipe to the current PowerShell window before running Maven:
+1. Start the machine: `podman machine start`
+2. Export the Docker API pipe: `$env:DOCKER_HOST="npipe:////./pipe/podman-machine-default"`
+3. Re-run your `mvnw.cmd` native build.
 
 ### 🔴 Failure: Docker Compose Fails with `bind: address already in use` for TCP port `11434`
 **Symptom:** During `docker compose up`, the startup halts with `Error response from daemon: cannot listen on the TCP port: listen tcp4 :11434: bind: address already in use`.
