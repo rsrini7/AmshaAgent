@@ -92,7 +92,7 @@ public class TelegramAgentHandler {
         // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
-        // Handle commands first
+        // Handle commands first (always using the deterministic baseId)
         if (text.equalsIgnoreCase("/approve")) {
             reply(chatId, handleApprovalDecision(chatId, userId, baseId, true));
             return;
@@ -102,28 +102,23 @@ public class TelegramAgentHandler {
             return;
         }
 
-        final String[] activeSessionId = { baseId };
-
-        // Session Continuity Check (REQ-V11-CLI-11)
+        // Session Continuity Check (Wipe old state instead of changing the ID)
         statefulAgentStore.load(baseId, "coordinator").ifPresent(cp -> {
             if (cp.status == CheckpointStatus.COMPLETED || cp.status == CheckpointStatus.FAILED) {
-                // The task finished in the past. We want to start a completely new context
-                // instead of appending hallucinated steps to a finalized sequence.
-                activeSessionId[0] = UUID.randomUUID().toString();
+                log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.status);
+                workspaceManager.terminateSession(baseId); // This deletes the old SQLite record
             }
         });
 
         try {
-            // Activate CDI Workspace Scope manually
-            WorkspaceScopeHolder.set(activeSessionId[0]);
+            // Activate CDI Workspace Scope manually using the consistent baseId
+            WorkspaceScopeHolder.set(baseId);
             workspaceContext.setAutonomyLevel(autonomyLevel);
 
-            log.infof(
-                    "[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq",
-                    activeSessionId[0], autonomyLevel);
+            log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
             AgentResult result = agentLoop.run(
-                    activeSessionId[0],
+                    baseId,
                     "coordinator",
                     text,
                     reasoningEngine,

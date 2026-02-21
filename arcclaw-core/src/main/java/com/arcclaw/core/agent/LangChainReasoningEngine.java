@@ -42,7 +42,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         List<ChatMessage> messages = new ArrayList<>();
 
         messages.add(SystemMessage.from(
-                "You are an intelligent agent. Your goal is to fulfill the user's request using the available tools. When you have finished, use a tool named 'FINISH' or output the final answer if no tools are available."));
+                "You are an intelligent agent. Your goal is to fulfill the user's request using the available tools. When you have gathered enough information to fulfill the request, simply output the final answer as plain text to the user. Do not call any further tools."));
         messages.add(UserMessage.from(goal));
 
         for (int i = 0; i < history.size(); i++) {
