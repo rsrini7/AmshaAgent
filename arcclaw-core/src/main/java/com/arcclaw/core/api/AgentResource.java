@@ -87,10 +87,19 @@ public class AgentResource {
         // (which carries CDI RequestScope) into the spawned virtual thread.
         vThreads.execute(() -> {
             try {
-                agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
-                response.resume(Response.accepted().build());
+                AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
+                        maxIterations);
+                if (result.success()) {
+                    response.resume(Response.accepted().build());
+                } else {
+                    log.error("Async agent run completed with failure for session {}: {}", sessionId,
+                            result.terminationReason());
+                    response.resume(Response.serverError()
+                            .entity(result.terminationReason())
+                            .build());
+                }
             } catch (Exception e) {
-                log.error("Async agent run failed for session {}: {}", sessionId, e.getMessage(), e);
+                log.error("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
                 response.resume(Response.serverError().entity(e.getMessage()).build());
             }
         });
