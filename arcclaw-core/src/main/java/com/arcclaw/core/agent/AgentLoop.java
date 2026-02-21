@@ -199,9 +199,9 @@ public class AgentLoop {
 
             } catch (Exception e) {
                 log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
+                String errorMessage = mapKnownExceptions(e);
                 synchronized (history) {
-                    return AgentResult.error(List.copyOf(history),
-                            "ReasoningEngine error: " + e.getMessage());
+                    return AgentResult.error(List.copyOf(history), errorMessage);
                 }
             }
 
@@ -281,5 +281,31 @@ public class AgentLoop {
         synchronized (history) {
             return AgentResult.loopExceeded(List.copyOf(history), maxIterations);
         }
+    }
+
+    private String mapKnownExceptions(Exception e) {
+        String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+
+        // Deep trace inspection
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            String causeMsg = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+            if (causeMsg.contains("Connection refused")) {
+                return "Technical Error: AI Provider Connection Refused. Check that your local Ollama instance is running or verify your 'base-url' properties.";
+            }
+            cause = cause.getCause();
+        }
+
+        if (msg.contains("Connection refused")) {
+            return "Technical Error: AI Provider Connection Refused. Check that your local Ollama instance is running or verify your 'base-url' properties.";
+        }
+        if (msg.contains("model") && msg.contains("not found")) {
+            return "Configuration Error: AI Model Not Found. The requested weights have not been downloaded. Please use 'ollama pull <model-name>' to fetch them.";
+        }
+        if (msg.contains("model is required")) {
+            return "Configuration Error: AI Model Not Specified. Please ensure you have specified the LLM model name inside the application configuration.";
+        }
+
+        return "ReasoningEngine error: " + msg;
     }
 }

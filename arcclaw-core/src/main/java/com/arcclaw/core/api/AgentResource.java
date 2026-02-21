@@ -95,12 +95,14 @@ public class AgentResource {
                     log.error("Async agent run completed with failure for session {}: {}", sessionId,
                             result.terminationReason());
                     response.resume(Response.serverError()
-                            .entity(result.terminationReason())
+                            .entity(java.util.Map.of("error", result.terminationReason()))
                             .build());
                 }
             } catch (Exception e) {
                 log.error("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
-                response.resume(Response.serverError().entity(e.getMessage()).build());
+                response.resume(Response.serverError().entity(
+                        java.util.Map.of("error", e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
+                        .build());
             }
         });
     }

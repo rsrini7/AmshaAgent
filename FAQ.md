@@ -48,3 +48,6 @@ When Quarkus offloads execution to a Virtual Thread, standard `ThreadLocal` stor
 ### Q: Why does the `containers.conf` force the `vfs` storage driver?
 When running Podman *inside* a container (nested containerization), standard storage drivers like `overlayfs` often fail due to host kernel restrictions on unprivileged mounts. The Virtual File System (`vfs`) driver is a fallback that guarantees the sandbox will work in any environment. 
 *Note: `vfs` creates deep copies of container images. You should periodically run `podman system prune -f` to free up disk space.*
+
+### Q: What are `createdFiles.lst` and `inputFiles.lst` showing up in my Git workspace?
+These are standard tracker files generated internally by the `maven-compiler-plugin` (specifically within the `target/maven-status/` directory). Maven uses them to track timestamps and class structures between compilation cycles to support fast, incremental compilation (only recompiling Java files that actually changed). They are strictly temporary build artifacts and should be ignored by Git. Try running `git rm -r --cached "*/target/*"` to clear them out of your Git index if they were accidentally committed!
