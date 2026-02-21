@@ -705,13 +705,10 @@ podman machine start
         enabled: false
 ```
 
-### 🔴 Failure: Telegram Bot Token Not Loaded (Windows/PowerShell)
+### 🔴 Failure: Telegram Bot Token Not Loaded (Windows/PowerShell/Multi-Module)
 **Symptom:** `TelegramException: Could not GET ... 404 Not Found` and `authorizationToken=mock-token` in logs, despite `.env` file being present.
-**Root Cause:** Quarkus (and Java in general) does not automatically load `.env` files into System Environment variables on Windows PowerShell unless explicitly handled by a library (like `dotenv-java`) or the shell itself.
-**Resolution:** Manually load `.env` variables into the PowerShell session before starting the app:
-```powershell
-Get-Content .env | Where-Object { $_ -match '^\s*[^#]' -and $_ -like '*=*' } | ForEach-Object { $k,$v=$_.Split('=',2); [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim()) }; .\mvnw.cmd -pl arcclaw-app quarkus:dev "-Dquarkus.args=serve"
-```
+**Root Cause:** When running `quarkus:dev` against a submodule (e.g., `-pl arcclaw-app`), SmallRye Config evaluates paths relative to the submodule directory. The standard `config: locations: "../.env"` directive in `application.yaml` natively fails to propagate dynamically parsed properties early enough during boot, leaving the `.env` variables unloaded.
+**Resolution:** Explicitly implemented a custom `ConfigSourceProvider` SPI (`DotenvConfigSourceProvider.java`) that scans both `./.env` and `../.env` natively, parsing key-value pairs and injecting them into the configuration tree with a standard ordinal (`295`), completely bypassing OS-level shell and classloader limitations.
 
 ### 🔴 Failure: Camel Routes Not Registering in Daemon Mode
 **Symptom:** Application starts, but `Camel Context Status` shows 0 routes, or `TelegramChannelRoute` is not active.
