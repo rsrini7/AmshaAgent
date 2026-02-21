@@ -293,6 +293,11 @@ mp:
       level: INFO
       console:
         color: false
+    langchain4j:
+      ollama:
+        chat-model:
+          # Explicitly set for prod to prevent default-drop
+          model-id: "${OLLAMA_MODEL:llama3.2:1b}"
   arcclaw:
     sandbox:
       strategy: PODMAN
