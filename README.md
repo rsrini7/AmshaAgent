@@ -15,6 +15,26 @@
 
 ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built with a paranoid security posture and rigorous financial guardrails.
 
+### Core Technical Pillars
+
+| Pillar | Implementation |
+|---|---|
+| **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces |
+| **State** | Per-workspace SQLite (WAL mode) for session isolation and resiliency |
+| **Lifecycle** | Custom `@WorkspaceScoped` CDI context that survives HTTP request gaps |
+| **Resiliency** | Checkpointing of every agent "thought" for instant resume-after-crash |
+| **Governance** | Real-time Token Buckets and USD cost guardrails per session |
+| **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption |
+
+### 🕉️ The Cosmic Pantheon (Grok 4.20 Inspiration)
+
+ArcClaw's default multi-agent roster is heavily inspired by the architecture of the **Grok 4.20** release, which famously utilized a 4-agent collaborative design to achieve unprecedented reasoning capabilities. To give this architecture a distinct flavor, ArcClaw maps these 4 foundational roles to the Hindu Cosmic Pantheon:
+
+*   **Vishnu (`coordinator`):** The Preserver. Acts as the primary router, decomposing the user's objective, delegating tasks to specialists, and synthesizing the final output.
+*   **Saraswati (`researcher`):** The Goddess of Knowledge. Operates strictly on facts and external data retrieval (e.g., GitHub). Hard-prompted to never fabricate information or write code.
+*   **Brahma (`coder`):** The Creator. A pure logic and engineering brain focused exclusively on writing code, math, and system design. Refuses conversational tasks.
+*   **Shiva (`debugger`):** The Transformer. Acts as the contrarian balance expert. Identifies blind spots, challenges assumptions, and provides creative alternatives to break the team out of local minima.
+
 *   **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files—never as process arguments.
 *   **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
 *   **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JEP 491 optimized concurrent loops utilizing standard `synchronized` blocks alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage state maps across thousands of lightweight threads.

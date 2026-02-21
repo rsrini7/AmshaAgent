@@ -41,7 +41,14 @@ ArcClaw is the convergence point of three predecessors:
 
 An "arc" in architecture means a bridge — ArcClaw bridges all three into a single JDK 25 LTS–ready kernel.
 
-**3. A Peak, Not a Patch**
+**3. The Cosmic Pantheon (Grok 4.20 Inspiration)**
+The core multi-agent roster inside ArcClaw `v1.0` adopts a 4-agent collaborative architecture inspired directly by the **Grok 4.20** release. To give this powerful architecture a unique flavor, the agents are mapped to the Hindu Cosmic Pantheon:
+- `Vishnu` (Coordinator): The Preserver, router, and synthesizer.
+- `Saraswati` (Researcher): The Goddess of Knowledge and factual retrieval.
+- `Brahma` (Coder): The Creator, focused purely on logic and engineering.
+- `Shiva` (Debugger): The Transformer, challenging assumptions and detecting blind-spots.
+
+**4. A Peak, Not a Patch**
 An arc also describes a trajectory reaching its highest point. ArcClaw v1.0 is the apex of this audit cycle — 5 models, 4+ review passes, 21 issues resolved, and full JDK 25 JEP alignment. This is the version you build from, not patch.
 
 ### Name Provenance
