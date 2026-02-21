@@ -260,6 +260,9 @@ mp:
   arcclaw:
     sandbox:
       strategy: NONE        # no Podman in local dev
+    channel:
+      telegram:
+        bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
     governance:
       budget-usd: 999.99
     vault:
