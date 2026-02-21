@@ -3,12 +3,16 @@ package com.arcclaw.app.channel.telegram;
 import org.apache.camel.builder.RouteBuilder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class TelegramChannelRoute extends RouteBuilder {
 
     private static final Logger log = Logger.getLogger(TelegramChannelRoute.class);
+
+    @Inject
+    TelegramAgentHandler telegramAgentHandler;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.enabled", defaultValue = "true")
     boolean enabled;
@@ -33,6 +37,6 @@ public class TelegramChannelRoute extends RouteBuilder {
 
         from("telegram:bots?authorizationToken=" + botToken)
                 .routeId("telegram-bot")
-                .bean(TelegramAgentHandler.class, "receiveMessage");
+                .bean(telegramAgentHandler, "receiveMessage");
     }
 }
