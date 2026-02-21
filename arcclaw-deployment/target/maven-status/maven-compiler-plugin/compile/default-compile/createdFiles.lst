@@ -1,3 +1,0 @@
-META-INF\quarkus-build-steps.list
-com\arcclaw\deployment\scope\WorkspaceScopeProcessor.class
-com\arcclaw\deployment\ArcClawDeploymentInfo.class
