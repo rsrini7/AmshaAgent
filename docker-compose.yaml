@@ -19,7 +19,11 @@ services:
       - QUARKUS_PROFILE=prod
       - ARCCLAW_DATA_DIR=/app/data
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
       - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
+      # LangChain credentials
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key-to-bypass-validation}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
       # GITHUB_TOKEN should be provided via .env file or environment
       - "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
     volumes:
