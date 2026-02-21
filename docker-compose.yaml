@@ -20,6 +20,8 @@ services:
       - ARCCLAW_DATA_DIR=/app/data
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
+      # Direct Quarkus property override — bypasses YAML interpolation for native
+      - QUARKUS_LANGCHAIN4J_OLLAMA_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-llama3.2:1b}
       - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
       # LangChain credentials
       - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key-to-bypass-validation}

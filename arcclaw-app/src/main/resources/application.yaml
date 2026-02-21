@@ -241,7 +241,8 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-name: "llama3.2:1b"
+        chat-model:
+          model-name: "llama3.2:1b"
       log-requests: true
       log-responses: true
     hibernate-orm:
@@ -265,7 +266,8 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-name: "llama3.2:1b"
+        chat-model:
+          model-name: "llama3.2:1b"
   arcclaw:
     sandbox:
       strategy: NONE
