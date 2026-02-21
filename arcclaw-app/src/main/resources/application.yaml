@@ -246,6 +246,8 @@ mp:
 
 "%dev":
   quarkus:
+    console:
+      enabled: false
     langchain4j:
       openai:
         devservices:

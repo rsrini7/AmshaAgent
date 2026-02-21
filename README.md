@@ -191,6 +191,8 @@ If you prefer to run the kernel locally on the JVM using Quarkus dev mode instea
 .\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
 ```
 *(Note: Or using the built JAR: `java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve`)*
+> [!NOTE]
+> If Quarkus dev mode fails with a console `NullPointerException`, disable the dev console by setting `quarkus.console.enabled=false` in the `%dev` profile. See `TROUBLESHOOTING.md` for details.
 
 **Option B: CLI One-Shot Mode**
 Run a single agentic task and exit immediately. Agent loop output and token costs are streamed directly to your terminal.

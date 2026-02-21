@@ -625,6 +625,17 @@ podman machine start
 **Symptom:** The Quarkus application fails to start during tests, complaining that a method with an interceptor (like `@ActivateRequestContext`) is `private`.
 **Root Cause:** The Quarkus ArC container uses proxies for intercepted methods. Proxies require that intercepted methods be overridable (i.e., not `private` and not `final`).
 **Resolution:** Change method visibility from `private` to package-private (default) or `protected`. (e.g., Change `private void runAgent(...)` to `void runAgent(...)`).
+
+### 🔴 Failure: Dev mode crash (`StatusLine.setMessage` NPE)
+**Symptom:** Quarkus dev mode fails to start with `NullPointerException: Cannot invoke "io.quarkus.dev.console.StatusLine.setMessage(String)" because "this.prompt" is null`.
+**Root Cause:** The dev console prompt can fail to initialize in certain terminal environments, causing `AeshConsole` to receive a null prompt during console redraw.
+**Resolution:** Disable the dev console prompt in the `%dev` profile:
+```yaml
+"%dev":
+  quarkus:
+    console:
+      enabled: false
+```
 ### 🔴 Failure: `NoSuchElementException` for `Optional<String>` Bot Token
 **Symptom:** Quarkus crashes during Camel route registration with `java.util.NoSuchElementException` when using `@ConfigProperty Optional<String> botToken`.
 **Root Cause:** Even if declared as `Optional`, Camel's endpoint URI construction (e.g., `from("telegram:bots?authorizationToken=" + botToken.get())`) will trigger `get()` before the container has verified the presence of the configuration.
@@ -664,7 +675,7 @@ podman machine start
 
 ---
 
-## 18. Pending Issues & Sprint 2A Backlog
+## 18. Telegram Agent Test Sprint 2A
 
 ### ✅ Solved: `TelegramAgentHandlerTest` Stubborn Mocking
 **Status:** Resolved.
@@ -675,5 +686,5 @@ podman machine start
 3.  **Critical Fix:** Unwrapped the `ClientProxy` of `TelegramAgentHandler` to inject these manual mocks directly into the underlying instance's private fields, bypassing the proxy's limitations.
 4.  Ensured correct scope handling for `StatefulAgentStore` by using `@InjectMock` which handles the proxy delegation correctly.
 
-### 🟡 Pending: YAML Profile Parsing Nuance
+### 🟡 YAML Profile Parsing Nuance
 **Observation:** Ensure that the `%test` profile in `application.yaml` is correctly structured and doesn't conflict with legacy `.properties` files that might still exist in the target directory after a non-clean build.
