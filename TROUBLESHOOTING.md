@@ -479,14 +479,29 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 
 ### 🔴 Failure: Native Container Ollama Error `{"error":"model is required"}`
 **Symptom:** When running the native container via `docker compose up`, triggering an agent loop immediately fails with `HttpException: {"error":"model is required"}`.
-**Root Cause & Exhausted Avenues:** 
-This is a deeply rooted bug in Quarkus LangChain4j version `0.26.1` regarding how it handles native AOT (Ahead-Of-Time) compilation for `LangChain4jOllamaFixedRuntimeConfig`.
-Here is everything we tried to fix the configuration (and why it failed natively):
-1. **Changing `model-id` to `model-name`:** We suspected a property naming issue (as the newest docs use `model-name`). However, source code inspection of `0.26.1`'s `OllamaRecorder.java` confirmed it strictly relies on `model-id`.
-2. **Environment Variable Injection:** We attempted to pass `QUARKUS_LANGCHAIN4J_OLLAMA_CHAT_MODEL_MODEL_ID` via `docker-compose.yaml`. This failed because the property is a `FixedRuntimeConfig`, meaning it is permanently embedded into the binary at the exact moment `mvnw package -Pnative` is run. Runtime overrides are entirely ignored.
-3. **Explicit `%prod` Profile Declaration:** We hypothesized that the native compiler was dropping the property because it was only declared in the `%dev` profile block of `application.yaml`. We explicitly duplicated it into the `%prod` block to ensure the AOT compiler baked the value in. This *also* failed, likely due to a deeper bug in how the `0.26.1` extension maps configuration interfaces during native code generation.
+**Root Cause:** 
+This is a deeply rooted bug in Quarkus LangChain4j version `0.26.1` regarding how it handles native AOT (Ahead-Of-Time) compilation.
+If the `ollama` extension is enabled, the model ID is locked at build-time (`FixedRuntimeConfig`), strictly ignoring runtime environment variables.
+However, if you attempt to *disable* the extension and write a custom CDI producer, the Native GraalVM processor strips the `OllamaChatRequest` payload classes out of the binary (since it assumes they are unused). At runtime, Jackson serializes an empty `{}` JSON object, which Ollama rejects.
+**Resolution:** You must completely abandon the `provider: ollama` configuration block. Instead, configure the application to use the `provider: openai` extension.
+Ollama hosts a perfectly compatible native OpenAI API at `http://ollama:11434/v1`. Unlike the Ollama extension, the `quarkus-langchain4j-openai` extension perfectly supports robust, dynamic `model-name` injection at runtime in native mode without any Reflection stripping bugs:
+```yaml
+langchain4j:
+  chat-model:
+    provider: openai
+  openai:
+    base-url: "http://ollama:11434/v1"
+    api-key: "ollama-key-can-be-anything"
+    model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+```
 
-**Impending Resolution:** Because the Quarkus extension's native auto-configuration is fundamentally broken in this version, the configuration properties must be abandoned. A programmatic CDI `@Produces` method must be written to manually construct the `OllamaChatModel` using the underlying `dev.langchain4j.model.ollama.OllamaChatModelBuilder`, bypassing the Quarkus extension's auto-wiring entirely.
+### 🔴 Failure: HTTP 500 `model 'llamaX' not found`
+**Symptom:** The native container runs perfectly, but the first AI request fails with: `ReasoningEngine failed at iteration 1: dev.langchain4j.exception.ModelNotFoundException: {"error":{"message":"model 'llama3.2:1b' not found","type":"api_error","param":null,"code":null}}`.
+**Root Cause:** The `model is required` compilation defect has been completely resolved, and the application is correctly sending the model name to the `ollama` Docker container. However, the Docker container itself is freshly spun up and has not yet downloaded the actual model weights (e.g. `llama3.2:1b`) from the internet.
+**Resolution:** Exec into the running container and pull the model manually to populate its volume:
+```powershell
+docker compose exec ollama ollama pull llama3.2:1b
+```
 
 ### 🔴 Failure: Dockerfile.native Build Fails with `mkdir: cannot create directory '/app/data': Permission denied`
 **Symptom:** During `docker compose up --build`, the build halts at the `RUN mkdir -p /home/arcclaw/... /app/data` step.
