@@ -68,7 +68,8 @@ quarkus:
       base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
       api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
       # The OpenAI extension properly parses model-name DYNAMICALLY at runtime!
-      model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+      chat-model:
+        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
       timeout: 120s
       log-requests: true
       log-responses: true

@@ -79,14 +79,13 @@ public class AgentResource {
                 log.error("Sync agent run completed with failure for session {}: {}", sessionId,
                         result.terminationReason());
                 return Response.serverError()
-                        .entity(java.util.Map.of("error", result.terminationReason()))
+                        .entity(result.terminationReason())
                         .build();
             }
         } catch (Exception e) {
             log.error("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
             return Response.serverError()
-                    .entity(java.util.Map.of("error",
-                            e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
+                    .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
         }
     }
@@ -111,13 +110,13 @@ public class AgentResource {
                     log.error("Async agent run completed with failure for session {}: {}", sessionId,
                             result.terminationReason());
                     response.resume(Response.serverError()
-                            .entity(java.util.Map.of("error", result.terminationReason()))
+                            .entity(result.terminationReason())
                             .build());
                 }
             } catch (Exception e) {
                 log.error("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
                 response.resume(Response.serverError().entity(
-                        java.util.Map.of("error", e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
+                        e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                         .build());
             }
         });
