@@ -5,6 +5,11 @@
 
 quarkus:
 
+  # Force SmallRye Config to load the .env file from the project root (parent directory)
+  # This fixes the issue where running `quarkus:dev` in a submodule misses the root .env
+  # config:
+  #   locations: "../.env"
+
   application:
     name: arcclaw
     version: "4.1.0"
@@ -178,7 +183,7 @@ arcclaw:
   channel:
     telegram:
       enabled: true
-      bot-token: ${TELEGRAM_BOT_TOKEN:}
+      bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
       default-autonomy-level: SUPERVISED
 
   vault:

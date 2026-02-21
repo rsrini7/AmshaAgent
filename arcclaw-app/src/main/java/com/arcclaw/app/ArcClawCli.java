@@ -33,7 +33,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     public static void main(String... args) {
         try {
-            String dataDir = System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data");
+            String dataDir = System.getProperty("ARCCLAW_DATA_DIR", System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
             Path dirPath = Path.of(dataDir);
             if (!Files.exists(dirPath)) {
                 System.out.printf("[ArcClaw] Provisioning data directory: %s%n",
