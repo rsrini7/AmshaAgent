@@ -498,10 +498,11 @@ langchain4j:
 ### 🔴 Failure: HTTP 500 `model 'llamaX' not found`
 **Symptom:** The native container runs perfectly, but the first AI request fails with: `ReasoningEngine failed at iteration 1: dev.langchain4j.exception.ModelNotFoundException: {"error":{"message":"model 'llama3.2:1b' not found","type":"api_error","param":null,"code":null}}`.
 **Root Cause:** The `model is required` compilation defect has been completely resolved, and the application is correctly sending the model name to the `ollama` Docker container. However, the Docker container itself is freshly spun up and has not yet downloaded the actual model weights (e.g. `llama3.2:1b`) from the internet.
-**Resolution:** Exec into the running container and pull the model manually to populate its volume:
+**Resolution:** Our `docker-compose.yaml` includes an `ollama-init` sidecar that automates this download on startup. However, if you removed that service or changed the `arcclaw` dependency to simply wait for `service_started`, you must pull the model manually by executing into the running container:
 ```powershell
 docker compose exec ollama ollama pull llama3.2:1b
 ```
+*(If you want to skip the automated pull sidecar entirely, change `depends_on: ollama-init` back to `depends_on: ollama: condition: service_started` in your `docker-compose.yaml`)*
 
 ### 🔴 Failure: Dockerfile.native Build Fails with `mkdir: cannot create directory '/app/data': Permission denied`
 **Symptom:** During `docker compose up --build`, the build halts at the `RUN mkdir -p /home/arcclaw/... /app/data` step.

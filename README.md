@@ -131,6 +131,8 @@ Once the `.env` is populated, the native binary is sitting in `target/`, and the
 ```bash
 docker compose up -d --build
 ```
+> [!TIP]
+> **Zero-Touch Initialization**: The Docker compose stack includes an `ollama-init` sidecar that will automatically download the LLM weights (e.g. `llama3.2:1b`) for you prior to the main ArcClaw server booting. Just wait a few seconds for the download!
 
 (or)
 

@@ -36,8 +36,8 @@ services:
         condition: service_completed_successfully
       otel-collector:
         condition: service_started
-      ollama:
-        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
     networks:
       - arcclaw-net
     privileged: true # Required for nested rootless Podman to create namespaces
@@ -50,6 +50,21 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - arcclaw-net
+
+  ollama-init:
+    image: curlimages/curl:latest
+    depends_on:
+      - ollama
+    networks:
+      - arcclaw-net
+    command: >
+      sh -c "
+      echo 'Waiting for Ollama API...' &&
+      until curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done &&
+      echo 'Ollama is up, pulling model ${OLLAMA_MODEL:-llama3.2:1b}...' &&
+      curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-llama3.2:1b}\"}' &&
+      echo '\nModel pull complete!'
+      "
     # deploy:
     #   resources:
     #     reservations:
