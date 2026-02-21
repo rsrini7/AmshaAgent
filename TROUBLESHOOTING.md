@@ -492,8 +492,14 @@ langchain4j:
   openai:
     base-url: "http://ollama:11434/v1"
     api-key: "ollama-key-can-be-anything"
-    model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+    chat-model:
+      model-name: "${OLLAMA_MODEL:llama3.2:1b}"
 ```
+
+### 🔴 Failure: Model defaults to `gpt-4o-mini` instead of Ollama model
+**Symptom:** Setting `langchain4j.openai.model-name` doesn't work; the application still attempts (and fails) to download weights for `gpt-4o-mini`.
+**Root Cause:** The property key for the OpenAI extension is nested one level deeper than you might expect.
+**Resolution:** The property MUST be `langchain4j.openai.chat-model.model-name` (notice the extra `.chat-model.` nested block), otherwise the framework ignores it and uses the extension's default (`gpt-4o-mini`).
 
 ### 🔴 Failure: HTTP 500 `model 'llamaX' not found`
 **Symptom:** The native container runs perfectly, but the first AI request fails with: `ReasoningEngine failed at iteration 1: dev.langchain4j.exception.ModelNotFoundException: {"error":{"message":"model 'llama3.2:1b' not found","type":"api_error","param":null,"code":null}}`.

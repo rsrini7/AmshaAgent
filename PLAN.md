@@ -788,9 +788,10 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 > [!CAUTION]
 > **Ollama `model is required` HttpException in Native Container**: Triggering an agent natively resulted in the Ollama container throwing an HTTP 400 `model is required` exception, despite `.env` injection.
 > **Root Cause**: In Quarkus LangChain4j version `0.26.1`, the property `quarkus.langchain4j.ollama.chat-model.model-id` is read natively from `LangChain4jOllamaFixedRuntimeConfig`. This means the property is **strictly evaluated at build time**. Whatever the value of `OLLAMA_MODEL` is in the host's `.env` during the `mvnw package -Pnative` execution gets permanently embedded into the binary. Any runtime environment variables passed in `docker-compose.yaml` are completely ignored, leading to a blank `model` payload if the host machine lacked the environment variable during build.
-> **The Fix**: Re-established `model-id` as the property and documented the strict requirement to ensure `OLLAMA_MODEL=...` exists locally before compiling to native. (My initial attempt to rename it to `model-name` failed because `model-name` was introduced in a newer extension version).
+> **The Fix**: We completely abandoned the `ollama` provider natively. We explicitly configured `quarkus.langchain4j.chat-model.provider=openai` mapped to `http://localhost:11434/v1`. The OpenAI extension properly parses `openai.chat-model.model-name` dynamically at runtime, providing 100% Ollama native image compatibility without the build-time lock bug. By user request, technical exception mapping in `AgentLoop` and `AgentResource` was reverted back to raw Strings.
 
 ## Verification
-- ✅ Native Docker image booted correctly via Compose without "model is required" HTTP crashes.
+- ✅ Native Docker image booted correctly via Compose without "model is required" HTTP crashes using the OpenAI provider fallback.
 - ✅ Native `/run-async` endpoint correctly executes `AgentLoop` tasks against the SQLite database using Virtual Threads without throwing `ContextNotActiveException`.
 - ✅ Asynchronous JAX-RS `@Suspended AsyncResponse` gracefully handles error tracking and HTTP 202/500 signaling.
+- ✅ Reverted `AgentLoop` exception mapping back to native REST API string propagation.
