@@ -63,12 +63,7 @@ quarkus:
     ollama:
       base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
       chat-model:
-        # ⚠️ CRITICAL NATIVE BUILD NOTE ⚠️
-        # In Quarkus LangChain4j, `model-id` is a BUILD-TIME property. 
-        # When compiling to native executable, whatever value this evaluates
-        # to at compile time is permanently embedded in the binary.
-        # Docker Compose runtime overrides via `.env` will be IGNORED by the native binary.
-        model-id: "${OLLAMA_MODEL:llama3.2:1b}"
+        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
       timeout: 120s
       log-requests: false
       log-responses: false
@@ -246,7 +241,7 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-id: "llama3.2:1b"
+        model-name: "llama3.2:1b"
       log-requests: true
       log-responses: true
     hibernate-orm:
@@ -270,7 +265,7 @@ mp:
     langchain4j:
       ollama:
         base-url: "http://localhost:11434"
-        model-id: "llama3.2:1b"
+        model-name: "llama3.2:1b"
   arcclaw:
     sandbox:
       strategy: NONE

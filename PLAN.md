@@ -765,4 +765,32 @@ Hardening the local Quarkus Hot-Reload Test Runner (`quarkus:dev`) against JDK 2
 ## Verification
 - ✅ Executing `r` in the `quarkus:dev` console successfully runs all 43 tests without `ClassNotFoundException` clutter and cleanly terminates without `IllegalAccessError`.
 - ✅ `docker compose up -d --build` successfully creates `/app/data` and launches the rootless container via Podman Desktop.
-- ✅ Making POST requests to `/api/v1/sessions/{id}/run-async` safely initializes asynchronous DB accesses without `ContextNotActiveException`.
+- ✅ Making POST requests to `/api/v1/sessions/{id}/run-async` safely initializes asynchronous DB accesses without `ContextNotActiveException` (in dev mode).
+
+---
+
+# Phase 14.6 — Day 3 Operations (Native Mode Resilience) ✅
+
+Complete post-mortem and resolution of critical blockers encountered *exclusively* during Native Image AOT execution via GraalVM/Mandrel.
+
+## Design Decisions
+
+> [!CAUTION]
+> **Native Context Propagation Failure**: The Phase 14.3 fix for `ContextNotActiveException` (using `@ActivateRequestContext` on the `AgentLoop.run` method inside an unmanaged `Thread.ofVirtual()`) successfully propagated context in JVM mode, but **failed entirely** in Native mode.
+> **Root Cause**: Unmanaged virtual threads completely circumvent Quarkus's Vert.x duplicated context mechanisms in AOT binaries.
+> **The Fix**: Refactored `AgentResource.runAgentAsync` to use Quarkus's managed executor: `@Inject @VirtualThreads ExecutorService vThreads`. Submitting the task via `vThreads.execute(...)` ensures the Vert.x duplicated context (and thus the CDI RequestScope and Hibernate EntityManager hooks) cleanly transitions across thread boundaries in native images.
+
+> [!CAUTION]
+> **Native Build Incremental Failure (`-am` Flag)**: While debugging the context propagation issue, code changes made to `arcclaw-core` were not reflecting in the native binary.
+> **Root Cause**: The Maven build command `mvnw clean package -pl arcclaw-app -Pnative` only built the `arcclaw-app` module natively. It silently reused the *old, cached JAR* for `arcclaw-core` from prior builds.
+> **The Fix**: The native build command MUST include the `-am` (also-make) flag: `mvnw clean package -pl arcclaw-app -am -Pnative`. This ensures `-core` is recompiled before `-app` is packaged into a native binary.
+
+> [!CAUTION]
+> **Ollama `model is required` HttpException in Native Container**: Triggering an agent natively resulted in the Ollama container throwing an HTTP 400 `model is required` exception, despite `.env` injection.
+> **Root Cause**: The application configuration was using the property `quarkus.langchain4j.ollama.chat-model.model-id`. The Quarkiverse LangChain4j Ollama extension explicitly requires `model-name`. The extension silently ignored the `model-id` property, sending an empty `model` JSON field to the Ollama API during chat requests.
+> **The Fix**: Migrated all YAML properties from `model-id` to `model-name` across `application.yaml` (default, `%dev`, and `%test`).
+
+## Verification
+- ✅ Native Docker image booted correctly via Compose without "model is required" HTTP crashes.
+- ✅ Native `/run-async` endpoint correctly executes `AgentLoop` tasks against the SQLite database using Virtual Threads without throwing `ContextNotActiveException`.
+- ✅ Asynchronous JAX-RS `@Suspended AsyncResponse` gracefully handles error tracking and HTTP 202/500 signaling.

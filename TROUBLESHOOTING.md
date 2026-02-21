@@ -479,8 +479,15 @@ mvn clean test -pl arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false
 
 ### 🔴 Failure: Native Container Ollama Error `{"error":"model is required"}`
 **Symptom:** When running the native container via `docker compose up`, triggering an agent loop immediately fails with `HttpException: {"error":"model is required"}` despite `OLLAMA_MODEL` being set in `.env` and `docker-compose.yaml`.
-**Root Cause:** The property `quarkus.langchain4j.ollama.chat-model.model-id` is a **build-time** configuration in Quarkus. When GraalVM compiles the native binary, it permanently embeds whatever value evaluated from `application.yaml` during compilation. Runtime overrides via Docker Compose environment variables are completely ignored by the native binary.
-**Resolution:** You must ensure your local `.env` file has the correct `OLLAMA_MODEL=...` value set *before* running the `mvnw clean package -Pnative` command. If you wish to change the model later, you must recompile the native binary.
+**Root Cause:** The Quarkiverse LangChain4j Ollama extension expects the property `quarkus.langchain4j.ollama.chat-model.model-name`, but our `application.yaml` was using `model-id` (an older/deprecated property name). The extension silently ignored `model-id` and sent an empty `model` field to the Ollama API.
+**Resolution:** Replace `model-id` with `model-name` everywhere in `application.yaml`:
+```yaml
+quarkus:
+  langchain4j:
+    ollama:
+      chat-model:
+        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+```
 
 ### 🔴 Failure: Dockerfile.native Build Fails with `mkdir: cannot create directory '/app/data': Permission denied`
 **Symptom:** During `docker compose up --build`, the build halts at the `RUN mkdir -p /home/arcclaw/... /app/data` step.
