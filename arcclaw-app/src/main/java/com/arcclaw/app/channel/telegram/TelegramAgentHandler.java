@@ -47,6 +47,9 @@ public class TelegramAgentHandler {
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
 
+    @Inject
+    org.jboss.logging.Logger log;
+
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
      * All Camel Exchange data must be extracted synchronously before offloading
@@ -55,12 +58,15 @@ public class TelegramAgentHandler {
     public void receiveMessage(Exchange exchange) {
         IncomingMessage msg = exchange.getIn().getBody(IncomingMessage.class);
         if (msg == null || msg.getText() == null) {
+            log.warn("Received message without text");
             return;
         }
 
         String text = msg.getText();
         String userId = String.valueOf(msg.getFrom().getId());
         String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
+        
+        log.infof("Received Telegram message from user %s in chat %s: %s", userId, chatId, text);
 
         // Offload execution specifically to allow the Vert.x networking thread
         // to return immediately, preventing event loop blocking.

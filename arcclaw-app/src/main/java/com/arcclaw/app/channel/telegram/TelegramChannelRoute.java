@@ -3,9 +3,12 @@ package com.arcclaw.app.channel.telegram;
 import org.apache.camel.builder.RouteBuilder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class TelegramChannelRoute extends RouteBuilder {
+
+    private static final Logger log = Logger.getLogger(TelegramChannelRoute.class);
 
     @ConfigProperty(name = "arcclaw.channel.telegram.enabled", defaultValue = "true")
     boolean enabled;
@@ -18,18 +21,18 @@ public class TelegramChannelRoute extends RouteBuilder {
         if (!enabled) {
             return;
         }
-        if (botToken == null || botToken.isBlank() || "mock-token".equals(botToken)) {
-            // In tests or if not configured, we might want to skip or use a mock.
-            // But for the sake of the testRouteExists, we MUST register it if it's
-            // "mock-token".
-            // Actually, the user says "Since bot-token has a default value, the route
-            // should initialize".
-        }
 
-        // We explicitly append the botToken to the URI rather than relying on Camel's
-        // internal {{property}} placeholder syntax, as requested algorithmically in the
-        // prompt constraints.
+        if ("mock-token".equals(botToken)) {
+            log.warn("Telegram Bot Token is set to 'mock-token'. The bot will not function correctly. Please set TELEGRAM_BOT_TOKEN in .env file.");
+        }
+        
+        String displayToken = (botToken != null && botToken.length() > 10) 
+            ? botToken.substring(0, 5) + "..." 
+            : botToken;
+        log.info("Telegram Route initializing with token: " + displayToken);
+
         from("telegram:bots?authorizationToken=" + botToken)
+                .routeId("telegram-bot")
                 .bean(TelegramAgentHandler.class, "receiveMessage");
     }
 }

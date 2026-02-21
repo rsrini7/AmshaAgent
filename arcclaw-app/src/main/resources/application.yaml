@@ -257,6 +257,9 @@ mp:
         sql: true
     log:
       level: DEBUG
+      category:
+        "org.apache.camel.component.telegram":
+          level: DEBUG
   arcclaw:
     sandbox:
       strategy: NONE        # no Podman in local dev

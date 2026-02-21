@@ -688,3 +688,40 @@ podman machine start
 
 ### 🟡 YAML Profile Parsing Nuance
 **Observation:** Ensure that the `%test` profile in `application.yaml` is correctly structured and doesn't conflict with legacy `.properties` files that might still exist in the target directory after a non-clean build.
+
+---
+
+## 19. Telegram Integration & Daemon Mode Troubleshooting Sprint 2A
+
+### 🔴 Failure: Quarkus Dev Console NPE
+**Symptom:** `java.lang.NullPointerException: Cannot invoke "java.io.Console.writer()" because the return value of "java.lang.System.console()" is null` during startup.
+**Root Cause:** Running inside some IDE terminals or non-interactive shells where `System.console()` is not available, but Quarkus Dev UI tries to use it.
+**Resolution:** Disable the Dev Console in `application.yaml` for the dev profile:
+```yaml
+"%dev":
+  quarkus:
+    dev:
+      console:
+        enabled: false
+```
+
+### 🔴 Failure: Telegram Bot Token Not Loaded (Windows/PowerShell)
+**Symptom:** `TelegramException: Could not GET ... 404 Not Found` and `authorizationToken=mock-token` in logs, despite `.env` file being present.
+**Root Cause:** Quarkus (and Java in general) does not automatically load `.env` files into System Environment variables on Windows PowerShell unless explicitly handled by a library (like `dotenv-java`) or the shell itself.
+**Resolution:** Manually load `.env` variables into the PowerShell session before starting the app:
+```powershell
+Get-Content .env | Where-Object { $_ -match '^\s*[^#]' -and $_ -like '*=*' } | ForEach-Object { $k,$v=$_.Split('=',2); [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim()) }; .\mvnw.cmd -pl arcclaw-app quarkus:dev "-Dquarkus.args=serve"
+```
+
+### 🔴 Failure: Camel Routes Not Registering in Daemon Mode
+**Symptom:** Application starts, but `Camel Context Status` shows 0 routes, or `TelegramChannelRoute` is not active.
+**Root Cause:** In programmatic daemon mode (implementing `QuarkusApplication`), CDI beans for Camel routes might be instantiated but not automatically added to the `CamelContext` if the context auto-discovery didn't trigger before the main loop.
+**Resolution:**
+1. Inject `CamelContext` and the Route bean (`TelegramChannelRoute`) into the main command (`ServeCommand`).
+2. Explicitly check and add the route if missing:
+```java
+if (camelContext.getRoute("telegram-bot") == null) {
+    camelContext.addRoutes(telegramChannelRoute);
+}
+```
+3. Ensure `camelContext.start()` is called if the context is stopped.
