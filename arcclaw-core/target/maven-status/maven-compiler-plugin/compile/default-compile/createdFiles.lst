@@ -54,7 +54,6 @@ com\arcclaw\core\security\VaultKey.class
 com\arcclaw\core\security\RequiresSecret.class
 com\arcclaw\core\security\AutonomyPolicy$Default.class
 com\arcclaw\core\tools\ToolRegistry.class
-com\arcclaw\core\agent\DefaultChatModelProducer.class
 com\arcclaw\core\tools\GithubTool.class
 com\arcclaw\core\state\CheckpointStatus.class
 com\arcclaw\core\agent\GrokAgent.class

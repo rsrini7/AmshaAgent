@@ -59,28 +59,21 @@ quarkus:
   # ---------------------------------------------------------------------------
   langchain4j:
     chat-model:
-      provider: ollama
+      provider: openai
     ollama:
-      base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
-      chat-model:
-        model-id: "${OLLAMA_MODEL:llama3.2:1b}"
-    openai:
       chat-model:
         enabled: false
+    openai:
+      # Ollama provides native OpenAI compatibility on /v1
+      base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
+      api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
+      # The OpenAI extension properly parses model-name DYNAMICALLY at runtime!
+      model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+      timeout: 120s
+      log-requests: true
+      log-responses: true
     chat-memory:
       max-messages: 100
-
-  # ---------------------------------------------------------------------------
-  # CUSTOM ASYNC AI PROVIDER CONFIGURATION
-  # ---------------------------------------------------------------------------
-  arcclaw:
-    ai:
-      provider: "ollama"
-      ollama:
-        base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
-        # Runtime resolved! We bypassed the Quarkiverse extension entirely.
-        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
-        timeout-seconds: 120
 
   # ---------------------------------------------------------------------------
   # OBSERVABILITY
@@ -252,11 +245,6 @@ mp:
     log:
       level: DEBUG
   arcclaw:
-    ai:
-      provider: "ollama"
-      ollama:
-        base-url: "http://localhost:11434"
-        model-name: "llama3.2:1b"
     sandbox:
       strategy: NONE        # no Podman in local dev
     governance:
@@ -270,11 +258,6 @@ mp:
       jdbc:
         url: "jdbc:sqlite::memory:"
   arcclaw:
-    ai:
-      provider: "ollama"
-      ollama:
-        base-url: "http://localhost:11434"
-        model-name: "llama3.2:1b"
     sandbox:
       strategy: NONE
     vault:
@@ -296,10 +279,6 @@ mp:
       console:
         color: false
   arcclaw:
-    ai:
-      provider: "ollama"
-      ollama:
-        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
     sandbox:
       strategy: PODMAN
     autonomy:
