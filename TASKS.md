@@ -212,3 +212,16 @@
 - [x] Create `CliAgentObserver.java` static-guarded CLI output observer
 - [x] Compile verified: `mvn compile` exit code 0
 
+
+---
+
+## Phase 16 — Telegram Channel Adapter
+- [x] Step 1: Add `quarkus-camel-bom` to parent `pom.xml` + `camel-quarkus-telegram` to `arcclaw-app/pom.xml`
+- [x] Step 2: Add `arcclaw.channel.telegram` config block to `application.yaml`
+- [x] Step 3: Create `TelegramChannelRoute.java` — Camel `RouteBuilder`
+- [x] Step 4: Create `TelegramAgentHandler.java` — message handler + async agent dispatch
+- [x] Step 5: Telegram Integration Testing
+  - [x] Create `TelegramAgentHandlerTest.java` (Mocked Executor flow)
+  - [x] Create `TelegramChannelRouteTest.java` (Route discovery check)
+  - [x] Document test failures and pending issues in `TROUBLESHOOTING.md`
+  - [x] Verification: Resolve remaining exit-code-1 in `TelegramAgentHandlerTest`

@@ -254,6 +254,61 @@ When the asynchronous agent executes successfully, you will see a precise sequen
 
 ---
 
+## 📱 Telegram Bot Integration (Live Test)
+
+ArcClaw features an enterprise-grade, Virtual-Thread-backed Telegram network adapter. By explicitly handling the Vert.x to ManagedExecutor handoff, ArcClaw can handle thousands of concurrent Telegram users without dropping connections.
+
+Here is the exact step-by-step guide to perform the Live Integration Test.
+
+### Step 1: Create a Telegram Bot
+1. Open Telegram and search for **@BotFather**.
+2. Send the command `/newbot`.
+3. Give it a name (e.g., `ArcClaw Dev Bot`) and a username (e.g., `arcclaw_dev_bot`).
+4. BotFather will give you an HTTP API Token (e.g., `123456789:ABCdefGHIjklmNOPQrsTUVwxyz`). Copy this.
+
+### Step 2: Configure Your Environment
+You need to provide the token to ArcClaw and ensure your LLM is running.
+Open your `.env` file and add the token:
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
+```
+Make sure your local Ollama container is running so the agent has a brain:
+```bash
+docker compose up -d ollama
+```
+*(Or open the Ollama GUI to start the local process).*
+
+### Step 3: Boot ArcClaw in Daemon Mode
+Because we are using the quarkus-picocli Dual-Mode binary, we must explicitly tell it to run the `serve` command.
+```bash
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+```
+*(You should see Quarkus boot up, connect to SQLite, and log: `ArcClaw daemon mode starting on port 8080...`)*
+
+### Step 4: The Live Verification Test
+This test will prove both the network layer and the Session Continuity.
+
+**Test 1: The Cold Start**
+1. Open Telegram and search for your bot's username.
+2. Click **Start** (or send a message like: "Hello, I need you to research the ArcClaw repository.")
+3. **Watch your terminal**: You should immediately see the Camel route pick it up, hand it off to the Virtual Thread, and the AgentLoop start logging its thoughts.
+4. **Watch Telegram**: A few seconds later, the bot should reply with Vishnu's final synthesized answer!
+
+**Test 2: Conversation Memory (Session Continuity)**
+1. Reply to the bot in Telegram with a follow-up: *"Can you summarize what you just told me in exactly 3 bullet points?"*
+2. **The Verification**: If the bot successfully references the previous message, it proves that your `UUID.nameUUIDFromBytes` mapping worked perfectly and the session stayed `IN_PROGRESS` as designed.
+
+### 🚨 Troubleshooting: The "Nuclear Option" (Token Revocation)
+If you have ghost container connections polling your bot, you can sever them by revoking the token in BotFather.
+
+1. In Telegram, click your bot's username in the BotFather chat.
+2. Send the `/revoke` (or `/token`) command.
+3. BotFather will immediately revoke the old token and give you a new one (e.g., `123456789:NEWtokenStringXYZ123...`).
+4. Replace the old token in your `.env` file with the new one.
+5. Restart the Quarkus daemon (`Ctrl+C`, then `.\mvnw.cmd quarkus:dev ...`) to pick up the new token.
+
+---
+
 ## 🧩 Extending ArcClaw
 
 ArcClaw is designed as a modular kernel. Adding new capabilities requires minimal boilerplate:

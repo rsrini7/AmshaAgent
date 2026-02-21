@@ -814,3 +814,30 @@ Upgrade ArcClaw from a single-mode REST daemon into a dual-mode binary using `qu
 - ✅ Single executable provides both daemon (`arcclaw serve`) and CLI (`arcclaw ask`) capabilities.
 - ✅ Compiled via `mvn compile` with 0 warnings/errors.
 
+
+---
+
+# Sprint 2A — Telegram Channel Adapter
+
+Network/threading layer for ArcClaw ↔ Telegram integration via Camel Quarkus.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Camel Quarkus BOM Required**: The `camel-quarkus-telegram` dependency is NOT managed by the standard `quarkus-bom`. We must import `quarkus-camel-bom:3.23.0` into the parent `pom.xml` `<dependencyManagement>` to get version management.
+
+> [!WARNING]
+> **Session Continuity (REQ-V11-CLI-11)**: Unlike `AskCommand`, the Telegram handler does NOT call `workspaceManager.terminateSession()` — the session stays `IN_PROGRESS` for conversation memory. Only `WorkspaceScopeHolder.clear()` is called in `finally`.
+
+## Proposed Changes
+
+### Telegram Integration
+1. **Parent BOM**: Added `quarkus-camel-bom` to `<dependencyManagement>`.
+2. **arcclaw-app**: Added `camel-quarkus-telegram` dependency.
+3. **application.yaml**: Added `arcclaw.channel.telegram` configuration block.
+4. **TelegramChannelRoute.java**: Camel `RouteBuilder` for the telegram component.
+5. **TelegramAgentHandler.java**: CDI bean to handle incoming messages and dispatch agent loops asynchronously via `ManagedExecutor`.
+
+## Verification Plan
+- ✅ `TelegramAgentHandlerTest`: Verified session ID generation and offloading.
+- ✅ `TelegramChannelRouteTest`: Verified route registration in CamelContext.

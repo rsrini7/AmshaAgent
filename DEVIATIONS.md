@@ -108,3 +108,15 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 ---
 *Internal Audit Trail sync complete.*
 
+
+### 10. Telegram Session Continuity (REQ-V11-CLI-11)
+*   **Deviation:** Explicitly omitted `workspaceManager.terminateSession()` in the Telegram handler loop.
+*   **Rationale:** To preserve conversation memory across separate Telegram messages, the session must remain `IN_PROGRESS`. We only invoke `WorkspaceScopeHolder.clear()` in the `finally` block to release the thread-local correlation without destroying the persistent state.
+
+### 11. Custom Dotenv Resolution SPI
+*   **Deviation:** Implemented `DotenvConfigSourceProvider.java` as a MicroProfile SPI instead of relying on `quarkus.config.locations`.
+*   **Rationale:** Standard Quarkus property location resolution failed to consistently load the root `.env` when executing submodules (e.g., `mvn -pl arcclaw-app quarkus:dev`) in Windows PowerShell. The SPI approach guarantees property injection early in the boot sequence with a high ordinal (295).
+
+### 12. CDI Proxy Mock Injection
+*   **Deviation:** Refactored `TelegramAgentHandlerTest` to bypass CDI proxy limitations.
+*   **Rationale:** Standard `@InjectMock` cannot resolve into private fields of `@Dependent` beans within a `@QuarkusTest`. We manually unwrapped the `ClientProxy` and used reflection to force mocks into the target instance's private fields.

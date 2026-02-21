@@ -276,3 +276,28 @@ ArcClaw upgraded from a single-mode REST daemon into a dual-mode binary using `q
 - **`WorkspaceManager`**: Specified `terminateSession` instead of the conceptual `terminateWorkspace`.
 
 **Runtime Defect Fixed**: Added `final ReasoningStep completedStep = step` around the observer `.forEach` lambda to resolve Java's internal "effectively-final" compile error before dispatch. 
+
+---
+
+## Sprint 2A: Telegram Channel Adapter ✅
+
+Added initial support for routing agent interactions through Telegram via Camel Quarkus, explicitly respecting Vert.x threading and CDI restrictions.
+
+**Key Changes:**
+1. **BOM Sync**: Added `quarkus-camel-bom:3.23.0` to the parent POM to coordinate the `camel-quarkus-telegram` version.
+2. `TelegramChannelRoute.java`: A Camel route that parses the `TELEGRAM_BOT_TOKEN`.
+3. `TelegramAgentHandler.java`: Bridges the synchronous HTTP/Webhook gap into the asynchronous JVM world.
+   - Extracts `IncomingMessage` data **synchronously** inside the Vert.x event loop.
+   - Uses `ManagedExecutor` to explicitly jump the thread gap.
+   - The thread execution is tagged with `@ActivateRequestContext` to wake up Quarkus CDI.
+   - Session continuity validates previous checkpoints using `StatefulAgentStore.load()`.
+   - Retains context by utilizing `WorkspaceScopeHolder.clear()` in the `finally` block instead of actively deleting it via `terminateSession()`.
+
+**Verification**: `mvn clean verify -pl arcclaw-app -am` completed successfully.
+
+### Test Environment Stabilization
+1. **BOM Ordering**: Corrected `quarkus-langchain4j-bom` placement above Camel BOM to prevent LangChain4j version conflicts.
+2. **IDE Classpath Sync**: Hard-pinned `quarkus-junit5` versions to repair IDE resolution errors.
+3. **Surefire Windows Crash**: Disabled `useManifestOnlyJar` for Windows absolute path compliance.
+4. **Mock Injection Resolution**: Refactored `TelegramAgentHandlerTest` to unwrap CDI proxies for force-injecting `@Dependent` mocks into private fields.
+5. **Native .env Resolution**: Implemented `DotenvConfigSourceProvider` SPI to natively find and inject `.env` properties regardless of execution directory.
