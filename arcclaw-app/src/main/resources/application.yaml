@@ -61,22 +61,25 @@ quarkus:
     chat-model:
       provider: ollama
     ollama:
-      base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
       chat-model:
-        # ⚠️ CRITICAL NATIVE BUILD NOTE for v0.26.1 ⚠️
-        # In this version of Quarkus LangChain4j, `model-id` is read from `FixedRuntimeConfig`.
-        # This makes it a BUILD-TIME property. Whatever value evaluates here during `mvnw package`
-        # is permanently embedded in the native binary. Runtime env vars are IGNORED.
-        model-id: "${OLLAMA_MODEL:llama3.2:1b}"
-      timeout: 120s
-      log-requests: false
-      log-responses: false
+        enabled: false
     openai:
-      api-key: "${OPENAI_API_KEY:dummy-key-to-bypass-validation}"
-      model-name: "${OPENAI_MODEL:gpt-4o}"
-      timeout: 60s
+      chat-model:
+        enabled: false
     chat-memory:
       max-messages: 100
+
+  # ---------------------------------------------------------------------------
+  # CUSTOM ASYNC AI PROVIDER CONFIGURATION
+  # ---------------------------------------------------------------------------
+  arcclaw:
+    ai:
+      provider: "ollama"
+      ollama:
+        base-url: "${OLLAMA_BASE_URL:http://localhost:11434}"
+        # Runtime resolved! We bypassed the Quarkiverse extension entirely.
+        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+        timeout-seconds: 120
 
   # ---------------------------------------------------------------------------
   # OBSERVABILITY
@@ -242,19 +245,17 @@ mp:
 
 "%dev":
   quarkus:
-    langchain4j:
-      ollama:
-        base-url: "http://localhost:11434"
-        chat-model:
-          model-id: "llama3.2:1b"
-      log-requests: true
-      log-responses: true
     hibernate-orm:
       log:
         sql: true
     log:
       level: DEBUG
   arcclaw:
+    ai:
+      provider: "ollama"
+      ollama:
+        base-url: "http://localhost:11434"
+        model-name: "llama3.2:1b"
     sandbox:
       strategy: NONE        # no Podman in local dev
     governance:
@@ -267,12 +268,12 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite::memory:"
-    langchain4j:
+  arcclaw:
+    ai:
+      provider: "ollama"
       ollama:
         base-url: "http://localhost:11434"
-        chat-model:
-          model-id: "llama3.2:1b"
-  arcclaw:
+        model-name: "llama3.2:1b"
     sandbox:
       strategy: NONE
     vault:
@@ -293,12 +294,11 @@ mp:
       level: INFO
       console:
         color: false
-    langchain4j:
-      ollama:
-        chat-model:
-          # Explicitly set for prod to prevent default-drop
-          model-id: "${OLLAMA_MODEL:llama3.2:1b}"
   arcclaw:
+    ai:
+      provider: "ollama"
+      ollama:
+        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
     sandbox:
       strategy: PODMAN
     autonomy:
