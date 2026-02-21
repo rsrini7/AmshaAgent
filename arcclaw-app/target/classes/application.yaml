@@ -239,6 +239,10 @@ mp:
 
 "%dev":
   quarkus:
+    langchain4j:
+      openai:
+        devservices:
+          enabled: false
     hibernate-orm:
       log:
         sql: true

@@ -299,9 +299,15 @@ public class AgentLoop {
         if (msg.contains("Connection refused")) {
             return "Technical Error: AI Provider Connection Refused. Check that your local Ollama instance is running or verify your 'base-url' properties.";
         }
-        if (msg.contains("model") && msg.contains("not found")) {
-            return "Configuration Error: AI Model Not Found. The requested weights have not been downloaded. Please use 'ollama pull <model-name>' to fetch them.";
+
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("model '([^']+)' not found");
+        java.util.regex.Matcher m = p.matcher(msg);
+        if (m.find()) {
+            return "Configuration Error: AI Model Not Found. The requested weights for model '" + m.group(1)
+                    + "' have not been downloaded. Please natively run 'ollama pull " + m.group(1)
+                    + "' or let the Docker init container fetch it.";
         }
+
         if (msg.contains("model is required")) {
             return "Configuration Error: AI Model Not Specified. Please ensure you have specified the LLM model name inside the application configuration.";
         }

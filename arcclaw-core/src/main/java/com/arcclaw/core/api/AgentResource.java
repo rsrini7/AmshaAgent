@@ -70,9 +70,25 @@ public class AgentResource {
                 request.goal());
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-        AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
-                maxIterations);
-        return Response.ok(result).build();
+        try {
+            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
+                    maxIterations);
+            if (result.success()) {
+                return Response.ok(result).build();
+            } else {
+                log.error("Sync agent run completed with failure for session {}: {}", sessionId,
+                        result.terminationReason());
+                return Response.serverError()
+                        .entity(java.util.Map.of("error", result.terminationReason()))
+                        .build();
+            }
+        } catch (Exception e) {
+            log.error("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+            return Response.serverError()
+                    .entity(java.util.Map.of("error",
+                            e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
+                    .build();
+        }
     }
 
     @POST
