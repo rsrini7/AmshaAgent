@@ -24,6 +24,7 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5</artifactId>
+      <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
 
@@ -42,6 +43,7 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5-mockito</artifactId>
+      <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
     <!-- Resolves DevMode Jupiter ClassNotFoundException for org.junit.internal.AssumptionViolatedException -->
@@ -125,6 +127,12 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-picocli</artifactId>
     </dependency>
+
+    <!-- Channels -->
+    <dependency>
+      <groupId>org.apache.camel.quarkus</groupId>
+      <artifactId>camel-quarkus-telegram</artifactId>
+    </dependency>
   </dependencies>
 
   <build>
@@ -157,11 +165,12 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
         <configuration>
+          <useManifestOnlyJar>false</useManifestOnlyJar>
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <maven.home>${maven.home}</maven.home>
           </systemPropertyVariables>
-          <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --sun-misc-unsafe-memory-access=allow</argLine>
+          <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow</argLine>
         </configuration>
       </plugin>
       <plugin>

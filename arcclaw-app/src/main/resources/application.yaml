@@ -175,6 +175,11 @@ quarkus:
 # =============================================================================
 arcclaw:
 
+  channel:
+    telegram:
+      bot-token: ${TELEGRAM_BOT_TOKEN:}
+      default-autonomy-level: SUPERVISED
+
   vault:
     pepper: "${ARCCLAW_VAULT_PEPPER:dev-pepper-not-for-production-0000000000000000000000000000}"
     argon2:

@@ -602,3 +602,26 @@ podman machine start
 **Root Cause:** The `step` variable was reassigned via `withObservation` before attempting to inject it into `.forEach(o -> o.onStepComplete(..., step))`.
 **Resolution:** Capture the mutated state inside a strictly defined block-local variable prior to the lambda: `final ReasoningStep completedStep = step; observers.forEach(o -> o.onStepComplete(..., completedStep));`.
 
+---
+
+## 17. Channel Adapter & Camel Integration Troubleshooting (Sprint 2A)
+
+### 🔴 Failure: IDE Resolution Issue (`io.quarkus.test` cannot be resolved)
+**Symptom:** After adding `quarkus-camel-bom` to the parent POM, the IDE (VS Code/Eclipse) shows red lines on test imports like `io.quarkus.test.junit.QuarkusTest`.
+**Root Cause:** Adding multiple BOMs can sometimes confuse the IDE's dependency resolution cache, especially if the new BOM transitively affects test-scoped dependencies.
+**Resolution:** Hard-pin the versions for `quarkus-junit5` and `quarkus-junit5-mockito` inside `arcclaw-app/pom.xml` using `<version>${quarkus.version}</version>` to force-repair the IDE's classpath mapping.
+
+### 🔴 Failure: `ClassNotFoundException: dev.langchain4j.service.IllegalConfigurationException`
+**Symptom:** Maven tests fail during startup with a `ClassNotFoundException` related to LangChain4j internal classes.
+**Root Cause:** The `camel-quarkus-bom` contains its own internal LangChain4j component mappings which transitively override the versions used by the Quarkiverse LangChain4j extensions. This results in binary incompatibility between the core library and the Quarkus-specific layer.
+**Resolution:** Explicitly import the `io.quarkiverse.langchain4j:quarkus-langchain4j-bom` into the parent `pom.xml` `<dependencyManagement>` section, placing it strictly *above* the Camel BOM to ensure the correct version is locked.
+
+### 🔴 Failure: `SurefireBooterForkException` (Windows absolute paths)
+**Symptom:** Maven tests crash on Windows with `Boot Manifest-JAR contains absolute paths in classpath`.
+**Root Cause:** A known JDK 21+ Windows limitation where the default Surefire "Manifest JAR" approach fails to handle long absolute file paths correctly.
+**Resolution:** Set `<useManifestOnlyJar>false</useManifestOnlyJar>` in the `maven-surefire-plugin` configuration in `arcclaw-app/pom.xml`.
+
+### 🔴 Failure: `BeanDeploymentException` / CDI Interceptor on Private Method
+**Symptom:** The Quarkus application fails to start during tests, complaining that a method with an interceptor (like `@ActivateRequestContext`) is `private`.
+**Root Cause:** The Quarkus ArC container uses proxies for intercepted methods. Proxies require that intercepted methods be overridable (i.e., not `private` and not `final`).
+**Resolution:** Change method visibility from `private` to package-private (default) or `protected`. (e.g., Change `private void runAgent(...)` to `void runAgent(...)`).
