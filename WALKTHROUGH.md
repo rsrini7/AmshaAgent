@@ -495,6 +495,10 @@ Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING
 | **Logic Wipe** | `TelegramAgentHandler.java` | Fixed the "Goldfish Memory" bug: `COMPLETED` sessions retain ChatMemory but softly wipe the internal tool loop state to avoid rehashing. |
 | **Approval Flow** | `TelegramAgentHandler.java` | Fixed the "Amnesia on Error" bug by forcing the LLM to read the tool output instead of blindly assuming an approval implies success. |
 | **Workspace Isolation** | `GithubTool.java` | Ensured tool execution is strictly routed to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`). |
+| **Phantom Memory** | `LangChainReasoningEngine.java` | Connected `ChatMemoryStore` history to the LLM request generation to persist full conversation trajectories. |
+| **Amnesia on Approval** | `AgentLoop.java` | Moved history persistence to the beginning of the runtime loop, ensuring prompts are saved before any HITL suspension occurs. |
+| **Ghost Triggers** | `TelegramAgentHandler.java` | Injected programmatic "Closure Messages" to inform the LLM when a tool execution is denied by the user. |
+
 
 ### Verification:
 - ✅ **Chat Persistence**: Repeated interactions on Telegram safely accumulate memory without dropping context.

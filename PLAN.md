@@ -1040,3 +1040,16 @@ Addressed several "Post Claude Code Review" edge cases to solidify the agent's r
 ## Verification
 - ✅ **Memory**: Verified that follow-up questions in Telegram correctly retain the conversational history after a tool completes.
 - ✅ **Approval**: Verified that tool errors following an approval are correctly detected and reported back to the user instead of being silently ignored.
+
+### Post-Integration ChatMemory Continuity Fixes (Sprint 3 Edge Cases)
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- **Phantom Memory**: Fixed bug where the engine created a fresh message list ignoring SQLite history by explicitly fetching `ChatMemoryStore` history before appending the current prompt.
+- **Double-Prompt Echo**: Removed redundant append of the user goal since it is now natively loaded from the `ChatMemoryStore` fetch.
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- **Amnesia on Approval**: Relocated the conversation persistence logic to the very top of `AgentLoop.runLoop()` to ensure the user's prompt is saved before any tool execution (and potential `RequiresApprovalException` suspension).
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- **Ghost of the Denied Prompt**: Inserted a programmatic "Closure Message" response into the `chatMemoryStore` upon a `/deny` action to explicitly inform the LLM the task was aborted, preventing it from retrying unfulfilled tools.
+- **Failure Poisoning**: Converted the `FAILED` check from a Hard Wipe (which destroys all chat memory) to a Soft Reset (wiping only the tool loop state), allowing continuity even after errors.
+
