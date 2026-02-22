@@ -417,4 +417,25 @@ arcclaw_agent_invocations_total{role="brahma",} 2.0
 arcclaw_agent_invocations_total{role="saraswati",} 3.0
 arcclaw_agent_invocations_total{role="coordinator",} 1.0
 ```
+---
 
+## Phase 20: Sprint 3D — ShivaAgent ("shiva") Integration ✅
+
+I have integrated the `shiva` (debugger) role into the LLM Intent Router, providing a dedicated agents for fixing bugs and analyzing errors, distinct from the code creation specialist (`brahma`).
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/IntentClassifierService.java) | Added `shiva` role and sharpened the "create vs fix" prompt distinction. |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | Updated approval discovery loop to support sessions running under the `shiva` role. |
+
+### Semantic Routing Verification:
+1.  **Intent: Create** (*"Write a Java function to sort a list"*) 
+    *   **Result:** Routed to `brahma`.
+2.  **Intent: Fix** (*"Why is my Java function throwing a NullPointerException?"*)
+    *   **Result:** Routed to `shiva`.
+
+### Observability:
+- ✅ **Metrics**: Verified `arcclaw_agent_invocations_total{role="shiva"}` tracking in `/q/metrics`.
+- ✅ **Sanitization**: Added fallback logic to map "debugger" synonyms to the internal `"shiva"` role string for robustness.

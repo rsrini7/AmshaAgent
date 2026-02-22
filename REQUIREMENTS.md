@@ -746,7 +746,8 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Sprint 3A (Persistent ChatMemory):** ✅ **[CRITICAL ARCHITECTURAL FIX]** Implemented a custom LangChain4j `ChatMemoryStore` backed by the existing JDBC SQLite database. Resolves "split-brain" state issues and enables "Task Amnesia" for Telegram reliability.
 * **Sprint 3B (LLM Intent Router):** ✅ Replace the brittle keyword-based `determineAgentRole` heuristic with a fast, low-latency LLM classification call (`llama-3.1-8b-instant` via Groq) to accurately route ambiguous prompts.
 * **Sprint 3C (Prometheus Metrics):** ✅ Implemented Micrometer/Prometheus integration. Metrics exposed at `/q/metrics` for token tracking and role-based invocation counting.
-* **Sprint 3D (Discord Adapter):** Planned — Replicate the Telegram asynchronous routing pattern using `camel-quarkus-discord`.
+* **Sprint 3D (ShivaAgent Integration):** ✅ Enhanced Intent Router with `shiva` (debugger) role to distinguish between code creation and bug fixing.
+* **Sprint 3E (Discord Adapter):** Planned — Replicate the Telegram asynchronous routing pattern using `camel-quarkus-discord`.
 
 
 

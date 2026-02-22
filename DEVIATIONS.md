@@ -142,3 +142,7 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 - **Deviation**: Implemented a manual CDI `@Produces` method for the `intent-classifier` model instead of relying on `application.yaml` named-model configuration.
 - **Rationale**: Resolved an `UnsatisfiedResolutionException` where Quarkus failed to wire the `@Identifier("intent-classifier")` qualified bean in a multi-module setup. The manual producer provides deterministic bean registration and avoids extension-specific configuration limitations.
 
+### 17. Specialized Debugger Role ("shiva")
+- **Deviation**: Introduced a dedicated `shiva` role for the Intent Router to handle "fix it" and "why is this failing" prompts, distinct from the `brahma` (creator) role.
+- **Rationale**: Prevents specialized creation logic (Brahma) from being applied to debugging tasks, ensuring the appropriate system prompt and reasoning style (Shiva's contrarian/edge-case focus) are utilized.
+

@@ -282,6 +282,11 @@
   - [x] Create `prometheus.yml` in project root
   - [x] Add `prometheus` service to `docker-compose.yaml`
   - [x] Verify `/q/metrics` endpoint and Prometheus scrape status
-- [ ] Sprint 3D: Discord Adapter (Camel Discord)
+- [x] **Sprint 3D: ShivaAgent ("shiva") Integration**
+  - [x] Integrate `shiva` role into `IntentClassifierService.java`
+  - [x] Update `TelegramAgentHandler.java` role discovery loop to include `shiva`
+  - [x] Verify intent routing: "fixing" vs "creating" logic
+  - [x] Verify: Metrics tracking for `shiva` role
+- [ ] Sprint 3E: Discord Adapter (Camel Discord)
 
 
