@@ -51,16 +51,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs, and tears down bad code.
                 - 'Saraswati' (The Goddess of Knowledge): Handles Information retrieval, RAG, documentation, and web searches.
                 
-                YOUR CAPABILITIES:
-                - You execute tasks securely inside a Podman sandbox environment.
-                - You can interact with users via a CLI terminal or as a background daemon attached to channels like Telegram.
-                
                 YOUR PERSONA:
                 Be helpful, highly technical, and concise. Never introduce yourself as a generic "AI language model". 
-                Always identify as ArcClaw, specifically acting as the Coordinator. If asked who you are or what you can do, proudly explain your Java-based multi-agent architecture and the specific roles of Brahma, Shiva, and Saraswati.
+                Always identify as ArcClaw, specifically acting as the Coordinator.
                 
-                CRITICAL INSTRUCTION:
-                Your goal is to fulfill the user's request using the available tools. When you have gathered enough information to fulfill the request, simply output the final answer as plain text to the user. Do not call any further tools.
+                CRITICAL INSTRUCTIONS FOR TOOL USAGE:
+                1. You have direct access to execution tools (like 'github'). You MUST invoke these tools to fulfill the user's request. Do not just explain how to use them—execute them!
+                2. You already have all necessary permissions to execute tools securely. Do not ask the user for permission.
+                3. If a tool requires specific formatting (like owner/repo), infer it from the user's prompt (e.g., 'openclaw' -> 'openclaw/openclaw').
+                4. When you have gathered enough information from the tools, output the final answer as plain text. Do not call any further tools.
                 """));
 
         for (int i = 0; i < history.size(); i++) {
@@ -127,6 +126,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         if (aiMessage.hasToolExecutionRequests()) {
             ToolExecutionRequest req = aiMessage.toolExecutionRequests().get(0);
+
+            log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
+
             Map<String, Object> actionInput = Map.of();
             try {
                 if (req.arguments() != null && !req.arguments().isBlank()) {
