@@ -137,3 +137,8 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 ### 15. Session Reset Logic (Sprint 2C)
 - **Deviation**: The Telegram handler now calls `workspaceManager.terminateSession()` specifically when the existing checkpoint is `COMPLETED` or `FAILED`.
 - **Rationale**: This allows a user to "start over" after a task finishes, without losing the convenience of deterministic ID mapping.
+
+### 16. Manual Model Producer (Sprint 3B)
+- **Deviation**: Implemented a manual CDI `@Produces` method for the `intent-classifier` model instead of relying on `application.yaml` named-model configuration.
+- **Rationale**: Resolved an `UnsatisfiedResolutionException` where Quarkus failed to wire the `@Identifier("intent-classifier")` qualified bean in a multi-module setup. The manual producer provides deterministic bean registration and avoids extension-specific configuration limitations.
+

@@ -59,6 +59,9 @@ public class TelegramAgentHandler {
     @Inject
     org.jboss.logging.Logger log;
 
+    @Inject
+    IntentClassifierService intentClassifier;
+
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
      * All Camel Exchange data must be extracted synchronously before offloading
@@ -102,32 +105,36 @@ public class TelegramAgentHandler {
             return;
         }
 
-        // Session Continuity Check (Wipe old state instead of changing the ID)
-        statefulAgentStore.load(baseId, "coordinator").ifPresent(cp -> {
-            if (cp.getStatus() == CheckpointStatus.COMPLETED || cp.getStatus() == CheckpointStatus.FAILED) {
-                log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.getStatus());
-
-                // 1. Wipe the LangChain4j ChatMemory
-                workspaceManager.terminateSession(baseId);
-
-                // 2. Wipe the ArcClaw Reasoning History so it doesn't poison the next prompt
-                cp.stateJson = "[]"; // Clear the JSON history array
-                cp.failReason = null;
-                cp.setStatus(CheckpointStatus.IN_PROGRESS);
-                statefulAgentStore.save(cp);
-            }
-        });
-
         try {
             // Activate CDI Workspace Scope manually using the consistent baseId
             WorkspaceScopeHolder.set(baseId);
             workspaceContext.setAutonomyLevel(autonomyLevel);
 
+            String activeRole = intentClassifier.classify(text);
+            log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
+                    text.length() > 50 ? text.substring(0, 50) + "..." : text, activeRole);
+
+            // Session Continuity Check (Wipe old state instead of changing the ID)
+            statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
+                if (cp.getStatus() == CheckpointStatus.COMPLETED || cp.getStatus() == CheckpointStatus.FAILED) {
+                    log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.getStatus());
+
+                    // 1. Wipe the LangChain4j ChatMemory
+                    workspaceManager.terminateSession(baseId);
+
+                    // 2. Wipe the ArcClaw Reasoning History so it doesn't poison the next prompt
+                    cp.stateJson = "[]"; // Clear the JSON history array
+                    cp.failReason = null;
+                    cp.setStatus(CheckpointStatus.IN_PROGRESS);
+                    statefulAgentStore.save(cp);
+                }
+            });
+
             log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
             AgentResult result = agentLoop.run(
                     baseId,
-                    "coordinator",
+                    activeRole,
                     text,
                     reasoningEngine,
                     5);
@@ -140,14 +147,25 @@ public class TelegramAgentHandler {
     }
 
     private String handleApprovalDecision(String chatId, String userId, String sessionId, boolean approved) {
-        var checkpoint = statefulAgentStore.load(sessionId, "coordinator");
+        String pausedRole = null;
+        com.arcclaw.core.state.AgentCheckpoint pendingCheckpoint = null;
 
-        if (checkpoint.isEmpty() || checkpoint.get().status != CheckpointStatus.AWAITING_APPROVAL) {
+        // Discover which agent role is waiting for approval
+        for (String role : java.util.List.of("coordinator", "brahma", "saraswati")) {
+            var opt = statefulAgentStore.load(sessionId, role);
+            if (opt.isPresent() && opt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                pausedRole = role;
+                pendingCheckpoint = opt.get();
+                break;
+            }
+        }
+
+        if (pausedRole == null) {
             return "❌ No pending approval found for your session.";
         }
 
         if (!approved) {
-            statefulAgentStore.markFailed(checkpoint.get().id, "Denied by user via Telegram");
+            statefulAgentStore.markFailed(pendingCheckpoint.id, "Denied by user via Telegram");
             return "🚫 Operation denied. The task has been terminated.";
         }
 
@@ -160,7 +178,7 @@ public class TelegramAgentHandler {
 
             AgentResult result = agentLoop.run(
                     sessionId,
-                    "coordinator",
+                    pausedRole,
                     "Resuming task after approval",
                     reasoningEngine,
                     5);

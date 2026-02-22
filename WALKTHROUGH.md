@@ -354,3 +354,30 @@ Replaced the default in-memory LangChain4j message store with a SQLite-backed JP
 - ✅ **Unit Test**: `PersistentChatMemoryStoreTest` verifies that messages are saved, retrieved accurately across transactions, and deleted upon command.
 - ✅ **Lifecycle Hook**: Verified `WorkspaceManager` calls `deleteMessages()` during session termination to prevent data bloat.
 - ✅ **LangChain4j 0.26.1 Compliance**: Confirmed interface package `dev.langchain4j.store.memory.chat` is correctly utilized.
+- ✅ **Task Amnesia Validation**: Real-time testing of "Secret code" retrieval confirmed the "goldfish memory" behavior. The bot intentionally forgets previous messages to ensure every task is a clean, isolated execution (Path A: Task Agent Pattern).
+
+
+---
+
+## Phase 20: Sprint 3B — LLM-Based Intent Router ✅
+
+I have successfully implemented the LLM-based intent router for the ArcClaw Telegram integration, replacing keyword-based heuristics with a robust Groq-powered classification system.
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/IntentClassifierService.java) | LLM classification logic (`brahma`/`saraswati`/`coordinator`) |
+| [ModelProducer.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/ModelProducer.java) | Manual CDI producer for `intent-classifier` model |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | Dynamic routing, session wiping, and approval discovery |
+
+### Implementation Details:
+1.  **Intent Classification**: Uses `llama-3.1-8b-instant` via Groq to analyze user prompts and determine the most appropriate agent role.
+2.  **Task Amnesia**: Implemented automatic state wiping (ChatMemory and Reasoning History) when a user resumes a session that was previously marked as `COMPLETED` or `FAILED`.
+3.  **Dynamic Approvals**: The `/approve` and `/deny` commands now dynamically scan for which agent role is `AWAITING_APPROVAL`.
+4.  **Manual CDI Producer**: Resolved a persistent `UnsatisfiedResolutionException` by manually defining the `intent-classifier` bean.
+
+### Verification Results:
+- ✅ **Automated Tests**: All 48 tests in `arcclaw-app` passed successfully.
+- ✅ **Stability**: Verified that manual bean definition correctly injects the `ChatLanguageModel` with the `@Identifier("intent-classifier")` qualifier.
+

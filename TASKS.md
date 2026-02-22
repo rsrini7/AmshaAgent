@@ -269,8 +269,14 @@
   - [x] Update `WorkspaceManager` to delete chat memory on session termination
   - [x] "Task Amnesia" Fix: Automated session reset for `COMPLETED`/`FAILED` tasks in `TelegramAgentHandler`
   - [x] Verify: `PersistentChatMemoryStoreTest` passed
-  - [ ] Verify: Realtime testing of Secret code check with Telegram - Currently it says `I don't have any information about a secret code associated with you. If you'd like to share more context or details, I'd be happy to try and help.`
-- [ ] Sprint 3B: LLM Intent Router (Groq-backed classification)
+  - [x] Verify: Realtime testing of Secret code check with Telegram - `Every message is treated as a completely isolated task... The bot has the memory of a goldfish. It cannot answer follow-up questions about the previous message because it intentionally wiped its own memory.`
+- [x] **Sprint 3B: LLM Intent Router (Groq-backed classification)**
+  - [x] Create `IntentClassifierService.java` (LLM-based role determination)
+  - [x] Create `ModelProducer.java` (Manual CDI producer for named model)
+  - [x] Integrate intent routing into `TelegramAgentHandler`
+  - [x] Implement dynamic role discovery for `/approve` and `/deny`
+  - [x] Verify: `TelegramAgentHandlerTest` routing logic
 - [ ] Sprint 3C: Prometheus Metrics (Micrometer + AgentObserver)
 - [ ] Sprint 3D: Discord Adapter (Camel Discord)
+
 

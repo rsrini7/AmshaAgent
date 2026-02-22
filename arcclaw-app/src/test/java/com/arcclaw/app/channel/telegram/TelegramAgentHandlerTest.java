@@ -19,7 +19,6 @@ import org.apache.camel.component.telegram.model.User;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -48,6 +47,9 @@ public class TelegramAgentHandlerTest {
     @InjectMock
     ReasoningEngine reasoningEngineMock;
 
+    @InjectMock
+    IntentClassifierService intentClassifierMock;
+
     ProducerTemplate producerTemplateMock;
 
     ManagedExecutor executorMock;
@@ -60,7 +62,7 @@ public class TelegramAgentHandlerTest {
         // Unwrap proxy to inject mocks into private fields
         TelegramAgentHandler instance = handler;
         if (handler instanceof io.quarkus.arc.ClientProxy) {
-             instance = (TelegramAgentHandler)((io.quarkus.arc.ClientProxy) handler).arc_contextualInstance();
+            instance = (TelegramAgentHandler) ((io.quarkus.arc.ClientProxy) handler).arc_contextualInstance();
         }
         instance.producerTemplate = producerTemplateMock;
         instance.executor = executorMock;
@@ -70,6 +72,9 @@ public class TelegramAgentHandlerTest {
             ((Runnable) invocation.getArgument(0)).run();
             return null;
         }).when(executorMock).submit(any(Runnable.class));
+
+        // Default mock for intent classifier
+        when(intentClassifierMock.classify(anyString())).thenReturn("coordinator");
 
         // Default mock for agent loop
         when(agentLoopMock.run(anyString(), anyString(), anyString(), any(ReasoningEngine.class), anyInt()))
@@ -90,7 +95,7 @@ public class TelegramAgentHandlerTest {
         when(exchange.getIn()).thenReturn(in);
         when(in.getBody(IncomingMessage.class)).thenReturn(msg);
         when(in.getHeader("CamelTelegramChatId", String.class)).thenReturn("chat456");
-        when(statefulAgentStoreMock.load(anyString(), eq("coordinator"))).thenReturn(Optional.empty());
+        when(statefulAgentStoreMock.load(anyString(), anyString())).thenReturn(Optional.empty());
 
         // Act
         handler.receiveMessage(exchange);
@@ -98,6 +103,7 @@ public class TelegramAgentHandlerTest {
         // Assert
         String expectedSessionId = UUID.nameUUIDFromBytes("chat456:123".getBytes(StandardCharsets.UTF_8)).toString();
 
+        verify(intentClassifierMock).classify("hello");
         verify(agentLoopMock).run(eq(expectedSessionId), eq("coordinator"), eq("hello"), any(), eq(5));
         verify(producerTemplateMock).sendBodyAndHeader(contains("telegram:bots"), eq("mock-answer"),
                 eq("CamelTelegramChatId"), eq("chat456"));
@@ -107,7 +113,7 @@ public class TelegramAgentHandlerTest {
     }
 
     @Test
-    void testReceiveMessage_StaleSession_GeneratesNewId() {
+    void testReceiveMessage_StaleSession_WipesState() {
         // Arrange
         Exchange exchange = mock(Exchange.class);
         Message in = mock(Message.class);
@@ -121,23 +127,24 @@ public class TelegramAgentHandlerTest {
         when(in.getBody(IncomingMessage.class)).thenReturn(msg);
         when(in.getHeader("CamelTelegramChatId", String.class)).thenReturn("chat456");
 
-        // Mock a COMPLETED checkpoint to trigger UUID.randomUUID()
+        // Mock a COMPLETED checkpoint
         AgentCheckpoint checkpoint = new AgentCheckpoint();
+        checkpoint.id = 1L;
         checkpoint.status = CheckpointStatus.COMPLETED;
-        when(statefulAgentStoreMock.load(anyString(), eq("coordinator"))).thenReturn(Optional.of(checkpoint));
+        String deterministicId = UUID.nameUUIDFromBytes("chat456:123".getBytes(StandardCharsets.UTF_8)).toString();
+
+        when(intentClassifierMock.classify("hello again")).thenReturn("coordinator");
+        when(statefulAgentStoreMock.load(eq(deterministicId), eq("coordinator"))).thenReturn(Optional.of(checkpoint));
 
         // Act
         handler.receiveMessage(exchange);
 
         // Assert
-        String deterministicId = UUID.nameUUIDFromBytes("chat456:123".getBytes(StandardCharsets.UTF_8)).toString();
+        verify(workspaceManagerMock).terminateSession(deterministicId);
+        verify(statefulAgentStoreMock)
+                .save(argThat(cp -> cp.status == CheckpointStatus.IN_PROGRESS && "[]".equals(cp.stateJson)));
 
-        ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
-        verify(agentLoopMock).run(idCaptor.capture(), anyString(), anyString(), any(), anyInt());
-
-        String actualId = idCaptor.getValue();
-        assertNotEquals(deterministicId, actualId, "Should have generated a random UUID for stale session");
-        assertTrue(actualId.length() > 0);
+        verify(agentLoopMock).run(eq(deterministicId), eq("coordinator"), eq("hello again"), any(), eq(5));
     }
 
     @Test

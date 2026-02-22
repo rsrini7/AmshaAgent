@@ -944,3 +944,39 @@ Implement a persistent message store for LangChain4j to ensure conversation cont
 ## Verification
 - ✅ `PersistentChatMemoryStoreTest`: Verified CRUD operations and transaction isolation.
 - ✅ Manual verification of "Task Amnesia" behavior in Telegram.
+
+---
+
+# Sprint 3B: LLM Intent Router (Groq-backed classification) — State Consistency & Observability ✅
+
+Harden the state layer and implementation intelligent routing for multi-agent coordination.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Persistent ChatMemory**: Migrated from in-memory to JDBC-backed `ChatMemoryStore` to ensure conversation history survives bot restarts and enables deterministic session resumption.
+
+> [!CAUTION]
+> **Task Amnesia**: Implemented automatic state wiping (ChatMemory + Reasoning History) when a user resumes a session marked as `COMPLETED` or `FAILED`. This ensures a fresh start for new tasks while maintaining deterministic IDs.
+
+> [!NOTE]
+> **LLM Intent Routing**: Replaced keyword-based heuristics with a fast LLM classifier (`llama-3.1-8b-instant`) to dynamically route ambiguous user prompts to specialized agent roles.
+
+## Proposed Changes
+
+### Core Module — Persistence & LLM
+- [NEW] `ChatMemoryEntity.java`: JPA entity for LangChain4j message persistence.
+- [NEW] `PersistentChatMemoryStore.java`: JDBC-backed implementation of `ChatMemoryStore`.
+- [NEW] `IntentClassifierService.java`: LLM-based prompt classification.
+- [NEW] `ModelProducer.java`: Manual CDI producer for named models.
+
+### App Module — Integration
+- [MODIFY] `TelegramAgentHandler.java`: Integrated intent routing and session reset logic.
+- [MODIFY] `TelegramAgentHandler.java`: Refactored approval discovery for multi-agent support.
+
+## Verification
+- ✅ `PersistentChatMemoryStoreTest` verifies history persistence.
+- ✅ `TelegramAgentHandlerTest` verifies routing and task amnesia.
+- ✅ **Secret Code Check**: Verified working as designed. The agent's intentional "goldfish memory" (Task Amnesia) correctly wipes the secret code between isolated tasks to prevent context poisoning.
+- ✅ Full suite (48 tests) passed.
+
