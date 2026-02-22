@@ -62,7 +62,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 CRITICAL INSTRUCTION:
                 Your goal is to fulfill the user's request using the available tools. When you have gathered enough information to fulfill the request, simply output the final answer as plain text to the user. Do not call any further tools.
                 """));
-        messages.add(UserMessage.from(goal));
 
         for (int i = 0; i < history.size(); i++) {
             ReasoningStep step = history.get(i);
@@ -101,6 +100,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 }
             }
         }
+
+        // This ensures the LLM knows the user just spoke and it must reply.
+        messages.add(UserMessage.from(goal));
 
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
