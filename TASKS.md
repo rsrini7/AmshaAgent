@@ -305,6 +305,11 @@
   - [x] Fix "OpenClaw Hallucination" by adding negative constraints to the system prompt
   - [x] Add an escape hatch in the system prompt for generic conversational replies
   - [x] Route GithubTool execution to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`)
+  - [x] Fix "Phantom Memory" by fetching history before LLM request in `LangChainReasoningEngine`
+  - [x] Fix "Amnesia on Approval" by persisting user goal at the start of `AgentLoop`
+  - [x] Fix "Double-Prompt Echo" by removing redundant goal appending in engine
+  - [x] Fix "Ghost of the Denied Prompt" by injecting Closure Message on `/deny`
+  - [x] Prevent Internal Noise Contamination by filtering system commands from history
 - [ ] Sprint 4C: Multi-Language Support (Planned)
 
 

@@ -1043,3 +1043,41 @@ agentLoop.run(...);
 * **Symptom:** The `GithubTool` throws a `RuntimeException: ProcessBuilder.start() debug` stating `cmd: "gh"` cannot be executed.
 * **Root Cause:** The GraalVM native binary is stepping outside the application sandbox to the host OS (WSL2). The operating system did not have the GitHub CLI (`gh`) installed or available in the system `$PATH`.
 * **Resolution:** Installed the official `gh` CLI via `apt` on the WSL2 instance and authenticated it via `gh auth login`.
+
+### The transition to a stateful **ChatMemoryStore** in Sprint 3 introduced several complex edge cases involving how an LLM handles historical context versus real-time tool execution. Below is the comprehensive troubleshooting guide for the challenges faced and resolved after the memory integration began.
+
+#### 1. The "Phantom Memory" Bug
+
+* **Symptom:** The agent successfully answered a prompt involving a tool, but immediately claimed "the conversation just started" or "I didn't look up any project yet" when asked a follow-up question.
+* **Root Cause:** The `LangChainReasoningEngine` was creating a brand-new message list for every request. Even though the history was being saved to SQLite, the engine was not fetching those messages before sending the next request to the LLM.
+* **Resolution:** Injected the `ChatMemoryStore` into the reasoning engine. Added logic to fetch historical messages by `sessionId` and append them to the request list before the current user prompt.
+
+#### 2. Internal Noise Contamination
+
+* **Symptom:** The LLM became confused when asked about previous turns, sometimes trying to "re-debug" internal system strings or tool outputs.
+* **Root Cause:** The `ChatMemoryStore` was saving every message, including internal loop mechanics like "Human Approved" or raw tool JSON outputs. This cluttered the context window with technical noise that the LLM tried to interpret as user conversation.
+* **Resolution:** Implemented a message filter in the loading logic. Historical messages containing internal keywords (like "The tool execution has been approved") or specific AI thought processes are now skipped during the context-loading phase to keep the conversational history clean.
+
+#### 3. The "Amnesia on Approval" Bug
+
+* **Symptom:** After a user approved a tool execution (e.g., searching for a Linux repo), the agent provided the answer but completely lost track of the original request in the next turn.
+* **Root Cause:** The logic to save the user’s goal to memory was originally placed at the *end* of the reasoning loop. When a tool triggered a `RequiresApprovalException`, the thread suspended and the "save" step was never reached. The resume loop only saw the tool's result, not the original question.
+* **Resolution:** Relocated the persistence logic to the very top of `AgentLoop.runLoop`. The user's prompt is now committed to the database the millisecond the loop begins, ensuring it exists even if the thread pauses for human interaction.
+
+#### 4. The "Double-Prompt Echo"
+
+* **Symptom:** Logs showed the user's current question appearing twice in the JSON payload sent to the LLM.
+* **Root Cause:** Redundant message handling. The `AgentLoop` started saving the prompt to the database immediately, which the engine then fetched. However, the engine was also manually appending the "current goal" at the end of the list.
+* **Resolution:** Flipped the logic in `LangChainReasoningEngine`. It now only manually appends the `goal` if it matches an internal system "Resume" command. Standard user prompts are exclusively loaded from the memory fetch to prevent duplication.
+
+#### 5. The "Ghost of the Denied Prompt"
+
+* **Symptom:** After a user denied a tool execution via `/deny`, the bot would spontaneously try to execute that same denied tool later in the conversation.
+* **Root Cause:** State misalignment. While Java marked the session as `FAILED`, the LLM’s conversational history still contained the original unfulfilled command. The LLM would see this "open task" in its history and try to "catch up" during the next interaction.
+* **Resolution:** Updated the `/deny` handler in the Telegram gateway to inject a "Closure Message" into the chat memory: *"I requested permission to run the tool, but the user denied it. The task was aborted."* This informs the LLM that the task is officially closed.
+
+#### 6. Failure Poisoning
+
+* **Symptom:** If a session previously hit a `/deny` or a system error, it would persistently wipe all memory of the conversation when a new prompt was sent.
+* **Root Cause:** The "Hard Wipe" continuity check. The system was programmed to call `terminateSession()` (which deletes all SQLite chat history) if the previous checkpoint status was `FAILED`.
+* **Resolution:** Replaced the "Hard Wipe" with a "Soft Reset." The system now only clears the internal tool-execution JSON (`stateJson`) while leaving the `ChatMemoryStore` untouched, allowing the agent to remember the past even after a specific tool failure.

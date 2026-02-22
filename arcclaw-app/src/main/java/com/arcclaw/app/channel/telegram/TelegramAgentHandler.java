@@ -7,6 +7,9 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -46,6 +49,9 @@ public class TelegramAgentHandler {
 
     @Inject
     ManagedExecutor executor;
+
+    @Inject
+    ChatMemoryStore chatMemoryStore;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
@@ -113,23 +119,12 @@ public class TelegramAgentHandler {
             log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
                     text.length() > 50 ? text.substring(0, 50) + "..." : text, activeRole);
 
-            // Session Continuity Check
+            // Session Continuity Check (Soft Reset only)
             statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
-                if (cp.getStatus() == CheckpointStatus.FAILED) {
-                    log.infof("Previous session %s was FAILED. Wiping history to start fresh.", baseId);
-                    // 1. HARD WIPE: Destroys LangChain4j ChatMemory so the user isn't trapped
-                    workspaceManager.terminateSession(baseId);
-                    
-                    cp.stateJson = "[]"; 
-                    cp.failReason = null;
-                    cp.setStatus(CheckpointStatus.IN_PROGRESS);
-                    statefulAgentStore.save(cp);
-                } 
-                else if (cp.getStatus() == CheckpointStatus.COMPLETED) {
-                    log.infof("Previous session %s was COMPLETED. Retaining chat memory for continuity.", baseId);
-                    // SOFT WIPE: DO NOT call terminateSession() here! We want to keep the conversation memory.
-                    
-                    // Only wipe the internal ArcClaw Reasoning History so it doesn't replay old tool calls
+                if (cp.getStatus() == CheckpointStatus.FAILED || cp.getStatus() == CheckpointStatus.COMPLETED) {
+                    log.infof("Resetting ReAct state for session %s (%s) to start fresh goal.", baseId, cp.getStatus());
+                    // 1. We keep the ChatMemory (DO NOT call terminateSession)
+                    // 2. We just wipe the internal JSON tool-call array
                     cp.stateJson = "[]"; 
                     cp.failReason = null;
                     cp.setStatus(CheckpointStatus.IN_PROGRESS);
@@ -177,6 +172,15 @@ public class TelegramAgentHandler {
 
         if (!approved) {
             statefulAgentStore.markFailed(pendingCheckpoint.id, "Denied by user via Telegram");
+            
+            // --- SPRINT 2 FIX: Inform the LLM that the user cancelled the action ---
+            java.util.List<dev.langchain4j.data.message.ChatMessage> mem = chatMemoryStore.getMessages(sessionId);
+            if (mem != null) {
+                mem = new java.util.ArrayList<>(mem);
+                mem.add(dev.langchain4j.data.message.AiMessage.from("I requested permission to run the tool, but the user denied it. The task was aborted."));
+                chatMemoryStore.updateMessages(sessionId, mem);
+            }
+            
             return "🚫 Operation denied. The task has been terminated.";
         }
 

@@ -8,6 +8,10 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.governance.RequiresApprovalException;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
@@ -56,6 +60,9 @@ public class AgentLoop {
     AgentOtelContext otelContext;
 
     @Inject
+    ChatMemoryStore chatMemoryStore;
+
+    @Inject
     Instance<com.arcclaw.core.observability.AgentObserver> observers;
 
     /**
@@ -99,7 +106,6 @@ public class AgentLoop {
         WorkspaceScopeHolder.set(sessionId);
         MDC.put("sessionId", sessionId);
         MDC.put("agentRole", agentRole);
-        // Span sessionSpan = otelContext.startSessionSpan(sessionId);
 
         try {
             // --- CHECKPOINT RESUME ---
@@ -121,7 +127,6 @@ public class AgentLoop {
             } else {
                 // Save the reasoning steps and grab the entity ID
                 var cp = agentStore.save(sessionId, agentRole, result.steps());
-                
                 if (result.success()) {
                     agentStore.markCompleted(cp.id);
                 } else {
@@ -177,7 +182,33 @@ public class AgentLoop {
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
 
-        // --- CHANGE A: RESUME HOOK ---
+        String sessionId = WorkspaceScopeHolder.get();
+
+        // --- SPRINT 2: Save user prompt BEFORE anything else happens ---
+        if (sessionId != null && goal != null && !goal.isEmpty()) {
+            if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
+                && !"Resuming task after approval".equals(goal)) {
+                
+                List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
+                if (currentHistory == null) currentHistory = new ArrayList<>();
+                else currentHistory = new ArrayList<>(currentHistory);
+                
+                // Avoid duplicating if we somehow re-enter with the same goal
+                boolean alreadySaved = false;
+                if (!currentHistory.isEmpty()) {
+                    ChatMessage lastMsg = currentHistory.get(currentHistory.size() - 1);
+                    if (lastMsg instanceof UserMessage && lastMsg.toString().contains(goal)) {
+                        alreadySaved = true;
+                    }
+                }
+                if (!alreadySaved) {
+                    currentHistory.add(UserMessage.from(goal));
+                    chatMemoryStore.updateMessages(sessionId, currentHistory);
+                }
+            }
+        }
+
+        // --- RESUME HOOK ---
         agentStore.load(WorkspaceScopeHolder.get(), agentRole).ifPresent(checkpoint -> {
             if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                 String pendingTool = checkpoint.getPendingToolName();
@@ -232,16 +263,14 @@ public class AgentLoop {
             } catch (Exception e) {
                 log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
                 synchronized (history) {
-                    return AgentResult.error(List.copyOf(history),
-                            "ReasoningEngine error: " + e.getMessage());
+                    return AgentResult.error(List.copyOf(history), "ReasoningEngine error: " + e.getMessage());
                 }
             }
 
             if (step == null) {
                 log.warn("ReasoningEngine returned null step — terminating");
                 synchronized (history) {
-                    return AgentResult.error(List.copyOf(history),
-                            "ReasoningEngine returned null step");
+                    return AgentResult.error(List.copyOf(history), "ReasoningEngine returned null step");
                 }
             }
 
@@ -253,6 +282,20 @@ public class AgentLoop {
                 if (step.actionInput() != null && step.actionInput().containsKey("answer")) {
                     answer = String.valueOf(step.actionInput().get("answer"));
                 }
+                
+                // --- SPRINT 2: SAVE COMPLETED AI ANSWER TO CHAT MEMORY STORE ---
+                if (sessionId != null && answer != null) {
+                    List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
+                    if (currentHistory == null) {
+                        currentHistory = new ArrayList<>();
+                    } else {
+                        currentHistory = new ArrayList<>(currentHistory);
+                    }
+                    
+                    currentHistory.add(AiMessage.from(answer));
+                    chatMemoryStore.updateMessages(sessionId, currentHistory);
+                }
+
                 step = step.withObservation("Task completed.");
                 final ReasoningStep completedStep = step;
                 synchronized (history) {
