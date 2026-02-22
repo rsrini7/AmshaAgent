@@ -108,7 +108,7 @@ public class ToolRegistry {
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
                 try {
                     String paramsJson = objectMapper.writeValueAsString(params);
-                    throw new RequiresApprovalException(toolName, paramsJson, "current");
+                    throw new RequiresApprovalException(toolName, paramsJson, workspaceContext.getSessionId());
                 } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                     throw new RuntimeException("Failed to serialize tool parameters", e);
                 }

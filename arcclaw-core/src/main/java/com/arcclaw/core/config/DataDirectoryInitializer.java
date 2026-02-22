@@ -10,14 +10,12 @@ import java.io.File;
 @ApplicationScoped
 public class DataDirectoryInitializer {
 
-    @ConfigProperty(name = "arcclaw.data.dir", defaultValue = "./data")
-    String dataDir;
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
+    String workspaceRootDir;
 
     // This runs the millisecond Quarkus boots, BEFORE Hibernate connects to SQLite
     void onStart(@Observes StartupEvent ev) {
-        File dir = new File(dataDir);
-        if (!dir.exists()) {
-            dir.mkdirs(); // Forces Windows/Linux to create the missing folder!
-        }
+        // Create both: the data root (for SQLite) and the workspaces dir (for agents)
+        new File(workspaceRootDir).mkdirs();  // implicitly creates ./data parent too
     }
 }

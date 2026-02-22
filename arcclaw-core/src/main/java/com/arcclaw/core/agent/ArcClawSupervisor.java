@@ -50,19 +50,21 @@ public class ArcClawSupervisor {
     /**
      * Execute a goal using a specific agent persona with the given engine.
      *
+     * @param sessionId The chat-bot sesstion id
      * @param role   The agent role to use.
      * @param goal   The task goal.
      * @param engine The reasoning engine (LLM abstraction).
      * @return The agent result from the reasoning loop.
      * @throws IllegalArgumentException if the agent role is not found.
      */
-    public AgentResult executeWithAgent(String role, String goal, ReasoningEngine engine) {
+    public AgentResult executeWithAgent(String sessionId, String role, String goal, ReasoningEngine engine) {
         var agent = findAgent(role)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown agent role: " + role));
-
-        log.infof("Supervisor delegating goal to agent '%s': %s",
-                agent.role(), goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
-
-        return agentLoop.run(goal, engine);
+                
+        log.infof("Supervisor delegating to '%s': %s", agent.role(),
+                goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
+                
+        // USE the correct 5-parameter AgentLoop signature
+        return agentLoop.run(sessionId, agent.role(), goal, engine, 5);
     }
 }

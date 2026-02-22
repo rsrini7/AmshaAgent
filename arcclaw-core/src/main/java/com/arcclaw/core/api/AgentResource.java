@@ -7,6 +7,9 @@ import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +36,9 @@ import org.slf4j.LoggerFactory;
 public class AgentResource {
 
     private static final Logger log = LoggerFactory.getLogger(AgentResource.class);
+
+    @Inject
+    WorkspaceContext workspaceContext;
 
     @Inject
     WorkspaceManager workspaceManager;
@@ -71,6 +77,12 @@ public class AgentResource {
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         try {
+            // 1. Activate the Workspace Scope for this REST request thread
+            WorkspaceScopeHolder.set(sessionId);
+            
+            // 2. Elevate Autonomy so tools trigger RequiresApprovalException instead of hard crashing
+            workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
                     maxIterations);
             if (result.success()) {
@@ -87,6 +99,9 @@ public class AgentResource {
             return Response.serverError()
                     .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
+        } finally {
+            // 3. ALWAYS clear the thread scope when done to prevent memory leaks!
+            WorkspaceScopeHolder.clear();
         }
     }
 
@@ -97,11 +112,16 @@ public class AgentResource {
         log.info("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-        // Use Quarkus-managed @VirtualThreads executor to propagate Vert.x duplicated
-        // context
+        // Use Quarkus-managed @VirtualThreads executor to propagate Vert.x duplicated context
         // (which carries CDI RequestScope) into the spawned virtual thread.
         vThreads.execute(() -> {
             try {
+                // 1. Activate the Workspace Scope for this background thread
+                WorkspaceScopeHolder.set(sessionId);
+                
+                // 2. Elevate Autonomy for the background task
+                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
                 AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
                         maxIterations);
                 if (result.success()) {
@@ -118,6 +138,9 @@ public class AgentResource {
                 response.resume(Response.serverError().entity(
                         e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                         .build());
+            } finally {
+                // 3. Clear scope to prevent memory leaks in the executor pool
+                WorkspaceScopeHolder.clear();
             }
         });
     }
