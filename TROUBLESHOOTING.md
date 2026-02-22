@@ -1000,20 +1000,46 @@ agentLoop.run(...);
 
 ```
 
-#### 🔴 Some more findings whilte testing the above fix
+### 🔴 Post Claude Code Review Fixes & HITL & Memory Testing Challenges
 
-🔴 Failure: Goldfish Memory (Agent forgets immediately after success)
-Symptom: The agent successfully completes a tool action and answers a prompt, but if the user asks a follow-up question in the next message, the agent claims the conversation just started.
-Root Cause: The TelegramAgentHandler was treating COMPLETED checkpoints the same as FAILED checkpoints, calling workspaceManager.terminateSession(). This destroyed the LangChain ChatMemory after every successful interaction.
-Resolution: Split the continuity check. FAILED sessions get a hard wipe (including terminateSession()), while COMPLETED sessions get a soft wipe (resetting the stateJson tool loop array to [] but leaving the ChatMemory completely intact).
+#### 1. The "Goldfish Memory" Bug (Premature Context Wipes)
 
-🧠 The Psychology of this Fix
-By adding "DO NOT invoke tools for general greetings or questions about your own identity...", you give the LLM an explicit "escape hatch". It now knows it has permission to simply talk to you without forcing a square peg (the GitHub tool) into a round hole (a conversational question).
+* **Symptom:** The agent successfully completes a tool action and answers a prompt, but if the user asks a follow-up question in the next message, the agent claims the conversation just started.
+* **Root Cause:** The `TelegramAgentHandler` was treating `COMPLETED` checkpoints the exact same as `FAILED` checkpoints, calling `workspaceManager.terminateSession()` for both. This aggressively destroyed the LangChain in-memory `ChatMemory` after every successful interaction.
+* **Resolution:** Split the continuity check logic. `FAILED` sessions receive a hard wipe (including `terminateSession()`), while `COMPLETED` sessions receive a soft wipe (resetting only the internal `stateJson` tool loop array to `[]` to prevent tool replays, while leaving the LangChain conversational memory completely intact).
 
-🧠 Why did it forget the conversation again?
-In your first message, it said: "You didn't request any repository earlier. This conversation just started."
-This happened because you restarted your native runner.
+#### 2. LLM "Trigger Happy" Behavior (Tool Over-Eagerness)
 
-While your SQLite database permanently saves your AWAITING_APPROVAL checkpoints, LangChain4j stores the actual conversational chat history in your server's RAM (memory). When you stopped the server to rebuild, the RAM was wiped. As far as the new Java process was concerned, your Telegram message was the very first time you had ever spoken to it!
+* **Symptom:** The user asks a conversational question like "Who are you?" or "What are your capabilities?", and the agent inexplicably attempts to trigger the `github` tool to answer it.
+* **Root Cause:** The system prompt aggressively commanded the LLM: *"You MUST invoke these tools to fulfill the user's request."* Small, highly literal models (like Llama 3) interpreted this to mean they were forbidden from answering *any* prompt without using a tool first.
+* **Resolution (Prompt Engineering):** Added an explicit "escape hatch" to the system prompt: *"DO NOT invoke tools for general greetings or questions about your own identity and capabilities."* This gives the LLM psychological permission to act as a conversational chatbot when external data isn't required.
 
-(If you want conversation history to survive server reboots in the future, we will need to wire LangChain's ChatMemoryStore directly to your SQLite database, but for now, it works perfectly as an ephemeral session).
+#### 3. The "Amnesia on Error" Bug (Approval Flow Blindspot)
+
+* **Symptom:** A tool is approved by the user, but the execution fails (e.g., a 404 Not Found from GitHub). Instead of reporting the error, the agent ignores it and replies with: *"Task resumed. What would you like to do next?"*
+* **Root Cause:** When `/approve` was typed, the `handleApprovalDecision` method sent a hardcoded system string to the LLM saying: `"Resuming task after approval"`. The LLM saw this string, assumed everything was fine, and ignored the preceding tool error.
+* **Resolution:** Updated the hardcoded continuation prompt to explicitly command the LLM to evaluate the result: *"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer."*
+
+#### 4. Few-Shot Overfitting (The "OpenClaw" Hallucination)
+
+* **Symptom:** The user requests details for a specific repository (e.g., `rsrini7/mermaid2gif`), but the agent stubborn queries `openclaw/mermaid2gif` or `rsrini7/openclaw`, resulting in 404 errors.
+* **Root Cause:** The system prompt used a highly specific few-shot example: *"infer it from the user's prompt (e.g., 'openclaw' -> 'openclaw/openclaw')"*. The small LLM overfitted to this example, treating the word "openclaw" as a strict formatting rule that had to be injected into every GitHub query.
+* **Resolution:** Replaced the specific example with a generic one (`apache/camel`) and added a strict negative constraint: *"NEVER hallucinate or guess the repository owner. If the user only provides a repo name, ask them for the full owner/repo path."*
+
+#### 5. Ephemeral Chat Memory (Amnesia on Reboot)
+
+* **Symptom:** After stopping and recompiling the Quarkus native runner, the agent forgets the entire previous conversation, even though the SQLite database is still intact.
+* **Root Cause (Architectural Constraint):** While ArcClaw's SQLite database permanently saves stateful checkpoints (like `AWAITING_APPROVAL`), LangChain4j stores the actual conversational chat history in the server's RAM via an in-memory `ChatMemoryStore`. Restarting the JVM/Native process wipes the RAM.
+* **Resolution:** Documented as expected behavior. For enterprise persistence across server reboots, LangChain's `ChatMemoryStore` must eventually be wired directly to the SQLite/Hibernate persistence layer.
+
+#### 6. SQLite Check Constraint Violations
+
+* **Symptom:** The agent attempts to pause for human approval, but throws a fatal SQL error: `[SQLITE_CONSTRAINT_CHECK] A CHECK constraint failed`.
+* **Root Cause:** The legacy SQLite database schema was generated with a strict `CHECK` constraint that only allowed `IN_PROGRESS`, `COMPLETED`, and `FAILED`. When the Java enum was updated to include `AWAITING_APPROVAL`, the database engine rejected the new string.
+* **Resolution:** Deleted the local `arcclaw-meta.db` file. Upon the next startup, Hibernate recreated the schema with the updated constraint rules.
+
+#### 7. Native ProcessBuilder Failures
+
+* **Symptom:** The `GithubTool` throws a `RuntimeException: ProcessBuilder.start() debug` stating `cmd: "gh"` cannot be executed.
+* **Root Cause:** The GraalVM native binary is stepping outside the application sandbox to the host OS (WSL2). The operating system did not have the GitHub CLI (`gh`) installed or available in the system `$PATH`.
+* **Resolution:** Installed the official `gh` CLI via `apt` on the WSL2 instance and authenticated it via `gh auth login`.

@@ -1,3 +1,13 @@
+🧠 Why did it forget the conversation again?
+In your first message, it said: "You didn't request any repository earlier. This conversation just started."
+This happened because you restarted your native runner.
+
+While your SQLite database permanently saves your AWAITING_APPROVAL checkpoints, LangChain4j stores the actual conversational chat history in your server's RAM (memory). When you stopped the server to rebuild, the RAM was wiped. As far as the new Java process was concerned, your Telegram message was the very first time you had ever spoken to it!
+
+(If you want conversation history to survive server reboots in the future, we will need to wire LangChain's ChatMemoryStore directly to your SQLite database, but for now, it works perfectly as an ephemeral session).
+
+---
+
 Option A: New Tools. Want to give Brahma the ability to write files to the disk, or give Saraswati the ability to search the web or query a Vector database (RAG)?
 
 Option B: Sandbox Hardening. Remember the GithubTool using the JVM's user.dir? We could build the dynamic isolated workspace folders for Podman mounts.
