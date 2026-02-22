@@ -16,6 +16,9 @@ public class IntentClassifierService {
     @Identifier("intent-classifier")
     ChatLanguageModel classifierModel;
 
+    @Inject
+    org.eclipse.microprofile.context.ManagedExecutor managedExecutor;
+
     private static final Logger Log = Logger.getLogger(IntentClassifierService.class);
 
     private static final String CLASSIFIER_PROMPT = """
@@ -37,8 +40,8 @@ public class IntentClassifierService {
             return CompletableFuture.supplyAsync(() -> {
                 String raw = classifierModel.chat(
                         CLASSIFIER_PROMPT.formatted(userMessage));
-                return sanitize(raw.toLowerCase());
-            }).get(3, TimeUnit.SECONDS);
+                return sanitize(raw.trim().toLowerCase());
+            }, managedExecutor).get(3, TimeUnit.SECONDS);
         } catch (Exception e) {
             Log.warnf("Intent classifier failed for '%s': %s — defaulting to coordinator",
                     userMessage.length() > 40
