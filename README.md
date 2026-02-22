@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🛡️ ArcClaw v1.0</h1>
+  <h1>🛡️ ArcClaw v1.2</h1>
   <p><strong>A secure, stateful, and financially governed AI agent kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -19,8 +19,8 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 | Pillar | Implementation |
 |---|---|
-| **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces |
-| **State** | JDBC-backed `ChatMemoryStore` + SQLite (WAL) for 100% session persistence |
+| **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
+| **State** | JDBC-backed `ChatMemoryStore` + SQLite (WAL) for 100% session persistence and graceful continuity |
 | **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
@@ -28,7 +28,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 ### 🕉️ The Cosmic Pantheon (Grok 4.20 Inspiration)
 
-ArcClaw's default multi-agent roster is heavily inspired by the architecture of the **Grok 4.20** release, which famously utilized a 4-agent collaborative design to achieve unprecedented reasoning capabilities. To give this architecture a distinct flavor, ArcClaw maps these 4 foundational roles to the Hindu Cosmic Pantheon:
+ArcClaw's default multi-agent roster is heavily inspired by the four-agent collaborative architecture of the **Grok 4.20** Beta release, designed to achieve unprecedented reasoning capabilities. To give this architecture a distinct flavor, ArcClaw maps these foundational roles to the Hindu **Trimurti & Tridevi Personas**:
 
 *   **Vishnu (`coordinator`):** The Preserver. Acts as the primary router, decomposing the user's objective, delegating tasks to specialists, and synthesizing the final output.
 *   **Saraswati (`researcher`):** The Goddess of Knowledge. Operates strictly on facts and external data retrieval (e.g., GitHub). Hard-prompted to never fabricate information or write code.
@@ -186,32 +186,42 @@ mvn clean verify -pl arcclaw-app -am
 ```
 *(Note: Mockito requires JDK 21+ inline mock attachments. This is handled automatically by the `--add-opens` flags in the `arcclaw-app` pom.xml).*
 
-### Step 4: Run the Kernel (Dual-Mode)
-ArcClaw v1.0 functions as a dual-mode binary. You can run it as a long-lived REST daemon or execute a single task directly from the CLI.
+### Step 4: Run the Kernel (Multi-Mode)
+ArcClaw v1.2 functions as a multi-mode binary. You can run it as a long-lived REST daemon, attach it to external channels, interact via a REPL, or execute a single task directly from the CLI.
 
-**Option A: Daemon Mode (REST API)**
-If you prefer to run the kernel locally on the JVM using Quarkus dev mode instead of Docker:
+**Option A: Daemon Mode (`serve`)**
+Run as a background REST API server.
 ```bash
 # Ensure you are using JDK 21+ (Designed for JDK 25)
 .\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
 ```
 *(Note: Or using the built JAR: `java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve`)*
-> [!NOTE]
-> If Quarkus dev mode fails with a console `NullPointerException`, disable the dev console by setting `quarkus.console.enabled=false` in the `%dev` profile. See `TROUBLESHOOTING.md` for details.
 
-**Option B: CLI One-Shot Mode (Verbose)**
-Run a single agentic task and exit immediately. Agent loop output and token costs are streamed directly to your terminal.
+**Option B: Channel Daemon (`attach`)**
+Keep ArcClaw running as a background daemon to service external channel adapters (e.g., Telegram bots).
 ```bash
-# Using the built JAR
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar attach telegram
+```
+
+**Option C: Interactive REPL (`chat`)**
+Start a multi-turn, stateful conversation stream directly in your terminal.
+```bash
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar chat
+```
+
+**Option D: One-Shot Task (`ask`)**
+Run a single agentic task and exit immediately. Perfect for CI/CD automation.
+```bash
 java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar ask "Analyze the codebase..." --role coordinator
 ```
 
-**Option C: Silent PowerShell CLI (Recommended for Windows)**
-For a cleaner experience, use the provided silent wrapper. It forces the `%cli` profile, disabling banners and verbose logging, leaving only the agent's reasoning.
+**Option E: Silent PowerShell Wrapper (Recommended for Windows)**
+For a cleaner experience, use the provided silent wrapper. It forces the `%cli` profile (disabling banners) and sets JVM `UTF-8` encoding to ensure Unicode terminal symbols (`✦`, `⚡`) render perfectly.
 ```powershell
+.\arcclaw-cli.ps1 chat
+# or
 .\arcclaw-cli.ps1 ask "Your goal here" --role coordinator
 ```
-*(Note: If running purely natively, execute the compiled binary with `-Dquarkus.profile=cli`: `./arcclaw-app-1.0.0-SNAPSHOT-runner -Dquarkus.profile=cli ask "your goal"`)*
 
 ---
 
