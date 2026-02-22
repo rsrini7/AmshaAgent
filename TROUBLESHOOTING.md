@@ -873,7 +873,7 @@ if (camelContext.getRoute("telegram-bot") == null) {
 
 #### 13.4 Detailed Intent Classifer Steps
 
-### 🏛️ 1. Coordinator Role
+##### 🏛️ 1. Coordinator Role
 
 **Routing Intent:** General planning, coordination, and tasks that don't fit specialized buckets.
 
@@ -881,7 +881,7 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Expected Log:** `Intent classified '...' -> role: coordinator`
 * **Verification:** Confirm `arcclaw_agent_invocations_total{role="coordinator"}` increments in `/q/metrics`.
 
-### 🛠️ 2. Brahma Role (The Creator)
+##### 🛠️ 2. Brahma Role (The Creator)
 
 **Routing Intent:** Creating new code, writing scripts from scratch, or building features.
 
@@ -889,7 +889,7 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Expected Log:** `Intent classified '...' -> role: brahma`
 * **Verification:** Confirm Brahma is invoked for **creation** tasks, not just generic coding keywords.
 
-### 🕉️ 3. Shiva Role (The Debugger/Transformer)
+##### 🕉️ 3. Shiva Role (The Debugger/Transformer)
 
 **Routing Intent:** Fixing existing code, analyzing errors, and interpreting stack traces.
 
@@ -897,7 +897,7 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Expected Log:** `Intent classified '...' -> role: shiva`
 * **Verification:** Ensure the `sanitize()` method correctly prioritized `shiva` over `brahma` for this fix-oriented prompt.
 
-### 📚 4. Saraswati Role (The Knowledge Base)
+##### 📚 4. Saraswati Role (The Knowledge Base)
 
 **Routing Intent:** Research, facts, explanations, and finding information.
 
@@ -905,7 +905,7 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Expected Log:** `Intent classified '...' -> role: saraswati`
 * **Verification:** Confirms the classifier ignores the "Java" keyword (which might trigger Brahma) and correctly identifies the **research** intent.
 
-### 📊 Verification Dashboard
+##### 📊 Verification Dashboard
 
 After running one of each, your metrics endpoint should look like this:
 
@@ -917,3 +917,59 @@ After running one of each, your metrics endpoint should look like this:
 | `arcclaw_agent_invocations_total` | `role="saraswati"` | `1.0` |
 
 ---
+
+### 14. 🛠️ Claude Code Reviews and Fixes
+
+#### 🔴 Failure: REST API Sessions Cannot Use Tools
+
+**Symptom:** When triggering agents via the REST API (`POST /api/v1/sessions/{id}/run`), tools like `GithubTool` immediately fail with a `SecurityException: Operation NETWORK_OUTBOUND not permitted`. The Human-in-the-loop (HITL) approval flow never triggers.
+**Root Cause:** The `WorkspaceContext` initializes in `READONLY` mode by default. The REST API (`AgentResource`) was not elevating the autonomy level to `SUPERVISED` like the Telegram handler did, permanently trapping REST requests in a strict sandbox.
+**Resolution:** Explicitly activate the CDI scope and elevate the autonomy level before calling the `AgentLoop`. (Ensure this is done inside the lambda thread for async calls as well).
+
+```java
+WorkspaceScopeHolder.set(sessionId);
+workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
+```
+
+#### 🔴 Failure: Human-in-the-Loop Approval Fails to Resume
+
+**Symptom:** An agent pauses for human approval, but when `/approve` is typed, the system cannot find the paused session or throws errors relating to a session ID named `"current"`.
+**Root Cause:** `ToolRegistry.java` had a hardcoded string `"current"` being passed into the `RequiresApprovalException`, which wiped out the actual UUID of the session needing approval.
+**Resolution:** Injected `WorkspaceContext` into the `ToolRegistry` and updated the exception to pass the real ID:
+
+```java
+throw new RequiresApprovalException(toolName, paramsJson, workspaceContext.getSessionId());
+
+```
+
+#### 🔴 Failure: Semantic Router Triggers Default Coordinator
+
+**Symptom:** A prompt specifically asking to debug a stack trace is sent. The `IntentClassifierService` correctly identifies it as "shiva", but the generic "coordinator" (Vishnu) replies instead.
+**Root Cause:** Domain Leakage. The LLM was outputting persona names ("shiva"), but the agents were registered under functional duty names (`@AgentRole("debugger")`). Because "shiva" didn't match "debugger", the `AgentLoop` fell back to the default coordinator.
+**Resolution:** Updated `IntentClassifierService.sanitize()` to act as a strict Translation Layer mapping personas to system duties.
+
+```java
+if (lower.contains("shiva") || lower.contains("debugger")) return "debugger";
+
+```
+
+*Note: Approval loops and CLI help text must strictly use the functional duty strings (`coder`, `debugger`, `researcher`, `coordinator`).*
+
+#### 🔴 Failure: Concurrent Users Overwriting Files
+
+**Symptom:** When multiple users ask ArcClaw to clone different GitHub repositories simultaneously, the files get mixed up, overwritten, or throw file-lock exceptions.
+**Root Cause:** `GithubTool.java` was hardcoding the working directory to `System.getProperty("user.dir")` (the JVM root). All Podman containers were mounting the exact same host directory.
+**Resolution:** Updated `GithubTool` to dynamically generate and create a unique, isolated workspace directory for every request using the active session ID.
+
+```java
+Path workspaceRoot = Path.of(workspaceRootDir, workspaceContext.getSessionId());
+Files.createDirectories(workspaceRoot);
+
+```
+
+#### 🟡 Warning: ArcClawSupervisor Compilation Failure
+
+**Symptom:** Attempting to build a multi-agent orchestration flow using `ArcClawSupervisor` fails to compile, citing a missing 2-parameter `agentLoop.run()` method.
+**Root Cause:** The Supervisor class was dead code that had drifted from the main `AgentLoop` signature updates, lacking `sessionId`, `role`, and `maxIterations` parameters.
+**Resolution:** Updated the `executeWithAgent` method signature to pass the required 5 parameters, aligning it with the core state management system.
