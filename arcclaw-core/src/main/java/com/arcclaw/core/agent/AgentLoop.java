@@ -182,6 +182,32 @@ public class AgentLoop {
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
 
+        String sessionId = WorkspaceScopeHolder.get();
+
+        // --- SPRINT 2: Save user prompt BEFORE anything else happens ---
+        if (sessionId != null && goal != null && !goal.isEmpty()) {
+            if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
+                && !"Resuming task after approval".equals(goal)) {
+                
+                List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
+                if (currentHistory == null) currentHistory = new ArrayList<>();
+                else currentHistory = new ArrayList<>(currentHistory);
+                
+                // Avoid duplicating if we somehow re-enter with the same goal
+                boolean alreadySaved = false;
+                if (!currentHistory.isEmpty()) {
+                    ChatMessage lastMsg = currentHistory.get(currentHistory.size() - 1);
+                    if (lastMsg instanceof UserMessage && lastMsg.toString().contains(goal)) {
+                        alreadySaved = true;
+                    }
+                }
+                if (!alreadySaved) {
+                    currentHistory.add(UserMessage.from(goal));
+                    chatMemoryStore.updateMessages(sessionId, currentHistory);
+                }
+            }
+        }
+
         // --- RESUME HOOK ---
         agentStore.load(WorkspaceScopeHolder.get(), agentRole).ifPresent(checkpoint -> {
             if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
@@ -257,18 +283,13 @@ public class AgentLoop {
                     answer = String.valueOf(step.actionInput().get("answer"));
                 }
                 
-                // --- SAVE CONVERSATION TO LONG-TERM MEMORY ---
-                String sessionId = WorkspaceScopeHolder.get();
+                // --- SPRINT 2: SAVE COMPLETED AI ANSWER TO CHAT MEMORY STORE ---
                 if (sessionId != null && answer != null) {
                     List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
                     if (currentHistory == null) {
                         currentHistory = new ArrayList<>();
                     } else {
                         currentHistory = new ArrayList<>(currentHistory);
-                    }
-                    
-                    if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)) {
-                        currentHistory.add(UserMessage.from(goal));
                     }
                     
                     currentHistory.add(AiMessage.from(answer));

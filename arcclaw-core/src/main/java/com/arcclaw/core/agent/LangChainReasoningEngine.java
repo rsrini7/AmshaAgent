@@ -9,10 +9,10 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,23 +75,17 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (chatHistory != null && !chatHistory.isEmpty()) {
                 for (ChatMessage msg : chatHistory) {
                     boolean skip = false;
+                    String msgString = msg.toString();
                     
-                    // Filter out old SystemMessages
+                    // Safely filter out system noise without using deprecated .text() methods
                     if (msg instanceof SystemMessage) {
                         skip = true;
-                    } 
-                    // Safely check AiMessage for "Human Approved" without using deprecated ChatMessage.text()
-                    else if (msg instanceof AiMessage) {
-                        AiMessage aiMsg = (AiMessage) msg;
-                        if (aiMsg.text() != null && aiMsg.text().equals("Human Approved")) {
-                            skip = true;
-                        }
-                    } 
-                    // Safely filter out the internal User prompt injection using toString()
-                    else if (msg instanceof UserMessage) {
-                        if (msg.toString().contains("The tool execution has been approved and completed")) {
-                            skip = true;
-                        }
+                    } else if (msg instanceof AiMessage && msgString.contains("Human Approved")) {
+                        skip = true;
+                    } else if (msg instanceof UserMessage && msgString.contains("The tool execution has been approved and completed")) {
+                        skip = true;
+                    } else if (msg instanceof UserMessage && msgString.contains("Resuming task after approval")) {
+                        skip = true;
                     }
                     
                     if (!skip) {
@@ -122,7 +116,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         .arguments(argsJson)
                         .build();
 
-                // LangChain4J 1.0.0 AiMessage.from takes a List of tool execution requests
                 messages.add(AiMessage.from(step.thought() != null ? step.thought() : "",
                         Collections.singletonList(request)));
 
@@ -140,8 +133,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
 
-        // 4. Add the CURRENT User goal
-        messages.add(UserMessage.from(goal));
+        // 4. Add the CURRENT User goal (unless it's an internal resume string)
+        if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
+            && !"Resuming task after approval".equals(goal)) {
+            messages.add(UserMessage.from(goal));
+        }
 
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
