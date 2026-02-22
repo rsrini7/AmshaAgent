@@ -722,3 +722,50 @@ if (camelContext.getRoute("telegram-bot") == null) {
 }
 ```
 3. Ensure `camelContext.start()` is called if the context is stopped.
+
+## Sprint 2A & 2B: Telegram Channel & Human-in-the-Loop State Machine
+
+### 1. Telegram Polling `409 Conflict`
+* **Symptom:** `org.apache.camel.component.telegram.TelegramException: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running`
+* **Root Cause:** Quarkus Dev Mode hot-reloads occasionally fail to kill the old Camel networking thread before starting a new one. Telegram strictly limits polling to one active connection per bot token.
+* **Resolution:** 1. Stop the Quarkus application (`Ctrl+C`).
+  2. Kill lingering Java processes (Windows: `taskkill /F /IM java.exe`, Linux: `pkill -f java`).
+  3. Verify no orphaned Docker containers are running with the same `.env` file (`docker ps`).
+  4. Restart the Quarkus application cleanly.
+
+### 2. Local LLM Emitting Raw JSON / Hallucinating
+* **Symptom:** The agent prints raw JSON tool schemas to the Telegram chat (e.g., `{"name": "gh", "parameters": ...}`) instead of executing them, or hallucinates blatantly incorrect facts (e.g., "John Simpson invented C++").
+* **Root Cause:** The local model (e.g., `llama3.2:1b`) lacked the parameter capacity (neural size) to hold the complex ArcClaw system prompt, adhere to the strict LangChain4j tool-calling JSON schema, and recall factual data simultaneously.
+* **Resolution:** Migrated to the Groq Cloud API using the OpenAI compatibility layer in `application.yaml`. Pointed `base-url` to `https://api.groq.com/openai/v1` and upgraded the model to `llama-3.3-70b-versatile` which has native tool-calling training.
+
+### 3. Agent Stuck in `READONLY` Mode
+* **Symptom:** Agent refuses to execute tools, returning: `Security violation... The current autonomy level does not permit this operation.`
+* **Root Cause:** Two issues: 
+  1. Enum drift (`READ_ONLY` vs `READONLY`, `PARTIAL` vs `SUPERVISED`) caused config injection silently to fail. 
+  2. `TelegramAgentHandler` injected the config property but failed to actively apply it to the `WorkspaceContext` via `workspaceContext.setAutonomyLevel()`.
+* **Resolution:** Aligned all `AutonomyLevel` enums across the core and applied the setting dynamically within the Vert.x offloaded thread block before invoking `agentLoop.run()`.
+
+### 4. SQLite `CHECK` Constraint Failure on Pause
+* **Symptom:** `[SQLITE_CONSTRAINT_CHECK] A CHECK constraint failed (CHECK constraint failed: status in ('IN_PROGRESS','COMPLETED','FAILED'))`
+* **Root Cause:** Added the `AWAITING_APPROVAL` state to the `CheckpointStatus` Java enum. However, SQLite does not support `ALTER TABLE` for modifying existing `CHECK` constraints generated previously by Hibernate.
+* **Resolution:** In local dev mode, deleted the `arcclaw.db` file from the `data/` directory and allowed Hibernate to recreate the schema from scratch with the new enum values.
+
+### 5. The "State Machine Overwrite" Bug (Phantom Approvals)
+* **Symptom:** After the agent requests human approval, replying `/approve` results in `❌ No pending approval found for your session.` The database shows the session as `FAILED`.
+* **Root Cause:** The `runLoop` internal method correctly caught `RequiresApprovalException` and set the state to `AWAITING_APPROVAL`. However, the public wrapper `AgentLoop.run()` saw that `success == false` and blindly overwrote the state to `FAILED` before returning.
+* **Resolution:** Added an explicit bypass in the `AgentLoop.run()` wrapper: `if (result.awaitingApproval()) { // DO NOTHING } else if (result.success()) { ... }`.
+
+### 6. The "Phantom Session" UUID Disconnect
+* **Symptom:** Still receiving `❌ No pending approval found` despite fixing the overwrite bug.
+* **Root Cause:** The Telegram handler was generating a new `UUID.randomUUID()` when a previous session failed, but the `/approve` command was strictly querying the deterministic `baseId` derived from the Telegram `chatId`. 
+* **Resolution:** Enforced strict usage of the deterministic `baseId` in `TelegramAgentHandler`. Instead of generating a new UUID on failure, the system now calls `workspaceManager.terminateSession(baseId)` to wipe the old SQLite record and starts fresh under the exact same ID.
+
+### 7. Groq `400 Bad Request` on FINISH Tool
+* **Symptom:** `tool call validation failed: attempted to call tool 'FINISH' which was not in request.tools`
+* **Root Cause:** The legacy ReAct-style system prompt instructed the LLM: `"When you have finished, use a tool named 'FINISH'"`. Modern native tool-calling LLMs obediently generated a `<function=FINISH>` payload, which Groq rejected because `FINISH` wasn't registered in the LangChain4j tool array.
+* **Resolution:** Updated the System Prompt to native conversational standards: `"When you have gathered enough information to fulfill the request, simply output the final answer as plain text to the user. Do not call any further tools."`
+
+### 8. `ProcessBuilder.start() debug` RuntimeException
+* **Symptom:** Scary stack trace in console starting with `java.lang.RuntimeException: ProcessBuilder.start() debug` when executing a sandbox tool.
+* **Root Cause:** This is **not a crash**. The Quarkus Dev Mode Java Agent intercepts the JDK's `ProcessBuilder` and throws a fake exception internally to capture the stack trace. This ensures Quarkus can kill orphaned child processes (like `gh` or `podman`) if you hit `Ctrl+C`.
+* **Resolution:** Ignore. This is expected dev-mode behavior and disappears in production binaries.
