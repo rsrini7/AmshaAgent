@@ -151,7 +151,7 @@ public class TelegramAgentHandler {
         com.arcclaw.core.state.AgentCheckpoint pendingCheckpoint = null;
 
         // Discover which agent role is waiting for approval
-        for (String role : java.util.List.of("coordinator", "brahma", "saraswati")) {
+        for (String role : java.util.List.of("coordinator", "brahma", "saraswati", "shiva")) {
             var opt = statefulAgentStore.load(sessionId, role);
             if (opt.isPresent() && opt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                 pausedRole = role;

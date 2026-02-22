@@ -26,13 +26,14 @@ public class IntentClassifierService {
             one of these agent roles. Reply with ONLY the role name, nothing else.
 
             Roles:
-            - brahma: coding, debugging, scripts, programming errors, code review
+            - brahma: CREATING new code, building new features, writing new scripts from scratch, implementing new functionality
+            - shiva: FIXING existing code, diagnosing bugs, analyzing stack traces, explaining error messages, code review, finding issues in existing code
             - saraswati: research, facts, "who is", "what is", finding information
             - coordinator: planning, general questions, coordination, anything else
 
             User message: "%s"
 
-            Reply with one word only: brahma, saraswati, or coordinator
+            Reply with one word only: brahma, shiva, saraswati, or coordinator
             """;
 
     public String classify(String userMessage) {
@@ -54,6 +55,8 @@ public class IntentClassifierService {
 
     private String sanitize(String raw) {
         // Guards against model returning "I'll route this to brahma" etc.
+        if (raw.contains("shiva") || raw.contains("debugger"))
+            return "shiva";
         if (raw.contains("brahma"))
             return "brahma";
         if (raw.contains("saraswati"))

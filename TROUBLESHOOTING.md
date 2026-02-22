@@ -819,3 +819,86 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Symptom:** Sandbox execution fails or falls back to `NAMESPACE` isolation even when Podman is installed.
 * **Root Cause:** The `ProcessIsolationExecutor` performs a `podman --version` check at `@PostConstruct`. If Podman is not on the system PATH or fails to respond within 5 seconds, the "Podman Circuit" opens.
 * **Resolution:** Ensure the Podman binary is in the environment PATH and the service is responsive. The executor automatically falls back to `NAMESPACE` strategy (if on Linux) or direct execution to maintain system availability.
+
+---
+
+### 13. Multi-Agent Routing & Metrics Verification (Sprint 3B/3C)
+
+#### 13.1 Intent Router Semantic Validation
+
+* **Symptom:** User prompts are consistently routed to the `coordinator` or the wrong specialized agent (e.g., a bug report routing to `brahma` instead of `shiva`).
+* **Root Cause:** The 8B classifier model is failing to distinguish between "creating" and "fixing" code, or the `sanitize()` method in `IntentClassifierService` is missing a role mapping.
+* **Verification Steps:** * **Test Case A (Creation):** Send *"Write a Java method to calculate factorials."* * **Expected Log:** `[TelegramHandler] Intent classified '...' -> role: brahma`.
+* **Test Case B (Correction):** Send *"Why does this code throw a NullPointerException? String s = null; s.length();"* * **Expected Log:** `[TelegramHandler] Intent classified '...' -> role: shiva`.
+
+
+
+#### 13.2 Real-time Metrics Verification
+
+* **Symptom:** The metrics endpoint at `/q/metrics` loads, but the `arcclaw_` specific counters are missing.
+* **Root Cause:** Micrometer counters are lazily initialized and only appear after the first event is recorded, or the `MetricsAgentObserver` is not being discovered by the `AgentLoop` due to indexing issues.
+* **Verification Steps:**
+1. Send any valid command to the Telegram bot to trigger an `AgentLoop` run.
+2. Monitor the console for the explicit debug hook: `DEBUG: MetricsAgentObserver incrementing counter for role: <role>`.
+3. Refresh `http://localhost:8080/q/metrics` and search for:
+* `arcclaw_agent_invocations_total{role="brahma"}`
+* `arcclaw_agent_invocations_total{role="shiva"}`
+* `arcclaw_agent_tokens_total{type="input"}`
+
+
+#### 13.3 Dynamic Approval Discovery
+
+* **Symptom:** Typing `/approve` or `/deny` in Telegram results in a *"No pending approval found"* message, even though the bot is clearly waiting.
+* **Root Cause:** The `handleApproval()` discovery loop in `TelegramAgentHandler` is missing the role string for the active agent (e.g., it checks `coordinator` but the task is stuck in `shiva`).
+* **Verification Steps:**
+1. Trigger a "dangerous" task (e.g., file deletion) that puts the agent into `AWAITING_APPROVAL`.
+2. Confirm the bot asks for permission.
+3. Type `/approve`.
+4. Verify the console shows the discovery loop successfully locating the session's role (e.g., `shiva`) and resuming the loop.
+
+#### 13.4 Detailed Intent Classifer Steps
+
+### 🏛️ 1. Coordinator Role
+
+**Routing Intent:** General planning, coordination, and tasks that don't fit specialized buckets.
+
+* **Prompt:** *"What are the next steps to complete the ArcClaw development roadmap?"*
+* **Expected Log:** `Intent classified '...' -> role: coordinator`
+* **Verification:** Confirm `arcclaw_agent_invocations_total{role="coordinator"}` increments in `/q/metrics`.
+
+### 🛠️ 2. Brahma Role (The Creator)
+
+**Routing Intent:** Creating new code, writing scripts from scratch, or building features.
+
+* **Prompt:** *"Write a Go script to listen for a web socket and log the incoming messages to a file."*
+* **Expected Log:** `Intent classified '...' -> role: brahma`
+* **Verification:** Confirm Brahma is invoked for **creation** tasks, not just generic coding keywords.
+
+### 🕉️ 3. Shiva Role (The Debugger/Transformer)
+
+**Routing Intent:** Fixing existing code, analyzing errors, and interpreting stack traces.
+
+* **Prompt:** *"I'm getting 'IndexOutOfBoundsException' on line 45 of my Python script when the array is empty. How do I fix this?"*
+* **Expected Log:** `Intent classified '...' -> role: shiva`
+* **Verification:** Ensure the `sanitize()` method correctly prioritized `shiva` over `brahma` for this fix-oriented prompt.
+
+### 📚 4. Saraswati Role (The Knowledge Base)
+
+**Routing Intent:** Research, facts, explanations, and finding information.
+
+* **Prompt:** *"Who was the lead architect behind the Java 8 Stream API, and what were the primary design goals?"*
+* **Expected Log:** `Intent classified '...' -> role: saraswati`
+* **Verification:** Confirms the classifier ignores the "Java" keyword (which might trigger Brahma) and correctly identifies the **research** intent.
+
+### 📊 Verification Dashboard
+
+After running one of each, your metrics endpoint should look like this:
+
+| Metric Name | Tag | Expected Value |
+| --- | --- | --- |
+| `arcclaw_agent_invocations_total` | `role="coordinator"` | `1.0` |
+| `arcclaw_agent_invocations_total` | `role="brahma"` | `1.0` |
+| `arcclaw_agent_invocations_total` | `role="shiva"` | `1.0` |
+| `arcclaw_agent_invocations_total` | `role="saraswati"` | `1.0` |
+
+---
