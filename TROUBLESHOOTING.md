@@ -769,3 +769,22 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Symptom:** Scary stack trace in console starting with `java.lang.RuntimeException: ProcessBuilder.start() debug` when executing a sandbox tool.
 * **Root Cause:** This is **not a crash**. The Quarkus Dev Mode Java Agent intercepts the JDK's `ProcessBuilder` and throws a fake exception internally to capture the stack trace. This ensures Quarkus can kill orphaned child processes (like `gh` or `podman`) if you hit `Ctrl+C`.
 * **Resolution:** Ignore. This is expected dev-mode behavior and disappears in production binaries.
+
+---
+
+### 11. Sprint 2B/2C: Human-in-the-Loop & State Machine Issues
+
+#### 11.1 "No pending approval found" after /approve
+* **Issue:** User clicks `/approve` in Telegram, but the bot responds with "No pending approval found".
+* **Root Cause:** The `AgentLoop.run()` wrapper was catching the result and, seeing that the internal loop finished (even if it was a pause), it was blindly updating the checkpoint to `COMPLETED` or `FAILED`, overwriting the `AWAITING_APPROVAL` status.
+* **Resolution:** Modified `AgentLoop.run()` to check `result.awaitingApproval()`. If true, bypass the final checkpoint status update.
+
+#### 11.2 "Phantom Sessions" (Old state stuck)
+* **Issue:** User tries to start a new task via Telegram, but the bot resumes an old completed or failed task.
+* **Root Cause:** Deterministic ID mapping (`chatId:userId`) means the session ID never changes. If the old state is still in the database as `COMPLETED`, the agent loop loads it and thinks it has nothing to do.
+* **Resolution:** In `TelegramAgentHandler`, check if the existing checkpoint status is `COMPLETED` or `FAILED`. If so, invoke `workspaceManager.terminateSession(id)` to wipe the records before starting the new loop.
+
+#### 11.3 REQUIRES_APPROVAL_EXCEPTION on Shell Tools
+* **Issue:** Simple bash tools fail in `SUPERVISED` mode.
+* **Root Cause:** Sensitive operations like `EXECUTE_SHELL` are gated by the `ToolRegistry` to protect the host/container.
+* **Resolution:** This is intended. The user must manually `/approve` these operations via Telegram.

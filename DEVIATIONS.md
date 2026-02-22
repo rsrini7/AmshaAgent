@@ -124,3 +124,16 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 ### 12. CDI Proxy Mock Injection
 *   **Deviation:** Refactored `TelegramAgentHandlerTest` to bypass CDI proxy limitations.
 *   **Rationale:** Standard `@InjectMock` cannot resolve into private fields of `@Dependent` beans within a `@QuarkusTest`. We manually unwrapped the `ClientProxy` and used reflection to force mocks into the target instance's private fields.
+- [x] Verification: Resolve remaining exit-code-1 in `TelegramAgentHandlerTest`
+
+### 13. State Machine "Resume Hook" (Sprint 2B)
+- **Deviation**: Implemented a "resume hook" in `AgentLoop.run()` that detects `AWAITING_APPROVAL` checkpoints and executes the pending tool before entering the thought loop.
+- **Rationale**: This allows for non-blocking human-in-the-loop approvals. The agent doesn't need to "re-decide" to run the tool; it completes the approved action and then continues reasoning.
+
+### 14. Deterministic Session Continuity (Sprint 2C)
+- **Deviation**: Use of `UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes())` for session IDs in Telegram.
+- **Rationale**: Ensures that a single user in a specific chat always maps to the same workspace and conversational context, enabling true persistence even after bot restarts.
+
+### 15. Session Reset Logic (Sprint 2C)
+- **Deviation**: The Telegram handler now calls `workspaceManager.terminateSession()` specifically when the existing checkpoint is `COMPLETED` or `FAILED`.
+- **Rationale**: This allows a user to "start over" after a task finishes, without losing the convenience of deterministic ID mapping.

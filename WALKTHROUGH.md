@@ -301,3 +301,37 @@ Added initial support for routing agent interactions through Telegram via Camel 
 3. **Surefire Windows Crash**: Disabled `useManifestOnlyJar` for Windows absolute path compliance.
 4. **Mock Injection Resolution**: Refactored `TelegramAgentHandlerTest` to unwrap CDI proxies for force-injecting `@Dependent` mocks into private fields.
 5. **Native .env Resolution**: Implemented `DotenvConfigSourceProvider` SPI to natively find and inject `.env` properties regardless of execution directory.
+
+---
+
+## Phase 18: Human-in-the-Loop Telegram Approval Flow ✅
+
+Implemented a paused execution flow for the Telegram channel. When an agent attempts a `SUPERVISED` operation (e.g., `NETWORK_OUTBOUND`), the execution pauses, saves state, and waits for user input.
+
+**Key Components:**
+
+| File | Purpose |
+|------|---------|
+| [CheckpointStatus.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CheckpointStatus.java) | Added `AWAITING_APPROVAL` state |
+| [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java) | Added `pendingToolName`, `pendingParamsJson` |
+| [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java) | Intercepts `SUPERVISED` operations -> `RequiresApprovalException` |
+| [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) | Handles pause/resume logic |
+| [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java) | Added timeout GC sweep for pending approvals |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | `/approve` and `/deny` command handlers |
+
+**Verification Results:**
+- ✅ Verified `WorkspaceManager` correctly sweeps sessions after 60 mins of inactivity in `AWAITING_APPROVAL` state.
+- ✅ Verified `/approve` triggers immediate resumption with elevated privileges.
+- ✅ Verified `/deny` marks the task as `FAILED`.
+
+---
+
+## Phase 19: Sprint 2C & Day 2 Hardening ✅
+
+Completed the final grooming of the v1.1 feature set and drafted the v1.2 mission.
+
+**Key Accomplishments:**
+- **Dynamic Role Routing**: Implemented a keyword-based intent router in `TelegramAgentHandler` to dynamically dispatch between `coordinator`, `researcher`, and `coder` agents.
+- **Bug Fix: State Machine Overwrite**: Resolved the "Phantom Approval" issue by preventing the `AgentLoop.run()` wrapper from overwriting `AWAITING_APPROVAL` states on exit.
+- **Bug Fix: Phantom Sessions**: Switched to strict deterministic `baseId` (derived from `chatId:userId`) in Telegram and implemented automatic session termination for finished tasks to allow clean restarts.
+- **Roadmap Baseline**: Formally updated `REQUIREMENTS.md` to baseline Phase 11 and draft Phase 12 (Sprint 3: Persistent ChatMemory, Prometheus Metrics).

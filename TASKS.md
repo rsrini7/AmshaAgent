@@ -239,3 +239,24 @@
 - [x] Pass `GROQ_API_KEY` through `docker-compose.yaml`
 - [x] Verify production profile boots with Groq configuration
 
+---
+
+## Phase 18 — Sprint 2B: Human-in-the-Loop Telegram Approval Flow
+- [x] Add `AWAITING_APPROVAL` to `CheckpointStatus`
+- [x] Update `AgentCheckpoint` Entity with pending tool columns
+- [x] Create `RequiresApprovalException`
+- [x] Update `ToolRegistry` to enforce `SUPERVISED` network approvals
+- [x] Update `AgentResult` record with `awaitingApproval` flag
+- [x] Update `AgentLoop.runLoop()` to handle `RequiresApprovalException` and resume pending tools
+- [x] Implement `WorkspaceManager` approval timeout GC sweep
+- [x] Update `TelegramAgentHandler` to process `/approve` and `/deny` commands
+
+---
+
+## Phase 19 — Sprint 2C: Dynamic Role Routing & Day 2 Hardening
+- [x] Implement keyword-based Intent Router in `TelegramAgentHandler`
+- [x] Route to `brahma`, `saraswati`, or `coordinator` based on prompt matching
+- [x] Bug Fix: Prevent `AgentLoop` from overwriting `AWAITING_APPROVAL` with `FAILED` on exit
+- [x] Bug Fix: Enforce deterministic `baseId` and implement session wipe for completed/failed tasks
+- [x] Updated SRS `REQUIREMENTS.md` with v1.1 baseline and v1.2 roadmap
+

@@ -874,3 +874,50 @@ Network/threading layer for ArcClaw ↔ Telegram integration via Camel Quarkus.
 ## Verification Plan
 - ✅ `TelegramAgentHandlerTest`: Verified session ID generation and offloading.
 - ✅ `TelegramChannelRouteTest`: Verified route registration in CamelContext.
+
+---
+
+# Sprint 2B — Human-in-the-Loop Telegram Approval Flow
+
+Implement a robust human-in-the-loop (HITL) state machine for `SUPERVISED` autonomy mode, allowing the agent to pause for approval during sensitive operations without thread parking.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **No Thread Parking**: When approval is required, the `AgentLoop` returns an `AWAITING_APPROVAL` status and exits. The thread is released. The state is saved to the `AgentCheckpoint` including the pending tool name and serialized JSON parameters.
+> **Resume Hook**: The `AgentLoop.run()` method includes a "resume hook" at the beginning. If an `AWAITING_APPROVAL` checkpoint exists, it executes the pending tool first before resuming the thought loop.
+
+## Proposed Changes
+
+### Core Module — State & Logic
+1. **`CheckpointStatus`**: Added `AWAITING_APPROVAL`.
+2. **`AgentCheckpoint`**: Added `pendingToolName`, `pendingToolParametersJson`, and `LocalDateTime` timestamps.
+3. **`RequiresApprovalException`**: Custom exception thrown by `ToolRegistry` for sensitive operations (`NETWORK_OUTBOUND`, `VAULT_ACCESS`, `EXECUTE_SHELL`) in `SUPERVISED` mode.
+4. **`AgentLoop`**: Implemented `try-catch` for `RequiresApprovalException` and the resume-checkpoint hook.
+
+### App Module — Channel
+1. **`TelegramAgentHandler`**: Intercepts `/approve` and `/deny` commands. Elevates autonomy to `FULL` upon approval and triggers `AgentLoop.run()` to resume processing.
+
+## Verification
+- ✅ Verified `AWAITING_APPROVAL` state survives JVM restarts.
+- ✅ Verified `/approve` successfully resumes execution and completes the task.
+
+---
+
+# Sprint 2C — Dynamic Role Routing & Hardening
+
+Refine the Telegram user experience with intent discovery and resolve critical state machine edge cases discovered during HITL testing.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Intent Router**: Implemented a keyword-based `determineAgentRole` heuristic in `TelegramAgentHandler` to route user goals to the most appropriate persona (`brahma` for code, `saraswati` for research, `coordinator` for general/system).
+> **Deterministic ID Alignment**: Enforced `chatId:userId` as the source for deterministic session UUIDs to prevent session collisions and "phantom" UUIDs in logs.
+
+## Hardening Fixes
+1. **State Machine Overwrite**: Modified `AgentLoop.run()` wrapper to prevent marking a session as `FAILED` or `COMPLETED` if the internal loop returned `AWAITING_APPROVAL`.
+2. **Phantom Sessions**: Implemented `workspaceManager.terminateSession()` call in the Telegram handler logic to wipe previous `COMPLETED`/`FAILED` records, allowing users to start a "fresh" conversation under the same deterministic ID.
+
+## Verification
+- ✅ Verified `/approve` no longer suffers from "No pending approval found" errors.
+- ✅ Verified session resetting logic allows immediate new conversations after completion.
