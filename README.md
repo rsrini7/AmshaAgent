@@ -199,13 +199,19 @@ If you prefer to run the kernel locally on the JVM using Quarkus dev mode instea
 > [!NOTE]
 > If Quarkus dev mode fails with a console `NullPointerException`, disable the dev console by setting `quarkus.console.enabled=false` in the `%dev` profile. See `TROUBLESHOOTING.md` for details.
 
-**Option B: CLI One-Shot Mode**
+**Option B: CLI One-Shot Mode (Verbose)**
 Run a single agentic task and exit immediately. Agent loop output and token costs are streamed directly to your terminal.
 ```bash
 # Using the built JAR
-java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar ask "Analyze the codebase and list all design patterns used" --role coordinator
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar ask "Analyze the codebase..." --role coordinator
 ```
-*(Note: If running purely natively, simply execute the compiled binary: `./arcclaw-app-1.0.0-SNAPSHOT-runner ask "your goal"`)*
+
+**Option C: Silent PowerShell CLI (Recommended for Windows)**
+For a cleaner experience, use the provided silent wrapper. It forces the `%cli` profile, disabling banners and verbose logging, leaving only the agent's reasoning.
+```powershell
+.\arcclaw-cli.ps1 ask "Your goal here" --role coordinator
+```
+*(Note: If running purely natively, execute the compiled binary with `-Dquarkus.profile=cli`: `./arcclaw-app-1.0.0-SNAPSHOT-runner -Dquarkus.profile=cli ask "your goal"`)*
 
 ---
 

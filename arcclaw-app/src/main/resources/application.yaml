@@ -255,6 +255,32 @@ mp:
 # PROFILES
 # =============================================================================
 
+"%cli":
+  quarkus:
+    banner:
+      enabled: false
+    otel:
+      sdk:
+        disabled: true     # Stops the sun.misc.Unsafe JVM warnings
+    log:
+      level: ERROR
+      console:
+        level: ERROR
+      category:
+        "io.quarkus":
+          level: ERROR     # Silences "Started in...", "Installed features..."
+        "io.smallrye.config":
+          level: ERROR     # Silences "Unrecognized configuration key..."
+        "io.quarkus.agroal":
+          level: ERROR     # Silences "Agroal does not support..."
+        "com.arcclaw":
+          level: ERROR     # Silences WorkspaceManager and SqliteWalConfigurer
+        "org.hibernate":
+          level: ERROR
+    hibernate-orm:
+      log:
+        sql: false # Forces SQL logging off even if global dev is true
+
 "%dev":
   quarkus:
     console:

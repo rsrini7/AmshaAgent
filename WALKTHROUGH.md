@@ -439,3 +439,21 @@ I have integrated the `shiva` (debugger) role into the LLM Intent Router, provid
 ### Observability:
 - ✅ **Metrics**: Verified `arcclaw_agent_invocations_total{role="shiva"}` tracking in `/q/metrics`.
 - ✅ **Sanitization**: Added fallback logic to map "debugger" synonyms to the internal `"shiva"` role string for robustness.
+
+---
+
+## Phase 20: Sprint 3E — CLI Hardening ✅
+
+I have implemented a dedicated `%cli` profile and a PowerShell wrapper to provide a professional, "silent" CLI experience.
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml) | Added `%cli` profile to suppress Quarkus banners, OTel warnings, and verbose logging. |
+| [arcclaw-cli.ps1](file:///h:/ws/ArcClaw/arcclaw-cli.ps1) | PowerShell wrapper that forces `QUARKUS_PROFILE=cli` for a clean terminal experience. |
+| [README.md](file:///h:/ws/ArcClaw/README.md) | Added "Option C: Silent PowerShell CLI" to interaction methods. |
+
+### Verification:
+- ✅ **Silence**: Running via `.\arcclaw-cli.ps1` no longer shows the Quarkus ASCII banner or Hibernate SQL logs.
+- ✅ **Stability**: OTel SDK is disabled in CLI mode to prevent `sun.misc.Unsafe` warnings on modern JDKs.
