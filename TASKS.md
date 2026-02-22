@@ -287,6 +287,6 @@
   - [x] Update `TelegramAgentHandler.java` role discovery loop to include `shiva`
   - [x] Verify intent routing: "fixing" vs "creating" logic
   - [x] Verify: Metrics tracking for `shiva` role
-- [ ] Sprint 3E: Discord Adapter (Camel Discord)
+- [➖] Sprint 3E: Discord Adapter (Camel Discord) — Deferred (See [AD-014](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md))
 
 

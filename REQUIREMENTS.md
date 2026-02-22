@@ -747,10 +747,7 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Sprint 3B (LLM Intent Router):** ✅ Replace the brittle keyword-based `determineAgentRole` heuristic with a fast, low-latency LLM classification call (`llama-3.1-8b-instant` via Groq) to accurately route ambiguous prompts.
 * **Sprint 3C (Prometheus Metrics):** ✅ Implemented Micrometer/Prometheus integration. Metrics exposed at `/q/metrics` for token tracking and role-based invocation counting.
 * **Sprint 3D (ShivaAgent Integration):** ✅ Enhanced Intent Router with `shiva` (debugger) role to distinguish between code creation and bug fixing.
-* **Sprint 3E (Discord Adapter):** Planned — Replicate the Telegram asynchronous routing pattern using `camel-quarkus-discord`.
-
-
-
+* **Sprint 3E (Discord Adapter):** [➖] Deferred due to library deprecation (See [ARCHITECTURAL_DECISIONS.md](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md)).
 
 *ArcClaw v1.0 Requirements — Baselined from production implementation.*
 *Source documents: ArcClaw-v1_0-CONSOLIDATED.md, TASKS.md, DEVIATIONS.md, WALKTHROUGH.md, TROUBLESHOOTING.md, FAQ.md, README.md, claw-ecosystem.md.*

@@ -966,3 +966,8 @@ Harden the state layer and implement intelligent routing for multi-agent coordin
 - ✅ **Semantic Routing**: Verified accurate dispatching between `brahma` (create) and `shiva` (fix) roles.
 - ✅ Full suite (48 tests) passed.
 
+---
+
+> [!NOTE]
+> **Sprint 3E (Discord Adapter)** has been deferred. See [AD-014: De-prioritization of Discord Channel Adapter (Feb 2026)](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md) for details on the library deprecation and security risks that led to this decision.
+
