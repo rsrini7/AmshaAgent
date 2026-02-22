@@ -70,7 +70,7 @@ public class GovernanceLayer implements AgentObserver {
                 // To get the bean instance, we lookup via Arc
                 var handle = Arc.container().instance(WorkspaceContext.class);
                 if (handle.isAvailable()) {
-                    handle.get().setAutonomyLevel(AutonomyLevel.READ_ONLY);
+                    handle.get().setAutonomyLevel(AutonomyLevel.READONLY);
                 }
             }
         } catch (Exception e) {

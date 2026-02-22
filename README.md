@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🛡️ ArcClaw v1.0</h1>
+  <h1>🛡️ ArcClaw v1.2</h1>
   <p><strong>A secure, stateful, and financially governed AI agent kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -19,27 +19,30 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 | Pillar | Implementation |
 |---|---|
-| **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces |
-| **State** | Per-workspace SQLite (WAL mode) for session isolation and resiliency |
-| **Lifecycle** | Custom `@WorkspaceScoped` CDI context that survives HTTP request gaps |
-| **Resiliency** | Checkpointing of every agent "thought" for instant resume-after-crash |
-| **Governance** | Real-time Token Buckets and USD cost guardrails per session |
+| **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
+| **State** | JDBC-backed `ChatMemoryStore` + SQLite (WAL) for 100% session persistence and graceful continuity |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch |
+| **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations |
+| **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption |
 
 ### 🕉️ The Cosmic Pantheon (Grok 4.20 Inspiration)
 
-ArcClaw's default multi-agent roster is heavily inspired by the architecture of the **Grok 4.20** release, which famously utilized a 4-agent collaborative design to achieve unprecedented reasoning capabilities. To give this architecture a distinct flavor, ArcClaw maps these 4 foundational roles to the Hindu Cosmic Pantheon:
+ArcClaw's default multi-agent roster is heavily inspired by the four-agent collaborative architecture of the **Grok 4.20** Beta release, designed to achieve unprecedented reasoning capabilities. To give this architecture a distinct flavor, ArcClaw maps these foundational roles to the Hindu **Trimurti & Tridevi Personas**:
 
 *   **Vishnu (`coordinator`):** The Preserver. Acts as the primary router, decomposing the user's objective, delegating tasks to specialists, and synthesizing the final output.
 *   **Saraswati (`researcher`):** The Goddess of Knowledge. Operates strictly on facts and external data retrieval (e.g., GitHub). Hard-prompted to never fabricate information or write code.
 *   **Brahma (`coder`):** The Creator. A pure logic and engineering brain focused exclusively on writing code, math, and system design. Refuses conversational tasks.
 *   **Shiva (`debugger`):** The Transformer. Acts as the contrarian balance expert. Identifies blind spots, challenges assumptions, and provides creative alternatives to break the team out of local minima.
 
+> [!NOTE]
+> ArcClaw v1.2 utilizes a high-speed LLM Intent Classifier (`llama-3.1-8b-instant`) to dynamically route incoming requests to the most qualified specialist among the roles above.
+
 *   **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files—never as process arguments.
 *   **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
-*   **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JEP 491 optimized concurrent loops utilizing standard `synchronized` blocks alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage state maps across thousands of lightweight threads.
-*   **💰 Financial Governance:** Hard USD circuit breakers. Analyzes input/output token costs per `ReasoningStep` via an interceptor observer. If budget is exceeded, rogue agents are immediately downgraded to `READ_ONLY` autonomy.
-*   **🔍 Observability:** OTLP distributed tracing transparently connects the abstract LLM reasoning loop (`Thought-Plan-Act-Observe`) straight down to physical container execution via Jaeger.
+*   **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JDK 25 optimized concurrent loops utilizing standard `synchronized` blocks alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage state maps across thousands of lightweight threads.
+*   **💰 Financial Governance:** Hard USD circuit breakers and **Human-in-the-Loop** approvals. Sensitive operations (e.g., `NETWORK_OUTBOUND`) pause execution until a user clicks `/approve` via Telegram.
+*   **🔍 Observability:** Real-time Prometheus metrics at `/q/metrics` track token consumption and agent invocations, while OTLP distributed tracing connects the abstract LLM reasoning loop to physical container execution via Jaeger.
 
 ---
 
@@ -55,16 +58,18 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 
 ```mermaid
 graph TD
-    Client([Client / UI]) -->|HTTP POST| REST[AgentResource REST API]
+    Client([Client / UI]) -->|Telegram / REST| REST[AgentResource REST API]
     REST --> Loop[AgentLoop Orchestrator]
     
     subgraph Core Kernel
         Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB)]
+        Loop <-->|JDBC ChatMemory| JDBC[(Persistent ChatMemory)]
         Loop <-->|Prompt & History| AI[LangChain4J ReasoningEngine]
         Loop -->|Execute Tool Request| ToolReg[Tool Registry]
     end
     
-    AI <-->|Local Inference| Ollama((Ollama: llama3.1))
+    AI <-->|Cloud Reasoning| Groq((Groq: llama-3.3-70b))
+    Loop -->|Micrometer| Prom[Prometheus /q/metrics]
     
     subgraph Sandbox Layer
         ToolReg --> Isolator[ProcessIsolationExecutor]
@@ -181,16 +186,41 @@ mvn clean verify -pl arcclaw-app -am
 ```
 *(Note: Mockito requires JDK 21+ inline mock attachments. This is handled automatically by the `--add-opens` flags in the `arcclaw-app` pom.xml).*
 
-### Step 4: Run the Kernel (JVM Mode)
-If you prefer to run the kernel locally on the JVM using Quarkus dev mode instead of Docker:
+### Step 4: Run the Kernel (Multi-Mode)
+ArcClaw v1.2 functions as a multi-mode binary. You can run it as a long-lived REST daemon, attach it to external channels, interact via a REPL, or execute a single task directly from the CLI.
+
+**Option A: Daemon Mode (`serve`)**
+Run as a background REST API server.
 ```bash
 # Ensure you are using JDK 21+ (Designed for JDK 25)
-$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
-./mvnw quarkus:dev -pl arcclaw-app
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+```
+*(Note: Or using the built JAR: `java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve`)*
 
-(or)
+**Option B: Channel Daemon (`attach`)**
+Keep ArcClaw running as a background daemon to service external channel adapters (e.g., Telegram bots).
+```bash
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar attach telegram
+```
 
-.\mvnw.cmd quarkus:dev -pl arcclaw-app -am
+**Option C: Interactive REPL (`chat`)**
+Start a multi-turn, stateful conversation stream directly in your terminal.
+```bash
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar chat
+```
+
+**Option D: One-Shot Task (`ask`)**
+Run a single agentic task and exit immediately. Perfect for CI/CD automation.
+```bash
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar ask "Analyze the codebase..." --role coordinator
+```
+
+**Option E: Silent PowerShell Wrapper (Recommended for Windows)**
+For a cleaner experience, use the provided silent wrapper. It forces the `%cli` profile (disabling banners) and sets JVM `UTF-8` encoding to ensure Unicode terminal symbols (`✦`, `⚡`) render perfectly.
+```powershell
+.\arcclaw-cli.ps1 chat
+# or
+.\arcclaw-cli.ps1 ask "Your goal here" --role coordinator
 ```
 
 ---
@@ -242,6 +272,61 @@ When the asynchronous agent executes successfully, you will see a precise sequen
    *Hibernate ORM commits the final reasoning step history as a JSON CLOB into the SQLite database, marking the virtual thread's lifecycle complete.*
 
 ---
+
+---
+
+## 📱 Telegram Bot Integration (Live Test)
+
+ArcClaw features an enterprise-grade, Virtual-Thread-backed Telegram network adapter. By explicitly handling the Vert.x to ManagedExecutor handoff, ArcClaw can handle thousands of concurrent Telegram users without dropping connections.
+
+Here is the exact step-by-step guide to perform the Live Integration Test.
+
+### Step 1: Create a Telegram Bot
+1. Open Telegram and search for **@BotFather**.
+2. Send the command `/newbot`.
+3. Give it a name (e.g., `ArcClaw Dev Bot`) and a username (e.g., `arcclaw_dev_bot`).
+4. BotFather will give you an HTTP API Token (e.g., `123456789:ABCdefGHIjklmNOPQrsTUVwxyz`). Copy this.
+
+### Step 2: Configure Your Environment
+You need to provide the token to ArcClaw and ensure your LLM is running.
+Open your `.env` file and add the token:
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
+```
+Make sure your local Ollama container is running so the agent has a brain:
+```bash
+docker compose up -d ollama
+```
+*(Or open the Ollama GUI to start the local process).*
+
+### Step 3: Boot ArcClaw in Daemon Mode
+Because we are using the quarkus-picocli Dual-Mode binary, we must explicitly tell it to run the `serve` command.
+```bash
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+```
+*(You should see Quarkus boot up, connect to SQLite, and log: `ArcClaw daemon mode starting on port 8080...`)*
+
+### Step 4: The Live Verification Test
+This test will prove both the network layer and the Session Continuity.
+
+**Test 1: The Cold Start**
+1. Open Telegram and search for your bot's username.
+2. Click **Start** (or send a message like: "Hello, I need you to research the ArcClaw repository.")
+3. **Watch your terminal**: You should immediately see the Camel route pick it up, hand it off to the Virtual Thread, and the AgentLoop start logging its thoughts.
+4. **Watch Telegram**: A few seconds later, the bot should reply with Vishnu's final synthesized answer!
+
+**Test 2: Conversation Memory (Session Continuity)**
+1. Reply to the bot in Telegram with a follow-up: *"Can you summarize what you just told me in exactly 3 bullet points?"*
+2. **The Verification**: If the bot successfully references the previous message, it proves that your `UUID.nameUUIDFromBytes` mapping worked perfectly and the session stayed `IN_PROGRESS` as designed.
+
+### 🚨 Troubleshooting: The "Nuclear Option" (Token Revocation)
+If you have ghost container connections polling your bot, you can sever them by revoking the token in BotFather.
+
+1. In Telegram, click your bot's username in the BotFather chat.
+2. Send the `/revoke` (or `/token`) command.
+3. BotFather will immediately revoke the old token and give you a new one (e.g., `123456789:NEWtokenStringXYZ123...`).
+4. Replace the old token in your `.env` file with the new one.
+5. Restart the Quarkus daemon (`Ctrl+C`, then `.\mvnw.cmd quarkus:dev ...`) to pick up the new token.
 
 ---
 

@@ -23,10 +23,10 @@ public interface AutonomyPolicy {
             if (level == AutonomyLevel.FULL) {
                 return true;
             }
-            if (level == AutonomyLevel.READ_ONLY) {
+            if (level == AutonomyLevel.READONLY) {
                 return operation == ToolOperation.READ_FS;
             }
-            if (level == AutonomyLevel.PARTIAL) {
+            if (level == AutonomyLevel.SUPERVISED) {
                 // Partial allows reads, but flags everything else for approval
                 return operation == ToolOperation.READ_FS;
             }

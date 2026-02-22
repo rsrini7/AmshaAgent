@@ -107,6 +107,21 @@
 **Root Cause:** Signed jar conflict (`bc-fips` vs `bcprov`).
 **Resolution:** Enforce explicit exclusions in `pom.xml`.
 
+### 🔴 Failure: Discord Channel Registry (AD-014)
+**Symptom:** Attempting to use `camel-quarkus-discord` crashes on boot with `NoClassDefFoundError`.
+**Root Cause:** `quarkus-discord4j` is effectively abandonware (v0.0.1, no updates since 2024). It is incompatible with modern Quarkus 3.x and the latest Discord Gateway intents.
+**Resolution:** De-prioritize Discord as a production-ready adapter. Stick with Telegram. See [ARCHITECTURAL_DECISIONS.md](./ARCHITECTURAL_DECISIONS.md).
+
+### 🔴 Failure: Emojis appearing as `???` in Windows Terminal
+**Symptom:** `ChatCommand` output looks like `? ArcClaw Interactive Terminal`.
+**Root Cause:** Standard Windows Command Prompt and older PowerShell versions do not support the full UTF-8 Emoji plane by default.
+**Resolution:** Swapped modern emojis for wider-compatible Unicode symbols like `✦` (U+2726), `⚡` (U+26A1), and `▶` (U+25B6).
+
+### 🔴 Failure: `NoSuchElementException` in `ChatCommand` REPL
+**Symptom:** Force-closing the stream or hitting `Ctrl+C` throws a massive stack trace from `scanner.nextLine()`.
+**Root Cause:** The `Scanner` object throws this when the input stream is terminally closed while waiting for input.
+**Resolution:** Added a defensive `try-catch` around `scanner.nextLine()` specifically for `NoSuchElementException` to break the loop silently.
+
 ---
 
 ## 4. CDI & Scope Troubleshooting
@@ -409,7 +424,6 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 mvn clean install -DskipTests
 
 # Run specific test
-$env:MAVEN_OPTS="-Dnet.bytebuddy.experimental=true --add-opens=java.base/java.lang=ALL-UNNAMED"
 mvn test -pl arcclaw-app -am -Dtest=TestClassName -Dsurefire.failIfNoSpecifiedTests=false
 
 # Run all tests
@@ -588,3 +602,444 @@ podman machine start
 **Symptom:** Running `quarkus:dev` locally and triggering the agent API returns `ReasoningEngine error: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: localhost/127.0.0.1:11434`.
 **Root Cause:** The application's `%dev` profile in `application.yaml` connects to `localhost:11434` for the Ollama inference engine. This error means there is no local process listening on that port. This typically happens if you haven't started your `ollama` Docker container via `docker compose up -d ollama` or if you quit the local Windows/Mac Ollama desktop app.
 **Resolution:** Either start the local background Ollama application (from the system tray) or rely purely on the project's Docker stack by running `docker compose up -d` before booting `quarkus:dev`.
+
+---
+
+## 16. CLI Dual-Mode Operations Troubleshooting (Phase 15)
+
+### 🔴 Failure: CLI Command `ask` Hangs Indefinitely after Completion
+**Symptom:** Typing `arcclaw ask "goal"` correctly runs the agent, solves the task, prints the final result, but the terminal cursor hangs permanently instead of exiting back to bash. 
+**Root Cause:** The top-level `ArcClawCli.java` (or main method dispatch block) contained `Quarkus.waitForExit()`. This function holds the Quarkus thread open waiting for a daemon stop signal, which directly conflicts with Picocli's desired application exit boundary.
+**Resolution:** Remove `Quarkus.waitForExit()` from the root Picocli `CommandLine.execute()` scope. Re-assign `Quarkus.waitForExit()` explicitly *only* inside the background-intended `ServeCommand.run()` block.
+
+### 🔴 Failure: `Variable used in lambda expression should be final or effectively final`
+**Symptom:** Compilation fails inside `AgentLoop.java` during observer stream iterations. 
+**Root Cause:** The `step` variable was reassigned via `withObservation` before attempting to inject it into `.forEach(o -> o.onStepComplete(..., step))`.
+**Resolution:** Capture the mutated state inside a strictly defined block-local variable prior to the lambda: `final ReasoningStep completedStep = step; observers.forEach(o -> o.onStepComplete(..., completedStep));`.
+
+---
+
+## 17. Channel Adapter & Camel Integration Troubleshooting (Sprint 2A)
+
+### 🔴 Failure: IDE Resolution Issue (`io.quarkus.test` cannot be resolved)
+**Symptom:** After adding `quarkus-camel-bom` to the parent POM, the IDE (VS Code/Eclipse) shows red lines on test imports like `io.quarkus.test.junit.QuarkusTest`.
+**Root Cause:** Adding multiple BOMs can sometimes confuse the IDE's dependency resolution cache, especially if the new BOM transitively affects test-scoped dependencies.
+**Resolution:** Hard-pin the versions for `quarkus-junit5` and `quarkus-junit5-mockito` inside `arcclaw-app/pom.xml` using `<version>${quarkus.version}</version>` to force-repair the IDE's classpath mapping.
+
+### 🔴 Failure: `ClassNotFoundException: dev.langchain4j.service.IllegalConfigurationException`
+**Symptom:** Maven tests fail during startup with a `ClassNotFoundException` related to LangChain4j internal classes.
+**Root Cause:** The `camel-quarkus-bom` contains its own internal LangChain4j component mappings which transitively override the versions used by the Quarkiverse LangChain4j extensions. This results in binary incompatibility between the core library and the Quarkus-specific layer.
+**Resolution:** Explicitly import the `io.quarkiverse.langchain4j:quarkus-langchain4j-bom` into the parent `pom.xml` `<dependencyManagement>` section, placing it strictly *above* the Camel BOM to ensure the correct version is locked.
+
+### 🔴 Failure: `SurefireBooterForkException` (Windows absolute paths)
+**Symptom:** Maven tests crash on Windows with `Boot Manifest-JAR contains absolute paths in classpath`.
+**Root Cause:** A known JDK 21+ Windows limitation where the default Surefire "Manifest JAR" approach fails to handle long absolute file paths correctly.
+**Resolution:** Set `<useManifestOnlyJar>false</useManifestOnlyJar>` in the `maven-surefire-plugin` configuration in `arcclaw-app/pom.xml`.
+
+### 🔴 Failure: `BeanDeploymentException` / CDI Interceptor on Private Method
+**Symptom:** The Quarkus application fails to start during tests, complaining that a method with an interceptor (like `@ActivateRequestContext`) is `private`.
+**Root Cause:** The Quarkus ArC container uses proxies for intercepted methods. Proxies require that intercepted methods be overridable (i.e., not `private` and not `final`).
+**Resolution:** Change method visibility from `private` to package-private (default) or `protected`. (e.g., Change `private void runAgent(...)` to `void runAgent(...)`).
+
+### 🔴 Failure: Dev mode crash (`StatusLine.setMessage` NPE)
+**Symptom:** Quarkus dev mode fails to start with `NullPointerException: Cannot invoke "io.quarkus.dev.console.StatusLine.setMessage(String)" because "this.prompt" is null`.
+**Root Cause:** The dev console prompt can fail to initialize in certain terminal environments, causing `AeshConsole` to receive a null prompt during console redraw.
+**Resolution:** Disable the dev console prompt in the `%dev` profile:
+```yaml
+"%dev":
+  quarkus:
+    console:
+      enabled: false
+```
+### 🔴 Failure: `NoSuchElementException` for `Optional<String>` Bot Token
+**Symptom:** Quarkus crashes during Camel route registration with `java.util.NoSuchElementException` when using `@ConfigProperty Optional<String> botToken`.
+**Root Cause:** Even if declared as `Optional`, Camel's endpoint URI construction (e.g., `from("telegram:bots?authorizationToken=" + botToken.get())`) will trigger `get()` before the container has verified the presence of the configuration.
+**Resolution:** Always provide a `defaultValue = ""` in the `@ConfigProperty` annotation, or standardize to a required `String` and check for `isBlank()` inside the `configure()` method.
+
+### 🔴 Failure: Camel Route Discovery Failure (`AssertionError: expected <true> but was <false>`)
+**Symptom:** `TelegramChannelRouteTest` fails because the `CamelContext` contains zero routes, despite the `RouteBuilder` being annotated with `@ApplicationScoped`.
+**Root Cause:**
+1. **Missing Jandex Index:** In multi-module projects, Quarkus only scans modules with a `META-INF/jandex.idx` or a `META-INF/beans.xml`.
+2. **Lazy Initialization:** The bean may not be instantiated if not explicitly injected or used.
+3. **Missing Camel Bean Component:** `.bean(TelegramAgentHandler.class, "receiveMessage")` requires `camel-quarkus-bean`. Without it, route creation fails when the test tries to add routes.
+4. **Context Not Started in Test:** The `CamelContext` can be present but not started, leaving the runtime routes list empty.
+**Resolution:** 
+- Add `jandex-maven-plugin` to the module's `pom.xml`.
+- Use `mvn clean test` to ensure the index is not stale.
+- Add `camel-quarkus-bean` to `arcclaw-app/pom.xml` when using `.bean(...)` in Camel routes.
+- In `TelegramChannelRouteTest`, call `camelContext.addRoutes(route)` and `camelContext.start()` before asserting route existence.
+**Notes:** When running with a mock Telegram token in tests, the Telegram consumer will log 404 polling warnings; these are expected and do not fail the test.
+
+### 🔴 Failure: Telegram polling 404 noise during unrelated JUnit tests
+**Symptom:** Running any `@QuarkusTest` (even non-Telegram tests) logs repeated `TelegramConsumer` 404 warnings because the Telegram route starts with a mock token.
+**Root Cause:** The Telegram route is registered and its polling consumer starts in the test profile, which triggers real HTTP calls against Telegram.
+**Resolution:**
+- Add a config toggle (e.g., `arcclaw.channel.telegram.enabled`) in the route and set it to `false` in `%test`.
+- Use a `QuarkusTestProfile` in `TelegramChannelRouteTest` to re-enable the route only for that test.
+- Optionally reduce the Telegram component log level to `ERROR` in that profile to keep output clean.
+
+### 🔴 Failure: `IllegalStateException: Invalid use of @InjectMock` on @Dependent Beans
+**Symptom:** Test crashes with `Invalid use of io.quarkus.test.InjectMock - the injected bean does not declare a CDI normal scope but: jakarta.enterprise.context.Dependent`.
+**Root Cause:** `@InjectMock` only works on beans with a normal scope (like `@ApplicationScoped`). Common framework beans like `ProducerTemplate` (Camel) and `ManagedExecutor` (MicroProfile) are often `@Dependent`.
+**Resolution:** Use `QuarkusMock.installMockForType(mockInstance, BeanType.class)` in the test setup instead.
+
+### 🔴 Failure: `QuarkusMock` fails because "bean is already in use"
+**Symptom:** `java.lang.IllegalStateException: Actually, the bean is already in use` when calling `QuarkusMock.installMock(...)`.
+**Root Cause:** The bean being mocked has already been injected into the System Under Test (SUT) or used by the container during the initial boot sequence before the test's `@BeforeEach` method had a chance to install the mock.
+**Resolution:** Move `QuarkusMock` installation to a static **`@BeforeAll`** method. This ensures the mocks are registered with the CDI container *before* it starts wiring the beans for the test class.
+
+---
+
+## 18. Telegram Agent Test Sprint 2A
+
+### ✅ Solved: `TelegramAgentHandlerTest` Stubborn Mocking
+**Status:** Resolved.
+**Solution:** The issue stemmed from `QuarkusMock` failing to consistently replace beans that were already proxied or instantiated, particularly with mixed scopes (`Dependent` vs `ApplicationScoped`).
+**Approach:**
+1.  Replaced `QuarkusMock` in `@BeforeAll` with `@InjectMock` for normal-scoped beans (`AgentLoop`, `WorkspaceManager`, `StatefulAgentStore`, `ReasoningEngine`).
+2.  Manually mocked `Dependent` beans (`ProducerTemplate`, `ManagedExecutor`) in `@BeforeEach` to avoid scope conversion issues.
+3.  **Critical Fix:** Unwrapped the `ClientProxy` of `TelegramAgentHandler` to inject these manual mocks directly into the underlying instance's private fields, bypassing the proxy's limitations.
+4.  Ensured correct scope handling for `StatefulAgentStore` by using `@InjectMock` which handles the proxy delegation correctly.
+
+### 🟡 YAML Profile Parsing Nuance
+**Observation:** Ensure that the `%test` profile in `application.yaml` is correctly structured and doesn't conflict with legacy `.properties` files that might still exist in the target directory after a non-clean build.
+
+---
+
+## 19. Telegram Integration & Daemon Mode Troubleshooting Sprint 2A
+
+### 🔴 Failure: Quarkus Dev Console NPE
+**Symptom:** `java.lang.NullPointerException: Cannot invoke "java.io.Console.writer()" because the return value of "java.lang.System.console()" is null` during startup.
+**Root Cause:** Running inside some IDE terminals or non-interactive shells where `System.console()` is not available, but Quarkus Dev UI tries to use it.
+**Resolution:** Disable the Dev Console in `application.yaml` for the dev profile:
+```yaml
+"%dev":
+  quarkus:
+    dev:
+      console:
+        enabled: false
+```
+
+### 🔴 Failure: Telegram Bot Token Not Loaded (Windows/PowerShell/Multi-Module)
+**Symptom:** `TelegramException: Could not GET ... 404 Not Found` and `authorizationToken=mock-token` in logs, despite `.env` file being present.
+**Root Cause:** When running `quarkus:dev` against a submodule (e.g., `-pl arcclaw-app`), SmallRye Config evaluates paths relative to the submodule directory. The standard `config: locations: "../.env"` directive in `application.yaml` natively fails to propagate dynamically parsed properties early enough during boot, leaving the `.env` variables unloaded.
+**Resolution:** Explicitly implemented a custom `ConfigSourceProvider` SPI (`DotenvConfigSourceProvider.java`) that scans both `./.env` and `../.env` natively, parsing key-value pairs and injecting them into the configuration tree with a standard ordinal (`295`), completely bypassing OS-level shell and classloader limitations.
+
+### 🔴 Failure: Camel Routes Not Registering in Daemon Mode
+**Symptom:** Application starts, but `Camel Context Status` shows 0 routes, or `TelegramChannelRoute` is not active.
+**Root Cause:** In programmatic daemon mode (implementing `QuarkusApplication`), CDI beans for Camel routes might be instantiated but not automatically added to the `CamelContext` if the context auto-discovery didn't trigger before the main loop.
+**Resolution:**
+1. Inject `CamelContext` and the Route bean (`TelegramChannelRoute`) into the main command (`ServeCommand`).
+2. Explicitly check and add the route if missing:
+```java
+if (camelContext.getRoute("telegram-bot") == null) {
+    camelContext.addRoutes(telegramChannelRoute);
+}
+```
+3. Ensure `camelContext.start()` is called if the context is stopped.
+
+## Sprint 2A & 2B: Telegram Channel & Human-in-the-Loop State Machine
+
+### 1. Telegram Polling `409 Conflict`
+* **Symptom:** `org.apache.camel.component.telegram.TelegramException: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running`
+* **Root Cause:** Quarkus Dev Mode hot-reloads occasionally fail to kill the old Camel networking thread before starting a new one. Telegram strictly limits polling to one active connection per bot token.
+* **Resolution:** 1. Stop the Quarkus application (`Ctrl+C`).
+  2. Kill lingering Java processes (Windows: `taskkill /F /IM java.exe`, Linux: `pkill -f java`).
+  3. Verify no orphaned Docker containers are running with the same `.env` file (`docker ps`).
+  4. Restart the Quarkus application cleanly.
+
+### 2. Local LLM Emitting Raw JSON / Hallucinating
+* **Symptom:** The agent prints raw JSON tool schemas to the Telegram chat (e.g., `{"name": "gh", "parameters": ...}`) instead of executing them, or hallucinates blatantly incorrect facts (e.g., "John Simpson invented C++").
+* **Root Cause:** The local model (e.g., `llama3.2:1b`) lacked the parameter capacity (neural size) to hold the complex ArcClaw system prompt, adhere to the strict LangChain4j tool-calling JSON schema, and recall factual data simultaneously.
+* **Resolution:** Migrated to the Groq Cloud API using the OpenAI compatibility layer in `application.yaml`. Pointed `base-url` to `https://api.groq.com/openai/v1` and upgraded the model to `llama-3.3-70b-versatile` which has native tool-calling training.
+
+### 3. Agent Stuck in `READONLY` Mode
+* **Symptom:** Agent refuses to execute tools, returning: `Security violation... The current autonomy level does not permit this operation.`
+* **Root Cause:** Two issues: 
+  1. Enum drift (`READ_ONLY` vs `READONLY`, `PARTIAL` vs `SUPERVISED`) caused config injection silently to fail. 
+  2. `TelegramAgentHandler` injected the config property but failed to actively apply it to the `WorkspaceContext` via `workspaceContext.setAutonomyLevel()`.
+* **Resolution:** Aligned all `AutonomyLevel` enums across the core and applied the setting dynamically within the Vert.x offloaded thread block before invoking `agentLoop.run()`.
+
+### 4. SQLite `CHECK` Constraint Failure on Pause
+* **Symptom:** `[SQLITE_CONSTRAINT_CHECK] A CHECK constraint failed (CHECK constraint failed: status in ('IN_PROGRESS','COMPLETED','FAILED'))`
+* **Root Cause:** Added the `AWAITING_APPROVAL` state to the `CheckpointStatus` Java enum. However, SQLite does not support `ALTER TABLE` for modifying existing `CHECK` constraints generated previously by Hibernate.
+* **Resolution:** In local dev mode, deleted the `arcclaw.db` file from the `data/` directory and allowed Hibernate to recreate the schema from scratch with the new enum values.
+
+### 5. The "State Machine Overwrite" Bug (Phantom Approvals)
+* **Symptom:** After the agent requests human approval, replying `/approve` results in `❌ No pending approval found for your session.` The database shows the session as `FAILED`.
+* **Root Cause:** The `runLoop` internal method correctly caught `RequiresApprovalException` and set the state to `AWAITING_APPROVAL`. However, the public wrapper `AgentLoop.run()` saw that `success == false` and blindly overwrote the state to `FAILED` before returning.
+* **Resolution:** Added an explicit bypass in the `AgentLoop.run()` wrapper: `if (result.awaitingApproval()) { // DO NOTHING } else if (result.success()) { ... }`.
+
+### 6. The "Phantom Session" UUID Disconnect
+* **Symptom:** Still receiving `❌ No pending approval found` despite fixing the overwrite bug.
+* **Root Cause:** The Telegram handler was generating a new `UUID.randomUUID()` when a previous session failed, but the `/approve` command was strictly querying the deterministic `baseId` derived from the Telegram `chatId`. 
+* **Resolution:** Enforced strict usage of the deterministic `baseId` in `TelegramAgentHandler`. Instead of generating a new UUID on failure, the system now calls `workspaceManager.terminateSession(baseId)` to wipe the old SQLite record and starts fresh under the exact same ID.
+
+### 7. Groq `400 Bad Request` on FINISH Tool
+* **Symptom:** `tool call validation failed: attempted to call tool 'FINISH' which was not in request.tools`
+* **Root Cause:** The legacy ReAct-style system prompt instructed the LLM: `"When you have finished, use a tool named 'FINISH'"`. Modern native tool-calling LLMs obediently generated a `<function=FINISH>` payload, which Groq rejected because `FINISH` wasn't registered in the LangChain4j tool array.
+* **Resolution:** Updated the System Prompt to native conversational standards: `"When you have gathered enough information to fulfill the request, simply output the final answer as plain text to the user. Do not call any further tools."`
+
+### 8. `ProcessBuilder.start() debug` RuntimeException
+* **Symptom:** Scary stack trace in console starting with `java.lang.RuntimeException: ProcessBuilder.start() debug` when executing a sandbox tool.
+* **Root Cause:** This is **not a crash**. The Quarkus Dev Mode Java Agent intercepts the JDK's `ProcessBuilder` and throws a fake exception internally to capture the stack trace. This ensures Quarkus can kill orphaned child processes (like `gh` or `podman`) if you hit `Ctrl+C`.
+* **Resolution:** Ignore. This is expected dev-mode behavior and disappears in production binaries.
+
+---
+
+### 11. Sprint 2B/2C: Human-in-the-Loop & State Machine Issues
+
+#### 11.1 "No pending approval found" after /approve
+* **Issue:** User clicks `/approve` in Telegram, but the bot responds with "No pending approval found".
+* **Root Cause:** The `AgentLoop.run()` wrapper was catching the result and, seeing that the internal loop finished (even if it was a pause), it was blindly updating the checkpoint to `COMPLETED` or `FAILED`, overwriting the `AWAITING_APPROVAL` status.
+* **Resolution:** Modified `AgentLoop.run()` to check `result.awaitingApproval()`. If true, bypass the final checkpoint status update.
+
+#### 11.2 "Phantom Sessions" (Old state stuck)
+* **Issue:** User tries to start a new task via Telegram, but the bot resumes an old completed or failed task.
+* **Root Cause:** Deterministic ID mapping (`chatId:userId`) means the session ID never changes. If the old state is still in the database as `COMPLETED`, the agent loop loads it and thinks it has nothing to do.
+* **Resolution:** In `TelegramAgentHandler`, check if the existing checkpoint status is `COMPLETED` or `FAILED`. If so, invoke `workspaceManager.terminateSession(id)` to wipe the records before starting the new loop.
+
+#### 11.3 REQUIRES_APPROVAL_EXCEPTION on Shell Tools
+* **Issue:** Simple bash tools fail in `SUPERVISED` mode.
+* **Root Cause:** Sensitive operations like `EXECUTE_SHELL` are gated by the `ToolRegistry` to protect the host/container.
+* **Resolution:** This is intended. The user must manually `/approve` these operations via Telegram.
+
+### 12. Sprint 3A (Persistent ChatMemory)
+
+#### 12.1 The "Illusion of Memory" / Telegram 400 Empty Message Crash
+* **Symptom:** After successfully completing a task, the next message sent to the Telegram bot results in no response, and a `400 Bad Request` appears in the console from the Telegram API (`message text is empty`). The Groq API response logs show the LLM returning an empty string `""`.
+* **Root Cause:** ArcClaw's `AgentLoop` is a task-based state machine, not a continuous chatbot. It bypasses LangChain4j's native `ChatMemory` and manually reconstructs the prompt by interleaving the user's `goal` with the `ReasoningSteps` from SQLite. If a `COMPLETED` session is kept alive for a new prompt, the loop appends the *previous* task's final answer to the very bottom of the prompt as an "Assistant" message. The LLM receives an out-of-order prompt where the last message is already from the Assistant, assumes its turn is over, and outputs nothing.
+* **Resolution:** Enforced strict "Task Amnesia" in `TelegramAgentHandler.java`. The Session Continuity Check must explicitly call `workspaceManager.terminateSession(baseId)` to wipe the SQLite record if the previous session was `COMPLETED` or `FAILED`. Every new user message must trigger a fresh, isolated Agent Loop with a clean context window.
+* **Validation Note:** The "Secret Code" retrieval failure (where the bot forgets a code word from the previous message) is a confirmed success of this architecture. It proves that the "Task Agent" pattern is correctly isolating execution and preventing context poisoning.
+
+
+#### 12.2 `UnsatisfiedResolutionException` for Named Models
+* **Symptom:** Build fails during CDI validation with `Unsatisfied dependency for type ChatLanguageModel ... and qualifiers [@Identifier("intent-classifier")]`.
+* **Root Cause:** In LangChain4j-Quarkus `0.26.1`, automatic generation of `@Identifier`-qualified beans from `application.yaml` named models can be brittle in multi-module projects. If the injection point is in a different module than the configuration, or if Jandex indexing excludes the generated beans, resolution fails.
+* **Resolution:** Implemented a manual CDI producer (`ModelProducer.java`). This guarantees the bean is correctly qualified and discovered by ArC across module boundaries.
+
+#### 12.3 `ServiceConfigurationError` in Async LLM Calls
+* **Symptom:** Asynchronous LLM tasks (like the Intent Classifier) fail silently and trigger fallback behavior. The console logs show a warning: `java.util.ServiceConfigurationError: io.smallrye.config.SmallRyeConfigFactory: io.quarkus.runtime.configuration.QuarkusConfigFactory not a subtype`.
+* **Root Cause:** Executing Quarkus/LangChain4j logic using standard Java async methods like `CompletableFuture.supplyAsync()` runs the task on the unmanaged common `ForkJoinPool`. These raw threads do not inherit Quarkus CDI, OpenTelemetry, or Configuration contexts. When LangChain4j's underlying REST client attempts to lazily load configuration on this unmanaged thread, it causes a classloader/context conflict.
+* **Resolution:** Replaced the default executor with the Quarkus/MicroProfile `ManagedExecutor`. By injecting `@Inject ManagedExecutor managedExecutor` and passing it to the async call (`CompletableFuture.supplyAsync(() -> { ... }, managedExecutor)`), Quarkus successfully propagates the CDI and config contexts to the worker thread.
+
+#### 12.4 Metrics "Cold Start" (Lazy Counter Initialization)
+
+* **Symptom:** Navigating to `/q/metrics` immediately after a restart does not show `arcclaw_agent_invocations_total` or `arcclaw_agent_tokens_total`, even if the Micrometer extension is active.
+* **Root Cause:** Micrometer counters are lazily initialized. They do not appear in the Prometheus export until they have been incremented at least once.
+* **Resolution:** This is expected behavior. The metrics will appear as soon as the first `AgentLoop` reasoning step completes or the first LLM call is recorded by the `MetricsAgentObserver`.
+
+#### 12.5 Podman Availability & Circuit Breaker
+
+* **Symptom:** Sandbox execution fails or falls back to `NAMESPACE` isolation even when Podman is installed.
+* **Root Cause:** The `ProcessIsolationExecutor` performs a `podman --version` check at `@PostConstruct`. If Podman is not on the system PATH or fails to respond within 5 seconds, the "Podman Circuit" opens.
+* **Resolution:** Ensure the Podman binary is in the environment PATH and the service is responsive. The executor automatically falls back to `NAMESPACE` strategy (if on Linux) or direct execution to maintain system availability.
+
+---
+
+### 13. Multi-Agent Routing & Metrics Verification (Sprint 3B/3C)
+
+#### 13.1 Intent Router Semantic Validation
+
+* **Symptom:** User prompts are consistently routed to the `coordinator` or the wrong specialized agent (e.g., a bug report routing to `brahma` instead of `shiva`).
+* **Root Cause:** The 8B classifier model is failing to distinguish between "creating" and "fixing" code, or the `sanitize()` method in `IntentClassifierService` is missing a role mapping.
+* **Verification Steps:** * **Test Case A (Creation):** Send *"Write a Java method to calculate factorials."* * **Expected Log:** `[TelegramHandler] Intent classified '...' -> role: brahma`.
+* **Test Case B (Correction):** Send *"Why does this code throw a NullPointerException? String s = null; s.length();"* * **Expected Log:** `[TelegramHandler] Intent classified '...' -> role: shiva`.
+
+
+
+#### 13.2 Real-time Metrics Verification
+
+* **Symptom:** The metrics endpoint at `/q/metrics` loads, but the `arcclaw_` specific counters are missing.
+* **Root Cause:** Micrometer counters are lazily initialized and only appear after the first event is recorded, or the `MetricsAgentObserver` is not being discovered by the `AgentLoop` due to indexing issues.
+* **Verification Steps:**
+1. Send any valid command to the Telegram bot to trigger an `AgentLoop` run.
+2. Monitor the console for the explicit debug hook: `DEBUG: MetricsAgentObserver incrementing counter for role: <role>`.
+3. Refresh `http://localhost:8080/q/metrics` and search for:
+* `arcclaw_agent_invocations_total{role="brahma"}`
+* `arcclaw_agent_invocations_total{role="shiva"}`
+* `arcclaw_agent_tokens_total{type="input"}`
+
+
+#### 13.3 Dynamic Approval Discovery
+
+* **Symptom:** Typing `/approve` or `/deny` in Telegram results in a *"No pending approval found"* message, even though the bot is clearly waiting.
+* **Root Cause:** The `handleApproval()` discovery loop in `TelegramAgentHandler` is missing the role string for the active agent (e.g., it checks `coordinator` but the task is stuck in `shiva`).
+* **Verification Steps:**
+1. Trigger a "dangerous" task (e.g., file deletion) that puts the agent into `AWAITING_APPROVAL`.
+2. Confirm the bot asks for permission.
+3. Type `/approve`.
+4. Verify the console shows the discovery loop successfully locating the session's role (e.g., `shiva`) and resuming the loop.
+
+#### 13.4 Detailed Intent Classifer Steps
+
+##### 🏛️ 1. Coordinator Role
+
+**Routing Intent:** General planning, coordination, and tasks that don't fit specialized buckets.
+
+* **Prompt:** *"What are the next steps to complete the ArcClaw development roadmap?"*
+* **Expected Log:** `Intent classified '...' -> role: coordinator`
+* **Verification:** Confirm `arcclaw_agent_invocations_total{role="coordinator"}` increments in `/q/metrics`.
+
+##### 🛠️ 2. Brahma Role (The Creator)
+
+**Routing Intent:** Creating new code, writing scripts from scratch, or building features.
+
+* **Prompt:** *"Write a Go script to listen for a web socket and log the incoming messages to a file."*
+* **Expected Log:** `Intent classified '...' -> role: brahma`
+* **Verification:** Confirm Brahma is invoked for **creation** tasks, not just generic coding keywords.
+
+##### 🕉️ 3. Shiva Role (The Debugger/Transformer)
+
+**Routing Intent:** Fixing existing code, analyzing errors, and interpreting stack traces.
+
+* **Prompt:** *"I'm getting 'IndexOutOfBoundsException' on line 45 of my Python script when the array is empty. How do I fix this?"*
+* **Expected Log:** `Intent classified '...' -> role: shiva`
+* **Verification:** Ensure the `sanitize()` method correctly prioritized `shiva` over `brahma` for this fix-oriented prompt.
+
+##### 📚 4. Saraswati Role (The Knowledge Base)
+
+**Routing Intent:** Research, facts, explanations, and finding information.
+
+* **Prompt:** *"Who was the lead architect behind the Java 8 Stream API, and what were the primary design goals?"*
+* **Expected Log:** `Intent classified '...' -> role: saraswati`
+* **Verification:** Confirms the classifier ignores the "Java" keyword (which might trigger Brahma) and correctly identifies the **research** intent.
+
+##### 📊 Verification Dashboard
+
+After running one of each, your metrics endpoint should look like this:
+
+| Metric Name | Tag | Expected Value |
+| --- | --- | --- |
+| `arcclaw_agent_invocations_total` | `role="coordinator"` | `1.0` |
+| `arcclaw_agent_invocations_total` | `role="brahma"` | `1.0` |
+| `arcclaw_agent_invocations_total` | `role="shiva"` | `1.0` |
+| `arcclaw_agent_invocations_total` | `role="saraswati"` | `1.0` |
+
+---
+
+### 14. 🛠️ Claude Code Reviews and Fixes
+
+#### 🔴 Failure: REST API Sessions Cannot Use Tools
+
+**Symptom:** When triggering agents via the REST API (`POST /api/v1/sessions/{id}/run`), tools like `GithubTool` immediately fail with a `SecurityException: Operation NETWORK_OUTBOUND not permitted`. The Human-in-the-loop (HITL) approval flow never triggers.
+**Root Cause:** The `WorkspaceContext` initializes in `READONLY` mode by default. The REST API (`AgentResource`) was not elevating the autonomy level to `SUPERVISED` like the Telegram handler did, permanently trapping REST requests in a strict sandbox.
+**Resolution:** Explicitly activate the CDI scope and elevate the autonomy level before calling the `AgentLoop`. (Ensure this is done inside the lambda thread for async calls as well).
+
+```java
+WorkspaceScopeHolder.set(sessionId);
+workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
+```
+
+#### 🔴 Failure: Human-in-the-Loop Approval Fails to Resume
+
+**Symptom:** An agent pauses for human approval, but when `/approve` is typed, the system cannot find the paused session or throws errors relating to a session ID named `"current"`.
+**Root Cause:** `ToolRegistry.java` had a hardcoded string `"current"` being passed into the `RequiresApprovalException`, which wiped out the actual UUID of the session needing approval.
+**Resolution:** Injected `WorkspaceContext` into the `ToolRegistry` and updated the exception to pass the real ID:
+
+```java
+throw new RequiresApprovalException(toolName, paramsJson, workspaceContext.getSessionId());
+
+```
+
+#### 🔴 Failure: Semantic Router Triggers Default Coordinator
+
+**Symptom:** A prompt specifically asking to debug a stack trace is sent. The `IntentClassifierService` correctly identifies it as "shiva", but the generic "coordinator" (Vishnu) replies instead.
+**Root Cause:** Domain Leakage. The LLM was outputting persona names ("shiva"), but the agents were registered under functional duty names (`@AgentRole("debugger")`). Because "shiva" didn't match "debugger", the `AgentLoop` fell back to the default coordinator.
+**Resolution:** Updated `IntentClassifierService.sanitize()` to act as a strict Translation Layer mapping personas to system duties.
+
+```java
+if (lower.contains("shiva") || lower.contains("debugger")) return "debugger";
+
+```
+
+*Note: Approval loops and CLI help text must strictly use the functional duty strings (`coder`, `debugger`, `researcher`, `coordinator`).*
+
+#### 🔴 Failure: Concurrent Users Overwriting Files
+
+**Symptom:** When multiple users ask ArcClaw to clone different GitHub repositories simultaneously, the files get mixed up, overwritten, or throw file-lock exceptions.
+**Root Cause:** `GithubTool.java` was hardcoding the working directory to `System.getProperty("user.dir")` (the JVM root). All Podman containers were mounting the exact same host directory.
+**Resolution:** Updated `GithubTool` to dynamically generate and create a unique, isolated workspace directory for every request using the active session ID.
+
+```java
+Path workspaceRoot = Path.of(workspaceRootDir, workspaceContext.getSessionId());
+Files.createDirectories(workspaceRoot);
+
+```
+
+#### 🟡 Warning: ArcClawSupervisor Compilation Failure
+
+**Symptom:** Attempting to build a multi-agent orchestration flow using `ArcClawSupervisor` fails to compile, citing a missing 2-parameter `agentLoop.run()` method.
+**Root Cause:** The Supervisor class was dead code that had drifted from the main `AgentLoop` signature updates, lacking `sessionId`, `role`, and `maxIterations` parameters.
+**Resolution:** Updated the `executeWithAgent` method signature to pass the required 5 parameters, aligning it with the core state management system.
+
+Here is the exact write-up for your `TROUBLESHOOTING.md` guide. You can paste this right below the other architectural fixes.
+
+---
+
+#### 🔴 Failure: The CDI Scope "Amnesia" Bug (ReAct Death Spiral)
+
+**Symptom:** The LLM attempts to call a tool but gets rejected with `Security violation: Operation NETWORK_OUTBOUND not permitted at autonomy level READONLY`. Because the prompt tells the LLM it *does* have permission, the LLM stubbornly retries the tool call 5 times in a row until it crashes with a `MAX_ITERATIONS_EXCEEDED` error.
+**The Mystery:** This happens even though your code explicitly calls `workspaceContext.setAutonomyLevel(SUPERVISED)` at the top of the method.
+**Root Cause:** When `TelegramAgentHandler` detects a stale session (e.g., the previous task was `COMPLETED`), it calls `workspaceManager.terminateSession()` to wipe the history. However, `terminateSession` also **destroys the CDI Workspace Scope**. When the scope is destroyed, Quarkus throws away your elevated `WorkspaceContext`. Seconds later, when `agentLoop.run()` starts, Quarkus silently generates a brand-new context which defaults back to `READONLY`.
+**Resolution:** You must ensure the CDI scope activation and autonomy elevation happen *after* any potential session termination logic, immediately before the AgentLoop runs.
+
+```java
+// 1. Session Continuity Check (may destroy the CDI scope!)
+statefulAgentStore.load(...).ifPresent(cp -> {
+    workspaceManager.terminateSession(baseId); 
+});
+
+// 2. RE-ASSERT the scope and elevate autonomy AFTER potential termination
+WorkspaceScopeHolder.set(baseId);
+workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
+// 3. Now it is safe to run
+agentLoop.run(...);
+
+```
+
+### 🔴 Post Claude Code Review Fixes & HITL & Memory Testing Challenges
+
+#### 1. The "Goldfish Memory" Bug (Premature Context Wipes)
+
+* **Symptom:** The agent successfully completes a tool action and answers a prompt, but if the user asks a follow-up question in the next message, the agent claims the conversation just started.
+* **Root Cause:** The `TelegramAgentHandler` was treating `COMPLETED` checkpoints the exact same as `FAILED` checkpoints, calling `workspaceManager.terminateSession()` for both. This aggressively destroyed the LangChain in-memory `ChatMemory` after every successful interaction.
+* **Resolution:** Split the continuity check logic. `FAILED` sessions receive a hard wipe (including `terminateSession()`), while `COMPLETED` sessions receive a soft wipe (resetting only the internal `stateJson` tool loop array to `[]` to prevent tool replays, while leaving the LangChain conversational memory completely intact).
+
+#### 2. LLM "Trigger Happy" Behavior (Tool Over-Eagerness)
+
+* **Symptom:** The user asks a conversational question like "Who are you?" or "What are your capabilities?", and the agent inexplicably attempts to trigger the `github` tool to answer it.
+* **Root Cause:** The system prompt aggressively commanded the LLM: *"You MUST invoke these tools to fulfill the user's request."* Small, highly literal models (like Llama 3) interpreted this to mean they were forbidden from answering *any* prompt without using a tool first.
+* **Resolution (Prompt Engineering):** Added an explicit "escape hatch" to the system prompt: *"DO NOT invoke tools for general greetings or questions about your own identity and capabilities."* This gives the LLM psychological permission to act as a conversational chatbot when external data isn't required.
+
+#### 3. The "Amnesia on Error" Bug (Approval Flow Blindspot)
+
+* **Symptom:** A tool is approved by the user, but the execution fails (e.g., a 404 Not Found from GitHub). Instead of reporting the error, the agent ignores it and replies with: *"Task resumed. What would you like to do next?"*
+* **Root Cause:** When `/approve` was typed, the `handleApprovalDecision` method sent a hardcoded system string to the LLM saying: `"Resuming task after approval"`. The LLM saw this string, assumed everything was fine, and ignored the preceding tool error.
+* **Resolution:** Updated the hardcoded continuation prompt to explicitly command the LLM to evaluate the result: *"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer."*
+
+#### 4. Few-Shot Overfitting (The "OpenClaw" Hallucination)
+
+* **Symptom:** The user requests details for a specific repository (e.g., `rsrini7/mermaid2gif`), but the agent stubborn queries `openclaw/mermaid2gif` or `rsrini7/openclaw`, resulting in 404 errors.
+* **Root Cause:** The system prompt used a highly specific few-shot example: *"infer it from the user's prompt (e.g., 'openclaw' -> 'openclaw/openclaw')"*. The small LLM overfitted to this example, treating the word "openclaw" as a strict formatting rule that had to be injected into every GitHub query.
+* **Resolution:** Replaced the specific example with a generic one (`apache/camel`) and added a strict negative constraint: *"NEVER hallucinate or guess the repository owner. If the user only provides a repo name, ask them for the full owner/repo path."*
+
+#### 5. Ephemeral Chat Memory (Amnesia on Reboot)
+
+* **Symptom:** After stopping and recompiling the Quarkus native runner, the agent forgets the entire previous conversation, even though the SQLite database is still intact.
+* **Root Cause (Architectural Constraint):** While ArcClaw's SQLite database permanently saves stateful checkpoints (like `AWAITING_APPROVAL`), LangChain4j stores the actual conversational chat history in the server's RAM via an in-memory `ChatMemoryStore`. Restarting the JVM/Native process wipes the RAM.
+* **Resolution:** Documented as expected behavior. For enterprise persistence across server reboots, LangChain's `ChatMemoryStore` must eventually be wired directly to the SQLite/Hibernate persistence layer.
+
+#### 6. SQLite Check Constraint Violations
+
+* **Symptom:** The agent attempts to pause for human approval, but throws a fatal SQL error: `[SQLITE_CONSTRAINT_CHECK] A CHECK constraint failed`.
+* **Root Cause:** The legacy SQLite database schema was generated with a strict `CHECK` constraint that only allowed `IN_PROGRESS`, `COMPLETED`, and `FAILED`. When the Java enum was updated to include `AWAITING_APPROVAL`, the database engine rejected the new string.
+* **Resolution:** Deleted the local `arcclaw-meta.db` file. Upon the next startup, Hibernate recreated the schema with the updated constraint rules.
+
+#### 7. Native ProcessBuilder Failures
+
+* **Symptom:** The `GithubTool` throws a `RuntimeException: ProcessBuilder.start() debug` stating `cmd: "gh"` cannot be executed.
+* **Root Cause:** The GraalVM native binary is stepping outside the application sandbox to the host OS (WSL2). The operating system did not have the GitHub CLI (`gh`) installed or available in the system `$PATH`.
+* **Resolution:** Installed the official `gh` CLI via `apt` on the WSL2 instance and authenticated it via `gh auth login`.

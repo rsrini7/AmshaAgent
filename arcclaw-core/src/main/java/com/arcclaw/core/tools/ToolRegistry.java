@@ -7,6 +7,10 @@ import com.arcclaw.core.security.RequiresSecrets;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arcclaw.core.governance.RequiresApprovalException;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.ToolOperation;
 import org.jboss.logging.Logger;
 
 import java.lang.reflect.Method;
@@ -36,6 +40,9 @@ public class ToolRegistry {
 
     @Inject
     WorkspaceContext workspaceContext;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     // Stateless — no CDI needed. Can be swapped to @Inject if custom policies are
     // required later.
@@ -91,7 +98,22 @@ public class ToolRegistry {
         // Governance check
         var level = workspaceContext.getAutonomyLevel();
         var requiredOp = tool.requiredOperation();
+
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
+            // Step 4: Sprint 2B Approval Interception
+            if (level == AutonomyLevel.SUPERVISED &&
+                    (requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.VAULT_ACCESS
+                            || requiredOp == ToolOperation.EXECUTE_SHELL)) {
+
+                log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
+                try {
+                    String paramsJson = objectMapper.writeValueAsString(params);
+                    throw new RequiresApprovalException(toolName, paramsJson, workspaceContext.getSessionId());
+                } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                    throw new RuntimeException("Failed to serialize tool parameters", e);
+                }
+            }
+
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
             throw new SecurityException(
@@ -100,6 +122,24 @@ public class ToolRegistry {
 
         log.infof("Invoking tool '%s' (operation=%s, level=%s)", toolName, requiredOp, level);
         return tool.execute(params);
+    }
+
+    /**
+     * Resumes execution of a pending tool from its serialized JSON parameters.
+     * 
+     * @param toolName   The unique tool name.
+     * @param paramsJson The serialized JSON parameters.
+     * @param sessionId  The workspace session ID.
+     * @return The tool execution result.
+     */
+    public ToolResponse invokeTool(String toolName, String paramsJson, String sessionId) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> params = objectMapper.readValue(paramsJson, Map.class);
+            return invokeTool(toolName, params);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to deserialize tool parameters for " + toolName, e);
+        }
     }
 
     /**

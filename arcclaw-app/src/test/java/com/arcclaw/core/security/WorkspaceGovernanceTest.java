@@ -32,23 +32,23 @@ public class WorkspaceGovernanceTest {
     void testWorkspaceContextInjection() {
         assertNotNull(context);
         assertEquals(TEST_SESSION_ID, context.getSessionId());
-        assertEquals(AutonomyLevel.READ_ONLY, context.getAutonomyLevel());
+        assertEquals(AutonomyLevel.READONLY, context.getAutonomyLevel());
     }
 
     @Test
     void testAutonomyPolicyLogic() {
         AutonomyPolicy policy = new AutonomyPolicy.Default();
 
-        // READ_ONLY
-        assertTrue(policy.isAllowed(AutonomyLevel.READ_ONLY, ToolOperation.READ_FS));
-        assertFalse(policy.isAllowed(AutonomyLevel.READ_ONLY, ToolOperation.WRITE_FS));
+        // READONLY
+        assertTrue(policy.isAllowed(AutonomyLevel.READONLY, ToolOperation.READ_FS));
+        assertFalse(policy.isAllowed(AutonomyLevel.READONLY, ToolOperation.WRITE_FS));
 
         // FULL
         assertTrue(policy.isAllowed(AutonomyLevel.FULL, ToolOperation.EXECUTE_SHELL));
 
-        // PARTIAL
-        assertTrue(policy.isAllowed(AutonomyLevel.PARTIAL, ToolOperation.READ_FS));
-        assertFalse(policy.isAllowed(AutonomyLevel.PARTIAL, ToolOperation.VAULT_ACCESS));
+        // SUPERVISED
+        assertTrue(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.READ_FS));
+        assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.VAULT_ACCESS));
     }
 
     @Test

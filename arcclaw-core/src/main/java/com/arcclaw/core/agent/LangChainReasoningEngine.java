@@ -41,9 +41,26 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public ReasoningStep nextStep(String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
-        messages.add(SystemMessage.from(
-                "You are an intelligent agent. Your goal is to fulfill the user's request using the available tools. When you have finished, use a tool named 'FINISH' or output the final answer if no tools are available."));
-        messages.add(UserMessage.from(goal));
+        messages.add(SystemMessage.from("""
+                You are ArcClaw, an advanced, enterprise-grade AI Agent ecosystem built in Java and Quarkus.
+                You operate within a Dual-Mode CLI and Daemon architecture.
+                
+                YOUR INTERNAL ARCHITECTURE (THE TRIMURTI & TRIDEVI):
+                You act as 'Vishnu' (The Coordinator / Preserver). You are the main orchestrator, maintaining the state of the conversation and delegating tasks to your specialized sub-agents:
+                - 'Brahma' (The Creator): Writes new code, builds features from scratch, and designs software architecture.
+                - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs, and tears down bad code.
+                - 'Saraswati' (The Goddess of Knowledge): Handles Information retrieval, RAG, documentation, and web searches.
+                
+                YOUR PERSONA:
+                Be helpful, highly technical, and concise. Never introduce yourself as a generic "AI language model". 
+                Always identify as ArcClaw, specifically acting as the Coordinator.
+                
+                CRITICAL INSTRUCTIONS FOR TOOL USAGE:
+                1. You have direct access to execution tools (like 'github'). If the user's prompt requires external data, looking up a repository, or running a command, you MUST execute the tool. However, DO NOT invoke tools for general greetings or questions about your own identity and capabilities.
+                2. You already have all necessary permissions to execute tools securely. Do not ask the user for permission.
+                3. If a tool requires specific formatting (like owner/repo), use EXACTLY what the user provides (e.g., 'apache/camel'). NEVER hallucinate or guess the repository owner. If the user only provides a repo name without the owner, ask them for the full owner/repo path.
+                4. When you have gathered enough information from the tools, output the final answer as plain text. Do not call any further tools.
+                """));
 
         for (int i = 0; i < history.size(); i++) {
             ReasoningStep step = history.get(i);
@@ -83,6 +100,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
 
+        // This ensures the LLM knows the user just spoke and it must reply.
+        messages.add(UserMessage.from(goal));
+
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
                 .map(tool -> ToolSpecification.builder()
@@ -106,6 +126,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         if (aiMessage.hasToolExecutionRequests()) {
             ToolExecutionRequest req = aiMessage.toolExecutionRequests().get(0);
+
+            log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
+
             Map<String, Object> actionInput = Map.of();
             try {
                 if (req.arguments() != null && !req.arguments().isBlank()) {

@@ -1,6 +1,6 @@
 # ArcClaw v1.0 — Implementation Task Checklist
 
-> Tracking all implementation phases derived from the [ArcClaw-v1_0-CONSOLIDATED.md](./ArcClaw-v1_0-CONSOLIDATED.md) specification.
+> Tracking all implementation phases derived from the [REQUIREMENTS.md](./REQUIREMENTS.md) specification.
 
 > **Cross-Reference**: [PLAN.md](./PLAN.md) | [DEVIATIONS.md](./DEVIATIONS.md) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | [WALKTHROUGH.md](./WALKTHROUGH.md) | [FAQ.md](./FAQ.md)
 
@@ -202,8 +202,109 @@
 
 ---
 
-## Phase 15 — JDK 25 LTS Alignment (Future-Ready)
-- [ ] All JDK 25 JEP notes documented inline (JEP 491, 506, 505, 473)
-- [ ] ScopedValue migration path in `WorkspaceScopeHolder` comments
-- [ ] ReentrantLock vs synchronized documented (optional on JDK 25)
-- [ ] Structured Concurrency noted as preview-only (avoid in stable kernel)
+## Phase 15 — Dual-Mode Binary Upgrade (quarkus-picocli)
+- [x] Add `quarkus-picocli` dependency
+- [x] Add `onStepComplete` default method to `AgentObserver.java`
+- [x] Update `AgentLoop.runLoop()` to call `onStepComplete` with `agentRole` and `completedStep` (effectively-final fix)
+- [x] Create `ArcClawCli.java` mapped via `@QuarkusMain` to boot Picocli (replaces `ArcClawApp.java`)
+- [x] Create `ServeCommand.java` (`arcclaw serve`) for daemon mode (`Quarkus.waitForExit()`)
+- [x] Create `AskCommand.java` (`arcclaw ask "<goal>"`) for CLI one-shot execution (`@ActivateRequestContext`)
+- [x] Create `CliAgentObserver.java` static-guarded CLI output observer
+- [x] Compile verified: `mvn compile` exit code 0
+
+
+---
+
+## Phase 16 — Telegram Channel Adapter
+- [x] Step 1: Add `quarkus-camel-bom` to parent `pom.xml` + `camel-quarkus-telegram` to `arcclaw-app/pom.xml`
+- [x] Step 2: Add `arcclaw.channel.telegram` config block to `application.yaml`
+- [x] Step 3: Create `TelegramChannelRoute.java` — Camel `RouteBuilder`
+- [x] Step 4: Create `TelegramAgentHandler.java` — message handler + async agent dispatch
+- [x] Step 5: Telegram Integration Testing
+  - [x] Create `TelegramAgentHandlerTest.java` (Mocked Executor flow)
+  - [x] Create `TelegramChannelRouteTest.java` (Route discovery check)
+  - [x] Document test failures and pending issues in `TROUBLESHOOTING.md`
+  - [x] Verification: Resolve remaining exit-code-1 in `TelegramAgentHandlerTest`
+- [x] Step 6: Diagnostic Logging & Autonomy Level Rename
+  - [x] Rename `READ_ONLY` -> `READONLY` and `PARTIAL` -> `SUPERVISED` in all modules
+  - [x] Inject default autonomy level into `TelegramAgentHandler`
+  - [x] Add log statements to verify session autonomy and completion in Telegram flow
+
+---
+
+## Phase 17 — Groq Cloud Migration
+- [x] Repoint LangChain4J OpenAI extension to Groq API
+- [x] Update `.env.example` with `GROQ_API_KEY`
+- [x] Configure `application.yaml` with `llama-3.3-70b-versatile` as default
+- [x] Pass `GROQ_API_KEY` through `docker-compose.yaml`
+- [x] Verify production profile boots with Groq configuration
+
+---
+
+## Phase 18 — Sprint 2B: Human-in-the-Loop Telegram Approval Flow
+- [x] Add `AWAITING_APPROVAL` to `CheckpointStatus`
+- [x] Update `AgentCheckpoint` Entity with pending tool columns
+- [x] Create `RequiresApprovalException`
+- [x] Update `ToolRegistry` to enforce `SUPERVISED` network approvals
+- [x] Update `AgentResult` record with `awaitingApproval` flag
+- [x] Update `AgentLoop.runLoop()` to handle `RequiresApprovalException` and resume pending tools
+- [x] Implement `WorkspaceManager` approval timeout GC sweep
+- [x] Update `TelegramAgentHandler` to process `/approve` and `/deny` commands
+
+---
+
+## Phase 19 — Sprint 2C: Dynamic Role Routing & Day 2 Hardening
+- [x] Implement keyword-based Intent Router in `TelegramAgentHandler`
+- [x] Route to `brahma`, `saraswati`, or `coordinator` based on prompt matching
+- [x] Bug Fix: Prevent `AgentLoop` from overwriting `AWAITING_APPROVAL` with `FAILED` on exit
+- [x] Bug Fix: Enforce deterministic `baseId` and implement session wipe for completed/failed tasks
+- [x] Updated SRS `REQUIREMENTS.md` with v1.1 baseline and v1.2 roadmap
+
+---
+
+## Phase 20 — ArcClaw v1.2: State Consistency & Observability
+- [x] **Sprint 3A: Persistent ChatMemoryStore**
+  - [x] Create `ChatMemoryEntity` (JPA/SQLite persistence)
+  - [x] Create `PersistentChatMemoryStore` (LangChain4j 0.26.1 implementation)
+  - [x] Update `WorkspaceManager` to delete chat memory on session termination
+  - [x] "Task Amnesia" Fix: Automated session reset for `COMPLETED`/`FAILED` tasks in `TelegramAgentHandler`
+  - [x] Verify: `PersistentChatMemoryStoreTest` passed
+  - [x] Verify: Realtime testing of Secret code check with Telegram - `Every message is treated as a completely isolated task... The bot has the memory of a goldfish. It cannot answer follow-up questions about the previous message because it intentionally wiped its own memory.`
+- [x] **Sprint 3B: LLM Intent Router (Groq-backed classification)**
+  - [x] Create `IntentClassifierService.java` (LLM-based role determination)
+  - [x] Create `ModelProducer.java` (Manual CDI producer for named model)
+  - [x] Integrate intent routing into `TelegramAgentHandler`
+  - [x] Implement dynamic role discovery for `/approve` and `/deny`
+  - [x] Verify: `TelegramAgentHandlerTest` routing logic
+- [x] **Sprint 3C: Prometheus Metrics (Micrometer + AgentObserver)**
+  - [x] Add `quarkus-micrometer-registry-prometheus` dependency
+  - [x] Create `MetricsAgentObserver.java`
+  - [x] Create `prometheus.yml` in project root
+  - [x] Add `prometheus` service to `docker-compose.yaml`
+  - [x] Verify `/q/metrics` endpoint and Prometheus scrape status
+- [x] **Sprint 3D: ShivaAgent ("shiva") Integration**
+  - [x] Integrate `shiva` role into `IntentClassifierService.java`
+  - [x] Update `TelegramAgentHandler.java` role discovery loop to include `shiva`
+  - [x] Verify intent routing: "fixing" vs "creating" logic
+  - [x] Verify: Metrics tracking for `shiva` role
+- [x] **Sprint 3E: CLI Hardening (%cli profile & ps1 wrapper)**
+  - [x] Create `%cli` profile in `application.yaml` to silence Quarkus/Hibernate logs
+  - [x] Create `arcclaw-cli.ps1` PowerShell wrapper for Windows users
+  - [x] Update `README.md` with Option C (Silent CLI) instructions
+- [x] **Sprint 4A: CLI Subcommands (Chat & Attach)**
+  - [x] Create `ChatCommand.java` (REPL)
+  - [x] Create `AttachCommand.java` (Daemon)
+  - [x] Register subcommands in `ArcClawCli.java`
+  - [x] Verify REPL interaction and session reset
+  - [x] Verify attach daemon mode
+  - [x] Inject ArcClaw Trimurti/Tridevi persona into `LangChainReasoningEngine`
+  - [x] Force JVM UTF-8 encoding in `arcclaw-cli.ps1`
+- [x] **Sprint 4B: Pre-Release Hardening & Agent UX**
+  - [x] Fix "Goldfish Memory" bug in `TelegramAgentHandler` (soft wipe on COMPLETE)
+  - [x] Fix "Amnesia on Error" by updating the `/approve` continuation prompt
+  - [x] Fix "OpenClaw Hallucination" by adding negative constraints to the system prompt
+  - [x] Add an escape hatch in the system prompt for generic conversational replies
+  - [x] Route GithubTool execution to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`)
+- [ ] Sprint 4C: Multi-Language Support (Planned)
+
+

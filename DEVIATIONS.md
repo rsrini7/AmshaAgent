@@ -52,9 +52,10 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 | **5** | Agent & Orchestration | **Complete** | `AgentLoop` (Thought-Plan-Act-Observe, 3 guardrails), `ReasoningEngine` interface, 3 agent personas, 5 tests passing. |
 | **6** | State Layer (Checkpointing) | **Complete** | `AgentCheckpoint` entity (plain JPA, not Panache), `StatefulAgentStore` (EntityManager + Jackson), `SqliteWalConfigurer` (WAL PRAGMAs), 4 tests passing. |
 | **7** | Lifecycle Layer | **Complete** | `WorkspaceManager` (Heartbeats, GC, Termination), `AgentLoop` lifecycle upgrade. deviation: `WorkspaceScopeContext` injected via `Arc.container()` lookup (custom context). |
-| **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). |
+| **8** | Governance Layer | **Complete** | Token tracking and budget enforcement (`BudgetExceededException`, `AutonomyLevel.READONLY`). Rename: READ_ONLY -> READONLY. |
 | **9** | Observer / OTel Layer | **Complete** | `AgentOtelContext` OpenTelemetry implementation. deviation: Replaced `InMemorySpanExporter` with `@InjectMock Tracer` for testing due to Quarkus OTLP extension limitations in unit tests. |
 | **10** | Health Layer | **Complete** | `PodmanHealthCheck`/`PodmanImageHealthCheck` implemented. deviation: Used `@Alternative`+`@Priority` standalone `HealthCheck` mocks instead of `@Mock extends` due to ArC classloader boundary preventing `@ConfigProperty` injection across module boundaries. Management port 9001 required for health endpoint tests. |
+| **15** | Dual-Mode Binary | **Complete** | Migrated to `quarkus-picocli` entry point. deviation: Adjusted `AgentObserver.recordLlmCall` signature (omitted `modelName`) to align with existing implementations. |
 
 ### 5. OTel Stub for Sandbox Layer
 *   **Deviation:** Created a minimal `AgentOtelContext` stub returning `Span.getInvalid()` instead of implementing the full observer layer.
@@ -97,6 +98,51 @@ The implementation of ArcClaw v1.0 has successfully translated the high-level co
 *   **YAML OpenAI Model Property**: To stop `openai` falling back to `gpt-4o-mini`, the model injection MUST be prefixed exclusively at `quarkus.langchain4j.openai.chat-model.model-name`, NOT `quarkus.langchain4j.openai.model-name`.
 *   **Cosmic Pantheon (Grok 4.20) Agents**: Renamed `GrokAgent` -> `VishnuAgent`, `HarperAgent` -> `SaraswatiAgent`, `BenjaminAgent` -> `BrahmaAgent`, `LucasAgent` -> `ShivaAgent` to establish a distinct mythological agentic framework for the kernel.
 *   **Native Maven Compilation (`-am`)**: When building the native binary via `mvnw clean package -pl arcclaw-app -Pnative`, you MUST include the `-am` flag (Also Make) to ensure changes in `arcclaw-core` are recompiled before the `-app` binary is linked.
+*   **Groq Cloud API Migration**: **CRITICAL CHANGE**. Replaced local Ollama with Groq Cloud (`llama-3.3-70b-versatile`) as the default LLM provider in the production profile. This utilizes the `openai` compatibility layer but repoints the `base-url` to Groq. 
+*   **AutonomyLevel Renaming**: Renamed `READ_ONLY` -> `READONLY` and `PARTIAL` -> `SUPERVISED` across the entire codebase (Java core, handlers, and tests) to align with enterprise configuration standards and provide clearer operational semantics.
+*   **Telegram Handler Default Level**: The `TelegramAgentHandler` now explicitly injects and applies the `arcclaw.autonomy.default-level` (defaulting to `SUPERVISED`) to the active workspace session at runtime.
+*   **Autonomy Enforcement Location**: **ARCHITECTURE DECISION**. Autonomy policy enforcement was moved from `GovernanceLayer` (which focuses on financial token/budget tracking) to `ToolRegistry.java`. This preserves separation of concerns as `ToolRegistry` already acts as the gatekeeper for tool discovery and invocation security. `RequiresApprovalException` is thrown directly from the registry for `SUPERVISED` accounts.
+
+### 9. Dual-Mode Binary Picocli Lifecycle (Phase 15)
+*   **Deviation:** `Quarkus.waitForExit()` is omitted from the top-level `ArcClawCli.run()` dispatch method. 
+*   **Rationale:** Calling `waitForExit()` at the parent level hangs the one-shot `ask` CLI mode indefinitely. Instead, the `serve` subcommand explicitly owns its own daemon hold via `Quarkus.waitForExit()`.
+*   **Deviation:** The `AgentLoop` `forEach` observer loop captured an effectively non-final variable (`step`), which `AgentObserver.onStepComplete` rejected.
+*   **Rationale:** Fixed explicitly assigning `final ReasoningStep completedStep = step` directly preceding the stream logic to satisfy Java's closure scopes.
 
 ---
 *Internal Audit Trail sync complete.*
+
+
+### 10. Telegram Session Continuity (REQ-V11-CLI-11)
+*   **Deviation:** Explicitly omitted `workspaceManager.terminateSession()` in the Telegram handler loop.
+*   **Rationale:** To preserve conversation memory across separate Telegram messages, the session must remain `IN_PROGRESS`. We only invoke `WorkspaceScopeHolder.clear()` in the `finally` block to release the thread-local correlation without destroying the persistent state.
+
+### 11. Custom Dotenv Resolution SPI
+*   **Deviation:** Implemented `DotenvConfigSourceProvider.java` as a MicroProfile SPI instead of relying on `quarkus.config.locations`.
+*   **Rationale:** Standard Quarkus property location resolution failed to consistently load the root `.env` when executing submodules (e.g., `mvn -pl arcclaw-app quarkus:dev`) in Windows PowerShell. The SPI approach guarantees property injection early in the boot sequence with a high ordinal (295).
+
+### 12. CDI Proxy Mock Injection
+*   **Deviation:** Refactored `TelegramAgentHandlerTest` to bypass CDI proxy limitations.
+*   **Rationale:** Standard `@InjectMock` cannot resolve into private fields of `@Dependent` beans within a `@QuarkusTest`. We manually unwrapped the `ClientProxy` and used reflection to force mocks into the target instance's private fields.
+- [x] Verification: Resolve remaining exit-code-1 in `TelegramAgentHandlerTest`
+
+### 13. State Machine "Resume Hook" (Sprint 2B)
+- **Deviation**: Implemented a "resume hook" in `AgentLoop.run()` that detects `AWAITING_APPROVAL` checkpoints and executes the pending tool before entering the thought loop.
+- **Rationale**: This allows for non-blocking human-in-the-loop approvals. The agent doesn't need to "re-decide" to run the tool; it completes the approved action and then continues reasoning.
+
+### 14. Deterministic Session Continuity (Sprint 2C)
+- **Deviation**: Use of `UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes())` for session IDs in Telegram.
+- **Rationale**: Ensures that a single user in a specific chat always maps to the same workspace and conversational context, enabling true persistence even after bot restarts.
+
+### 15. Session Reset Logic (Sprint 2C)
+- **Deviation**: The Telegram handler now calls `workspaceManager.terminateSession()` specifically when the existing checkpoint is `COMPLETED` or `FAILED`.
+- **Rationale**: This allows a user to "start over" after a task finishes, without losing the convenience of deterministic ID mapping.
+
+### 16. Manual Model Producer (Sprint 3B)
+- **Deviation**: Implemented a manual CDI `@Produces` method for the `intent-classifier` model instead of relying on `application.yaml` named-model configuration.
+- **Rationale**: Resolved an `UnsatisfiedResolutionException` where Quarkus failed to wire the `@Identifier("intent-classifier")` qualified bean in a multi-module setup. The manual producer provides deterministic bean registration and avoids extension-specific configuration limitations.
+
+### 17. Specialized Debugger Role ("shiva")
+- **Deviation**: Introduced a dedicated `shiva` role for the Intent Router to handle "fix it" and "why is this failing" prompts, distinct from the `brahma` (creator) role.
+- **Rationale**: Prevents specialized creation logic (Brahma) from being applied to debugging tasks, ensuring the appropriate system prompt and reasoning style (Shiva's contrarian/edge-case focus) are utilized.
+

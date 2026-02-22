@@ -17,3 +17,12 @@ quarkus:
 
   log:
     level: INFO
+    category:
+      "com.arcclaw.core.agent":
+        level: "OFF"
+      "com.arcclaw.core.tools":
+        level: "OFF"
+      "com.arcclaw.core.governance":
+        level: "OFF"
+      "com.arcclaw.core.scope":
+        level: "OFF"

@@ -5,6 +5,11 @@
 
 quarkus:
 
+  # Force SmallRye Config to load the .env file from the project root (parent directory)
+  # This fixes the issue where running `quarkus:dev` in a submodule misses the root .env
+  config:
+    locations: "../.env"
+
   application:
     name: arcclaw
     version: "4.1.0"
@@ -65,14 +70,20 @@ quarkus:
         enabled: false
     openai:
       # Ollama provides native OpenAI compatibility on /v1
-      base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
-      api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
+      # base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
+      # api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
       # The OpenAI extension properly parses model-name DYNAMICALLY at runtime!
+      
+      # Groq is OpenAI API-compatible
+      base-url: "https://api.groq.com/openai/v1"
+      api-key: "${GROQ_API_KEY}"
       chat-model:
-        model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+        #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
+        model-name: "llama-3.3-70b-versatile"
+        temperature: 0.1
+        log-requests: true
+        log-responses: true
       timeout: 120s
-      log-requests: true
-      log-responses: true
     chat-memory:
       max-messages: 100
 
@@ -175,6 +186,12 @@ quarkus:
 # =============================================================================
 arcclaw:
 
+  channel:
+    telegram:
+      enabled: true
+      bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
+      default-autonomy-level: SUPERVISED
+
   vault:
     pepper: "${ARCCLAW_VAULT_PEPPER:dev-pepper-not-for-production-0000000000000000000000000000}"
     argon2:
@@ -238,22 +255,60 @@ mp:
 # PROFILES
 # =============================================================================
 
+"%cli":
+  quarkus:
+    banner:
+      enabled: false
+    otel:
+      sdk:
+        disabled: true     # Stops the sun.misc.Unsafe JVM warnings
+    log:
+      level: ERROR
+      console:
+        level: ERROR
+      category:
+        "io.quarkus":
+          level: ERROR     # Silences "Started in...", "Installed features..."
+        "io.smallrye.config":
+          level: ERROR     # Silences "Unrecognized configuration key..."
+        "io.quarkus.agroal":
+          level: ERROR     # Silences "Agroal does not support..."
+        "com.arcclaw":
+          level: ERROR     # Silences WorkspaceManager and SqliteWalConfigurer
+        "org.hibernate":
+          level: ERROR
+    hibernate-orm:
+      log:
+        sql: false # Forces SQL logging off even if global dev is true
+
 "%dev":
   quarkus:
+    console:
+      enabled: false
     langchain4j:
       openai:
         devservices:
           enabled: false
+      groq:
+        log-requests: true
+        log-responses: true
     hibernate-orm:
       log:
         sql: true
     log:
       level: DEBUG
+      category:
+        "org.apache.camel.component.telegram":
+          level: DEBUG
   arcclaw:
     sandbox:
       strategy: NONE        # no Podman in local dev
+    channel:
+      telegram:
+        bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
     governance:
       budget-usd: 999.99
+      approval-timeout-minutes: 60
     vault:
       pepper: "dev-pepper-not-for-production-0000000000000000000000000000"
 
@@ -263,6 +318,10 @@ mp:
       jdbc:
         url: "jdbc:sqlite::memory:"
   arcclaw:
+    channel:
+      telegram:
+        enabled: false
+        bot-token: "mock-bot-token"
     sandbox:
       strategy: NONE
     vault:

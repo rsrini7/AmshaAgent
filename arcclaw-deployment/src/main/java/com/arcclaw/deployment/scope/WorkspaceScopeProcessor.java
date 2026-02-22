@@ -65,7 +65,8 @@ public class WorkspaceScopeProcessor {
     @BuildStep
     void unremovableBeans(BuildProducer<UnremovableBeanBuildItem> producer) {
         producer.produce(
-                UnremovableBeanBuildItem.beanClassNames(
-                        WorkspaceScopeContext.class.getName()));
+                new UnremovableBeanBuildItem(
+                        new UnremovableBeanBuildItem.BeanClassNameExclusion(
+                                WorkspaceScopeContext.class.getName())));
     }
 }

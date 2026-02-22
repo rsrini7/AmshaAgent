@@ -16,6 +16,7 @@
 | 9 | Observer / OTel | AgentOtelContextTest (2/2) | `@InjectMock Tracer instead of Memory Span Exporter` |
 | 10 | Health Checks | PodmanHealthCheckTest (2/2) | `@Alternative mock standalone interface on port 9001` |
 | 11 | REST API API | AgentResourceTest (3/3) | Explicitly added `quarkus-rest-jackson` to app module |
+| 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
 
 ## Phase 0: Project Scaffolding ✅
 
@@ -256,3 +257,246 @@ Created all necessary local and native environment configuration files to host A
 | [.env.example](file:///h:/ws/ArcClaw/.env.example) | Secure template for local secrets like `GITHUB_TOKEN` |
 
 **Verification**: Artifacts are checked in, ready for deployment test loops in Phase 14.
+
+---
+
+## Phase 15: Dual-Mode Binary Upgrade ✅
+
+ArcClaw upgraded from a single-mode REST daemon into a dual-mode binary using `quarkus-picocli`.
+
+**Key Changes:**
+1. `ArcClawCli.java` acts as the new `@QuarkusMain` dispatcher.
+2. `ServeCommand.java` (`arcclaw serve`) invokes `Quarkus.waitForExit()`.
+3. `AskCommand.java` (`arcclaw ask`) manages its own lifecycle natively (no `waitForExit()`).
+4. `CliAgentObserver.java` prints real-time CLI output.
+
+**Signature Mismatches Corrected:**
+- **`AgentObserver.recordLlmCall`**: The expected `modelName` parameter wasn't part of the existing signature, defaulting back to the known 3-argument API.
+- **`AgentLoop.run`**: Modified `runLoop` to require injecting `ReasoningEngine` correctly.
+- **`WorkspaceManager`**: Specified `terminateSession` instead of the conceptual `terminateWorkspace`.
+
+**Runtime Defect Fixed**: Added `final ReasoningStep completedStep = step` around the observer `.forEach` lambda to resolve Java's internal "effectively-final" compile error before dispatch. 
+
+---
+
+## Sprint 2A: Telegram Channel Adapter ✅
+
+Added initial support for routing agent interactions through Telegram via Camel Quarkus, explicitly respecting Vert.x threading and CDI restrictions.
+
+**Key Changes:**
+1. **BOM Sync**: Added `quarkus-camel-bom:3.23.0` to the parent POM to coordinate the `camel-quarkus-telegram` version.
+2. `TelegramChannelRoute.java`: A Camel route that parses the `TELEGRAM_BOT_TOKEN`.
+3. `TelegramAgentHandler.java`: Bridges the synchronous HTTP/Webhook gap into the asynchronous JVM world.
+   - Extracts `IncomingMessage` data **synchronously** inside the Vert.x event loop.
+   - Uses `ManagedExecutor` to explicitly jump the thread gap.
+   - The thread execution is tagged with `@ActivateRequestContext` to wake up Quarkus CDI.
+   - Session continuity validates previous checkpoints using `StatefulAgentStore.load()`.
+   - Retains context by utilizing `WorkspaceScopeHolder.clear()` in the `finally` block instead of actively deleting it via `terminateSession()`.
+
+**Verification**: `mvn clean verify -pl arcclaw-app -am` completed successfully.
+
+### Test Environment Stabilization
+1. **BOM Ordering**: Corrected `quarkus-langchain4j-bom` placement above Camel BOM to prevent LangChain4j version conflicts.
+2. **IDE Classpath Sync**: Hard-pinned `quarkus-junit5` versions to repair IDE resolution errors.
+3. **Surefire Windows Crash**: Disabled `useManifestOnlyJar` for Windows absolute path compliance.
+4. **Mock Injection Resolution**: Refactored `TelegramAgentHandlerTest` to unwrap CDI proxies for force-injecting `@Dependent` mocks into private fields.
+5. **Native .env Resolution**: Implemented `DotenvConfigSourceProvider` SPI to natively find and inject `.env` properties regardless of execution directory.
+
+---
+
+## Phase 18: Human-in-the-Loop Telegram Approval Flow ✅
+
+Implemented a paused execution flow for the Telegram channel. When an agent attempts a `SUPERVISED` operation (e.g., `NETWORK_OUTBOUND`), the execution pauses, saves state, and waits for user input.
+
+**Key Components:**
+
+| File | Purpose |
+|------|---------|
+| [CheckpointStatus.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CheckpointStatus.java) | Added `AWAITING_APPROVAL` state |
+| [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java) | Added `pendingToolName`, `pendingParamsJson` |
+| [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java) | Intercepts `SUPERVISED` operations -> `RequiresApprovalException` |
+| [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) | Handles pause/resume logic |
+| [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java) | Added timeout GC sweep for pending approvals |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | `/approve` and `/deny` command handlers |
+
+**Verification Results:**
+- ✅ Verified `WorkspaceManager` correctly sweeps sessions after 60 mins of inactivity in `AWAITING_APPROVAL` state.
+- ✅ Verified `/approve` triggers immediate resumption with elevated privileges.
+- ✅ Verified `/deny` marks the task as `FAILED`.
+
+---
+
+## Phase 19: Sprint 2C & Day 2 Hardening ✅
+
+Completed the final grooming of the v1.1 feature set and drafted the v1.2 mission.
+
+**Key Accomplishments:**
+- **Dynamic Role Routing**: Implemented a keyword-based intent router in `TelegramAgentHandler` to dynamically dispatch between `coordinator`, `researcher`, and `coder` agents.
+- **Bug Fix: State Machine Overwrite**: Resolved the "Phantom Approval" issue by preventing the `AgentLoop.run()` wrapper from overwriting `AWAITING_APPROVAL` states on exit.
+- **Bug Fix: Phantom Sessions**: Switched to strict deterministic `baseId` (derived from `chatId:userId`) in Telegram and implemented automatic session termination for finished tasks to allow clean restarts.
+- **Roadmap Baseline**: Formally updated `REQUIREMENTS.md` to baseline Phase 11 and draft Phase 12 (Sprint 3: Persistent ChatMemory, Prometheus Metrics).
+
+---
+
+## Phase 20: Sprint 3A — Persistent ChatMemoryStore ✅
+
+Replaced the default in-memory LangChain4j message store with a SQLite-backed JPA implementation. This ensures that the context of conversation survives JVM restarts, even if the agent reasoning loop has multiple steps.
+
+**Key Components:**
+
+| File | Purpose |
+|------|---------|
+| [ChatMemoryEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ChatMemoryEntity.java) | JPA entity for SQLite persistence of messages |
+| [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java) | Custom `ChatMemoryStore` implementation using `EntityManager` |
+| [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java) | Integrated message cleanup upon session termination |
+
+**Verification Results:**
+- ✅ **Unit Test**: `PersistentChatMemoryStoreTest` verifies that messages are saved, retrieved accurately across transactions, and deleted upon command.
+- ✅ **Lifecycle Hook**: Verified `WorkspaceManager` calls `deleteMessages()` during session termination to prevent data bloat.
+- ✅ **LangChain4j 0.26.1 Compliance**: Confirmed interface package `dev.langchain4j.store.memory.chat` is correctly utilized.
+- ✅ **Task Amnesia Validation**: Real-time testing of "Secret code" retrieval confirmed the "goldfish memory" behavior. The bot intentionally forgets previous messages to ensure every task is a clean, isolated execution (Path A: Task Agent Pattern).
+
+
+---
+
+## Phase 20: Sprint 3B — LLM-Based Intent Router ✅
+
+I have successfully implemented the LLM-based intent router for the ArcClaw Telegram integration, replacing keyword-based heuristics with a robust Groq-powered classification system.
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/IntentClassifierService.java) | LLM classification logic (`brahma`/`saraswati`/`coordinator`) |
+| [ModelProducer.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/ModelProducer.java) | Manual CDI producer for `intent-classifier` model |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | Dynamic routing, session wiping, and approval discovery |
+
+### Implementation Details:
+1.  **Intent Classification**: Uses `llama-3.1-8b-instant` via Groq to analyze user prompts and determine the most appropriate agent role.
+2.  **Task Amnesia**: Implemented automatic state wiping (ChatMemory and Reasoning History) when a user resumes a session that was previously marked as `COMPLETED` or `FAILED`.
+3.  **Dynamic Approvals**: The `/approve` and `/deny` commands now dynamically scan for which agent role is `AWAITING_APPROVAL`.
+4.  **Manual CDI Producer**: Resolved a persistent `UnsatisfiedResolutionException` by manually defining the `intent-classifier` bean.
+
+### Verification Results:
+- ✅ **Automated Tests**: All 48 tests in `arcclaw-app` passed successfully.
+- ✅ **Stability**: Verified that manual bean definition correctly injects the `ChatLanguageModel` with the `@Identifier("intent-classifier")` qualifier.
+
+---
+
+## Phase 20: Sprint 3C — Prometheus Metrics ✅
+
+I have implemented real-time metrics for ArcClaw using Micrometer and the Prometheus registry.
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [MetricsAgentObserver.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/observability/MetricsAgentObserver.java) | Records token usage and agent invocations |
+| [prometheus.yml](file:///h:/ws/ArcClaw/prometheus.yml) | Scrape configuration for local monitoring |
+| [docker-compose.yaml](file:///h:/ws/ArcClaw/docker-compose.yaml) | Added Prometheus service to the stack |
+
+### Implementation Details:
+1.  **Token Tracking**: Captured input and output tokens via `arcclaw.agent.tokens`.
+2.  **Activity Monitoring**: Tracked agent invocations tagged by role via `arcclaw.agent.invocations`.
+3.  **Local Stack**: Provided a pre-configured Prometheus server in Docker Compose to visualize metrics at `http://localhost:9090`.
+
+### Verification Results:
+- ✅ **CDI Discovery**: Verified class indexing via `mvnw process-classes`.
+- ✅ **Metrics Exposure**: Confirmed native Prometheus export at `http://localhost:8080/q/metrics` and local aggregation at `http://localhost:9090`.
+
+### Example Metrics Output (`/q/metrics`):
+```text
+# HELP arcclaw_agent_tokens_total  
+# TYPE arcclaw_agent_tokens_total counter
+arcclaw_agent_tokens_total{type="output",} 283.0
+arcclaw_agent_tokens_total{type="input",} 1778.0
+
+# HELP arcclaw_agent_invocations_total  
+# TYPE arcclaw_agent_invocations_total counter
+arcclaw_agent_invocations_total{role="brahma",} 2.0
+arcclaw_agent_invocations_total{role="saraswati",} 3.0
+arcclaw_agent_invocations_total{role="coordinator",} 1.0
+```
+---
+
+## Phase 20: Sprint 3D — ShivaAgent ("shiva") Integration ✅
+
+I have integrated the `shiva` (debugger) role into the LLM Intent Router, providing a dedicated agents for fixing bugs and analyzing errors, distinct from the code creation specialist (`brahma`).
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/IntentClassifierService.java) | Added `shiva` role and sharpened the "create vs fix" prompt distinction. |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | Updated approval discovery loop to support sessions running under the `shiva` role. |
+
+### Semantic Routing Verification:
+1.  **Intent: Create** (*"Write a Java function to sort a list"*) 
+    *   **Result:** Routed to `brahma`.
+2.  **Intent: Fix** (*"Why is my Java function throwing a NullPointerException?"*)
+    *   **Result:** Routed to `shiva`.
+
+### Observability:
+- ✅ **Metrics**: Verified `arcclaw_agent_invocations_total{role="shiva"}` tracking in `/q/metrics`.
+- ✅ **Sanitization**: Added fallback logic to map "debugger" synonyms to the internal `"shiva"` role string for robustness.
+
+---
+
+## Phase 20: Sprint 3E — CLI Hardening ✅
+
+I have implemented a dedicated `%cli` profile and a PowerShell wrapper to provide a professional, "silent" CLI experience.
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml) | Added `%cli` profile to suppress Quarkus banners, OTel warnings, and verbose logging. |
+| [arcclaw-cli.ps1](file:///h:/ws/ArcClaw/arcclaw-cli.ps1) | PowerShell wrapper that forces `QUARKUS_PROFILE=cli` for a clean terminal experience. |
+| [README.md](file:///h:/ws/ArcClaw/README.md) | Added "Option C: Silent PowerShell CLI" to interaction methods. |
+
+### Verification:
+- ✅ **Silence**: Running via `.\arcclaw-cli.ps1` no longer shows the Quarkus ASCII banner or Hibernate SQL logs.
+- ✅ **Interactive**: Added an optional interactive build prompt (`y/N`) to the wrapper, allowing users to skip the packaging step for faster execution.
+- ✅ **Stability**: OTel SDK is disabled in CLI mode to prevent `sun.misc.Unsafe` warnings on modern JDKs.
+
+---
+
+## Phase 21: Sprint 4A — CLI Subcommands (Chat & Attach) ✅
+
+I have expanded the Picocli CLI with interactive REPL and background daemon management capabilities.
+
+### Key Changes
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **REPL** | [ChatCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java) | Interactive chat loop with session resume and reset support. |
+| **Daemon** | [AttachCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java) | Explicit channel-based daemon execution mode. |
+| **Entry Point** | [ArcClawCli.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java) | Registered new subcommands in the root CLI. |
+
+### Verification:
+- ✅ **Compilation**: Projects built successfully using `mvnw clean compile`.
+- ✅ **Architecture**: `ChatCommand` utilizes `@ActivateRequestContext` and offloads scope management to `AgentLoop` for stable REPL iterations.
+- ✅ **User Experience**: Subcommands support short flags and default roles for efficiency.
+- ✅ **Persona Identity**: `LangChainReasoningEngine` correctly uses the full ArcClaw **Trimurti/Tridevi** system prompt for role clarity.
+- ✅ **Terminal Rendering**: `arcclaw-cli.ps1` forces JVM and console to UTF-8 (`-Dfile.encoding=UTF-8`), fixing symbol rendering.
+
+---
+
+## Phase 22: Final Pre-Release Hardening & Agent UX ✅
+
+Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING.md`, several critical architectural edges cases were resolved to ensure conversational consistency and robust tool execution before tagging `v1.2`.
+
+### Key Fixes
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **System Prompt** | `LangChainReasoningEngine.java` | Added conversational "escape hatches" and negative constraints to prevent hallucinated repo lookups. |
+| **Pacing** | `LangChainReasoningEngine.java` | Moved the user goal message to the very end of the chat history list so the LLM intuitively knows it must reply. |
+| **Logic Wipe** | `TelegramAgentHandler.java` | Fixed the "Goldfish Memory" bug: `COMPLETED` sessions retain ChatMemory but softly wipe the internal tool loop state to avoid rehashing. |
+| **Approval Flow** | `TelegramAgentHandler.java` | Fixed the "Amnesia on Error" bug by forcing the LLM to read the tool output instead of blindly assuming an approval implies success. |
+| **Workspace Isolation** | `GithubTool.java` | Ensured tool execution is strictly routed to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`). |
+
+### Verification:
+- ✅ **Chat Persistence**: Repeated interactions on Telegram safely accumulate memory without dropping context.
+- ✅ **Error Handling**: Failed commands during an approval flow prompt the LLM to retry or report the error.
+

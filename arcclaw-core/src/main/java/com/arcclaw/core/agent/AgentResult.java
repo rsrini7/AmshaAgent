@@ -18,27 +18,33 @@ public record AgentResult(
         String finalAnswer,
         List<ReasoningStep> steps,
         boolean success,
+        boolean awaitingApproval,
         String terminationReason,
         int totalInputTokens,
         int totalOutputTokens) {
 
     public static AgentResult finished(String answer, List<ReasoningStep> steps) {
-        return create(answer, steps, true, "FINISH");
+        return create(answer, steps, true, false, "FINISH");
+    }
+
+    public static AgentResult awaitingApproval(String message, List<ReasoningStep> steps) {
+        return create(message, steps, false, true, "AWAITING_APPROVAL");
     }
 
     public static AgentResult loopExceeded(List<ReasoningStep> steps, int maxIterations) {
         return create(
                 "Loop terminated: exceeded " + maxIterations + " iterations without reaching a conclusion.",
-                steps, false, "MAX_ITERATIONS_EXCEEDED");
+                steps, false, false, "MAX_ITERATIONS_EXCEEDED");
     }
 
     public static AgentResult error(List<ReasoningStep> steps, String reason) {
-        return create("Error: " + reason, steps, false, reason);
+        return create("Error: " + reason, steps, false, false, reason);
     }
 
-    private static AgentResult create(String answer, List<ReasoningStep> steps, boolean success, String reason) {
+    private static AgentResult create(String answer, List<ReasoningStep> steps, boolean success,
+            boolean awaitingApproval, String reason) {
         int inTokens = steps.stream().mapToInt(ReasoningStep::inputTokens).sum();
         int outTokens = steps.stream().mapToInt(ReasoningStep::outputTokens).sum();
-        return new AgentResult(answer, steps, success, reason, inTokens, outTokens);
+        return new AgentResult(answer, steps, success, awaitingApproval, reason, inTokens, outTokens);
     }
 }

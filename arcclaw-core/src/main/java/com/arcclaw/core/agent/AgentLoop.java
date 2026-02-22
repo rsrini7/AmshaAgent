@@ -5,6 +5,9 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.governance.RequiresApprovalException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
@@ -108,15 +111,22 @@ public class AgentLoop {
                         resumedHistory.size(), sessionId, agentRole);
             }
 
-            AgentResult result = runLoop(goal, engine, maxIterations, resumedHistory);
+            AgentResult result = runLoop(goal, engine, maxIterations, resumedHistory, agentRole);
 
             // --- CHECKPOINT FINAL STATE ---
-            if (result.success()) {
-                var cp = agentStore.save(sessionId, agentRole, result.steps());
-                agentStore.markCompleted(cp.id);
+            if (result.awaitingApproval()) {
+                // DO NOTHING: runLoop() already saved the checkpoint state as AWAITING_APPROVAL.
+                // We must not overwrite it with COMPLETED or FAILED.
+                log.debugf("Session %s paused, waiting for human approval.", sessionId);
             } else {
+                // Save the reasoning steps and grab the entity ID
                 var cp = agentStore.save(sessionId, agentRole, result.steps());
-                agentStore.markFailed(cp.id, result.terminationReason());
+                
+                if (result.success()) {
+                    agentStore.markCompleted(cp.id);
+                } else {
+                    agentStore.markFailed(cp.id, result.terminationReason());
+                }
             }
 
             return result;
@@ -147,7 +157,7 @@ public class AgentLoop {
      * @return The final result with reasoning trace.
      */
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
-        return runLoop(goal, engine, maxIterations, List.of());
+        return runLoop(goal, engine, maxIterations, List.of(), null);
     }
 
     /**
@@ -160,12 +170,34 @@ public class AgentLoop {
      * @return The final result.
      */
     private AgentResult runLoop(String goal, ReasoningEngine engine,
-            int maxIterations, List<ReasoningStep> resumedHistory) {
+            int maxIterations, List<ReasoningStep> resumedHistory, String agentRole) {
         // Mutable state — guarded by synchronized (JEP 491 safe)
         final List<ReasoningStep> history = new ArrayList<>(resumedHistory);
         int iteration = 0;
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
+
+        // --- CHANGE A: RESUME HOOK ---
+        agentStore.load(WorkspaceScopeHolder.get(), agentRole).ifPresent(checkpoint -> {
+            if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                String pendingTool = checkpoint.getPendingToolName();
+                String pendingParams = checkpoint.getPendingToolParametersJson();
+
+                log.infof("[AgentLoop] Resuming session %s: executing pending tool '%s'",
+                        WorkspaceScopeHolder.get(), pendingTool);
+
+                ToolResponse resumeResponse = toolRegistry.invokeTool(
+                        pendingTool, pendingParams, WorkspaceScopeHolder.get());
+
+                history.add(new ReasoningStep("Human Approved", pendingTool,
+                        Map.of("parameters", pendingParams), resumeResponse.output(), 0, 0));
+
+                checkpoint.setPendingToolName(null);
+                checkpoint.setPendingToolParametersJson(null);
+                checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+                agentStore.save(checkpoint);
+            }
+        });
 
         while (iteration < maxIterations) {
             iteration++;
@@ -222,8 +254,13 @@ public class AgentLoop {
                     answer = String.valueOf(step.actionInput().get("answer"));
                 }
                 step = step.withObservation("Task completed.");
+                final ReasoningStep completedStep = step;
                 synchronized (history) {
-                    history.add(step);
+                    history.add(completedStep);
+                }
+                observers.forEach(o -> o.onStepComplete(
+                        WorkspaceScopeHolder.get(), agentRole, completedStep));
+                synchronized (history) {
                     return AgentResult.finished(answer, List.copyOf(history));
                 }
             }
@@ -238,9 +275,12 @@ public class AgentLoop {
                         toolName, toolRegistry.listTools());
                 log.warnf("Hallucination intercepted: tool '%s' not found", toolName);
                 step = step.withObservation(errorObs);
+                final ReasoningStep completedStep = step;
                 synchronized (history) {
-                    history.add(step);
+                    history.add(completedStep);
                 }
+                observers.forEach(o -> o.onStepComplete(
+                        WorkspaceScopeHolder.get(), agentRole, completedStep));
                 continue;
             }
 
@@ -258,6 +298,28 @@ public class AgentLoop {
                 if (!response.success()) {
                     observation = "Tool execution failed (exit=" + response.exitCode() + "): " + observation;
                 }
+            } catch (RequiresApprovalException e) {
+                // --- CHANGE B: APPROVAL PAUSE ---
+                AgentCheckpoint cp = agentStore.load(WorkspaceScopeHolder.get(), agentRole)
+                        .orElseGet(() -> {
+                            var newCp = new AgentCheckpoint();
+                            newCp.sessionId = WorkspaceScopeHolder.get();
+                            newCp.agentRole = agentRole;
+                            return newCp;
+                        });
+                cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+                cp.setPendingToolName(e.getToolName());
+                cp.setPendingToolParametersJson(e.getToolParametersJson());
+                cp.setUpdatedAt(java.time.LocalDateTime.now());
+                agentStore.save(cp);
+
+                log.infof("[AgentLoop] Pausing session %s for human approval of tool '%s'",
+                        WorkspaceScopeHolder.get(), e.getToolName());
+
+                return AgentResult.awaitingApproval(
+                        "⚠️ The agent wants to run the `" + e.getToolName() + "` tool.\n" +
+                                "Reply /approve to allow this, or /deny to cancel.",
+                        List.copyOf(history));
             } catch (SecurityException e) {
                 observation = "Security violation: " + e.getMessage() +
                         ". The current autonomy level does not permit this operation.";
@@ -269,9 +331,12 @@ public class AgentLoop {
 
             // --- OBSERVE ---
             step = step.withObservation(observation);
+            final ReasoningStep completedStep = step;
             synchronized (history) {
-                history.add(step);
+                history.add(completedStep);
             }
+            observers.forEach(o -> o.onStepComplete(
+                    WorkspaceScopeHolder.get(), agentRole, completedStep));
             log.debugf("Observation for '%s': %s",
                     toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
         }

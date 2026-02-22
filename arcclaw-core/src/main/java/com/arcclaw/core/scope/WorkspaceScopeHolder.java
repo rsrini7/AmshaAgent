@@ -35,6 +35,7 @@ package com.arcclaw.core.scope;
 public final class WorkspaceScopeHolder {
 
     private static final InheritableThreadLocal<String> CURRENT_SESSION = new InheritableThreadLocal<>();
+    private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(WorkspaceScopeHolder.class);
 
     private WorkspaceScopeHolder() {
         // utility class — no instantiation
@@ -50,7 +51,7 @@ public final class WorkspaceScopeHolder {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("sessionId must not be null or blank");
         }
-        System.out.println("[ArcClaw Holder] Setting session: " + sessionId + " on thread: " + Thread.currentThread());
+        LOG.debugf("Setting session: %s on thread: %s", sessionId, Thread.currentThread());
         CURRENT_SESSION.set(sessionId);
     }
 
