@@ -282,15 +282,6 @@
   - [x] Create `prometheus.yml` in project root
   - [x] Add `prometheus` service to `docker-compose.yaml`
   - [x] Verify `/q/metrics` endpoint and Prometheus scrape status
-- [x] **Sprint 4A: CLI Subcommands (Chat & Attach)**
-  - [x] Create `ChatCommand.java` (REPL)
-  - [x] Create `AttachCommand.java` (Daemon)
-  - [x] Register subcommands in `ArcClawCli.java`
-  - [x] Verify REPL interaction and session reset
-  - [x] Verify attach daemon mode
-  - [x] Inject ArcClaw Trimurti/Tridevi persona into `LangChainReasoningEngine`
-  - [x] Force JVM UTF-8 encoding in `arcclaw-cli.ps1`
-- [ ] Sprint 4B: Multi-Language Support (Planned)
 - [x] **Sprint 3D: ShivaAgent ("shiva") Integration**
   - [x] Integrate `shiva` role into `IntentClassifierService.java`
   - [x] Update `TelegramAgentHandler.java` role discovery loop to include `shiva`
@@ -300,5 +291,20 @@
   - [x] Create `%cli` profile in `application.yaml` to silence Quarkus/Hibernate logs
   - [x] Create `arcclaw-cli.ps1` PowerShell wrapper for Windows users
   - [x] Update `README.md` with Option C (Silent CLI) instructions
+- [x] **Sprint 4A: CLI Subcommands (Chat & Attach)**
+  - [x] Create `ChatCommand.java` (REPL)
+  - [x] Create `AttachCommand.java` (Daemon)
+  - [x] Register subcommands in `ArcClawCli.java`
+  - [x] Verify REPL interaction and session reset
+  - [x] Verify attach daemon mode
+  - [x] Inject ArcClaw Trimurti/Tridevi persona into `LangChainReasoningEngine`
+  - [x] Force JVM UTF-8 encoding in `arcclaw-cli.ps1`
+- [x] **Sprint 4B: Pre-Release Hardening & Agent UX**
+  - [x] Fix "Goldfish Memory" bug in `TelegramAgentHandler` (soft wipe on COMPLETE)
+  - [x] Fix "Amnesia on Error" by updating the `/approve` continuation prompt
+  - [x] Fix "OpenClaw Hallucination" by adding negative constraints to the system prompt
+  - [x] Add an escape hatch in the system prompt for generic conversational replies
+  - [x] Route GithubTool execution to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`)
+- [ ] Sprint 4C: Multi-Language Support (Planned)
 
 

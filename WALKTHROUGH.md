@@ -479,3 +479,24 @@ I have expanded the Picocli CLI with interactive REPL and background daemon mana
 - ✅ **User Experience**: Subcommands support short flags and default roles for efficiency.
 - ✅ **Persona Identity**: `LangChainReasoningEngine` correctly uses the full ArcClaw **Trimurti/Tridevi** system prompt for role clarity.
 - ✅ **Terminal Rendering**: `arcclaw-cli.ps1` forces JVM and console to UTF-8 (`-Dfile.encoding=UTF-8`), fixing symbol rendering.
+
+---
+
+## Phase 22: Final Pre-Release Hardening & Agent UX ✅
+
+Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING.md`, several critical architectural edges cases were resolved to ensure conversational consistency and robust tool execution before tagging `v1.2`.
+
+### Key Fixes
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **System Prompt** | `LangChainReasoningEngine.java` | Added conversational "escape hatches" and negative constraints to prevent hallucinated repo lookups. |
+| **Pacing** | `LangChainReasoningEngine.java` | Moved the user goal message to the very end of the chat history list so the LLM intuitively knows it must reply. |
+| **Logic Wipe** | `TelegramAgentHandler.java` | Fixed the "Goldfish Memory" bug: `COMPLETED` sessions retain ChatMemory but softly wipe the internal tool loop state to avoid rehashing. |
+| **Approval Flow** | `TelegramAgentHandler.java` | Fixed the "Amnesia on Error" bug by forcing the LLM to read the tool output instead of blindly assuming an approval implies success. |
+| **Workspace Isolation** | `GithubTool.java` | Ensured tool execution is strictly routed to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`). |
+
+### Verification:
+- ✅ **Chat Persistence**: Repeated interactions on Telegram safely accumulate memory without dropping context.
+- ✅ **Error Handling**: Failed commands during an approval flow prompt the LLM to retry or report the error.
+

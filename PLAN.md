@@ -1008,3 +1008,35 @@ Implement interactive REPL and background daemon management in the root CLI.
 - ✅ **Build**: `mvnw clean package` successful.
 - ✅ **REPL**: Verified multi-turn chatting and session persistence.
 - ✅ **Daemon**: Verified background polling for Telegram bots.
+
+---
+
+# Phase 22 — Final Pre-Release Hardening & Agent UX
+
+Addressed several "Post Claude Code Review" edge cases to solidify the agent's reasoning loop and conversational memory before tagging v1.2.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Tool Eagerness**: Gave the LLM psychological permission (an "escape hatch") in the system prompt to explicitly not use tools for generic conversational queries.
+> **Workspace Isolation**: Ensured that any process-based tool, such as `GithubTool`, runs within a unique session-specific directory (`.arcclaw/workspaces/{sessionId}`).
+
+## Proposed Changes
+
+### [arcclaw-core]
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Moved the user goal message to the very end of the chat history list so the LLM knows it is its turn to reply.
+- Refined the system prompt with strict negative constraints to prevent hallucinating repo names (e.g., "OpenClaw" overfit).
+- Added an escape hatch for conversational queries.
+
+### [arcclaw-app]
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Fixed the "Goldfish Memory" bug: Split continuity wipe so that `FAILED` sessions get a hard LangChain wipe, while `COMPLETED` sessions only get a soft internal state wipe, preserving chat history across successful executions.
+- Fixed the "Amnesia on Error" bug: Updated the approval flow continuation prompt to force the LLM to read the tool output instead of blindly assuming success.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/tool/GithubTool.java)
+- Ensured tool execution is routed to an isolated workspace directory (`.arcclaw/workspaces/{sessionId}`).
+
+## Verification
+- ✅ **Memory**: Verified that follow-up questions in Telegram correctly retain the conversational history after a tool completes.
+- ✅ **Approval**: Verified that tool errors following an approval are correctly detected and reported back to the user instead of being silently ignored.
