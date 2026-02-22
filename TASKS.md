@@ -276,7 +276,12 @@
   - [x] Integrate intent routing into `TelegramAgentHandler`
   - [x] Implement dynamic role discovery for `/approve` and `/deny`
   - [x] Verify: `TelegramAgentHandlerTest` routing logic
-- [ ] Sprint 3C: Prometheus Metrics (Micrometer + AgentObserver)
+- [x] **Sprint 3C: Prometheus Metrics (Micrometer + AgentObserver)**
+  - [x] Add `quarkus-micrometer-registry-prometheus` dependency
+  - [x] Create `MetricsAgentObserver.java`
+  - [x] Create `prometheus.yml` in project root
+  - [x] Add `prometheus` service to `docker-compose.yaml`
+  - [x] Verify `/q/metrics` endpoint and Prometheus scrape status
 - [ ] Sprint 3D: Discord Adapter (Camel Discord)
 
 

@@ -807,3 +807,15 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Symptom:** Asynchronous LLM tasks (like the Intent Classifier) fail silently and trigger fallback behavior. The console logs show a warning: `java.util.ServiceConfigurationError: io.smallrye.config.SmallRyeConfigFactory: io.quarkus.runtime.configuration.QuarkusConfigFactory not a subtype`.
 * **Root Cause:** Executing Quarkus/LangChain4j logic using standard Java async methods like `CompletableFuture.supplyAsync()` runs the task on the unmanaged common `ForkJoinPool`. These raw threads do not inherit Quarkus CDI, OpenTelemetry, or Configuration contexts. When LangChain4j's underlying REST client attempts to lazily load configuration on this unmanaged thread, it causes a classloader/context conflict.
 * **Resolution:** Replaced the default executor with the Quarkus/MicroProfile `ManagedExecutor`. By injecting `@Inject ManagedExecutor managedExecutor` and passing it to the async call (`CompletableFuture.supplyAsync(() -> { ... }, managedExecutor)`), Quarkus successfully propagates the CDI and config contexts to the worker thread.
+
+#### 12.4 Metrics "Cold Start" (Lazy Counter Initialization)
+
+* **Symptom:** Navigating to `/q/metrics` immediately after a restart does not show `arcclaw_agent_invocations_total` or `arcclaw_agent_tokens_total`, even if the Micrometer extension is active.
+* **Root Cause:** Micrometer counters are lazily initialized. They do not appear in the Prometheus export until they have been incremented at least once.
+* **Resolution:** This is expected behavior. The metrics will appear as soon as the first `AgentLoop` reasoning step completes or the first LLM call is recorded by the `MetricsAgentObserver`.
+
+#### 12.5 Podman Availability & Circuit Breaker
+
+* **Symptom:** Sandbox execution fails or falls back to `NAMESPACE` isolation even when Podman is installed.
+* **Root Cause:** The `ProcessIsolationExecutor` performs a `podman --version` check at `@PostConstruct`. If Podman is not on the system PATH or fails to respond within 5 seconds, the "Podman Circuit" opens.
+* **Resolution:** Ensure the Podman binary is in the environment PATH and the service is responsive. The executor automatically falls back to `NAMESPACE` strategy (if on Linux) or direct execution to maintain system availability.

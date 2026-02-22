@@ -381,3 +381,40 @@ I have successfully implemented the LLM-based intent router for the ArcClaw Tele
 - ✅ **Automated Tests**: All 48 tests in `arcclaw-app` passed successfully.
 - ✅ **Stability**: Verified that manual bean definition correctly injects the `ChatLanguageModel` with the `@Identifier("intent-classifier")` qualifier.
 
+---
+
+## Phase 20: Sprint 3C — Prometheus Metrics ✅
+
+I have implemented real-time metrics for ArcClaw using Micrometer and the Prometheus registry.
+
+### Key Changes
+
+| File | Purpose |
+|------|---------|
+| [MetricsAgentObserver.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/observability/MetricsAgentObserver.java) | Records token usage and agent invocations |
+| [prometheus.yml](file:///h:/ws/ArcClaw/prometheus.yml) | Scrape configuration for local monitoring |
+| [docker-compose.yaml](file:///h:/ws/ArcClaw/docker-compose.yaml) | Added Prometheus service to the stack |
+
+### Implementation Details:
+1.  **Token Tracking**: Captured input and output tokens via `arcclaw.agent.tokens`.
+2.  **Activity Monitoring**: Tracked agent invocations tagged by role via `arcclaw.agent.invocations`.
+3.  **Local Stack**: Provided a pre-configured Prometheus server in Docker Compose to visualize metrics at `http://localhost:9090`.
+
+### Verification Results:
+- ✅ **CDI Discovery**: Verified class indexing via `mvnw process-classes`.
+- ✅ **Metrics Exposure**: Confirmed native Prometheus export at `http://localhost:8080/q/metrics` and local aggregation at `http://localhost:9090`.
+
+### Example Metrics Output (`/q/metrics`):
+```text
+# HELP arcclaw_agent_tokens_total  
+# TYPE arcclaw_agent_tokens_total counter
+arcclaw_agent_tokens_total{type="output",} 283.0
+arcclaw_agent_tokens_total{type="input",} 1778.0
+
+# HELP arcclaw_agent_invocations_total  
+# TYPE arcclaw_agent_invocations_total counter
+arcclaw_agent_invocations_total{role="brahma",} 2.0
+arcclaw_agent_invocations_total{role="saraswati",} 3.0
+arcclaw_agent_invocations_total{role="coordinator",} 1.0
+```
+
