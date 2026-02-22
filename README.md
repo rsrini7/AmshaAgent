@@ -20,10 +20,10 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | Pillar | Implementation |
 |---|---|
 | **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces |
-| **State** | Per-workspace SQLite (WAL mode) for session isolation and resiliency |
-| **Lifecycle** | Custom `@WorkspaceScoped` CDI context that survives HTTP request gaps |
-| **Resiliency** | Checkpointing of every agent "thought" for instant resume-after-crash |
-| **Governance** | Real-time Token Buckets and USD cost guardrails per session |
+| **State** | JDBC-backed `ChatMemoryStore` + SQLite (WAL) for 100% session persistence |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch |
+| **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations |
+| **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption |
 
 ### 🕉️ The Cosmic Pantheon (Grok 4.20 Inspiration)
@@ -35,11 +35,14 @@ ArcClaw's default multi-agent roster is heavily inspired by the architecture of 
 *   **Brahma (`coder`):** The Creator. A pure logic and engineering brain focused exclusively on writing code, math, and system design. Refuses conversational tasks.
 *   **Shiva (`debugger`):** The Transformer. Acts as the contrarian balance expert. Identifies blind spots, challenges assumptions, and provides creative alternatives to break the team out of local minima.
 
+> [!NOTE]
+> ArcClaw v1.2 utilizes a high-speed LLM Intent Classifier (`llama-3.1-8b-instant`) to dynamically route incoming requests to the most qualified specialist among the roles above.
+
 *   **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files—never as process arguments.
 *   **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
-*   **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JEP 491 optimized concurrent loops utilizing standard `synchronized` blocks alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage state maps across thousands of lightweight threads.
-*   **💰 Financial Governance:** Hard USD circuit breakers. Analyzes input/output token costs per `ReasoningStep` via an interceptor observer. If budget is exceeded, rogue agents are immediately downgraded to `READ_ONLY` autonomy.
-*   **🔍 Observability:** OTLP distributed tracing transparently connects the abstract LLM reasoning loop (`Thought-Plan-Act-Observe`) straight down to physical container execution via Jaeger.
+*   **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JDK 25 optimized concurrent loops utilizing standard `synchronized` blocks alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage state maps across thousands of lightweight threads.
+*   **💰 Financial Governance:** Hard USD circuit breakers and **Human-in-the-Loop** approvals. Sensitive operations (e.g., `NETWORK_OUTBOUND`) pause execution until a user clicks `/approve` via Telegram.
+*   **🔍 Observability:** Real-time Prometheus metrics at `/q/metrics` track token consumption and agent invocations, while OTLP distributed tracing connects the abstract LLM reasoning loop to physical container execution via Jaeger.
 
 ---
 
@@ -55,16 +58,18 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 
 ```mermaid
 graph TD
-    Client([Client / UI]) -->|HTTP POST| REST[AgentResource REST API]
+    Client([Client / UI]) -->|Telegram / REST| REST[AgentResource REST API]
     REST --> Loop[AgentLoop Orchestrator]
     
     subgraph Core Kernel
         Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB)]
+        Loop <-->|JDBC ChatMemory| JDBC[(Persistent ChatMemory)]
         Loop <-->|Prompt & History| AI[LangChain4J ReasoningEngine]
         Loop -->|Execute Tool Request| ToolReg[Tool Registry]
     end
     
-    AI <-->|Local Inference| Ollama((Ollama: llama3.1))
+    AI <-->|Cloud Reasoning| Groq((Groq: llama-3.3-70b))
+    Loop -->|Micrometer| Prom[Prometheus /q/metrics]
     
     subgraph Sandbox Layer
         ToolReg --> Isolator[ProcessIsolationExecutor]
