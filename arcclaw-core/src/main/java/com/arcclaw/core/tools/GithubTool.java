@@ -8,7 +8,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +32,9 @@ public class GithubTool implements AgentTool {
 
     @Inject
     WorkspaceContext workspaceContext;
+
+    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
+    String workspaceRootDir;
 
     @Override
     public String name() {
@@ -73,9 +75,16 @@ public class GithubTool implements AgentTool {
         var requiredSecrets = ToolRegistry.extractRequiredSecrets(GithubTool.class);
         var command = List.of("gh", "repo", "view", repo);
 
-        // Use workspace root — in production this will be the session's workspace
-        // directory.
-        var workspaceRoot = Path.of(System.getProperty("user.dir"));
+        // Dynamically route the tool to the user's isolated session folder
+        java.nio.file.Path workspaceRoot = java.nio.file.Path.of(workspaceRootDir, workspaceContext.getSessionId());
+        
+        try {
+            if (!java.nio.file.Files.exists(workspaceRoot)) {
+                java.nio.file.Files.createDirectories(workspaceRoot);
+            }
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to create isolated workspace for session: " + workspaceContext.getSessionId(), e);
+        }
 
         try {
             log.infof("Executing 'gh repo view %s' in sandbox for session %s", repo, sessionId);

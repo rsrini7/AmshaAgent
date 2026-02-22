@@ -34,7 +34,7 @@ public class AgentCheckpoint {
     @Column(nullable = false, length = 128)
     public String sessionId;
 
-    /** The agent role (e.g., "coordinator", "debugger", "researcher"). */
+    /** The agent role (e.g., "coordinator", "debugger", "researcher", "coder"). */
     @Column(nullable = false, length = 64)
     public String agentRole;
 
