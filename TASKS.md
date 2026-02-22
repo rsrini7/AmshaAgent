@@ -260,3 +260,17 @@
 - [x] Bug Fix: Enforce deterministic `baseId` and implement session wipe for completed/failed tasks
 - [x] Updated SRS `REQUIREMENTS.md` with v1.1 baseline and v1.2 roadmap
 
+---
+
+## Phase 20 — ArcClaw v1.2: State Consistency & Observability
+- [x] **Sprint 3A: Persistent ChatMemoryStore**
+  - [x] Create `ChatMemoryEntity` (JPA/SQLite persistence)
+  - [x] Create `PersistentChatMemoryStore` (LangChain4j 0.26.1 implementation)
+  - [x] Update `WorkspaceManager` to delete chat memory on session termination
+  - [x] "Task Amnesia" Fix: Automated session reset for `COMPLETED`/`FAILED` tasks in `TelegramAgentHandler`
+  - [x] Verify: `PersistentChatMemoryStoreTest` passed
+  - [ ] Verify: Realtime testing of Secret code check with Telegram - Currently it says `I don't have any information about a secret code associated with you. If you'd like to share more context or details, I'd be happy to try and help.`
+- [ ] Sprint 3B: LLM Intent Router (Groq-backed classification)
+- [ ] Sprint 3C: Prometheus Metrics (Micrometer + AgentObserver)
+- [ ] Sprint 3D: Discord Adapter (Camel Discord)
+

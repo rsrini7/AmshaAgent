@@ -11,6 +11,7 @@ import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -59,6 +60,9 @@ public class WorkspaceManager {
 
     @Inject
     com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+
+    @Inject
+    ChatMemoryStore chatMemoryStore;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -215,6 +219,7 @@ public class WorkspaceManager {
      * <li>Remove from heartbeat tracking</li>
      * <li>Mark any DB checkpoints as FAILED</li>
      * <li>Wipe the physical workspace directory</li>
+     * <li>Delete chat memory from persistence</li>
      * <li>Destroy the CDI scope (all @WorkspaceScoped beans)</li>
      * </ol>
      */
@@ -232,6 +237,14 @@ public class WorkspaceManager {
 
         // 3. Wipe workspace directory
         wipeWorkspaceDir(sessionId);
+
+        // 3a. Delete chat memory
+        try {
+            chatMemoryStore.deleteMessages(sessionId);
+            log.debugf("Chat memory deleted for session=%s", sessionId);
+        } catch (Exception e) {
+            log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
+        }
 
         // 4. Destroy CDI scope
         try {

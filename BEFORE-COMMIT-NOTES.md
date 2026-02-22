@@ -8,7 +8,7 @@ Check and append / update all / required points for future reference that should
 - [x] **TROUBLESHOOTING.md**: Added resolutions for "No pending approval" and "Phantom Sessions".
 - [x] **REQUIREMENTS.md**: v1.1 Baselined, v1.2 Drafted.
 
-## Manual Verification Required Before Commit
+## Manual Verification Required Before Commit - This is for Human only and AI should not call any tools
 1. **Approval Flow**: Send a prompt to Telegram requiring network access (e.g., "Check repo arcclaw"). Verify it pauses and resumes correctly via `/approve`.
 2. **Session Reset**: After a task completes, send a new goal. Verify it wipes the old state and starts fresh.
 3. **Native Build**: Run `mvn clean package -pl arcclaw-app -am -Pnative` once to ensure no regressions in AOT compilation.

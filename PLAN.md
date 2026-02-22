@@ -921,3 +921,26 @@ Refine the Telegram user experience with intent discovery and resolve critical s
 ## Verification
 - ✅ Verified `/approve` no longer suffers from "No pending approval found" errors.
 - ✅ Verified session resetting logic allows immediate new conversations after completion.
+
+---
+
+# Sprint 3A — Persistent ChatMemoryStore
+
+Implement a persistent message store for LangChain4j to ensure conversation context survives JVM restarts and avoids out-of-order prompt crashes.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **JPA Persistence**: Replaced the default in-memory `ChatMemoryStore` with a custom implementation (`PersistentChatMemoryStore`) using JPA/Hibernate for SQLite storage.
+> **Task Amnesia**: Implemented a mandatory session reset in `TelegramAgentHandler` for `COMPLETED` or `FAILED` sessions. This ensures that new tasks start with a clean prompt context, preventing the "400 Empty Message" crash while maintaining state within a single complex task.
+
+## Proposed Changes
+
+1. **`ChatMemoryEntity`**: JPA entity for storing serialized `ChatMessage` JSON.
+2. **`PersistentChatMemoryStore`**: Implements `dev.langchain4j.store.memory.chat.ChatMemoryStore`. Uses LangChain4j's native serializers.
+3. **`WorkspaceManager`**: Integrated `chatMemoryStore.deleteMessages(sessionId)` into the termination lifecycle.
+4. **`TelegramAgentHandler`**: Enhanced session cleanup to wipe both chat memory and reasoning history for finished sessions.
+
+## Verification
+- ✅ `PersistentChatMemoryStoreTest`: Verified CRUD operations and transaction isolation.
+- ✅ Manual verification of "Task Amnesia" behavior in Telegram.

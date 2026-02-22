@@ -788,3 +788,10 @@ if (camelContext.getRoute("telegram-bot") == null) {
 * **Issue:** Simple bash tools fail in `SUPERVISED` mode.
 * **Root Cause:** Sensitive operations like `EXECUTE_SHELL` are gated by the `ToolRegistry` to protect the host/container.
 * **Resolution:** This is intended. The user must manually `/approve` these operations via Telegram.
+
+### 12. Sprint 3A (Persistent ChatMemory)
+
+#### 12.1 The "Illusion of Memory" / Telegram 400 Empty Message Crash
+* **Symptom:** After successfully completing a task, the next message sent to the Telegram bot results in no response, and a `400 Bad Request` appears in the console from the Telegram API (`message text is empty`). The Groq API response logs show the LLM returning an empty string `""`.
+* **Root Cause:** ArcClaw's `AgentLoop` is a task-based state machine, not a continuous chatbot. It bypasses LangChain4j's native `ChatMemory` and manually reconstructs the prompt by interleaving the user's `goal` with the `ReasoningSteps` from SQLite. If a `COMPLETED` session is kept alive for a new prompt, the loop appends the *previous* task's final answer to the very bottom of the prompt as an "Assistant" message. The LLM receives an out-of-order prompt where the last message is already from the Assistant, assumes its turn is over, and outputs nothing.
+* **Resolution:** Enforced strict "Task Amnesia" in `TelegramAgentHandler.java`. The Session Continuity Check must explicitly call `workspaceManager.terminateSession(baseId)` to wipe the SQLite record if the previous session was `COMPLETED` or `FAILED`. Every new user message must trigger a fresh, isolated Agent Loop with a clean context window.

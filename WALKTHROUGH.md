@@ -335,3 +335,22 @@ Completed the final grooming of the v1.1 feature set and drafted the v1.2 missio
 - **Bug Fix: State Machine Overwrite**: Resolved the "Phantom Approval" issue by preventing the `AgentLoop.run()` wrapper from overwriting `AWAITING_APPROVAL` states on exit.
 - **Bug Fix: Phantom Sessions**: Switched to strict deterministic `baseId` (derived from `chatId:userId`) in Telegram and implemented automatic session termination for finished tasks to allow clean restarts.
 - **Roadmap Baseline**: Formally updated `REQUIREMENTS.md` to baseline Phase 11 and draft Phase 12 (Sprint 3: Persistent ChatMemory, Prometheus Metrics).
+
+---
+
+## Phase 20: Sprint 3A — Persistent ChatMemoryStore ✅
+
+Replaced the default in-memory LangChain4j message store with a SQLite-backed JPA implementation. This ensures that the context of conversation survives JVM restarts, even if the agent reasoning loop has multiple steps.
+
+**Key Components:**
+
+| File | Purpose |
+|------|---------|
+| [ChatMemoryEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ChatMemoryEntity.java) | JPA entity for SQLite persistence of messages |
+| [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java) | Custom `ChatMemoryStore` implementation using `EntityManager` |
+| [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java) | Integrated message cleanup upon session termination |
+
+**Verification Results:**
+- ✅ **Unit Test**: `PersistentChatMemoryStoreTest` verifies that messages are saved, retrieved accurately across transactions, and deleted upon command.
+- ✅ **Lifecycle Hook**: Verified `WorkspaceManager` calls `deleteMessages()` during session termination to prevent data bloat.
+- ✅ **LangChain4j 0.26.1 Compliance**: Confirmed interface package `dev.langchain4j.store.memory.chat` is correctly utilized.

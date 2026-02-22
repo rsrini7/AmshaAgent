@@ -741,9 +741,9 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Sprint 2B (Human-in-the-Loop State Machine):** Implemented the `/approve` and `/deny` flow. Refactored `AgentLoop` to cleanly exit on `RequiresApprovalException`, saving pending tool invocations to SQLite (`AWAITING_APPROVAL`), allowing asynchronous resumption without thread parking.
 * **Sprint 2C (Dynamic Role Routing):** Implemented a keyword-based Intent Router in the Telegram handler to dynamically route user prompts to `brahma`, `saraswati`, or `coordinator` agents.
 
-### Phase 12: ArcClaw v1.2 (State Consistency & Observability) - *Upcoming*
-* **Status:** ⏳ Pending (Sprint 3)
-* **Sprint 3A (Persistent ChatMemory):** **[CRITICAL ARCHITECTURAL FIX]** Implement a custom LangChain4j `ChatMemoryStore` backed by the existing JDBC SQLite database. This resolves the "split-brain" issue where `AgentCheckpoint` survives JVM restarts but LangChain4j's in-memory conversational context is wiped, guaranteeing true resume-after-crash capabilities.
+### Phase 12: ArcClaw v1.2 (State Consistency & Observability)
+* **Status:** [/] In Progress (Sprint 3)
+* **Sprint 3A (Persistent ChatMemory):** ✅ **[CRITICAL ARCHITECTURAL FIX]** Implemented a custom LangChain4j `ChatMemoryStore` backed by the existing JDBC SQLite database. Resolves "split-brain" state issues and enables "Task Amnesia" for Telegram reliability.
 * **Sprint 3B (LLM Intent Router):** Replace the brittle keyword-based `determineAgentRole` heuristic with a fast, low-latency LLM classification call (e.g., `llama-3.1-8b-instant` via Groq) to accurately route ambiguous prompts (e.g., "who invented java?").
 * **Sprint 3C (Prometheus Metrics):** Wire Micrometer into the existing `AgentObserver` scaffolding to track agent execution counts, token usage per session, tool call latency, and human approval rates alongside existing OTel traces.
 * **Sprint 3D (Discord Adapter):** Replicate the Telegram asynchronous routing pattern using `camel-quarkus-discord`.

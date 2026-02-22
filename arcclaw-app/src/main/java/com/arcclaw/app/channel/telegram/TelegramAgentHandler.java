@@ -104,9 +104,17 @@ public class TelegramAgentHandler {
 
         // Session Continuity Check (Wipe old state instead of changing the ID)
         statefulAgentStore.load(baseId, "coordinator").ifPresent(cp -> {
-            if (cp.status == CheckpointStatus.COMPLETED || cp.status == CheckpointStatus.FAILED) {
-                log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.status);
-                workspaceManager.terminateSession(baseId); // This deletes the old SQLite record
+            if (cp.getStatus() == CheckpointStatus.COMPLETED || cp.getStatus() == CheckpointStatus.FAILED) {
+                log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.getStatus());
+
+                // 1. Wipe the LangChain4j ChatMemory
+                workspaceManager.terminateSession(baseId);
+
+                // 2. Wipe the ArcClaw Reasoning History so it doesn't poison the next prompt
+                cp.stateJson = "[]"; // Clear the JSON history array
+                cp.failReason = null;
+                cp.setStatus(CheckpointStatus.IN_PROGRESS);
+                statefulAgentStore.save(cp);
             }
         });
 
