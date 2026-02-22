@@ -288,6 +288,8 @@
   - [x] Register subcommands in `ArcClawCli.java`
   - [x] Verify REPL interaction and session reset
   - [x] Verify attach daemon mode
+  - [x] Inject ArcClaw Trimurti/Tridevi persona into `LangChainReasoningEngine`
+  - [x] Force JVM UTF-8 encoding in `arcclaw-cli.ps1`
 - [ ] Sprint 4B: Multi-Language Support (Planned)
 - [x] **Sprint 3D: ShivaAgent ("shiva") Integration**
   - [x] Integrate `shiva` role into `IntentClassifierService.java`

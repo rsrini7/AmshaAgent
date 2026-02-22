@@ -477,3 +477,5 @@ I have expanded the Picocli CLI with interactive REPL and background daemon mana
 - ✅ **Compilation**: Projects built successfully using `mvnw clean compile`.
 - ✅ **Architecture**: `ChatCommand` utilizes `@ActivateRequestContext` and offloads scope management to `AgentLoop` for stable REPL iterations.
 - ✅ **User Experience**: Subcommands support short flags and default roles for efficiency.
+- ✅ **Persona Identity**: `LangChainReasoningEngine` correctly uses the full ArcClaw **Trimurti/Tridevi** system prompt for role clarity.
+- ✅ **Terminal Rendering**: `arcclaw-cli.ps1` forces JVM and console to UTF-8 (`-Dfile.encoding=UTF-8`), fixing symbol rendering.

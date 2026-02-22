@@ -999,6 +999,10 @@ Implement interactive REPL and background daemon management in the root CLI.
 
 #### [MODIFY] [arcclaw-cli.ps1](file:///h:/ws/ArcClaw/arcclaw-cli.ps1)
 - Added an optional interactive `(y/N)` rebuild step before execution.
+- Forced PowerShell console and JVM to use UTF-8 (`-Dfile.encoding=UTF-8`) to fix symbol rendering.
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Replaced the generic LangChain system message with the comprehensive **ArcClaw Trimurti/Tridevi Persona**, properly introducing the roles of Vishnu, Brahma, Shiva, and Saraswati.
 
 ## Verification
 - ✅ **Build**: `mvnw clean package` successful.
