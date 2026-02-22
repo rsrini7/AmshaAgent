@@ -95,7 +95,7 @@ public class TelegramAgentHandler {
         // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
-        // Handle commands first (always using the deterministic baseId)
+        // Handle commands first
         if (text.equalsIgnoreCase("/approve")) {
             reply(chatId, handleApprovalDecision(chatId, userId, baseId, true));
             return;
@@ -106,9 +106,8 @@ public class TelegramAgentHandler {
         }
 
         try {
-            // Activate CDI Workspace Scope manually using the consistent baseId
+            // Activate CDI Workspace Scope initially so IntentClassifier works
             WorkspaceScopeHolder.set(baseId);
-            workspaceContext.setAutonomyLevel(autonomyLevel);
 
             String activeRole = intentClassifier.classify(text);
             log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
@@ -119,16 +118,20 @@ public class TelegramAgentHandler {
                 if (cp.getStatus() == CheckpointStatus.COMPLETED || cp.getStatus() == CheckpointStatus.FAILED) {
                     log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.getStatus());
 
-                    // 1. Wipe the LangChain4j ChatMemory
+                    // 1. Wipe the LangChain4j ChatMemory (THIS DESTROYS THE CDI SCOPE!)
                     workspaceManager.terminateSession(baseId);
 
                     // 2. Wipe the ArcClaw Reasoning History so it doesn't poison the next prompt
-                    cp.stateJson = "[]"; // Clear the JSON history array
+                    cp.stateJson = "[]"; 
                     cp.failReason = null;
                     cp.setStatus(CheckpointStatus.IN_PROGRESS);
                     statefulAgentStore.save(cp);
                 }
             });
+
+            // 👉 THE FIX: Re-assert the scope and elevate autonomy AFTER the potential termination!
+            WorkspaceScopeHolder.set(baseId);
+            workspaceContext.setAutonomyLevel(autonomyLevel);
 
             log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 

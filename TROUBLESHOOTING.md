@@ -973,3 +973,29 @@ Files.createDirectories(workspaceRoot);
 **Symptom:** Attempting to build a multi-agent orchestration flow using `ArcClawSupervisor` fails to compile, citing a missing 2-parameter `agentLoop.run()` method.
 **Root Cause:** The Supervisor class was dead code that had drifted from the main `AgentLoop` signature updates, lacking `sessionId`, `role`, and `maxIterations` parameters.
 **Resolution:** Updated the `executeWithAgent` method signature to pass the required 5 parameters, aligning it with the core state management system.
+
+Here is the exact write-up for your `TROUBLESHOOTING.md` guide. You can paste this right below the other architectural fixes.
+
+---
+
+#### 🔴 Failure: The CDI Scope "Amnesia" Bug (ReAct Death Spiral)
+
+**Symptom:** The LLM attempts to call a tool but gets rejected with `Security violation: Operation NETWORK_OUTBOUND not permitted at autonomy level READONLY`. Because the prompt tells the LLM it *does* have permission, the LLM stubbornly retries the tool call 5 times in a row until it crashes with a `MAX_ITERATIONS_EXCEEDED` error.
+**The Mystery:** This happens even though your code explicitly calls `workspaceContext.setAutonomyLevel(SUPERVISED)` at the top of the method.
+**Root Cause:** When `TelegramAgentHandler` detects a stale session (e.g., the previous task was `COMPLETED`), it calls `workspaceManager.terminateSession()` to wipe the history. However, `terminateSession` also **destroys the CDI Workspace Scope**. When the scope is destroyed, Quarkus throws away your elevated `WorkspaceContext`. Seconds later, when `agentLoop.run()` starts, Quarkus silently generates a brand-new context which defaults back to `READONLY`.
+**Resolution:** You must ensure the CDI scope activation and autonomy elevation happen *after* any potential session termination logic, immediately before the AgentLoop runs.
+
+```java
+// 1. Session Continuity Check (may destroy the CDI scope!)
+statefulAgentStore.load(...).ifPresent(cp -> {
+    workspaceManager.terminateSession(baseId); 
+});
+
+// 2. RE-ASSERT the scope and elevate autonomy AFTER potential termination
+WorkspaceScopeHolder.set(baseId);
+workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
+// 3. Now it is safe to run
+agentLoop.run(...);
+
+```
