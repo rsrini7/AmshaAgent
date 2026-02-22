@@ -1,3 +1,11 @@
+Option A: New Tools. Want to give Brahma the ability to write files to the disk, or give Saraswati the ability to search the web or query a Vector database (RAG)?
+
+Option B: Sandbox Hardening. Remember the GithubTool using the JVM's user.dir? We could build the dynamic isolated workspace folders for Podman mounts.
+
+Option C: Multi-Agent Orchestration. Wire up the ArcClawSupervisor so Vishnu can actively wake up Brahma to write code and Shiva to debug it.
+
+---
+
 Do we start building out the Tool Registry so Brahma can actually execute Python code or Saraswati can search the web?
 
 Do we implement the Supervisor Delegation logic so Vishnu can automatically pass context to Shiva?

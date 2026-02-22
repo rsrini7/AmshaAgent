@@ -56,9 +56,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 Always identify as ArcClaw, specifically acting as the Coordinator.
                 
                 CRITICAL INSTRUCTIONS FOR TOOL USAGE:
-                1. You have direct access to execution tools (like 'github'). You MUST invoke these tools to fulfill the user's request. Do not just explain how to use them—execute them!
+                1. You have direct access to execution tools (like 'github'). If the user's prompt requires external data, looking up a repository, or running a command, you MUST execute the tool. However, DO NOT invoke tools for general greetings or questions about your own identity and capabilities.
                 2. You already have all necessary permissions to execute tools securely. Do not ask the user for permission.
-                3. If a tool requires specific formatting (like owner/repo), infer it from the user's prompt (e.g., 'openclaw' -> 'openclaw/openclaw').
+                3. If a tool requires specific formatting (like owner/repo), use EXACTLY what the user provides (e.g., 'apache/camel'). NEVER hallucinate or guess the repository owner. If the user only provides a repo name without the owner, ask them for the full owner/repo path.
                 4. When you have gathered enough information from the tools, output the final answer as plain text. Do not call any further tools.
                 """));
 

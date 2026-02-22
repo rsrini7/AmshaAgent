@@ -999,3 +999,21 @@ workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
 agentLoop.run(...);
 
 ```
+
+#### 🔴 Some more findings whilte testing the above fix
+
+🔴 Failure: Goldfish Memory (Agent forgets immediately after success)
+Symptom: The agent successfully completes a tool action and answers a prompt, but if the user asks a follow-up question in the next message, the agent claims the conversation just started.
+Root Cause: The TelegramAgentHandler was treating COMPLETED checkpoints the same as FAILED checkpoints, calling workspaceManager.terminateSession(). This destroyed the LangChain ChatMemory after every successful interaction.
+Resolution: Split the continuity check. FAILED sessions get a hard wipe (including terminateSession()), while COMPLETED sessions get a soft wipe (resetting the stateJson tool loop array to [] but leaving the ChatMemory completely intact).
+
+🧠 The Psychology of this Fix
+By adding "DO NOT invoke tools for general greetings or questions about your own identity...", you give the LLM an explicit "escape hatch". It now knows it has permission to simply talk to you without forcing a square peg (the GitHub tool) into a round hole (a conversational question).
+
+🧠 Why did it forget the conversation again?
+In your first message, it said: "You didn't request any repository earlier. This conversation just started."
+This happened because you restarted your native runner.
+
+While your SQLite database permanently saves your AWAITING_APPROVAL checkpoints, LangChain4j stores the actual conversational chat history in your server's RAM (memory). When you stopped the server to rebuild, the RAM was wiped. As far as the new Java process was concerned, your Telegram message was the very first time you had ever spoken to it!
+
+(If you want conversation history to survive server reboots in the future, we will need to wire LangChain's ChatMemoryStore directly to your SQLite database, but for now, it works perfectly as an ephemeral session).

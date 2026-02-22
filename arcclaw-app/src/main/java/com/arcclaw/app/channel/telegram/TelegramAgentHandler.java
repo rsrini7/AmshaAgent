@@ -113,15 +113,23 @@ public class TelegramAgentHandler {
             log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
                     text.length() > 50 ? text.substring(0, 50) + "..." : text, activeRole);
 
-            // Session Continuity Check (Wipe old state instead of changing the ID)
+            // Session Continuity Check
             statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
-                if (cp.getStatus() == CheckpointStatus.COMPLETED || cp.getStatus() == CheckpointStatus.FAILED) {
-                    log.infof("Previous session %s was %s. Wiping history to start fresh.", baseId, cp.getStatus());
-
-                    // 1. Wipe the LangChain4j ChatMemory (THIS DESTROYS THE CDI SCOPE!)
+                if (cp.getStatus() == CheckpointStatus.FAILED) {
+                    log.infof("Previous session %s was FAILED. Wiping history to start fresh.", baseId);
+                    // 1. HARD WIPE: Destroys LangChain4j ChatMemory so the user isn't trapped
                     workspaceManager.terminateSession(baseId);
-
-                    // 2. Wipe the ArcClaw Reasoning History so it doesn't poison the next prompt
+                    
+                    cp.stateJson = "[]"; 
+                    cp.failReason = null;
+                    cp.setStatus(CheckpointStatus.IN_PROGRESS);
+                    statefulAgentStore.save(cp);
+                } 
+                else if (cp.getStatus() == CheckpointStatus.COMPLETED) {
+                    log.infof("Previous session %s was COMPLETED. Retaining chat memory for continuity.", baseId);
+                    // SOFT WIPE: DO NOT call terminateSession() here! We want to keep the conversation memory.
+                    
+                    // Only wipe the internal ArcClaw Reasoning History so it doesn't replay old tool calls
                     cp.stateJson = "[]"; 
                     cp.failReason = null;
                     cp.setStatus(CheckpointStatus.IN_PROGRESS);
@@ -182,7 +190,7 @@ public class TelegramAgentHandler {
             AgentResult result = agentLoop.run(
                     sessionId,
                     pausedRole,
-                    "Resuming task after approval",
+                    "The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.",
                     reasoningEngine,
                     5);
 
