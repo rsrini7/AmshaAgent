@@ -971,3 +971,36 @@ Harden the state layer and implement intelligent routing for multi-agent coordin
 > [!NOTE]
 > **Sprint 3E (Discord Adapter)** has been deferred. See [AD-014: De-prioritization of Discord Channel Adapter (Feb 2026)](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md) for details on the library deprecation and security risks that led to this decision.
 
+---
+
+# Phase 21 — CLI Subcommands (Sprint 4A) ✅
+
+Implement interactive REPL and background daemon management in the root CLI.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **CDI Isolation**: Used `@ActivateRequestContext` in Picocli commands and offloaded scope management to `AgentLoop` to ensure stable state across iterative REPL turns.
+> **Windows Terminal Compatibility**: Swapped emojis for compatible Unicode symbols (`✦`, `⚡`, `▶`) to ensure reliable rendering in standard PowerShell/CMD environments.
+
+## Proposed Changes
+
+### [arcclaw-app]
+
+#### [NEW] [ChatCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java)
+- Interactive REPL with session resume (`--session`) and reset (`/reset`) support.
+- Graceful `Ctrl+C` interrupt handling.
+
+#### [NEW] [AttachCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java)
+- Background daemon mode for channel adapters (Telegram/Discord).
+
+#### [MODIFY] [ArcClawCli.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java)
+- Registered new subcommands in the root CLI entry point.
+
+#### [MODIFY] [arcclaw-cli.ps1](file:///h:/ws/ArcClaw/arcclaw-cli.ps1)
+- Added an optional interactive `(y/N)` rebuild step before execution.
+
+## Verification
+- ✅ **Build**: `mvnw clean package` successful.
+- ✅ **REPL**: Verified multi-turn chatting and session persistence.
+- ✅ **Daemon**: Verified background polling for Telegram bots.

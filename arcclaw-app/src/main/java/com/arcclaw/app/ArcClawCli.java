@@ -1,5 +1,7 @@
 package com.arcclaw.app;
 
+import com.arcclaw.app.cli.AttachCommand;
+import com.arcclaw.app.cli.ChatCommand;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
@@ -21,7 +23,12 @@ import java.nio.file.Path;
  * is called, ensuring the directory exists before Hibernate boots.
  */
 @QuarkusMain
-@Command(name = "arcclaw", mixinStandardHelpOptions = true, subcommands = { AskCommand.class, ServeCommand.class })
+@Command(name = "arcclaw", mixinStandardHelpOptions = true, subcommands = {
+        AskCommand.class,
+        ServeCommand.class,
+        ChatCommand.class,
+        AttachCommand.class
+})
 public class ArcClawCli implements Runnable, QuarkusApplication {
 
     @Inject
@@ -33,7 +40,8 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     public static void main(String... args) {
         try {
-            String dataDir = System.getProperty("ARCCLAW_DATA_DIR", System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
+            String dataDir = System.getProperty("ARCCLAW_DATA_DIR",
+                    System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
             Path dirPath = Path.of(dataDir);
             if (!Files.exists(dirPath)) {
                 System.out.printf("[ArcClaw] Provisioning data directory: %s%n",

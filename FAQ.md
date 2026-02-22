@@ -19,6 +19,11 @@ ArcClaw relies on `StatefulAgentStore` to checkpoint the LLM's `ReasoningStep` h
 ### Q: Why do you use Virtual Threads (`@RunOnVirtualThread`) for the REST endpoints?
 Agent loops are fundamentally I/O bound. They spend 95% of their time waiting for the LLM API to respond or waiting for a Podman sandbox process to finish executing. If we used standard Quarkus worker threads, a few dozen concurrent agent sessions would exhaust the thread pool. Virtual Threads (JEP 491) allow us to handle thousands of concurrent agents with almost zero memory overhead.
 
+### Q: What is the difference between specific subcommands like `ask`, `chat`, and `attach`?
+- **`ask`**: One-shot mode. Provide a goal, the agent completes it, and the process exits. Perfect for CI/CD or automation.
+- **`chat`**: Interactive REPL mode. Maintains a continuous conversation stream, allowing for iterative refinement and multi-turn debugging.
+- **`attach`**: Daemon mode. Keeps the JVM alive to service external channel adapters (Telegram/Discord) that rely on polling or webhooks.
+
 ---
 
 ## ⚙️ Runtime & AI Operations
@@ -36,7 +41,18 @@ Docker daemons run as root and create named volumes as `root:root`. However, Arc
 
 ---
 
-## 💻 Local Development & Environment
+## 🤖 AI & Agent Logic
+
+### Q: What is the difference between the "Brahma" and "Shiva" roles?
+In ArcClaw, we use **Semantic Routing** to select the best persona for a task:
+- **Brahma**: The Creator. Optimized for building new features, writing code from scratch, and architectural design.
+- **Shiva**: The Destroyer/Debugger. Optimized for analyzing stack traces, find-and-fixing bugs in existing code, and performing security audits.
+The **IntentClassifierService** uses a fast LLM call to route your prompt to the specialized prompts of these roles.
+
+### Q: Why does the `arcclaw-cli.ps1` script prompt "Rebuild/Package application before running? (y/N)"?
+ArcClaw development often involves changing core logic (`arcclaw-core`) which must be re-compiled into the app's fat-jar (`arcclaw-app`). 
+- **y**: Triggers a full `mvn clean package`. Ensures you are running the ABSOLUTE latest code.
+- **N (Default)**: Skips the 10-15 second build step. Best for when you are just chatting with the agent or using it for one-off tasks without changing local code.
 
 ### Q: Can I run ArcClaw natively on Windows?
 Yes, but you **must** use WSL2 (Windows Subsystem for Linux). Because ArcClaw relies on Linux user namespaces to isolate the AI sandbox, it cannot run natively on the Windows NT kernel. 

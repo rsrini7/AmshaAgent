@@ -107,6 +107,21 @@
 **Root Cause:** Signed jar conflict (`bc-fips` vs `bcprov`).
 **Resolution:** Enforce explicit exclusions in `pom.xml`.
 
+### 🔴 Failure: Discord Channel Registry (AD-014)
+**Symptom:** Attempting to use `camel-quarkus-discord` crashes on boot with `NoClassDefFoundError`.
+**Root Cause:** `quarkus-discord4j` is effectively abandonware (v0.0.1, no updates since 2024). It is incompatible with modern Quarkus 3.x and the latest Discord Gateway intents.
+**Resolution:** De-prioritize Discord as a production-ready adapter. Stick with Telegram. See [ARCHITECTURAL_DECISIONS.md](./ARCHITECTURAL_DECISIONS.md).
+
+### 🔴 Failure: Emojis appearing as `???` in Windows Terminal
+**Symptom:** `ChatCommand` output looks like `? ArcClaw Interactive Terminal`.
+**Root Cause:** Standard Windows Command Prompt and older PowerShell versions do not support the full UTF-8 Emoji plane by default.
+**Resolution:** Swapped modern emojis for wider-compatible Unicode symbols like `✦` (U+2726), `⚡` (U+26A1), and `▶` (U+25B6).
+
+### 🔴 Failure: `NoSuchElementException` in `ChatCommand` REPL
+**Symptom:** Force-closing the stream or hitting `Ctrl+C` throws a massive stack trace from `scanner.nextLine()`.
+**Root Cause:** The `Scanner` object throws this when the input stream is terminally closed while waiting for input.
+**Resolution:** Added a defensive `try-catch` around `scanner.nextLine()` specifically for `NoSuchElementException` to break the loop silently.
+
 ---
 
 ## 4. CDI & Scope Troubleshooting

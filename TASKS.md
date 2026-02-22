@@ -282,6 +282,13 @@
   - [x] Create `prometheus.yml` in project root
   - [x] Add `prometheus` service to `docker-compose.yaml`
   - [x] Verify `/q/metrics` endpoint and Prometheus scrape status
+- [x] **Sprint 4A: CLI Subcommands (Chat & Attach)**
+  - [x] Create `ChatCommand.java` (REPL)
+  - [x] Create `AttachCommand.java` (Daemon)
+  - [x] Register subcommands in `ArcClawCli.java`
+  - [x] Verify REPL interaction and session reset
+  - [x] Verify attach daemon mode
+- [ ] Sprint 4B: Multi-Language Support (Planned)
 - [x] **Sprint 3D: ShivaAgent ("shiva") Integration**
   - [x] Integrate `shiva` role into `IntentClassifierService.java`
   - [x] Update `TelegramAgentHandler.java` role discovery loop to include `shiva`
@@ -291,6 +298,5 @@
   - [x] Create `%cli` profile in `application.yaml` to silence Quarkus/Hibernate logs
   - [x] Create `arcclaw-cli.ps1` PowerShell wrapper for Windows users
   - [x] Update `README.md` with Option C (Silent CLI) instructions
-- [➖] Sprint 3F: Discord Adapter (Camel Discord) — Deferred (See [AD-014](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md))
 
 

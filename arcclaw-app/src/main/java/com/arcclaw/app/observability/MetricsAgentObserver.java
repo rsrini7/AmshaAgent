@@ -22,9 +22,6 @@ public class MetricsAgentObserver implements AgentObserver {
 
     @Override
     public void onStepComplete(String sessionId, String role, ReasoningStep step) {
-
-        System.out.println("DEBUG: MetricsAgentObserver incrementing counter for role: " + role);
-        
         // Count agent invocations tagged by role
         registry.counter("arcclaw.agent.invocations",
                 "role", role != null ? role : "unknown").increment();

@@ -456,4 +456,24 @@ I have implemented a dedicated `%cli` profile and a PowerShell wrapper to provid
 
 ### Verification:
 - ✅ **Silence**: Running via `.\arcclaw-cli.ps1` no longer shows the Quarkus ASCII banner or Hibernate SQL logs.
+- ✅ **Interactive**: Added an optional interactive build prompt (`y/N`) to the wrapper, allowing users to skip the packaging step for faster execution.
 - ✅ **Stability**: OTel SDK is disabled in CLI mode to prevent `sun.misc.Unsafe` warnings on modern JDKs.
+
+---
+
+## Phase 21: Sprint 4A — CLI Subcommands (Chat & Attach) ✅
+
+I have expanded the Picocli CLI with interactive REPL and background daemon management capabilities.
+
+### Key Changes
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **REPL** | [ChatCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java) | Interactive chat loop with session resume and reset support. |
+| **Daemon** | [AttachCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java) | Explicit channel-based daemon execution mode. |
+| **Entry Point** | [ArcClawCli.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java) | Registered new subcommands in the root CLI. |
+
+### Verification:
+- ✅ **Compilation**: Projects built successfully using `mvnw clean compile`.
+- ✅ **Architecture**: `ChatCommand` utilizes `@ActivateRequestContext` and offloads scope management to `AgentLoop` for stable REPL iterations.
+- ✅ **User Experience**: Subcommands support short flags and default roles for efficiency.
