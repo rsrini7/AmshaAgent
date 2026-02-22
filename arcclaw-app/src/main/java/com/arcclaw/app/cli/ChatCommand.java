@@ -16,8 +16,8 @@ public class ChatCommand implements Runnable {
     @CommandLine.Option(names = { "-s", "--session" }, description = "Session ID to resume an existing conversation")
     String sessionId;
 
-    @CommandLine.Option(names = { "-r",
-            "--role" }, defaultValue = "coordinator", description = "Agent role (coordinator | brahma | saraswati | shiva)")
+    @CommandLine.Option(names = { "-r", "--role" }, defaultValue = "coordinator", 
+            description = "Agent role (coordinator | coder | researcher | debugger)")
     String role;
 
     @Inject

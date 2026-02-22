@@ -32,7 +32,7 @@ public class AskCommand implements Runnable {
     @Parameters(index = "0", description = "The goal for the agent")
     String goal;
 
-    @Option(names = { "--role", "-r" }, defaultValue = "coordinator", description = "Agent role")
+    @Option(names = { "--role", "-r" }, defaultValue = "coordinator", description = "Agent role (coordinator | coder | researcher | debugger)")
     String role;
 
     @Inject

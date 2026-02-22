@@ -54,13 +54,11 @@ public class IntentClassifierService {
     }
 
     private String sanitize(String raw) {
-        // Guards against model returning "I'll route this to brahma" etc.
-        if (raw.contains("shiva") || raw.contains("debugger"))
-            return "shiva";
-        if (raw.contains("brahma"))
-            return "brahma";
-        if (raw.contains("saraswati"))
-            return "saraswati";
+        String lower = raw.toLowerCase();
+        // Translate persona to actual functional duty
+        if (lower.contains("shiva") || lower.contains("debugger")) return "debugger";
+        if (lower.contains("brahma") || lower.contains("coder")) return "coder";
+        if (lower.contains("saraswati") || lower.contains("researcher")) return "researcher";
         return "coordinator";
     }
 }

@@ -6,7 +6,6 @@ Do we implement the Supervisor Delegation logic so Vishnu can automatically pass
 
 basic question like ZeroClaw how this will connect with Apps like Telegram
 
-
 That is a great architectural question. ArcClaw is designed as a Headless Agent Kernel. It doesn't have a UI or a chat interface built-in; instead, it exposes a high-performance REST and WebSocket API.
 
 To connect ArcClaw to Telegram (or Slack, Discord, etc.), you would use the Gateway Pattern. Here is how that looks conceptually:
@@ -26,6 +25,7 @@ sequenceDiagram
     A->>L: Reasoning Loop...
     A-->>G: Event: "Agent Finished" (WebSocket)
     G->>U: Telegram Message: "Analysis complete: [Result]"
+    
 2. How it would be implemented in ArcClaw:
 Session Mapping: You would map the Telegram chat_id directly to an ArcClaw sessionId. This ensures that when the user returns tomorrow, the agent remembers them because the state is persisted in SQLite.
 WebSockets for Real-time streaming: Since ArcClaw has the langchain4j-websockets-next feature installed, the Telegram Gateway can "listen" to the agent's internal thoughts. Instead of waiting 30 seconds for a final answer, the bot can show "Grok is thinking..." or even stream the reasoning steps as they happen.
