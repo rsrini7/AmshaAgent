@@ -133,9 +133,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
 
-        // 4. Add the CURRENT User goal (unless it's an internal resume string)
-        if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
-            && !"Resuming task after approval".equals(goal)) {
+        // 4. Add the CURRENT goal ONLY if it is an internal system command (like resuming)
+        // Regular user prompts are already fetched from the ChatMemoryStore in Step 2!
+        if ("The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)) {
             messages.add(UserMessage.from(goal));
         }
 
