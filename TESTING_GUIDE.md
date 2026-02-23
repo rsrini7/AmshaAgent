@@ -70,3 +70,75 @@ To view traces:
 2. In the **Service** dropdown, select `arcclaw`.
 3. Click **Find Traces** to view the timeline of requests.
 4. Click on an individual trace to see the span hierarchy, which will include the HTTP request, the agent loop, LLM interactions, and executed Sandbox tool operations.
+
+
+## Sandbox Isolation Tier Testing (ProcessIsolationExecutor)
+
+ArcClaw's sandbox layer degrades gracefully depending on the active Quarkus profile and host OS capabilities. To mathematically prove the sandbox is working in all scenarios, follow these three testing phases.
+
+### Prerequisites for Sandbox Testing
+1. **GitHub CLI**: `gh` must be installed on your host machine's `PATH`.
+2. **Podman**: Podman Desktop must be installed (for Windows/Mac) or natively installed (Linux).
+3. **Tool Runner Image**: You must build the base container image that Podman will spin up. Run this once:
+   ```bash
+   # Create a minimal Alpine image with GitHub CLI installed
+   cat <<EOF > Dockerfile.toolrunner
+   FROM alpine:latest
+   RUN apk add --no-cache github-cli
+   EOF
+   
+   podman build -t arcclaw-tool-runner:latest -f Dockerfile.toolrunner
+
+### 💡 Special Note for Windows Users (The WSL Boundary Trap)
+If you are developing on Windows and want to test **Tier 2 (Podman)**, you cannot simply run the `.jar` in PowerShell. 
+1. `ProcessIsolationExecutor` checks `System.getProperty("os.name")`. If it detects Windows, it safely bypasses Linux container namespaces and falls back to host execution.
+2. Therefore, **you must run the application inside WSL (e.g., Ubuntu).**
+
+However, Podman Desktop runs in its own isolated WSL VM (`podman-machine-default`). If you open your Ubuntu terminal, commands like `podman machine list` or `podman ps` will be empty or fail because Ubuntu cannot see the Podman VM.
+
+**The Solution: Treat WSL Ubuntu as a Native Linux Server**
+Do not try to bridge Podman Desktop into Ubuntu. Instead, install Podman natively *inside* your Ubuntu WSL distribution.
+
+**Step 1: Open your Ubuntu WSL terminal**
+```bash
+wsl -d Ubuntu
+
+```
+
+**Step 2: Install Podman natively inside Ubuntu**
+
+```bash
+sudo apt-get update
+sudo apt-get -y install podman
+
+```
+
+**Step 3: Build the Tool Runner Image (Inside Ubuntu)**
+
+```bash
+cat <<EOF > Dockerfile.toolrunner
+FROM alpine:latest
+RUN apk add --no-cache github-cli
+EOF
+
+podman build -t arcclaw-tool-runner:latest -f Dockerfile.toolrunner
+
+```
+
+**Step 4: Run ArcClaw (Inside Ubuntu)**
+Ensure you are in the `/mnt/c/.../ArcClaw` directory (your project root mounted in WSL).
+
+```bash
+# Build the JAR
+./mvnw clean package -pl arcclaw-app -am -DskipTests
+
+# Run the production binary natively in Linux
+java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
+
+```
+
+When you trigger the `gh` tool now via Telegram, the Java process will correctly identify the OS as Linux, locate the native `podman` executable, and successfully launch the rootless container isolation.
+
+```
+
+```   
