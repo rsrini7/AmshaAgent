@@ -740,13 +740,18 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Sprint 2B (Human-in-the-Loop State Machine):** Implemented the `/approve` and `/deny` flow. Refactored `AgentLoop` to cleanly exit on `RequiresApprovalException`, saving pending tool invocations to SQLite (`AWAITING_APPROVAL`), allowing asynchronous resumption without thread parking.
 * **Sprint 2C (Dynamic Role Routing):** Implemented a keyword-based Intent Router in the Telegram handler to dynamically route user prompts to `brahma`, `saraswati`, or `coordinator` agents.
 
-### Phase 12: ArcClaw V1.0.0 (State Consistency & Observability)
-* **Status:** [/] In Progress (Sprint 3)
+### Phase 12: ArcClaw V1.0.0 (State Consistency, Observability & Hardening)
+* **Status:** ✅ Completed (Sprint 3 & 4)
 * **Sprint 3A (Persistent ChatMemory):** ✅ **[CRITICAL ARCHITECTURAL FIX]** Implemented a custom LangChain4j `ChatMemoryStore` backed by the existing JDBC SQLite database. Resolves "split-brain" state issues and enables "Task Amnesia" for Telegram reliability.
 * **Sprint 3B (LLM Intent Router):** ✅ Replace the brittle keyword-based `determineAgentRole` heuristic with a fast, low-latency LLM classification call (`llama-3.1-8b-instant` via Groq) to accurately route ambiguous prompts.
 * **Sprint 3C (Prometheus Metrics):** ✅ Implemented Micrometer/Prometheus integration. Metrics exposed at `/q/metrics` for token tracking and role-based invocation counting.
 * **Sprint 3D (ShivaAgent Integration):** ✅ Enhanced Intent Router with `shiva` (debugger) role to distinguish between code creation and bug fixing.
 * **Sprint 3E (Discord Adapter):** [➖] Deferred due to library deprecation (See [ARCHITECTURAL_DECISIONS.md](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md)).
+
+### Phase 24: ArcClaw V1.0.0 (Tool Bias & Context Hardening)
+* **Status:** ✅ Completed.
+* **Strict Tool Binding:** ✅ Implemented `STRICT TOOL BINDING CONTRACT` injection in `ReasoningEngine`. Forcefully restricts `brahma` (coder) and `shiva` (debugger) to text-only output, eliminating tool bias.
+* **Context Reset Command:** ✅ Added `/reset` to Telegram Channel. Purges `WorkspaceScope` and `PersistentChatMemoryStore` to allow clean-slate verification of multi-turn logic.
 
 *ArcClaw V1.0.0 Requirements — Baselined from production implementation.*
 *Source documents: ArcClaw-v1_0-CONSOLIDATED.md, TASKS.md, DEVIATIONS.md, WALKTHROUGH.md, TROUBLESHOOTING.md, FAQ.md, README.md, claw-ecosystem.md.*

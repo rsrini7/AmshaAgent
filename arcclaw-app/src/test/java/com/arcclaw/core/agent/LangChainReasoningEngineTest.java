@@ -42,7 +42,7 @@ class LangChainReasoningEngineTest {
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
 
         // Act
-        ReasoningStep step = reasoningEngine.nextStep("Do something", List.of());
+        ReasoningStep step = reasoningEngine.nextStep("coordinator", "Do something", List.of());
 
         // Assert
         assertEquals(ReasoningStep.FINISH, step.action());
@@ -70,7 +70,7 @@ class LangChainReasoningEngineTest {
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
 
         // Act
-        ReasoningStep step = reasoningEngine.nextStep("Do something", List.of());
+        ReasoningStep step = reasoningEngine.nextStep("coordinator", "Do something", List.of());
 
         // Assert
         assertEquals("github", step.action());

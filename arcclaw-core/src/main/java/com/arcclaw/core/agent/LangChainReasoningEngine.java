@@ -42,12 +42,39 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject
     ChatMemoryStore chatMemoryStore;
 
+    /**
+     * Returns the strict tool binding constraint for the given agent role.
+     * This is injected into the system prompt to prevent tool bias.
+     */
+    private String getRoleBinding(String role) {
+        if (role == null) return "PERMITTED TOOLS: None";
+        return switch (role.toLowerCase()) {
+            // Coordinator routes user requests and may invoke github when explicitly asked
+            case "coordinator", "vishnu" ->
+                "PERMITTED TOOLS: github (ONLY when user explicitly uses words like " +
+                "'fetch', 'gh', 'repository', 'repo', or 'github'. " +
+                "For all other requests, output text only.)";
+            // Researcher is the knowledge agent — github is its primary tool
+            case "researcher", "saraswati" ->
+                "PERMITTED TOOLS: github";
+            // Coder generates code — never needs external data
+            case "coder", "brahma" ->
+                "PERMITTED TOOLS: None. You are a pure code generation engine. " +
+                "Do not invoke any tools under any circumstances. Output code only.";
+            // Debugger analyzes provided information — never fetches external data
+            case "debugger", "shiva" ->
+                "PERMITTED TOOLS: None. You are a pure analysis engine. " +
+                "Analyze only the information provided. Do not invoke any tools.";
+            default -> "PERMITTED TOOLS: None";
+        };
+    }
+
     @Override
-    public ReasoningStep nextStep(String goal, List<ReasoningStep> history) {
+    public ReasoningStep nextStep(String agentRole, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
         // 1. Add the Base System Prompt
-        messages.add(SystemMessage.from("""
+        String baseSystemPrompt = """
                 You are ArcClaw, an advanced, enterprise-grade AI Agent ecosystem built in Java and Quarkus.
                 You operate within a Dual-Mode CLI and Daemon architecture.
                 
@@ -62,11 +89,27 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 Always identify as ArcClaw, specifically acting as the Coordinator.
                 
                 CRITICAL INSTRUCTIONS FOR TOOL USAGE:
-                1. You have access to a 'github' tool. ONLY invoke this tool if the user explicitly asks you to look up a repository, fetch code, or use the 'gh' command. If the user asks a general question, needs debugging help, or just wants to chat, DO NOT invoke the tool. Just reply with text.
                 2. You already have all necessary permissions to execute tools securely. Do not ask the user for permission.
                 3. If a tool requires specific formatting (like owner/repo), use EXACTLY what the user provides (e.g., 'apache/camel'). NEVER hallucinate or guess the repository owner. If the user only provides a repo name without the owner, ask them for the full owner/repo path.
                 4. When you have gathered enough information from the tools, output the final answer as plain text. Do not call any further tools.
-                """));
+                """;
+
+        String strictBinding = String.format("""
+                
+                ════════════════════════════════════════
+                STRICT TOOL BINDING CONTRACT
+                ════════════════════════════════════════
+                ACTIVE PERSONA: %s
+                %s
+                
+                This is a HARD constraint. A tool call that violates the PERMITTED TOOLS 
+                list above is a critical failure and will break the orchestration pipeline.
+                When in doubt, output text only.
+                ════════════════════════════════════════
+                """, agentRole, getRoleBinding(agentRole));
+
+        String finalSystemPrompt = baseSystemPrompt + strictBinding;
+        messages.add(SystemMessage.from(finalSystemPrompt));
 
         // 2. FETCH AND INJECT LONG-TERM HISTORY (Sprint 2 Memory)
         String sessionId = WorkspaceScopeHolder.get();

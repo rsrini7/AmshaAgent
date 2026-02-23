@@ -237,7 +237,7 @@ public class AgentLoop {
             // --- THOUGHT + PLAN ---
             ReasoningStep step;
             try {
-                step = engine.nextStep(goal, Collections.unmodifiableList(history));
+                step = engine.nextStep(agentRole, goal, Collections.unmodifiableList(history));
 
                 // --- GOVERNANCE & OBSERVABILITY INTERCEPTION ---
                 if (step != null) {

@@ -1100,3 +1100,32 @@ Refactor the Tool Execution layer to enforce container isolation at the `ToolReg
 - ✅ `mvn clean verify -pl arcclaw-app -am` succeeds.
 - ✅ Verified that `ToolRegistry` logs sandbox execution while `GithubTool` remains thin.
 - ✅ Verified secret injection from Vault to container via ephemeral env-file still works.
+
+---
+
+# Phase 24 — Context Poisoning & Tool Bias Fix ✅
+
+Address architectural weaknesses leading to LLM tool eagerness and history bleed across unrelated task boundaries.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Strict Tool Binding Contract**: Transitions tool usage instructions from weak, ignoreable system prompt advisories into a hard per-persona contract. The reasoning engine now injects a `STRICT TOOL BINDING CONTRACT` at the point of reasoning, tailored to the active agent role (e.g., `coder` and `debugger` are strictly forbidden from tool usage).
+
+> [!NOTE]
+> **Manual Session Reset**: Added a first-class `/reset` command to the Telegram adapter. This provides a human-triggered "Emergency Wipe" that clears both the `WorkspaceScope` (destroying in-memory beans) and the `PersistentChatMemoryStore` (purging SQLite message rows), ensuring a 100% clean context for follow-up testing.
+
+## Proposed Changes
+
+### Core Module — Agents
+- [MODIFY] [ReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ReasoningEngine.java): Updated interface to accept `agentRole`.
+- [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java): Implemented role-based contract injection.
+- [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java): Updated loop to pass the current role to the engine.
+
+### App Module — Channel
+- [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java): Intercepted `/reset` command to trigger session termination and chat memory deletion.
+
+## Verification
+- ✅ **Tool Bias**: Verified `brahma` (coder) no longer attempts to invoke `github` for pure Java generation tasks.
+- ✅ **Context Poisoning**: Verified `/reset` successfully wipes the "memory of a goldfish" for testing subsequent task isolation.
+- ✅ **Regression**: `mvn clean verify` confirmed that existing approval flows and autonomous loops are unaffected by the signature changes.

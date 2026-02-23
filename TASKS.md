@@ -314,4 +314,16 @@
     (Deviation #18) — closes sandbox opt-in security gap
 - [ ] Sprint 4C: Multi-Language Support (Planned)
 
+---
+
+## Phase 24 — Context Poisoning & Tool Bias Fix
+- [x] Step 1: Add `/reset` command to `TelegramAgentHandler.java` <!-- id: 75 -->
+- [x] Step 2: Add `agentRole` to `ReasoningEngine.nextStep()` interface <!-- id: 76 -->
+- [x] Step 3: Implement `STRICT TOOL BINDING CONTRACT` in `LangChainReasoningEngine.java` <!-- id: 77 -->
+- [x] Step 4: Update `AgentLoop.java` call sites <!-- id: 78 -->
+- [x] Step 5: Fix test compilation and argument matching in all test modules <!-- id: 79 -->
+- [x] Step 6: Full verification build (`mvn clean verify`) <!-- id: 80 -->
+- [x] Step 7: Update `DEVIATIONS.md` with Deviation #19 <!-- id: 81 -->
+- [x] Step 8: Document and sync all Phase 24 changes across `.md` files <!-- id: 82 -->
+
 

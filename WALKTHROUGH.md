@@ -18,6 +18,7 @@
 | 11 | REST API API | AgentResourceTest (3/3) | Explicitly added `quarkus-rest-jackson` to app module |
 | 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
 | 23 | Sandbox Enforcement | ToolRegistryTest (7/7) | Centralized `ProcessIsolationExecutor` in `ToolRegistry` |
+| 24 | Context & Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
 
 ## Phase 0: Project Scaffolding ✅
 
@@ -519,4 +520,31 @@ Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING
 | [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java) | Central logic for secret injection and container execution. |
 | [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java) | Refactored to leverage centralized isolation logic. |
 
-**Verification**: `mvn clean verify` confirms that `ToolRegistry` correctly extracts secrets from `sandboxCommand()` and delegates to `ProcessIsolationExecutor`.
+**Verification**: `mvn clean verify` ✅ Verified that `ToolRegistry` correctly extracts secrets from `sandboxCommand()` and delegates to `ProcessIsolationExecutor`.
+
+---
+
+## Phase 24: Context Poisoning & Tool Bias Fix ✅
+
+This phase addressed architectural eagerness where the LLM would over-invoke tools (e.g., Coder attempting to fetch from GitHub) and context bleed where prior conversation turns would leak into new unrelated tasks.
+
+### 1. Strict Tool Binding Contract
+Instead of relying on the system prompt's optional guidance, we now inject a hard **STRICT TOOL BINDING CONTRACT** into every reasoning tick.
+
+| Agent | Contract Enforcement |
+|-------|----------------------|
+| **Brahma** (Coder) | `PERMITTED TOOLS: None`. Pure code generation only. |
+| **Shiva** (Debugger) | `PERMITTED TOOLS: None`. Pure analysis engine. |
+| **Saraswati** (Researcher)| `PERMITTED TOOLS: github`. Knowledge acquisition specialist. |
+| **Vishnu** (Coordinator)| `PERMITTED TOOLS: github`. (Only if user explicitly mentions keywords). |
+
+### 2. Manual Reset Command
+Added the `/reset` command to the Telegram bot handler.
+
+| Action | Result |
+|--------|--------|
+| `workspaceManager.terminateSession()` | Clears CDI `@WorkspaceScoped` beans from memory. |
+| `chatMemoryStore.deleteMessages()` | Deletes rows from `ChatMemoryEntity` SQLite table. |
+| Confirmation | Bot replies with "🧹 Session wiped... Ready for a new task." |
+
+**Verification**: Full test suite pass (48/48) confirming the `ReasoningEngine` signature change (`agentRole`) maintains backward compatibility with the orchestration loop.

@@ -156,4 +156,14 @@ The implementation of ArcClaw V1.0.0 has successfully translated the high-level 
   method `extractRequiredSecrets` was updated to accept a method name parameter, 
   fixing a silent credential injection failure when annotations moved from 
   `execute()` to `sandboxCommand()`.
-
+### 19. Strict Tool Binding Per Persona + Session Reset Command
+- **Deviation**: Added `agentRole` parameter to `ReasoningEngine.nextStep()` 
+  interface. Replaced weak advisory tool instructions in the system prompt 
+  with a per-role `STRICT TOOL BINDING CONTRACT` injected dynamically at 
+  reasoning time. Added `/reset` Telegram command that clears both workspace 
+  scope AND `PersistentChatMemoryStore` SQLite rows for the session.
+- **Rationale**: Tool Bias caused the LLM to invoke the `github` tool during 
+  pure code generation and debugging tasks. Context Poisoning caused prior 
+  session history to corrupt unrelated queries. The strict binding contract 
+  eliminates tool eagerness per persona. The `/reset` command provides a 
+  clean testing surface without requiring JVM restart or manual DB surgery.

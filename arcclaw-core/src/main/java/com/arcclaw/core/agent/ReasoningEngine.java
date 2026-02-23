@@ -13,13 +13,14 @@ import java.util.List;
 public interface ReasoningEngine {
 
     /**
-     * Determine the next reasoning step.
+     * Computes the next reasoning step given the current agent role, goal, 
+     * and prior step history.
      *
-     * @param goal    The user's goal / task description.
-     * @param history Previous reasoning steps (may be empty on first call).
-     * @return The next step with thought, action, and actionInput filled in.
-     *         The {@code observation} field will be {@code null} — it is
-     *         filled by the {@link AgentLoop} after tool execution.
+     * @param agentRole The active persona role (e.g., "coordinator", "coder").
+     *                  Used to enforce strict tool binding per persona.
+     * @param goal      The current task goal.
+     * @param history   The prior reasoning steps in this loop iteration.
+     * @return The next reasoning step.
      */
-    ReasoningStep nextStep(String goal, List<ReasoningStep> history);
+    ReasoningStep nextStep(String agentRole, String goal, List<ReasoningStep> history);
 }

@@ -16,6 +16,14 @@ Check and append / update all / required points for future reference that should
    (e.g., "Check repo rsrini7/ArcClaw"). Verify in server logs that 
    `ToolRegistry` (not `GithubTool`) logs the `executeSandboxed` call. 
    GithubTool should never log "Executing 'gh repo view'" directly.
+5. **Strict Binding**: Send "Write a Java singleton class" to Telegram.
+   Verify Brahma writes code immediately — no /approve prompt appears.
+6. **Shiva Isolation**: Send "NullPointerException at ToolRegistry.java:145".
+   Verify Shiva analyses it without fetching any GitHub repo.
+7. **Reset Command**: Send `/reset`. Verify 🧹 confirmation. Then send a 
+   follow-up question. Verify prior session context is NOT referenced.
+8. **Coordinator Tool**: Send "fetch rsrini7/mermaid2gif repo with gh".
+   Verify coordinator still triggers `/approve` correctly.
 
 > [!TIP]
 > **Git Tip**: I have synced the docs. You can now safely `git add .` and commit. I will not override these files blindly in future sessions.
