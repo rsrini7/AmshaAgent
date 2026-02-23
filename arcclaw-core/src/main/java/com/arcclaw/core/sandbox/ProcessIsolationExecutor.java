@@ -64,6 +64,12 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.cpu-limit", defaultValue = "0.5")
     String containerCpuLimit;
 
+    @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
+    String podmanPath;
+
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
+    String workspaceRootDir;
+
     private static final String CONTAINER_PIDS_LIMIT = "64";
 
     // Circuit breaker state
@@ -85,7 +91,7 @@ public class ProcessIsolationExecutor {
     void checkPodmanAvailability() {
         if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
             try {
-                var pb = new ProcessBuilder("podman", "--version");
+                var pb = new ProcessBuilder(podmanPath, "--version");
                 pb.redirectErrorStream(true);
                 var proc = pb.start();
                 boolean ok = proc.waitFor(5, TimeUnit.SECONDS);
@@ -114,7 +120,7 @@ public class ProcessIsolationExecutor {
         log.infof("JVM shutdown: stopping %d active Podman container(s)...", activeContainerNames.size());
         for (String containerName : activeContainerNames) {
             try {
-                var pb = new ProcessBuilder("podman", "stop", "--time", "10", containerName);
+                var pb = new ProcessBuilder(podmanPath, "stop", "--time", "10", containerName);
                 pb.redirectErrorStream(true);
                 var proc = pb.start();
                 boolean stopped = proc.waitFor(15, TimeUnit.SECONDS); // 10s grace + 5s buffer
@@ -156,8 +162,11 @@ public class ProcessIsolationExecutor {
                 String result = executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
                 podmanFailures.set(0);
                 return result;
-            } catch (IOException e) {
+            } catch (Exception e) {
                 int failures = podmanFailures.incrementAndGet();
+                log.errorf("Podman execution failed (session=%s, failureCount=%d): %s",
+                        sessionId, failures, e.getMessage());
+
                 if (failures >= PODMAN_FAILURE_THRESHOLD) {
                     log.errorf("Podman failed %d times — opening circuit breaker, falling back to NAMESPACE", failures);
                     podmanCircuitOpen = true;
@@ -198,9 +207,9 @@ public class ProcessIsolationExecutor {
         activeContainerNames.add(containerName); // track before start — avoids race on early failure
         try (Scope scope = span.makeCurrent()) {
             var podmanCmd = new ArrayList<>(List.of(
-                    "podman", "run", "--rm",
+                    podmanPath, "run", "--rm",
                     "--name", containerName, // Fix G2: named for tracking + graceful stop
-                    "--network=none",
+                    "--network=bridge",
                     "--read-only",
                     "--security-opt=no-new-privileges",
                     "--cap-drop=ALL",
@@ -216,7 +225,14 @@ public class ProcessIsolationExecutor {
             podmanCmd.addAll(command);
 
             var pb = new ProcessBuilder(podmanCmd);
+
+            Path workspaceDir = Path.of(workspaceRootDir, sessionId);
+            if (!Files.exists(workspaceDir)) {
+                throw new IOException("workspace dir not exist");
+            }
+            pb.directory(workspaceDir.toFile());
             pb.redirectErrorStream(true);
+
             var process = pb.start();
             var output = new String(process.getInputStream().readAllBytes());
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
@@ -290,17 +306,33 @@ public class ProcessIsolationExecutor {
      */
     private Map<String, String> resolveSecrets(Map<String, String> requiredSecrets) {
         var resolved = new LinkedHashMap<String, String>();
+        
+        // Failsafe if ToolRegistry reflection missed the annotation
+        if (requiredSecrets == null || requiredSecrets.isEmpty()) {
+            requiredSecrets = Map.of("GH_TOKEN", "GITHUB_TOKEN");
+        }
+
         for (var entry : requiredSecrets.entrySet()) {
             String envVar = entry.getKey();
             String vaultKeyName = entry.getValue();
+            
+            // 1. Try the secure Database Vault first
             var optionalKey = secretVault.get(vaultKeyName);
-            if (optionalKey.isEmpty()) {
-                throw new SecurityException("Required secret not in vault: " + vaultKeyName);
-            }
-            try (VaultKey key = optionalKey.get()) {
-                // Convert bytes to string for env-file writing.
-                // The backing byte[] is wiped when VaultKey is closed.
-                resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+            
+            if (optionalKey.isPresent()) {
+                try (VaultKey key = optionalKey.get()) {
+                    resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+                }
+            } else {
+                // 2. FALLBACK: Try Mac OS Environment Variables (e.g., ~/.zshrc or export)
+                String hostEnvValue = System.getenv(vaultKeyName);
+                
+                if (hostEnvValue != null && !hostEnvValue.isBlank()) {
+                    resolved.put(envVar, hostEnvValue);
+                } else {
+                    // 3. Both failed - throw security exception
+                    throw new SecurityException("Required secret not in DB vault or Host environment: " + vaultKeyName);
+                }
             }
         }
         return resolved;

@@ -190,7 +190,7 @@ Every module added to ArcClaw MUST include the `jandex-maven-plugin`. Failure to
 
 **REQ-SAND-02:** Podman containers must enforce resource caps: `--memory=512m`, `--cpus=0.5`, `--pids-limit=64`, `--ulimit=nofile=256:256`. These caps prevent a prompt-injected fork bomb or resource exhaustion attack from escaping the sandbox.
 
-**REQ-SAND-03:** Podman containers must run with: `--network=none`, `--read-only`, `--cap-drop=ALL`. No Docker daemon socket (`/var/run/docker.sock`) shall ever be mounted.
+**REQ-SAND-03:** Podman containers must run with: `--network=bridge`, `--read-only`, `--cap-drop=ALL`. No Docker daemon socket (`/var/run/docker.sock`) shall ever be mounted.
 
 **REQ-SAND-04:** Secrets required by a sandboxed tool must be injected via an ephemeral env-file (`--env-file`). The file must be written to `java.io.tmpdir` and **immediately locked down to POSIX permission `600` (owner read/write only) via `Files.setPosixFilePermissions()` before any secret data is written**. This eliminates the race window in which another OS process on the shared `/tmp` filesystem could read plaintext credentials. The file is then passed to Podman, zero-filled, and deleted in a `finally` block regardless of execution outcome.
 
@@ -214,7 +214,7 @@ Every module added to ArcClaw MUST include the `jandex-maven-plugin`. Failure to
 
 **REQ-TOOL-04:** The `ToolRegistry` must enforce autonomy policy and OS-level sandboxing before delegating to `ProcessIsolationExecutor`. By default, all tools run within a sandbox unless `requiresSandbox()` returns `false`. Tools requiring a higher `AutonomyLevel` than the session's current level must be rejected.
 
-**REQ-TOOL-05:** The `GithubTool` must serve as the canonical reference implementation: `@RequiresSecret(GITHUB_TOKEN)`, delegates to `ProcessIsolationExecutor`, executes `gh repo view` inside the sandbox.
+**REQ-TOOL-05:** The `GithubTool` must serve as the canonical reference implementation: `@RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")`, delegates to `ProcessIsolationExecutor`, executes `gh repo view` inside the sandbox.
 
 **REQ-TOOL-06:** Tool execution output must be truncated to a maximum of **4,000 characters** before being returned as an observation to the agent loop. This prevents context window overflow and silent `HTTP 400` errors from the LLM provider.
 
@@ -398,7 +398,7 @@ Every module added to ArcClaw MUST include the `jandex-maven-plugin`. Failure to
 
 **REQ-NFR-SEC-04:** Native image builds must verify that BouncyCastle's DRBG is seeded at runtime, not build time. Two consecutive binary runs must produce different cryptographic nonces.
 
-**REQ-NFR-SEC-05:** Sandbox containers must run with `--cap-drop=ALL --network=none --read-only` enforced. Resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`) must prevent fork bomb or resource exhaustion attacks.
+**REQ-NFR-SEC-05:** Sandbox containers must run with `--cap-drop=ALL --network=bridge --read-only` enforced. Resource caps (`--memory`, `--cpus`, `--pids-limit`, `--ulimit`) must prevent fork bomb or resource exhaustion attacks.
 
 ### 5.4 Portability
 

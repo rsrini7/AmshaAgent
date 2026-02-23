@@ -3,7 +3,6 @@ package com.arcclaw.core.tools;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.jboss.logging.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -21,8 +20,6 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class GithubTool implements AgentTool {
-
-    private static final Logger log = Logger.getLogger(GithubTool.class);
 
     @Override
     public String name() {
@@ -46,7 +43,7 @@ public class GithubTool implements AgentTool {
     }
 
     @Override
-    @RequiresSecret(envVar = "GITHUB_TOKEN", vaultKey = "GITHUB_TOKEN")
+    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
     public List<String> sandboxCommand(Map<String, Object> params) {
         var repo = (String) params.get("repo");
         if (repo == null || repo.isBlank()) {
@@ -58,7 +55,7 @@ public class GithubTool implements AgentTool {
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         throw new UnsupportedOperationException(
-            "GithubTool execution is handled by ToolRegistry sandbox wrapping. " +
-            "This method should never be called directly.");
+                "GithubTool execution is handled by ToolRegistry sandbox wrapping. " +
+                        "This method should never be called directly.");
     }
 }

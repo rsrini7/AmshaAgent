@@ -142,8 +142,9 @@ public class ToolRegistry {
                 if (!Files.exists(workspaceRoot)) {
                     Files.createDirectories(workspaceRoot);
                 }
+
                 String output = isolationExecutor.executeSandboxed(
-                    workspaceContext.getSessionId(), workspaceRoot, command, requiredSecrets);
+                        workspaceContext.getSessionId(), workspaceRoot, command, requiredSecrets);
                 return ToolResponse.success(output);
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
@@ -201,9 +202,10 @@ public class ToolRegistry {
             if (single != null && container == null) {
                 secrets.put(single.envVar(), single.vaultKey());
             }
+
         } catch (NoSuchMethodException e) {
             log.warnf("Tool %s has no %s(Map) method — no secrets extracted",
-                      toolClass.getName(), methodName);
+                    toolClass.getName(), methodName);
         }
         return Collections.unmodifiableMap(secrets);
     }

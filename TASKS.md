@@ -65,7 +65,7 @@
 - [x] `ToolResponse` record (`exitCode`, `output`, `success`) <!-- id: 29 -->
 - [x] `AgentTool` interface (`name()`, `description()`, `requiredOperation()`, `execute()`) <!-- id: 30 -->
 - [x] `ToolRegistry` (`@ApplicationScoped`, CDI `Instance<AgentTool>`, autonomy check, secret extraction) <!-- id: 31 -->
-- [x] `GithubTool` (`@RequiresSecret(GITHUB_TOKEN)`, `ProcessIsolationExecutor` delegation) <!-- id: 32 -->
+- [x] `GithubTool` (`@RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")`, `ProcessIsolationExecutor` delegation) <!-- id: 32 -->
 - [x] `ToolRegistryTest` (7 tests: discovery, governance, reflection, error handling) <!-- id: 33 -->
 
 ---
@@ -337,3 +337,13 @@
   Add rolling window to `PersistentChatMemoryStore` — retain last N messages
   per session rather than unbounded history. Prevents context drag when
   switching task domains within a session. N=10 is a reasonable starting point.
+
+---
+
+## Phase 26 — Sandbox Isolation Hardening
+- [x] Step 1: Ingest `podman-path` into `ProcessIsolationExecutor.java` <!-- id: 87 -->
+- [x] Step 2: Extract and log raw `STDERR` from failing Podman processes <!-- id: 88 -->
+- [x] Step 3: Use system `PATH` discovery for `podman` instead of hardcoding paths <!-- id: 89 -->
+- [x] Step 4: Create standalone `WSL2_SETUP_GUIDE.md` and `MAC_SETUP_GUIDE.md` <!-- id: 90 -->
+- [x] Step 5: Update `TESTING_GUIDE.md` and `README.md` cross-references <!-- id: 91 -->
+- [x] Step 6: Verify build and logging via `mvn compile` and manual socket break <!-- id: 92 -->

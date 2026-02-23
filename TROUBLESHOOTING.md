@@ -1096,3 +1096,286 @@ agentLoop.run(...);
 * **Symptom:** During testing, the agent recalls details from a previous, unrelated task (e.g., a "secret code" or specific instructions) because the session ID is reused.
 * **Root Cause:** Aggressive chat memory persistence. While beneficial for long-running tasks, it prevents clean-slate testing for developers.
 * **Resolution:** Implemented the `/reset` command in `TelegramAgentHandler`. This command explicitly triggers `workspaceManager.terminateSession()` (wiping scope/beans) and `chatMemoryStore.deleteMessages()` (purging SQLite rows), providing a verified "cold start" for testing.
+
+# 16. Podman Sandbox Strategy: Troubleshooting & Known Limitations
+
+**Status:** IN PROGRESS (Blocked by JVM/Rootless Podman Environment Boundary)
+**Environment:** WSL2 Ubuntu (Native), Rootless Podman, Quarkus JVM (Prod Profile)
+
+## 1. The Core Symptom: The `chroot` Illusion
+When the agent attempts to execute a tool (e.g., `gh`) using the `PODMAN` strategy, the LLM receives the following error:
+> `chroot: failed to run command ‘gh’: No such file or directory`
+
+**The Reality:** Podman does not use `chroot`. This error proves that the `ProcessIsolationExecutor` is silently failing to execute the `podman run` command. Because ArcClaw is designed for high availability, it catches this invisible failure and gracefully degrades to the `NAMESPACE` fallback strategy. The fallback uses Linux namespaces and `chroot` into an empty workspace directory, which naturally lacks the `gh` binary, causing the final observable error.
+
+## 2. Verified Infrastructure
+The underlying infrastructure is healthy. The following have been mathematically proven:
+* ✅ **Podman is installed:** `podman --version` works.
+* ✅ **Image exists:** `arcclaw-tool-runner:latest` is built via Docker Compose.
+* ✅ **Rootless execution works:** Running `podman run --rm arcclaw-tool-runner:latest gh --help` directly in the Ubuntu terminal executes perfectly in milliseconds.
+
+## 3. Attempted Mitigations (The Troubleshooting Log)
+We have systematically eliminated the standard points of failure between Java and Podman:
+
+### A. The WSL Boundary Trap
+* **Hypothesis:** Running the JAR in Windows PowerShell bypasses Podman because the Java `os.name` check forces a direct execution fallback, and Windows cannot natively talk to the Podman desktop VM socket easily.
+* **Action Taken:** Migrated execution entirely inside a native WSL2 Ubuntu environment. 
+
+### B. Profile Activation
+* **Hypothesis:** The application was booting in `%dev` mode, which hardcodes `strategy: NONE`.
+* **Action Taken:** Forced production mode using `java -Dquarkus.profile=prod -jar ...` to ensure the `PODMAN` strategy was active.
+
+### C. The Absolute PATH Fix
+* **Hypothesis:** Java's `ProcessBuilder` spawns a non-interactive, headless shell. It does not load `~/.bashrc`, meaning it might not find the `podman` executable.
+* **Action Taken:** Hardcoded `/usr/bin/podman` into `application.yaml` (`arcclaw.sandbox.podman-path`) and updated the `ProcessBuilder` calls to use the absolute path.
+
+### D. The Rootless Socket Disconnect (`XDG_RUNTIME_DIR`)
+* **Hypothesis:** Rootless Podman requires the `XDG_RUNTIME_DIR` environment variable to locate its daemon socket (e.g., `/run/user/1000`). Headless Java processes drop this variable.
+* 
+* **Action Taken:** Exported `XDG_RUNTIME_DIR=/run/user/$(id -u)` before running the JAR, and added dynamic `xdgRuntimeDir` injection directly into the `ProcessBuilder` environment map inside Java.
+
+## 4. The Unresolved Bottleneck
+Despite hardcoding the path and injecting the socket environment variables, the Java `ProcessBuilder` is still failing to execute `podman run`. 
+
+Because `ProcessBuilder` separates `STDOUT` and `STDERR`, and the current Java code catches the generic `Exception` to trigger the `NAMESPACE` fallback, the *actual* OS-level stderr from the failing Podman call is being swallowed. 
+
+## 5. Next Actionable Steps (For Future Resolution)
+To crack this, the resilience layer must be temporarily dismantled to expose the raw standard error.
+
+1.  **Extract STDERR:** Modify `executeInContainer` in `ProcessIsolationExecutor.java`. Instead of just calling `proc.waitFor()`, we must read the `ErrorStream` of the process.
+    ```java
+    String errorOutput = new String(proc.getErrorStream().readAllBytes());
+    if (!errorOutput.isBlank()) {
+        log.error("RAW PODMAN STDERR: " + errorOutput);
+    }
+    ```
+2.  **Remove the Safety Net:** Temporarily comment out the `catch` block that triggers `executeInNamespace()` so the application hard-crashes and prints the exact reason the daemon is rejecting the JVM's request.
+3.  **Investigate SubUID/SubGID:** Rootless Podman inside WSL2 sometimes requires strict `/etc/subuid` and `/etc/subgid` mappings. While the interactive user shell handles this, the Java subprocess might be spawning with a restricted UID mapping.
+
+
+Here is a complete troubleshooting guide documenting the exact hurdles we faced while building the `arcclaw-tool-runner:latest` image, why they occurred, and how we resolved them.
+
+You can add this to your project documentation (e.g., `TROUBLESHOOTING_TOOL_RUNNER.md`).
+
+---
+
+# Troubleshooting Guide: Building the Tool Runner Image
+
+**Context:** ArcClaw's Tier 2 sandbox relies on an ephemeral Alpine Linux container to execute tools (like `gh` or `jq`) without installing them on the host. To keep the architecture clean, we integrated the build process into `docker-compose.yml` rather than using raw shell scripts.
+
+During setup, we encountered two specific build failures. Here is why they happened and how to fix them.
+
+---
+
+## Challenge 1: The Missing Context Path Error
+
+**The Error:**
+
+```text
+unable to prepare context: path "/mnt/h/ws/ArcClaw/sandbox" not found
+
+```
+
+**Why it failed:**
+In `docker-compose.yml`, we defined the build configuration like this:
+
+```yaml
+build:
+  context: ./sandbox
+  dockerfile: Dockerfile.toolrunner
+
+```
+
+Docker requires a "context"—a specific folder containing the files it is allowed to send to the Docker daemon for the build. We intentionally isolated the tool runner to a `./sandbox` folder instead of the root `./` directory. If we used `./`, Docker would attempt to send the entire Java source code, `.git` history, and `target` directories to the daemon, making the build incredibly slow.
+
+The build failed because we declared the `sandbox` context in the YAML, but the physical folder did not exist yet, and `Dockerfile.toolrunner` was sitting in the project root.
+
+**The Solution:**
+Create the isolated context directory and move the Dockerfile into it before building.
+
+```bash
+mkdir -p sandbox
+mv Dockerfile.toolrunner sandbox/
+
+```
+
+---
+
+## Challenge 2: The "Accidental Monorepo" Build Failure
+
+**The Error:**
+
+```text
+=> ERROR [arcclaw 8/9] COPY arcclaw-app/target/*-runner /app/application
+------
+target arcclaw: failed to solve: lstat /arcclaw-app/target: no such file or directory
+
+```
+
+**Why it failed:**
+When we ran the broad command `docker compose --profile builder build`, Docker Compose looked at the entire `docker-compose.yml` file and attempted to build **all** active services.
+
+It successfully started building the `tool-runner`, but it concurrently tried to build the main `arcclaw` application image using `Dockerfile.native`. The main application build immediately crashed because the `Dockerfile.native` expects a compiled Quarkus native binary in the `target/` folder, which hadn't been compiled via Maven yet.
+
+**The Solution:**
+When you only want to update or build the Sandbox image, you must explicitly target that specific service by name. This tells Docker Compose to ignore the rest of the stack.
+
+```bash
+# Correct command to build ONLY the tool runner
+docker compose build tool-runner
+
+```
+
+---
+
+## Architectural Best Practice: The "Builder" Profile
+
+**The Problem:** If we define the `tool-runner` in `docker-compose.yml`, running `docker compose up` would normally start it as a background daemon. This violates ArcClaw's security model, which requires the container to only exist for the exact 2 seconds a tool is running, and then self-destruct.
+
+**The Fix:**
+We assigned the `tool-runner` service to a dormant profile:
+
+```yaml
+profiles:
+  - builder # Keeps this dormant during normal operations
+
+```
+
+Because of this profile, `docker compose up` completely ignores the service. It acts purely as a centralized blueprint for building the static image, keeping our DevOps workflow clean and maintaining a single source of truth.
+
+---
+
+## 17. macOS & Podman Sandbox Troubleshooting
+
+Transitioning the ArcClaw Tier 2 Sandbox from WSL2/Linux to macOS introduces architectural differences regarding file paths, Unix sockets, and secret management. Below is a comprehensive guide to the errors encountered and their resolutions.
+
+### 1. The macOS Path Trap
+
+**Error:** `java.io.IOException: Cannot run program "/usr/bin/podman": Exec failed, error: 2 (No such file or directory)`
+
+**Root Cause:**
+macOS Apple Silicon (and System Integrity Protection) prevents installing user binaries in `/usr/bin/`. Homebrew installs Podman in `/opt/homebrew/bin/podman`. A hardcoded Linux path in `application.yaml` or `ProcessBuilder` will instantly trip the circuit breaker and force the fallback strategy.
+
+**Resolution:**
+Remove absolute Linux paths from the configuration. Rely on the system `PATH`.
+
+```yaml
+# application.yaml
+arcclaw:
+  sandbox:
+    strategy: PODMAN
+    podman-path: podman # Do not use /usr/bin/podman on macOS
+
+```
+
+### 2. The Linux Socket Hangover (`XDG_RUNTIME_DIR`)
+
+**Error:**
+`Podman execution failed... Failed to obtain podman configuration: lstat /run: no such file or directory`
+
+**Root Cause:**
+WSL2 requires explicitly setting `XDG_RUNTIME_DIR=/run/user/1000` for headless Java processes to find the Podman socket. macOS does not use the `/run` directory structure; its lightweight Podman Machine VM handles socket routing natively.
+
+**Resolution:**
+Remove any configuration or Java code injecting `XDG_RUNTIME_DIR` into the `ProcessBuilder` environment when running on macOS.
+
+### 3. The Docker Hub Pull Trap
+
+**Error:**
+`Tool failed (exit 125): Resolving "arcclaw-tool-runner" ... Trying to pull docker.io/library/arcclaw-tool-runner:latest... requested access to the resource is denied`
+
+**Root Cause:**
+macOS does not run containers natively; it uses a background VM (`podman machine`). If the custom `arcclaw-tool-runner` image was built via Docker Desktop, the Podman daemon cannot see it. It will attempt to pull the local image from the public internet (Docker Hub) and fail.
+
+**Resolution:**
+Build the image explicitly inside the active Podman daemon:
+
+```bash
+podman machine start
+podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
+
+```
+
+### 4. The Ephemeral Container Network Block
+
+**Error:**
+The container boots, but tools requiring internet access (like `gh` fetching a repository) timeout or fail.
+
+**Root Cause:**
+The `ProcessIsolationExecutor` natively hardcodes `--network=none` for maximum security, creating an air-gapped container. Tools that make external API calls will silently fail inside the sandbox.
+
+**Resolution:**
+Update `ProcessIsolationExecutor.java` to allow bridged networking for tools requiring outbound API access.
+
+```java
+// In ProcessIsolationExecutor.java -> executeInContainer()
+var podmanCmd = new ArrayList<>(List.of(
+        podmanPath, "run", "--rm",
+        "--name", containerName, 
+        "--network=bridge", // Changed from 'none' to allow outbound API calls
+        "--read-only",
+        // ...
+));
+
+```
+
+### 5. The Session-Scoped Vault Dilemma
+
+**Error:**
+`Podman execution failed... Required secret not in vault: GITHUB_TOKEN`
+
+**Root Cause:**
+ArcClaw's `SecretVaultImpl` is an encrypted, session-scoped SQLite database. Every time `/reset` is triggered via Telegram, a new session ID is generated with an empty vault. Developer tools (like `gh`) require a global API token, but typing it into Telegram on every reset is poor DX.
+
+**Resolution:**
+Implement an OS-level environment variable fallback in `ProcessIsolationExecutor.java`. If the secure DB vault is empty, allow the executor to read from the host machine's environment (e.g., `~/.zshrc` exports) before failing.
+
+```java
+// In ProcessIsolationExecutor.java -> resolveSecrets()
+var optionalKey = secretVault.get(vaultKeyName);
+if (optionalKey.isPresent()) {
+    try (VaultKey key = optionalKey.get()) {
+        resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+    }
+} else {
+    // FALLBACK: Check Mac OS Environment Variables for Developer global tools
+    String hostEnvValue = System.getenv(vaultKeyName);
+    if (hostEnvValue != null && !hostEnvValue.isBlank()) {
+        resolved.put(envVar, hostEnvValue);
+    } else {
+        throw new SecurityException("Required secret not in DB vault or Host environment: " + vaultKeyName);
+    }
+}
+
+```
+
+### 6. The CLI Variable Name Mismatch
+
+**Error:**
+`Tool failed (exit 4): To get started with GitHub CLI, please run: gh auth login Alternatively, populate the GH_TOKEN environment variable...`
+
+**Root Cause:**
+The secret vault stores the token as `GITHUB_TOKEN`, but the `gh` binary strictly prioritizes `GH_TOKEN`. If mapped incorrectly, the container receives the secret under a name the tool ignores.
+
+**Resolution:**
+Ensure the `@RequiresSecret` annotation explicitly maps the internal vault key to the target tool's expected environment variable name.
+
+```java
+// In GithubTool.java
+@RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
+public List<String> sandboxCommand(Map<String, Object> params) {
+    // ...
+}
+
+```
+
+### 7. The ToolRegistry Reflection Failsafe
+
+**Error:**
+The sandbox executes successfully, but tools requiring credentials (like `gh` fetching a repository) fail due to an unauthorized error, even though the token exists in the OS environment or DB Vault.
+
+**Root Cause:**
+If complex class hierarchies, interfaces, or CDI proxies mask the target tool's `@RequiresSecret` method annotation, `ToolRegistry` reflection may silently fail to extract the required map of secrets to inject into the sandbox. 
+
+**Resolution:**
+A failsafe has been implemented in `ProcessIsolationExecutor.java` (in `resolveSecrets`). If the reflection-driven `requiredSecrets` map is `null` or empty, the sandbox executor automatically injects a fallback map (e.g., `GH_TOKEN` mapped to `GITHUB_TOKEN`) to guarantee critical developer tools have credentials.

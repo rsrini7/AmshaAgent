@@ -53,28 +53,53 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 1.  **REST API:** The edge layer (`AgentResource`) intercepts the request on a Virtual Thread and provisions a session.
 2.  **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 3.  **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or bankrupt).
-4.  **ProcessIsolationExecutor:** The ToolRegistry enforces sandboxing by default. Tool implementations declare their sandbox command, and the registry dynamically spins up a rootless Podman container with capped CPU/Memory. Trusted in-memory tools may explicitly opt-out via requiresSandbox() = false.
+4.  **ProcessIsolationExecutor:** The Sandbox layer enforces three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in dev mode (`strategy: NONE`). Tool schemas are also filtered per persona — coder and debugger roles receive an empty tool list, making tool bias architecturally impossible regardless of LLM instruction.
+
+> [!NOTE]
+> **Sandbox Degradation Details**: The ProcessIsolationExecutor operates in three tiers:
+> - **Production** (`%prod`): Full Podman rootless container isolation.
+> - **Namespace fallback**: If Podman is unavailable, Linux `unshare` namespaces.
+> - **Development** (`%dev`, strategy: NONE): Direct host execution — requires `gh` CLI installed on the host PATH. No container isolation.
+
 5.  **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 
 ```mermaid
 graph TD
     Client([Client / UI]) -->|Telegram / REST| REST[AgentResource REST API]
+    Telegram([Telegram User]) -->|Apache Camel Route| TH[TelegramAgentHandler]
+    TH -->|Intent Classification| IC[IntentClassifierService\nllama-3.1-8b-instant]
+    IC -->|Routed Role| REST
     REST --> Loop[AgentLoop Orchestrator]
-    
+
     subgraph Core Kernel
         Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB)]
-        Loop <-->|JDBC ChatMemory| JDBC[(Persistent ChatMemory)]
-        Loop <-->|Prompt & History| AI[LangChain4J ReasoningEngine]
-        Loop -->|Execute Tool Request| ToolReg[Tool Registry]
+        Loop <-->|JDBC ChatMemory\nRolling Window| JDBC[(Persistent ChatMemory)]
+        Loop <-->|Prompt + Role-Filtered\nTool Schema| AI[LangChainReasoningEngine]
+        Loop -->|Execute Tool Request| ToolReg[ToolRegistry\nGovernance + HITL]
     end
-    
+
+    subgraph Strict Tool Binding
+        AI -->|agentRole filter| Schema{Schema Filter\ngetPermittedToolNames}
+        Schema -->|coordinator / researcher| ToolSpec[github tool in schema]
+        Schema -->|coder / debugger| NoTool[empty schema\ntool bias impossible]
+    end
+
     AI <-->|Cloud Reasoning| Groq((Groq: llama-3.3-70b))
     Loop -->|Micrometer| Prom[Prometheus /q/metrics]
-    
-    subgraph Sandbox Layer
-        ToolReg --> AgentToolImpl[AgentTool Implementation]
-        AgentToolImpl -->|requiresSandbox=true| Isolator[ProcessIsolationExecutor]
-        Isolator -->|Rootless Mounts| Podman[(Podman Container)]
+
+    subgraph Sandbox Layer - Three-Tier Degradation
+        ToolReg -->|requiresSandbox=true| AgentToolImpl[AgentTool Implementation]
+        AgentToolImpl -->|sandboxCommand + @RequiresSecret| PIE[ProcessIsolationExecutor]
+
+        PIE -->|%prod + Podman running| Podman[(Podman Rootless Container\n--network=none --read-only\nmemory + CPU capped)]
+        PIE -->|Podman failed 3x circuit open| NS[Linux unshare Namespaces\npid + net + mount isolated]
+        PIE -->|%dev strategy=NONE\nor Windows fallback| Direct[Direct ProcessBuilder\nHost PATH execution\nno isolation]
+    end
+
+    subgraph HITL Governance
+        ToolReg -->|NETWORK_OUTBOUND\nSUPERVISED level| Pause[Pause + Save AWAITING_APPROVAL]
+        Pause -->|/approve via Telegram| Resume[Resume from SQLite Checkpoint]
+        Pause -->|/deny via Telegram| Terminate[Mark FAILED + Wipe State]
     end
 ```
 
@@ -82,23 +107,55 @@ Sequence Flow:
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant API as AgentResource
+    participant T as Telegram User
+    participant TH as TelegramAgentHandler
+    participant IC as IntentClassifier
     participant AL as AgentLoop
     participant LLM as ReasoningEngine
-    participant Sandbox as IsolationExecutor
+    participant TR as ToolRegistry
+    participant PIE as ProcessIsolationExecutor
     participant DB as SQLite WAL
 
-    C->>API: POST /sessions/{id}/run-async
-    API->>AL: Spawn Virtual Thread
-    loop maxIterations (Thought → Plan → Act → Observe)
-        AL->>LLM: 🧠 Thought & Plan
-        LLM-->>AL: Action (Tool Name + Args)
-        AL->>Sandbox: ⚡ Act (Rootless Podman)
-        Sandbox-->>AL: 🔍 Observe (ToolOutput)
-        AL->>DB: 💾 Checkpoint Sequence
+    T->>TH: Send message
+    TH->>IC: Classify intent → role
+    IC-->>TH: coder / debugger / coordinator / researcher
+    TH->>AL: run(sessionId, role, goal)
+
+    loop maxIterations — Thought → Plan → Act → Observe
+        AL->>LLM: nextStep(agentRole, goal, history)
+        Note over LLM: Role-filtered tool schema injected\ncoder + debugger → empty schema\ncoordinator + researcher → github in schema
+        LLM-->>AL: Action (ToolName + Args) OR FINISH
+
+        alt Tool call requested
+            AL->>TR: invokeTool(toolName, params)
+            TR->>TR: Governance check\nAutonomyPolicy.isAllowed()
+
+            alt SUPERVISED + NETWORK_OUTBOUND
+                TR-->>T: ⚠️ Approval required — /approve or /deny
+                AL->>DB: 💾 Save AWAITING_APPROVAL checkpoint
+                T->>TH: /approve
+                TH->>AL: Resume from checkpoint
+                AL->>TR: invokeTool (elevated to FULL)
+            end
+
+            TR->>PIE: executeSandboxed(sessionId, workspaceRoot, command, secrets)
+
+            alt %prod — Podman available
+                PIE->>PIE: executeInContainer()\n--network=none --read-only\nmemory + CPU capped
+            else Podman circuit open — Linux host
+                PIE->>PIE: executeInNamespace()\nunshare pid + net + mount
+            else %dev strategy=NONE or Windows
+                PIE->>PIE: executeDirectly()\nhost PATH ProcessBuilder
+            end
+
+            PIE-->>AL: 🔍 Tool output observation
+        else FINISH
+            AL->>DB: 💾 Checkpoint COMPLETED
+            AL-->>T: 🏁 Final answer
+        end
+
+        AL->>DB: 💾 Checkpoint each iteration
     end
-    AL-->>C: 🏁 AgentResult (Completion)
 ```
 
 ---
@@ -288,7 +345,7 @@ ArcClaw features an enterprise-grade, Virtual-Thread-backed Telegram network ada
 It features several advanced conversational mechanisms:
 *   **Deterministic Session Routing**: Uses `UUID.nameUUIDFromBytes(chatId + ":" + userId)` to ensure a user's session persists exactly across bot or server restarts.
 *   **Semantic Intent Classification**: Every incoming message passes through the `IntentClassifierService` (`llama-3.1-8b-instant`) to auto-route your task to the correct specialist (Vishnu, Brahma, Shiva, or Saraswati).
-*   **Task Amnesia (Goldfish Memory)**: To prevent context-poisoning, sessions are softly reset upon `COMPLETED` or `FAILED` checkpoints, wiping the internal ReAct loop state to prevent ghost tool triggers, while retaining the LangChain conversational history.
+*   **Task Amnesia (Goldfish Memory)**: To prevent context-poisoning, sessions undergo a **Soft Reset** upon `COMPLETED` or `FAILED` checkpoints. This wipes the internal ReAct loop state to prevent "ghost" tool triggers, while retaining the LangChain conversational history for follow-up turns.
 *   **Human-in-the-Loop (HITL)**: Tool calls requiring `SUPERVISED` autonomy pause the agent. You can review the intention and reply with `/approve` or `/deny`.
 
 Here is the exact step-by-step guide to perform the Live Integration Test.
@@ -363,6 +420,8 @@ ArcClaw enforces strict module boundaries to guarantee clean architectural separ
 
 ---
 
+---
+
 ## 📚 Deep-Dive Documentation
 
 Our codebase was engineered for Future AI and Human contributors. Don't guess—read the docs:
@@ -372,4 +431,5 @@ Our codebase was engineered for Future AI and Human contributors. Don't guess—
 *   **[`DEVIATIONS.md`](./DEVIATIONS.md)** — The audit trail of every architectural pivot made during V1.0.0 implementation.
 *   **[`PLAN.md`](./PLAN.md)** & **[`TASKS.md`](./TASKS.md)** — The original, granular specification and the milestone checklist.
 *   **[`WALKTHROUGH.md`](./WALKTHROUGH.md)** — 14 phases of linear development history, capturing "why" we did things, not just "what" we did.
+*   **[`WSL2_SETUP_GUIDE.md`](./WSL2_SETUP_GUIDE.md)** — Step-by-step guide for setting up JDK 25 and native Podman inside WSL2.
 *  **[FAQ.md](./FAQ.md)** - Frequently Asked Questions - Answered

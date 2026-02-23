@@ -1,6 +1,8 @@
 package com.arcclaw.core.health;
 
 import jakarta.enterprise.context.ApplicationScoped;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
@@ -11,10 +13,13 @@ import java.util.concurrent.TimeUnit;
 @ApplicationScoped
 public class PodmanHealthCheck implements HealthCheck {
 
+    @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
+    String podmanPath;
+
     @Override
     public HealthCheckResponse call() {
         try {
-            ProcessBuilder pb = new ProcessBuilder("podman", "--version");
+            ProcessBuilder pb = new ProcessBuilder(podmanPath, "--version");
             Process process = pb.start();
             boolean finished = process.waitFor(2, TimeUnit.SECONDS);
 
