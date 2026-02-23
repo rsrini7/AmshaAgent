@@ -1,8 +1,7 @@
 # ArcClaw — System Requirements
 
 > **Document Type:** Software Requirements Specification (SRS)
-> **v1.0 Status:** Baselined — Production Implementation Complete
-> **v1.1 Status:** Baselined — Phase 11 Implemented
+> **V1.0.0 Status:** Baselined — Production Implementation Complete
 > **Audit Date:** February 2026
 > **Audience:** Engineers, Architects, SREs, Product Owners
 
@@ -683,7 +682,7 @@ mvnw quarkus:dev -pl arcclaw-app
 
 ### 10.2 Performance Boundaries vs. ZeroClaw (Rust)
 
-| Metric | ZeroClaw (Rust) | ArcClaw v1.0 (Native) | Gap |
+| Metric | ZeroClaw (Rust) | ArcClaw V1.0.0 (Native) | Gap |
 |---|---|---|---|
 | Binary size | 8.8 MB | ~30 MB | 3.4× — accepted |
 | Cold start | < 10 ms | 30–50 ms | 3–5× — accepted for Java |
@@ -691,7 +690,7 @@ mvnw quarkus:dev -pl arcclaw-app
 
 These gaps are considered acceptable given the Java ecosystem's tooling, maintainability, and LangChain4J integration advantages.
 
-### 10.3 Out-of-Scope Items (v1.0)
+### 10.3 Out-of-Scope Items (V1.0.0)
 
 | Feature | Status | Notes |
 |---|---|---|
@@ -706,7 +705,7 @@ These gaps are considered acceptable given the Java ecosystem's tooling, maintai
 
 The following table tracks ArcClaw's feature parity against the ZeroClaw Rust reference implementation:
 
-| Feature | ZeroClaw Rust | ArcClaw v1.0 Status |
+| Feature | ZeroClaw Rust | ArcClaw V1.0.0 Status |
 |---|---|---|
 | Trait-driven pluggable kernel | Provider/Tool traits | ✅ CDI interfaces + qualifiers |
 | 22+ LLM providers | Multiple | ✅ LangChain4J `ChatLanguageModel` |
@@ -730,18 +729,18 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 
 ## 12. Roadmap & Phases
 
-### Phase 1–10: ArcClaw v1.0 (Core Kernel)
+### Phase 1–10: ArcClaw V1.0.0 (Core Kernel)
 * **Status:** ✅ Completed and Baselined.
 * **Features:** CDI Sandbox, REST API, Financial Governance, Vault Secrets, OpenTelemetry, JDBC SQLite Checkpointing, Multi-Agent Tool Registry.
 
-### Phase 11: ArcClaw v1.1 (Multi-Channel & Human-in-the-Loop)
+### Phase 11: ArcClaw V1.0.0 (Multi-Channel & Human-in-the-Loop)
 * **Status:** ✅ Completed.
 * **Sprint 1 (Dual-Mode Binary):** Implemented Picocli integration allowing the single compiled artifact to run as a transient CLI task (`ask`) or a background daemon (`serve`).
 * **Sprint 2A (Telegram Channel):** Integrated `camel-quarkus-telegram`. Implemented non-blocking Vert.x to Virtual Thread handoff, mapping Telegram `chatId` deterministically to SQLite workspace sessions.
 * **Sprint 2B (Human-in-the-Loop State Machine):** Implemented the `/approve` and `/deny` flow. Refactored `AgentLoop` to cleanly exit on `RequiresApprovalException`, saving pending tool invocations to SQLite (`AWAITING_APPROVAL`), allowing asynchronous resumption without thread parking.
 * **Sprint 2C (Dynamic Role Routing):** Implemented a keyword-based Intent Router in the Telegram handler to dynamically route user prompts to `brahma`, `saraswati`, or `coordinator` agents.
 
-### Phase 12: ArcClaw v1.2 (State Consistency & Observability)
+### Phase 12: ArcClaw V1.0.0 (State Consistency & Observability)
 * **Status:** [/] In Progress (Sprint 3)
 * **Sprint 3A (Persistent ChatMemory):** ✅ **[CRITICAL ARCHITECTURAL FIX]** Implemented a custom LangChain4j `ChatMemoryStore` backed by the existing JDBC SQLite database. Resolves "split-brain" state issues and enables "Task Amnesia" for Telegram reliability.
 * **Sprint 3B (LLM Intent Router):** ✅ Replace the brittle keyword-based `determineAgentRole` heuristic with a fast, low-latency LLM classification call (`llama-3.1-8b-instant` via Groq) to accurately route ambiguous prompts.
@@ -749,9 +748,9 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Sprint 3D (ShivaAgent Integration):** ✅ Enhanced Intent Router with `shiva` (debugger) role to distinguish between code creation and bug fixing.
 * **Sprint 3E (Discord Adapter):** [➖] Deferred due to library deprecation (See [ARCHITECTURAL_DECISIONS.md](file:///h:/ws/ArcClaw/ARCHITECTURAL_DECISIONS.md)).
 
-*ArcClaw v1.0 Requirements — Baselined from production implementation.*
+*ArcClaw V1.0.0 Requirements — Baselined from production implementation.*
 *Source documents: ArcClaw-v1_0-CONSOLIDATED.md, TASKS.md, DEVIATIONS.md, WALKTHROUGH.md, TROUBLESHOOTING.md, FAQ.md, README.md, claw-ecosystem.md.*
 *Audit trail: 5 LLMs, 4+ review passes, 21 unique risks resolved, 7 factual corrections applied.*
 *Post-baseline review pass 1 (Gemini): 4 corrections — ShivaAgent role → debugger, Windows SQLite dir constraint, Podman Desktop Docker compat, dev/native LLM profile split.*
 *Post-baseline review pass 2 (Gemini — Security/Ops): 5 patches — POSIX 600 env-file hardening (REQ-SAND-04), singleton topology constraint (10.1), Hibernate → Flyway in production (7.2), maxIterations API bounds (Section 6), cumulative context token limit (REQ-GOV-07).*
-*Section 12 updated: Phase 11 (v1.1) baselined after full implementation of Multi-Channel & Human-in-the-Loop flow. Phase 12 (v1.2) roadmap drafted for state consistency and observability sprints.*
+*Section 12 updated: Baselined after full implementation of Multi-Channel & Human-in-the-Loop flow.*

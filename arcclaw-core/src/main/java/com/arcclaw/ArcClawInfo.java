@@ -1,7 +1,7 @@
 package com.arcclaw;
 
 /**
- * ArcClaw v1.0 — Agentic Kernel (Core Runtime Module).
+ * ArcClaw V1.0.0 — Agentic Kernel (Core Runtime Module).
  * <p>
  * This package contains all runtime logic: CDI scope, security, sandbox,
  * tools, agents, state, lifecycle, governance, observer, health, and channels.

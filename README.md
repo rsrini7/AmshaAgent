@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🛡️ ArcClaw v1.2</h1>
+  <h1>🛡️ ArcClaw V1.0.0</h1>
   <p><strong>A secure, stateful, and financially governed AI agent kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -36,13 +36,13 @@ ArcClaw's default multi-agent roster is heavily inspired by the four-agent colla
 *   **Shiva (`debugger`):** The Transformer. Acts as the contrarian balance expert. Identifies blind spots, challenges assumptions, and provides creative alternatives to break the team out of local minima.
 
 > [!NOTE]
-> ArcClaw v1.2 utilizes a high-speed LLM Intent Classifier (`llama-3.1-8b-instant`) to dynamically route incoming requests to the most qualified specialist among the roles above.
+> ArcClaw V1.0.0 utilizes a high-speed LLM Intent Classifier (`llama-3.1-8b-instant`) to dynamically route incoming requests to the most qualified specialist among the roles above.
 
 *   **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files—never as process arguments.
 *   **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
 *   **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JDK 25 optimized concurrent loops utilizing standard `synchronized` blocks alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage state maps across thousands of lightweight threads.
 *   **💰 Financial Governance:** Hard USD circuit breakers and **Human-in-the-Loop** approvals. Sensitive operations (e.g., `NETWORK_OUTBOUND`) pause execution until a user clicks `/approve` via Telegram.
-*   **🔍 Observability:** Real-time Prometheus metrics at `/q/metrics` track token consumption and agent invocations, while OTLP distributed tracing connects the abstract LLM reasoning loop to physical container execution via Jaeger.
+*   **🔍 Observability:** Real-time Prometheus metrics at `/q/metrics` track token consumption and agent invocations, while OTLP distributed tracing provides basic HTTP spans via Jaeger (Note: internal reasoning spans are stubbed as no-ops in V1.0.0).
 
 ---
 
@@ -77,7 +77,7 @@ graph TD
     end
 ```
 
-Sequece Flow:
+Sequence Flow:
 
 ```mermaid
 sequenceDiagram
@@ -127,14 +127,15 @@ cd ArcClaw
 cp .env.example .env
 
 # Configure your secrets
-# E.g., GITHUB_TOKEN=ghp_...
-# Note: The local stack provisions Ollama (llama3.2:1b)—test the framework 100% offline and free of charge!
-# E.g., OLLAMA_BASE_URL=http://ollama:11434
+# Note: ArcClaw V1.0.0 defaults to Groq (llama-3.3-70b-versatile) for reasoning and (llama-3.1-8b-instant) for intent classification.
+# The local docker-compose stack still provisions an offline Ollama instance for experimentation, but it is disabled by default in application.yaml.
 ```
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Points to the local or remote Ollama LLM provider. |
+| `GROQ_API_KEY` | `(empty)` | **Required.** Authenticates with the Groq Cloud for the main reasoning engine and intent classifier. |
+| `TELEGRAM_BOT_TOKEN` | `(empty)` | **Required for attach mode.** Connects the daemon to your Telegram bot. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Points to the local or remote Ollama LLM provider (disabled by default in V1.0.0). |
 | `GITHUB_TOKEN` | `(empty)` | Required if using the `SaraswatiAgent` or GitHub tools. |
 | `ARCCLAW_DATA_DIR` | `./data` | The host path where SQLite DBs and Workspaces are saved. |
 
@@ -157,7 +158,7 @@ Once the `.env` is populated, the native binary is sitting in `target/`, and the
 docker compose up -d --build
 ```
 > [!TIP]
-> **Zero-Touch Initialization**: The Docker compose stack includes an `ollama-init` sidecar that will automatically download the LLM weights (e.g. `llama3.2:1b`) for you prior to the main ArcClaw server booting. Just wait a few seconds for the download!
+> **Zero-Touch Initialization**: The Docker compose stack includes an `ollama-init` sidecar that will automatically download the LLM weights (e.g. `llama3.2:1b`) for you prior to the main ArcClaw server booting. Just wait a few seconds for the download! *(This only applies if you re-enable the Ollama chat model in `application.yaml`)*.
 
 (or)
 
@@ -187,7 +188,7 @@ mvn clean verify -pl arcclaw-app -am
 *(Note: Mockito requires JDK 21+ inline mock attachments. This is handled automatically by the `--add-opens` flags in the `arcclaw-app` pom.xml).*
 
 ### Step 4: Run the Kernel (Multi-Mode)
-ArcClaw v1.2 functions as a multi-mode binary. You can run it as a long-lived REST daemon, attach it to external channels, interact via a REPL, or execute a single task directly from the CLI.
+ArcClaw V1.0.0 functions as a multi-mode binary. You can run it as a long-lived REST daemon, attach it to external channels, interact via a REPL, or execute a single task directly from the CLI.
 
 **Option A: Daemon Mode (`serve`)**
 Run as a background REST API server.
@@ -196,6 +197,10 @@ Run as a background REST API server.
 .\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
 ```
 *(Note: Or using the built JAR: `java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve`)*
+
+> [!NOTE]
+> **Dev Sandbox Limitations**: In the `%dev` profile (when running `quarkus:dev`), the container isolation strategy defaults to `NONE`. To test full Podman rootless isolation, you must run the packaged runner (or native binary) using the Prod profile.
+> If Quarkus dev mode fails with a console `NullPointerException`, disable the dev console by setting `quarkus.console.enabled=false`. See `TROUBLESHOOTING.md` for details.
 
 **Option B: Channel Daemon (`attach`)**
 Keep ArcClaw running as a background daemon to service external channel adapters (e.g., Telegram bots).
@@ -264,8 +269,8 @@ When the asynchronous agent executes successfully, you will see a precise sequen
    *ArcClaw receives the REST payload and instantly offloads the workload to a lightweight JDK 25 Virtual Thread so the HTTP worker isn't blocked.*
 2. **Context Hydration:** `AgentLoop starting for goal... (maxIterations=5)`
    *The `@ActivateRequestContext` binds a fresh CDI lifecycle to the unmanaged thread, and the `WorkspaceScopeHolder` activates the isolated workspace session.*
-3. **LLM Delegation:** `HTTP request: - url: http://localhost:11434/api/chat`
-   *LangChain4j serializes the tools and your prompt, then executes a synchronous REST payload to your local Ollama `llama3.2:1b` container.*
+3. **LLM Delegation:** `HTTP request: - url: https://api.groq.com/openai/v1/chat/completions`
+   *LangChain4j serializes the tools and your prompt, then executes an asynchronous REST payload to the Groq cloud infrastructure.*
 4. **Tool/Reasoning Execution:** `Agent reached FINISH at iteration 1`
    *The LLM decides it has satisfied your goal (or emitted a final hallucinated JSON string) and commands the parser to halt the Thought-Action-Observation loop.*
 5. **State Checkpointing:** `Created checkpoint for session=e8d8... role=coordinator` followed immediately by `Checkpoint id=2 marked COMPLETED`
@@ -277,7 +282,13 @@ When the asynchronous agent executes successfully, you will see a precise sequen
 
 ## 📱 Telegram Bot Integration (Live Test)
 
-ArcClaw features an enterprise-grade, Virtual-Thread-backed Telegram network adapter. By explicitly handling the Vert.x to ManagedExecutor handoff, ArcClaw can handle thousands of concurrent Telegram users without dropping connections.
+ArcClaw features an enterprise-grade, Virtual-Thread-backed Telegram network adapter built on **Apache Camel** (`TelegramChannelRoute`). By explicitly handling the Vert.x to ManagedExecutor handoff, ArcClaw can handle thousands of concurrent Telegram users without dropping connections.
+
+It features several advanced conversational mechanisms:
+*   **Deterministic Session Routing**: Uses `UUID.nameUUIDFromBytes(chatId + ":" + userId)` to ensure a user's session persists exactly across bot or server restarts.
+*   **Semantic Intent Classification**: Every incoming message passes through the `IntentClassifierService` (`llama-3.1-8b-instant`) to auto-route your task to the correct specialist (Vishnu, Brahma, Shiva, or Saraswati).
+*   **Task Amnesia (Goldfish Memory)**: To prevent context-poisoning, sessions are softly reset upon `COMPLETED` or `FAILED` checkpoints, wiping the internal ReAct loop state to prevent ghost tool triggers, while retaining the LangChain conversational history.
+*   **Human-in-the-Loop (HITL)**: Tool calls requiring `SUPERVISED` autonomy pause the agent. You can review the intention and reply with `/approve` or `/deny`.
 
 Here is the exact step-by-step guide to perform the Live Integration Test.
 
@@ -293,11 +304,9 @@ Open your `.env` file and add the token:
 ```env
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
 ```
-Make sure your local Ollama container is running so the agent has a brain:
-```bash
-docker compose up -d ollama
-```
-*(Or open the Ollama GUI to start the local process).*
+Make sure your `GROQ_API_KEY` is set in your environment so the agent has a brain.
+
+*(Note: If you have modified `application.yaml` to re-enable local Ollama instead, ensure your local Ollama container is running: `docker compose up -d ollama`).*
 
 ### Step 3: Boot ArcClaw in Daemon Mode
 Because we are using the quarkus-picocli Dual-Mode binary, we must explicitly tell it to run the `serve` command.
@@ -359,7 +368,7 @@ Our codebase was engineered for Future AI and Human contributors. Don't guess—
 
 *   **[`TESTING_GUIDE.md`](./TESTING_GUIDE.md)** — Comprehensive E2E `curl` commands, REST flows, and distributed tracing setups.
 *   **[`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md)** — A mandatory read for new engineers. Covers JDK 25 ByteBuddy workarounds, Virtual Thread Context Propagation, Docker Permission traps, and specific `@InjectMock` nuances.
-*   **[`DEVIATIONS.md`](./DEVIATIONS.md)** — The audit trail of every architectural pivot made during v1.0 implementation.
+*   **[`DEVIATIONS.md`](./DEVIATIONS.md)** — The audit trail of every architectural pivot made during V1.0.0 implementation.
 *   **[`PLAN.md`](./PLAN.md)** & **[`TASKS.md`](./TASKS.md)** — The original, granular specification and the milestone checklist.
 *   **[`WALKTHROUGH.md`](./WALKTHROUGH.md)** — 14 phases of linear development history, capturing "why" we did things, not just "what" we did.
 *  **[FAQ.md](./FAQ.md)** - Frequently Asked Questions - Answered

@@ -1,4 +1,4 @@
-# ArcClaw v1.0 — Master Architecture & Troubleshooting Guide
+# ArcClaw V1.0.0 — Master Architecture & Troubleshooting Guide
 
 > **Consolidated Design Decisions, Known Failure Modes, and "Missing Think" Resolutions**
 >

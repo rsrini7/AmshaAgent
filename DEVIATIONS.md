@@ -1,4 +1,4 @@
-# ArcClaw v1.0 — Technical Audit & Deviations
+# ArcClaw V1.0.0 — Technical Audit & Deviations
 
 **Audit Date:** February 20, 2026  
 **Auditor:** Senior Technical Auditor (Antigravity)  
@@ -7,7 +7,7 @@
 > **Cross-Reference**: [PLAN.md](./PLAN.md) | [TASKS.md](./TASKS.md) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | [WALKTHROUGH.md](./WALKTHROUGH.md) | [FAQ.md](./FAQ.md)
 
 ## Executive Summary
-The implementation of ArcClaw v1.0 has successfully translated the high-level consolidated specification into a functional, hardened kernel. The primary driver for architectural pivots was the requirement for **JDK 25 stability** and **Quarkus 3.23.0 LTS alignment**. While the core pillars (Autonomy, Isolation, Scope) remain intact, specific implementation details were adjusted to handle the edge cases of JEP 491 (Virtual Thread Pinning) and ArC build-time processing.
+The implementation of ArcClaw V1.0.0 has successfully translated the high-level consolidated specification into a functional, hardened kernel. The primary driver for architectural pivots was the requirement for **JDK 25 stability** and **Quarkus 3.23.0 LTS alignment**. While the core pillars (Autonomy, Isolation, Scope) remain intact, specific implementation details were adjusted to handle the edge cases of JEP 491 (Virtual Thread Pinning) and ArC build-time processing.
 
 ## Version Deviation Table
 

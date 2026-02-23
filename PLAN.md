@@ -1013,7 +1013,7 @@ Implement interactive REPL and background daemon management in the root CLI.
 
 # Phase 22 — Final Pre-Release Hardening & Agent UX
 
-Addressed several "Post Claude Code Review" edge cases to solidify the agent's reasoning loop and conversational memory before tagging v1.2.
+Addressed several "Post Claude Code Review" edge cases to solidify the agent's reasoning loop and conversational memory before tagging V1.0.0.
 
 ## Design Decisions
 

@@ -1,4 +1,4 @@
-# ArcClaw v1.0 — Implementation Task Checklist
+# ArcClaw V1.0.0 — Implementation Task Checklist
 
 > Tracking all implementation phases derived from the [REQUIREMENTS.md](./REQUIREMENTS.md) specification.
 
@@ -258,11 +258,11 @@
 - [x] Route to `brahma`, `saraswati`, or `coordinator` based on prompt matching
 - [x] Bug Fix: Prevent `AgentLoop` from overwriting `AWAITING_APPROVAL` with `FAILED` on exit
 - [x] Bug Fix: Enforce deterministic `baseId` and implement session wipe for completed/failed tasks
-- [x] Updated SRS `REQUIREMENTS.md` with v1.1 baseline and v1.2 roadmap
+- [x] Updated SRS `REQUIREMENTS.md` with V1.0.0 baseline and roadmap
 
 ---
 
-## Phase 20 — ArcClaw v1.2: State Consistency & Observability
+## Phase 20 — ArcClaw V1.0.0: State Consistency & Observability
 - [x] **Sprint 3A: Persistent ChatMemoryStore**
   - [x] Create `ChatMemoryEntity` (JPA/SQLite persistence)
   - [x] Create `PersistentChatMemoryStore` (LangChain4j 0.26.1 implementation)

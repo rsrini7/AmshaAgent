@@ -1,5 +1,5 @@
 # =============================================================================
-# ArcClaw v1.0 — Full Application Configuration
+# ArcClaw V1.0.0 — Full Application Configuration
 # Never hardcode secrets here. Use env vars or Kubernetes Secrets.
 # =============================================================================
 
@@ -12,7 +12,7 @@ quarkus:
 
   application:
     name: arcclaw
-    version: "4.1.0"
+    version: "1.0.0"
 
   index-dependency:
     arcclaw-core:
@@ -106,7 +106,7 @@ quarkus:
     resource:
       attributes:
         service.name: "arcclaw"
-        service.version: "4.1.0"
+        service.version: "1.0.0"
         deployment.environment: "${ARCCLAW_ENV:development}"
     traces:
       enabled: true
@@ -146,7 +146,7 @@ quarkus:
   # ---------------------------------------------------------------------------
   smallrye-openapi:
     info-title: "ArcClaw Agent API"
-    info-version: "4.1.0"
+    info-version: "1.0.0"
     info-description: "Autonomous multi-agent framework — Java 21 + Quarkus + LangChain4J"
 
   # ---------------------------------------------------------------------------
