@@ -1053,3 +1053,50 @@ Addressed several "Post Claude Code Review" edge cases to solidify the agent's r
 - **Ghost of the Denied Prompt**: Inserted a programmatic "Closure Message" response into the `chatMemoryStore` upon a `/deny` action to explicitly inform the LLM the task was aborted, preventing it from retrying unfulfilled tools.
 - **Failure Poisoning**: Converted the `FAILED` check from a Hard Wipe (which destroys all chat memory) to a Soft Reset (wiping only the tool loop state), allowing continuity even after errors.
 
+---
+
+# Phase 23 — Sandbox Enforcement Centralization ✅
+
+Refactor the Tool Execution layer to enforce container isolation at the `ToolRegistry` level by default, closing the security gap where tools could previously bypass the sandbox.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Centralized Enforcement**: The original pattern required each tool to manually inject `ProcessIsolationExecutor` and call `executeSandboxed`. The new pattern moves this responsibility to `ToolRegistry.invokeTool()`, making isolation the default and requiring explicit opt-out via `requiresSandbox() = false`.
+
+> [!CAUTION]
+> **Secret Injection Fix**: Moving `@RequiresSecret` from the `execute()` method to `sandboxCommand()` caused a silent extraction failure because the reflection logic was hardcoded to look at `execute()`. The extraction logic was refactored to accept a method name parameter.
+
+## Completed Changes
+
+### Core Module — Tool Registry & Interface
+
+#### [MODIFY] [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java)
+- Added `default boolean requiresSandbox() { return true; }`.
+- Added `default List<String> sandboxCommand(Map<String, Object> params)` to define the OS-level command for the container.
+
+#### [MODIFY] [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java)
+- Injected `isolationExecutor` and `workspaceRootDir`.
+- Updated `invokeTool` to conditionally call `isolationExecutor.executeSandboxed` if the tool requires it.
+- Refactored `extractRequiredSecrets` to take a `methodName` parameter.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Removed direct `ProcessIsolationExecutor` and `WorkspaceContext` dependencies.
+- Implemented `requiresSandbox()` and `sandboxCommand()`.
+- Moved `@RequiresSecret` to `sandboxCommand()`.
+- Replaced `execute()` with an `UnsupportedOperationException`.
+
+#### [MODIFY] [ReflectionConfig.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/config/ReflectionConfig.java)
+- Registered `GithubTool.class` for reflection to support AOT secret extraction.
+
+### Tests
+
+#### [MODIFY] [ToolRegistryTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/tools/ToolRegistryTest.java)
+- Added `@InjectMock ProcessIsolationExecutor`.
+- Updated `testRequiresSecretExtraction` to use the new method signature.
+
+## Verification
+
+- ✅ `mvn clean verify -pl arcclaw-app -am` succeeds.
+- ✅ Verified that `ToolRegistry` logs sandbox execution while `GithubTool` remains thin.
+- ✅ Verified secret injection from Vault to container via ephemeral env-file still works.

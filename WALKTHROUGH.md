@@ -17,6 +17,7 @@
 | 10 | Health Checks | PodmanHealthCheckTest (2/2) | `@Alternative mock standalone interface on port 9001` |
 | 11 | REST API API | AgentResourceTest (3/3) | Explicitly added `quarkus-rest-jackson` to app module |
 | 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
+| 23 | Sandbox Enforcement | ToolRegistryTest (7/7) | Centralized `ProcessIsolationExecutor` in `ToolRegistry` |
 
 ## Phase 0: Project Scaffolding ✅
 
@@ -504,3 +505,18 @@ Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING
 - ✅ **Chat Persistence**: Repeated interactions on Telegram safely accumulate memory without dropping context.
 - ✅ **Error Handling**: Failed commands during an approval flow prompt the LLM to retry or report the error.
 
+
+---
+
+## Phase 23: Sandbox Enforcement Centralization ✅
+
+> [!IMPORTANT]
+> **Security Baseline**: Transitioned from an "opt-in" sandbox model (where tools chose to be isolated) to a "centralized enforcement" model (where `ToolRegistry` mandates isolation for all tools by default).
+
+| File | Purpose |
+|------|---------|
+| [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java) | New `sandboxCommand()` method for OS-level command definition. |
+| [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java) | Central logic for secret injection and container execution. |
+| [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java) | Refactored to leverage centralized isolation logic. |
+
+**Verification**: `mvn clean verify` confirms that `ToolRegistry` correctly extracts secrets from `sandboxCommand()` and delegates to `ProcessIsolationExecutor`.

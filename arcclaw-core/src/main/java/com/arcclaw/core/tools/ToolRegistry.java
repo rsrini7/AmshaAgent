@@ -13,9 +13,14 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import org.jboss.logging.Logger;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.StreamSupport;
+
+import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * CDI-based tool registry with governance enforcement.
@@ -43,6 +48,12 @@ public class ToolRegistry {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    ProcessIsolationExecutor isolationExecutor;
+
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
+    String workspaceRootDir;
 
     // Stateless — no CDI needed. Can be swapped to @Inject if custom policies are
     // required later.
@@ -121,6 +132,28 @@ public class ToolRegistry {
         }
 
         log.infof("Invoking tool '%s' (operation=%s, level=%s)", toolName, requiredOp, level);
+
+        if (tool.requiresSandbox()) {
+            var requiredSecrets = extractRequiredSecrets(tool.getClass(), "sandboxCommand");
+            var command = tool.sandboxCommand(params);
+            var workspaceRoot = Path.of(workspaceRootDir, workspaceContext.getSessionId());
+
+            try {
+                if (!Files.exists(workspaceRoot)) {
+                    Files.createDirectories(workspaceRoot);
+                }
+                String output = isolationExecutor.executeSandboxed(
+                    workspaceContext.getSessionId(), workspaceRoot, command, requiredSecrets);
+                return ToolResponse.success(output);
+            } catch (SecurityException e) {
+                return ToolResponse.failure(1, "Security violation: " + e.getMessage());
+            } catch (Exception e) {
+                log.errorf(e, "Tool '%s' execution failed: %s", toolName, e.getMessage());
+                return ToolResponse.failure(1, "Execution failed: " + e.getMessage());
+            }
+        }
+
+        log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         return tool.execute(params);
     }
 
@@ -143,35 +176,34 @@ public class ToolRegistry {
     }
 
     /**
-     * Reflectively reads {@link RequiresSecret} annotations from a tool's
-     * {@code execute(Map)} method to build the env-var → vault-key mapping.
+     * Reflectively reads {@link RequiresSecret} annotations from the named method
+     * of a tool class to build the env-var → vault-key mapping.
      * <p>
-     * Used by tools that delegate to {@code ProcessIsolationExecutor} and need
-     * to pass secrets into the container's ephemeral env-file.
+     * Pass {@code "sandboxCommand"} for sandboxed tools (new default).
+     * The old {@code "execute"} method name is no longer used.
      *
-     * @param toolClass The tool implementation class.
-     * @return Map of envVar → vaultKey from {@code @RequiresSecret} annotations.
+     * @param toolClass  The tool implementation class.
+     * @param methodName The method to scan for @RequiresSecret annotations.
+     * @return Immutable map of envVar → vaultKey.
      */
-    public static Map<String, String> extractRequiredSecrets(Class<? extends AgentTool> toolClass) {
+    public static Map<String, String> extractRequiredSecrets(
+            Class<? extends AgentTool> toolClass, String methodName) {
         var secrets = new LinkedHashMap<String, String>();
         try {
-            Method executeMethod = toolClass.getMethod("execute", Map.class);
-
-            // Check for @RequiresSecrets container annotation first
-            var container = executeMethod.getAnnotation(RequiresSecrets.class);
+            Method method = toolClass.getMethod(methodName, Map.class);
+            var container = method.getAnnotation(RequiresSecrets.class);
             if (container != null) {
                 for (var rs : container.value()) {
                     secrets.put(rs.envVar(), rs.vaultKey());
                 }
             }
-
-            // Check for single @RequiresSecret (not inside container)
-            var single = executeMethod.getAnnotation(RequiresSecret.class);
+            var single = method.getAnnotation(RequiresSecret.class);
             if (single != null && container == null) {
                 secrets.put(single.envVar(), single.vaultKey());
             }
         } catch (NoSuchMethodException e) {
-            log.warnf("Tool %s has no execute(Map) method — no secrets extracted", toolClass.getName());
+            log.warnf("Tool %s has no %s(Map) method — no secrets extracted",
+                      toolClass.getName(), methodName);
         }
         return Collections.unmodifiableMap(secrets);
     }

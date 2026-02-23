@@ -310,6 +310,8 @@
   - [x] Fix "Double-Prompt Echo" by removing redundant goal appending in engine
   - [x] Fix "Ghost of the Denied Prompt" by injecting Closure Message on `/deny`
   - [x] Prevent Internal Noise Contamination by filtering system commands from history
+  - [x] Refactor: Centralize ProcessIsolationExecutor invocation in ToolRegistry 
+    (Deviation #18) — closes sandbox opt-in security gap
 - [ ] Sprint 4C: Multi-Language Support (Planned)
 
 

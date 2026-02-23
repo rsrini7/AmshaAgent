@@ -1,11 +1,8 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -27,15 +24,6 @@ public class GithubTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(GithubTool.class);
 
-    @Inject
-    ProcessIsolationExecutor executor;
-
-    @Inject
-    WorkspaceContext workspaceContext;
-
-    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
-    String workspaceRootDir;
-
     @Override
     public String name() {
         return "github";
@@ -52,49 +40,25 @@ public class GithubTool implements AgentTool {
         return ToolOperation.NETWORK_OUTBOUND;
     }
 
-    /**
-     * Executes {@code gh repo view <repo>} inside the sandbox.
-     * <p>
-     * The {@code GITHUB_TOKEN} secret is declared via {@code @RequiresSecret}
-     * and resolved by the {@link ToolRegistry} before sandbox execution.
-     *
-     * @param params Must contain {@code "repo"} key (e.g.,
-     *               {@code "owner/repo-name"}).
-     * @return The tool response with the command output.
-     */
+    @Override
+    public boolean requiresSandbox() {
+        return true;
+    }
+
     @Override
     @RequiresSecret(envVar = "GITHUB_TOKEN", vaultKey = "GITHUB_TOKEN")
-    public ToolResponse execute(Map<String, Object> params) {
+    public List<String> sandboxCommand(Map<String, Object> params) {
         var repo = (String) params.get("repo");
         if (repo == null || repo.isBlank()) {
-            return ToolResponse.failure(1, "Missing required parameter: 'repo'");
+            throw new IllegalArgumentException("Missing required parameter: 'repo'");
         }
+        return List.of("gh", "repo", "view", repo);
+    }
 
-        var sessionId = workspaceContext.getSessionId();
-        // Extract secrets declared on this method via @RequiresSecret
-        var requiredSecrets = ToolRegistry.extractRequiredSecrets(GithubTool.class);
-        var command = List.of("gh", "repo", "view", repo);
-
-        // Dynamically route the tool to the user's isolated session folder
-        java.nio.file.Path workspaceRoot = java.nio.file.Path.of(workspaceRootDir, workspaceContext.getSessionId());
-        
-        try {
-            if (!java.nio.file.Files.exists(workspaceRoot)) {
-                java.nio.file.Files.createDirectories(workspaceRoot);
-            }
-        } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to create isolated workspace for session: " + workspaceContext.getSessionId(), e);
-        }
-
-        try {
-            log.infof("Executing 'gh repo view %s' in sandbox for session %s", repo, sessionId);
-            String output = executor.executeSandboxed(sessionId, workspaceRoot, command, requiredSecrets);
-            return ToolResponse.success(output);
-        } catch (SecurityException e) {
-            return ToolResponse.failure(1, "Security violation: " + e.getMessage());
-        } catch (Exception e) {
-            log.errorf(e, "GitHub tool execution failed for repo '%s'", repo);
-            return ToolResponse.failure(1, "Execution failed: " + e.getMessage());
-        }
+    @Override
+    public ToolResponse execute(Map<String, Object> params) {
+        throw new UnsupportedOperationException(
+            "GithubTool execution is handled by ToolRegistry sandbox wrapping. " +
+            "This method should never be called directly.");
     }
 }

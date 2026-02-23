@@ -5,6 +5,7 @@ import com.arcclaw.core.agent.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.tools.GithubTool;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -17,7 +18,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         AgentResult.class,
         RunAgentRequest.class,
         CreateSessionResponse.class,
-        SessionStatusResponse.class
+        SessionStatusResponse.class,
+        GithubTool.class
 })
 public class ReflectionConfig {
 }
