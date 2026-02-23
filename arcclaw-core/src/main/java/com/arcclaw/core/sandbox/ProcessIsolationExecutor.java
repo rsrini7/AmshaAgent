@@ -64,6 +64,15 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.cpu-limit", defaultValue = "0.5")
     String containerCpuLimit;
 
+    @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "/usr/bin/podman")
+    String podmanPath;
+
+    @ConfigProperty(name = "arcclaw.sandbox.xdg-runtime-dir", defaultValue = "")
+    String xdgRuntimeDir;
+
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
+    String workspaceRootDir;
+
     private static final String CONTAINER_PIDS_LIMIT = "64";
 
     // Circuit breaker state
@@ -85,7 +94,7 @@ public class ProcessIsolationExecutor {
     void checkPodmanAvailability() {
         if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
             try {
-                var pb = new ProcessBuilder("podman", "--version");
+                var pb = new ProcessBuilder(podmanPath, "--version");
                 pb.redirectErrorStream(true);
                 var proc = pb.start();
                 boolean ok = proc.waitFor(5, TimeUnit.SECONDS);
@@ -114,7 +123,7 @@ public class ProcessIsolationExecutor {
         log.infof("JVM shutdown: stopping %d active Podman container(s)...", activeContainerNames.size());
         for (String containerName : activeContainerNames) {
             try {
-                var pb = new ProcessBuilder("podman", "stop", "--time", "10", containerName);
+                var pb = new ProcessBuilder(podmanPath, "stop", "--time", "10", containerName);
                 pb.redirectErrorStream(true);
                 var proc = pb.start();
                 boolean stopped = proc.waitFor(15, TimeUnit.SECONDS); // 10s grace + 5s buffer
@@ -156,8 +165,11 @@ public class ProcessIsolationExecutor {
                 String result = executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
                 podmanFailures.set(0);
                 return result;
-            } catch (IOException e) {
+            } catch (Exception e) {
                 int failures = podmanFailures.incrementAndGet();
+                log.errorf("Podman execution failed (session=%s, failureCount=%d): %s", 
+                        sessionId, failures, e.getMessage());
+                
                 if (failures >= PODMAN_FAILURE_THRESHOLD) {
                     log.errorf("Podman failed %d times — opening circuit breaker, falling back to NAMESPACE", failures);
                     podmanCircuitOpen = true;
@@ -198,7 +210,7 @@ public class ProcessIsolationExecutor {
         activeContainerNames.add(containerName); // track before start — avoids race on early failure
         try (Scope scope = span.makeCurrent()) {
             var podmanCmd = new ArrayList<>(List.of(
-                    "podman", "run", "--rm",
+                    podmanPath, "run", "--rm",
                     "--name", containerName, // Fix G2: named for tracking + graceful stop
                     "--network=none",
                     "--read-only",
@@ -216,7 +228,19 @@ public class ProcessIsolationExecutor {
             podmanCmd.addAll(command);
 
             var pb = new ProcessBuilder(podmanCmd);
+
+            Path workspaceDir = Path.of(workspaceRootDir, sessionId);
+            if (!Files.exists(workspaceDir)) {
+                throw new IOException("workspace dir not exist");
+            }
+            pb.directory(workspaceDir.toFile());
             pb.redirectErrorStream(true);
+
+            // Inject the socket path for rootless Podman execution
+            if (xdgRuntimeDir != null && !xdgRuntimeDir.isBlank()) {
+                pb.environment().put("XDG_RUNTIME_DIR", xdgRuntimeDir);
+            }
+
             var process = pb.start();
             var output = new String(process.getInputStream().readAllBytes());
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);

@@ -110,6 +110,19 @@ services:
     networks:
       - arcclaw-net
 
+  # ---------------------------------------------------------------------------
+  # ARC-CLAW SANDBOX IMAGE (BUILD ONLY)
+  # This service exists strictly to centralize the build configuration.
+  # It is assigned to the "builder" profile so `compose up` ignores it.
+  # ---------------------------------------------------------------------------
+  tool-runner:
+    image: arcclaw-tool-runner:latest
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile.toolrunner
+    profiles:
+      - builder # Keeps this dormant during normal operations
+
 volumes:
   arcclaw_data:
   ollama_data:

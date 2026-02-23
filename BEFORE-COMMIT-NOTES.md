@@ -5,8 +5,9 @@ Check and append / update all / required points for future reference that should
 - [x] **TASKS.md**: Implementation Task tracker.
 - [x] **WALKTHROUGH.md**: Implementation Walkthrough tracker.
 - [x] **DEVIATIONS.md**: Implementation Deviations tracker comparing with ./REQUIREMENTS.md.
-- [x] **TROUBLESHOOTING.md**: Implementation Troubleshooting tracker.
+- [x] **TROUBLESHOOTING.md**: Implementation Troubleshooting tracker (including Podman Sandbox Strategy).
 - [x] **REQUIREMENTS.md**: Implementation Requirements tracker.
+- [x] **WSL2_SETUP_GUIDE.md**: New unified setup guide for JDK 25 and Podman.
 
 ## Manual Verification Required Before Commit - This is for Human only and AI should not call any tools
 1. **Approval Flow**: Send a prompt to Telegram requiring network access (e.g., "Check repo arcclaw"). Verify it pauses and resumes correctly via `/approve`.

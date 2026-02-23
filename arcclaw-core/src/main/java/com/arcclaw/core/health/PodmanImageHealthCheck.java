@@ -18,7 +18,7 @@ public class PodmanImageHealthCheck implements HealthCheck {
     @Override
     public HealthCheckResponse call() {
         try {
-            ProcessBuilder pb = new ProcessBuilder("podman", "image", "exists", containerImage);
+            ProcessBuilder pb = new ProcessBuilder("/usr/bin/podman", "image", "exists", containerImage);
             Process process = pb.start();
             boolean finished = process.waitFor(2, TimeUnit.SECONDS);
 
