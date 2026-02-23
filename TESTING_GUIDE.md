@@ -79,17 +79,10 @@ ArcClaw's sandbox layer degrades gracefully depending on the active Quarkus prof
 ### Prerequisites for Sandbox Testing
 1. **GitHub CLI**: `gh` must be installed on your host machine's `PATH`.
 2. **Podman**: Podman Desktop must be installed (for Windows/Mac) or natively installed (Linux).
-3. **Tool Runner Image**: You must build the base container image that Podman will spin up. Run this once:
-   ```bash
-   # Create a minimal Alpine image with GitHub CLI installed
-   cat <<EOF > Dockerfile.toolrunner
-   FROM alpine:latest
-   RUN apk add --no-cache github-cli
-   EOF
-   
-   podman build -t arcclaw-tool-runner:latest -f Dockerfile.toolrunner
+3. **Tool Runner Image**: You must build the base container image that Podman will spin up. 
 
-### 💡 Special Note for Windows Users (The WSL Boundary Trap)
+💡 Special Note for Windows Users (The WSL Boundary Trap)
+
 If you are developing on Windows and want to test **Tier 2 (Podman)**, you cannot simply run the `.jar` in PowerShell. 
 1. `ProcessIsolationExecutor` checks `System.getProperty("os.name")`. If it detects Windows, it safely bypasses Linux container namespaces and falls back to host execution.
 2. Therefore, **you must run the application inside WSL (e.g., Ubuntu).**
@@ -100,20 +93,10 @@ However, Podman Desktop runs in its own isolated WSL VM (`podman-machine-default
 Do not try to bridge Podman Desktop into Ubuntu. Instead, install Podman natively *inside* your Ubuntu WSL distribution.
 
 **Step 1: Open your Ubuntu WSL terminal**
-```bash
-wsl -d Ubuntu
 
-```
+Follow [PODMAN SETUP WSL2](./PODMAN_SETUP_WSL2.md)
 
-**Step 2: Install Podman natively inside Ubuntu**
-
-```bash
-sudo apt-get update
-sudo apt-get -y install podman
-
-```
-
-**Step 3: Build the Tool Runner Image (Inside Ubuntu)**
+**Step 2: Build the Tool Runner Image (Inside Ubuntu)**
 
 ```bash
 cat <<EOF > Dockerfile.toolrunner
@@ -125,7 +108,7 @@ podman build -t arcclaw-tool-runner:latest -f Dockerfile.toolrunner
 
 ```
 
-**Step 4: Run ArcClaw (Inside Ubuntu)**
+**Step 3: Run ArcClaw (Inside Ubuntu)**
 Ensure you are in the `/mnt/c/.../ArcClaw` directory (your project root mounted in WSL).
 
 ```bash
@@ -139,6 +122,38 @@ java -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
 When you trigger the `gh` tool now via Telegram, the Java process will correctly identify the OS as Linux, locate the native `podman` executable, and successfully launch the rootless container isolation.
 
+---
+
+## 🛠️ Sandbox Troubleshooting: Why is my Strategy 'NONE'?
+
+If you are running the application but it appears to be bypassing the sandbox (using direct `gh` on your host), check these four technical constraints.
+
+### 1. Understanding Quarkus Profiles
+The sandbox strategy is profile-aware. If you run via `mvnw quarkus:dev`, you are in the **`%dev`** profile which hardcodes `strategy: NONE` for developer velocity.
+
+| Execution Mode | Default Profile | Expected Strategy |
+| --- | --- | --- |
+| `.\mvnw quarkus:dev` | **`%dev`** | `NONE` (No isolation) |
+| `java -jar arcclaw-run.jar` | **`%prod`** | `PODMAN` (Strict isolation) |
+
+**How to force Prod mode for testing:**
+```powershell
+# Force the production profile even when running the JAR locally
+java -Dquarkus.profile=prod -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 ```
 
-```   
+### 2. Initialization "Freeze" & Circuit Breaker
+The `ProcessIsolationExecutor` determines its capability **only once** at startup.
+- **The Check**: It runs `podman --version` at boot.
+- **The Result**: If Podman is not running or not on the `PATH` during those first 5 seconds, the **Circuit Breaker** trips. 
+- **The Consequence**: The strategy is permanently downgraded to `NAMESPACE` or `NONE` for that JVM session. Starting Podman *after* the app has booted will not fix it; you must restart ArcClaw.
+
+### 3. The Windows OS Bypass
+ArcClaw contains a safety guard: if `os.name` contains "Windows", it knows it cannot use Linux Cgroups/Namespaces. 
+- Even if your strategy is `PODMAN`, if the circuit breaker trips, the fallback to `NAMESPACE` will immediately see it is on Windows and skip to `executeDirectly()`.
+- **Solution**: Use the [Native Podman Setup Guide](./PODMAN_SETUP_WSL2.md) to verify true container isolation inside WSL2.
+
+### 4. Verification Checklist
+To mathematically confirm your isolation level, check the **first 50 lines** of the console output during boot:
+- ✅ `INFO: Isolation strategy: PODMAN initialized.` -> **Full Security**
+- ⚠️ `WARN: Podman not available — circuit open, falling back...` -> **Degraded Security**
