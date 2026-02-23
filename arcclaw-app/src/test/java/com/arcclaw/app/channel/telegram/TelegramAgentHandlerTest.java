@@ -140,7 +140,7 @@ public class TelegramAgentHandlerTest {
         handler.receiveMessage(exchange);
 
         // Assert
-        verify(workspaceManagerMock).terminateSession(deterministicId);
+        verify(workspaceManagerMock, never()).terminateSession(anyString());
         verify(statefulAgentStoreMock)
                 .save(argThat(cp -> cp.status == CheckpointStatus.IN_PROGRESS && "[]".equals(cp.stateJson)));
 
