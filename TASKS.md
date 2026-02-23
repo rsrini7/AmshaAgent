@@ -337,3 +337,13 @@
   Add rolling window to `PersistentChatMemoryStore` — retain last N messages
   per session rather than unbounded history. Prevents context drag when
   switching task domains within a session. N=10 is a reasonable starting point.
+
+---
+
+## Phase 26 — Sandbox Isolation Hardening
+- [x] Step 1: Ingest `podman-path` and `xdg-runtime-dir` into `ProcessIsolationExecutor.java` <!-- id: 87 -->
+- [x] Step 2: Extract and log raw `STDERR` from failing Podman processes <!-- id: 88 -->
+- [x] Step 3: Hardcode absolute `/usr/bin/podman` path into `application.yaml` (Dev/Prod) <!-- id: 89 -->
+- [x] Step 4: Create standalone `WSL2_SETUP_GUIDE.md` (SDKMAN!, JDK 25, Podman) <!-- id: 90 -->
+- [x] Step 5: Update `TESTING_GUIDE.md` and `README.md` cross-references <!-- id: 91 -->
+- [x] Step 6: Verify build and logging via `mvn compile` and manual socket break <!-- id: 92 -->

@@ -1140,3 +1140,43 @@ Address the LLM schema-presence jailbreak and context window drag identified dur
 ### Core Module — Agents & Memory
 - [PLANNED] `LangChainReasoningEngine.java`: Intercept and filter the `ToolSpecification` list passed to the LLM based on `agentRole`. 
 - [PLANNED] `PersistentChatMemoryStore.java`: Implement a rolling window (e.g., retain last 10 messages) during the `getMessages` hydration phase to prevent token exhaustion and goal-confusion across long-lived sessions.
+
+---
+
+# Phase 26 — Sandbox Isolation Hardening (WSL2 & Podman) ✅
+
+Harden the infrastructure layer to ensure reliable container execution across diverse host environments, particularly focusing on the native WSL2/Podman boundary.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Path Fixation**: Moved from dynamic `PATH` discovery (which often fails in headless JVM processes) to explicit configuration. The `podman-path` and `xdg-runtime-dir` are now first-class properties in `application.yaml`.
+
+> [!TIP]
+> **Visibility via Volatility**: Enforced raw `STDERR` extraction in `ProcessIsolationExecutor`. This ensures that OS-level rejections (like Podman socket permission errors) are no longer swallowed by the fallback mechanism, making the "invisible failures" visible.
+
+## Proposed Changes
+
+### [arcclaw-core]
+#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Injected `podmanPath` and `xdgRuntimeDir` configuration properties.
+- Updated all `ProcessBuilder` calls to use the absolute `podmanPath`.
+- Implemented raw `STDERR` logging on execution failure.
+- Improved circuit breaker logging to include the specific session ID and failure count.
+
+### [arcclaw-app]
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Added default values for `arcclaw.sandbox.podman-path` and `arcclaw.sandbox.xdg-runtime-dir`.
+- Enabled `PODMAN` strategy by default in `%dev` profile to encourage isolated development.
+
+### Documentation
+#### [NEW] [WSL2_SETUP_GUIDE.md](file:///h:/ws/ArcClaw/WSL2_SETUP_GUIDE.md)
+- Created a unified setup guide covering SDKMAN!, JDK 25, and native Podman installation inside WSL2.
+
+#### [MODIFY] [TESTING_GUIDE.md](file:///h:/ws/ArcClaw/TESTING_GUIDE.md)
+- Expanded the sandbox troubleshooting section to point to the new WSL2 setup guide and explain the "WSL Boundary Trap."
+
+## Verification
+- ✅ **Infrastructure**: Verified that `ProcessIsolationExecutor` correctly picks up `/usr/bin/podman` from YAML.
+- ✅ **Logging**: Verified that manually breaking the Podman socket permissions results in a clear `RAW PODMAN STDERR` log entry.
+- ✅ **WSL2 Continuity**: Verified the `WSL2_SETUP_GUIDE.md` steps against a clean Ubuntu 24.04 environment.

@@ -18,7 +18,8 @@
 | 11 | REST API API | AgentResourceTest (3/3) | Explicitly added `quarkus-rest-jackson` to app module |
 | 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
 | 23 | Sandbox Enforcement | ToolRegistryTest (7/7) | Centralized `ProcessIsolationExecutor` in `ToolRegistry` |
-| 24 | Context & Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
+| 24 | Context Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
+| 26 | Sandbox Hardening | Manual Verification | Absolute paths, logging hardening, and WSL2 Setup Guide |
 
 ## Phase 0: Project Scaffolding ✅
 
@@ -548,3 +549,22 @@ Added the `/reset` command to the Telegram bot handler.
 | Confirmation | Bot replies with "🧹 Session wiped... Ready for a new task." |
 
 **Verification**: Full test suite pass (48/48) confirming the `ReasoningEngine` signature change (`agentRole`) maintains backward compatibility with the orchestration loop.
+
+---
+
+## Phase 26: Sandbox Hardening ✅
+
+This phase focused on the "Last Mile" of production readiness: ensuring the sandbox is reliable outside of the developer's machine and providing clear diagnostics for environment failures.
+
+### 1. Transparency via Logging
+We eliminated "Invisible Fallbacks" by forcing the extraction of raw OS-level stderr. If Podman fails due to a locked socket or invalid UID mapping, the exact error now appears in the Quarkus logs instead of being swallowed by the circuit breaker.
+
+### 2. Absolute Pathing
+Fixed the common "Headless JVM PATH" bug by moving the Podman executable path and XDG runtime socket directory into the `application.yaml` configuration.
+
+| File | Purpose |
+|------|---------|
+| [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java) | Improved error capture and configurable pathing. |
+| [WSL2_SETUP_GUIDE.md](file:///h:/ws/ArcClaw/WSL2_SETUP_GUIDE.md) | **[NEW]** Comprehensive environment guide for Windows users. |
+
+**Verification**: Verified that breaking the Podman socket results in a clear `RAW PODMAN STDERR` log entry, proving the instrumentation works.
