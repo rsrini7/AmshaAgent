@@ -1097,7 +1097,7 @@ agentLoop.run(...);
 * **Root Cause:** Aggressive chat memory persistence. While beneficial for long-running tasks, it prevents clean-slate testing for developers.
 * **Resolution:** Implemented the `/reset` command in `TelegramAgentHandler`. This command explicitly triggers `workspaceManager.terminateSession()` (wiping scope/beans) and `chatMemoryStore.deleteMessages()` (purging SQLite rows), providing a verified "cold start" for testing.
 
-# Podman Sandbox Strategy: Troubleshooting & Known Limitations
+# 16. Podman Sandbox Strategy: Troubleshooting & Known Limitations
 
 **Status:** IN PROGRESS (Blocked by JVM/Rootless Podman Environment Boundary)
 **Environment:** WSL2 Ubuntu (Native), Rootless Podman, Quarkus JVM (Prod Profile)
@@ -1243,11 +1243,9 @@ profiles:
 
 Because of this profile, `docker compose up` completely ignores the service. It acts purely as a centralized blueprint for building the static image, keeping our DevOps workflow clean and maintaining a single source of truth.
 
-Here is the complete documentation of our findings. You can copy and paste this directly into your `TroubleshootingGuide.md` file under a new section for **macOS & Podman Sandbox Troubleshooting**.
-
 ---
 
-## macOS & Podman Sandbox Troubleshooting
+## 17. macOS & Podman Sandbox Troubleshooting
 
 Transitioning the ArcClaw Tier 2 Sandbox from WSL2/Linux to macOS introduces architectural differences regarding file paths, Unix sockets, and secret management. Below is a comprehensive guide to the errors encountered and their resolutions.
 
@@ -1370,3 +1368,14 @@ public List<String> sandboxCommand(Map<String, Object> params) {
 }
 
 ```
+
+### 7. The ToolRegistry Reflection Failsafe
+
+**Error:**
+The sandbox executes successfully, but tools requiring credentials (like `gh` fetching a repository) fail due to an unauthorized error, even though the token exists in the OS environment or DB Vault.
+
+**Root Cause:**
+If complex class hierarchies, interfaces, or CDI proxies mask the target tool's `@RequiresSecret` method annotation, `ToolRegistry` reflection may silently fail to extract the required map of secrets to inject into the sandbox. 
+
+**Resolution:**
+A failsafe has been implemented in `ProcessIsolationExecutor.java` (in `resolveSecrets`). If the reflection-driven `requiredSecrets` map is `null` or empty, the sandbox executor automatically injects a fallback map (e.g., `GH_TOKEN` mapped to `GITHUB_TOKEN`) to guarantee critical developer tools have credentials.

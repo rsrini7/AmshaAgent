@@ -270,7 +270,7 @@ Build the tool abstraction, CDI-based discovery registry with governance enforce
 ### Core Module — Reference Tool
 
 #### [NEW] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
-- `@ApplicationScoped`, `@RequiresSecret(envVar="GITHUB_TOKEN", vaultKey="GITHUB_TOKEN")`
+- `@ApplicationScoped`, `@RequiresSecret(envVar="GH_TOKEN", vaultKey="GITHUB_TOKEN")`
 - Runs `gh repo view <repo>` via `ProcessIsolationExecutor`
 - `requiredOperation()` → `NETWORK_OUTBOUND`
 
@@ -1150,7 +1150,7 @@ Harden the infrastructure layer to ensure reliable container execution across di
 ## Design Decisions
 
 > [!IMPORTANT]
-> **Path Fixation**: Moved from dynamic `PATH` discovery (which often fails in headless JVM processes) to explicit configuration. The `podman-path` is now first-class properties in `application.yaml`.
+> **Path Resolution**: Removed explicit `/usr/bin/podman` hardcoding and `XDG_RUNTIME_DIR` overrides to ensure native capability across macOS and WSL2 environments. The `podman-path` strictly uses system `PATH` discovery by default.
 
 > [!TIP]
 > **Visibility via Volatility**: Enforced raw `STDERR` extraction in `ProcessIsolationExecutor`. This ensures that OS-level rejections (like Podman socket permission errors) are no longer swallowed by the fallback mechanism, making the "invisible failures" visible.
