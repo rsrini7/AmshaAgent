@@ -1053,3 +1053,90 @@ Addressed several "Post Claude Code Review" edge cases to solidify the agent's r
 - **Ghost of the Denied Prompt**: Inserted a programmatic "Closure Message" response into the `chatMemoryStore` upon a `/deny` action to explicitly inform the LLM the task was aborted, preventing it from retrying unfulfilled tools.
 - **Failure Poisoning**: Converted the `FAILED` check from a Hard Wipe (which destroys all chat memory) to a Soft Reset (wiping only the tool loop state), allowing continuity even after errors.
 
+---
+
+# Phase 23 — Sandbox Enforcement Centralization ✅
+
+Refactor the Tool Execution layer to enforce container isolation at the `ToolRegistry` level by default, closing the security gap where tools could previously bypass the sandbox.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Centralized Enforcement**: The original pattern required each tool to manually inject `ProcessIsolationExecutor` and call `executeSandboxed`. The new pattern moves this responsibility to `ToolRegistry.invokeTool()`, making isolation the default and requiring explicit opt-out via `requiresSandbox() = false`.
+
+> [!CAUTION]
+> **Secret Injection Fix**: Moving `@RequiresSecret` from the `execute()` method to `sandboxCommand()` caused a silent extraction failure because the reflection logic was hardcoded to look at `execute()`. The extraction logic was refactored to accept a method name parameter.
+
+## Completed Changes
+
+### Core Module — Tool Registry & Interface
+
+#### [MODIFY] [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java)
+- Added `default boolean requiresSandbox() { return true; }`.
+- Added `default List<String> sandboxCommand(Map<String, Object> params)` to define the OS-level command for the container.
+
+#### [MODIFY] [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java)
+- Injected `isolationExecutor` and `workspaceRootDir`.
+- Updated `invokeTool` to conditionally call `isolationExecutor.executeSandboxed` if the tool requires it.
+- Refactored `extractRequiredSecrets` to take a `methodName` parameter.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Removed direct `ProcessIsolationExecutor` and `WorkspaceContext` dependencies.
+- Implemented `requiresSandbox()` and `sandboxCommand()`.
+- Moved `@RequiresSecret` to `sandboxCommand()`.
+- Replaced `execute()` with an `UnsupportedOperationException`.
+
+#### [MODIFY] [ReflectionConfig.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/config/ReflectionConfig.java)
+- Registered `GithubTool.class` for reflection to support AOT secret extraction.
+
+### Tests
+
+#### [MODIFY] [ToolRegistryTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/tools/ToolRegistryTest.java)
+- Added `@InjectMock ProcessIsolationExecutor`.
+- Updated `testRequiresSecretExtraction` to use the new method signature.
+
+## Verification
+
+- ✅ `mvn clean verify -pl arcclaw-app -am` succeeds.
+- ✅ Verified that `ToolRegistry` logs sandbox execution while `GithubTool` remains thin.
+- ✅ Verified secret injection from Vault to container via ephemeral env-file still works.
+
+---
+
+# Phase 24 — Context Poisoning & Tool Bias Fix ✅
+
+Address architectural weaknesses leading to LLM tool eagerness and history bleed across unrelated task boundaries.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Strict Tool Binding Contract**: Transitions tool usage instructions from weak, ignoreable system prompt advisories into a hard per-persona contract. The reasoning engine now injects a `STRICT TOOL BINDING CONTRACT` at the point of reasoning, tailored to the active agent role (e.g., `coder` and `debugger` are strictly forbidden from tool usage).
+
+> [!NOTE]
+> **Manual Session Reset**: Added a first-class `/reset` command to the Telegram adapter. This provides a human-triggered "Emergency Wipe" that clears both the `WorkspaceScope` (destroying in-memory beans) and the `PersistentChatMemoryStore` (purging SQLite message rows), ensuring a 100% clean context for follow-up testing.
+
+## Proposed Changes
+
+### Core Module — Agents
+- [MODIFY] [ReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ReasoningEngine.java): Updated interface to accept `agentRole`.
+- [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java): Implemented role-based contract injection.
+- [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java): Updated loop to pass the current role to the engine.
+
+### App Module — Channel
+- [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java): Intercepted `/reset` command to trigger session termination and chat memory deletion.
+
+## Verification
+- ✅ **Tool Bias**: Verified `brahma` (coder) no longer attempts to invoke `github` for pure Java generation tasks.
+- ✅ **Context Poisoning**: Verified `/reset` successfully wipes the "memory of a goldfish" for testing subsequent task isolation.
+- ✅ **Regression**: `mvn clean verify` confirmed that existing approval flows and autonomous loops are unaffected by the signature changes.
+
+---
+
+# Phase 25 — Dynamic Schema Binding & Context Pruning (Planned)
+
+Address the LLM schema-presence jailbreak and context window drag identified during V1.0.0 verification.
+
+## Proposed Changes
+### Core Module — Agents & Memory
+- [PLANNED] `LangChainReasoningEngine.java`: Intercept and filter the `ToolSpecification` list passed to the LLM based on `agentRole`. 
+- [PLANNED] `PersistentChatMemoryStore.java`: Implement a rolling window (e.g., retain last 10 messages) during the `getMessages` hydration phase to prevent token exhaustion and goal-confusion across long-lived sessions.

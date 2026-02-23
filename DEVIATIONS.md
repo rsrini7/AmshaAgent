@@ -146,3 +146,24 @@ The implementation of ArcClaw V1.0.0 has successfully translated the high-level 
 - **Deviation**: Introduced a dedicated `shiva` role for the Intent Router to handle "fix it" and "why is this failing" prompts, distinct from the `brahma` (creator) role.
 - **Rationale**: Prevents specialized creation logic (Brahma) from being applied to debugging tasks, ensuring the appropriate system prompt and reasoning style (Shiva's contrarian/edge-case focus) are utilized.
 
+### 18. Sandbox Enforcement Centralized in ToolRegistry
+- **Deviation**: Moved `ProcessIsolationExecutor` invocation from individual 
+  tool implementations into `ToolRegistry.invokeTool()`.
+- **Rationale**: The original opt-in pattern allowed tool developers to silently 
+  skip sandbox isolation. Centralizing enforcement in the registry makes 
+  sandboxing the default for all tools, with explicit opt-out via 
+  `requiresSandbox() = false` for trusted in-memory tools. The reflection 
+  method `extractRequiredSecrets` was updated to accept a method name parameter, 
+  fixing a silent credential injection failure when annotations moved from 
+  `execute()` to `sandboxCommand()`.
+### 19. Strict Tool Binding Per Persona + Session Reset Command
+- **Deviation**: Added `agentRole` parameter to `ReasoningEngine.nextStep()` 
+  interface. Replaced weak advisory tool instructions in the system prompt 
+  with a per-role `STRICT TOOL BINDING CONTRACT` injected dynamically at 
+  reasoning time. Added `/reset` Telegram command that clears both workspace 
+  scope AND `PersistentChatMemoryStore` SQLite rows for the session.
+- **Rationale**: Tool Bias caused the LLM to invoke the `github` tool during 
+  pure code generation and debugging tasks. Context Poisoning caused prior 
+  session history to corrupt unrelated queries. The strict binding contract 
+  eliminates tool eagerness per persona. The `/reset` command provides a 
+  clean testing surface without requiring JVM restart or manual DB surgery.

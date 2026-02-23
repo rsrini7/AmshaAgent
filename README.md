@@ -53,7 +53,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 1.  **REST API:** The edge layer (`AgentResource`) intercepts the request on a Virtual Thread and provisions a session.
 2.  **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 3.  **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or bankrupt).
-4.  **ProcessIsolationExecutor:** The Sandbox layer dynamically spins up a rootless Podman container, passing credentials securely and capping CPU/Memory.
+4.  **ProcessIsolationExecutor:** The ToolRegistry enforces sandboxing by default. Tool implementations declare their sandbox command, and the registry dynamically spins up a rootless Podman container with capped CPU/Memory. Trusted in-memory tools may explicitly opt-out via requiresSandbox() = false.
 5.  **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 
 ```mermaid
@@ -72,7 +72,8 @@ graph TD
     Loop -->|Micrometer| Prom[Prometheus /q/metrics]
     
     subgraph Sandbox Layer
-        ToolReg --> Isolator[ProcessIsolationExecutor]
+        ToolReg --> AgentToolImpl[AgentTool Implementation]
+        AgentToolImpl -->|requiresSandbox=true| Isolator[ProcessIsolationExecutor]
         Isolator -->|Rootless Mounts| Podman[(Podman Container)]
     end
 ```

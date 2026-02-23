@@ -101,6 +101,26 @@ public class TelegramAgentHandler {
         // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
+        // Intercept /reset — wipes both workspace scope AND persistent chat memory
+        if (text != null && text.trim().equalsIgnoreCase("/reset")) {
+            log.infof("[TelegramHandler] User requested session reset for %s", baseId);
+            
+            // 1. Wipe the workspace scope (clears IN_PROGRESS / AWAITING_APPROVAL state)
+            workspaceManager.terminateSession(baseId);
+            
+            // 2. Wipe persistent chat memory from SQLite so context poisoning is cleared
+            chatMemoryStore.deleteMessages(baseId);
+            
+            log.infof("[TelegramHandler] Session %s fully reset — workspace and chat memory cleared", baseId);
+            
+            producerTemplate.sendBodyAndHeaders(
+                    "telegram:bots?authorizationToken=" + botToken,
+                    "🧹 Session wiped. Memory and tool states cleared. Ready for a new task.",
+                    java.util.Map.of("CamelTelegramChatId", chatId)
+            );
+            return;
+        }
+
         // Handle commands first
         if (text.equalsIgnoreCase("/approve")) {
             reply(chatId, handleApprovalDecision(chatId, userId, baseId, true));

@@ -3,7 +3,9 @@ package com.arcclaw.core.tools;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.InjectMock;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +29,9 @@ class ToolRegistryTest {
 
     @Inject
     ToolRegistry registry;
+
+    @InjectMock
+    ProcessIsolationExecutor mockIsolationExecutor;
 
     @Inject
     WorkspaceContext workspaceContext;
@@ -109,7 +114,7 @@ class ToolRegistryTest {
      */
     @Test
     void testRequiresSecretExtraction() {
-        var secrets = ToolRegistry.extractRequiredSecrets(GithubTool.class);
+        var secrets = ToolRegistry.extractRequiredSecrets(GithubTool.class, "sandboxCommand");
         assertEquals(1, secrets.size(), "GithubTool should declare 1 secret");
         assertEquals("GITHUB_TOKEN", secrets.get("GITHUB_TOKEN"),
                 "GITHUB_TOKEN env var should map to GITHUB_TOKEN vault key");

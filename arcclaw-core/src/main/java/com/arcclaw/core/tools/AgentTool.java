@@ -2,6 +2,7 @@ package com.arcclaw.core.tools;
 
 import com.arcclaw.core.security.ToolOperation;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -42,6 +43,35 @@ public interface AgentTool {
      * before calling {@link #execute(Map)}.
      */
     ToolOperation requiredOperation();
+
+    /**
+     * Whether this tool's execution should be wrapped by ProcessIsolationExecutor.
+     * Defaults to {@code true} — opt-OUT is the exception, not the rule.
+     * <p>
+     * Set to {@code false} only for trusted in-memory tools that do not
+     * require OS-level isolation (e.g., pure computation or local read-only access).
+     */
+    default boolean requiresSandbox() {
+        return true;
+    }
+
+    /**
+     * The OS command this tool executes inside the sandbox container.
+     * <p>
+     * IMPORTANT: Place {@code @RequiresSecret} annotations on THIS method,
+     * NOT on {@link #execute(Map)}. The ToolRegistry scans this method
+     * reflectively to build the ephemeral env-file for secret injection.
+     * <p>
+     * Only called by the registry when {@link #requiresSandbox()} returns true.
+     *
+     * @param params Tool-specific parameters (same as execute).
+     * @return The OS command tokens to run inside the sandbox.
+     * @throws IllegalArgumentException if required params are missing.
+     */
+    default List<String> sandboxCommand(Map<String, Object> params) {
+        throw new UnsupportedOperationException(
+            name() + " declared requiresSandbox=true but did not implement sandboxCommand()");
+    }
 
     /**
      * Execute the tool with the given parameters.

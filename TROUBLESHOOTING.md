@@ -45,6 +45,7 @@
 | **Security** | `IllegalStateException` | Active session required to store secrets. | Verify `WorkspaceScopeHolder.set()` is called BEFORE test logic in `@BeforeEach`. |
 | **Security** | `GenericJDBCException` | `getBlob` not implemented by SQLite. | Remove `@Lob` from entity `byte[]` fields to use `getBytes()`. |
 | **Security** | `HibernateException` | ManagedEntity in two persistence contexts. | Use `entityManager.merge()` instead of `persist()` for existing entities in tests. |
+| **Security** | Silent Credential Failure | Annotation moved from `execute()` to `sandboxCommand()`. | Refactored `extractRequiredSecrets` to accept a `methodName` parameter. |
 | **Sandbox** | Zombie Containers | JVM `SIGTERM` didn't signal the Podman process. | Verify the `@PreDestroy` method in `ProcessIsolationExecutor` is calling `podman stop`. |
 | **Native** | Predictable Nonces | BC initialized at build-time instead of run-time. | Verify fine-grained `native-image.properties` flags are correctly applied. |
 
@@ -1081,3 +1082,17 @@ agentLoop.run(...);
 * **Symptom:** If a session previously hit a `/deny` or a system error, it would persistently wipe all memory of the conversation when a new prompt was sent.
 * **Root Cause:** The "Hard Wipe" continuity check. The system was programmed to call `terminateSession()` (which deletes all SQLite chat history) if the previous checkpoint status was `FAILED`.
 * **Resolution:** Replaced the "Hard Wipe" with a "Soft Reset." The system now only clears the internal tool-execution JSON (`stateJson`) while leaving the `ChatMemoryStore` untouched, allowing the agent to remember the past even after a specific tool failure.
+
+---
+
+### 15. Context Poisoning and Tool Bias (Phase 24)
+
+#### 15.1 Tool Eagerness / Persona Overlap
+* **Symptom:** The `coder` or `debugger` agent attempts to use forbidden tools like `github` for tasks that should be text-only.
+* **Root Cause:** Large context windows and weak system prompt advisories allow the LLM to ignore role boundaries.
+* **Resolution:** Implemented a **STRICT TOOL BINDING CONTRACT**. The `LangChainReasoningEngine` now dynamically injects a hard contract into the system prompt based on the active persona. For `coder` and `debugger`, the contract explicitly states: `PERMITTED TOOLS: None`. Any attempt to violate this contract is a critical failure.
+
+#### 15.2 Cross-Task History Bleed
+* **Symptom:** During testing, the agent recalls details from a previous, unrelated task (e.g., a "secret code" or specific instructions) because the session ID is reused.
+* **Root Cause:** Aggressive chat memory persistence. While beneficial for long-running tasks, it prevents clean-slate testing for developers.
+* **Resolution:** Implemented the `/reset` command in `TelegramAgentHandler`. This command explicitly triggers `workspaceManager.terminateSession()` (wiping scope/beans) and `chatMemoryStore.deleteMessages()` (purging SQLite rows), providing a verified "cold start" for testing.

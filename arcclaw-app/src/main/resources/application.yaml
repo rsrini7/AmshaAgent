@@ -294,7 +294,7 @@ mp:
         log-responses: true
     hibernate-orm:
       log:
-        sql: true
+        sql: false
     log:
       level: DEBUG
       category:
