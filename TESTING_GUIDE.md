@@ -94,7 +94,7 @@ Do not try to bridge Podman Desktop into Ubuntu. Instead, install Podman nativel
 
 **Step 1: Open your Ubuntu WSL terminal**
 
-Follow [PODMAN SETUP WSL2](./PODMAN_SETUP_WSL2.md)
+Follow [WSL2 SETUP GUIDE](./WSL2_SETUP_GUIDE.md)
 
 **Step 2: Build the Tool Runner Image (Inside Ubuntu)**
 
@@ -151,7 +151,7 @@ The `ProcessIsolationExecutor` determines its capability **only once** at startu
 ### 3. The Windows OS Bypass
 ArcClaw contains a safety guard: if `os.name` contains "Windows", it knows it cannot use Linux Cgroups/Namespaces. 
 - Even if your strategy is `PODMAN`, if the circuit breaker trips, the fallback to `NAMESPACE` will immediately see it is on Windows and skip to `executeDirectly()`.
-- **Solution**: Use the [Native Podman Setup Guide](./PODMAN_SETUP_WSL2.md) to verify true container isolation inside WSL2.
+- **Solution**: Use the [WSL2 Setup Guide](./WSL2_SETUP_GUIDE.md) to verify true container isolation inside WSL2.
 
 ### 4. Verification Checklist
 To mathematically confirm your isolation level, check the **first 50 lines** of the console output during boot:
