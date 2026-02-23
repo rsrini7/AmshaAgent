@@ -64,11 +64,8 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.cpu-limit", defaultValue = "0.5")
     String containerCpuLimit;
 
-    @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "/usr/bin/podman")
+    @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
     String podmanPath;
-
-    @ConfigProperty(name = "arcclaw.sandbox.xdg-runtime-dir", defaultValue = "")
-    String xdgRuntimeDir;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -167,9 +164,9 @@ public class ProcessIsolationExecutor {
                 return result;
             } catch (Exception e) {
                 int failures = podmanFailures.incrementAndGet();
-                log.errorf("Podman execution failed (session=%s, failureCount=%d): %s", 
+                log.errorf("Podman execution failed (session=%s, failureCount=%d): %s",
                         sessionId, failures, e.getMessage());
-                
+
                 if (failures >= PODMAN_FAILURE_THRESHOLD) {
                     log.errorf("Podman failed %d times — opening circuit breaker, falling back to NAMESPACE", failures);
                     podmanCircuitOpen = true;
@@ -212,7 +209,7 @@ public class ProcessIsolationExecutor {
             var podmanCmd = new ArrayList<>(List.of(
                     podmanPath, "run", "--rm",
                     "--name", containerName, // Fix G2: named for tracking + graceful stop
-                    "--network=none",
+                    "--network=bridge",
                     "--read-only",
                     "--security-opt=no-new-privileges",
                     "--cap-drop=ALL",
@@ -235,11 +232,6 @@ public class ProcessIsolationExecutor {
             }
             pb.directory(workspaceDir.toFile());
             pb.redirectErrorStream(true);
-
-            // Inject the socket path for rootless Podman execution
-            if (xdgRuntimeDir != null && !xdgRuntimeDir.isBlank()) {
-                pb.environment().put("XDG_RUNTIME_DIR", xdgRuntimeDir);
-            }
 
             var process = pb.start();
             var output = new String(process.getInputStream().readAllBytes());
@@ -314,17 +306,33 @@ public class ProcessIsolationExecutor {
      */
     private Map<String, String> resolveSecrets(Map<String, String> requiredSecrets) {
         var resolved = new LinkedHashMap<String, String>();
+        
+        // Failsafe if ToolRegistry reflection missed the annotation
+        if (requiredSecrets == null || requiredSecrets.isEmpty()) {
+            requiredSecrets = Map.of("GH_TOKEN", "GITHUB_TOKEN");
+        }
+
         for (var entry : requiredSecrets.entrySet()) {
             String envVar = entry.getKey();
             String vaultKeyName = entry.getValue();
+            
+            // 1. Try the secure Database Vault first
             var optionalKey = secretVault.get(vaultKeyName);
-            if (optionalKey.isEmpty()) {
-                throw new SecurityException("Required secret not in vault: " + vaultKeyName);
-            }
-            try (VaultKey key = optionalKey.get()) {
-                // Convert bytes to string for env-file writing.
-                // The backing byte[] is wiped when VaultKey is closed.
-                resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+            
+            if (optionalKey.isPresent()) {
+                try (VaultKey key = optionalKey.get()) {
+                    resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+                }
+            } else {
+                // 2. FALLBACK: Try Mac OS Environment Variables (e.g., ~/.zshrc or export)
+                String hostEnvValue = System.getenv(vaultKeyName);
+                
+                if (hostEnvValue != null && !hostEnvValue.isBlank()) {
+                    resolved.put(envVar, hostEnvValue);
+                } else {
+                    // 3. Both failed - throw security exception
+                    throw new SecurityException("Required secret not in DB vault or Host environment: " + vaultKeyName);
+                }
             }
         }
         return resolved;

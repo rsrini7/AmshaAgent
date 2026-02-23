@@ -1242,3 +1242,131 @@ profiles:
 ```
 
 Because of this profile, `docker compose up` completely ignores the service. It acts purely as a centralized blueprint for building the static image, keeping our DevOps workflow clean and maintaining a single source of truth.
+
+Here is the complete documentation of our findings. You can copy and paste this directly into your `TroubleshootingGuide.md` file under a new section for **macOS & Podman Sandbox Troubleshooting**.
+
+---
+
+## macOS & Podman Sandbox Troubleshooting
+
+Transitioning the ArcClaw Tier 2 Sandbox from WSL2/Linux to macOS introduces architectural differences regarding file paths, Unix sockets, and secret management. Below is a comprehensive guide to the errors encountered and their resolutions.
+
+### 1. The macOS Path Trap
+
+**Error:** `java.io.IOException: Cannot run program "/usr/bin/podman": Exec failed, error: 2 (No such file or directory)`
+
+**Root Cause:**
+macOS Apple Silicon (and System Integrity Protection) prevents installing user binaries in `/usr/bin/`. Homebrew installs Podman in `/opt/homebrew/bin/podman`. A hardcoded Linux path in `application.yaml` or `ProcessBuilder` will instantly trip the circuit breaker and force the fallback strategy.
+
+**Resolution:**
+Remove absolute Linux paths from the configuration. Rely on the system `PATH`.
+
+```yaml
+# application.yaml
+arcclaw:
+  sandbox:
+    strategy: PODMAN
+    podman-path: podman # Do not use /usr/bin/podman on macOS
+
+```
+
+### 2. The Linux Socket Hangover (`XDG_RUNTIME_DIR`)
+
+**Error:**
+`Podman execution failed... Failed to obtain podman configuration: lstat /run: no such file or directory`
+
+**Root Cause:**
+WSL2 requires explicitly setting `XDG_RUNTIME_DIR=/run/user/1000` for headless Java processes to find the Podman socket. macOS does not use the `/run` directory structure; its lightweight Podman Machine VM handles socket routing natively.
+
+**Resolution:**
+Remove any configuration or Java code injecting `XDG_RUNTIME_DIR` into the `ProcessBuilder` environment when running on macOS.
+
+### 3. The Docker Hub Pull Trap
+
+**Error:**
+`Tool failed (exit 125): Resolving "arcclaw-tool-runner" ... Trying to pull docker.io/library/arcclaw-tool-runner:latest... requested access to the resource is denied`
+
+**Root Cause:**
+macOS does not run containers natively; it uses a background VM (`podman machine`). If the custom `arcclaw-tool-runner` image was built via Docker Desktop, the Podman daemon cannot see it. It will attempt to pull the local image from the public internet (Docker Hub) and fail.
+
+**Resolution:**
+Build the image explicitly inside the active Podman daemon:
+
+```bash
+podman machine start
+podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
+
+```
+
+### 4. The Ephemeral Container Network Block
+
+**Error:**
+The container boots, but tools requiring internet access (like `gh` fetching a repository) timeout or fail.
+
+**Root Cause:**
+The `ProcessIsolationExecutor` natively hardcodes `--network=none` for maximum security, creating an air-gapped container. Tools that make external API calls will silently fail inside the sandbox.
+
+**Resolution:**
+Update `ProcessIsolationExecutor.java` to allow bridged networking for tools requiring outbound API access.
+
+```java
+// In ProcessIsolationExecutor.java -> executeInContainer()
+var podmanCmd = new ArrayList<>(List.of(
+        podmanPath, "run", "--rm",
+        "--name", containerName, 
+        "--network=bridge", // Changed from 'none' to allow outbound API calls
+        "--read-only",
+        // ...
+));
+
+```
+
+### 5. The Session-Scoped Vault Dilemma
+
+**Error:**
+`Podman execution failed... Required secret not in vault: GITHUB_TOKEN`
+
+**Root Cause:**
+ArcClaw's `SecretVaultImpl` is an encrypted, session-scoped SQLite database. Every time `/reset` is triggered via Telegram, a new session ID is generated with an empty vault. Developer tools (like `gh`) require a global API token, but typing it into Telegram on every reset is poor DX.
+
+**Resolution:**
+Implement an OS-level environment variable fallback in `ProcessIsolationExecutor.java`. If the secure DB vault is empty, allow the executor to read from the host machine's environment (e.g., `~/.zshrc` exports) before failing.
+
+```java
+// In ProcessIsolationExecutor.java -> resolveSecrets()
+var optionalKey = secretVault.get(vaultKeyName);
+if (optionalKey.isPresent()) {
+    try (VaultKey key = optionalKey.get()) {
+        resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+    }
+} else {
+    // FALLBACK: Check Mac OS Environment Variables for Developer global tools
+    String hostEnvValue = System.getenv(vaultKeyName);
+    if (hostEnvValue != null && !hostEnvValue.isBlank()) {
+        resolved.put(envVar, hostEnvValue);
+    } else {
+        throw new SecurityException("Required secret not in DB vault or Host environment: " + vaultKeyName);
+    }
+}
+
+```
+
+### 6. The CLI Variable Name Mismatch
+
+**Error:**
+`Tool failed (exit 4): To get started with GitHub CLI, please run: gh auth login Alternatively, populate the GH_TOKEN environment variable...`
+
+**Root Cause:**
+The secret vault stores the token as `GITHUB_TOKEN`, but the `gh` binary strictly prioritizes `GH_TOKEN`. If mapped incorrectly, the container receives the secret under a name the tool ignores.
+
+**Resolution:**
+Ensure the `@RequiresSecret` annotation explicitly maps the internal vault key to the target tool's expected environment variable name.
+
+```java
+// In GithubTool.java
+@RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
+public List<String> sandboxCommand(Map<String, Object> params) {
+    // ...
+}
+
+```

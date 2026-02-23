@@ -15,10 +15,13 @@ public class PodmanImageHealthCheck implements HealthCheck {
     @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "docker.io/library/alpine:latest")
     protected String containerImage;
 
+    @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
+    String podmanPath;
+
     @Override
     public HealthCheckResponse call() {
         try {
-            ProcessBuilder pb = new ProcessBuilder("/usr/bin/podman", "image", "exists", containerImage);
+            ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "exists", containerImage);
             Process process = pb.start();
             boolean finished = process.waitFor(2, TimeUnit.SECONDS);
 

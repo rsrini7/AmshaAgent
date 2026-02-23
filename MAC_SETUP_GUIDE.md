@@ -1,8 +1,13 @@
 brew install podman
 
-podman machine init
+podman machine init --memory 6144 --cpus 4 --disk-size 40
+
 podman machine start
 
+----
+
+
+below points from brew gave..
 
 Starting machine "podman-machine-default"
 
@@ -28,6 +33,10 @@ following command in your terminal session:
 Machine "podman-machine-default" started successfully
 
 
+---
+
+mvnw clean package -pl arcclaw-app -am -DskipTests
+
 ----
 
 /usr/libexec/java_home -V
@@ -35,3 +44,17 @@ Machine "podman-machine-default" started successfully
 jenv add /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
 
 jenv global 25.0
+
+
+graalvm install then do below
+
+./mvnw clean package -Pnative -Dquarkus.native.container-build=false -DskipTests
+
+
+./mvnw clean package -pl arcclaw-app -am -DskipTests
+
+./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+
+----
+
+podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/

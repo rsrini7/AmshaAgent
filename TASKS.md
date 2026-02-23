@@ -341,7 +341,7 @@
 ---
 
 ## Phase 26 — Sandbox Isolation Hardening
-- [x] Step 1: Ingest `podman-path` and `xdg-runtime-dir` into `ProcessIsolationExecutor.java` <!-- id: 87 -->
+- [x] Step 1: Ingest `podman-path` into `ProcessIsolationExecutor.java` <!-- id: 87 -->
 - [x] Step 2: Extract and log raw `STDERR` from failing Podman processes <!-- id: 88 -->
 - [x] Step 3: Hardcode absolute `/usr/bin/podman` path into `application.yaml` (Dev/Prod) <!-- id: 89 -->
 - [x] Step 4: Create standalone `WSL2_SETUP_GUIDE.md` (SDKMAN!, JDK 25, Podman) <!-- id: 90 -->

@@ -153,6 +153,7 @@ quarkus:
   # NATIVE IMAGE
   # ---------------------------------------------------------------------------
   native:
+    # native-image-xmx: 4g # require 8GB machine with podman
     resources:
       includes:
         - "META-INF/services/*"
@@ -189,7 +190,7 @@ arcclaw:
   channel:
     telegram:
       enabled: true
-      bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
+      bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
       default-autonomy-level: SUPERVISED
 
   vault:
@@ -218,8 +219,7 @@ arcclaw:
 
   sandbox:
     strategy: PODMAN
-    podman-path: /usr/bin/podman
-    xdg-runtime-dir: /run/user/1000
+    podman-path: podman
     container-image: "arcclaw-tool-runner:latest"
     timeout-seconds: 30
     network: none

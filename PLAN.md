@@ -1150,7 +1150,7 @@ Harden the infrastructure layer to ensure reliable container execution across di
 ## Design Decisions
 
 > [!IMPORTANT]
-> **Path Fixation**: Moved from dynamic `PATH` discovery (which often fails in headless JVM processes) to explicit configuration. The `podman-path` and `xdg-runtime-dir` are now first-class properties in `application.yaml`.
+> **Path Fixation**: Moved from dynamic `PATH` discovery (which often fails in headless JVM processes) to explicit configuration. The `podman-path` is now first-class properties in `application.yaml`.
 
 > [!TIP]
 > **Visibility via Volatility**: Enforced raw `STDERR` extraction in `ProcessIsolationExecutor`. This ensures that OS-level rejections (like Podman socket permission errors) are no longer swallowed by the fallback mechanism, making the "invisible failures" visible.
@@ -1166,7 +1166,6 @@ Harden the infrastructure layer to ensure reliable container execution across di
 
 ### [arcclaw-app]
 #### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
-- Added default values for `arcclaw.sandbox.podman-path` and `arcclaw.sandbox.xdg-runtime-dir`.
 - Enabled `PODMAN` strategy by default in `%dev` profile to encourage isolated development.
 
 ### Documentation
