@@ -54,6 +54,13 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 2.  **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 3.  **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or bankrupt).
 4.  **ProcessIsolationExecutor:** The Sandbox layer enforces three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in dev mode (`strategy: NONE`). Tool schemas are also filtered per persona — coder and debugger roles receive an empty tool list, making tool bias architecturally impossible regardless of LLM instruction.
+
+> [!NOTE]
+> **Sandbox Degradation Details**: The ProcessIsolationExecutor operates in three tiers:
+> - **Production** (`%prod`): Full Podman rootless container isolation.
+> - **Namespace fallback**: If Podman is unavailable, Linux `unshare` namespaces.
+> - **Development** (`%dev`, strategy: NONE): Direct host execution — requires `gh` CLI installed on the host PATH. No container isolation.
+
 5.  **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 
 ```mermaid
@@ -338,7 +345,7 @@ ArcClaw features an enterprise-grade, Virtual-Thread-backed Telegram network ada
 It features several advanced conversational mechanisms:
 *   **Deterministic Session Routing**: Uses `UUID.nameUUIDFromBytes(chatId + ":" + userId)` to ensure a user's session persists exactly across bot or server restarts.
 *   **Semantic Intent Classification**: Every incoming message passes through the `IntentClassifierService` (`llama-3.1-8b-instant`) to auto-route your task to the correct specialist (Vishnu, Brahma, Shiva, or Saraswati).
-*   **Task Amnesia (Goldfish Memory)**: To prevent context-poisoning, sessions are softly reset upon `COMPLETED` or `FAILED` checkpoints, wiping the internal ReAct loop state to prevent ghost tool triggers, while retaining the LangChain conversational history.
+*   **Task Amnesia (Goldfish Memory)**: To prevent context-poisoning, sessions undergo a **Soft Reset** upon `COMPLETED` or `FAILED` checkpoints. This wipes the internal ReAct loop state to prevent "ghost" tool triggers, while retaining the LangChain conversational history for follow-up turns.
 *   **Human-in-the-Loop (HITL)**: Tool calls requiring `SUPERVISED` autonomy pause the agent. You can review the intention and reply with `/approve` or `/deny`.
 
 Here is the exact step-by-step guide to perform the Live Integration Test.
@@ -412,13 +419,6 @@ ArcClaw enforces strict module boundaries to guarantee clean architectural separ
 *   **`arcclaw-app/`**: The entrypoint. REST endpoints, `application.yaml` configuration, deployment integration tests, and application bootstrapping.
 
 ---
-
-> [!NOTE]
-> **Sandbox Degradation**: The ProcessIsolationExecutor operates in three tiers:
-> - **Production** (`%prod`): Full Podman rootless container isolation
-> - **Namespace fallback**: If Podman is unavailable, Linux `unshare` namespaces
-> - **Development** (`%dev`, strategy: NONE): Direct host execution — 
->   requires `gh` CLI installed on the host PATH. No container isolation.
 
 ---
 
