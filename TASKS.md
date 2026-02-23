@@ -326,4 +326,14 @@
 - [x] Step 7: Update `DEVIATIONS.md` with Deviation #19 <!-- id: 81 -->
 - [x] Step 8: Document and sync all Phase 24 changes across `.md` files <!-- id: 82 -->
 
+---
 
+## Phase 25 — Dynamic Schema Binding & Context Pruning
+- [ ] Sprint 25A: Dynamic Tool Schema Binding
+  Strip tools from LangChain ChatRequest payload based on `agentRole`.
+  `coder` + `debugger` → empty `toolSpecifications` list (not just prompt constraint).
+  This closes the schema-presence jailbreak confirmed in Phase 24 logs.
+- [ ] Sprint 25B: Context Window Pruning  
+  Add rolling window to `PersistentChatMemoryStore` — retain last N messages
+  per session rather than unbounded history. Prevents context drag when
+  switching task domains within a session. N=10 is a reasonable starting point.

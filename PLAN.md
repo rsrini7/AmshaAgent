@@ -1129,3 +1129,14 @@ Address architectural weaknesses leading to LLM tool eagerness and history bleed
 - ✅ **Tool Bias**: Verified `brahma` (coder) no longer attempts to invoke `github` for pure Java generation tasks.
 - ✅ **Context Poisoning**: Verified `/reset` successfully wipes the "memory of a goldfish" for testing subsequent task isolation.
 - ✅ **Regression**: `mvn clean verify` confirmed that existing approval flows and autonomous loops are unaffected by the signature changes.
+
+---
+
+# Phase 25 — Dynamic Schema Binding & Context Pruning (Planned)
+
+Address the LLM schema-presence jailbreak and context window drag identified during V1.0.0 verification.
+
+## Proposed Changes
+### Core Module — Agents & Memory
+- [PLANNED] `LangChainReasoningEngine.java`: Intercept and filter the `ToolSpecification` list passed to the LLM based on `agentRole`. 
+- [PLANNED] `PersistentChatMemoryStore.java`: Implement a rolling window (e.g., retain last 10 messages) during the `getMessages` hydration phase to prevent token exhaustion and goal-confusion across long-lived sessions.
