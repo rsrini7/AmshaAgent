@@ -32,7 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>
  * Resource caps (Fix C2): --memory, --cpus, --pids-limit, --ulimit.
  * Circuit breaker (Fix C3): auto-fallback to NAMESPACE after 3 Podman failures.
- * Secret injection (v4.1): ephemeral env-file, deleted in finally, never in
+ * <li><strong>Security</strong>:
+ * Secret injection (V1.0.0): ephemeral env-file, deleted in finally, never in
  * process args.
  * OTel tracing: child spans attached to session root span.
  * Fix G2: @PreDestroy graceful container shutdown.

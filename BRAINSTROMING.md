@@ -63,7 +63,7 @@ Based on the `REQUIREMENTS.md` and the end-to-end architecture we just finalized
 
 You have built ArcClaw as a "Headless Enterprise AI Kernel." By exposing everything through a Virtual-Thread-backed REST API (`/api/v1/sessions`), you have completely decoupled the "Brain" from the "Mouth."
 
-However, looking at the broader Claw ecosystem (OpenClaw, ZeroClaw, NanoBot), those systems often have native bindings or gateways to consume Telegram, Slack, or Discord messages directly. ArcClaw v1.0 currently expects a client to speak HTTP REST and aggressively poll the `/status` endpoint.
+However, looking at the broader Claw ecosystem (OpenClaw, ZeroClaw, NanoBot), those systems often have native bindings or gateways to consume Telegram, Slack, or Discord messages directly. ArcClaw V1.0.0 currently expects a client to speak HTTP REST and aggressively poll the `/status` endpoint.
 
 Here is the Senior Architect's breakdown of what is ready, what is missing, and the exact next steps to make ArcClaw the brain for your Telegram/NanoBot ecosystem.
 
@@ -92,7 +92,7 @@ Because the OpenClaw Gateway expects a real-time, event-driven stream (to update
 
 To make ArcClaw a native backend for the OpenClaw Control UI and Telegram channels, we need to add a WebSocket Adapter to Quarkus.
 
-🚀 Next Step: The ArcClaw WebSocket Extension (v1.1)
+🚀 Next Step: The ArcClaw WebSocket Extension (v1.1.0)
 Instead of the OpenClaw Gateway having to "ask" ArcClaw for updates, ArcClaw will stream its thoughts live.
 
 Add the Dependency: We will add quarkus-websockets-next to arcclaw-app.
@@ -107,7 +107,7 @@ Because your OpenClaw Control UI is already built to consume streamed chat event
 
 ---
 
-### 🚀 The Next Step: Building the "Channel Gateway" (v1.1)
+### 🚀 The Next Step: Building the "Channel Gateway" (v1.1.0)
 
 To integrate ArcClaw seamlessly into the Telegram/NanoBot ecosystem, you need to implement **The Callback Pattern (Webhooks)** or an **Event-Driven Bus**.
 

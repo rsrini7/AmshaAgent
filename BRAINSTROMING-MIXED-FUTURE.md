@@ -15,7 +15,7 @@ Right now, ArcClaw is explicitly constrained to a **Strict Singleton Topology** 
 
 ### 2. The AI/ML Lead: Infinite Memory & Swarms
 
-ArcClaw v1.0 has *short-term* session memory (the `AgentCheckpoint`), but it has no *long-term* memory. If Vishnu solves a complex coding problem on Monday, he forgets it by Tuesday.
+ArcClaw V1.0.0 has *short-term* session memory (the `AgentCheckpoint`), but it has no *long-term* memory. If Vishnu solves a complex coding problem on Monday, he forgets it by Tuesday.
 
 * **Episodic Memory (RAG & Vector DB):** Integrate a Vector Database (like Qdrant, Milvus, or pgvector). Create a new `MemoryLayer` where the `SaraswatiAgent` can query past successful session resolutions across the entire enterprise to inform current tasks.
 * **Dynamic Swarms vs. Static Routing:** Currently, you have four hardcoded roles (`coordinator`, `researcher`, `coder`, `debugger`). A massive platform uses dynamic swarms. Allow the `VishnuAgent` to dynamically spawn ephemeral sub-agents with custom system prompts tailored to the exact sub-task, rather than relying strictly on the static `@AgentRole` roster.

@@ -1,4 +1,4 @@
-# ArcClaw v1.0 — Frequently Asked Questions (FAQ)
+# ArcClaw V1.0.0 — Frequently Asked Questions (FAQ)
 
 This document explains the "Why" behind ArcClaw's architectural decisions, operational quirks, and runtime behaviors. If you are experiencing an actual crash or stack trace, please refer to [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) instead.
 

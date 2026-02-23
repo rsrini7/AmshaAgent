@@ -1,4 +1,4 @@
-# ArcClaw v1.0 — Phases 0–10 Walkthrough
+# ArcClaw V1.0.0 — Phases 0–10 Walkthrough
 
 > **Cross-Reference**: [PLAN.md](./PLAN.md) | [TASKS.md](./TASKS.md) | [DEVIATIONS.md](./DEVIATIONS.md) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | [FAQ.md](./FAQ.md)
 
@@ -328,7 +328,7 @@ Implemented a paused execution flow for the Telegram channel. When an agent atte
 
 ## Phase 19: Sprint 2C & Day 2 Hardening ✅
 
-Completed the final grooming of the v1.1 feature set and drafted the v1.2 mission.
+Completed the final grooming of the V1.0.0 feature set and drafted the V1.0.0 mission.
 
 **Key Accomplishments:**
 - **Dynamic Role Routing**: Implemented a keyword-based intent router in `TelegramAgentHandler` to dynamically dispatch between `coordinator`, `researcher`, and `coder` agents.
@@ -484,7 +484,7 @@ I have expanded the Picocli CLI with interactive REPL and background daemon mana
 
 ## Phase 22: Final Pre-Release Hardening & Agent UX ✅
 
-Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING.md`, several critical architectural edges cases were resolved to ensure conversational consistency and robust tool execution before tagging `v1.2`.
+Following a "HITL & Memory Testing" review matrix documented in `TROUBLESHOOTING.md`, several critical architectural edges cases were resolved to ensure conversational consistency and robust tool execution before tagging `V1.0.0`.
 
 ### Key Fixes
 
