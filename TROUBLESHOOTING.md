@@ -1568,6 +1568,50 @@ The OpenTelemetry SDK is attempting to export traces to a local collector (`loca
 
 **Resolution:**
 Disable the OTel SDK in the dev profile by adding `%dev.quarkus.otel.sdk.disabled=true` to the application configuration.
+---
+
+## 24. PII Regex Collision (Greedy Phone Match)
+
+**Symptom:** PII redaction labels like `[REDACTED-PHONE]` appear in places where `[REDACTED-IP]` or `[REDACTED-CARD]` should be. E.g., `127.0.0.1` becomes `[REDACTED-PHONE].[REDACTED-PHONE].0.1`.
+
+**Root Cause:**
+The international phone number regex (`\+?[1-9]\d{1,14}`) is broad enough to match segments of IP addresses or clusters of digits in Credit Cards and Aadhaar numbers. If the phone pattern is evaluated before more structured patterns, it "steals" the match.
+
+**Resolution:**
+Strictly reorder the `RULES` list in `PiiScanReflex.java`. Higher-entropy, highly structured patterns (JWT, Credit Card, Aadhaar, SSN, PAN, IPv4) MUST be evaluated before broad digit-based patterns like Phone Numbers.
+
+---
+
+## 25. Two-Pass Reflex Testing (NullPointerException)
+
+**Symptom:** JUnit tests fail with `NullPointerException` at `reflexResult.commandResponse()` in `TelegramAgentHandler.java`.
+
+**Root Cause:**
+The `ReflexRegistry` was refactored from returning `Optional<String>` to the new `ReflexResult` record to support two-pass sanitization. Tests that mock `ReflexRegistry` but still return `Optional` (or `null`) break the handler logic.
+
+**Resolution:**
+Update all `@InjectMock` configurations for `ReflexRegistry` to return a valid `ReflexResult`. If a test is not testing a specific reflex intercept, use a "passthrough" answer:
+```java
+when(reflexRegistryMock.processIfReflex(anyString(), anyString(), anyString()))
+    .thenAnswer(inv -> new ReflexResult(Optional.empty(), inv.getArgument(2)));
+```
+
+---
+
+## 26. Cross-Module Build Stall (`cannot find symbol ReflexResult`)
+
+**Symptom:** Running `mvn test -pl arcclaw-app` fails with `cannot find symbol ReflexResult` even though the file exists in `arcclaw-core`.
+
+**Root Cause:**
+Maven doesn't automatically detect changes in sibling modules if you only target a single sub-module without installing the siblings first. If `arcclaw-core` hasn't been compiled/indexed with the new `ReflexResult` class, `arcclaw-app` cannot find it during its own compilation phase.
+
+**Resolution:**
+Build the required modules together in one reactor command:
+```bash
+mvn clean test -pl arcclaw-core,arcclaw-app
+```
+Alternatively, run `mvn clean install -DskipTests` to sync all local artifacts before running targeted tests.
+
 ## Test Infrastructure
 
 ### 🔴 T-1: `TestEngine failed to discover tests` (Multi-Module Maven `-am` Flag)

@@ -38,25 +38,25 @@ class ReflexRegistryTest {
 
     @Test
     void testUnknownInputReturnsEmpty() {
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-1", "user-1", "Hello ArcClaw");
-        assertTrue(result.isEmpty(), 
+        assertTrue(result.commandResponse().isEmpty(), 
                 "Non-reflex input must return Optional.empty()");
         verifyNoInteractions(workspaceManager);
     }
 
     @Test
     void testNullInputReturnsEmpty() {
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-1", "user-1", null);
-        assertTrue(result.isEmpty());
+        assertTrue(result.commandResponse().isEmpty());
     }
 
     @Test
     void testBlankInputReturnsEmpty() {
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-1", "user-1", "   ");
-        assertTrue(result.isEmpty());
+        assertTrue(result.commandResponse().isEmpty());
     }
 
     // ── Log injection guard ─────────────────────────────────────────────────
@@ -68,9 +68,9 @@ class ReflexRegistryTest {
         String longInput = "/reset" + "A".repeat(250);
         // ResetReflex.matches() uses equalsIgnoreCase — this won't match
         // so it tests that the registry handles long non-matching input cleanly
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-1", "user-1", longInput);
-        assertTrue(result.isEmpty(), 
+        assertTrue(result.commandResponse().isEmpty(), 
                 "Long non-matching input must return empty, not throw");
     }
 
@@ -78,31 +78,31 @@ class ReflexRegistryTest {
 
     @Test
     void testResetReflexWipesWorkspaceAndMemory() {
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-reset", "user-1", "/reset");
 
-        assertTrue(result.isPresent());
-        assertTrue(result.get().contains("wiped"));
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().contains("wiped"));
         verify(workspaceManager).terminateSession("session-reset");
         verify(chatMemoryStore).deleteMessages("session-reset");
     }
 
     @Test
     void testResetReflexCaseInsensitive() {
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-1", "user-1", "/RESET");
-        assertTrue(result.isPresent());
+        assertTrue(result.commandResponse().isPresent());
     }
 
     // ── HaltReflex ──────────────────────────────────────────────────────────
 
     @Test
     void testHaltReflexTerminatesSession() {
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-halt", "user-1", "/halt");
 
-        assertTrue(result.isPresent());
-        assertTrue(result.get().contains("Halted"));
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().contains("Halted"));
         verify(workspaceManager).terminateSession("session-halt");
         // Halt must NOT wipe chat memory — different from reset
         verifyNoInteractions(chatMemoryStore);
@@ -121,14 +121,14 @@ class ReflexRegistryTest {
                 .thenReturn(Optional.empty());
         when(governanceLayer.getSessionCost("session-status")).thenReturn(0.05);
 
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-status", "user-1", "/status");
 
-        assertTrue(result.isPresent());
-        assertTrue(result.get().contains("COMPLETED"));
-        assertTrue(result.get().contains("$0.0500"));
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().contains("COMPLETED"));
+        assertTrue(result.commandResponse().get().contains("$0.0500"));
         // Last 8 chars of sessionId must appear
-        assertTrue(result.get().contains("n-status".substring(1))); 
+        assertTrue(result.commandResponse().get().contains("n-status".substring(1)));
     }
 
     @Test
@@ -137,11 +137,11 @@ class ReflexRegistryTest {
                 .thenReturn(Optional.empty());
         when(governanceLayer.getSessionCost(anyString())).thenReturn(0.0);
 
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-new", "user-1", "/status");
 
-        assertTrue(result.isPresent());
-        assertTrue(result.get().contains("NO_ACTIVE_STATE"));
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().contains("NO_ACTIVE_STATE"));
     }
 
     // ── DenyReflex ──────────────────────────────────────────────────────────
@@ -151,11 +151,11 @@ class ReflexRegistryTest {
         when(statefulAgentStore.load(anyString(), anyString()))
                 .thenReturn(Optional.empty());
 
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-deny", "user-1", "/deny");
 
-        assertTrue(result.isPresent());
-        assertTrue(result.get().contains("No pending"));
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().contains("No pending"));
     }
 
     @Test
@@ -183,12 +183,12 @@ class ReflexRegistryTest {
         doThrow(new RuntimeException("DB connection lost"))
                 .when(workspaceManager).terminateSession(anyString());
 
-        Optional<String> result = reflexRegistry.processIfReflex(
+        ReflexResult result = reflexRegistry.processIfReflex(
                 "session-err", "user-1", "/reset");
 
         // Must NOT throw — must return safe error message
-        assertTrue(result.isPresent());
-        assertTrue(result.get().contains("System Error"));
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().contains("System Error"));
         // Telegram consumer loop must not be affected
     }
 }

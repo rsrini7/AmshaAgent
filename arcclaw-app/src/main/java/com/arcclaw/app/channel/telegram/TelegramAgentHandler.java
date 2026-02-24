@@ -114,11 +114,13 @@ public class TelegramAgentHandler {
             WorkspaceScopeHolder.set(baseId);
 
             // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
-            java.util.Optional<String> reflexResponse = reflexRegistry.processIfReflex(baseId, userId, text);
-            if (reflexResponse.isPresent()) {
-                reply(chatId, reflexResponse.get());
+            com.arcclaw.core.reflex.ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
+            if (reflexResult.commandResponse().isPresent()) {
+                reply(chatId, reflexResult.commandResponse().get());
                 return; // Terminate execution immediately, bypassed LLM
             }
+
+            String safeInput = reflexResult.sanitizedInput();
 
             // Auto-cancel any dangling tool approvals if the user 
             // sends a free-text message instead of clicking /approve or /deny
@@ -134,10 +136,10 @@ public class TelegramAgentHandler {
                 });
             }
 
-            String activeRole = intentClassifier.classify(text);
+            String activeRole = intentClassifier.classify(safeInput);
 
             log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
-                    text.length() > 50 ? text.substring(0, 50) + "..." : text, activeRole);
+                    safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, activeRole);
 
             // Session Continuity Check (Soft Reset only)
             statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
@@ -163,7 +165,7 @@ public class TelegramAgentHandler {
 
             log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
-            AgentResult result = agentLoop.run(baseId, activeRole, text, reasoningEngine, 5);
+            AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
 
             if (result.awaitingApproval()) {
                 reply(chatId, "⚠️ **Approval Required**\n\nThe agent is attempting a secure network operation. Please review the trace and reply with `/approve` or `/deny`.");

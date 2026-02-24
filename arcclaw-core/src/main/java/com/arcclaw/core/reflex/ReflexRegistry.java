@@ -16,24 +16,36 @@ public class ReflexRegistry {
     @Inject
     Instance<AgentReflex> reflexes;
 
-    public Optional<String> processIfReflex(String sessionId, String userId, String input) {
+    public ReflexResult processIfReflex(String sessionId, String userId, String input) {
         if (input == null || input.isBlank()) {
-            return Optional.empty();
+            return new ReflexResult(Optional.empty(), input != null ? input : "");
         }
 
+        // Pass 1: Command check (short-circuit)
         for (AgentReflex reflex : reflexes) {
             if (reflex.matches(input)) {
                 try {
-                    return Optional.ofNullable(reflex.execute(sessionId, userId));
+                    // Pass 1: Command short-circuit — sanitizedInput is unused since LLM is bypassed
+                    return new ReflexResult(Optional.ofNullable(reflex.execute(sessionId, userId)), input);
                 } catch (Exception e) {
                     String sanitizedInput = input.length() > 200 ? input.substring(0, 200) + "...[truncated]" : input;
                     log.errorf("[REFLEX-FAILURE] reflex=%s session=%s user=%s input=%s error=%s", 
                         reflex.getClass().getSimpleName(), sessionId, userId, sanitizedInput, e.getMessage(), e);
-                    return Optional.of("⚠️ System Error during reflex execution: " + e.getMessage());
+                    return new ReflexResult(Optional.of("⚠️ System Error during reflex execution: " + e.getMessage()), input);
                 }
             }
         }
 
-        return Optional.empty();
+        // Pass 2: Sanitization (chain output through all reflexes)
+        String sanitized = input;
+        for (AgentReflex reflex : reflexes) {
+            try {
+                sanitized = reflex.sanitize(sessionId, userId, sanitized);
+            } catch (Exception e) {
+                log.errorf("[REFLEX-SANITIZE-FAILURE] reflex=%s error=%s", reflex.getClass().getSimpleName(), e.getMessage(), e);
+            }
+        }
+
+        return new ReflexResult(Optional.empty(), sanitized);
     }
 }

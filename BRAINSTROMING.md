@@ -685,3 +685,12 @@ For Telegram rendering, run `mmdc` (Mermaid CLI) inside the Podman sandbox to pr
 | M6 | `TranslatorService` multilingual interceptor | UX | Low |
 | M7 | Mermaid.js diagram tool for Brahma/Shiva | Developer UX | Medium |
 | M8 | Self-contained native binary + `arcclaw doctor` | Distribution | Low-Medium |
+
+
+Phase 33 (Planned) — Local PII Redaction
+Use a local rule-based + ML approach:
+- Regex pre-filter for obvious PII patterns (email, SSN, phone, Aadhaar)
+  implemented as a new AgentReflex: PiiScanReflex
+- Optionally backed by a local spaCy/GLiNER model via a Python sidecar
+  called from ProcessIsolationExecutor if high-confidence detection needed
+- Zero external API calls — all in-process or localhost

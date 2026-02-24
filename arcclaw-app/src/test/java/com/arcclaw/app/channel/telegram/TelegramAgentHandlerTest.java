@@ -83,6 +83,10 @@ public class TelegramAgentHandlerTest {
         // Default mock for agent loop
         when(agentLoopMock.run(anyString(), anyString(), anyString(), any(ReasoningEngine.class), anyInt()))
                 .thenReturn(AgentResult.finished("mock-answer", List.of()));
+
+        // Default mock for reflex registry (simulate no commands hit, passthrough sanitized input)
+        when(reflexRegistryMock.processIfReflex(anyString(), anyString(), anyString()))
+                .thenAnswer(inv -> new com.arcclaw.core.reflex.ReflexResult(Optional.empty(), inv.getArgument(2)));
     }
 
     @Test
@@ -182,7 +186,7 @@ public class TelegramAgentHandlerTest {
 
         // Mock ReflexRegistry to return a status response
         when(reflexRegistryMock.processIfReflex(anyString(), anyString(), eq("/status")))
-                .thenReturn(Optional.of("📊 Status: COMPLETED | Cost: $0.05 | Session: abcd1234"));
+                .thenReturn(new com.arcclaw.core.reflex.ReflexResult(Optional.of("📊 Status: COMPLETED | Cost: $0.05 | Session: abcd1234"), "/status"));
 
         // Act
         handler.receiveMessage(exchange);

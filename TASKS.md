@@ -383,3 +383,14 @@
 - [x] Step 6: Test Infrastructure: Document T-1 to T-6 troubleshooting scenarios
 - [x] Step 7: Inject `--add-opens java.base/java.lang=ALL-UNNAMED` to parent `pom.xml` for Java 24+ compatibility
 - [x] Step 8: Verify build success and test passes
+
+---
+
+## Phase 31 — PiiScanReflex (Local PII Redaction)
+- [x] Step 1: Add `sanitize` method to `AgentReflex` interface
+- [x] Step 2: Implement Two-Pass processing inside `ReflexRegistry` replacing `Optional` with `ReflexResult`
+- [x] Step 3: Create `PiiScanReflex` with 10 exact PII regex patterns
+- [x] Step 4: Fix regex matching priority (Aadhaar/IP/Card vs Greed Phone match)
+- [x] Step 5: Route strict `sanitizedInput` into `IntentClassifierService` and `AgentLoop` in `TelegramAgentHandler`
+- [x] Step 6: Expand `PiiScanReflexTest` covering mixed inputs and idempotency
+- [x] Step 7: Finalize Mockito configuration in `TelegramAgentHandlerTest` to default to `sanitizedInput`
