@@ -50,10 +50,19 @@ graalvm install then do below
 
 ./mvnw clean package -Pnative -Dquarkus.native.container-build=false -DskipTests
 
+mvn clean verify -pl arcclaw-app -am
 
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
 
 ./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+
+java \
+  --add-opens=java.base/java.nio=ALL-UNNAMED \
+  --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  -Dsun.misc.unsafe.memory.access=allow \
+  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar \
+  serve
 
 ----
 

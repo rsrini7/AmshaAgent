@@ -105,8 +105,8 @@ public class TelegramAgentHandlerTest {
 
         verify(intentClassifierMock).classify("hello");
         verify(agentLoopMock).run(eq(expectedSessionId), eq("coordinator"), eq("hello"), any(), eq(5));
-        verify(producerTemplateMock).sendBodyAndHeader(contains("telegram:bots"), eq("mock-answer"),
-                eq("CamelTelegramChatId"), eq("chat456"));
+        verify(producerTemplateMock).sendBodyAndHeaders(contains("telegram:bots"), eq("mock-answer"),
+                eq(java.util.Map.of("CamelTelegramChatId", "chat456")));
 
         // Context should be cleared
         assertNull(WorkspaceScopeHolder.get());

@@ -3,7 +3,6 @@ package com.arcclaw.core.agent;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -22,7 +21,6 @@ import org.jboss.logging.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.Collections;
 
 @ApplicationScoped
@@ -182,20 +180,27 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             messages.add(UserMessage.from(goal));
         }
 
-        List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
+        // 1. Determine which tools the current persona is allowed to see
+        List<String> allowedTools = switch (agentRole.toLowerCase()) {
+            case "coder", "brahma", "debugger", "shiva" -> List.of(); // NO tools in schema
+            case "researcher", "saraswati", "coordinator", "vishnu" -> List.of("github");
+            default -> List.of();
+        };
+
+        // 2. Dynamically filter the specifications to prevent Schema Jailbreaks
+        List<dev.langchain4j.agent.tool.ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
+                .filter(allowedTools::contains) // THE SPRINT 25A FIX
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
-                .map(tool -> ToolSpecification.builder()
+                .map(tool -> dev.langchain4j.agent.tool.ToolSpecification.builder()
                         .name(tool.name())
                         .description(tool.description())
                         .build())
-                .collect(Collectors.toList());
+                .collect(java.util.stream.Collectors.toList());
 
-        ChatRequest request;
-        if (toolSpecifications.isEmpty()) {
-            request = ChatRequest.builder().messages(messages).build();
-        } else {
-            request = ChatRequest.builder().messages(messages).toolSpecifications(toolSpecifications).build();
-        }
+        // 3. Build the request (If empty, LangChain4j omits the tools array entirely from the API call)
+        ChatRequest request = toolSpecifications.isEmpty()
+                ? ChatRequest.builder().messages(messages).build()
+                : ChatRequest.builder().messages(messages).toolSpecifications(toolSpecifications).build();
 
         ChatResponse response = chatLanguageModel.chat(request);
 

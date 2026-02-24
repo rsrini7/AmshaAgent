@@ -2,15 +2,22 @@ package com.arcclaw.core.agent;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.output.TokenUsage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.model.output.FinishReason;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Collections;
@@ -79,5 +86,121 @@ class LangChainReasoningEngineTest {
         assertEquals(25, step.outputTokens());
         assertTrue(step.actionInput().containsKey("repo"));
         assertEquals("test/repo", step.actionInput().get("repo"));
+    }
+
+    @InjectMock
+    ChatMemoryStore chatMemoryStore;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Test
+    void testApprovalMarkerMessagesAreFilteredFromHistory() {
+        // Arrange
+        String sessionId = "test-session";
+        com.arcclaw.core.scope.WorkspaceScopeHolder.set(sessionId);
+
+        List<ChatMessage> storedMessages = List.of(
+            SystemMessage.from("Ignore me"),
+            AiMessage.from("Human Approved: ..."),
+            UserMessage.from("Actual Goal"),
+            UserMessage.from("Resuming task after approval")
+        );
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(storedMessages);
+
+        AiMessage mockAiMessage = AiMessage.from("Processing");
+        ChatResponse mockResponse = ChatResponse.builder()
+                .aiMessage(mockAiMessage)
+                .build();
+
+        // Capture the request to verify filtered messages
+        org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
+
+        // Act
+        reasoningEngine.nextStep("coordinator", "Actual Goal", List.of());
+
+        // Assert
+        ChatRequest capturedRequest = requestCaptor.getValue();
+        List<ChatMessage> filtered = capturedRequest.messages();
+
+        // Should have: 
+        // 1. Initial System Message (Trimurti prompt)
+        // 2. "Actual Goal" (from history)
+        // Count: 2
+        
+        // Let's verify specifically that "Ignore me", "Human Approved", and "Resuming" were skipped
+        boolean foundSystemStore = filtered.stream().anyMatch(m -> m instanceof SystemMessage && ((SystemMessage)m).text().equals("Ignore me"));
+        boolean foundApproved = filtered.stream().anyMatch(m -> m.toString().contains("Human Approved"));
+        boolean foundResuming = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().contains("Resuming"));
+
+        assertFalse(foundSystemStore, "System message from store should be filtered out");
+        assertFalse(foundApproved, "Approval marker should be filtered out");
+        assertFalse(foundResuming, "Resuming marker should be filtered out");
+        
+        boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().equals("Actual Goal"));
+        assertTrue(foundGoal, "Real goal should be preserved");
+        
+        com.arcclaw.core.scope.WorkspaceScopeHolder.clear();
+    }
+
+    @Test
+    void testCoderRoleReceivesNoToolSchema() {
+        AiMessage msg = AiMessage.from("Here is the code.");
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(msg).tokenUsage(new TokenUsage(10, 20))
+                .finishReason(FinishReason.STOP).build();
+
+        ArgumentCaptor<ChatRequest> captor = 
+                ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+
+        reasoningEngine.nextStep("coder", "Write a sort", List.of());
+
+        ChatRequest sent = captor.getValue();
+        assertTrue(sent.toolSpecifications() == null 
+                || sent.toolSpecifications().isEmpty(),
+                "coder must NOT receive tool schemas — schema jailbreak fix");
+    }
+
+    @Test
+    void testDebuggerRoleReceivesNoToolSchema() {
+        AiMessage msg = AiMessage.from("Bug is on line 42.");
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(msg).tokenUsage(new TokenUsage(5, 10))
+                .finishReason(FinishReason.STOP).build();
+
+        ArgumentCaptor<ChatRequest> captor = 
+                ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+
+        reasoningEngine.nextStep("debugger", "Find the NPE", List.of());
+
+        ChatRequest sent = captor.getValue();
+        assertTrue(sent.toolSpecifications() == null 
+                || sent.toolSpecifications().isEmpty(),
+                "debugger must NOT receive tool schemas — schema jailbreak fix");
+    }
+
+    @Test
+    void testResearcherRoleReceivesGithubSchemaOnly() {
+        AiMessage msg = AiMessage.from("Searching...");
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(msg).tokenUsage(new TokenUsage(5, 10))
+                .finishReason(FinishReason.STOP).build();
+
+        ArgumentCaptor<ChatRequest> captor = 
+                ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+
+        // Requires setting up a tool in the instance if not mocked, but the test 
+        // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
+        reasoningEngine.nextStep("researcher", "Find Quarkus docs", List.of());
+
+        ChatRequest sent = captor.getValue();
+        assertNotNull(sent.toolSpecifications());
+        // Depending on Tools registered, there could be multiple, but the test ensures we have some
+        assertEquals(1, sent.toolSpecifications().size());
+        assertEquals("github", sent.toolSpecifications().get(0).name());
     }
 }
