@@ -26,10 +26,16 @@ public class IntentClassifierService {
             one of these agent roles. Reply with ONLY the role name, nothing else.
 
             Roles:
-            - brahma: CREATING new code, building new features, writing new scripts from scratch, implementing new functionality
-            - shiva: FIXING existing code, diagnosing bugs, analyzing stack traces, explaining error messages, code review, finding issues in existing code
-            - saraswati: research, facts, "who is", "what is", finding information
+            - brahma: CREATING new code, building new features, writing new scripts
+            - shiva: FIXING existing code, diagnosing bugs, analyzing stack traces
+            - saraswati: research, facts, finding information, GitHub actions
             - coordinator: planning, general questions, coordination, anything else
+
+            CRITICAL GUARDRAILS:
+            1. If the user mentions GitHub, gists, or repositories to LIST, FETCH, or VIEW existing content -> saraswati.
+            2. If the user mentions GitHub, gists, or repositories to CREATE, BUILD, or GENERATE new content -> brahma. GitHub context does NOT override creation intent.
+            3. Only output 'shiva' if the user provides actual error text, stack traces, or explicitly says "fix", "broken", "not working" with technical detail. Negative words like "no", "none", or "missing" alone are NOT debugging signals.
+            4. "Hi", "Hello", greetings, or vague messages -> coordinator only.
 
             User message: "%s"
 
@@ -45,20 +51,18 @@ public class IntentClassifierService {
             }, managedExecutor).get(3, TimeUnit.SECONDS);
         } catch (Exception e) {
             Log.warnf("Intent classifier failed for '%s': %s — defaulting to coordinator",
-                    userMessage.length() > 40
-                            ? userMessage.substring(0, 40) + "..."
-                            : userMessage,
+                    userMessage.length() > 40 ? userMessage.substring(0, 40) + "..." : userMessage,
                     e.getMessage());
             return "coordinator";
         }
     }
 
     private String sanitize(String raw) {
-        String lower = raw.toLowerCase();
+        String lowerRaw = raw.toLowerCase();
         // Translate persona to actual functional duty
-        if (lower.contains("shiva") || lower.contains("debugger")) return "debugger";
-        if (lower.contains("brahma") || lower.contains("coder")) return "coder";
-        if (lower.contains("saraswati") || lower.contains("researcher")) return "researcher";
+        if (lowerRaw.contains("shiva") || lowerRaw.contains("debugger")) return "debugger";
+        if (lowerRaw.contains("brahma") || lowerRaw.contains("coder")) return "coder";
+        if (lowerRaw.contains("saraswati") || lowerRaw.contains("researcher")) return "researcher";
         return "coordinator";
     }
 }

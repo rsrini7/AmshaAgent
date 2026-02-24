@@ -367,3 +367,12 @@
 - [x] Step 3: Upgrade `IOException` to `ToolExecutionException` in `ProcessIsolationExecutor` <!-- id: 102 -->
 - [x] Step 4: Overhaul `application.yaml` logging to suppress JVM security cert events <!-- id: 103 -->
 - [x] Step 5: Document `TROUBLESHOOTING.md` sections 18-20 for proxy faults and tool failures <!-- id: 104 -->
+
+---
+
+## Phase 29 — Intent Hardening & Auto-Cancellation
+- [x] Step 1: Implement auto-cancellation loop for dangling approvals in `TelegramAgentHandler` <!-- id: 105 -->
+- [x] Step 2: Extract numbered guardrails into `IntentClassifierService` prompt <!-- id: 106 -->
+- [x] Step 3: Harden routing logic to prioritize Actions (Create) over Context (GitHub) <!-- id: 107 -->
+- [x] Step 4: Ensure free-text messages force-fail pending tool states <!-- id: 108 -->
+- [x] Step 5: Document Troubleshooting items #20 and #21 <!-- id: 109 -->

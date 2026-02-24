@@ -1217,6 +1217,36 @@ Address critical vulnerabilities and robustness flaws identified during the stat
 
 ---
 
+# Phase 29 — Intent Hardening & Auto-Cancellation ✅
+
+Address "dangling approval" edge cases and intent routing regressions discovered during V1.0.0 stress testing.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Proactive Auto-Cancellation**: If a user triggers a sensitive tool (entering `AWAITING_APPROVAL`) but then sends a new free-text message instead of explicitly clicking `/approve` or `/deny`, the system now auto-cancels the pending execution. This prevents "phantom approvals" where a greeting like "Hi" might otherwise trigger a tool from a previous turn.
+
+> [!TIP]
+> **Semantic Routing Guardrails**: To resolve compound intent regressions (e.g., "Create a GitHub repo" being routed to researcher), the classifier prompt was hardened with strict numbered guardrails. Semantic priority now favors the *action* (Create/Build) over the *context* (GitHub).
+
+## Completed Changes
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Implemented a loop to scan and auto-cancel dangling tool approvals upon receiving new free-text input.
+- Added explicit state wiping (`stateJson = "[]"`) for canceled checkpoints.
+
+#### [MODIFY] [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/IntentClassifierService.java)
+- Refined `CLASSIFIER_PROMPT` with strict guardrails for GitHub context and debugging signals.
+- Simplified `sanitize` logic to avoid case-insensitive collisions.
+
+## Verification
+- ✅ Verified that "Hi" correctly cancels pending approvals in logs.
+- ✅ Verified "Create GitHub gist" routes to `brahma` (coder) despite the "GitHub" keyword.
+- ✅ `mvn clean compile` succeeds cleanly.
+
+
+---
+
 # Phase 28 — Tool Flexibility & Proxy Unwrapping ✅
 
 Address tool integration issues caused by dynamic subcommands, JVM proxy wrapping, and logging verbosity.
