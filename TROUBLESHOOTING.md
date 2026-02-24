@@ -1395,3 +1395,73 @@ The following systemic vulnerabilities were identified and structurally eliminat
 | HIGH | `ProcessIsolationExecutor::executeInNamespace(Path, List)` | Ignores the exit code and timeout result of `proc.waitFor()`. | If the Linux namespace process times out or exits with a non-zero code (e.g., tool crash), the failure is silently ignored and the error output is returned to the agent loop as a successful execution, corrupting the reasoning state. | SMALL |
 | HIGH | `ProcessIsolationExecutor::executeDirectly(Path, List)` | Ignores the exit code and timeout result of `proc.waitFor()`. | If the direct host process execution times out or exits with a non-zero status, the exit code is dropped and the `stderr` is treated as a successful tool observation, causing the agent to hallucinate based on error text. | SMALL |
 
+## 15. Developer Experience (DX) Secret Seeding (macOS & Podman)
+
+**Symptom:** When developing on macOS with Podman, sandbox tools (like `gh`) fail with authentication errors because the ephemeral `SecretVault` is empty on every session reset.
+
+**Root Cause:**
+For strict production security, `ProcessIsolationExecutor` must NEVER read directly from `System.getenv()`. It is strictly fail-closed and only reads from the encrypted SQLite `SecretVault`.
+
+**Resolution (The DevSecretSeeder Pattern):**
+To preserve DX without compromising the sandbox, we use a `DevSecretSeeder` bean annotated with `@IfBuildProfile("dev")`. 
+* It safely copies developer host variables into the `SecretVault` at the exact moment a session is initialized.
+* **Important:** This bean is completely stripped from the production JAR and Native Image, ensuring zero risk of environment-variable leakage in production.
+
+---
+
+## 16. CDI Lifecycle Mismatches (`StartupEvent` vs `@WorkspaceScoped`)
+
+**Error:**
+`java.lang.IllegalStateException: Active session required to store secrets` during application startup.
+
+**Root Cause:**
+Attempting to interact with the `SecretVault` (or any `@WorkspaceScoped` bean) inside a Quarkus `@Observes StartupEvent` listener. At application boot time, the custom Virtual Thread/Session context (`WorkspaceScopeHolder`) does not exist yet.
+
+**Resolution:**
+Never seed or mutate session-scoped state at application startup. State initialization must be deferred until the absolute edge of the application (e.g., `AskCommand.run()` or `TelegramAgentHandler.runAgent()`) IMMEDIATELY AFTER `WorkspaceScopeHolder.set(sessionId)` is called.
+
+---
+
+## 17. Conditional Bean Injection (`@IfBuildProfile` Pitfalls)
+
+**Error:**
+`jakarta.enterprise.inject.UnsatisfiedResolutionException` at runtime or build time.
+
+**Root Cause:**
+A core class (like `AskCommand` or `TelegramAgentHandler`) attempts to `@Inject` a dev-only bean (like `DevSecretSeeder`) directly. Because `@IfBuildProfile("dev")` removes the bean during a production build, the injection point becomes unresolvable and crashes the application.
+
+**Resolution:**
+Always use `Instance<T>` for environment-specific beans.
+```java
+@Inject
+Instance<DevSecretSeeder> devSeeder;
+
+// Later in code:
+if (!devSeeder.isUnsatisfied()) {
+    devSeeder.get().seedDevSecrets();
+}
+
+---
+
+## 18. The "Unclosed Existence Check" Memory Leak
+
+**Symptom:**
+Plaintext secrets are found lingering in the JVM heap during a heap-dump audit, despite the use of `VaultKey` and `Arrays.fill()`.
+
+**Root Cause:**
+Calling `secretVault.get(keyName).isPresent()` without a `try-with-resources` block. If the key exists, the `get()` method decrypts the byte array and wraps it in a `VaultKey`. If it is not explicitly closed, the `byte[]` is never zeroed out.
+
+**Resolution:**
+Even if you are only checking for a key's existence (idempotency checks), you must wrap the retrieval in a `try-with-resources` block to guarantee the immediate destruction of the underlying byte array.
+
+```java
+// CORRECT:
+var optionalKey = secretVault.get(vaultKeyName);
+if (optionalKey.isPresent()) {
+    try (VaultKey key = optionalKey.get()) {
+        log.debug("Key exists.");
+    } // Bytes are zeroed here!
+    return;
+}
+
+```

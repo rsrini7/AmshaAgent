@@ -5,15 +5,16 @@ import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
@@ -68,6 +69,9 @@ public class TelegramAgentHandler {
     @Inject
     IntentClassifierService intentClassifier;
 
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
+
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
      * All Camel Exchange data must be extracted synchronously before offloading
@@ -75,6 +79,7 @@ public class TelegramAgentHandler {
      */
     public void receiveMessage(Exchange exchange) {
         IncomingMessage msg = exchange.getIn().getBody(IncomingMessage.class);
+
         if (msg == null || msg.getText() == null) {
             log.warn("Received message without text");
             return;
@@ -104,15 +109,14 @@ public class TelegramAgentHandler {
         // Intercept /reset — wipes both workspace scope AND persistent chat memory
         if (text != null && text.trim().equalsIgnoreCase("/reset")) {
             log.infof("[TelegramHandler] User requested session reset for %s", baseId);
-            
+
             // 1. Wipe the workspace scope (clears IN_PROGRESS / AWAITING_APPROVAL state)
             workspaceManager.terminateSession(baseId);
-            
+
             // 2. Wipe persistent chat memory from SQLite so context poisoning is cleared
             chatMemoryStore.deleteMessages(baseId);
-            
+
             log.infof("[TelegramHandler] Session %s fully reset — workspace and chat memory cleared", baseId);
-            
             producerTemplate.sendBodyAndHeaders(
                     "telegram:bots?authorizationToken=" + botToken,
                     "🧹 Session wiped. Memory and tool states cleared. Ready for a new task.",
@@ -126,6 +130,7 @@ public class TelegramAgentHandler {
             reply(chatId, handleApprovalDecision(chatId, userId, baseId, true));
             return;
         }
+
         if (text.equalsIgnoreCase("/deny")) {
             reply(chatId, handleApprovalDecision(chatId, userId, baseId, false));
             return;
@@ -134,8 +139,8 @@ public class TelegramAgentHandler {
         try {
             // Activate CDI Workspace Scope initially so IntentClassifier works
             WorkspaceScopeHolder.set(baseId);
-
             String activeRole = intentClassifier.classify(text);
+
             log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
                     text.length() > 50 ? text.substring(0, 50) + "..." : text, activeRole);
 
@@ -145,7 +150,7 @@ public class TelegramAgentHandler {
                     log.infof("Resetting ReAct state for session %s (%s) to start fresh goal.", baseId, cp.getStatus());
                     // 1. We keep the ChatMemory (DO NOT call terminateSession)
                     // 2. We just wipe the internal JSON tool-call array
-                    cp.stateJson = "[]"; 
+                    cp.stateJson = "[]";
                     cp.failReason = null;
                     cp.setStatus(CheckpointStatus.IN_PROGRESS);
                     statefulAgentStore.save(cp);
@@ -156,82 +161,89 @@ public class TelegramAgentHandler {
             WorkspaceScopeHolder.set(baseId);
             workspaceContext.setAutonomyLevel(autonomyLevel);
 
+            // Dev DX: seed host OS tokens into vault (idempotent — skips if already seeded)
+            if (!devSeeder.isUnsatisfied()) {
+                devSeeder.get().seedDevSecrets();
+            }
+
             log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
-            AgentResult result = agentLoop.run(
-                    baseId,
-                    activeRole,
-                    text,
-                    reasoningEngine,
-                    5);
+            AgentResult result = agentLoop.run(baseId, activeRole, text, reasoningEngine, 5);
 
-            reply(chatId, result.finalAnswer());
+            if (result.awaitingApproval()) {
+                reply(chatId, "⚠️ **Approval Required**\n\nThe agent is attempting a secure network operation. Please review the trace and reply with `/approve` or `/deny`.");
+            } else if (result.success()) {
+                reply(chatId, result.finalAnswer());
+            } else {
+                reply(chatId, "❌ **Task Failed**\n\nReason: " + result.terminationReason());
+            }
 
+        } catch (Exception e) {
+            log.error("Failed to process agent loop for session: " + baseId, e);
+            reply(chatId, "⚠️ System Error: " + e.getMessage());
         } finally {
             WorkspaceScopeHolder.clear();
         }
     }
 
-    private String handleApprovalDecision(String chatId, String userId, String sessionId, boolean approved) {
-        String pausedRole = null;
-        com.arcclaw.core.state.AgentCheckpoint pendingCheckpoint = null;
-
-        // Discover which agent role is waiting for approval
-        for (String role : java.util.List.of("coordinator", "coder", "researcher", "debugger")) {
-            var opt = statefulAgentStore.load(sessionId, role);
-            if (opt.isPresent() && opt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                pausedRole = role;
-                pendingCheckpoint = opt.get();
-                break;
-            }
-        }
-
-        if (pausedRole == null) {
-            return "❌ No pending approval found for your session.";
-        }
-
-        if (!approved) {
-            statefulAgentStore.markFailed(pendingCheckpoint.id, "Denied by user via Telegram");
-            
-            // --- SPRINT 2 FIX: Inform the LLM that the user cancelled the action ---
-            java.util.List<dev.langchain4j.data.message.ChatMessage> mem = chatMemoryStore.getMessages(sessionId);
-            if (mem != null) {
-                mem = new java.util.ArrayList<>(mem);
-                mem.add(dev.langchain4j.data.message.AiMessage.from("I requested permission to run the tool, but the user denied it. The task was aborted."));
-                chatMemoryStore.updateMessages(sessionId, mem);
-            }
-            
-            return "🚫 Operation denied. The task has been terminated.";
-        }
-
-        log.infof("[TelegramHandler] User %s approved operation for session %s. Elevating to FULL.",
-                userId, sessionId);
-
+    private String handleApprovalDecision(String chatId, String userId, String baseId, boolean approved) {
+        WorkspaceScopeHolder.set(baseId);
         try {
-            WorkspaceScopeHolder.set(sessionId);
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            // Check which role is currently waiting for approval
+            String activeRole = null;
+            for (String role : java.util.List.of("coordinator", "coder", "researcher", "debugger")) {
+                var cp = statefulAgentStore.load(baseId, role);
+                if (cp.isPresent() && cp.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                    activeRole = role;
+                    break;
+                }
+            }
 
-            AgentResult result = agentLoop.run(
-                    sessionId,
-                    pausedRole,
-                    "The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.",
-                    reasoningEngine,
-                    5);
+            if (activeRole == null) {
+                return "No pending tool executions require approval for this session.";
+            }
 
-            return "✅ Approved. Resuming...\n\n" + result.finalAnswer();
+            if (approved) {
+                log.infof("[TelegramHandler] User approved pending tool execution for session: %s", baseId);
+                workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
 
+                // Dev DX: Seed tokens again upon approval resume in case JVM was restarted
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
+                }
+
+                AgentResult result = agentLoop.run(
+                        baseId, activeRole,
+                        "Resuming task after approval",
+                        reasoningEngine, 5
+                );
+
+                if (result.success()) {
+                    return result.finalAnswer();
+                } else {
+                    return "❌ **Task Failed after approval**\n\nReason: " + result.terminationReason();
+                }
+            } else {
+                log.infof("[TelegramHandler] User denied pending tool execution for session: %s", baseId);
+                AgentCheckpoint cp = statefulAgentStore.load(baseId, activeRole).orElseThrow();
+                cp.setStatus(CheckpointStatus.FAILED);
+                cp.failReason = "Human denied the tool execution.";
+                statefulAgentStore.save(cp);
+                return "🚫 Execution denied. The agent's task has been terminated.";
+            }
+        } catch (Exception e) {
+            log.error("Error processing approval for session: " + baseId, e);
+            return "⚠️ System Error during approval processing: " + e.getMessage();
         } finally {
-            // Memory cleanup ONLY — session remains IN_PROGRESS indefinitely for
-            // conversation memory
             WorkspaceScopeHolder.clear();
         }
     }
 
-    private void reply(String chatId, String text) {
-        producerTemplate.sendBodyAndHeader(
+    private void reply(String chatId, String message) {
+        producerTemplate.sendBodyAndHeaders(
                 "telegram:bots?authorizationToken=" + botToken,
-                text,
-                "CamelTelegramChatId",
-                chatId);
+                message,
+                java.util.Map.of("CamelTelegramChatId", chatId)
+        );
     }
 }
