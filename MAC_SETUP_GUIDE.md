@@ -50,6 +50,7 @@ graalvm install then do below
 
 ./mvnw clean package -Pnative -Dquarkus.native.container-build=false -DskipTests
 
+mvn clean verify -pl arcclaw-app -am
 
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
 
