@@ -1,5 +1,7 @@
 Check and append / update all / required points for future reference that should not spend time on it. Based on the md files can proceed by any LLM. - **Do Not Update me**
 
+check git logs for past 5 and its modified files before doing update. Check its commit message and list of files changed as well.
+
 ## Documentation Sync Status (2026-02-23)
 - [x] **PLAN.md**: Implementation Plan tracker.
 - [x] **TASKS.md**: Implementation Task tracker.
