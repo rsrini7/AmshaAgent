@@ -275,6 +275,7 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 **Symptom:** `WorkspaceScopeContext cannot be resolved to a type` during `@QuarkusTest` discovery.
 **Root Cause:** Stale `.class` files in `arcclaw-deployment/target/` from a previous build.
 **Resolution:** Always use `mvn clean test` instead of `mvn test` when switching between incremental builds.
+
 ## 6. Native Image Troubleshooting (Phase 0+)
 
 ### 🔴 Failure: OOM During Analysis
@@ -1567,3 +1568,154 @@ The OpenTelemetry SDK is attempting to export traces to a local collector (`loca
 
 **Resolution:**
 Disable the OTel SDK in the dev profile by adding `%dev.quarkus.otel.sdk.disabled=true` to the application configuration.
+## Test Infrastructure
+
+### 🔴 T-1: `TestEngine failed to discover tests` (Multi-Module Maven `-am` Flag)
+
+**Symptom:** `TestEngine with ID 'junit-jupiter' failed to discover tests` or `org.junit.internal.AssumptionViolatedException` when running tests via `.\mvnw.cmd test -pl arcclaw-app -am`.
+
+**Root Cause:** The `-am` flag causes Maven to attempt test discovery on dependent library modules (e.g., `arcclaw-core`). If `arcclaw-core` has stale `.class` files or encounters missing test dependencies in the current JVM execution profile, Jupiter's discovery engine crashes and halts the entire Maven reactor build.
+
+**Resolution:** Run tests strictly on the target module without `-am`:
+```bash
+.\mvnw.cmd test -pl arcclaw-app
+```
+If dependent framework changes are required, rebuild the CDI Jandex index first:
+```bash
+mvn clean install -DskipTests
+.\mvnw.cmd test -pl arcclaw-app
+```
+
+***
+
+### 🔴 T-2: `ConfigurationException: chat-model.provider needs to be set` (LangChain4J Multi-Provider)
+
+**Symptom:** Build fails at augmentation with:
+```
+Build step BeansProcessor#handleProviders threw an exception:
+ConfigurationException: A ChatLanguageModel bean was requested, but since there 
+are multiple available providers, 'quarkus.langchain4j.chat-model.provider' 
+needs to be set to one of the available options (ollama,openai).
+```
+
+**Root Cause:** Both `quarkus-langchain4j-ollama` and `quarkus-langchain4j-openai` are on the classpath. In production, `application.yaml` resolves this. The test profile in `arcclaw-core` has no config file, so Quarkus cannot pick a provider at augmentation time — even when LLM beans are fully mocked with `@InjectMock`.
+
+**Resolution:** Create `arcclaw-core/src/test/resources/application.properties` and set:
+```properties
+quarkus.langchain4j.chat-model.provider=openai
+quarkus.langchain4j.openai.api-key=dummy-test-key
+quarkus.langchain4j.openai.base-url=http://localhost:9999
+quarkus.langchain4j.openai.chat-model.model-name=gpt-4o-mini
+```
+The `localhost:9999` URL is intentional — all LLM calls in unit tests are mocked, so the HTTP client never fires.
+
+***
+
+### 🔴 T-3: `ConfigurationException: arcclaw.vault.pepper is required` (SecretVault Startup Validation)
+
+**Symptom:** Quarkus fails to start in tests with:
+```
+DeploymentException: ConfigurationException: Failed to load config value of type 
+String for: arcclaw.vault.pepper
+SRCFG00014: The config property arcclaw.vault.pepper is required but it could not 
+be found in any config source
+```
+
+**Root Cause:** `SecretVault` uses `@ConfigProperty(name = "arcclaw.vault.pepper")` with mandatory validation. Quarkus validates all `@ConfigProperty` fields at startup regardless of whether the bean is mocked in tests.
+
+**Resolution:** Add dummy values to `arcclaw-core/src/test/resources/application.properties`:
+```properties
+arcclaw.vault.pepper=test-pepper-value-not-used-in-tests
+arcclaw.vault.master-key=test-master-key-32-chars-padded!
+```
+These values are never cryptographically used — `SecretVault` beans are `@InjectMock`'d in any test that exercises vault logic.
+
+***
+
+### 🔴 T-4: `Unable to find JDBC driver for database kind 'other'` (Agroal Driver Resolution)
+
+**Symptom:** Build fails at augmentation with:
+```
+AgroalProcessor#build threw an exception: ConfigurationException: Unable to find 
+a JDBC driver corresponding to the database kind 'other' for the default datasource 
+(available: 'sqlite').
+```
+
+**Root Cause:** Setting `quarkus.datasource.db-kind=other` overrides Quarkus's auto-detection of the SQLite driver from `quarkus-jdbc-sqlite` on the classpath. Quarkus then cannot resolve the driver mapping.
+
+**Resolution:** Remove `quarkus.datasource.db-kind` entirely from the test properties file. Quarkus auto-detects `db-kind=sqlite` from the classpath extension. Only override the JDBC URL:
+```properties
+quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw.db
+```
+
+***
+
+### 🔴 T-5: `no such table: agent_checkpoint` (Missing Schema in Test DB)
+
+**Symptom:** Quarkus starts but immediately fails with:
+```
+GenericJDBCException: could not prepare statement [SQLITE_ERROR] SQL error or 
+missing database (no such table: agent_checkpoint)
+```
+Triggered from `WorkspaceManager.onStartup()` which queries `agent_checkpoint` during the `StartupEvent`.
+
+**Root Cause:** The test SQLite DB file (`./target/test-arcclaw.db`) is created empty. Hibernate does not auto-create the schema unless explicitly configured. `WorkspaceManager.onStartup()` fires before test mocks are injected, so it hits the real (empty) database.
+
+**Resolution:** Add schema generation to `arcclaw-core/src/test/resources/application.properties`:
+```properties
+quarkus.hibernate-orm.database.generation=drop-and-create
+```
+This creates all `@Entity`-mapped tables on every test run. `drop-and-create` is safe for tests since all data is mocked via `@InjectMock` and no real persistence is needed.
+
+***
+
+### 🔴 T-6: `IllegalAccessError: module java.base does not open java.lang` (JBoss Threads on Java 24+)
+
+**Symptom:** Exception in Vert.x worker threads during test startup:
+```
+IllegalAccessError: module java.base does not open java.lang to unnamed module
+Use --add-opens java.base/java.lang=ALL-UNNAMED
+```
+Followed by `NoClassDefFoundError: Could not initialize class JDKSpecific$ThreadAccess`.
+
+**Root Cause:** JBoss Threads uses reflection to reset thread-locals, which requires access to `java.lang` internals. This is restricted by default on Java 24+.
+
+**Resolution:** Add JVM args to `maven-surefire-plugin` in `arcclaw-core/pom.xml`:
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-surefire-plugin</artifactId>
+    <configuration>
+        <argLine>
+            --add-opens java.base/java.lang=ALL-UNNAMED
+            --enable-native-access=ALL-UNNAMED
+        </argLine>
+    </configuration>
+</plugin>
+```
+If `arcclaw-app` already has this in the parent `pom.xml`, move it there so it applies to all modules uniformly.
+
+***
+
+### Complete Reference: `arcclaw-core/src/test/resources/application.properties`
+
+The canonical test configuration resolving all of the above:
+
+```properties
+# LangChain4J — resolves multi-provider ambiguity (T-2)
+quarkus.langchain4j.chat-model.provider=openai
+quarkus.langchain4j.openai.api-key=dummy-test-key
+quarkus.langchain4j.openai.base-url=http://localhost:9999
+quarkus.langchain4j.openai.chat-model.model-name=gpt-4o-mini
+
+# SecretVault — satisfies mandatory config validation (T-3)
+arcclaw.vault.pepper=test-pepper-value-not-used-in-tests
+arcclaw.vault.master-key=test-master-key-32-chars-padded!
+
+# OTel — disable to prevent 10s export timeout (TROUBLESHOOTING #23)
+quarkus.otel.sdk.disabled=true
+
+# SQLite — auto-detected db-kind, explicit URL, schema creation (T-4, T-5)
+quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw.db
+quarkus.hibernate-orm.database.generation=drop-and-create
+```

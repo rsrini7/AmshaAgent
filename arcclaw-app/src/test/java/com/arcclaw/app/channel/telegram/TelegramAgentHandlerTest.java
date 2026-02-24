@@ -4,6 +4,7 @@ import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -49,6 +50,9 @@ public class TelegramAgentHandlerTest {
 
     @InjectMock
     IntentClassifierService intentClassifierMock;
+
+    @InjectMock
+    ReflexRegistry reflexRegistryMock;
 
     ProducerTemplate producerTemplateMock;
 
@@ -160,5 +164,36 @@ public class TelegramAgentHandlerTest {
 
         // Assert
         verify(executorMock, never()).submit(any(Runnable.class));
+    }
+
+    @Test
+    void testReflexInterceptorPreventsAgentLoop() {
+        // Arrange
+        Exchange exchange = mock(Exchange.class);
+        Message in = mock(Message.class);
+        IncomingMessage msg = new IncomingMessage();
+        msg.setText("/status");
+        User from = new User();
+        from.setId(123L);
+        msg.setFrom(from);
+        when(exchange.getIn()).thenReturn(in);
+        when(in.getBody(IncomingMessage.class)).thenReturn(msg);
+        when(in.getHeader("CamelTelegramChatId", String.class)).thenReturn("chat456");
+
+        // Mock ReflexRegistry to return a status response
+        when(reflexRegistryMock.processIfReflex(anyString(), anyString(), eq("/status")))
+                .thenReturn(Optional.of("📊 Status: COMPLETED | Cost: $0.05 | Session: abcd1234"));
+
+        // Act
+        handler.receiveMessage(exchange);
+
+        // Assert: AgentLoop must NOT be called
+        verify(agentLoopMock, never()).run(any(), any(), any(), any(), anyInt());
+        // Reply must be sent with reflex response
+        verify(producerTemplateMock).sendBodyAndHeaders(
+        contains("telegram:bots"),
+        contains("📊 Status"),
+        argThat(headers -> "chat456".equals(
+                ((java.util.Map<?, ?>) headers).get("CamelTelegramChatId"))));
     }
 }

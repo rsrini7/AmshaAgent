@@ -649,3 +649,24 @@ The `PersistentChatMemoryStore` now implements a "System Aware" rolling window. 
 Added 13 dedicated JUnit tests across `PersistentChatMemoryStoreTest`, `LangChainReasoningEngineTest`, and `ToolRegistryTest` to ensure zero regressions in history management and secret mapping.
 
 **Verification**: `mvn clean verify` ✅
+
+---
+
+## Phase 30: Reflex Registry & Test Infrastructure Hardening ✅
+
+This phase introduced a deterministic O(1) LLM-bypass layer for system commands and resolved systemic Maven multi-module test discovery failures.
+
+### 1. Reflex Registry
+The `TelegramAgentHandler` previously contained hardcoded logic for `/reset`, `/approve`, and `/deny`, cluttering the channel logic. We abstracted this into an `AgentReflex` interface dynamically loaded via CDI inside a `ReflexRegistry`. This acts as an immediate short-circuit before the expensive LLM loop starts, guaranteeing zero USD cost and deterministic execution.
+
+New reflexes include:
+- `HaltReflex`: Immediately destroys the session and drops an ERROR audit log.
+- `StatusReflex`: Bridges `StatefulAgentStore` and `GovernanceLayer` to report live cost and execution context.
+
+### 2. Test Infrastructure Stabilization (T-1 to T-6)
+Addressed several root causes causing the `TestEngine failed to discover tests` failure.
+- **T-1**: Realized the `mvn test -am` flag corrupted Jupiter discovery boundaries on the library module.
+- **T-6**: `JBoss Threads` under Quarkus was violently triggering `IllegalAccessError` on JDK 24+ JVMs trying to reset thread-locals. Fixed via injecting `--add-opens java.base/java.lang=ALL-UNNAMED` into the parent `pom.xml`.
+- **T-2..T-5**: Stabilized offline test parameters for LangChain4J multi-provider configs, mandatory `@ConfigProperty` Vault requirements, and SQLite memory initialization.
+
+**Verification**: `mvn clean test -pl arcclaw-app` ✅

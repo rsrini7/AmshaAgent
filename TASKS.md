@@ -371,3 +371,15 @@
 - [x] Step 3: Implement internal protocol message filtering in `LangChainReasoningEngine` <!-- id: 112 -->
 - [x] Step 4: Add JUnit coverage for rolling window and filtering logic <!-- id: 113 -->
 - [x] Step 5: Verify build success and test passes (13/13) <!-- id: 114 -->
+
+---
+
+## Phase 30 — Reflex Registry & Test Infrastructure Hardening
+- [x] Step 1: Create `AgentReflex` interface for LLM-bypass commands
+- [x] Step 2: Implement `ReflexRegistry` with CDI discovery and log injection guards
+- [x] Step 3: Implement standard reflexes: `HaltReflex`, `StatusReflex`, `ResetReflex`, `ApproveReflex`, `DenyReflex`
+- [x] Step 4: Inject `ReflexRegistry` into `TelegramAgentHandler` to replace hardcoded intercepts
+- [x] Step 5: Expand `GovernanceLayer` API with `getSessionCost()`
+- [x] Step 6: Test Infrastructure: Document T-1 to T-6 troubleshooting scenarios
+- [x] Step 7: Inject `--add-opens java.base/java.lang=ALL-UNNAMED` to parent `pom.xml` for Java 24+ compatibility
+- [x] Step 8: Verify build success and test passes

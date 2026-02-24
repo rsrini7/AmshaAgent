@@ -1262,3 +1262,44 @@ Address "dangling approval" edge cases and intent routing regressions discovered
 - ✅ `mvn clean compile` succeeds cleanly.
 
 ---
+
+# Phase 30 — Reflex Registry & Test Infrastructure Hardening
+
+Create a deterministic, zero-latency "kill switch" for the AI agent, bypassing the LLM for critical system commands, and resolving comprehensive Maven multi-module test discovery failures.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Reflex Registry (LLM Bypass)**: Implemented `ReflexRegistry` using CDI `Instance<AgentReflex>` to intercept commands like `/reset`, `/approve`, `/halt`, and `/status` in `TelegramAgentHandler` *before* the LLM reasoning loop. This guarantees O(1) latency and zero USD cost for system administration.
+> **Log Injection Guard**: Reflex logs truncate user input to 200 characters to prevent log forging attacks.
+
+> [!CAUTION]
+> **Test Discovery on JDK 24+**: Maven Surefire and Quarkus TestEngine crashed with `IllegalAccessError` due to JBoss threads resetting `java.lang` internals. Added `--add-opens java.base/java.lang=ALL-UNNAMED` to the `pom.xml` test profile.
+> **Maven `-am` Test Flag**: Attempting to run `mvn test -pl arcclaw-app -am` caused JUnit Jupiter to fail test discovery on the library `arcclaw-core` module. Tests must be targeted precisely without `-am` if the reactor has stale `.class` indices.
+
+## Completed Changes
+
+### Core Module — Reflex System
+
+#### [NEW] [AgentReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/AgentReflex.java)
+- Interface defining `matches()` and `execute(sessionId, userId)`.
+
+#### [NEW] [ReflexRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/ReflexRegistry.java)
+- CDI registry that evaluates reflexes sequentially and handles input truncation safely.
+
+#### [NEW] [HaltReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/HaltReflex.java) / [StatusReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/StatusReflex.java)
+- `HaltReflex`: Immediately wipes the workspace and logs an ERROR for auditing.
+- `StatusReflex`: Queries `GovernanceLayer.getSessionCost()` and `StatefulAgentStore` for live monitoring.
+
+### App Module — Integration & Testing
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Replaced hardcoded `/reset`, `/approve`, and `/deny` logic with `reflexRegistry.processIfReflex()`.
+
+#### [MODIFY] [pom.xml](file:///h:/ws/ArcClaw/pom.xml)
+- Injected `--add-opens java.base/java.lang=ALL-UNNAMED` to `maven-surefire-plugin` across the reactor.
+
+## Verification
+
+- ✅ Verified `TelegramAgentHandlerTest` properly asserts that LLM is bypassed during a Reflex.
+- ✅ Verified `mvn test -pl arcclaw-app` executes successfully without `TestEngine` crashes.
