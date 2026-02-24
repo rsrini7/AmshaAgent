@@ -49,7 +49,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         // LangChain4j 0.26.1 utility for message serialization
         List<ChatMessage> allMessages = 
                 ChatMessageDeserializer.messagesFromJson(entity.getMessagesJson());
-                
+
+        // Note: ArcClaw injects SystemMessages fresh in LangChainReasoningEngine.nextStep()
+        // They are never stored in ChatMemoryStore, so systemMessages here is always empty.
+        // This partition is preserved for future architectures that may store system messages.                
         // 1. Separate the sacred System Message(s) from the volatile history
         List<ChatMessage> systemMessages = allMessages.stream()
                 .filter(m -> m instanceof SystemMessage)

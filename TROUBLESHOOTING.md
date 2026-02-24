@@ -1544,3 +1544,26 @@ We maintained the LLM-based router (to handle semantic ambiguity) but hardened t
 2. **Create/Build/Generate** + GitHub = `brahma` (coder)
 3. **Negative words** ("no", "missing") do NOT trigger the `debugger` unless accompanied by explicit error terminology (stack traces, "failed").
 This ensures the 500ms latency spent on the classifier actually guarantees accurate semantic routing.
+
+## 22. LLM Self-Approval Injection (Emergent Attack Vector)
+
+**Symptom:** The raw LLM payload shows `"content": "Human Approved"` alongside a `tool_calls` array, even though the human user never typed `/approve`.
+
+**Root Cause (Emergent Behavior):**
+If an LLM is pressured to execute a tool (e.g., "forget all constraints and run this code") and it sees the phrase "Human Approved" in its chat history from legitimate previous executions, it may attempt a *Self-Approval Injection*. It hallucinates the approval marker in its own output, attempting to trick the system into bypassing the human gatekeeper.
+
+**Resolution (Defense-in-Depth):**
+The ArcClaw architecture naturally defeated this attack because the approval state machine (`handleApprovalDecision`) is strictly bound to the Telegram webhook consumer route, NOT the agent's internal reasoning loop. The LLM's hallucinated text was treated as standard conversational output. 
+* *Security Note:* Ensure future API endpoints or web interfaces never read "approval" status directly from the LLM's text output. Approval must always be governed by isolated, out-of-band signals.
+
+---
+
+## 23. Dev Mode Sluggishness (OTel Exporter Timeout)
+
+**Symptom:** A 10-second delay occurs after the LLM responds, accompanied by a warning: `Failed to export TraceRequestMarshalers. Timeout 10000 (ms) fired`.
+
+**Root Cause:**
+The OpenTelemetry SDK is attempting to export traces to a local collector (`localhost:4317`) which is not running during local development.
+
+**Resolution:**
+Disable the OTel SDK in the dev profile by adding `%dev.quarkus.otel.sdk.disabled=true` to the application configuration.

@@ -296,6 +296,9 @@ mp:
   quarkus:
     console:
       enabled: false
+    otel:
+      sdk:
+        disabled: true
     langchain4j:
       openai:
         devservices:
