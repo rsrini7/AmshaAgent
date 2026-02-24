@@ -358,3 +358,12 @@
 - [x] Step 5: Fail-closed `resolveSecrets` dropping `System.getenv()` falls and throwing `SecurityException` <!-- id: 97 -->
 - [x] Step 6: Concurrency hardening: Add `volatile` keyword to `VaultKey.destroyed` <!-- id: 98 -->
 - [x] Step 7: Document GH_TOKEN rename and sandbox `bridge` networking <!-- id: 99 -->
+
+---
+
+## Phase 28 — Tool Flexibility & Proxy Unwrapping
+- [x] Step 1: Unwrap Quarkus CDI Proxies in `ToolRegistry` to expose `@RequiresSecret` <!-- id: 100 -->
+- [x] Step 2: Implement dynamic subcommands to `GithubTool.java` (removing hardcoded commands) <!-- id: 101 -->
+- [x] Step 3: Upgrade `IOException` to `ToolExecutionException` in `ProcessIsolationExecutor` <!-- id: 102 -->
+- [x] Step 4: Overhaul `application.yaml` logging to suppress JVM security cert events <!-- id: 103 -->
+- [x] Step 5: Document `TROUBLESHOOTING.md` sections 18-20 for proxy faults and tool failures <!-- id: 104 -->

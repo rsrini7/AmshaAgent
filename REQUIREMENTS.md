@@ -761,6 +761,13 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Secure Pipeline:** ✅ Replaced `String` materialization of credentials with a direct `byte[]` pipeline, fortified by Atomic POSIX file permissions on tmpfs.
 * **Developer Experience:** ✅ Added `DevSecretSeeder` to automate SQLite token hydration inside the `%dev` profile.
 
+### Phase 28: ArcClaw V1.0.0 (Tool Flexibility & Proxy Unwrapping)
+* **Status:** ✅ Completed.
+* **CDI Proxy Transparency:** ✅ Refactored `ToolRegistry.extractRequiredSecrets` to climb the class hierarchy, bypassing Quarkus `_ClientProxy` wrappers to correctly identify `@RequiresSecret`.
+* **Dynamic Tool Commands:** ✅ Overhauled `GithubTool.java` to accept dynamic actions and targets instead of a static `gh repo view` constraint.
+* **Error Escalation:** ✅ Replaced `IOException` with `ToolExecutionException` in the sandbox executor to provide semantic clarity to the agent loop.
+* **Log Suppression:** ✅ Suppressed `jdk.event.security` verbosity in development profiles.
+
 *ArcClaw V1.0.0 Requirements — Baselined from production implementation.*
 *Source documents: ArcClaw-v1_0-CONSOLIDATED.md, TASKS.md, DEVIATIONS.md, WALKTHROUGH.md, TROUBLESHOOTING.md, FAQ.md, README.md, claw-ecosystem.md.*
 *Audit trail: 5 LLMs, 4+ review passes, 21 unique risks resolved, 7 factual corrections applied.*

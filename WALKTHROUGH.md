@@ -592,3 +592,24 @@ Created a `DevSecretSeeder` utility bean that conditionally activates in the `%d
 
 **Verification**: `mvn clean compile` ✅
 
+---
+
+## Phase 28: Tool Flexibility & Proxy Unwrapping ✅
+
+This phase resolved integration quirks discovered during deep human-in-the-loop testing, specifically around how the LLM interacts with dynamic tools and Quarkus proxies.
+
+### 1. CDI Proxy Unwrapping
+Quarkus `@ApplicationScoped` beans are injected as runtime proxies (e.g., `GithubTool_ClientProxy`). The `ToolRegistry` reflection logic was failing to find the `@RequiresSecret` annotation because it was only checking the proxy class. Added `getSuperclass()` traversal to properly identify required secrets on the implementation classes, fixing silent vault injection failures.
+
+### 2. Dynamic Tool Subcommands
+The `GithubTool` was previously rigidly hardcoded to execute `gh repo view`. It was refactored to accept dynamic parameters (`action`, `command`, `target`), allowing the agent to express intent freely (e.g., `gh gist list`, `gh pr checkout`).
+
+### 3. Noise Reduction
+Added log level overrides (`INFO`) for `jdk.event.security` and `io.netty.handler.ssl` in `application.yaml` to suppress the massive influx of TLS handshake logs during LLM Provider and Telegram polling.
+
+### 4. Exception Escalation
+`ProcessIsolationExecutor` now throws `ToolExecutionException` instead of a generic `IOException` when a tool fails (exit code != 0), allowing the `AgentLoop` to more clearly relay the specific tool failure back to the LLM for correction.
+
+**Verification**: End-to-end testing with dynamic GitHub queries and `mvn compile`.
+
+
