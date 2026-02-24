@@ -7,8 +7,6 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.DevSecretSeeder;
 
-import io.quarkus.arc.profile.IfBuildProfile;
-import com.arcclaw.core.security.DevSecretSeeder;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
