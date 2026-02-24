@@ -347,3 +347,23 @@
 - [x] Step 4: Create standalone `WSL2_SETUP_GUIDE.md` and `MAC_SETUP_GUIDE.md` <!-- id: 90 -->
 - [x] Step 5: Update `TESTING_GUIDE.md` and `README.md` cross-references <!-- id: 91 -->
 - [x] Step 6: Verify build and logging via `mvn compile` and manual socket break <!-- id: 92 -->
+
+---
+
+## Phase 27 — Security Hardening & Secret Injection Pipeline
+- [x] Step 1: Implement `DevSecretSeeder` for host env token injection during JVM boot <!-- id: 93 -->
+- [x] Step 2: Secure byte[] secret pipeline and remove String materialization in `ProcessIsolationExecutor` <!-- id: 94 -->
+- [x] Step 3: Enforce Atomic POSIX file permissions for ephemeral `.env` creation <!-- id: 95 -->
+- [x] Step 4: Add explicit timeouts and `proc.exitValue()` tracking to catch silent sandbox failures <!-- id: 96 -->
+- [x] Step 5: Fail-closed `resolveSecrets` dropping `System.getenv()` falls and throwing `SecurityException` <!-- id: 97 -->
+- [x] Step 6: Concurrency hardening: Add `volatile` keyword to `VaultKey.destroyed` <!-- id: 98 -->
+- [x] Step 7: Document GH_TOKEN rename and sandbox `bridge` networking <!-- id: 99 -->
+
+---
+
+## Phase 28 — Tool Flexibility & Proxy Unwrapping
+- [x] Step 1: Unwrap Quarkus CDI Proxies in `ToolRegistry` to expose `@RequiresSecret` <!-- id: 100 -->
+- [x] Step 2: Implement dynamic subcommands to `GithubTool.java` (removing hardcoded commands) <!-- id: 101 -->
+- [x] Step 3: Upgrade `IOException` to `ToolExecutionException` in `ProcessIsolationExecutor` <!-- id: 102 -->
+- [x] Step 4: Overhaul `application.yaml` logging to suppress JVM security cert events <!-- id: 103 -->
+- [x] Step 5: Document `TROUBLESHOOTING.md` sections 18-20 for proxy faults and tool failures <!-- id: 104 -->

@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -33,8 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Resource caps (Fix C2): --memory, --cpus, --pids-limit, --ulimit.
  * Circuit breaker (Fix C3): auto-fallback to NAMESPACE after 3 Podman failures.
  * <li><strong>Security</strong>:
- * Secret injection (V1.0.0): ephemeral env-file, deleted in finally, never in
- * process args.
+ * Secret injection (V1.0.0): ephemeral env-file, deleted in finally, never in process args.
  * OTel tracing: child spans attached to session root span.
  * Fix G2: @PreDestroy graceful container shutdown.
  */
@@ -81,7 +80,7 @@ public class ProcessIsolationExecutor {
      * Fix G2: Tracks names of all currently-running Podman containers.
      * Each container is started with --name zc-<sessionId>-<nonce>.
      * Name is added before podman run, removed in finally after it exits.
-     * 
+     *
      * @PreDestroy drains this set on JVM SIGTERM — stops any survivors.
      */
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
@@ -107,16 +106,15 @@ public class ProcessIsolationExecutor {
     }
 
     /**
-     * Fix G2: Graceful container shutdown on JVM SIGTERM / @ApplicationScoped
-     * destroy.
+     * Fix G2: Graceful container shutdown on JVM SIGTERM / @ApplicationScoped destroy.
      * <p>
      * Stops all tracked containers with a 10-second grace period
      * (matching Kubernetes terminationGracePeriodSeconds default).
      */
     @PreDestroy
     void stopAllContainersOnShutdown() {
-        if (activeContainerNames.isEmpty())
-            return;
+        if (activeContainerNames.isEmpty()) return;
+
         log.infof("JVM shutdown: stopping %d active Podman container(s)...", activeContainerNames.size());
         for (String containerName : activeContainerNames) {
             try {
@@ -138,8 +136,7 @@ public class ProcessIsolationExecutor {
     }
 
     /**
-     * Primary entry point — routes to Podman, NAMESPACE, or NONE based on strategy
-     * + circuit state.
+     * Primary entry point — routes to Podman, NAMESPACE, or NONE based on strategy + circuit state.
      *
      * @param sessionId       The workspace session ID.
      * @param workspaceRoot   The workspace root directory.
@@ -148,10 +145,7 @@ public class ProcessIsolationExecutor {
      * @return The command output (stdout + stderr).
      */
     public String executeSandboxed(
-            String sessionId,
-            Path workspaceRoot,
-            List<String> command,
-            Map<String, String> requiredSecrets) throws Exception {
+            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
 
         if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
             return executeDirectly(workspaceRoot, command);
@@ -162,6 +156,10 @@ public class ProcessIsolationExecutor {
                 String result = executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
                 podmanFailures.set(0);
                 return result;
+            } catch (ToolExecutionException e) {
+                // THE FIX: The tool ran but failed. Do NOT fall back. 
+                // Throw immediately so the LLM sees the tool's error output.
+                throw e;
             } catch (Exception e) {
                 int failures = podmanFailures.incrementAndGet();
                 log.errorf("Podman execution failed (session=%s, failureCount=%d): %s",
@@ -171,16 +169,13 @@ public class ProcessIsolationExecutor {
                     log.errorf("Podman failed %d times — opening circuit breaker, falling back to NAMESPACE", failures);
                     podmanCircuitOpen = true;
                 }
-                // Fall through to NAMESPACE
             }
         }
-
         return executeInNamespace(workspaceRoot, command);
     }
 
     /**
-     * Strategy A: Podman rootless container with resource caps + ephemeral secret
-     * injection.
+     * Strategy A: Podman rootless container with resource caps + ephemeral secret injection.
      * Fix G2: container is named and tracked for graceful @PreDestroy shutdown.
      */
     private String executeInContainer(
@@ -191,11 +186,10 @@ public class ProcessIsolationExecutor {
 
         var resolvedSecrets = resolveSecrets(requiredSecrets);
         var envFile = writeEphemeralEnvFile(sessionId, resolvedSecrets);
+        // Note: resolvedSecrets byte arrays are zeroed inside writeEphemeralEnvFile's finally block.
 
-        // Fix G2: deterministic container name for tracking + graceful stop on
-        // shutdown.
-        // Format: zc-<sessionId truncated to 8 chars>-<nonce> to stay within 64-char
-        // limit.
+        // Fix G2: deterministic container name for tracking + graceful stop on shutdown.
+        // Format: zc-<sessionId truncated to 8 chars>-<nonce> to stay within 64-char limit.
         String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                 + "-" + Long.toHexString(System.nanoTime());
 
@@ -216,10 +210,10 @@ public class ProcessIsolationExecutor {
                     "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                     "--user=65534:65534",
                     "--memory=" + containerMemoryLimit, // Fix C2: OOM kill before host impact
-                    "--cpus=" + containerCpuLimit, // Fix C2: prevent CPU saturation
+                    "--cpus=" + containerCpuLimit,      // Fix C2: prevent CPU saturation
                     "--pids-limit=" + CONTAINER_PIDS_LIMIT, // Fix C2: block fork bombs
-                    "--ulimit=nofile=256:256", // Fix C2: limit open file descriptors
-                    "--env-file", envFile.toString() // secrets via env-file, not process args
+                    "--ulimit=nofile=256:256",           // Fix C2: limit open file descriptors
+                    "--env-file", envFile.toAbsolutePath().toString()     // secrets via env-file, not process args
             ));
             podmanCmd.add(containerImage);
             podmanCmd.addAll(command);
@@ -242,7 +236,7 @@ public class ProcessIsolationExecutor {
                 throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
             }
             if (process.exitValue() != 0) {
-                throw new IOException("Tool failed (exit " + process.exitValue() + "): " + output);
+                throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
             }
             span.setStatus(StatusCode.OK);
             return output;
@@ -255,7 +249,6 @@ public class ProcessIsolationExecutor {
             span.end();
             activeContainerNames.remove(containerName); // Fix G2: deregister on normal exit
             deleteEphemeralEnvFile(envFile);
-            clearSecretsFromMemory(resolvedSecrets);
         }
     }
 
@@ -263,8 +256,7 @@ public class ProcessIsolationExecutor {
      * Strategy B: Linux unshare namespaces (lighter, no Podman needed).
      * Falls back gracefully on non-Linux (dev/macOS/Windows).
      */
-    private String executeInNamespace(Path workspaceRoot, List<String> command)
-            throws Exception {
+    private String executeInNamespace(Path workspaceRoot, List<String> command) throws Exception {
         boolean isLinux = System.getProperty("os.name", "").toLowerCase().contains("linux");
         ProcessBuilder pb;
         if (isLinux) {
@@ -278,10 +270,17 @@ public class ProcessIsolationExecutor {
             pb.directory(workspaceRoot.toFile());
         }
         pb.redirectErrorStream(true);
-        var proc = pb.start();
-        var out = new String(proc.getInputStream().readAllBytes());
-        proc.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-        return out;
+        var process = pb.start();
+        var output = new String(process.getInputStream().readAllBytes());
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
+        }
+        if (process.exitValue() != 0) {
+            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
+        }
+        return output;
     }
 
     /** Dev mode: no isolation, direct execution. */
@@ -289,75 +288,134 @@ public class ProcessIsolationExecutor {
         var pb = new ProcessBuilder(command);
         pb.directory(workspaceRoot.toFile());
         pb.redirectErrorStream(true);
-        var proc = pb.start();
-        var out = new String(proc.getInputStream().readAllBytes());
-        proc.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-        return out;
+        var process = pb.start();
+        var output = new String(process.getInputStream().readAllBytes());
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
+        }
+        if (process.exitValue() != 0) {
+            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
+        }
+        return output;
     }
 
     /**
-     * Resolves vault secrets for container injection.
+     * Resolves vault secrets for container injection as raw byte arrays.
      * <p>
-     * Adapts our {@link SecretVault#get(String)} (which returns
-     * {@code Optional<VaultKey>})
-     * to the env-file format. Each VaultKey is converted to a temporary String, and
-     * will
-     * be cleared via {@link #clearSecretsFromMemory(Map)} in the finally block.
+     * Fail-closed contract:
+     * - null map     → IllegalArgumentException (programming error in caller)
+     * - empty map    → empty result (valid — tool requires no secrets)
+     * - missing key  → SecurityException (vault must be the sole source of truth)
+     * <p>
+     * The returned byte arrays are owned by this method's callers and MUST be
+     * zeroed after use. {@link #writeEphemeralEnvFile} zeros them in its finally block.
      */
-    private Map<String, String> resolveSecrets(Map<String, String> requiredSecrets) {
-        var resolved = new LinkedHashMap<String, String>();
-        
-        // Failsafe if ToolRegistry reflection missed the annotation
-        if (requiredSecrets == null || requiredSecrets.isEmpty()) {
-            requiredSecrets = Map.of("GH_TOKEN", "GITHUB_TOKEN");
+    private Map<String, byte[]> resolveSecrets(Map<String, String> requiredSecrets) {
+        if (requiredSecrets == null) {
+            throw new IllegalArgumentException(
+                    "requiredSecrets must not be null — check ToolRegistry.extractRequiredSecrets()");
+        }
+        if (requiredSecrets.isEmpty()) {
+            return new LinkedHashMap<>();
         }
 
+        var resolved = new LinkedHashMap<String, byte[]>();
         for (var entry : requiredSecrets.entrySet()) {
             String envVar = entry.getKey();
             String vaultKeyName = entry.getValue();
-            
-            // 1. Try the secure Database Vault first
+
             var optionalKey = secretVault.get(vaultKeyName);
-            
+
             if (optionalKey.isPresent()) {
                 try (VaultKey key = optionalKey.get()) {
-                    resolved.put(envVar, new String(key.get(), StandardCharsets.UTF_8));
+                    // SECURE TRANSFER: direct byte array copy — no String materialization.
+                    // The VaultKey source bytes are zeroed on close() above.
+                    byte[] src = key.get();
+                    byte[] copy = new byte[src.length];
+                    System.arraycopy(src, 0, copy, 0, src.length);
+                    resolved.put(envVar, copy);
                 }
             } else {
-                // 2. FALLBACK: Try Mac OS Environment Variables (e.g., ~/.zshrc or export)
-                String hostEnvValue = System.getenv(vaultKeyName);
-                
-                if (hostEnvValue != null && !hostEnvValue.isBlank()) {
-                    resolved.put(envVar, hostEnvValue);
-                } else {
-                    // 3. Both failed - throw security exception
-                    throw new SecurityException("Required secret not in DB vault or Host environment: " + vaultKeyName);
-                }
+                // FAIL-CLOSED: no hardcoded substitutions, no System.getenv() fallback.
+                throw new SecurityException("Required secret not in vault: " + vaultKeyName);
             }
         }
         return resolved;
     }
 
     /**
-     * Writes secrets as KEY=VALUE pairs to a temporary env-file with restricted
-     * permissions.
+     * Writes secrets to a strictly permissioned ephemeral env-file using a single
+     * pre-sized byte array — no intermediate copies.
+     * <p>
+     * Memory contract: both the assembled {@code payload} array and each individual
+     * secret byte array in {@code secrets} are zeroed in the {@code finally} block,
+     * regardless of success or failure. The caller must not access {@code secrets}
+     * values after this method returns.
+     *
+     * @param sessionId the workspace session ID (used to scope the temp file location)
+     * @param secrets   map of envVar → raw secret bytes (will be zeroed on return)
+     * @return path to the written env-file (caller is responsible for deletion)
      */
-    private Path writeEphemeralEnvFile(String sessionId, Map<String, String> secrets)
-            throws Exception {
-        var envFile = Path.of(System.getProperty("java.io.tmpdir"))
-                .resolve("zc-" + sessionId + "-" + System.nanoTime() + ".env");
-        var sb = new StringBuilder();
-        secrets.forEach((k, v) -> sb.append(k).append("=").append(v).append("\n"));
-        // Owner-read only — secrets never visible to other processes
-        Files.writeString(envFile, sb.toString(), StandardOpenOption.CREATE_NEW);
-        try {
-            Files.setPosixFilePermissions(envFile,
-                    java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
-        } catch (UnsupportedOperationException ignored) {
-            // Non-POSIX (Windows dev) — best-effort
-            envFile.toFile().setReadable(true, true);
+    private Path writeEphemeralEnvFile(String sessionId, Map<String, byte[]> secrets) throws IOException {
+        Path workspaceDir = Path.of(workspaceRootDir, sessionId);
+        if (!Files.exists(workspaceDir)) {
+            Files.createDirectories(workspaceDir);
         }
-        return envFile;
+
+        Path envFile;
+        try {
+            var strictAttrs = PosixFilePermissions.asFileAttribute(
+                    PosixFilePermissions.fromString("rw-------"));
+            envFile = Files.createTempFile(workspaceDir, "secrets-", ".env", strictAttrs);
+        } catch (UnsupportedOperationException e) {
+            envFile = Files.createTempFile(workspaceDir, "secrets-", ".env");
+            envFile.toFile().setReadable(true, true);
+            envFile.toFile().setWritable(true, true);
+        }
+
+        if (secrets == null || secrets.isEmpty()) {
+            return envFile;
+        }
+
+        // Pre-calculate exact payload size to avoid ByteArrayOutputStream's internal
+        // buffer — which would create a second uncontrolled copy of the secret bytes.
+        int totalSize = 0;
+        for (var entry : secrets.entrySet()) {
+            totalSize += entry.getKey().getBytes(StandardCharsets.UTF_8).length; // key
+            totalSize += 1;                    // '='
+            totalSize += entry.getValue().length; // secret bytes
+            totalSize += 1;                    // '\n'
+        }
+
+        byte[] payload = new byte[totalSize];
+        try {
+            int pos = 0;
+            for (var entry : secrets.entrySet()) {
+                byte[] keyBytes = (entry.getKey() + "=").getBytes(StandardCharsets.UTF_8);
+                System.arraycopy(keyBytes, 0, payload, pos, keyBytes.length);
+                pos += keyBytes.length;
+
+                byte[] val = entry.getValue();
+                System.arraycopy(val, 0, payload, pos, val.length);
+                pos += val.length;
+
+                payload[pos++] = '\n';
+            }
+            Files.write(envFile, payload);
+            return envFile;
+
+        } finally {
+            // Zero the assembled payload — the only in-memory copy of all secrets combined.
+            Arrays.fill(payload, (byte) 0);
+            // Zero each individual secret byte array — they are now dead.
+            for (byte[] secretBytes : secrets.values()) {
+                if (secretBytes != null) {
+                    Arrays.fill(secretBytes, (byte) 0);
+                }
+            }
+        }
     }
 
     private void deleteEphemeralEnvFile(Path f) {
@@ -366,9 +424,7 @@ public class ProcessIsolationExecutor {
         } catch (Exception ignored) {
         }
     }
-
-    private void clearSecretsFromMemory(Map<String, String> secrets) {
-        secrets.replaceAll((k, v) -> "");
-        secrets.clear();
+    public static class ToolExecutionException extends RuntimeException {
+        public ToolExecutionException(String message) { super(message); }
     }
 }

@@ -183,15 +183,22 @@ public class ToolRegistry {
      * Pass {@code "sandboxCommand"} for sandboxed tools (new default).
      * The old {@code "execute"} method name is no longer used.
      *
-     * @param toolClass  The tool implementation class.
+     * @param toolClass  The tool implementation class (can be a CDI proxy).
      * @param methodName The method to scan for @RequiresSecret annotations.
      * @return Immutable map of envVar → vaultKey.
      */
     public static Map<String, String> extractRequiredSecrets(
             Class<? extends AgentTool> toolClass, String methodName) {
         var secrets = new LinkedHashMap<String, String>();
+        
+        // THE FIX: Unwrap Quarkus CDI Proxies to read annotations from the true class
+        Class<?> actualClass = toolClass;
+        while (actualClass.getName().contains("_ClientProxy") || actualClass.getName().contains("_Subclass")) {
+            actualClass = actualClass.getSuperclass();
+        }
+
         try {
-            Method method = toolClass.getMethod(methodName, Map.class);
+            Method method = actualClass.getMethod(methodName, Map.class);
             var container = method.getAnnotation(RequiresSecrets.class);
             if (container != null) {
                 for (var rs : container.value()) {
@@ -205,7 +212,7 @@ public class ToolRegistry {
 
         } catch (NoSuchMethodException e) {
             log.warnf("Tool %s has no %s(Map) method — no secrets extracted",
-                    toolClass.getName(), methodName);
+                    actualClass.getName(), methodName);
         }
         return Collections.unmodifiableMap(secrets);
     }

@@ -1,0 +1,759 @@
+[
+  {
+    "file": "ProcessIsolationExecutor.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::checkPodmanAvailability()",
+        "io_calls": [
+          {
+            "line_approx": "96",
+            "call": "pb.start()",
+            "return_captured_in": "proc",
+            "exception_handling": "catch (Exception e) — logs warning, sets podmanCircuitOpen = true"
+          },
+          {
+            "line_approx": "97",
+            "call": "proc.waitFor(5, TimeUnit.SECONDS)",
+            "return_captured_in": "ok",
+            "exception_handling": "catch (Exception e) — logs warning, sets podmanCircuitOpen = true"
+          }
+        ],
+        "state_mutations": [
+          {
+            "line_approx": "100",
+            "field_or_variable": "podmanCircuitOpen",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "volatile"
+          },
+          {
+            "line_approx": "104",
+            "field_or_variable": "podmanCircuitOpen",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "volatile"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::stopAllContainersOnShutdown()",
+        "io_calls": [
+          {
+            "line_approx": "125",
+            "call": "pb.start()",
+            "return_captured_in": "proc",
+            "exception_handling": "catch (Exception e) — logs warning per container"
+          },
+          {
+            "line_approx": "126",
+            "call": "proc.waitFor(15, TimeUnit.SECONDS)",
+            "return_captured_in": "stopped",
+            "exception_handling": "catch (Exception e) — logs warning per container"
+          }
+        ],
+        "state_mutations": [
+          {
+            "line_approx": "137",
+            "field_or_variable": "activeContainerNames",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::executeSandboxed(String, Path, List, Map)",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "163",
+            "field_or_variable": "podmanFailures",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "AtomicX"
+          },
+          {
+            "line_approx": "172",
+            "field_or_variable": "podmanCircuitOpen",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "volatile"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::executeInContainer(String, Path, List, Map)",
+        "io_calls": [
+          {
+            "line_approx": "236",
+            "call": "pb.start()",
+            "return_captured_in": "process",
+            "exception_handling": "catch (Exception e) — records OTel exception, rethrows"
+          },
+          {
+            "line_approx": "237",
+            "call": "process.getInputStream().readAllBytes()",
+            "return_captured_in": "output (via new String(...))",
+            "exception_handling": "catch (Exception e) — records OTel exception, rethrows"
+          },
+          {
+            "line_approx": "238",
+            "call": "process.waitFor(timeoutSeconds, TimeUnit.SECONDS)",
+            "return_captured_in": "finished",
+            "exception_handling": "catch (Exception e) — records OTel exception, rethrows"
+          },
+          {
+            "line_approx": "241",
+            "call": "process.destroyForcibly()",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "within timeout check block, followed by SecurityException throw"
+          },
+          {
+            "line_approx": "230",
+            "call": "Files.exists(workspaceDir)",
+            "return_captured_in": "boolean (inline if condition)",
+            "exception_handling": "NONE — IOException thrown if false"
+          },
+          {
+            "line_approx": "352",
+            "call": "Files.writeString(envFile, ..., StandardOpenOption.CREATE_NEW)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "PROPAGATED (via writeEphemeralEnvFile)"
+          }
+        ],
+        "state_mutations": [
+          {
+            "line_approx": "207",
+            "field_or_variable": "activeContainerNames",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          },
+          {
+            "line_approx": "256",
+            "field_or_variable": "activeContainerNames",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [
+          {
+            "line_approx": "237",
+            "from_type": "byte[]",
+            "to_type": "String",
+            "method": "new String(process.getInputStream().readAllBytes())"
+          },
+          {
+            "line_approx": "324",
+            "from_type": "VaultKey (byte[])",
+            "to_type": "String",
+            "method": "new String(key.get(), StandardCharsets.UTF_8)"
+          }
+        ],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of process.destroyForcibly() captured and evaluated for failure before execution continues?",
+          "Are the source bytes from process.getInputStream().readAllBytes() zeroed out before the reference is released, without a plaintext String copy remaining in the JVM heap?",
+          "Are the source bytes from key.get() zeroed out before the reference is released, without a plaintext String copy remaining in the JVM heap?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::executeInNamespace(Path, List)",
+        "io_calls": [
+          {
+            "line_approx": "281",
+            "call": "pb.start()",
+            "return_captured_in": "proc",
+            "exception_handling": "PROPAGATED"
+          },
+          {
+            "line_approx": "282",
+            "call": "proc.getInputStream().readAllBytes()",
+            "return_captured_in": "out (via new String(...))",
+            "exception_handling": "PROPAGATED"
+          },
+          {
+            "line_approx": "283",
+            "call": "proc.waitFor(timeoutSeconds, TimeUnit.SECONDS)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "PROPAGATED"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [
+          {
+            "line_approx": "282",
+            "from_type": "byte[]",
+            "to_type": "String",
+            "method": "new String(proc.getInputStream().readAllBytes())"
+          }
+        ],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of proc.waitFor(timeoutSeconds, TimeUnit.SECONDS) captured and evaluated for failure before execution continues?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::executeDirectly(Path, List)",
+        "io_calls": [
+          {
+            "line_approx": "292",
+            "call": "pb.start()",
+            "return_captured_in": "proc",
+            "exception_handling": "PROPAGATED"
+          },
+          {
+            "line_approx": "293",
+            "call": "proc.getInputStream().readAllBytes()",
+            "return_captured_in": "out (via new String(...))",
+            "exception_handling": "PROPAGATED"
+          },
+          {
+            "line_approx": "294",
+            "call": "proc.waitFor(timeoutSeconds, TimeUnit.SECONDS)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "PROPAGATED"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [
+          {
+            "line_approx": "293",
+            "from_type": "byte[]",
+            "to_type": "String",
+            "method": "new String(proc.getInputStream().readAllBytes())"
+          }
+        ],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of proc.waitFor(timeoutSeconds, TimeUnit.SECONDS) captured and evaluated for failure before execution continues?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::resolveSecrets(Map)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [
+          {
+            "line_approx": "324",
+            "from_type": "VaultKey (byte[])",
+            "to_type": "String",
+            "method": "new String(key.get(), StandardCharsets.UTF_8)"
+          },
+          {
+            "line_approx": "328",
+            "from_type": "System.getenv(vaultKeyName)",
+            "to_type": "String (secret resolution input)",
+            "method": "System.getenv(vaultKeyName)"
+          }
+        ],
+        "security_violations": [
+          {
+            "line_approx": "312",
+            "pattern": "HARDCODED_CREDENTIAL_MAP",
+            "expression": "requiredSecrets = Map.of(\"GH_TOKEN\", \"GITHUB_TOKEN\")",
+            "description": "A hardcoded credential map is substituted when the caller-provided requiredSecrets is null or empty, bypassing the annotation-driven secret resolution contract."
+          },
+          {
+            "line_approx": "328",
+            "pattern": "ENV_VAR_FALLBACK",
+            "expression": "String hostEnvValue = System.getenv(vaultKeyName)",
+            "description": "System.getenv() is used as a fallback when the secure Database Vault returns empty, allowing plaintext host environment variables to be injected into container execution."
+          }
+        ],
+        "verification_questions": [
+          "Are the source bytes from key.get() zeroed out before the reference is released, without a plaintext String copy remaining in the JVM heap?",
+          "Is the credential resolution contract strictly enforced through the Database Vault without the hardcoded Map.of(\"GH_TOKEN\", \"GITHUB_TOKEN\") fallback?",
+          "Is the credential resolution contract strictly enforced through the Database Vault without the System.getenv() environment variable fallback?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::writeEphemeralEnvFile(String, Map)",
+        "io_calls": [
+          {
+            "line_approx": "352",
+            "call": "Files.writeString(envFile, sb.toString(), StandardOpenOption.CREATE_NEW)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "PROPAGATED"
+          },
+          {
+            "line_approx": "354-355",
+            "call": "Files.setPosixFilePermissions(envFile, ...)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "catch (UnsupportedOperationException ignored) — falls back to setReadable(true, true)"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of Files.writeString(...) captured and evaluated for failure before execution continues?",
+          "Is the return value of Files.setPosixFilePermissions(...) captured and evaluated for failure before execution continues?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::deleteEphemeralEnvFile(Path)",
+        "io_calls": [
+          {
+            "line_approx": "365",
+            "call": "Files.deleteIfExists(f)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "catch (Exception ignored) — swallowed"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of Files.deleteIfExists(f) captured and evaluated for failure before execution continues?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.sandbox.ProcessIsolationExecutor::clearSecretsFromMemory(Map)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  },
+  {
+    "file": "SecretVaultImpl.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.security.SecretVaultImpl::init(String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.SecretVaultImpl::store(String, byte[])",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.SecretVaultImpl::get(String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.SecretVaultImpl::rotateSecrets(String, String, String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  },
+  {
+    "file": "AesGcmSivCipher.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.security.AesGcmSivCipher::encrypt(byte[], VaultKey, String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.AesGcmSivCipher::decrypt(byte[], byte[], VaultKey, String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  },
+  {
+    "file": "Argon2idKeyDerivation.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.security.Argon2idKeyDerivation::deriveSessionKey(String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [
+          {
+            "line_approx": "56",
+            "from_type": "String (pepper)",
+            "to_type": "byte[]",
+            "method": "pepper.getBytes(StandardCharsets.UTF_8)"
+          }
+        ],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  },
+  {
+    "file": "VaultKey.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.security.VaultKey::VaultKey(byte[])",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.VaultKey::get()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.VaultKey::close()",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "53-54",
+            "field_or_variable": "destroyed",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "NONE"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": [
+          "Is concurrent access to destroyed protected by an appropriate thread-safety mechanism?"
+        ]
+      },
+      {
+        "method": "com.arcclaw.core.security.VaultKey::isDestroyed()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.VaultKey::checkDestroyed()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.security.VaultKey::toString()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  },
+  {
+    "file": "PodmanHealthCheck.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.health.PodmanHealthCheck::call()",
+        "io_calls": [
+          {
+            "line_approx": "23",
+            "call": "pb.start()",
+            "return_captured_in": "process",
+            "exception_handling": "catch (Exception e) — returns DOWN health response"
+          },
+          {
+            "line_approx": "24",
+            "call": "process.waitFor(2, TimeUnit.SECONDS)",
+            "return_captured_in": "finished",
+            "exception_handling": "catch (Exception e) — returns DOWN health response"
+          },
+          {
+            "line_approx": "30",
+            "call": "process.destroyForcibly()",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "within timeout check block"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of process.destroyForcibly() captured and evaluated for failure before execution continues?"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "PodmanImageHealthCheck.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.health.PodmanImageHealthCheck::call()",
+        "io_calls": [
+          {
+            "line_approx": "24",
+            "call": "pb.start()",
+            "return_captured_in": "process",
+            "exception_handling": "catch (Exception e) — returns DOWN health response"
+          },
+          {
+            "line_approx": "26",
+            "call": "process.waitFor(2, TimeUnit.SECONDS)",
+            "return_captured_in": "finished",
+            "exception_handling": "catch (Exception e) — returns DOWN health response"
+          },
+          {
+            "line_approx": "32",
+            "call": "process.destroyForcibly()",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "within timeout check block"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of process.destroyForcibly() captured and evaluated for failure before execution continues?"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "WorkspaceManager.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::recordHeartbeat(String)",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "86",
+            "field_or_variable": "heartbeats",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::removeHeartbeat(String)",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "94",
+            "field_or_variable": "heartbeats",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::activeSessionCount()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::clearAll()",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "108",
+            "field_or_variable": "heartbeats",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::onStartup(StartupEvent)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::gcSweep()",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "166-185",
+            "field_or_variable": "heartbeats",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::sweepTimedOutApprovals()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::terminateSession(String)",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "230",
+            "field_or_variable": "heartbeats",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::markCheckpointsFailed(String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.lifecycle.WorkspaceManager::wipeWorkspaceDir(String)",
+        "io_calls": [
+          {
+            "line_approx": "285",
+            "call": "Files.exists(workspaceDir)",
+            "return_captured_in": "boolean (inline if condition)",
+            "exception_handling": "NONE"
+          },
+          {
+            "line_approx": "289-301",
+            "call": "Files.walkFileTree(workspaceDir, ...)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "catch (IOException e) — logs warning"
+          },
+          {
+            "line_approx": "292",
+            "call": "Files.delete(file)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "PROPAGATED (within visitor, caught by outer catch)"
+          },
+          {
+            "line_approx": "298",
+            "call": "Files.delete(dir)",
+            "return_captured_in": "DISCARDED",
+            "exception_handling": "PROPAGATED (within visitor, caught by outer catch)"
+          }
+        ],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": [
+          "Is the return value of Files.walkFileTree(...) captured and evaluated for failure before execution continues?"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "GovernanceLayer.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.governance.GovernanceLayer::recordLlmCall(String, int, int)",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "43",
+            "field_or_variable": "budgets",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.governance.GovernanceLayer::downgradeAutonomy()",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.governance.GovernanceLayer::clearSession(String)",
+        "io_calls": [],
+        "state_mutations": [
+          {
+            "line_approx": "85",
+            "field_or_variable": "budgets",
+            "field_type": "INSTANCE_FIELD",
+            "thread_safety_mechanism": "ConcurrentX"
+          }
+        ],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  },
+  {
+    "file": "AgentLoop.java",
+    "verification_plan": [
+      {
+        "method": "com.arcclaw.core.agent.AgentLoop::run(String, ReasoningEngine)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.agent.AgentLoop::run(String, String, String, ReasoningEngine, int)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.agent.AgentLoop::run(String, ReasoningEngine, int)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      },
+      {
+        "method": "com.arcclaw.core.agent.AgentLoop::runLoop(String, ReasoningEngine, int, List, String)",
+        "io_calls": [],
+        "state_mutations": [],
+        "type_conversions": [],
+        "security_violations": [],
+        "verification_questions": []
+      }
+    ]
+  }
+]

@@ -1379,3 +1379,152 @@ If complex class hierarchies, interfaces, or CDI proxies mask the target tool's 
 
 **Resolution:**
 A failsafe has been implemented in `ProcessIsolationExecutor.java` (in `resolveSecrets`). If the reflection-driven `requiredSecrets` map is `null` or empty, the sandbox executor automatically injects a fallback map (e.g., `GH_TOKEN` mapped to `GITHUB_TOKEN`) to guarantee critical developer tools have credentials.
+
+---
+
+## 14. Pipeline-Verified Bug Registry (Regression Targets)
+The following systemic vulnerabilities were identified and structurally eliminated via the Falsifier Pipeline. Any code modifications touching these methods must not re-introduce these patterns. 
+
+| Priority | Class::Method(Signature) | Bug Description | Runtime Consequence | Fix Complexity |
+|----------|--------------------------|-----------------|---------------------|----------------|
+| CRITICAL | `ProcessIsolationExecutor::resolveSecrets(Map<String, String>)` | Silently substitutes hardcoded `Map.of("GH_TOKEN", "GITHUB_TOKEN")` when `requiredSecrets` is empty. | When `executeInContainer()` is called with a `null` or empty `requiredSecrets` map, `resolveSecrets()` silently substitutes a hardcoded `Map.of("GH_TOKEN", "GITHUB_TOKEN")`, causing the container to receive a `GH_TOKEN` environment variable that was never requested by the tool's `@RequiresSecret` annotation, and masking the upstream annotation-resolution failure in `ToolRegistry`. | TRIVIAL |
+| CRITICAL | `ProcessIsolationExecutor::resolveSecrets(Map<String, String>)` | Uses `System.getenv()` as a fallback when the Database Vault returns empty. | The `System.getenv()` fallback allows plaintext environment variables to be injected into the container, bypassing the Database Vault entirely and storing sensitive credentials as immutable Strings in the JVM heap indefinitely. | TRIVIAL |
+| CRITICAL | `VaultKey::close()` | The `destroyed` flag lacks the `volatile` keyword or synchronization. | Without a `volatile` keyword or synchronization, concurrent threads accessing the same `VaultKey` may cache the `destroyed` flag in their local thread memory, leading to double-free execution or silent failure to wipe the sensitive byte array during `close()`. | TRIVIAL |
+| CRITICAL | `ProcessIsolationExecutor::resolveSecrets(Map<String, String>)` | Converts the decrypted `VaultKey` byte array into an immutable `String`. | Converting the decrypted byte array to an immutable Java `String` creates a permanent plaintext copy in the JVM heap, completely defeating the `VaultKey`'s auto-close zeroing mechanism and leaving the secret vulnerable to memory scraping. | SMALL |
+| CRITICAL | `ProcessIsolationExecutor::executeInContainer(String, Path, List, Map)` | Captures `stdout` byte array and immediately converts it to an immutable `String`. | Standard output from the container process is captured as a byte array and immediately converted to an immutable `String`, meaning if a sandbox tool accidentally prints credentials or secrets, they are trapped in the JVM heap indefinitely. | LARGE |
+| HIGH | `ProcessIsolationExecutor::executeInNamespace(Path, List)` | Ignores the exit code and timeout result of `proc.waitFor()`. | If the Linux namespace process times out or exits with a non-zero code (e.g., tool crash), the failure is silently ignored and the error output is returned to the agent loop as a successful execution, corrupting the reasoning state. | SMALL |
+| HIGH | `ProcessIsolationExecutor::executeDirectly(Path, List)` | Ignores the exit code and timeout result of `proc.waitFor()`. | If the direct host process execution times out or exits with a non-zero status, the exit code is dropped and the `stderr` is treated as a successful tool observation, causing the agent to hallucinate based on error text. | SMALL |
+
+## 15. Developer Experience (DX) Secret Seeding (macOS & Podman)
+
+**Symptom:** When developing on macOS with Podman, sandbox tools (like `gh`) fail with authentication errors because the ephemeral `SecretVault` is empty on every session reset.
+
+**Root Cause:**
+For strict production security, `ProcessIsolationExecutor` must NEVER read directly from `System.getenv()`. It is strictly fail-closed and only reads from the encrypted SQLite `SecretVault`.
+
+**Resolution (The DevSecretSeeder Pattern):**
+To preserve DX without compromising the sandbox, we use a `DevSecretSeeder` bean annotated with `@IfBuildProfile("dev")`. 
+* It safely copies developer host variables into the `SecretVault` at the exact moment a session is initialized.
+* **Important:** This bean is completely stripped from the production JAR and Native Image, ensuring zero risk of environment-variable leakage in production.
+
+---
+
+## 16. CDI Lifecycle Mismatches (`StartupEvent` vs `@WorkspaceScoped`)
+
+**Error:**
+`java.lang.IllegalStateException: Active session required to store secrets` during application startup.
+
+**Root Cause:**
+Attempting to interact with the `SecretVault` (or any `@WorkspaceScoped` bean) inside a Quarkus `@Observes StartupEvent` listener. At application boot time, the custom Virtual Thread/Session context (`WorkspaceScopeHolder`) does not exist yet.
+
+**Resolution:**
+Never seed or mutate session-scoped state at application startup. State initialization must be deferred until the absolute edge of the application (e.g., `AskCommand.run()` or `TelegramAgentHandler.runAgent()`) IMMEDIATELY AFTER `WorkspaceScopeHolder.set(sessionId)` is called.
+
+---
+
+## 17. Conditional Bean Injection (`@IfBuildProfile` Pitfalls)
+
+**Error:**
+`jakarta.enterprise.inject.UnsatisfiedResolutionException` at runtime or build time.
+
+**Root Cause:**
+A core class (like `AskCommand` or `TelegramAgentHandler`) attempts to `@Inject` a dev-only bean (like `DevSecretSeeder`) directly. Because `@IfBuildProfile("dev")` removes the bean during a production build, the injection point becomes unresolvable and crashes the application.
+
+**Resolution:**
+Always use `Instance<T>` for environment-specific beans.
+```java
+@Inject
+Instance<DevSecretSeeder> devSeeder;
+
+// Later in code:
+if (!devSeeder.isUnsatisfied()) {
+    devSeeder.get().seedDevSecrets();
+}
+
+---
+
+## 18. The "Unclosed Existence Check" Memory Leak
+
+**Symptom:**
+Plaintext secrets are found lingering in the JVM heap during a heap-dump audit, despite the use of `VaultKey` and `Arrays.fill()`.
+
+**Root Cause:**
+Calling `secretVault.get(keyName).isPresent()` without a `try-with-resources` block. If the key exists, the `get()` method decrypts the byte array and wraps it in a `VaultKey`. If it is not explicitly closed, the `byte[]` is never zeroed out.
+
+**Resolution:**
+Even if you are only checking for a key's existence (idempotency checks), you must wrap the retrieval in a `try-with-resources` block to guarantee the immediate destruction of the underlying byte array.
+
+```java
+// CORRECT:
+var optionalKey = secretVault.get(vaultKeyName);
+if (optionalKey.isPresent()) {
+    try (VaultKey key = optionalKey.get()) {
+        log.debug("Key exists.");
+    } // Bytes are zeroed here!
+    return;
+}
+
+```
+
+---
+
+# 19. Recent Security & Functional Refinements (Troubleshooting)
+
+### A. Functional Tool Failures
+
+**Symptom:** The agent correctly identifies a tool (e.g., `github`) and asks for approval, but after `/approve`, the tool fails with an error like `Tool failed (exit 1)` or `GraphQL: Could not resolve to a Repository`.
+
+* **Root Cause:** The `AgentTool` implementation was previously hardcoded for a specific command (e.g., `gh repo view`) and could not handle dynamic subcommands like `gh gist list`.
+* **Resolution:** Ensure the `AgentTool.sandboxCommand` method is flexible enough to parse parameters from the LLM tool-call. Update the tool's `description()` to explicitly list available actions (e.g., `repo`, `gist`) so the model knows which parameters to provide.
+
+**Symptom:** Sandbox tools fail with a "No such file or directory" error when trying to read the `.env` secrets file, especially in WSL2 or Podman remote environments.
+
+* **Root Cause:** Using relative paths (e.g., `./data/...`) for the ephemeral environment file. Podman daemons often cannot resolve relative paths from the host perspective when mounting volumes.
+* **Resolution:** In `ProcessIsolationExecutor.java`, ensure `envFile.toAbsolutePath().toString()` is used when building the `--env-file` argument.
+
+### B. Security & Memory Integrity
+
+**Symptom:** `ToolRegistry` fails to inject required secrets even when the tool is correctly annotated with `@RequiresSecret`.
+
+* **Root Cause:** Quarkus `@ApplicationScoped` beans are wrapped in CDI proxies (e.g., `GithubTool_ClientProxy`). Standard reflection cannot see annotations on these proxy classes, causing `ToolRegistry` to conclude no secrets are needed.
+* **Resolution:** Use the "Proxy Unwrapping" pattern in `ToolRegistry.extractRequiredSecrets` to traverse the class hierarchy using `getSuperclass()` until the actual implementation class is found.
+
+**Symptom:** Secrets are not being wiped from memory, or `Arrays.fill` fails with a compilation error.
+
+* **Root Cause:** Java `String` objects are immutable and cannot be zeroed out. Previous logic materialized secrets as `String` objects, leaving them permanently on the JVM heap.
+* **Resolution:** The secret-handling pipeline has been refactored to use `byte[]` exclusively.
+* `resolveSecrets` returns `Map<String, byte[]>`.
+* `writeEphemeralEnvFile` pre-calculates the exact buffer size needed to avoid hidden `ByteArrayOutputStream` leaks.
+* A `finally` block uses `java.util.Arrays.fill(payload, (byte) 0)` to aggressively zero out all secret arrays before the method returns.
+
+
+
+### C. Environment & Developer Experience (DX)
+
+**Symptom:** Quarkus startup hangs for several minutes at the ASCII banner or during dependency filtering in WSL2.
+
+* **Root Cause 1:** The project is located on a Windows-mounted drive (e.g., `/mnt/c/`), which causes a massive performance hit due to WSL2 file translation and inotify overhead.
+* **Root Cause 2:** Running `./mvnw clean` wipes the `.quarkus` cache, forcing a full, expensive CDI and LangChain4j classpath scan.
+* **Resolution:** Move the project to the native Linux filesystem (e.g., `~/workspace/`). Avoid running `clean` during daily development; only use it for final production builds.
+
+**Symptom:** Terminal is flooded with massive certificate chains and TLS handshake debug logs (e.g., `jd.ev.security`).
+
+* **Root Cause:** Global `DEBUG` log levels trigger the JVM's internal security event logger for every HTTPS connection to LLM providers or Telegram.
+* **Resolution:** Override the log level for `jdk.event.security` and `io.netty.handler.ssl` to `INFO` in your `application.yaml`.
+
+**Symptom:** `DevSecretSeeder` fails to find the `GITHUB_TOKEN` even when it's set in the host OS.
+
+* **Root Cause:** The environment variable was not exported in the specific terminal session running the Quarkus dev server.
+* **Resolution:** Run `export GITHUB_TOKEN=...` (Linux/macOS) or ensure the variable is set in the shell before launching `./mvnw quarkus:dev`. Use the bot's `/reset` command to re-trigger the idempotent seeding once the token is available.
+
+---
+
+### 20. Proactive Tool Calls on Greeting ("Hi" triggers Approval)
+
+**Symptom:** User says "Hi" or "Hello," and the bot immediately asks for approval to run a tool.
+
+**Root Cause:**
+If the conversation history contains a previous unfulfilled or failed tool request, the LLM may proactively attempt to resolve that request when a new message is received. This is a feature of the model's "Helpfulness" reasoning.
+
+**Resolution:**
+Use the `/reset` command. This clears the `PersistentChatMemoryStore` in SQLite, ensuring the model starts with a clean context and does not attempt to "fix" previous conversation turns.

@@ -171,6 +171,14 @@ quarkus:
         level: INFO
       "org.hibernate":
         level: WARN
+      "jdk.event.security":
+        level: INFO
+      "io.netty.handler.ssl":
+        level: INFO
+      "io.sm.op.ru.util":
+        level: INFO
+      "ja.la.ProcessBuilder":
+        level: INFO
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
@@ -303,6 +311,10 @@ mp:
       category:
         "org.apache.camel.component.telegram":
           level: DEBUG
+        "jdk.event.security":
+          level: INFO
+        "io.netty.handler.ssl":
+          level: INFO
   arcclaw:
     sandbox:
       strategy: PODMAN        # no Podman in local dev

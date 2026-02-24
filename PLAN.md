@@ -1179,3 +1179,66 @@ Harden the infrastructure layer to ensure reliable container execution across di
 - ✅ **Infrastructure**: Verified that `ProcessIsolationExecutor` correctly picks up `/usr/bin/podman` from YAML.
 - ✅ **Logging**: Verified that manually breaking the Podman socket permissions results in a clear `RAW PODMAN STDERR` log entry.
 - ✅ **WSL2 Continuity**: Verified the `WSL2_SETUP_GUIDE.md` steps against a clean Ubuntu 24.04 environment.
+
+---
+
+# Phase 27 — Security Hardening & Secret Injection Pipeline ✅
+
+Address critical vulnerabilities and robustness flaws identified during the static analysis and falsification audit, along with developer experience improvements.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Strict Fail-Closed Secret Resolution**: Removed legacy hardcoded fallbacks and `System.getenv()` bypasses in `ProcessIsolationExecutor.java`. Secrets must strictly originate from the cryptographic Vault.
+
+> [!TIP]
+> **Subprocess Exit Code Verification**: Tool executions failing in the sandbox must propagate their failure to the LLM. Silent process deaths are now caught by explicitly evaluating `proc.waitFor()` timeouts and `proc.exitValue()` non-zero results.
+
+> [!CAUTION]
+> **Secure Byte[] Injection**: Refactored the entire secret pipeline to use `byte[]` arrays instead of `String` materialization. Enforced Atomic POSIX file permissions on `.env` creation before secrets are written, eliminating race condition risks on tmpfs. Added `volatile` to `VaultKey.destroyed` for cross-thread visibility.
+
+## Completed Changes
+
+#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Refactored `resolveSecrets()` to return `Map<String, byte[]>` (no `String` materialization).
+- Implemented Atomic POSIX file permissions on `.env` creation via `PosixFilePermissions`.
+- Throws `SecurityException` on missing secrets, removed `System.getenv` and `GH_TOKEN` fallbacks.
+- Validates exit and timeout conditions in `executeInNamespace()` and `executeDirectly()`.
+
+#### [MODIFY] [VaultKey.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/VaultKey.java)
+- Added `volatile` to `destroyed` boolean flag to assure memory visibility.
+
+#### [NEW] [DevSecretSeeder.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/DevSecretSeeder.java)
+- Injects host environment tokens (e.g., `GH_TOKEN`) into the encrypted `SecretVault` during JVM boot for the `%dev` profile.
+
+## Verification
+- ✅ Verified by Falsifier Pipeline audit.
+- ✅ `mvn clean compile` succeeds cleanly without warnings.
+
+---
+
+# Phase 28 — Tool Flexibility & Proxy Unwrapping ✅
+
+Address tool integration issues caused by dynamic subcommands, JVM proxy wrapping, and logging verbosity.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Proxy Unwrapping for Annotations**: Quarkus `@ApplicationScoped` beans are wrapped in `_ClientProxy` classes, meaning standard reflection failed to find `@RequiresSecret` on the actual implementation. `ToolRegistry` now unpacks the superclass recursively.
+
+> [!TIP]
+> **Dynamic Subcommands in GithubTool**: Removed hardcoded `gh repo view` binding. The tool now accepts `action`, `command`, and an optional `target` from the LLM, empowering it to run things like `gh gist list` fluently.
+
+## Completed Changes
+
+#### [MODIFY] [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java)
+- Traverse proxy superclasses in `extractRequiredSecrets` to find the real implementation class.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Accept `action`, `command`, and `target` parameters dynamically for greater utility.
+
+#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Modified `executeInNamespace` and `executeDirectly` to throw `ToolExecutionException` instead of `IOException` for tool failures, improving error propagation cleanly to the agent.
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Reduced logging noise by setting `jdk.event.security` and `io.netty.handler.ssl` to `INFO`.

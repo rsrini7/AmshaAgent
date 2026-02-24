@@ -5,6 +5,9 @@ import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.DevSecretSeeder;
+
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import picocli.CommandLine.Command;
@@ -44,6 +47,9 @@ public class AskCommand implements Runnable {
     @Inject
     ReasoningEngine reasoningEngine;
 
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
+
     @Override
     @ActivateRequestContext
     public void run() {
@@ -51,6 +57,12 @@ public class AskCommand implements Runnable {
         try {
             CliAgentObserver.enabled = true;
             WorkspaceScopeHolder.set(sessionId);
+            
+            // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
+            if (!devSeeder.isUnsatisfied()) {
+                devSeeder.get().seedDevSecrets();
+            }
+
             AgentResult result = agentLoop.run(sessionId, role, goal,
                     reasoningEngine, 5);
             System.out.println("\n✅ Final Answer:\n" + result.finalAnswer());

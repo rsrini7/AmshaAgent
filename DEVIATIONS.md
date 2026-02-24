@@ -167,3 +167,15 @@ The implementation of ArcClaw V1.0.0 has successfully translated the high-level 
   session history to corrupt unrelated queries. The strict binding contract 
   eliminates tool eagerness per persona. The `/reset` command provides a 
   clean testing surface without requiring JVM restart or manual DB surgery.
+
+### 20. Strict Fail-Closed Secret Sandbox Resolution
+- **Deviation**: Removed fallback `System.getenv()` secret resolution inside `ProcessIsolationExecutor.java`.
+- **Rationale**: Re-aligned the sandbox with the original zero-trust architecture. Host environment variables must never leak into the sandbox implicitly. All tool credentials must explicitly originate from `SecretVault`.
+
+### 21. DevSecretSeeder for Local Environment Credentials
+- **Deviation**: Introduced `DevSecretSeeder.java` to automatically seed the `SecretVault` with host environment variables (like `GH_TOKEN`) during JVM startup, exclusively in the `%dev` profile. Retooled `.env` generation to write `byte[]` arrays instead of `String` objects, with POSIX permissions enforced.
+- **Rationale**: Strict fail-closed sandbox architectures made local development painful. The seeder restores developer convenience without compromising production security. The `byte[]` migration and atomic POSIX permissions prevent credential extraction from JVM heap dumps and tmpfs race conditions.
+
+### 22. CDI Proxy Unwrapping for Sandboxed Tools
+- **Deviation**: Refactored `ToolRegistry.extractRequiredSecrets` to recursively traverse `class.getSuperclass()` instead of only scanning the injected class definition.
+- **Rationale**: Quarkus proxies `@ApplicationScoped` beans with subclass wrappers (e.g., `GithubTool_ClientProxy`). Standard reflection fails to read the developer's `@RequiresSecret` annotation on these proxies, which caused the strict fail-closed sandbox executor to silently reject tool execution due to missing secrets. Unwrapping the proxy restores the intended declarative security model.

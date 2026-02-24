@@ -16,7 +16,7 @@ import java.util.Arrays;
 public final class VaultKey implements AutoCloseable {
 
     private final byte[] key;
-    private boolean destroyed = false;
+    private volatile boolean destroyed = false;
 
     /**
      * Creates a new VaultKey by WRAPPING the provided byte array.

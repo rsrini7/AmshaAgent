@@ -20,7 +20,7 @@
 | 23 | Sandbox Enforcement | ToolRegistryTest (7/7) | Centralized `ProcessIsolationExecutor` in `ToolRegistry` |
 | 24 | Context Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
 | 26 | Sandbox Hardening | Manual Verification | Absolute paths, logging hardening, and WSL2 Setup Guide |
-
+| 27 | Falsification Bug Fixes | Manual Compilation | Strict fail-closed secrets and exit-code validation |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -568,3 +568,48 @@ Fixed the common "Headless JVM PATH" bug by moving the Podman executable path an
 | [WSL2_SETUP_GUIDE.md](file:///h:/ws/ArcClaw/WSL2_SETUP_GUIDE.md) | **[NEW]** Comprehensive environment guide for Windows users. |
 
 **Verification**: Verified that breaking the Podman socket results in a clear `RAW PODMAN STDERR` log entry, proving the instrumentation works.
+
+---
+
+## Phase 27: Security Hardening & Secret Injection Pipeline ✅
+
+This phase addressed critical vulnerabilities identified during a systemic static analysis and falsification audit.
+
+### 1. Fail-Closed Secret Resolution
+Removed legacy credential bypasses (e.g., hardcoded `GH_TOKEN` falling back to `System.getenv()`). If the cryptographic vault does not contain the requested secret, the `ProcessIsolationExecutor` now throws a hard `SecurityException`, preventing potential host credential leaks.
+
+### 2. Subprocess Orchestration Silencing
+Fixed a major robustness flaw where sandbox subprocesses (`proc.waitFor()` and `proc.exitValue()`) were not checked for failure. If a tool crashed or timed out inside the namespace/Podman, the LLM hallucinated a "success". The executor now explicitly validates timeouts and exit codes, throwing `SecurityException` or `IOException` respectively.
+
+### 3. Thread-Safe Memory Wiping
+Added the `volatile` keyword to the `VaultKey.destroyed` flag. In a highly concurrent virtual thread environment, missing this keyword created a race condition where the `close()` method could return early from thread caches without zero-filling the sensitive AES key `byte[]`.
+
+### 4. Secure Byte[] Injection & Atomic File Permissions
+Refactored the entire secret pipeline to use byte arrays instead of String materialization, preventing heap retention of credentials. Furthermore, implemented Atomic POSIX file permissions on `.env` file creation via `PosixFilePermissions` prior to secret payload writes.
+
+### 5. DevSecretSeeder
+Created a `DevSecretSeeder` utility bean that conditionally activates in the `%dev` profile to automatically inject host environment variables into the local SQLite database at JVM boot time, significantly improving the local development experience.
+
+**Verification**: `mvn clean compile` ✅
+
+---
+
+## Phase 28: Tool Flexibility & Proxy Unwrapping ✅
+
+This phase resolved integration quirks discovered during deep human-in-the-loop testing, specifically around how the LLM interacts with dynamic tools and Quarkus proxies.
+
+### 1. CDI Proxy Unwrapping
+Quarkus `@ApplicationScoped` beans are injected as runtime proxies (e.g., `GithubTool_ClientProxy`). The `ToolRegistry` reflection logic was failing to find the `@RequiresSecret` annotation because it was only checking the proxy class. Added `getSuperclass()` traversal to properly identify required secrets on the implementation classes, fixing silent vault injection failures.
+
+### 2. Dynamic Tool Subcommands
+The `GithubTool` was previously rigidly hardcoded to execute `gh repo view`. It was refactored to accept dynamic parameters (`action`, `command`, `target`), allowing the agent to express intent freely (e.g., `gh gist list`, `gh pr checkout`).
+
+### 3. Noise Reduction
+Added log level overrides (`INFO`) for `jdk.event.security` and `io.netty.handler.ssl` in `application.yaml` to suppress the massive influx of TLS handshake logs during LLM Provider and Telegram polling.
+
+### 4. Exception Escalation
+`ProcessIsolationExecutor` now throws `ToolExecutionException` instead of a generic `IOException` when a tool fails (exit code != 0), allowing the `AgentLoop` to more clearly relay the specific tool failure back to the LLM for correction.
+
+**Verification**: End-to-end testing with dynamic GitHub queries and `mvn compile`.
+
+
