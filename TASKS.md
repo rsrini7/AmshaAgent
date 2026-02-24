@@ -389,8 +389,8 @@
 ## Phase 31 — PiiScanReflex (Local PII Redaction)
 - [x] Step 1: Add `sanitize` method to `AgentReflex` interface
 - [x] Step 2: Implement Two-Pass processing inside `ReflexRegistry` replacing `Optional` with `ReflexResult`
-- [x] Step 3: Create `PiiScanReflex` with 10 exact PII regex patterns
-- [x] Step 4: Fix regex matching priority (Aadhaar/IP/Card vs Greed Phone match)
+- [x] Step 3: Create `PiiScanReflex` with 10 exact PII regex patterns and Configurable Mode (`REDACT` vs `BLOCK`)
+- [x] Step 4: Fix regex matching priority and implement negative lookarounds for Aadhaar (`+91` collision)
 - [x] Step 5: Route strict `sanitizedInput` into `IntentClassifierService` and `AgentLoop` in `TelegramAgentHandler`
-- [x] Step 6: Expand `PiiScanReflexTest` covering mixed inputs and idempotency
+- [x] Step 6: Expand `PiiScanReflexTest` covering mixed inputs, idempotency, and mode-specific `matches()` behavior
 - [x] Step 7: Finalize Mockito configuration in `TelegramAgentHandlerTest` to default to `sanitizedInput`

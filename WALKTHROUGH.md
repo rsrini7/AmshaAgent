@@ -677,11 +677,11 @@ Addressed several root causes causing the `TestEngine failed to discover tests` 
 
 Securing user privacy by implementing a true offline, high-performance PII redaction layer.
 
-### 1. Two-Pass Execution
-Upgraded the `ReflexRegistry` to process standard commands (`/status`, `/reset`) via a first-pass deterministic short-circuit. If no command is matched, the input enters a second-pass chain, flowing through every registered reflex's `sanitize` method before touching the LLM. 
+### 1. Two-Pass Execution & Configurable Mode
+Upgraded the `ReflexRegistry` to process standard commands (`/status`, `/reset`) via a first-pass deterministic short-circuit. If no command is matched, the input enters a second-pass chain. We introduced `arcclaw.pii.mode` allowing users to choose between `REDACT_AND_FORWARD` (silent sanitization) and `BLOCK_AND_NOTIFY` (hard blocking of PII).
 
 ### 2. Comprehensive PII Redaction
 Implemented `PiiScanReflex` which utilizes statically compiled `java.util.regex.Pattern` definitions to detect and strip 10 sensitive categories (including Indian Aadhaar, PAN, SSN, Credit Cards, and JWTs) replacing them with clean tokens like `[REDACTED-EMAIL]`.
 
-### 3. Resolving Regex Collisions
-Identified and resolved an overlapping match collision where a broad Phone Number regex (`\+?[1-9]\d{1,14}`) eagerly consumed and corrupted Credit Card numbers and IPv4 addresses. By strictly reordering the evaluation list to prioritize highly structured tokens (JWT, PAN, Aadhaar) first, we ensure zero corruption of non-phone PII metrics.
+### 3. Resolving Regex Collisions with Lookarounds
+Resolved an overlapping match collision where a broad Phone Number regex (`\+?[1-9]\d{1,14}`) eagerly consumed parts of Aadhaar numbers. By implementing negative lookarounds in the Aadhaar pattern—`(?<![+\-\d])[2-9][0-9]{11}(?!\d)`—we ensure the 12-digit Aadhaar pattern only triggers on standalone numeric blocks, effectively isolating it from `+91` prefixed phone numbers.

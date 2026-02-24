@@ -1314,10 +1314,11 @@ Implement local, offline PII detection and redaction within the ArcClaw ecosyste
 
 > [!IMPORTANT]
 > **Two-Pass Reflex Logic**: Extended `ReflexRegistry` to process input in two distinct passes. Pass 1 checks for command short-circuits (`matches` -> `execute`). Pass 2 chains the input through all reflexes' `sanitize` methods.
+> **Configurable PII Mode**: Added `arcclaw.pii.mode` (`REDACT_AND_FORWARD` vs `BLOCK_AND_NOTIFY`). The logic now supports either transparent sanitization or hard blocking of messages containing PII.
 > **Stateless Regex Redaction**: `PiiScanReflex` uses statically compiled `java.util.regex.Pattern` to redact Email, Phone (India/Intl), SSN, Aadhaar, PAN, Credit Card, IPv4, and JWTs locally.
 
 > [!TIP]
-> **Regex Collision Mitigation**: A broad international phone regex (`\+?[1-9]\d{1,14}`) eagerly consumed parts of IPv4, Aadhaar, and Credit Cards. Reordering the `PiiRule` list to execute precise patterns (like JWT, AADHAAR_COMPACT) *before* broad phone number patterns resolved these collisions.
+> **Regex Collision & Lookarounds**: A broad international phone regex eagerly consumed parts of Aadhaar numbers. Implemented `(?<![+\-\d])[2-9][0-9]{11}(?!\d)` (negative lookbehind/lookahead) for `AADHAAR_COMPACT` to ensure it only matches standalone 12-digit IDs, preventing collision with `+91` phone numbers.
 
 ## Completed Changes
 
