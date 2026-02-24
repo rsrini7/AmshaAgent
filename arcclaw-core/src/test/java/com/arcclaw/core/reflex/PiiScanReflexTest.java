@@ -15,7 +15,7 @@ class PiiScanReflexTest {
     @Test
     void testEmailRedaction() {
         String input = "Contact me at user@example.com for more info.";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("session1", "user1", input);
         Assertions.assertEquals("Contact me at [REDACTED-EMAIL] for more info.", sanitized);
     }
@@ -23,7 +23,7 @@ class PiiScanReflexTest {
     @Test
     void testPhoneRedaction() {
         String input = "My Indian phone is +91-9876543210 and US is 123-456-7890. Wait international is +14155552671.";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertTrue(sanitized.contains("[REDACTED-PHONE]"));
         Assertions.assertFalse(sanitized.contains("+91-9876543210"));
@@ -33,7 +33,7 @@ class PiiScanReflexTest {
     @Test
     void testSsnRedaction() {
         String input = "My SSN is 123-45-6789. Keep it safe.";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("My SSN is [REDACTED-SSN]. Keep it safe.", sanitized);
     }
@@ -41,7 +41,7 @@ class PiiScanReflexTest {
     @Test
     void testAadhaarRedaction() {
         String input = "Aadhaar: 2345 6789 1234 or 234567891234";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("Aadhaar: [REDACTED-AADHAAR] or [REDACTED-AADHAAR]", sanitized);
     }
@@ -49,7 +49,7 @@ class PiiScanReflexTest {
     @Test
     void testPanRedaction() {
         String input = "My PAN is ABCDE1234F.";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("My PAN is [REDACTED-PAN].", sanitized);
     }
@@ -57,7 +57,7 @@ class PiiScanReflexTest {
     @Test
     void testCreditCardRedaction() {
         String input = "Card: 1234-5678-9012-3456 or 1234 5678 9012 3456";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("Card: [REDACTED-CARD] or [REDACTED-CARD]", sanitized);
     }
@@ -65,7 +65,7 @@ class PiiScanReflexTest {
     @Test
     void testIpv4Redaction() {
         String input = "Server IP is 192.168.1.100.";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("Server IP is [REDACTED-IP].", sanitized);
     }
@@ -73,7 +73,7 @@ class PiiScanReflexTest {
     @Test
     void testJwtRedaction() {
         String input = "Token: eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("Token: [REDACTED-JWT]", sanitized);
     }
@@ -89,7 +89,7 @@ class PiiScanReflexTest {
     @Test
     void testMixedPii() {
         String input = "Email me at test@foo.com or call +91-9000000000. IP: 10.0.0.1";
-        Assertions.assertTrue(piiScanReflex.matches(input));
+        Assertions.assertTrue(piiScanReflex.detectsPii(input));;
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("Email me at [REDACTED-EMAIL] or call [REDACTED-PHONE]. IP: [REDACTED-IP]", sanitized);
     }

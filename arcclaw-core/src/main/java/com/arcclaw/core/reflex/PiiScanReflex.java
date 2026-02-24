@@ -2,6 +2,8 @@ package com.arcclaw.core.reflex;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
@@ -11,6 +13,14 @@ import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class PiiScanReflex implements AgentReflex {
+
+    public enum PiiMode {
+        REDACT_AND_FORWARD,  // Option B — sanitize silently, pass to LLM
+        BLOCK_AND_NOTIFY     // Option A — block message, notify user
+    }
+
+    @ConfigProperty(name = "arcclaw.pii.mode", defaultValue = "REDACT_AND_FORWARD")
+    PiiMode piiMode;
 
     @Inject
     Logger log;
@@ -42,29 +52,23 @@ public class PiiScanReflex implements AgentReflex {
         new PiiRule(PHONE_INTL, "PHONE", "[REDACTED-PHONE]")
     );
 
+    // Private detection — mode-independent
     @Override
     public boolean matches(String input) {
-        if (input == null || input.isBlank()) {
-            return false;
-        }
-        for (PiiRule rule : RULES) {
-            if (rule.pattern().matcher(input).find()) {
-                return true;
-            }
-        }
-        return false;
+        return piiMode == PiiMode.BLOCK_AND_NOTIFY && containsPii(input);
     }
 
     @Override
     public String execute(String sessionId, String userId) {
-        return "⚠️ PII detected. Message has been sanitized.";
+        // Only reached in BLOCK_AND_NOTIFY mode
+        return "⚠️ PII detected. Message has been sanitized and blocked.";
     }
 
     @Override
     public String sanitize(String sessionId, String userId, String input) {
-        if (input == null || input.isBlank()) {
-            return input;
-        }
+        // Always runs in Pass 2 regardless of mode
+        // In BLOCK_AND_NOTIFY mode this is a no-op since Pass 1 already blocked
+        if (input == null || input.isBlank()) return input;
 
         String result = input;
         List<String> detectedTypes = new ArrayList<>();
@@ -82,10 +86,26 @@ public class PiiScanReflex implements AgentReflex {
         }
 
         if (redacted) {
-            log.warnf("[PII-REDACTED] session=%s user=%s types=%s original_length=%d sanitized_length=%d",
-                    sessionId, userId, String.join(",", detectedTypes), input.length(), result.length());
+            log.warnf("[PII-REDACTED] session=%s user=%s mode=%s types=%s " +
+                      "original_length=%d sanitized_length=%d",
+                    sessionId, userId, piiMode,
+                    String.join(",", detectedTypes),
+                    input.length(), result.length());
         }
 
         return result;
     }
+
+    public boolean detectsPii(String input) {
+        return containsPii(input);
+    }
+
+    private boolean containsPii(String input) {
+        if (input == null || input.isBlank()) return false;
+        for (PiiRule rule : RULES) {
+            if (rule.pattern().matcher(input).find()) return true;
+        }
+        return false;
+    }
+
 }
