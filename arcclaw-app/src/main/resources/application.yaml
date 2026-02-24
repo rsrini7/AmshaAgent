@@ -201,6 +201,9 @@ arcclaw:
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
       default-autonomy-level: SUPERVISED
 
+  pii:
+    mode: REDACT_AND_FORWARD   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
+
   vault:
     pepper: "${ARCCLAW_VAULT_PEPPER:dev-pepper-not-for-production-0000000000000000000000000000}"
     argon2:
@@ -319,6 +322,8 @@ mp:
         "io.netty.handler.ssl":
           level: INFO
   arcclaw:
+    pii:
+      mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
       strategy: PODMAN        # no Podman in local dev
     channel:
@@ -340,6 +345,8 @@ mp:
       telegram:
         enabled: false
         bot-token: "mock-bot-token"
+    pii:
+      mode: REDACT_AND_FORWARD   # Tests use default
     sandbox:
       strategy: NONE
     vault:

@@ -1262,3 +1262,81 @@ Address "dangling approval" edge cases and intent routing regressions discovered
 - ✅ `mvn clean compile` succeeds cleanly.
 
 ---
+
+# Phase 30 — Reflex Registry & Test Infrastructure Hardening
+
+Create a deterministic, zero-latency "kill switch" for the AI agent, bypassing the LLM for critical system commands, and resolving comprehensive Maven multi-module test discovery failures.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Reflex Registry (LLM Bypass)**: Implemented `ReflexRegistry` using CDI `Instance<AgentReflex>` to intercept commands like `/reset`, `/approve`, `/halt`, and `/status` in `TelegramAgentHandler` *before* the LLM reasoning loop. This guarantees O(1) latency and zero USD cost for system administration.
+> **Log Injection Guard**: Reflex logs truncate user input to 200 characters to prevent log forging attacks.
+
+> [!CAUTION]
+> **Test Discovery on JDK 24+**: Maven Surefire and Quarkus TestEngine crashed with `IllegalAccessError` due to JBoss threads resetting `java.lang` internals. Added `--add-opens java.base/java.lang=ALL-UNNAMED` to the `pom.xml` test profile.
+> **Maven `-am` Test Flag**: Attempting to run `mvn test -pl arcclaw-app -am` caused JUnit Jupiter to fail test discovery on the library `arcclaw-core` module. Tests must be targeted precisely without `-am` if the reactor has stale `.class` indices.
+
+## Completed Changes
+
+### Core Module — Reflex System
+
+#### [NEW] [AgentReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/AgentReflex.java)
+- Interface defining `matches()` and `execute(sessionId, userId)`.
+
+#### [NEW] [ReflexRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/ReflexRegistry.java)
+- CDI registry that evaluates reflexes sequentially and handles input truncation safely.
+
+#### [NEW] [HaltReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/HaltReflex.java) / [StatusReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/StatusReflex.java)
+- `HaltReflex`: Immediately wipes the workspace and logs an ERROR for auditing.
+- `StatusReflex`: Queries `GovernanceLayer.getSessionCost()` and `StatefulAgentStore` for live monitoring.
+
+### App Module — Integration & Testing
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Replaced hardcoded `/reset`, `/approve`, and `/deny` logic with `reflexRegistry.processIfReflex()`.
+
+#### [MODIFY] [pom.xml](file:///h:/ws/ArcClaw/pom.xml)
+- Injected `--add-opens java.base/java.lang=ALL-UNNAMED` to `maven-surefire-plugin` across the reactor.
+
+## Verification
+
+- ✅ Verified `TelegramAgentHandlerTest` properly asserts that LLM is bypassed during a Reflex.
+- ✅ Verified `mvn test -pl arcclaw-app` executes successfully without `TestEngine` crashes.
+
+---
+
+# Phase 31 — PiiScanReflex (Local PII Redaction)
+
+Implement local, offline PII detection and redaction within the ArcClaw ecosystem to prevent sensitive data from reaching the LLM.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Two-Pass Reflex Logic**: Extended `ReflexRegistry` to process input in two distinct passes. Pass 1 checks for command short-circuits (`matches` -> `execute`). Pass 2 chains the input through all reflexes' `sanitize` methods.
+> **Configurable PII Mode**: Added `arcclaw.pii.mode` (`REDACT_AND_FORWARD` vs `BLOCK_AND_NOTIFY`). The logic now supports either transparent sanitization or hard blocking of messages containing PII.
+> **Stateless Regex Redaction**: `PiiScanReflex` uses statically compiled `java.util.regex.Pattern` to redact Email, Phone (India/Intl), SSN, Aadhaar, PAN, Credit Card, IPv4, and JWTs locally.
+
+> [!TIP]
+> **Regex Collision & Lookarounds**: A broad international phone regex eagerly consumed parts of Aadhaar numbers. Implemented `(?<![+\-\d])[2-9][0-9]{11}(?!\d)` (negative lookbehind/lookahead) for `AADHAAR_COMPACT` to ensure it only matches standalone 12-digit IDs, preventing collision with `+91` phone numbers.
+
+## Completed Changes
+
+#### [MODIFY] [AgentReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/AgentReflex.java)
+- Added default `sanitize(String sessionId, String userId, String input)` method.
+
+#### [NEW] [ReflexResult.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/ReflexResult.java)
+- Created an immutable record to hold `commandResponse` and the sequentially processed `sanitizedInput`.
+
+#### [MODIFY] [ReflexRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/ReflexRegistry.java)
+- Migrated from `Optional<String>` to `ReflexResult` for the two-pass execution logic.
+
+#### [NEW] [PiiScanReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/PiiScanReflex.java)
+- Contains all 10 PII regex patterns and handles WARN-level logging when redaction occurs.
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Refactored `runAgent` to strictly provide the LLM (and Intent Classifier) with only the `sanitizedInput`.
+
+## Verification
+- ✅ Verified by comprehensive JUnit parametrics covering 10 PII types and mixed formats.
+- ✅ `mvn clean test` yields `BUILD SUCCESS`.

@@ -86,6 +86,14 @@ public class GovernanceLayer implements AgentObserver {
     }
 
     /**
+     * Gets the total tracked USD cost for a given session.
+     */
+    public double getSessionCost(String sessionId) {
+        SessionBudget budget = budgets.get(sessionId);
+        return budget != null ? budget.getTotalCost() : 0.0;
+    }
+
+    /**
      * Internal state representation of a session's budget.
      * Uses AtomicIntegers for tokens, and synchronized `addCost` for doubles
      * to avoid CAS loop complexity overhead on primitive doubles.

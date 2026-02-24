@@ -1,3 +1,5 @@
+First, Make Sure to execute once `.\mvnw.cmd clean verify -pl arcclaw-app -am` if no errors proceed.
+
 Check and append / update all / required points for future reference that should not spend time on it. Based on the md files can proceed by any LLM. - **Do Not Update me**
 
 *Analyze the current Git state:*

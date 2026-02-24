@@ -106,6 +106,9 @@
             <systemPropertyVariables>
               <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
             </systemPropertyVariables>
+             <argLine>
+              --add-opens java.base/java.lang=ALL-UNNAMED
+            </argLine>
           </configuration>
         </plugin>
       </plugins>

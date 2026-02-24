@@ -371,3 +371,26 @@
 - [x] Step 3: Implement internal protocol message filtering in `LangChainReasoningEngine` <!-- id: 112 -->
 - [x] Step 4: Add JUnit coverage for rolling window and filtering logic <!-- id: 113 -->
 - [x] Step 5: Verify build success and test passes (13/13) <!-- id: 114 -->
+
+---
+
+## Phase 30 — Reflex Registry & Test Infrastructure Hardening
+- [x] Step 1: Create `AgentReflex` interface for LLM-bypass commands
+- [x] Step 2: Implement `ReflexRegistry` with CDI discovery and log injection guards
+- [x] Step 3: Implement standard reflexes: `HaltReflex`, `StatusReflex`, `ResetReflex`, `ApproveReflex`, `DenyReflex`
+- [x] Step 4: Inject `ReflexRegistry` into `TelegramAgentHandler` to replace hardcoded intercepts
+- [x] Step 5: Expand `GovernanceLayer` API with `getSessionCost()`
+- [x] Step 6: Test Infrastructure: Document T-1 to T-6 troubleshooting scenarios
+- [x] Step 7: Inject `--add-opens java.base/java.lang=ALL-UNNAMED` to parent `pom.xml` for Java 24+ compatibility
+- [x] Step 8: Verify build success and test passes
+
+---
+
+## Phase 31 — PiiScanReflex (Local PII Redaction)
+- [x] Step 1: Add `sanitize` method to `AgentReflex` interface
+- [x] Step 2: Implement Two-Pass processing inside `ReflexRegistry` replacing `Optional` with `ReflexResult`
+- [x] Step 3: Create `PiiScanReflex` with 10 exact PII regex patterns and Configurable Mode (`REDACT` vs `BLOCK`)
+- [x] Step 4: Fix regex matching priority and implement negative lookarounds for Aadhaar (`+91` collision)
+- [x] Step 5: Route strict `sanitizedInput` into `IntentClassifierService` and `AgentLoop` in `TelegramAgentHandler`
+- [x] Step 6: Expand `PiiScanReflexTest` covering mixed inputs, idempotency, and mode-specific `matches()` behavior
+- [x] Step 7: Finalize Mockito configuration in `TelegramAgentHandlerTest` to default to `sanitizedInput`

@@ -649,3 +649,39 @@ The `PersistentChatMemoryStore` now implements a "System Aware" rolling window. 
 Added 13 dedicated JUnit tests across `PersistentChatMemoryStoreTest`, `LangChainReasoningEngineTest`, and `ToolRegistryTest` to ensure zero regressions in history management and secret mapping.
 
 **Verification**: `mvn clean verify` ✅
+
+---
+
+## Phase 30: Reflex Registry & Test Infrastructure Hardening ✅
+
+This phase introduced a deterministic O(1) LLM-bypass layer for system commands and resolved systemic Maven multi-module test discovery failures.
+
+### 1. Reflex Registry
+The `TelegramAgentHandler` previously contained hardcoded logic for `/reset`, `/approve`, and `/deny`, cluttering the channel logic. We abstracted this into an `AgentReflex` interface dynamically loaded via CDI inside a `ReflexRegistry`. This acts as an immediate short-circuit before the expensive LLM loop starts, guaranteeing zero USD cost and deterministic execution.
+
+New reflexes include:
+- `HaltReflex`: Immediately destroys the session and drops an ERROR audit log.
+- `StatusReflex`: Bridges `StatefulAgentStore` and `GovernanceLayer` to report live cost and execution context.
+
+### 2. Test Infrastructure Stabilization (T-1 to T-6)
+Addressed several root causes causing the `TestEngine failed to discover tests` failure.
+- **T-1**: Realized the `mvn test -am` flag corrupted Jupiter discovery boundaries on the library module.
+- **T-6**: `JBoss Threads` under Quarkus was violently triggering `IllegalAccessError` on JDK 24+ JVMs trying to reset thread-locals. Fixed via injecting `--add-opens java.base/java.lang=ALL-UNNAMED` into the parent `pom.xml`.
+- **T-2..T-5**: Stabilized offline test parameters for LangChain4J multi-provider configs, mandatory `@ConfigProperty` Vault requirements, and SQLite memory initialization.
+
+**Verification**: `mvn clean test -pl arcclaw-app` ✅
+
+---
+
+## Phase 31: PiiScanReflex (Local PII Redaction) ✅
+
+Securing user privacy by implementing a true offline, high-performance PII redaction layer.
+
+### 1. Two-Pass Execution & Configurable Mode
+Upgraded the `ReflexRegistry` to process standard commands (`/status`, `/reset`) via a first-pass deterministic short-circuit. If no command is matched, the input enters a second-pass chain. We introduced `arcclaw.pii.mode` allowing users to choose between `REDACT_AND_FORWARD` (silent sanitization) and `BLOCK_AND_NOTIFY` (hard blocking of PII).
+
+### 2. Comprehensive PII Redaction
+Implemented `PiiScanReflex` which utilizes statically compiled `java.util.regex.Pattern` definitions to detect and strip 10 sensitive categories (including Indian Aadhaar, PAN, SSN, Credit Cards, and JWTs) replacing them with clean tokens like `[REDACTED-EMAIL]`.
+
+### 3. Resolving Regex Collisions with Lookarounds
+Resolved an overlapping match collision where a broad Phone Number regex (`\+?[1-9]\d{1,14}`) eagerly consumed parts of Aadhaar numbers. By implementing negative lookarounds in the Aadhaar pattern—`(?<![+\-\d])[2-9][0-9]{11}(?!\d)`—we ensure the 12-digit Aadhaar pattern only triggers on standalone numeric blocks, effectively isolating it from `+91` prefixed phone numbers.
