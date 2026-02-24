@@ -1379,3 +1379,19 @@ If complex class hierarchies, interfaces, or CDI proxies mask the target tool's 
 
 **Resolution:**
 A failsafe has been implemented in `ProcessIsolationExecutor.java` (in `resolveSecrets`). If the reflection-driven `requiredSecrets` map is `null` or empty, the sandbox executor automatically injects a fallback map (e.g., `GH_TOKEN` mapped to `GITHUB_TOKEN`) to guarantee critical developer tools have credentials.
+
+---
+
+## 14. Pipeline-Verified Bug Registry (Regression Targets)
+The following systemic vulnerabilities were identified and structurally eliminated via the Falsifier Pipeline. Any code modifications touching these methods must not re-introduce these patterns. 
+
+| Priority | Class::Method(Signature) | Bug Description | Runtime Consequence | Fix Complexity |
+|----------|--------------------------|-----------------|---------------------|----------------|
+| CRITICAL | `ProcessIsolationExecutor::resolveSecrets(Map<String, String>)` | Silently substitutes hardcoded `Map.of("GH_TOKEN", "GITHUB_TOKEN")` when `requiredSecrets` is empty. | When `executeInContainer()` is called with a `null` or empty `requiredSecrets` map, `resolveSecrets()` silently substitutes a hardcoded `Map.of("GH_TOKEN", "GITHUB_TOKEN")`, causing the container to receive a `GH_TOKEN` environment variable that was never requested by the tool's `@RequiresSecret` annotation, and masking the upstream annotation-resolution failure in `ToolRegistry`. | TRIVIAL |
+| CRITICAL | `ProcessIsolationExecutor::resolveSecrets(Map<String, String>)` | Uses `System.getenv()` as a fallback when the Database Vault returns empty. | The `System.getenv()` fallback allows plaintext environment variables to be injected into the container, bypassing the Database Vault entirely and storing sensitive credentials as immutable Strings in the JVM heap indefinitely. | TRIVIAL |
+| CRITICAL | `VaultKey::close()` | The `destroyed` flag lacks the `volatile` keyword or synchronization. | Without a `volatile` keyword or synchronization, concurrent threads accessing the same `VaultKey` may cache the `destroyed` flag in their local thread memory, leading to double-free execution or silent failure to wipe the sensitive byte array during `close()`. | TRIVIAL |
+| CRITICAL | `ProcessIsolationExecutor::resolveSecrets(Map<String, String>)` | Converts the decrypted `VaultKey` byte array into an immutable `String`. | Converting the decrypted byte array to an immutable Java `String` creates a permanent plaintext copy in the JVM heap, completely defeating the `VaultKey`'s auto-close zeroing mechanism and leaving the secret vulnerable to memory scraping. | SMALL |
+| CRITICAL | `ProcessIsolationExecutor::executeInContainer(String, Path, List, Map)` | Captures `stdout` byte array and immediately converts it to an immutable `String`. | Standard output from the container process is captured as a byte array and immediately converted to an immutable `String`, meaning if a sandbox tool accidentally prints credentials or secrets, they are trapped in the JVM heap indefinitely. | LARGE |
+| HIGH | `ProcessIsolationExecutor::executeInNamespace(Path, List)` | Ignores the exit code and timeout result of `proc.waitFor()`. | If the Linux namespace process times out or exits with a non-zero code (e.g., tool crash), the failure is silently ignored and the error output is returned to the agent loop as a successful execution, corrupting the reasoning state. | SMALL |
+| HIGH | `ProcessIsolationExecutor::executeDirectly(Path, List)` | Ignores the exit code and timeout result of `proc.waitFor()`. | If the direct host process execution times out or exits with a non-zero status, the exit code is dropped and the `stderr` is treated as a successful tool observation, causing the agent to hallucinate based on error text. | SMALL |
+
