@@ -126,3 +126,28 @@ If you receive a permission error with `docker ps`, ensure your user is in the c
 ```bash
 sudo usermod -aG $(getent group 10 | cut -d: -f1) $USER
 ```
+
+If running `./mvnw` shows:
+
+```bash
+-bash: ./mvnw: cannot execute: required file not found
+```
+
+It’s likely a Windows **CRLF line-ending issue** in WSL.
+
+### ✅ Fix
+
+Convert the script:
+
+```bash
+sudo apt install dos2unix
+dos2unix mvnw
+```
+
+Then run:
+
+```bash
+./mvnw
+```
+
+---
