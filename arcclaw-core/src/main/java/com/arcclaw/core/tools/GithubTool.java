@@ -4,19 +4,14 @@ import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.
  * <p>
- * Executes {@code gh repo view <owner/repo>} inside the Podman sandbox.
- * The {@code GITHUB_TOKEN} is resolved from the vault and injected into the
- * container environment via an ephemeral env-file (never passed as a process
- * argument).
- * <p>
- * This tool requires {@link ToolOperation#NETWORK_OUTBOUND} autonomy — blocked
- * under {@code READ_ONLY} and {@code PARTIAL} levels.
+ * Supports 'repo' and 'gist' subcommands.
  */
 @ApplicationScoped
 public class GithubTool implements AgentTool {
@@ -28,8 +23,11 @@ public class GithubTool implements AgentTool {
 
     @Override
     public String description() {
-        return "View GitHub repository information using the gh CLI. " +
-                "Requires 'repo' parameter (e.g., 'owner/repo-name').";
+        return "Interact with GitHub using the gh CLI. " +
+                "Parameters: " +
+                "1. 'action': 'repo' or 'gist'. " +
+                "2. 'command': 'view' or 'list'. " +
+                "3. 'target': (Optional) The owner/repo path for 'repo' actions.";
     }
 
     @Override
@@ -45,17 +43,24 @@ public class GithubTool implements AgentTool {
     @Override
     @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
     public List<String> sandboxCommand(Map<String, Object> params) {
-        var repo = (String) params.get("repo");
-        if (repo == null || repo.isBlank()) {
-            throw new IllegalArgumentException("Missing required parameter: 'repo'");
+        String action = (String) params.getOrDefault("action", "repo");
+        String command = (String) params.getOrDefault("command", "view");
+        String target = (String) params.get("target");
+
+        List<String> cmd = new ArrayList<>();
+        cmd.add("gh");
+        cmd.add(action);
+        cmd.add(command);
+
+        if (target != null && !target.isBlank()) {
+            cmd.add(target);
         }
-        return List.of("gh", "repo", "view", repo);
+
+        return cmd;
     }
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        throw new UnsupportedOperationException(
-                "GithubTool execution is handled by ToolRegistry sandbox wrapping. " +
-                        "This method should never be called directly.");
+        throw new UnsupportedOperationException("GithubTool requires sandbox execution");
     }
 }

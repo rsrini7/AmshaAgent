@@ -1465,3 +1465,66 @@ if (optionalKey.isPresent()) {
 }
 
 ```
+
+---
+
+# 19. Recent Security & Functional Refinements (Troubleshooting)
+
+### A. Functional Tool Failures
+
+**Symptom:** The agent correctly identifies a tool (e.g., `github`) and asks for approval, but after `/approve`, the tool fails with an error like `Tool failed (exit 1)` or `GraphQL: Could not resolve to a Repository`.
+
+* **Root Cause:** The `AgentTool` implementation was previously hardcoded for a specific command (e.g., `gh repo view`) and could not handle dynamic subcommands like `gh gist list`.
+* **Resolution:** Ensure the `AgentTool.sandboxCommand` method is flexible enough to parse parameters from the LLM tool-call. Update the tool's `description()` to explicitly list available actions (e.g., `repo`, `gist`) so the model knows which parameters to provide.
+
+**Symptom:** Sandbox tools fail with a "No such file or directory" error when trying to read the `.env` secrets file, especially in WSL2 or Podman remote environments.
+
+* **Root Cause:** Using relative paths (e.g., `./data/...`) for the ephemeral environment file. Podman daemons often cannot resolve relative paths from the host perspective when mounting volumes.
+* **Resolution:** In `ProcessIsolationExecutor.java`, ensure `envFile.toAbsolutePath().toString()` is used when building the `--env-file` argument.
+
+### B. Security & Memory Integrity
+
+**Symptom:** `ToolRegistry` fails to inject required secrets even when the tool is correctly annotated with `@RequiresSecret`.
+
+* **Root Cause:** Quarkus `@ApplicationScoped` beans are wrapped in CDI proxies (e.g., `GithubTool_ClientProxy`). Standard reflection cannot see annotations on these proxy classes, causing `ToolRegistry` to conclude no secrets are needed.
+* **Resolution:** Use the "Proxy Unwrapping" pattern in `ToolRegistry.extractRequiredSecrets` to traverse the class hierarchy using `getSuperclass()` until the actual implementation class is found.
+
+**Symptom:** Secrets are not being wiped from memory, or `Arrays.fill` fails with a compilation error.
+
+* **Root Cause:** Java `String` objects are immutable and cannot be zeroed out. Previous logic materialized secrets as `String` objects, leaving them permanently on the JVM heap.
+* **Resolution:** The secret-handling pipeline has been refactored to use `byte[]` exclusively.
+* `resolveSecrets` returns `Map<String, byte[]>`.
+* `writeEphemeralEnvFile` pre-calculates the exact buffer size needed to avoid hidden `ByteArrayOutputStream` leaks.
+* A `finally` block uses `java.util.Arrays.fill(payload, (byte) 0)` to aggressively zero out all secret arrays before the method returns.
+
+
+
+### C. Environment & Developer Experience (DX)
+
+**Symptom:** Quarkus startup hangs for several minutes at the ASCII banner or during dependency filtering in WSL2.
+
+* **Root Cause 1:** The project is located on a Windows-mounted drive (e.g., `/mnt/c/`), which causes a massive performance hit due to WSL2 file translation and inotify overhead.
+* **Root Cause 2:** Running `./mvnw clean` wipes the `.quarkus` cache, forcing a full, expensive CDI and LangChain4j classpath scan.
+* **Resolution:** Move the project to the native Linux filesystem (e.g., `~/workspace/`). Avoid running `clean` during daily development; only use it for final production builds.
+
+**Symptom:** Terminal is flooded with massive certificate chains and TLS handshake debug logs (e.g., `jd.ev.security`).
+
+* **Root Cause:** Global `DEBUG` log levels trigger the JVM's internal security event logger for every HTTPS connection to LLM providers or Telegram.
+* **Resolution:** Override the log level for `jdk.event.security` and `io.netty.handler.ssl` to `INFO` in your `application.yaml`.
+
+**Symptom:** `DevSecretSeeder` fails to find the `GITHUB_TOKEN` even when it's set in the host OS.
+
+* **Root Cause:** The environment variable was not exported in the specific terminal session running the Quarkus dev server.
+* **Resolution:** Run `export GITHUB_TOKEN=...` (Linux/macOS) or ensure the variable is set in the shell before launching `./mvnw quarkus:dev`. Use the bot's `/reset` command to re-trigger the idempotent seeding once the token is available.
+
+---
+
+### 20. Proactive Tool Calls on Greeting ("Hi" triggers Approval)
+
+**Symptom:** User says "Hi" or "Hello," and the bot immediately asks for approval to run a tool.
+
+**Root Cause:**
+If the conversation history contains a previous unfulfilled or failed tool request, the LLM may proactively attempt to resolve that request when a new message is received. This is a feature of the model's "Helpfulness" reasoning.
+
+**Resolution:**
+Use the `/reset` command. This clears the `PersistentChatMemoryStore` in SQLite, ensuring the model starts with a clean context and does not attempt to "fix" previous conversation turns.

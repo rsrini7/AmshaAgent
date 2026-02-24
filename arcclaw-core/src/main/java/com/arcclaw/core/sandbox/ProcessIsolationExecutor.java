@@ -145,10 +145,7 @@ public class ProcessIsolationExecutor {
      * @return The command output (stdout + stderr).
      */
     public String executeSandboxed(
-            String sessionId,
-            Path workspaceRoot,
-            List<String> command,
-            Map<String, String> requiredSecrets) throws Exception {
+            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
 
         if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
             return executeDirectly(workspaceRoot, command);
@@ -159,6 +156,10 @@ public class ProcessIsolationExecutor {
                 String result = executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
                 podmanFailures.set(0);
                 return result;
+            } catch (ToolExecutionException e) {
+                // THE FIX: The tool ran but failed. Do NOT fall back. 
+                // Throw immediately so the LLM sees the tool's error output.
+                throw e;
             } catch (Exception e) {
                 int failures = podmanFailures.incrementAndGet();
                 log.errorf("Podman execution failed (session=%s, failureCount=%d): %s",
@@ -168,10 +169,8 @@ public class ProcessIsolationExecutor {
                     log.errorf("Podman failed %d times — opening circuit breaker, falling back to NAMESPACE", failures);
                     podmanCircuitOpen = true;
                 }
-                // Fall through to NAMESPACE
             }
         }
-
         return executeInNamespace(workspaceRoot, command);
     }
 
@@ -214,7 +213,7 @@ public class ProcessIsolationExecutor {
                     "--cpus=" + containerCpuLimit,      // Fix C2: prevent CPU saturation
                     "--pids-limit=" + CONTAINER_PIDS_LIMIT, // Fix C2: block fork bombs
                     "--ulimit=nofile=256:256",           // Fix C2: limit open file descriptors
-                    "--env-file", envFile.toString()     // secrets via env-file, not process args
+                    "--env-file", envFile.toAbsolutePath().toString()     // secrets via env-file, not process args
             ));
             podmanCmd.add(containerImage);
             podmanCmd.addAll(command);
@@ -237,7 +236,7 @@ public class ProcessIsolationExecutor {
                 throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
             }
             if (process.exitValue() != 0) {
-                throw new IOException("Tool failed (exit " + process.exitValue() + "): " + output);
+                throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
             }
             span.setStatus(StatusCode.OK);
             return output;
@@ -271,17 +270,17 @@ public class ProcessIsolationExecutor {
             pb.directory(workspaceRoot.toFile());
         }
         pb.redirectErrorStream(true);
-        var proc = pb.start();
-        var out = new String(proc.getInputStream().readAllBytes());
-        boolean finished = proc.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        var process = pb.start();
+        var output = new String(process.getInputStream().readAllBytes());
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
-            proc.destroyForcibly();
+            process.destroyForcibly();
             throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
         }
-        if (proc.exitValue() != 0) {
-            throw new IOException("Tool failed (exit " + proc.exitValue() + "): " + out);
+        if (process.exitValue() != 0) {
+            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
         }
-        return out;
+        return output;
     }
 
     /** Dev mode: no isolation, direct execution. */
@@ -289,17 +288,17 @@ public class ProcessIsolationExecutor {
         var pb = new ProcessBuilder(command);
         pb.directory(workspaceRoot.toFile());
         pb.redirectErrorStream(true);
-        var proc = pb.start();
-        var out = new String(proc.getInputStream().readAllBytes());
-        boolean finished = proc.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        var process = pb.start();
+        var output = new String(process.getInputStream().readAllBytes());
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
-            proc.destroyForcibly();
+            process.destroyForcibly();
             throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
         }
-        if (proc.exitValue() != 0) {
-            throw new IOException("Tool failed (exit " + proc.exitValue() + "): " + out);
+        if (process.exitValue() != 0) {
+            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
         }
-        return out;
+        return output;
     }
 
     /**
@@ -424,5 +423,8 @@ public class ProcessIsolationExecutor {
             Files.deleteIfExists(f);
         } catch (Exception ignored) {
         }
+    }
+    public static class ToolExecutionException extends RuntimeException {
+        public ToolExecutionException(String message) { super(message); }
     }
 }
