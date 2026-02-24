@@ -13,7 +13,6 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -81,7 +80,8 @@ public class ProcessIsolationExecutor {
      * Fix G2: Tracks names of all currently-running Podman containers.
      * Each container is started with --name zc-<sessionId>-<nonce>.
      * Name is added before podman run, removed in finally after it exits.
-     * * @PreDestroy drains this set on JVM SIGTERM — stops any survivors.
+     *
+     * @PreDestroy drains this set on JVM SIGTERM — stops any survivors.
      */
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
 
@@ -114,7 +114,7 @@ public class ProcessIsolationExecutor {
     @PreDestroy
     void stopAllContainersOnShutdown() {
         if (activeContainerNames.isEmpty()) return;
-        
+
         log.infof("JVM shutdown: stopping %d active Podman container(s)...", activeContainerNames.size());
         for (String containerName : activeContainerNames) {
             try {
@@ -187,8 +187,10 @@ public class ProcessIsolationExecutor {
 
         var resolvedSecrets = resolveSecrets(requiredSecrets);
         var envFile = writeEphemeralEnvFile(sessionId, resolvedSecrets);
+        // Note: resolvedSecrets byte arrays are zeroed inside writeEphemeralEnvFile's finally block.
 
         // Fix G2: deterministic container name for tracking + graceful stop on shutdown.
+        // Format: zc-<sessionId truncated to 8 chars>-<nonce> to stay within 64-char limit.
         String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                 + "-" + Long.toHexString(System.nanoTime());
 
@@ -209,10 +211,10 @@ public class ProcessIsolationExecutor {
                     "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                     "--user=65534:65534",
                     "--memory=" + containerMemoryLimit, // Fix C2: OOM kill before host impact
-                    "--cpus=" + containerCpuLimit, // Fix C2: prevent CPU saturation
+                    "--cpus=" + containerCpuLimit,      // Fix C2: prevent CPU saturation
                     "--pids-limit=" + CONTAINER_PIDS_LIMIT, // Fix C2: block fork bombs
-                    "--ulimit=nofile=256:256", // Fix C2: limit open file descriptors
-                    "--env-file", envFile.toString() // secrets via env-file, not process args
+                    "--ulimit=nofile=256:256",           // Fix C2: limit open file descriptors
+                    "--env-file", envFile.toString()     // secrets via env-file, not process args
             ));
             podmanCmd.add(containerImage);
             podmanCmd.addAll(command);
@@ -248,8 +250,6 @@ public class ProcessIsolationExecutor {
             span.end();
             activeContainerNames.remove(containerName); // Fix G2: deregister on normal exit
             deleteEphemeralEnvFile(envFile);
-            // Notice: clearSecretsFromMemory is no longer needed here because 
-            // writeEphemeralEnvFile wipes the byte arrays directly in its finally block.
         }
     }
 
@@ -303,38 +303,43 @@ public class ProcessIsolationExecutor {
     }
 
     /**
-     * Resolves vault secrets for container injection safely using byte arrays.
+     * Resolves vault secrets for container injection as raw byte arrays.
      * <p>
-     * The returned byte arrays will be securely zeroed out inside 
-     * {@link #writeEphemeralEnvFile(String, Map)}.
+     * Fail-closed contract:
+     * - null map     → IllegalArgumentException (programming error in caller)
+     * - empty map    → empty result (valid — tool requires no secrets)
+     * - missing key  → SecurityException (vault must be the sole source of truth)
+     * <p>
+     * The returned byte arrays are owned by this method's callers and MUST be
+     * zeroed after use. {@link #writeEphemeralEnvFile} zeros them in its finally block.
      */
     private Map<String, byte[]> resolveSecrets(Map<String, String> requiredSecrets) {
-        var resolved = new LinkedHashMap<String, byte[]>();
-        
         if (requiredSecrets == null) {
             throw new IllegalArgumentException(
-                "requiredSecrets must not be null — check ToolRegistry.extractRequiredSecrets()");
+                    "requiredSecrets must not be null — check ToolRegistry.extractRequiredSecrets()");
         }
         if (requiredSecrets.isEmpty()) {
-            return resolved;
+            return new LinkedHashMap<>();
         }
 
+        var resolved = new LinkedHashMap<String, byte[]>();
         for (var entry : requiredSecrets.entrySet()) {
             String envVar = entry.getKey();
             String vaultKeyName = entry.getValue();
-            
+
             var optionalKey = secretVault.get(vaultKeyName);
-            
+
             if (optionalKey.isPresent()) {
                 try (VaultKey key = optionalKey.get()) {
-                    // SECURE TRANSFER: Direct byte array copy, absolutely NO Strings.
-                    byte[] secretBytes = key.get();
-                    byte[] copy = new byte[secretBytes.length];
-                    System.arraycopy(secretBytes, 0, copy, 0, secretBytes.length);
+                    // SECURE TRANSFER: direct byte array copy — no String materialization.
+                    // The VaultKey source bytes are zeroed on close() above.
+                    byte[] src = key.get();
+                    byte[] copy = new byte[src.length];
+                    System.arraycopy(src, 0, copy, 0, src.length);
                     resolved.put(envVar, copy);
                 }
             } else {
-                // FAIL-CLOSED: No hardcoded substitutions, no environment variable leaks.
+                // FAIL-CLOSED: no hardcoded substitutions, no System.getenv() fallback.
                 throw new SecurityException("Required secret not in vault: " + vaultKeyName);
             }
         }
@@ -342,56 +347,75 @@ public class ProcessIsolationExecutor {
     }
 
     /**
-     * Creates the file, securely writes the byte payload, and aggressively zeros memory.
+     * Writes secrets to a strictly permissioned ephemeral env-file using a single
+     * pre-sized byte array — no intermediate copies.
+     * <p>
+     * Memory contract: both the assembled {@code payload} array and each individual
+     * secret byte array in {@code secrets} are zeroed in the {@code finally} block,
+     * regardless of success or failure. The caller must not access {@code secrets}
+     * values after this method returns.
+     *
+     * @param sessionId the workspace session ID (used to scope the temp file location)
+     * @param secrets   map of envVar → raw secret bytes (will be zeroed on return)
+     * @return path to the written env-file (caller is responsible for deletion)
      */
     private Path writeEphemeralEnvFile(String sessionId, Map<String, byte[]> secrets) throws IOException {
         Path workspaceDir = Path.of(workspaceRootDir, sessionId);
         if (!Files.exists(workspaceDir)) {
             Files.createDirectories(workspaceDir);
         }
-        
-        Path envFile = Files.createTempFile(workspaceDir, "secrets-", ".env");
+
+        Path envFile;
+        try {
+            var strictAttrs = PosixFilePermissions.asFileAttribute(
+                    PosixFilePermissions.fromString("rw-------"));
+            envFile = Files.createTempFile(workspaceDir, "secrets-", ".env", strictAttrs);
+        } catch (UnsupportedOperationException e) {
+            envFile = Files.createTempFile(workspaceDir, "secrets-", ".env");
+            envFile.toFile().setReadable(true, true);
+            envFile.toFile().setWritable(true, true);
+        }
 
         if (secrets == null || secrets.isEmpty()) {
-            setStrictFilePermissions(envFile);
             return envFile;
         }
 
-        byte[] payload = null;
-        try (var baos = new ByteArrayOutputStream()) {
+        // Pre-calculate exact payload size to avoid ByteArrayOutputStream's internal
+        // buffer — which would create a second uncontrolled copy of the secret bytes.
+        int totalSize = 0;
+        for (var entry : secrets.entrySet()) {
+            totalSize += entry.getKey().getBytes(StandardCharsets.UTF_8).length; // key
+            totalSize += 1;                    // '='
+            totalSize += entry.getValue().length; // secret bytes
+            totalSize += 1;                    // '\n'
+        }
+
+        byte[] payload = new byte[totalSize];
+        try {
+            int pos = 0;
             for (var entry : secrets.entrySet()) {
-                baos.write((entry.getKey() + "=").getBytes(StandardCharsets.UTF_8));
-                baos.write(entry.getValue()); // Write raw bytes
-                baos.write('\n');
+                byte[] keyBytes = (entry.getKey() + "=").getBytes(StandardCharsets.UTF_8);
+                System.arraycopy(keyBytes, 0, payload, pos, keyBytes.length);
+                pos += keyBytes.length;
+
+                byte[] val = entry.getValue();
+                System.arraycopy(val, 0, payload, pos, val.length);
+                pos += val.length;
+
+                payload[pos++] = '\n';
             }
-            
-            payload = baos.toByteArray();
-            
             Files.write(envFile, payload);
-            setStrictFilePermissions(envFile);
-            
             return envFile;
 
         } finally {
-            // Memory Wipe: Zero the payload array
-            if (payload != null) {
-                Arrays.fill(payload, (byte) 0);
-            }
-            // Memory Wipe: Zero the individual secret arrays in the map
+            // Zero the assembled payload — the only in-memory copy of all secrets combined.
+            Arrays.fill(payload, (byte) 0);
+            // Zero each individual secret byte array — they are now dead.
             for (byte[] secretBytes : secrets.values()) {
                 if (secretBytes != null) {
                     Arrays.fill(secretBytes, (byte) 0);
                 }
             }
-        }
-    }
-
-    private void setStrictFilePermissions(Path envFile) throws IOException {
-        try {
-            Files.setPosixFilePermissions(envFile, PosixFilePermissions.fromString("rw-------"));
-        } catch (UnsupportedOperationException ignored) {
-            envFile.toFile().setReadable(true, true);
-            envFile.toFile().setWritable(true, true);
         }
     }
 
