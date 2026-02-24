@@ -56,6 +56,14 @@ mvn clean verify -pl arcclaw-app -am
 
 ./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
 
+java \
+  --add-opens=java.base/java.nio=ALL-UNNAMED \
+  --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  -Dsun.misc.unsafe.memory.access=allow \
+  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar \
+  serve
+
 ----
 
 podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
