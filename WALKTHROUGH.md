@@ -19,10 +19,11 @@
 | 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
 | 23 | Sandbox Enforcement | ToolRegistryTest (7/7) | Centralized `ProcessIsolationExecutor` in `ToolRegistry` |
 | 24 | Context Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
-| 26 | Sandbox Hardening | Manual Verification | Absolute paths, logging hardening, and WSL2 Setup Guide |
-| 27 | Falsification Bug Fixes | Manual Compilation | Strict fail-closed secrets and exit-code validation |
-| 28 | Tool Flexibility | Manual Compilation | CDI Proxy Unwrapping and Dynamic GithubTool actions |
-| 29 | Intent Hardening | Manual Verification | Auto-cancellation of dangling approvals & Routing Guardrails |
+| 25 | Sandbox Hardening | Manual Verification | Absolute paths, logging hardening, and WSL2 Setup Guide |
+| 26 | Security Hardening | Manual Compilation | Strict fail-closed secrets and exit-code validation |
+| 27 | Tool Flexibility | Manual Compilation | CDI Proxy Unwrapping and Dynamic GithubTool actions |
+| 28 | Intent Hardening | Manual Verification | Auto-cancellation of dangling approvals & Routing Guardrails |
+| 29 | Memory & Filtering | 13/13 JUnit Passes | Rolling window + identity preservation + Protocol filtering |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -629,3 +630,22 @@ Refined the `IntentClassifierService` with strict guardrails to handle compound 
 **Verification**: Verified "Hi" cancels pending tools and "Create repo" routes to `brahma`. ✅
 
 
+
+---
+
+## Phase 29: Memory Optimization & History Filtering ✅
+
+This phase ensured long-term session stability and agent reasoning clarity by pruning redundant history and filtering internal orchestration noise.
+
+### 1. Identity-Aware Rolling Window
+The `PersistentChatMemoryStore` now implements a "System Aware" rolling window. It prunes non-system messages once the limit (default=20) is reached but strictly preserves the initial `SystemMessage`. This ensures the agent never forgets its core persona or the **Trimurti** architecture.
+
+### 2. Protocol Noise Filtering
+`LangChainReasoningEngine` now cleans the chat history before every LLM request, removing:
+- `SystemMessage` objects coming from the persistent store (redundant with the newly generated prompt).
+- "Human Approved", "The tool execution has been approved...", and "Resuming task after approval" markers which previously caused the LLM to hallucinate about the approval state.
+
+### 3. Verification Coverage
+Added 13 dedicated JUnit tests across `PersistentChatMemoryStoreTest`, `LangChainReasoningEngineTest`, and `ToolRegistryTest` to ensure zero regressions in history management and secret mapping.
+
+**Verification**: `mvn clean verify` ✅

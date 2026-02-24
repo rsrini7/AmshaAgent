@@ -761,17 +761,20 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Secure Pipeline:** ✅ Replaced `String` materialization of credentials with a direct `byte[]` pipeline, fortified by Atomic POSIX file permissions on tmpfs.
 * **Developer Experience:** ✅ Added `DevSecretSeeder` to automate SQLite token hydration inside the `%dev` profile.
 
-### Phase 28: ArcClaw V1.0.0 (Tool Flexibility & Proxy Unwrapping)
+#### Tool Flexibility & Proxy Unwrapping
 * **Status:** ✅ Completed.
-* **CDI Proxy Transparency:** ✅ Refactored `ToolRegistry.extractRequiredSecrets` to climb the class hierarchy, bypassing Quarkus `_ClientProxy` wrappers to correctly identify `@RequiresSecret`.
-* **Dynamic Tool Commands:** ✅ Overhauled `GithubTool.java` to accept dynamic actions and targets instead of a static `gh repo view` constraint.
-* **Error Escalation:** ✅ Replaced `IOException` with `ToolExecutionException` in the sandbox executor to provide semantic clarity to the agent loop.
-* **Log Suppression:** ✅ Suppressed `jdk.event.security` verbosity in development profiles.
+* **CDI Proxy Transparency:** ✅ Refactored `ToolRegistry.extractRequiredSecrets` to climb the class hierarchy, bypassing Quarkus `_ClientProxy` wrappers.
+* **Dynamic Tool Commands:** ✅ Overhauled `GithubTool.java` to accept dynamic actions and targets.
 
-### Phase 29: ArcClaw V1.0.0 (Intent Hardening & Auto-Cancellation)
+### Phase 28: ArcClaw V1.0.0 (Intent Hardening & Auto-Cancellation)
 * **Status:** ✅ Completed.
-* **Auto-Cancel Pipeline:** ✅ Implemented proactive scanning in `TelegramAgentHandler` to wipe dangling `AWAITING_APPROVAL` checkpoints upon receipt of new free-text input.
-* **Routing Guardrails:** ✅ Hardened `IntentClassifierService` to prioritize semantic actions (Create/Build/Generate) over contextual keywords (GitHub), eliminating routing regressions.
+* **Auto-Cancel Pipeline:** ✅ Implemented proactive scanning in `TelegramAgentHandler` to wipe dangling `AWAITING_APPROVAL` checkpoints.
+* **Routing Guardrails:** ✅ Hardened `IntentClassifierService` to prioritize Actions (Create) over Context (GitHub).
+
+### Phase 29: ArcClaw V1.0.0 (Memory Optimization & History Filtering)
+* **Status:** ✅ Completed.
+* **Rolling Window:** ✅ Implemented identity-aware memory pruning (n=20) in `PersistentChatMemoryStore` to preserve system persona.
+* **History Scrubbing:** ✅ Sanitized reasoning history in `LangChainReasoningEngine` to filter out internal orchestration markers.
 
 *ArcClaw V1.0.0 Requirements — Baselined from production implementation.*
 *Source documents: ArcClaw-v1_0-CONSOLIDATED.md, TASKS.md, DEVIATIONS.md, WALKTHROUGH.md, TROUBLESHOOTING.md, FAQ.md, README.md, claw-ecosystem.md.*

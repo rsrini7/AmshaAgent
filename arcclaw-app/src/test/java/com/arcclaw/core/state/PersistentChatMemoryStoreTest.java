@@ -54,4 +54,48 @@ public class PersistentChatMemoryStoreTest {
         em.clear(); // Clear L1 cache to force reload from DB
         Assertions.assertNull(em.find(ChatMemoryEntity.class, sessionId));
     }
+
+    @Test
+    void testRollingWindowPreservesSystemMessages() {
+        String sessionId = UUID.randomUUID().toString();
+        List<ChatMessage> messages = new ArrayList<>();
+        
+        // 1. Add 1 System Message
+        messages.add(dev.langchain4j.data.message.SystemMessage.from("Identity"));
+        
+        // 2. Add 24 User Messages (Total 25)
+        for (int i = 1; i <= 24; i++) {
+            messages.add(UserMessage.from("Message " + i));
+        }
+        
+        chatMemoryStore.updateMessages(sessionId, messages);
+        
+        // 3. Retrieve
+        List<ChatMessage> retrieved = chatMemoryStore.getMessages(sessionId);
+        
+        // Window size is 20 (non-system) + 1 (system) = 21
+        Assertions.assertEquals(21, retrieved.size());
+        
+        // First message must be the System message
+        Assertions.assertTrue(retrieved.get(0) instanceof dev.langchain4j.data.message.SystemMessage);
+        
+        // Last 20 messages should be "Message 5" through "Message 24"
+        Assertions.assertEquals("Message 5", ((UserMessage) retrieved.get(1)).text());
+        Assertions.assertEquals("Message 24", ((UserMessage) retrieved.get(20)).text());
+    }
+
+    @Test
+    void testUnderLimitReturnsAll() {
+        String sessionId = UUID.randomUUID().toString();
+        List<ChatMessage> messages = new ArrayList<>();
+        
+        for (int i = 1; i <= 15; i++) {
+            messages.add(UserMessage.from("Under Limit " + i));
+        }
+        
+        chatMemoryStore.updateMessages(sessionId, messages);
+        
+        List<ChatMessage> retrieved = chatMemoryStore.getMessages(sessionId);
+        Assertions.assertEquals(15, retrieved.size());
+    }
 }

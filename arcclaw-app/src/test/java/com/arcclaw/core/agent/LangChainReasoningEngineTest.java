@@ -80,4 +80,60 @@ class LangChainReasoningEngineTest {
         assertTrue(step.actionInput().containsKey("repo"));
         assertEquals("test/repo", step.actionInput().get("repo"));
     }
+
+    @InjectMock
+    dev.langchain4j.store.memory.chat.ChatMemoryStore chatMemoryStore;
+
+    @Inject
+    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    @Test
+    void testNextStepFiltersHistory() {
+        // Arrange
+        String sessionId = "test-session";
+        com.arcclaw.core.scope.WorkspaceScopeHolder.set(sessionId);
+
+        List<dev.langchain4j.data.message.ChatMessage> storedMessages = List.of(
+            dev.langchain4j.data.message.SystemMessage.from("Ignore me"),
+            dev.langchain4j.data.message.AiMessage.from("Human Approved: ..."),
+            dev.langchain4j.data.message.UserMessage.from("Actual Goal"),
+            dev.langchain4j.data.message.UserMessage.from("Resuming task after approval")
+        );
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(storedMessages);
+
+        AiMessage mockAiMessage = AiMessage.from("Processing");
+        ChatResponse mockResponse = ChatResponse.builder()
+                .aiMessage(mockAiMessage)
+                .build();
+
+        // Capture the request to verify filtered messages
+        org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
+
+        // Act
+        reasoningEngine.nextStep("coordinator", "Actual Goal", List.of());
+
+        // Assert
+        ChatRequest capturedRequest = requestCaptor.getValue();
+        List<dev.langchain4j.data.message.ChatMessage> filtered = capturedRequest.messages();
+
+        // Should have: 
+        // 1. Initial System Message (Trimurti prompt)
+        // 2. "Actual Goal" (from history)
+        // Count: 2
+        
+        // Let's verify specifically that "Ignore me", "Human Approved", and "Resuming" were skipped
+        boolean foundSystemStore = filtered.stream().anyMatch(m -> m instanceof dev.langchain4j.data.message.SystemMessage && ((dev.langchain4j.data.message.SystemMessage)m).text().equals("Ignore me"));
+        boolean foundApproved = filtered.stream().anyMatch(m -> m.toString().contains("Human Approved"));
+        boolean foundResuming = filtered.stream().anyMatch(m -> m instanceof dev.langchain4j.data.message.UserMessage && ((dev.langchain4j.data.message.UserMessage)m).text().contains("Resuming"));
+
+        assertFalse(foundSystemStore, "System message from store should be filtered out");
+        assertFalse(foundApproved, "Approval marker should be filtered out");
+        assertFalse(foundResuming, "Resuming marker should be filtered out");
+        
+        boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof dev.langchain4j.data.message.UserMessage && ((dev.langchain4j.data.message.UserMessage)m).text().equals("Actual Goal"));
+        assertTrue(foundGoal, "Real goal should be preserved");
+        
+        com.arcclaw.core.scope.WorkspaceScopeHolder.clear();
+    }
 }

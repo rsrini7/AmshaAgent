@@ -108,7 +108,6 @@
 
 ---
 
-
 ## Phase 8 — Governance Layer
 - [x] `GovernanceLayer` (`@ApplicationScoped`, implements `AgentObserver`)
   - [x] Per-session `AtomicInteger` token counter + `Double` cost accumulator
@@ -366,3 +365,9 @@
 
 ---
 
+## Phase 29 — Memory Optimization & History Filtering
+- [x] Step 1: Configure `quarkus.langchain4j.chat-memory.max-messages: 20` in `application.yaml` <!-- id: 110 -->
+- [x] Step 2: Implement identity-aware rolling window in `PersistentChatMemoryStore` <!-- id: 111 -->
+- [x] Step 3: Implement internal protocol message filtering in `LangChainReasoningEngine` <!-- id: 112 -->
+- [x] Step 4: Add JUnit coverage for rolling window and filtering logic <!-- id: 113 -->
+- [x] Step 5: Verify build success and test passes (13/13) <!-- id: 114 -->

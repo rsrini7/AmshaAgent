@@ -187,3 +187,7 @@ The implementation of ArcClaw V1.0.0 has successfully translated the high-level 
 ### 24. Action-Priority Semantic Routing
 - **Deviation**: Hardened the `IntentClassifierService` prompt with numbered guardrails that explicitly prioritize intent verbs (Create/Build) over noun context (GitHub/Gist).
 - **Rationale**: Prevents misrouting regressions where the keyword "GitHub" would steer creation tasks toward the `researcher` role instead of the `coder` role.
+
+### 25. Identity-Aware Memory Pruning (Rolling Window)
+- **Deviation**: The `PersistentChatMemoryStore` splits history into system and non-system messages before applying the rolling window limit (n=20). The system message is ALWAYS preserved and re-prepended.
+- **Rationale**: Standard rolling windows often prune the initial System Message (the "identity"), causing agents to lose their persona and tool-binding guardrails in long conversations. This ensures architectural continuity.

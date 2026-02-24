@@ -85,7 +85,7 @@ quarkus:
         log-responses: true
       timeout: 120s
     chat-memory:
-      max-messages: 100
+      max-messages: 20
 
   # ---------------------------------------------------------------------------
   # OBSERVABILITY
