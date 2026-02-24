@@ -58,9 +58,11 @@ public class IntentClassifierService {
     }
 
     private String sanitize(String raw) {
-        if (raw.contains("shiva") || raw.contains("debugger")) return "debugger";
-        if (raw.contains("brahma") || raw.contains("coder")) return "coder";
-        if (raw.contains("saraswati") || raw.contains("researcher")) return "researcher";
+        String lowerRaw = raw.toLowerCase();
+        // Translate persona to actual functional duty
+        if (lowerRaw.contains("shiva") || lowerRaw.contains("debugger")) return "debugger";
+        if (lowerRaw.contains("brahma") || lowerRaw.contains("coder")) return "coder";
+        if (lowerRaw.contains("saraswati") || lowerRaw.contains("researcher")) return "researcher";
         return "coordinator";
     }
 }
