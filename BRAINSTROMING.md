@@ -67,7 +67,7 @@ if (allowedUserIds.isPresent() && !allowedUserIds.get().contains(msg.getFrom().g
 ```
 
 ### 3. Context Compaction Missing → Context Rot Risk
-OpenClaw's compaction summarizes and compresses session history when it nears 50% of the context window.  ArcClaw has no equivalent. `PersistentChatMemoryStore` retains up to 100 messages (`max-messages: 100`) but never summarizes, so long sessions will silently degrade performance by ~40–90% as shown in the video.[2, {ts:549}][2, {ts:137}]
+OpenClaw's compaction summarizes and compresses session history when it nears 50% of the context window.  ArcClaw has no equivalent. `PersistentChatMemoryStore` retains up to 100 messages (`max-messages: 100`) but never summarizes, so long sessions will silently degrade performance by ~40–90% as shown in the video.
 
 **Fix:** Add a `ContextCompactionService` that triggers when `chatMemoryStore.getMessages(sessionId).size() > threshold`, summarizes older messages via a dedicated LLM call, replaces them with a `SystemMessage` summary, and saves back.
 
@@ -183,7 +183,7 @@ The `dev-pepper-not-for-production-...` value is present in `application.yaml` f
 ## Phase 1 — Core Agent Intelligence (High Impact)
 
 ### 1-A. Context Compaction Service *(OpenClaw lesson + P1 from prior analysis)*
-OpenClaw's compaction triggers at 50% context window and summarizes chunks iteratively until below threshold.  ArcClaw's `PersistentChatMemoryStore` retains 100 messages flat with no summarization — after 30–60 days of use this causes the ~40–90% performance degradation documented in the video.[5, {ts:137}][5, {ts:549}]
+OpenClaw's compaction triggers at 50% context window and summarizes chunks iteratively until below threshold.  ArcClaw's `PersistentChatMemoryStore` retains 100 messages flat with no summarization — after 30–60 days of use this causes the ~40–90% performance degradation documented in the video.
 
 **Design:**
 ```
@@ -215,7 +215,7 @@ reflexes:
 `ReflexRegistry` intercepts user input *before* `ZeroClawSupervisor`/`AgentLoop`. On match, executes the bound `@AgentTool` directly and returns without touching the LLM.
 
 ### 1-C. Proactive Heartbeat + Agent-Writable Cron *(OpenClaw + PicoClaw + Gemini feature — Must Add)*
-OpenClaw's most powerful autonomy feature: the agent writes to `heartbeat.mmd` to program its own future behavior.  PicoClaw implements the same pattern with `HEARTBEAT.md` and configurable intervals.  ArcClaw's `StatefulAgentStore` and `AgentCheckpoint` are the perfect foundation.[5, {ts:300}]
+OpenClaw's most powerful autonomy feature: the agent writes to `heartbeat.mmd` to program its own future behavior.  PicoClaw implements the same pattern with `HEARTBEAT.md` and configurable intervals.  ArcClaw's `StatefulAgentStore` and `AgentCheckpoint` are the perfect foundation.
 
 **Design:**
 ```
@@ -228,7 +228,7 @@ HeartbeatScheduler (@Scheduled every 60s)
 CronJobEntity
   └── id, sessionId, cronExpression, goal, nextFire, lastFire, enabled
 ```
-This transforms ArcClaw from a reactive chatbot into a true autonomous agent — the exact same capability that makes OpenClaw compelling, but implemented safely inside the existing governance framework.[5, {ts:295}]
+This transforms ArcClaw from a reactive chatbot into a true autonomous agent — the exact same capability that makes OpenClaw compelling, but implemented safely inside the existing governance framework.
 
 ### 1-D. Inbound Webhook Triggers *(SafeClaw feature — Good to Add)*
 SafeClaw's `WebhookServer` makes the agent event-driven — a Prometheus alert, a GitHub push, or a CI failure wakes the agent automatically.  This is the enterprise SRE/DevOps activation pattern.
@@ -268,7 +268,7 @@ SaraswatiAgent gains a memory_search tool:
 For local/offline operation, use `AllMiniLmL6V2QuantizedEmbeddingModel` (dimension 384, built-in LangChain4J, no API call).  For cloud, use `text-embedding-ada-002` (1536). [docs.quarkiverse](https://docs.quarkiverse.io/quarkus-langchain4j/dev/rag-pgvector-store.html)
 
 ### 2-B. Symbolic Memory File (OpenClaw's `memory.mmd` equivalent)
-OpenClaw gives the agent a writable `memory.mmd` file for critical user facts.  ArcClaw has no equivalent writable persistent fact store. Add a `MemoryNoteTool` that lets any agent write key-value facts (`user_name`, `preferred_language`, `current_project`) to a `memory_notes` SQLite table, loaded into system prompt on every session start.[5, {ts:186}]
+OpenClaw gives the agent a writable `memory.mmd` file for critical user facts.  ArcClaw has no equivalent writable persistent fact store. Add a `MemoryNoteTool` that lets any agent write key-value facts (`user_name`, `preferred_language`, `current_project`) to a `memory_notes` SQLite table, loaded into system prompt on every session start.
 
 ***
 
