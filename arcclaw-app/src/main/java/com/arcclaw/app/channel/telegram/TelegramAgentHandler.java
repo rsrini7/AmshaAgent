@@ -139,6 +139,21 @@ public class TelegramAgentHandler {
         try {
             // Activate CDI Workspace Scope initially so IntentClassifier works
             WorkspaceScopeHolder.set(baseId);
+
+            // Auto-cancel any dangling tool approvals if the user 
+            // sends a free-text message instead of clicking /approve or /deny
+            for (String r : java.util.List.of("coordinator", "coder", "researcher", "debugger")) {
+                statefulAgentStore.load(baseId, r).ifPresent(cp -> {
+                    if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                        log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r);
+                        cp.setStatus(CheckpointStatus.FAILED);
+                        cp.failReason = "User interrupted with a new message. Tool execution aborted.";
+                        cp.stateJson = "[]"; // Wipe the tool state
+                        statefulAgentStore.save(cp);
+                    }
+                });
+            }
+
             String activeRole = intentClassifier.classify(text);
 
             log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",

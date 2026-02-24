@@ -1519,12 +1519,28 @@ if (optionalKey.isPresent()) {
 
 ---
 
-### 20. Proactive Tool Calls on Greeting ("Hi" triggers Approval)
+## 20. Dangling Tool Approvals (The "Hi" Approval Bug)
 
-**Symptom:** User says "Hi" or "Hello," and the bot immediately asks for approval to run a tool.
+**Symptom:** You send a greeting like "Hi" or a completely unrelated new question, but the bot immediately responds with `⚠️ Approval Required` for a tool you triggered in a previous message.
 
 **Root Cause:**
-If the conversation history contains a previous unfulfilled or failed tool request, the LLM may proactively attempt to resolve that request when a new message is received. This is a feature of the model's "Helpfulness" reasoning.
+If a user triggers a sensitive tool but then sends a new free-text message instead of explicitly clicking `/approve` or `/deny`, the session checkpoint in the SQLite `StatefulAgentStore` remains stuck in the `AWAITING_APPROVAL` state. When the new message is processed, the LLM sees the unfulfilled tool call in the persistent chat history and proactively attempts to execute it again.
 
-**Resolution:**
-Use the `/reset` command. This clears the `PersistentChatMemoryStore` in SQLite, ensuring the model starts with a clean context and does not attempt to "fix" previous conversation turns.
+**Resolution (Implemented):**
+An auto-cancellation loop was added to `TelegramAgentHandler.runAgent()`. When a new free-text message arrives, the handler scans all roles for a dangling `AWAITING_APPROVAL` checkpoint. If found, it force-fails the checkpoint, clears the tool JSON, and wipes the slate clean before the Intent Classifier processes the new message.
+
+---
+
+## 21. Intent Classifier Regressions (Keyword vs. LLM Routing)
+
+**Symptom:** Compound intents are misrouted. For example, "Create a new GitHub repository" is routed to `researcher` instead of `coder`, or "Fix a bug in my repository" is routed to `researcher` instead of `debugger`.
+
+**Root Cause (Architectural Trap):**
+Attempting to replace the LLM-based `IntentClassifierService` with a pure Java keyword/RegEx matcher (to save latency/tokens) introduces systematic misrouting. Keyword matching cannot understand semantic priority (e.g., the verb "Create" should override the noun "GitHub"). 
+
+**Resolution (Implemented):**
+We maintained the LLM-based router (to handle semantic ambiguity) but hardened the `CLASSIFIER_PROMPT` with strict, numbered guardrails:
+1. **View/List/Fetch** + GitHub = `saraswati` (researcher)
+2. **Create/Build/Generate** + GitHub = `brahma` (coder)
+3. **Negative words** ("no", "missing") do NOT trigger the `debugger` unless accompanied by explicit error terminology (stack traces, "failed").
+This ensures the 500ms latency spent on the classifier actually guarantees accurate semantic routing.

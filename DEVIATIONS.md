@@ -179,3 +179,11 @@ The implementation of ArcClaw V1.0.0 has successfully translated the high-level 
 ### 22. CDI Proxy Unwrapping for Sandboxed Tools
 - **Deviation**: Refactored `ToolRegistry.extractRequiredSecrets` to recursively traverse `class.getSuperclass()` instead of only scanning the injected class definition.
 - **Rationale**: Quarkus proxies `@ApplicationScoped` beans with subclass wrappers (e.g., `GithubTool_ClientProxy`). Standard reflection fails to read the developer's `@RequiresSecret` annotation on these proxies, which caused the strict fail-closed sandbox executor to silently reject tool execution due to missing secrets. Unwrapping the proxy restores the intended declarative security model.
+
+### 23. Auto-Cancellation of Dangling Approvals
+- **Deviation**: Implemented a scanning loop in `TelegramAgentHandler.runAgent()` that force-fails any role-specific checkpoint in `AWAITING_APPROVAL` status when a new free-text message is received.
+- **Rationale**: Prevents "phantom tool executions" where a user's new message (like "Hi") triggers an unfulfilled tool call from a previous turn due to persistent chat memory.
+
+### 24. Action-Priority Semantic Routing
+- **Deviation**: Hardened the `IntentClassifierService` prompt with numbered guardrails that explicitly prioritize intent verbs (Create/Build) over noun context (GitHub/Gist).
+- **Rationale**: Prevents misrouting regressions where the keyword "GitHub" would steer creation tasks toward the `researcher` role instead of the `coder` role.

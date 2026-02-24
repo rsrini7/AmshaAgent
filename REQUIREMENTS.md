@@ -768,6 +768,11 @@ The following table tracks ArcClaw's feature parity against the ZeroClaw Rust re
 * **Error Escalation:** ✅ Replaced `IOException` with `ToolExecutionException` in the sandbox executor to provide semantic clarity to the agent loop.
 * **Log Suppression:** ✅ Suppressed `jdk.event.security` verbosity in development profiles.
 
+### Phase 29: ArcClaw V1.0.0 (Intent Hardening & Auto-Cancellation)
+* **Status:** ✅ Completed.
+* **Auto-Cancel Pipeline:** ✅ Implemented proactive scanning in `TelegramAgentHandler` to wipe dangling `AWAITING_APPROVAL` checkpoints upon receipt of new free-text input.
+* **Routing Guardrails:** ✅ Hardened `IntentClassifierService` to prioritize semantic actions (Create/Build/Generate) over contextual keywords (GitHub), eliminating routing regressions.
+
 *ArcClaw V1.0.0 Requirements — Baselined from production implementation.*
 *Source documents: ArcClaw-v1_0-CONSOLIDATED.md, TASKS.md, DEVIATIONS.md, WALKTHROUGH.md, TROUBLESHOOTING.md, FAQ.md, README.md, claw-ecosystem.md.*
 *Audit trail: 5 LLMs, 4+ review passes, 21 unique risks resolved, 7 factual corrections applied.*

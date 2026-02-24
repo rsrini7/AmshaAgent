@@ -21,6 +21,8 @@
 | 24 | Context Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
 | 26 | Sandbox Hardening | Manual Verification | Absolute paths, logging hardening, and WSL2 Setup Guide |
 | 27 | Falsification Bug Fixes | Manual Compilation | Strict fail-closed secrets and exit-code validation |
+| 28 | Tool Flexibility | Manual Compilation | CDI Proxy Unwrapping and Dynamic GithubTool actions |
+| 29 | Intent Hardening | Manual Verification | Auto-cancellation of dangling approvals & Routing Guardrails |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -611,5 +613,19 @@ Added log level overrides (`INFO`) for `jdk.event.security` and `io.netty.handle
 `ProcessIsolationExecutor` now throws `ToolExecutionException` instead of a generic `IOException` when a tool fails (exit code != 0), allowing the `AgentLoop` to more clearly relay the specific tool failure back to the LLM for correction.
 
 **Verification**: End-to-end testing with dynamic GitHub queries and `mvn compile`.
+
+---
+
+## Phase 29: Intent Hardening & Auto-Cancellation ✅
+
+This phase addressed architectural edge cases in the human-in-the-loop flow and refined the agent's semantic routing accuracy.
+
+### 1. Proactive Auto-Cancellation
+To prevent the "Dangling Approval" bug (where a user greets the bot while a tool is pending approval, causing the bot to re-prompt for the old tool), we implemented an auto-cancellation loop. Receiving any free-text message now automatically fails and wipes any `AWAITING_APPROVAL` checkpoints across all roles, ensuring the bot's memory starts fresh for the new intent.
+
+### 2. Hardened Semantic Guardrails
+Refined the `IntentClassifierService` with strict guardrails to handle compound intents. By prioritizing **Actions** (e.g., CREATE) over **Context** (e.g., GITHUB), we resolved regressions where the LLM would incorrectly route creation tasks to the `researcher` role simply due to the presence of the "GitHub" keyword.
+
+**Verification**: Verified "Hi" cancels pending tools and "Create repo" routes to `brahma`. ✅
 
 
