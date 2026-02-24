@@ -1,3 +1,124 @@
+## Tracking Status
+
+**Short answer: Partially started but NOT fully implemented in the current codebase.**  Here is exactly what exists versus what is missing for each sprint.
+
+***
+
+## Dynamic Tool Schema Binding
+
+### ✅ What IS already tracked/implemented
+
+`LangChainReasoningEngine.java` already has **prompt-level tool binding** via `getRoleBinding(role)`. The system prompt includes a `STRICT TOOL BINDING CONTRACT` block injected per role:
+
+```
+coder/brahma   → "PERMITTED TOOLS: None. Pure code generation engine."
+debugger/shiva → "PERMITTED TOOLS: None. Pure analysis engine."
+coordinator    → "PERMITTED TOOLS: github ONLY when user explicitly asks"
+researcher     → "PERMITTED TOOLS: github"
+```
+
+### ❌ What is NOT implemented
+
+The **`ToolSpecification` list itself is still being passed to every role** regardless. In `LangChainReasoningEngine.nextStep()`, this code runs unconditionally:
+
+```java
+List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
+    .map(name -> toolRegistry.findTool(name).orElseThrow())
+    .map(tool -> ToolSpecification.builder()
+        .name(tool.name())
+        .description(tool.description())
+        .build())
+    .collect(Collectors.toList());
+
+// Then:
+ChatRequest request = toolSpecifications.isEmpty()
+    ? ChatRequest.builder().messages(messages).build()
+    : ChatRequest.builder().messages(messages).toolSpecifications(toolSpecifications).build();
+```
+
+**The `coder` and `debugger` roles still receive the full `toolSpecifications` list in the `ChatRequest`**, meaning the LLM technically still has the schema available and the prompt-only constraint can be bypassed (the jailbreak confirmed in Phase 24 logs). The fix is a single filter before building the `ChatRequest`:
+
+```java
+// Fix — in LangChainReasoningEngine.nextStep()
+List<String> allowed = switch (agentRole.toLowerCase()) {
+    case "coder", "brahma", "debugger", "shiva" -> List.of(); // empty = no tools in schema
+    case "researcher", "saraswati" -> List.of("github");
+    case "coordinator", "vishnu" -> List.of("github");
+    default -> List.of();
+};
+
+List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
+    .filter(name -> allowed.contains(name))  // ← THE MISSING LINE
+    .map(name -> toolRegistry.findTool(name).orElseThrow())
+    .map(tool -> ToolSpecification.builder()
+            .name(tool.name()).description(tool.description()).build())
+    .collect(Collectors.toList());
+```
+
+This closes the schema-presence jailbreak because an empty `toolSpecifications` list causes the `ChatRequest` to be built **without** the `toolSpecifications` field entirely — the LLM never sees the schema.
+
+**Tracked anywhere?** ❌ No — not in any test, no TODO comment, no planned test in `LangChainReasoningEngineTest.java`. The existing `LangChainReasoningEngineTest` only tests `FINISH` and tool execution happy paths, not role-based schema filtering.
+
+***
+
+## Context Window Rolling Pruning
+
+### ✅ What IS already tracked/implemented
+
+`PersistentChatMemoryStore.getMessages()` is implemented and SQLite-backed. `application.yaml` has `chat-memory.max-messages: 100` configured.
+
+### ❌ What is NOT implemented
+
+The `max-messages: 100` config key is **declared in `application.yaml` but never read or enforced in `PersistentChatMemoryStore.java`**. The `getMessages()` method simply does:
+
+```java
+// Current — no pruning at all
+return ChatMessageDeserializer.messagesFromJson(entity.getMessagesJson());
+// Returns ALL messages unconditionally — unbounded
+```
+
+The rolling window pruning is entirely absent. The fix belongs in `getMessages()`:
+
+```java
+// Fix — in PersistentChatMemoryStore.getMessages()
+@ConfigProperty(name = "quarkus.langchain4j.chat-memory.max-messages", defaultValue = "10")
+int rollingWindowSize;
+
+@Override
+@Transactional
+public List<ChatMessage> getMessages(Object memoryId) {
+    ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, memoryId.toString());
+    if (entity == null) return new ArrayList<>();
+    List<ChatMessage> all = ChatMessageDeserializer.messagesFromJson(entity.getMessagesJson());
+    // Rolling window: keep SystemMessage(s) always + last N non-system messages
+    List<ChatMessage> systemMessages = all.stream()
+        .filter(m -> m instanceof SystemMessage).toList();
+    List<ChatMessage> nonSystem = all.stream()
+        .filter(m -> !(m instanceof SystemMessage)).toList();
+    int from = Math.max(0, nonSystem.size() - rollingWindowSize);
+    List<ChatMessage> windowed = new ArrayList<>(systemMessages);
+    windowed.addAll(nonSystem.subList(from, nonSystem.size()));
+    return windowed;
+}
+```
+
+**Important nuance:** The pruning must **preserve `SystemMessage` entries** (the role system prompt + tool binding contract) while only windowing `UserMessage` / `AiMessage` / `ToolExecutionResultMessage` entries — otherwise the agent loses its persona on every hydration after message 10.
+
+**Tracked anywhere?** ❌ No — `PersistentChatMemoryStoreTest.java` exists in the test tree but no test covers rolling window behavior or the `max-messages` config boundary.
+
+***
+
+## Summary
+
+| Sprint | Prompt-level | Schema-level | Config declared | Enforced in code | Test coverage |
+|---|---|---|---|---|---|
+| Tool Schema Binding | ✅ Done | ❌ Missing | — | ❌ No | ❌ No test |
+| Context Pruning | — | — | ✅ `max-messages: 100` | ❌ Not read | ❌ No test |
+
+Neither sprint is tracked in any test, comment, or TODO in the codebase.  Both require changes only to `LangChainReasoningEngine.java` and `PersistentChatMemoryStore.java` — both are small, surgical changes with no architectural side effects. The recommended N=10 starting point for the rolling window is safe but should be raised to at least **20** to avoid losing multi-step tool chains (a 5-step agent loop generates \~10–15 messages per request).
+
+---
+
 ## ArcClaw vs OpenClaw: Current State
 
 | Dimension | OpenClaw (JS) | ArcClaw (your code) |

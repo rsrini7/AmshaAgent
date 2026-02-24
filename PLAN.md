@@ -1132,18 +1132,7 @@ Address architectural weaknesses leading to LLM tool eagerness and history bleed
 
 ---
 
-# Phase 25 — Dynamic Schema Binding & Context Pruning (Planned)
-
-Address the LLM schema-presence jailbreak and context window drag identified during V1.0.0 verification.
-
-## Proposed Changes
-### Core Module — Agents & Memory
-- [PLANNED] `LangChainReasoningEngine.java`: Intercept and filter the `ToolSpecification` list passed to the LLM based on `agentRole`. 
-- [PLANNED] `PersistentChatMemoryStore.java`: Implement a rolling window (e.g., retain last 10 messages) during the `getMessages` hydration phase to prevent token exhaustion and goal-confusion across long-lived sessions.
-
----
-
-# Phase 26 — Sandbox Isolation Hardening (WSL2 & Podman) ✅
+# Phase 25 — Sandbox Isolation Hardening (WSL2 & Podman) ✅
 
 Harden the infrastructure layer to ensure reliable container execution across diverse host environments, particularly focusing on the native WSL2/Podman boundary.
 
@@ -1182,7 +1171,7 @@ Harden the infrastructure layer to ensure reliable container execution across di
 
 ---
 
-# Phase 27 — Security Hardening & Secret Injection Pipeline ✅
+# Phase 26 — Security Hardening & Secret Injection Pipeline ✅
 
 Address critical vulnerabilities and robustness flaws identified during the static analysis and falsification audit, along with developer experience improvements.
 
@@ -1217,7 +1206,35 @@ Address critical vulnerabilities and robustness flaws identified during the stat
 
 ---
 
-# Phase 29 — Intent Hardening & Auto-Cancellation ✅
+# Phase 27 — Tool Flexibility & Proxy Unwrapping ✅
+
+Address tool integration issues caused by dynamic subcommands, JVM proxy wrapping, and logging verbosity.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Proxy Unwrapping for Annotations**: Quarkus `@ApplicationScoped` beans are wrapped in `_ClientProxy` classes, meaning standard reflection failed to find `@RequiresSecret` on the actual implementation. `ToolRegistry` now unpacks the superclass recursively.
+
+> [!TIP]
+> **Dynamic Subcommands in GithubTool**: Removed hardcoded `gh repo view` binding. The tool now accepts `action`, `command`, and an optional `target` from the LLM, empowering it to run things like `gh gist list` fluently.
+
+## Completed Changes
+
+#### [MODIFY] [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java)
+- Traverse proxy superclasses in `extractRequiredSecrets` to find the real implementation class.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Accept `action`, `command`, and `target` parameters dynamically for greater utility.
+
+#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Modified `executeInNamespace` and `executeDirectly` to throw `ToolExecutionException` instead of `IOException` for tool failures, improving error propagation cleanly to the agent.
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Reduced logging noise by setting `jdk.event.security` and `io.netty.handler.ssl` to `INFO`.
+
+---
+
+# Phase 28 — Intent Hardening & Auto-Cancellation ✅
 
 Address "dangling approval" edge cases and intent routing regressions discovered during V1.0.0 stress testing.
 
@@ -1244,31 +1261,4 @@ Address "dangling approval" edge cases and intent routing regressions discovered
 - ✅ Verified "Create GitHub gist" routes to `brahma` (coder) despite the "GitHub" keyword.
 - ✅ `mvn clean compile` succeeds cleanly.
 
-
 ---
-
-# Phase 28 — Tool Flexibility & Proxy Unwrapping ✅
-
-Address tool integration issues caused by dynamic subcommands, JVM proxy wrapping, and logging verbosity.
-
-## Design Decisions
-
-> [!IMPORTANT]
-> **Proxy Unwrapping for Annotations**: Quarkus `@ApplicationScoped` beans are wrapped in `_ClientProxy` classes, meaning standard reflection failed to find `@RequiresSecret` on the actual implementation. `ToolRegistry` now unpacks the superclass recursively.
-
-> [!TIP]
-> **Dynamic Subcommands in GithubTool**: Removed hardcoded `gh repo view` binding. The tool now accepts `action`, `command`, and an optional `target` from the LLM, empowering it to run things like `gh gist list` fluently.
-
-## Completed Changes
-
-#### [MODIFY] [ToolRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolRegistry.java)
-- Traverse proxy superclasses in `extractRequiredSecrets` to find the real implementation class.
-
-#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
-- Accept `action`, `command`, and `target` parameters dynamically for greater utility.
-
-#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
-- Modified `executeInNamespace` and `executeDirectly` to throw `ToolExecutionException` instead of `IOException` for tool failures, improving error propagation cleanly to the agent.
-
-#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
-- Reduced logging noise by setting `jdk.event.security` and `io.netty.handler.ssl` to `INFO`.

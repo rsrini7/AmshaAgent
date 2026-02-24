@@ -312,7 +312,6 @@
   - [x] Prevent Internal Noise Contamination by filtering system commands from history
   - [x] Refactor: Centralize ProcessIsolationExecutor invocation in ToolRegistry 
     (Deviation #18) — closes sandbox opt-in security gap
-- [ ] Sprint 4C: Multi-Language Support (Planned)
 
 ---
 
@@ -328,19 +327,7 @@
 
 ---
 
-## Phase 25 — Dynamic Schema Binding & Context Pruning
-- [ ] Sprint 25A: Dynamic Tool Schema Binding
-  Strip tools from LangChain ChatRequest payload based on `agentRole`.
-  `coder` + `debugger` → empty `toolSpecifications` list (not just prompt constraint).
-  This closes the schema-presence jailbreak confirmed in Phase 24 logs.
-- [ ] Sprint 25B: Context Window Pruning  
-  Add rolling window to `PersistentChatMemoryStore` — retain last N messages
-  per session rather than unbounded history. Prevents context drag when
-  switching task domains within a session. N=10 is a reasonable starting point.
-
----
-
-## Phase 26 — Sandbox Isolation Hardening
+## Phase 25 — Sandbox Isolation Hardening
 - [x] Step 1: Ingest `podman-path` into `ProcessIsolationExecutor.java` <!-- id: 87 -->
 - [x] Step 2: Extract and log raw `STDERR` from failing Podman processes <!-- id: 88 -->
 - [x] Step 3: Use system `PATH` discovery for `podman` instead of hardcoding paths <!-- id: 89 -->
@@ -350,7 +337,7 @@
 
 ---
 
-## Phase 27 — Security Hardening & Secret Injection Pipeline
+## Phase 26 — Security Hardening & Secret Injection Pipeline
 - [x] Step 1: Implement `DevSecretSeeder` for host env token injection during JVM boot <!-- id: 93 -->
 - [x] Step 2: Secure byte[] secret pipeline and remove String materialization in `ProcessIsolationExecutor` <!-- id: 94 -->
 - [x] Step 3: Enforce Atomic POSIX file permissions for ephemeral `.env` creation <!-- id: 95 -->
@@ -361,7 +348,7 @@
 
 ---
 
-## Phase 28 — Tool Flexibility & Proxy Unwrapping
+## Phase 27 — Tool Flexibility & Proxy Unwrapping
 - [x] Step 1: Unwrap Quarkus CDI Proxies in `ToolRegistry` to expose `@RequiresSecret` <!-- id: 100 -->
 - [x] Step 2: Implement dynamic subcommands to `GithubTool.java` (removing hardcoded commands) <!-- id: 101 -->
 - [x] Step 3: Upgrade `IOException` to `ToolExecutionException` in `ProcessIsolationExecutor` <!-- id: 102 -->
@@ -370,9 +357,12 @@
 
 ---
 
-## Phase 29 — Intent Hardening & Auto-Cancellation
+## Phase 28 — Intent Hardening & Auto-Cancellation
 - [x] Step 1: Implement auto-cancellation loop for dangling approvals in `TelegramAgentHandler` <!-- id: 105 -->
 - [x] Step 2: Extract numbered guardrails into `IntentClassifierService` prompt <!-- id: 106 -->
 - [x] Step 3: Harden routing logic to prioritize Actions (Create) over Context (GitHub) <!-- id: 107 -->
 - [x] Step 4: Ensure free-text messages force-fail pending tool states <!-- id: 108 -->
 - [x] Step 5: Document Troubleshooting items #20 and #21 <!-- id: 109 -->
+
+---
+

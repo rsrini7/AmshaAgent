@@ -554,7 +554,7 @@ Added the `/reset` command to the Telegram bot handler.
 
 ---
 
-## Phase 26: Sandbox Hardening ✅
+## Phase 25: Sandbox Hardening ✅
 
 This phase focused on the "Last Mile" of production readiness: ensuring the sandbox is reliable outside of the developer's machine and providing clear diagnostics for environment failures.
 
@@ -573,7 +573,7 @@ Fixed the common "Headless JVM PATH" bug by moving the Podman executable path an
 
 ---
 
-## Phase 27: Security Hardening & Secret Injection Pipeline ✅
+## Phase 26: Security Hardening & Secret Injection Pipeline ✅
 
 This phase addressed critical vulnerabilities identified during a systemic static analysis and falsification audit.
 
@@ -596,7 +596,7 @@ Created a `DevSecretSeeder` utility bean that conditionally activates in the `%d
 
 ---
 
-## Phase 28: Tool Flexibility & Proxy Unwrapping ✅
+## Phase 27: Tool Flexibility & Proxy Unwrapping ✅
 
 This phase resolved integration quirks discovered during deep human-in-the-loop testing, specifically around how the LLM interacts with dynamic tools and Quarkus proxies.
 
@@ -616,7 +616,7 @@ Added log level overrides (`INFO`) for `jdk.event.security` and `io.netty.handle
 
 ---
 
-## Phase 29: Intent Hardening & Auto-Cancellation ✅
+## Phase 28: Intent Hardening & Auto-Cancellation ✅
 
 This phase addressed architectural edge cases in the human-in-the-loop flow and refined the agent's semantic routing accuracy.
 
