@@ -1765,6 +1765,12 @@ quarkus.hibernate-orm.database.generation=drop-and-create
 ```
 
 ## 28. Phase 32: REST API Authentication
+
+### 🔴 T-1: Fragile Package-Private Field Access in Tests
+**Symptom:** `TelegramAllowlistGuardTest` directly sets `manualGuard.allowedUsers` without standard setters or reflection.
+**Root Cause:** The test temporarily relies on package-private visibility mapping to the same test package to mutate internal state. This breaks if `TelegramAllowlistGuard` strictly encapsulates fields.
+**Resolution:** Ideally refactor the test to use `@TestProfile` with an `Map.of("arcclaw.telegram.allowed-users", "Alice,@Bob")` override block. Until then, treat this explicit field assignment as a known structural fragility.
+
 - Telegram user always blocked despite being in allowed-users list
   (user has no public @username set — Telegram API returns null;
   they must set a username in Telegram Settings → Username)

@@ -1351,7 +1351,7 @@ Implement API key-based authentication with sliding-window rate limiting for the
 
 > [!IMPORTANT]
 > **API Key Authentication**: Exposed REST API endpoints now require an `X-ArcClaw-API-Key` header. Implemented as a JAX-RS `@Provider` (`ApiKeyAuthFilter`) to intercept and validate requests before they hit the resource layer. Endpoints under `/q/*` (health/metrics) bypass authentication.
-> **Sliding Window Rate Limiting**: The `ApiKeyRegistry` tracks request rates using `ConcurrentHashMap` and `Deque<Instant>`. Exceeding the `requests-per-minute` limit returns a `429 Too Many Requests` response.
+> **Sliding Window Rate Limiting**: The `ApiKeyRegistry` tracks request rates using `ConcurrentHashMap<String, ConcurrentLinkedDeque<Instant>>` for thread-safe per-key sliding window counters. Exceeding `requests-per-minute` returns HTTP 429 with `Retry-After: 60` header.
 
 > [!TIP]
 > **Telegram Allowlist**: Added `TelegramAllowlistGuard` to enforce case-insensitive validation of Telegram usernames against `arcclaw.telegram.allowed-users`. If blocked, the handler silently drops the message or replies with an access denied message based on configuration.
