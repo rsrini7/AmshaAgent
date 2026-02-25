@@ -30,6 +30,15 @@ public class AuditEventRepository {
      * REQUIRED transaction boundary.
      */
     public void record(AuditEvent event) {
+        // Step 1: assign monotonic sequence for this session
+        List<Long> maxSeqResult = em.createQuery(
+                "SELECT COALESCE(MAX(a.sequence), 0) FROM AuditEvent a WHERE a.sessionId = :sid",
+                Long.class)
+                .setParameter("sid", event.sessionId)
+                .getResultList();
+        event.sequence = (maxSeqResult.isEmpty() ? 0L : maxSeqResult.get(0)) + 1;
+
+        // Step 2: chain to previous hash
         String prevHash = findLatestHash(event.sessionId);
         if (prevHash == null) {
             prevHash = AuditHashUtil.sha256hex("GENESIS:" + event.sessionId);
@@ -48,7 +57,7 @@ public class AuditEventRepository {
     @Transactional(Transactional.TxType.SUPPORTS)
     public String findLatestHash(String sessionId) {
         List<String> results = em.createQuery(
-                "SELECT a.hmacHash FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.timestamp DESC, a.id DESC",
+                "SELECT a.hmacHash FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.sequence DESC",
                 String.class)
                 .setParameter("sid", sessionId)
                 .setMaxResults(1)
@@ -61,7 +70,7 @@ public class AuditEventRepository {
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<AuditEvent> findBySessionId(String sessionId) {
         return em.createQuery(
-                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.timestamp ASC, a.id ASC",
+                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.sequence ASC",
                 AuditEvent.class)
                 .setParameter("sid", sessionId)
                 .getResultList();

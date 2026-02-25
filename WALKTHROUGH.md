@@ -37,6 +37,7 @@
 | 32 | API & Telegram Security | 68/68 JUnit Passes | Explicit JAX-RS Jackson declaration in app module |
 | 33 | Prompt Injection | PromptInjectionReflexTest | Pass 1 short-circuiting of adversarial instructions |
 | 34 | Tool Schema | 68/68 JUnit Passes | JSON Schema for tool arguments + Schema Jailbreak fix |
+| 35 | Immutable Audit Log | 12/12 Audit tests | HMAC Chaining + SQLite WORM triggers + monotonic sequence |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -740,3 +741,31 @@ Hardened the tool invocation pipeline by integrating JSON parameter schemas and 
 | [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Implemented `allowedTools` filtering (Schema Jailbreak fix) and parameter injection. |
 
 **Verification**: `mvn clean verify -pl arcclaw-app -am` ✅ (68/68 tests passed)
+
+## Phase 35: Immutable Audit Log (WORM) ✅
+
+Implemented a Write-Once-Read-Many (WORM) audit system using HMAC chaining and database-level triggers to guarantee the integrity of agent reasoning and security events.
+
+| File | Purpose |
+|------|---------|
+| [AuditEvent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEvent.java) | Immutable record with `hmacHash`, `prevHash`, and `sequence`. |
+| [AuditEventRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEventRepository.java) | HMAC chain construction and monotonic sequence assignment. |
+| [AuditVerifier.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditVerifier.java) | Cryptographic chain validation and tamper detection. |
+| [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java) | Injects SQLite `BEFORE UPDATE` and `BEFORE DELETE` triggers. |
+
+### Semantic Hook Points
+The `AuditService` is wired into 7 critical subsystems to provide a full transparent audit trail:
+
+1. **Tools**: Every `TOOL_INVOKED` (including output costs) and `TOOL_BLOCKED` event.
+2. **Reflexes**: `PROMPT_INJECTION_BLOCKED`, `PII_SCAN_REDACTED`, and `APPROVAL` decisions.
+3. **Vault**: Unauthorized `VAULT_RETRIEVE_MISS` or valid `VAULT_STORE` actions.
+4. **State**: Every `CHECKPOINT` creation and transition.
+5. **Channels**: Session lifecycle events from Telegram.
+6. **API**: Authentication successes and failures.
+
+**Automation Verification**:
+- ✅ `AuditEventRepositoryTest` (12/12 passing)
+- ✅ `AuditObserverTest` (Loop integration)
+- ✅ `AuditVerifierTest` (Tamper detection validated)
+- ✅ `AuditServiceIntegrationTest` (Subsystem wiring validated)
+

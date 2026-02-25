@@ -59,6 +59,10 @@ public class AuditEvent {
     @Column(updatable = false)
     public int iterationsUsed;
 
+    // Monotonic per-session insert order — set exclusively by AuditEventRepository.record()
+    @Column(nullable = false, updatable = false)
+    public long sequence;
+
     // HMAC Chain Fields
     @Column(nullable = false, updatable = false, length = 64)
     public String hmacHash;
@@ -85,6 +89,7 @@ public class AuditEvent {
         e.outputTokens   = outputTokens;
         e.usdCost        = usdCost;
         e.iterationsUsed = iterationsUsed;
+        e.sequence       = 0; // placeholder — set by AuditEventRepository.record() before persist
         e.timestamp      = Instant.now();
         return e;
     }
@@ -105,6 +110,7 @@ public class AuditEvent {
         e.outputTokens   = 0;
         e.usdCost        = BigDecimal.ZERO;
         e.iterationsUsed = 0;
+        e.sequence       = 0; // placeholder — set by AuditEventRepository.record() before persist
         e.timestamp      = Instant.now();
         return e;
     }

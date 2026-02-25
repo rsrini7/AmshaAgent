@@ -2039,3 +2039,31 @@ public void onStart(
 `CREATE TRIGGER IF NOT EXISTS` also ensures idempotency on subsequent restarts.
 
 ***
+
+### 🟡 T-8: HMAC Chain Non-Determinism on Millisecond Ties
+
+**Symptom:**
+```
+AssertionFailedError: expected: <49b1cdc6...> but was: <15961f15...>
+```
+Intermittent failure in `testHmacChainGeneration` or high-throughput session auditing.
+
+**Root Cause:** The `AuditEventRepository` used `ORDER BY timestamp DESC` to find the previous hash. When multiple events occurred in the same millisecond (SQL precision limit), the ordering became non-deterministic. Selecting the "wrong" row as the parent broke the HMAC chain validation.
+
+**Resolution:**
+1. Added a `long sequence` field to `AuditEvent.java` (monotonic per-session).
+2. Updated `AuditEventRepository.record()` to compute `MAX(sequence) + 1` atomically before insert.
+3. Repointed all HMAC chain lookups (`findLatestHash`) and query methods (`findBySessionId`) to use `ORDER BY sequence`.
+4. Retained `timestamp` for audit display/search while relying on `sequence` for cryptographic integrity.
+
+Note: One thing to note for future reference
+
+The COALESCE(MAX(a.sequence), 0) JPQL query works correctly in single-connection SQLite tests because everything runs in the same transaction and the L1 cache is visible. In a multi-threaded production scenario (e.g. two simultaneous agent sessions writing audit events for the same sessionId), this would be a race condition — two threads could read the same MAX(sequence) and both assign the same next value.
+
+For now this is safe because:
+
+sessionId maps to one user session — concurrent writes to the same session are architecturally impossible in the current design
+
+SQLite itself serializes all writes regardless
+
+Worth a // NOTE: safe because sessionId is single-writer by design comment on that query if you want to pre-empt future confusion.
