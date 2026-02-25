@@ -6,5 +6,6 @@ import java.util.List;
 public record SessionStatusResponse(
         String sessionId,
         String status,
-        List<ReasoningStep> steps) {
+        List<ReasoningStep> steps,
+        String failReason) {
 }

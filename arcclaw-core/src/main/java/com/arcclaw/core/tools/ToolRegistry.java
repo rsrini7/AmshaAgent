@@ -167,8 +167,15 @@ public class ToolRegistry {
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
             } catch (Exception e) {
+                // Catch sandbox failures so the LLM can see the error and retry
                 log.errorf(e, "Tool '%s' execution failed: %s", toolName, e.getMessage());
-                return ToolResponse.failure(1, "Execution failed: " + e.getMessage());
+                
+                String userId = (String) org.jboss.logging.MDC.get("userId");
+                String agentRole = (String) org.jboss.logging.MDC.get("agentRole");
+                auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+                    SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
+                    
+                return ToolResponse.failure(1, e.getMessage());
             }
         }
 

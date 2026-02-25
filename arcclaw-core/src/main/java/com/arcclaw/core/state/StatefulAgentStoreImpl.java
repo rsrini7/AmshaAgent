@@ -150,7 +150,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private String serializeSteps(List<ReasoningStep> steps) {
         try {
-            return objectMapper.writeValueAsString(steps);
+            return (steps == null || steps.isEmpty()) ? "[]" : objectMapper.writeValueAsString(steps);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize reasoning steps", e);
         }

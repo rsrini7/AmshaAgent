@@ -3,6 +3,7 @@ package com.arcclaw.core.api;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
@@ -206,14 +207,18 @@ public class AgentResource {
         return agentStore.load(sessionId, role)
                 .map(cp -> {
                     try {
-                        List<com.arcclaw.core.agent.ReasoningStep> steps = objectMapper.readValue(
-                                cp.stateJson,
-                                new TypeReference<List<com.arcclaw.core.agent.ReasoningStep>>() {
-                                });
-                        return Response.ok(new SessionStatusResponse(sessionId, cp.status.name(), steps)).build();
+                        // 1. Default to an empty list
+                        List<ReasoningStep> steps = List.of();
+                        
+                        // 2. Safely check if stateJson actually contains data before parsing
+                        if (cp.stateJson != null && !cp.stateJson.isBlank()) {
+                            steps = objectMapper.readValue(cp.stateJson, new TypeReference<List<ReasoningStep>>() {});
+                        }
+                        
+                        return Response.ok(new SessionStatusResponse(sessionId, cp.status.name(), steps, cp.failReason)).build();
                     } catch (Exception e) {
-                        log.error("Failed to deserialize state JSON for session {}", sessionId, e);
-                        return Response.serverError().build();
+                        log.errorf("Failed to parse stateJson for session %s: %s", sessionId, e.getMessage(), e);
+                        return Response.serverError().entity(e.getMessage()).build();
                     }
                 })
                 .orElseGet(() -> Response.status(Response.Status.NOT_FOUND).build());

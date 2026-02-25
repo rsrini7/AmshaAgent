@@ -792,6 +792,9 @@ Extended `WorkspaceManager.onStartup()` to recover sessions stuck in `AWAITING_A
 ### 4. Build & Test Hardening
 - **Split-Package Fix**: Resolved compilation errors by consolidating core tests into the `arcclaw-core` module, adhering to strict module-boundary constraints.
 - **OTel Mocking**: Addressed Mockito's inability to mock OTel's default `Tracer` by utilizing the standalone `@Alternative` + `@Priority` pattern for test-time overrides.
+- **Status Check Resilience**: Hardened `AgentResource.getSessionStatus` to gracefully handle `null` or empty `stateJson` when a session is paused for approval on its first iteration.
+- **Sandbox Robustness**: Improved `ToolRegistry` and `AgentLoop` to catch and report sandbox execution failures back to the LLM as Tool failures, preventing thread crashes and orphaned sessions.
+- **Smart Guardrails**: Injected argument validation logic into `GithubTool` to prevent common LLM parameter hallucinations (e.g., passing `owner/repo` to a list command) and provide actionable feedback for self-correction.
 
 **Verification**: `mvn clean verify "-Dquarkus.test.profile=test" -am -pl arcclaw-app,arcclaw-core` ✅ (71/71 tests passed)
 

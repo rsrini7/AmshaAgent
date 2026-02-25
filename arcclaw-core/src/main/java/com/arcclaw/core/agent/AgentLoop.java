@@ -146,7 +146,16 @@ public class AgentLoop {
         } catch (Exception e) {
             // result is null here — create synthetic result for audit
             result = AgentResult.error(List.of(), "SYSTEM_ERROR: " + e.getMessage());
-            throw e; // rethrow — don't swallow
+            
+            // NEW: Ensure the database state doesn't get stuck if the loop crashes
+            try {
+                agentStore.load(sessionId, agentRole).ifPresent(cp ->
+                    agentStore.markFailed(cp.id, "SYSTEM_ERROR: " + e.getMessage())
+                );
+            } catch (Exception ignored) {}
+
+            throw e;
+            // result stays null → finally's if (result != null) is false → no double-call
         } finally {
             if (result != null) {
                 String goalHash = AuditHashUtil.sha256hex(goal);
