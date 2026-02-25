@@ -118,13 +118,14 @@ public class AgentResource {
 
         vThreads.execute(() -> {
             try {
+                // MUST be first — activates WorkspaceScoped context
                 WorkspaceScopeHolder.set(sessionId);
+                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED); // ← safe now
 
-                // Detect approval commands and elevate autonomy to bypass the gate
                 boolean isApproval = "/approve".equalsIgnoreCase(request.goal());
                 boolean isDeny     = "/deny".equalsIgnoreCase(request.goal());
 
-               if (isDeny) {
+                if (isDeny) {
                     agentStore.load(sessionId, request.agentRole()).ifPresent(cp -> {
                         cp.status     = CheckpointStatus.FAILED;
                         cp.failedAt   = Instant.now();
@@ -137,18 +138,17 @@ public class AgentResource {
                                 "message", "Tool execution denied. Session terminated."
                             ))
                             .build());
-                    return;
+                    return; // finally still runs — scope clears cleanly
                 }
 
                 workspaceContext.setAutonomyLevel(
                     isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED
                 );
 
-                AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(),
-                        reasoningEngine, maxIterations);
+                AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                        request.goal(), reasoningEngine, maxIterations);
 
                 if (result.awaitingApproval()) {
-                    // 202 — not a failure, just waiting for human
                     response.resume(Response.accepted()
                             .entity(Map.of(
                                 "status",  "AWAITING_APPROVAL",
@@ -174,8 +174,12 @@ public class AgentResource {
                             e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
                         .build());
             } finally {
-                // Always restore to SUPERVISED + clear scope — never leave FULL lingering
-                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+                 // Guard: only call setAutonomyLevel if scope is still active
+                try {
+                    workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+                } catch (jakarta.enterprise.context.ContextNotActiveException ignored) {
+                    // Scope already cleared or was never activated — safe to ignore
+                }
                 WorkspaceScopeHolder.clear();
             }
         });

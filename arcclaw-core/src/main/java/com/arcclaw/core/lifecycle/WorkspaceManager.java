@@ -6,6 +6,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.arc.Arc;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -49,6 +50,8 @@ public class WorkspaceManager {
 
     private static final Logger log = Logger.getLogger(WorkspaceManager.class);
 
+    private volatile boolean shuttingDown = false;
+
     /** Active session heartbeats: sessionId → last heartbeat timestamp. */
     private final ConcurrentHashMap<String, Instant> heartbeats = new ConcurrentHashMap<>();
 
@@ -72,6 +75,10 @@ public class WorkspaceManager {
 
     @ConfigProperty(name = "arcclaw.governance.approval-timeout-minutes", defaultValue = "60")
     long approvalTimeoutMinutes;
+
+    void onShutdown(@Observes ShutdownEvent event) {
+        shuttingDown = true;
+    }
 
     // -------------------------------------------------------------------------
     // Heartbeat Management
@@ -188,11 +195,13 @@ public class WorkspaceManager {
     /**
      * Terminate sessions that have been AWAITING_APPROVAL for too long.
      */
-    @Scheduled(every = "5m")
+    @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
     @Transactional
     public void sweepTimedOutApprovals() {
-        var cutoff = java.time.LocalDateTime.now().minus(java.time.Duration.ofMinutes(approvalTimeoutMinutes));
+        if (shuttingDown) return;   // ← skip if JVM is shutting down
 
+        var cutoff = java.time.LocalDateTime.now()
+                .minus(java.time.Duration.ofMinutes(approvalTimeoutMinutes));
         List<AgentCheckpoint> timedOut = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
@@ -201,8 +210,7 @@ public class WorkspaceManager {
                 .getResultList();
 
         for (var cp : timedOut) {
-            log.warnf("Approval timeout: session=%s (updatedAt=%s, cutoff=%s). Terminating.",
-                    cp.sessionId, cp.getUpdatedAt(), cutoff);
+            log.warnf("Approval timeout session=%s. Terminating.", cp.sessionId);
             terminateSession(cp.sessionId);
         }
     }
