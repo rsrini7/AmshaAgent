@@ -418,3 +418,14 @@
 - [x] Step 6: Update `application.yaml` with the `arcclaw.security.prompt-injection.enabled` block
 - [x] Step 7: Fix regex boundary logic to properly capture optional trailing words
 - [x] Step 8: Verify test suite and update documentation
+
+---
+
+## Phase 34 — Tool Schema & Agent Tooling
+- [x] Step 1: Implement `parametersSchema()` default on `AgentTool`
+- [x] Step 2: Override `parametersSchema()` in `GithubTool` with action/command/target
+- [x] Step 3: Implement `ToolSpecification` builder parameter injection in `LangChainReasoningEngine`
+- [x] Step 4: Implement `allowedTools` filtering in `LangChainReasoningEngine` (Schema Jailbreak fix)
+- [x] Step 5: Fix T-4 truncated comment in `AgentTool.java`
+- [x] Step 6: Verify full build suite (`mvn clean verify`)
+- [x] Step 7: Update system documentation (PLAN, TASKS, TROUBLESHOOTING)

@@ -1412,3 +1412,38 @@ Implement an active defense mechanism against basic and complex prompt injection
 - ✅ Regex boundary analysis correctly isolates edge cases (e.g. `ignore your previous instructions`).
 - ✅ Verified full `arcclaw-core` and `arcclaw-app` test suites with passing `mvn clean test` execution.
 
+---
+
+# Phase 34 — Tool Schema & Agent Tooling
+
+Harden the tool invocation pipeline by implementing strict parameter schemas and enforcing agent-specific tool access (Schema Jailbreak prevention).
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Schema-Driven Tooling**: Introduced `JsonObjectSchema parametersSchema()` as a default method on the `AgentTool` interface. By declaring explicit parameter types and required fields, we provide the LLM with the necessary context to populate arguments correctly, resolving "null argument" failures.
+
+> [!NOTE]
+> **Schema Jailbreak Prevention**: The `LangChainReasoningEngine` now strictly filters the global tool registry against each agent's `allowedTools()` list before generating tool specifications. This ensures specialized agents (like `coder` or `debugger`) cannot be tricked into invoking unauthorized tools (like `github`).
+
+> [!TIP]
+> **Fail-Safe Defaults**: Existing tools without parameters simply inherit an empty `parametersSchema()`. The `LangChainReasoningEngine` builder chain was updated to append this schema to the `ToolSpecification` automatically.
+
+## Proposed Changes
+
+#### [MODIFY] [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java)
+- Added `default JsonObjectSchema parametersSchema()` providing an empty default for non-parameterized tools.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Overrode `parametersSchema()` to explicitly define `action`, `command`, and `target` properties for the LLM.
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Injected `parameters()` into the `ToolSpecification` builder.
+- Implemented `allowedTools` filtering to prevent Schema Jailbreaks.
+
+## Verification
+- ✅ Verified `mvn clean verify` passes all integration and unit tests.
+- ✅ Verified `GithubTool` schema correctly populates in AI requests (simulated).
+- ✅ Verified `coder`/`Brahma` persona receives zero tool specifications.
+
+

@@ -16,7 +16,15 @@
 | 9 | Observer / OTel | AgentOtelContextTest (2/2) | `@InjectMock Tracer instead of Memory Span Exporter` |
 | 10 | Health Checks | PodmanHealthCheckTest (2/2) | `@Alternative mock standalone interface on port 9001` |
 | 11 | REST API API | AgentResourceTest (3/3) | Explicitly added `quarkus-rest-jackson` to app module |
+| 12 | LangChain4J Integration | 2/2 JUnit Passes | Groq + Ollama ambiguity fix |
+| 13 | Deployment Artifacts | N/A | chown 1000:1000 for SQLite persistence |
+| 14 | Deployment Loops | Manual | Native environment validation |
 | 15 | Dual-Mode Binary | N/A | `Quarkus.waitForExit()` omitted in CLI entry point to prevent hanging |
+| 18 | Telegram Approval Flow | Manual Verification | AWAITING_APPROVAL state logic |
+| 19 | Day 2 Hardening | Manual Verification | Dynamic Role Routing + State fix |
+| 20 | Observability & Memory | 48/48 App Tests | Persistent ChatMemory + Prometheus |
+| 21 | CLI Subcommands | Manual | Chat REPL + Attach daemon mode |
+| 22 | Final Hardening | Manual Verification | UX Pacing + Escape Hatch Prompting |
 | 23 | Sandbox Enforcement | ToolRegistryTest (7/7) | Centralized `ProcessIsolationExecutor` in `ToolRegistry` |
 | 24 | Context Tool Bias Fix | All App Tests (48/48) | Strict per-persona tool binding contract + `/reset` command |
 | 25 | Sandbox Hardening | Manual Verification | Absolute paths, logging hardening, and WSL2 Setup Guide |
@@ -24,6 +32,11 @@
 | 27 | Tool Flexibility | Manual Compilation | CDI Proxy Unwrapping and Dynamic GithubTool actions |
 | 28 | Intent Hardening | Manual Verification | Auto-cancellation of dangling approvals & Routing Guardrails |
 | 29 | Memory & Filtering | 13/13 JUnit Passes | Rolling window + identity preservation + Protocol filtering |
+| 30 | Reflex Registry | mvn test -pl arcclaw-app | Jupiter discovery fix + JDK 24+ --add-opens |
+| 31 | PII Redaction | PiiScanReflexTest | Negative lookarounds for Aadhaar/Phone collisions |
+| 32 | API & Telegram Security | 68/68 JUnit Passes | Explicit JAX-RS Jackson declaration in app module |
+| 33 | Prompt Injection | PromptInjectionReflexTest | Pass 1 short-circuiting of adversarial instructions |
+| 34 | Tool Schema | 68/68 JUnit Passes | JSON Schema for tool arguments + Schema Jailbreak fix |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -699,3 +712,31 @@ A new JAX-RS `@Provider` named `ApiKeyAuthFilter` now intercepts all requests ro
 To prevent unauthorized users from discovering the Telegram bot and executing costly logic, `TelegramAllowlistGuard` evaluates incoming Telegram messages. If the `username` is not declared in `arcclaw.telegram.allowed-users`, the message is intercepted with either a silent drop or an explicit rejection response.
 
 **Verification**: `mvn clean verify` ✅
+
+---
+
+## Phase 33: Prompt Injection Defense ✅
+
+Implemented an active "Pass 1" defense layer to detect and block adversarial LLM instructions before they reach the reasoning engine.
+
+| File | Purpose |
+|------|---------|
+| [AgentReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/AgentReflex.java) | Updated `execute()` signature to accept raw user `input`. |
+| [PromptInjectionReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/PromptInjectionReflex.java) | 15+ regex patterns for Identity Hijacking, Exfiltration, and Governance Bypass. |
+| [ReflexRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/ReflexRegistry.java) | Prioritizes Injection defense in Pass 1 to prevent secondary processing of malicious content. |
+
+**Verification**: `PromptInjectionReflexTest` ✅ (covers 4 categories + false positive documentation)
+
+---
+
+## Phase 34: Tool Schema & Agent Tooling ✅
+
+Hardened the tool invocation pipeline by integrating JSON parameter schemas and enforcing persona-based tool restrictions.
+
+| File | Purpose |
+|------|---------|
+| [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java) | Added `parametersSchema()` default method for explicit argument definition. |
+| [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java) | Overrode schema to define `action`, `command`, and `target` properties. |
+| [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Implemented `allowedTools` filtering (Schema Jailbreak fix) and parameter injection. |
+
+**Verification**: `mvn clean verify -pl arcclaw-app -am` ✅ (68/68 tests passed)
