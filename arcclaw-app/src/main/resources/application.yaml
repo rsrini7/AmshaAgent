@@ -211,7 +211,7 @@ arcclaw:
       enabled: true
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
       default-autonomy-level: SUPERVISED
-      allowed-users: "${ARCCLAW_TELEGRAM_ALLOWED_USERS:}"
+      allowed-users: "${ARCCLAW_TELEGRAM_ALLOWED_USERS:mock-telegram-user}"
       silent-block: false
       block-response: "⛔ Access denied."
 
