@@ -58,6 +58,31 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 5
 }
 
+### Approve pending tool execution (after AWAITING_APPROVAL response)
+POST {{baseUrl}}/api/v1/sessions/{{createSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### Deny pending tool execution
+POST {{baseUrl}}/api/v1/sessions/{{createSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/deny",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+
 ###
 
 ### 7. Check Status (uses sessionId from step 5)
