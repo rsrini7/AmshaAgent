@@ -53,7 +53,7 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Analyze the arcclaw repository on github and tell me what it does",
+    "goal": "Analyze the rsrini7/arcclaw repository on github and tell me what it does",
     "agentRole": "coordinator",
     "maxIterations": 5
 }

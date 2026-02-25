@@ -4,6 +4,8 @@ import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -74,5 +76,15 @@ public class GithubTool implements AgentTool {
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         throw new UnsupportedOperationException("GithubTool requires sandbox execution");
+    }
+
+    @Override
+    public JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder()
+            .addStringProperty("action",  "Action to perform: repo or gist")
+            .addStringProperty("command", "Command to run: view or list")
+            .addStringProperty("target",  "The owner/repo path for repo actions (optional)")
+            .required("action", "command")
+            .build();
     }
 }
