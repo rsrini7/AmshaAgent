@@ -21,17 +21,24 @@ class AgentResourceTest {
         @InjectMock
         ReasoningEngine reasoningEngine;
 
+        @InjectMock
+        com.arcclaw.app.security.ApiKeyRegistry apiKeyRegistry;
+
         @BeforeEach
         void setupMock() {
                 ReasoningStep finishStep = new ReasoningStep("Calculated final answer", ReasoningStep.FINISH,
                                 java.util.Map.of("response", "42"), null, 0, 0);
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), any())).thenReturn(finishStep);
+
+                Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+                Mockito.when(apiKeyRegistry.isRateLimited(anyString())).thenReturn(false);
         }
 
         @Test
         void testFullAgentLifecycle() {
                 // 1. Create Session
                 String sessionId = given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
                                 .when().post("/api/v1/sessions")
                                 .then()
@@ -43,6 +50,7 @@ class AgentResourceTest {
                 RunAgentRequest request = new RunAgentRequest("Hello, World!", "COORDINATOR", 3);
 
                 given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
                                 .body(request)
                                 .when().post("/api/v1/sessions/{id}/run", sessionId)
@@ -54,6 +62,7 @@ class AgentResourceTest {
 
                 // 3. Check Status
                 given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .when().get("/api/v1/sessions/{id}/status/COORDINATOR", sessionId)
                                 .then()
                                 .log().ifValidationFails()
@@ -64,6 +73,7 @@ class AgentResourceTest {
 
                 // 4. Terminate Session
                 given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .when().delete("/api/v1/sessions/{id}", sessionId)
                                 .then()
                                 .statusCode(204);
@@ -73,6 +83,7 @@ class AgentResourceTest {
                 // A GET should still return 200 since the state is persisted in SQLite,
                 // but let's test a non-existent session for 404 compliance.
                 given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .when().get("/api/v1/sessions/fake-id-123/status/COORDINATOR")
                                 .then()
                                 .statusCode(404);
@@ -84,6 +95,7 @@ class AgentResourceTest {
                 RunAgentRequest invalidRequest = new RunAgentRequest(null, "", null);
 
                 given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
                                 .body(invalidRequest)
                                 .when().post("/api/v1/sessions/test-id/run")
@@ -94,6 +106,7 @@ class AgentResourceTest {
         @Test
         void testAsyncRun() {
                 String sessionId = given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
                                 .when().post("/api/v1/sessions")
                                 .then()
@@ -103,6 +116,7 @@ class AgentResourceTest {
                 RunAgentRequest request = new RunAgentRequest("Async task", "CODER", 5);
 
                 given()
+                                .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
                                 .body(request)
                                 .when().post("/api/v1/sessions/{id}/run-async", sessionId)

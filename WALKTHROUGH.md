@@ -685,3 +685,17 @@ Implemented `PiiScanReflex` which utilizes statically compiled `java.util.regex.
 
 ### 3. Resolving Regex Collisions with Lookarounds
 Resolved an overlapping match collision where a broad Phone Number regex (`\+?[1-9]\d{1,14}`) eagerly consumed parts of Aadhaar numbers. By implementing negative lookarounds in the Aadhaar pattern—`(?<![+\-\d])[2-9][0-9]{11}(?!\d)`—we ensure the 12-digit Aadhaar pattern only triggers on standalone numeric blocks, effectively isolating it from `+91` prefixed phone numbers.
+
+---
+
+## Phase 32: REST API Authentication & Telegram Security ✅
+
+Securing both the public REST API and the Telegram channel interface against unauthorized access and budget exhaustion.
+
+### 1. API Key Validation & Rate Limiting
+A new JAX-RS `@Provider` named `ApiKeyAuthFilter` now intercepts all requests routed to `/api/v1/sessions/*`. Clients must provide an `X-ArcClaw-API-Key` derived from `arcclaw.api.keys`. Additionally, `ApiKeyRegistry` implements a sliding-window rate limit (e.g., 60 requests/minute) throwing HTTP 429 when breached.
+
+### 2. Telegram Allowlist Guard
+To prevent unauthorized users from discovering the Telegram bot and executing costly logic, `TelegramAllowlistGuard` evaluates incoming Telegram messages. If the `username` is not declared in `arcclaw.telegram.allowed-users`, the message is intercepted with either a silent drop or an explicit rejection response.
+
+**Verification**: `mvn clean verify` ✅

@@ -54,6 +54,9 @@ public class TelegramAgentHandlerTest {
     @InjectMock
     ReflexRegistry reflexRegistryMock;
 
+    @InjectMock
+    com.arcclaw.app.security.TelegramAllowlistGuard allowlistGuardMock;
+
     ProducerTemplate producerTemplateMock;
 
     ManagedExecutor executorMock;
@@ -87,6 +90,9 @@ public class TelegramAgentHandlerTest {
         // Default mock for reflex registry (simulate no commands hit, passthrough sanitized input)
         when(reflexRegistryMock.processIfReflex(anyString(), anyString(), anyString()))
                 .thenAnswer(inv -> new com.arcclaw.core.reflex.ReflexResult(Optional.empty(), inv.getArgument(2)));
+
+        // Default mock for allowlist guard
+        when(allowlistGuardMock.isAllowed(any())).thenReturn(true);
     }
 
     @Test
@@ -199,5 +205,37 @@ public class TelegramAgentHandlerTest {
         contains("📊 Status"),
         argThat(headers -> "chat456".equals(
                 ((java.util.Map<?, ?>) headers).get("CamelTelegramChatId"))));
+    }
+
+    @Test
+    void testReceiveMessage_UnauthorizedUser_BlocksAndReplies() {
+        // Arrange
+        Exchange exchange = mock(Exchange.class);
+        Message in = mock(Message.class);
+        IncomingMessage msg = new IncomingMessage();
+        msg.setText("hello");
+        User from = new User();
+        from.setId(999L);
+        from.setUsername("hacker");
+        msg.setFrom(from);
+
+        when(exchange.getIn()).thenReturn(in);
+        when(in.getBody(IncomingMessage.class)).thenReturn(msg);
+        when(in.getHeader("CamelTelegramChatId", String.class)).thenReturn("chat999");
+
+        when(allowlistGuardMock.isAllowed("hacker")).thenReturn(false);
+        when(allowlistGuardMock.isSilentBlock()).thenReturn(false);
+        when(allowlistGuardMock.getBlockResponse()).thenReturn("⛔ Access denied.");
+
+        // Act
+        handler.receiveMessage(exchange);
+
+        // Assert
+        verify(executorMock, never()).submit(any(Runnable.class));
+        verify(producerTemplateMock).sendBodyAndHeaders(
+                contains("telegram:bots"),
+                eq("⛔ Access denied."),
+                anyMap()
+        );
     }
 }

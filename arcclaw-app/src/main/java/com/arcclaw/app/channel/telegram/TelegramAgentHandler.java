@@ -75,6 +75,9 @@ public class TelegramAgentHandler {
     @Inject
     com.arcclaw.core.reflex.ReflexRegistry reflexRegistry;
 
+    @Inject
+    com.arcclaw.app.security.TelegramAllowlistGuard allowlistGuard;
+
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
      * All Camel Exchange data must be extracted synchronously before offloading
@@ -90,9 +93,18 @@ public class TelegramAgentHandler {
 
         String text = msg.getText();
         String userId = String.valueOf(msg.getFrom().getId());
+        String username = msg.getFrom().getUsername();
         String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
 
-        log.infof("Received Telegram message from user %s in chat %s: %s", userId, chatId, text);
+        log.infof("Received Telegram message from user %s (@%s) in chat %s: %s", userId, username, chatId, text);
+
+        if (!allowlistGuard.isAllowed(username)) {
+            if (!allowlistGuard.isSilentBlock()) {
+                reply(chatId, allowlistGuard.getBlockResponse());
+            }
+            log.warnf("[SECURITY] Blocked unauthorized Telegram user: %s (id: %s)", username, userId);
+            return;
+        }
 
         // Offload execution specifically to allow the Vert.x networking thread
         // to return immediately, preventing event loop blocking.

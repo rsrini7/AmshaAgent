@@ -1612,7 +1612,7 @@ mvn clean test -pl arcclaw-core,arcclaw-app
 ```
 Alternatively, run `mvn clean install -DskipTests` to sync all local artifacts before running targeted tests.
 
-## Test Infrastructure
+## 27. Test Infrastructure
 
 ### 🔴 T-1: `TestEngine failed to discover tests` (Multi-Module Maven `-am` Flag)
 
@@ -1763,3 +1763,8 @@ quarkus.otel.sdk.disabled=true
 quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw.db
 quarkus.hibernate-orm.database.generation=drop-and-create
 ```
+
+## 28. Phase 32: REST API Authentication
+- Telegram user always blocked despite being in allowed-users list
+  (user has no public @username set — Telegram API returns null;
+  they must set a username in Telegram Settings → Username)

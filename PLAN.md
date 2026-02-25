@@ -1340,3 +1340,37 @@ Implement local, offline PII detection and redaction within the ArcClaw ecosyste
 ## Verification
 - ✅ Verified by comprehensive JUnit parametrics covering 10 PII types and mixed formats.
 - ✅ `mvn clean test` yields `BUILD SUCCESS`.
+
+---
+
+# Phase 32 — REST API Authentication & Telegram Security
+
+Implement API key-based authentication with sliding-window rate limiting for the REST interface, and a Telegram user allowlist to prevent budget draining by unauthorized users.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **API Key Authentication**: Exposed REST API endpoints now require an `X-ArcClaw-API-Key` header. Implemented as a JAX-RS `@Provider` (`ApiKeyAuthFilter`) to intercept and validate requests before they hit the resource layer. Endpoints under `/q/*` (health/metrics) bypass authentication.
+> **Sliding Window Rate Limiting**: The `ApiKeyRegistry` tracks request rates using `ConcurrentHashMap` and `Deque<Instant>`. Exceeding the `requests-per-minute` limit returns a `429 Too Many Requests` response.
+
+> [!TIP]
+> **Telegram Allowlist**: Added `TelegramAllowlistGuard` to enforce case-insensitive validation of Telegram usernames against `arcclaw.telegram.allowed-users`. If blocked, the handler silently drops the message or replies with an access denied message based on configuration.
+
+## Completed Changes
+
+#### [NEW] [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyRegistry.java)
+- `@ApplicationScoped` bean to load and validate configured API keys and enforce rate limits.
+
+#### [NEW] [ApiKeyAuthFilter.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java)
+- JAX-RS `ContainerRequestFilter` to intercept REST API calls and validate keys/rates.
+
+#### [NEW] [TelegramAllowlistGuard.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/TelegramAllowlistGuard.java)
+- Checks Telegram usernames against a configured list of allowed aliases.
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Injected `TelegramAllowlistGuard` to actively block messages originating from unapproved Telegram accounts.
+
+## Verification
+- ✅ Verified `ApiKeyRegistryTest` and `ApiKeyAuthFilterTest` endpoints return 401/429 appropriately.
+- ✅ Verified `TelegramAgentHandlerTest` properly blocks and logs unauthorized users.
+- ✅ `mvn clean verify` succeeds cleanly.

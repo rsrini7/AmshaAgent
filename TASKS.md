@@ -394,3 +394,15 @@
 - [x] Step 5: Route strict `sanitizedInput` into `IntentClassifierService` and `AgentLoop` in `TelegramAgentHandler`
 - [x] Step 6: Expand `PiiScanReflexTest` covering mixed inputs, idempotency, and mode-specific `matches()` behavior
 - [x] Step 7: Finalize Mockito configuration in `TelegramAgentHandlerTest` to default to `sanitizedInput`
+
+---
+
+## Phase 32 — REST API Authentication & Telegram Security
+- [x] Step 1: Create `AuthErrorResponse` and `RateLimitErrorResponse` records
+- [x] Step 2: Create `ClockProducer` and `ApiKeyRegistry` with rate limiting logic
+- [x] Step 3: Implement `ApiKeyAuthFilter` for API key validation on JAX-RS endpoints
+- [x] Step 4: Create `TelegramAllowlistGuard` for Telegram user authorization
+- [x] Step 5: Update `TelegramAgentHandler.java` to block unauthorized users
+- [x] Step 6: Add application.yaml properties for API keys and allowlists
+- [x] Step 7: Fix JAX-RS endpoint test failures due to missing authentication headers
+- [x] Step 8: Verify build success and test passes

@@ -194,12 +194,21 @@ quarkus:
 # ARCCLAW APPLICATION CONFIG
 # =============================================================================
 arcclaw:
+  api:
+    keys:
+      internal: "${ARCCLAW_API_KEY_INTERNAL:key-internal-changeme}"
+      ci-pipeline: "${ARCCLAW_API_KEY_CI:key-ci-changeme}"
+    rate-limit:
+      requests-per-minute: 20
 
   channel:
     telegram:
       enabled: true
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
       default-autonomy-level: SUPERVISED
+      allowed-users: "${ARCCLAW_TELEGRAM_ALLOWED_USERS:}"
+      silent-block: false
+      block-response: "⛔ Access denied."
 
   pii:
     mode: REDACT_AND_FORWARD   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
@@ -329,6 +338,7 @@ mp:
     channel:
       telegram:
         bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
+        allowed-users: ""
     governance:
       budget-usd: 999.99
       approval-timeout-minutes: 60
@@ -345,6 +355,7 @@ mp:
       telegram:
         enabled: false
         bot-token: "mock-bot-token"
+        allowed-users: ""
     pii:
       mode: REDACT_AND_FORWARD   # Tests use default
     sandbox:
