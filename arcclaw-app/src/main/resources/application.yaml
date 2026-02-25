@@ -51,6 +51,7 @@ quarkus:
     packages:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
+      - com.arcclaw.core.audit
     log:
       sql: false
 
@@ -235,6 +236,9 @@ arcclaw:
     gc-interval: "5m"
     heartbeat-interval: "60s"
 
+  audit:
+    hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+
   governance:
     token-limit: 100000
     budget-usd: "${ARCCLAW_SESSION_BUDGET_USD:10.00}"
@@ -355,10 +359,15 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite::memory:"
+    hibernate-orm:
+      database:
+        generation: update
   arcclaw:
     security:
       prompt-injection:
         enabled: true
+    audit:
+      hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 
     channel:
       telegram:

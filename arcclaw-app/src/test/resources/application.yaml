@@ -3,8 +3,14 @@ arcclaw:
     keys:
       internal: "key-internal-changeme"
       ci-pipeline: "key-ci-changeme"
+  audit:
+    hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
       
 quarkus:
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
   http:
     host: "localhost"
     port: 8081
@@ -12,6 +18,19 @@ quarkus:
     host: "localhost"
     port: 9000
     enabled: true
+  datasource:
+    jdbc:
+      url: "jdbc:sqlite::memory:"
+      min-size: 1
+      max-size: 1
+      initial-size: 1
+  hibernate-orm:
+    database:
+      generation: update
+    packages:
+      - com.arcclaw.core.state
+      - com.arcclaw.core.security
+      - com.arcclaw.core.audit
 
   langchain4j:
     openai:

@@ -125,6 +125,9 @@ public class TelegramAgentHandler {
             // Activate CDI Workspace Scope initially
             WorkspaceScopeHolder.set(baseId);
 
+            // Push userId to MDC for Audit logs
+            org.jboss.logging.MDC.put("userId", userId);
+
             // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
             com.arcclaw.core.reflex.ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
             if (reflexResult.commandResponse().isPresent()) {
@@ -191,6 +194,7 @@ public class TelegramAgentHandler {
             log.error("Failed to process agent loop for session: " + baseId, e);
             reply(chatId, "⚠️ System Error: " + e.getMessage());
         } finally {
+            org.jboss.logging.MDC.remove("userId");
             WorkspaceScopeHolder.clear();
         }
     }

@@ -1,0 +1,119 @@
+package com.arcclaw.core.audit;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * Immutable WORM audit record. Insert-only — no update or delete operations permitted.
+ * Includes an HMAC chain for tamper detection.
+ */
+@Entity
+@Table(name = "audit_event", indexes = {
+    @Index(name = "idx_audit_session",   columnList = "sessionId"),
+    @Index(name = "idx_audit_timestamp", columnList = "timestamp"),
+    @Index(name = "idx_audit_userId",    columnList = "userId")
+})
+public class AuditEvent {
+
+    @Id
+    @Column(nullable = false, updatable = false)
+    public UUID id;
+
+    @Column(nullable = false, updatable = false)
+    public String sessionId;
+
+    @Column(updatable = false)
+    public String userId;
+
+    @Column(nullable = false, updatable = false)
+    public String agentRole;
+
+    @Column(nullable = false, updatable = false, length = 64)
+    public String goalHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    public AuditOutcome outcome;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    public SecurityEventType eventType;
+
+    @Column(updatable = false, length = 512)
+    public String eventDetail;
+
+    @Column(nullable = false, updatable = false)
+    public int inputTokens;
+
+    @Column(nullable = false, updatable = false)
+    public int outputTokens;
+
+    @Column(nullable = false, updatable = false, precision = 10, scale = 6)
+    public BigDecimal usdCost;
+
+    @Column(nullable = false, updatable = false)
+    public Instant timestamp;
+
+    @Column(updatable = false)
+    public int iterationsUsed;
+
+    // HMAC Chain Fields
+    @Column(nullable = false, updatable = false, length = 64)
+    public String hmacHash;
+
+    @Column(nullable = false, updatable = false, length = 64)
+    public String prevHash;
+
+    protected AuditEvent() {} // JPA only
+
+    public static AuditEvent of(String sessionId, String userId, String agentRole,
+                                 String goalHash, AuditOutcome outcome, SecurityEventType eventType,
+                                 int inputTokens, int outputTokens,
+                                 BigDecimal usdCost, int iterationsUsed, String eventDetail) {
+        var e = new AuditEvent();
+        e.id             = UUID.randomUUID();
+        e.sessionId      = sessionId;
+        e.userId         = userId;
+        e.agentRole      = agentRole;
+        e.goalHash       = goalHash;
+        e.outcome        = outcome;
+        e.eventType      = eventType;
+        e.eventDetail    = eventDetail;
+        e.inputTokens    = inputTokens;
+        e.outputTokens   = outputTokens;
+        e.usdCost        = usdCost;
+        e.iterationsUsed = iterationsUsed;
+        e.timestamp      = Instant.now();
+        return e;
+    }
+
+    public static AuditEvent securityEvent(String sessionId, String userId,
+                                            String agentRole, SecurityEventType type,
+                                            String detail) {
+        var e = new AuditEvent();
+        e.id             = UUID.randomUUID();
+        e.sessionId      = sessionId != null ? sessionId : "unknown";
+        e.userId         = userId;
+        e.agentRole      = agentRole != null ? agentRole : "system";
+        e.goalHash       = "n/a";
+        e.outcome        = AuditOutcome.FINISH; // Default for non-loop events
+        e.eventType      = type;
+        e.eventDetail    = detail;
+        e.inputTokens    = 0;
+        e.outputTokens   = 0;
+        e.usdCost        = BigDecimal.ZERO;
+        e.iterationsUsed = 0;
+        e.timestamp      = Instant.now();
+        return e;
+    }
+
+    /**
+     * Reconstructs the canonical string payload used for HMAC computation.
+     */
+    public String computePayloadStr() {
+        return id.toString() + "|" + sessionId + "|" + eventType + "|" + 
+               (eventDetail != null ? eventDetail : "") + "|" + timestamp.toEpochMilli();
+    }
+}

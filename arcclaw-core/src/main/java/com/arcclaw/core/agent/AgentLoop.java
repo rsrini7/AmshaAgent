@@ -11,6 +11,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.governance.RequiresApprovalException;
+import com.arcclaw.core.audit.AuditHashUtil;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -113,6 +114,7 @@ public class AgentLoop {
         MDC.put("sessionId", sessionId);
         MDC.put("agentRole", agentRole);
 
+        AgentResult result = null;
         try {
             // --- CHECKPOINT RESUME ---
             List<ReasoningStep> resumedHistory = List.of();
@@ -123,7 +125,7 @@ public class AgentLoop {
                         resumedHistory.size(), sessionId, agentRole);
             }
 
-            AgentResult result = runLoop(goal, engine, maxIterations, resumedHistory, agentRole);
+            result = runLoop(goal, engine, maxIterations, resumedHistory, agentRole);
 
             // --- CHECKPOINT FINAL STATE ---
             if (result.awaitingApproval()) {
@@ -141,7 +143,17 @@ public class AgentLoop {
             }
 
             return result;
+        } catch (Exception e) {
+            // result is null here — create synthetic result for audit
+            result = AgentResult.error(List.of(), "SYSTEM_ERROR: " + e.getMessage());
+            throw e; // rethrow — don't swallow
         } finally {
+            if (result != null) {
+                String goalHash = AuditHashUtil.sha256hex(goal);
+                String userId = MDC.get("userId") != null ? (String) MDC.get("userId") : "unknown";
+                final AgentResult finalResult = result;
+                observers.forEach(o -> o.onLoopComplete(sessionId, userId, agentRole, goalHash, finalResult));
+            }
             // --- CONTEXT TEARDOWN ---
             MDC.remove("sessionId");
             MDC.remove("agentRole");
