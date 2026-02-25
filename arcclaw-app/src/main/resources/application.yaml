@@ -174,6 +174,12 @@ quarkus:
         level: INFO
       "ja.la.ProcessBuilder":
         level: INFO
+      "java.lang.ProcessBuilder":
+        level: WARN       # ← suppress DEBUG noise from sqlite-jdbc uname probe
+      "org.sqlite":
+        level: WARN       # ← suppress all sqlite-jdbc debug output
+      "java.lang":
+        level: WARN
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
