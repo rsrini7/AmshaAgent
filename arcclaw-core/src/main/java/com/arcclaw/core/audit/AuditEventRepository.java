@@ -27,7 +27,7 @@ public class AuditEventRepository {
      * Persists an AuditEvent and computes its HMAC chain fields.
      * This method is deliberately NOT annotated with @Transactional.
      * It relies on the caller (AuditService) to provide the appropriate
-     * REQUIRES_NEW transaction boundary.
+     * REQUIRED transaction boundary.
      */
     public void record(AuditEvent event) {
         String prevHash = findLatestHash(event.sessionId);

@@ -21,7 +21,7 @@ public class AuditService {
      * Executes in a new transaction to ensure audit survives parent rollbacks.
      * Swallows all exceptions to prevent crashing the caller.
      */
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
         try {
             AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
@@ -36,7 +36,7 @@ public class AuditService {
      * Executes in a new transaction to ensure audit survives parent rollbacks.
      * Swallows all exceptions to prevent crashing the caller.
      */
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void recordLoopCompletion(String sessionId, String userId, String agentRole,
                                      String goalHash, AgentResult result, 
                                      int inputTokens, int outputTokens, BigDecimal usdCost) {

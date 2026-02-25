@@ -1884,3 +1884,158 @@ List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
 ```java
 return JsonObjectSchema.builder().build(); // no-op default for tools without parameters
 ```
+
+---
+
+## 31. Phase 35: Immutable Audit Log (WORM)
+
+### 🔴 T-1: `arcclaw.audit.hmac-key` Required Config Breaks All Tests at Boot
+
+**Symptom:** Every `@QuarkusTest` class fails with:
+```
+DeploymentException: ConfigurationException: Failed to load config value of type String for: arcclaw.audit.hmac-key
+SRCFG00014: The config property arcclaw.audit.hmac-key is required but it could not be found
+```
+
+**Root Cause:** `AuditEventRepository` and `AuditVerifier` both inject `@ConfigProperty(name = "arcclaw.audit.hmac-key")` without a `defaultValue`. Quarkus validates all `@ConfigProperty` fields at deploy time — before any YAML is consulted — causing every test class that boots the full CDI container to fail.
+
+**Resolution:**
+1. Add `defaultValue` to both `@ConfigProperty` declarations:
+```java
+// AuditEventRepository.java and AuditVerifier.java
+@ConfigProperty(name = "arcclaw.audit.hmac-key",
+                defaultValue = "dev-audit-hmac-key-min-32-bytes-00000")
+String hmacKey;
+```
+2. Add the property to test `application.yaml`:
+```yaml
+arcclaw:
+  audit:
+    hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+```
+
+***
+
+### 🔴 T-2: `no such table: audit_event` — Hibernate Not Scanning Audit Package in Tests
+
+**Symptom:** `AuditSchemaEnforcer` and any `AuditEventRepository.record()` call during tests throws:
+```
+org.sqlite.SQLiteException: [SQLITE_ERROR] SQL error or missing database (no such table: audit_event)
+```
+
+**Root Cause:** Two separate causes were encountered sequentially:
+
+**Cause A — `application.properties` overrode `application.yaml` package scan:**
+The test resource directory had an `application.properties` file with a hardcoded `quarkus.hibernate-orm.packages` list that did not include `com.arcclaw.core.audit`. In Quarkus, `.properties` files take precedence over `.yaml` for the same key — so the YAML addition of the audit package was silently ignored.
+
+**Cause B — YAML indentation error after merging from `.properties`:**
+After deleting `application.properties` and merging all test config into `application.yaml`, a YAML indentation error caused `hibernate-orm.database.generation` and `packages` to not resolve under the `quarkus:` key, so Hibernate saw neither the schema generation directive nor the audit package.
+
+**Resolution:**
+1. Delete `arcclaw-app/src/test/resources/application.properties` entirely.
+2. In `arcclaw-app/src/test/resources/application.yaml`, ensure correct structure:
+```yaml
+quarkus:
+  hibernate-orm:
+    database:
+      generation: update
+    packages: com.arcclaw.core.state,com.arcclaw.core.security,com.arcclaw.core.audit
+  datasource:
+    jdbc:
+      url: "jdbc:sqlite::memory:"
+```
+3. Verify indentation strictly — `hibernate-orm:` must be at the same level as `datasource:` under `quarkus:`.
+
+***
+
+### 🔴 T-3: `REQUIRES_NEW` Causes `acquisition timeout` Connection Pool Deadlock
+
+**Symptom:**
+```
+GenericJDBCException: Unable to acquire JDBC Connection [Sorry, acquisition timeout!]
+```
+Seen in `StatefulAgentStoreTest.testMarkCompleted` and any test where `AuditService.record()` is called from inside an active `@Transactional` method.
+
+**Root Cause:** `AuditService.record()` was annotated `@Transactional(REQUIRES_NEW)`. When called from `StatefulAgentStoreImpl.markCompleted()` (which is `@Transactional(REQUIRED)`), Narayana JTA suspends the outer transaction but **does not release its JDBC connection** back to the pool. With SQLite's in-memory single-connection pool (`max-size=1`), `REQUIRES_NEW` then tries to acquire a second connection — which is unavailable. Result: acquisition timeout deadlock.
+
+Additionally, `REQUIRES_NEW` provides no real benefit in this architecture because none of the audit callsites (`ToolRegistry`, `ReflexRegistry`, `SecretVaultImpl`, `AgentLoop` finally block) have an active parent transaction that could roll back and orphan an audit row. For `StatefulAgentStoreImpl`, auditing a rolled-back checkpoint transition would produce a **false** audit record.
+
+**Resolution:** Change both `AuditService` methods from `REQUIRES_NEW` to `REQUIRED`:
+```java
+// AuditService.java
+@Transactional(Transactional.TxType.REQUIRED)  // was REQUIRES_NEW
+public void record(...) { ... }
+
+@Transactional(Transactional.TxType.REQUIRED)  // was REQUIRES_NEW
+public void recordLoopCompletion(...) { ... }
+```
+`REQUIRED` joins any existing transaction if present, or starts its own if called outside a transaction — which is the correct behaviour for all audit callsites in this stack.
+
+***
+
+### 🔴 T-4: `REQUIRES_NEW` + `@Alternative` Subclass Breaks Across Classloader Boundaries
+
+**Symptom:** After attempting to fix T-3 via a test-only `TestAuditService extends AuditService` with `@Alternative @Priority(1)`, all tests that touch `AuditService` fail with:
+```
+java.lang.IllegalAccessError: class TestAuditService_Bean tried to access field
+com.arcclaw.core.audit.AuditService.auditEventRepository
+(TestAuditService_Bean is in loader QuarkusClassLoader@arcclaw-app;
+AuditService is in loader QuarkusClassLoader@arcclaw-core)
+```
+
+**Root Cause:** `arcclaw-core` and `arcclaw-app` are loaded by separate Quarkus classloaders. A subclass defined in `arcclaw-app` test sources cannot access `private`/package-private fields of a parent class in `arcclaw-core` across the classloader boundary. The Quarkus CDI bean proxy (`TestAuditService_Bean`) is generated in the app classloader and fails to reflectively access the core field.
+
+**Resolution:** Do not use `@Alternative` subclasses across module boundaries. Fix the transaction type directly in `AuditService` (see T-3 resolution). The `TestAuditService.java` file should be deleted entirely.
+
+***
+
+### 🔴 T-5: HMAC Chain Hash Mismatch in `testHmacChainGeneration`
+
+**Symptom:**
+```
+AssertionFailedError: expected: <49b1cdc6...> but was: <15961f15...>
+```
+`e1.prevHash` does not equal `SHA-256("GENESIS:test-hmac-chain")`.
+
+**Root Cause:** `testHmacChainGeneration` used a hardcoded session ID `"test-hmac-chain"`. The SQLite in-memory database persists across test methods within the same `@QuarkusTest` application context. A prior test run left rows in the DB for `"test-hmac-chain"`, so `findLatestHash("test-hmac-chain")` returned the `hmacHash` of the last row from the previous run instead of `null` (genesis). The chain started mid-sequence rather than from genesis.
+
+**Resolution:** Use timestamp-suffixed session IDs in all `AuditEventRepositoryTest` methods to guarantee uniqueness across test runs:
+```java
+String sessionId = "test-hmac-chain-" + System.currentTimeMillis();
+String sessionId = "test-session-" + System.currentTimeMillis();
+```
+
+***
+
+### 🟡 T-6: `REQUIRES_NEW` + Single-Connection Pool (`max-size=1`) Audit Rows Invisible to Test Assertions
+
+**Symptom:**
+```
+AssertionFailedError: expected: <1> but was: <0>
+```
+`repository.findBySessionId(sessionId)` returns empty list immediately after `secretVault.store()` or `statefulAgentStore.save()`.
+
+**Root Cause:** When `max-size=1` was set to force SQLite in-memory single-connection behaviour, `REQUIRES_NEW` suspended the outer transaction but could not acquire a second connection. The `REQUIRES_NEW` transaction never opened, the `try/catch` in `AuditService.record()` swallowed the `acquisition timeout` silently, and no audit row was written. The test then queried an empty table.
+
+**Resolution:** Resolved as a side-effect of T-3 fix (`REQUIRED` instead of `REQUIRES_NEW`). The `max-size=1` constraint can remain or be removed — it is no longer needed since `REQUIRED` reuses the existing connection and does not attempt pool acquisition.
+
+***
+
+### 🟡 T-7: `AuditSchemaEnforcer` Must Run After Hibernate DDL
+
+**Symptom:** SQLite `CREATE TRIGGER` statements in `AuditSchemaEnforcer.onStart()` fail silently on first boot because `audit_event` table does not exist yet when the trigger is created.
+
+**Root Cause:** `@Observes StartupEvent` without a `@Priority` annotation fires at `APPLICATION` priority by default — the same priority as Hibernate's own schema generation. Ordering is non-deterministic, and Hibernate may not have created the `audit_event` table before `AuditSchemaEnforcer` runs.
+
+**Resolution:** Add `@Priority(Interceptor.Priority.APPLICATION + 100)` to the `onStart()` observer method to guarantee it runs after Hibernate DDL:
+```java
+@Transactional
+public void onStart(
+    @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
+    StartupEvent event) {
+    // CREATE TRIGGER IF NOT EXISTS ...
+}
+```
+`CREATE TRIGGER IF NOT EXISTS` also ensures idempotency on subsequent restarts.
+
+***
