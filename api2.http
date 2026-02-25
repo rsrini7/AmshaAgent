@@ -3,7 +3,7 @@
 ### ============================================================
 
 @baseUrl = http://localhost:8080
-@validKey = key-internal-changeme
+@validKey = key-945JtsyGpSauOUkZwTqysN6LIlYNtNr6S2LP7S732MQ=
 @invalidKey = totally-wrong-key
 
 ### ============================================================

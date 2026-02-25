@@ -157,3 +157,12 @@ ArcClaw contains a safety guard: if `os.name` contains "Windows", it knows it ca
 To mathematically confirm your isolation level, check the **first 50 lines** of the console output during boot:
 - ✅ `INFO: Isolation strategy: PODMAN initialized.` -> **Full Security**
 - ⚠️ `WARN: Podman not available — circuit open, falling back...` -> **Degraded Security**
+
+
+## For X-ArcClaw-API-Key: key-internal-changeme
+
+1. [System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+
+(or)
+
+2. openssl rand -hex 32
