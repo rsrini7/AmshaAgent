@@ -27,8 +27,8 @@ public class PiiScanReflex implements AgentReflex {
 
     // Compiled Patterns
     private static final Pattern EMAIL = Pattern.compile("[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}");
-    private static final Pattern PHONE_INDIA = Pattern.compile("(\\+91[\\-\\s]?)?[6-9]\\d{9}");
-    private static final Pattern PHONE_INTL = Pattern.compile("\\+?[1-9]\\d{1,14}");
+    private static final Pattern PHONE_INDIA = Pattern.compile("(?<![\\w])(?:\\+91[\\-\\s]?)?[6-9]\\d{9}(?![\\w])");
+    private static final Pattern PHONE_INTL  = Pattern.compile("(?<![\\w@.])\\+[1-9]\\d{6,14}(?![\\w])");
     private static final Pattern SSN = Pattern.compile("\\d{3}-\\d{2}-\\d{4}");
     private static final Pattern AADHAAR_SPACED = Pattern.compile("[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}");
     private static final Pattern AADHAAR_COMPACT = Pattern.compile("(?<![+\\-\\d])[2-9][0-9]{11}(?!\\d)");

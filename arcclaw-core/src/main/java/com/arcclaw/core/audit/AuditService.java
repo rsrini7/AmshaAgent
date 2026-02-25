@@ -23,6 +23,7 @@ public class AuditService {
      */
     @Transactional(Transactional.TxType.REQUIRED)
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
+        log.infof("[AUDIT-PROBE] type=%s session=%s", type, sessionId);
         try {
             AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
             auditEventRepository.record(event);

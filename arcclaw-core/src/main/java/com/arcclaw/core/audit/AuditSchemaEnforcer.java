@@ -21,12 +21,15 @@ public class AuditSchemaEnforcer {
     @Inject
     EntityManager em;
 
+    @Inject
+    org.jboss.logging.Logger log;
+
     @Transactional
     public void onStart(
-            @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
-            StartupEvent event) {
+        @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
+        StartupEvent event) {
 
-        // Prevent modification of existing audit records
+        // WORM triggers — already present
         em.createNativeQuery("""
             CREATE TRIGGER IF NOT EXISTS prevent_audit_update
             BEFORE UPDATE ON audit_event
@@ -35,7 +38,6 @@ public class AuditSchemaEnforcer {
             END
             """).executeUpdate();
 
-        // Prevent deletion of existing audit records
         em.createNativeQuery("""
             CREATE TRIGGER IF NOT EXISTS prevent_audit_delete
             BEFORE DELETE ON audit_event
@@ -43,5 +45,20 @@ public class AuditSchemaEnforcer {
                 SELECT RAISE(ABORT, 'audit_event rows are immutable');
             END
             """).executeUpdate();
+
+        // indexes with IF NOT EXISTS — idempotent on every restart
+        em.createNativeQuery(
+            "CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_event (sessionId)"
+        ).executeUpdate();
+
+        em.createNativeQuery(
+            "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_event (timestamp)"
+        ).executeUpdate();
+
+        em.createNativeQuery(
+            "CREATE INDEX IF NOT EXISTS idx_audit_userId ON audit_event (userId)"
+        ).executeUpdate();
+
+        log.info("AuditSchemaEnforcer: WORM triggers and indexes verified.");
     }
 }

@@ -24,11 +24,14 @@ public class ReflexRegistry {
     AuditService auditService;
 
     public ReflexResult processIfReflex(String sessionId, String userId, String input) {
-        if (input == null || input.isBlank()) {
+        // Guard: if input starts with "store " treat as vault command — skip PII entirely
+        if (input == null || input.isBlank() || input.trim().toLowerCase().startsWith("store ")) {
+             // Route directly to vault handler — do not sanitize
+            // Return empty Optional so TelegramAgentHandler routes to vault logic
             return new ReflexResult(Optional.empty(), input != null ? input : "");
         }
 
-        // Pass 1: Command check (short-circuit)
+        // PASS 1: Command/reflex matching on RAW input FIRST
         for (AgentReflex reflex : reflexes) {
             if (reflex.matches(input)) {
                 try {

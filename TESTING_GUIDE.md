@@ -165,4 +165,8 @@ To mathematically confirm your isolation level, check the **first 50 lines** of 
 
 (or)
 
-2. openssl rand -hex 32
+# Hex string (64 chars = 32 bytes)
+openssl rand -hex 32
+
+# Base64 string (~44 chars = 32 bytes)
+openssl rand -base64 32

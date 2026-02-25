@@ -2067,3 +2067,169 @@ sessionId maps to one user session — concurrent writes to the same session are
 SQLite itself serializes all writes regardless
 
 Worth a // NOTE: safe because sessionId is single-writer by design comment on that query if you want to pre-empt future confusion.
+
+
+### 🟡 T-9: `PHONE_INTL` Regex False Positive on GitHub Token Format
+
+**Symptom:**
+```
+store GITHUB_TOKEN=ghptest123
+→ PII-REDACTED type=PHONE → "store GITHUBTOKENghptestREDACTED-PHONE"
+→ Intent classified → role: coder
+→ LLM generates Base64 Java code instead of storing secret
+```
+The `store` command reached the `coder` persona with a destroyed token. The secret was never written to `SecretVaultImpl`.
+
+**Root Cause:**
+`PHONE_INTL` pattern `\\+?[1-9]\\d{1,14}` had no word boundary guards and did not require the `+` prefix. It matched any numeric-looking substring inside an alphanumeric token. `ghptest123` contains the digit sequence `123` which satisfied the pattern minimum length of `{1,14}`. The regex engine found a match inside the token and replaced the digit suffix with `REDACTED-PHONE`.
+
+Additionally, `PHONE_INDIA` pattern `(\\+?91[-]?)?[6-9]\\d{9}` had no negative lookbehind, making it vulnerable to the same false positive on any 10-digit alphanumeric string ending in digits.
+
+**Resolution:**
+Replace both phone patterns in `PiiScanReflex.java` with boundary-guarded versions:
+
+Key changes:
+- `PHONE_INDIA`: `(?<![\\w])` negative lookbehind + `(?![\\w])` negative lookahead prevents matching inside alphanumeric tokens like `ghptest123`
+- `PHONE_INTL`: Now **requires the `+` prefix** — eliminates false positives on bare digit sequences. Bare 10-digit India numbers without `+` are covered by `PHONE_INDIA`
+
+**Verification:**
+```
+store GITHUB_TOKEN=ghptest123  → no PHONE redaction, token passes through intact
+My phone is +919876543210      → correctly redacted as PHONE
+Call me at +1-800-555-0100     → correctly redacted as PHONE
+ghptest_abc123xyz              → no redaction (not a phone number)
+```
+
+***
+
+### 🟡 T-10: `store` Command Routed to LLM Instead of SecretVault
+
+**Symptom:**
+```
+store GITHUB_TOKEN=ghptest123
+→ TelegramAgentHandler intent classified → role: coder
+→ AgentLoop goal: "store GITHUBTOKENghptestREDACTED-PHONE"
+→ LLM responds with Base64 Java code example
+→ SecretVaultImpl never called
+```
+Secret was never persisted. Any subsequent tool that needs `GITHUB_TOKEN` from vault will fail with a vault miss.
+
+**Root Cause:**
+Two compounding issues:
+
+1. `PHONE_INTL` false positive (T-9) destroyed the token before `StoreReflex` could match it — `StoreReflex.matches()` checks for the `store ` prefix on the already-sanitized string, but the token content was corrupted making the intent classifier route it to `coder` instead.
+
+2. Even with T-9 fixed, if `StoreReflex` is absent from the `AgentReflex` CDI `Instance`, the `store` command falls through Pass 1 entirely, hits Pass 2 PII sanitization, and the raw token is sanitized before routing. The `store` command must be intercepted in Pass 1 on **raw, unsanitized input** and must never reach Pass 2.
+
+**Resolution:**
+
+**Step 1 — Apply T-9 fix** (phone regex). This alone resolves the false positive for `ghptest123`.
+
+**Step 2 — If `StoreReflex` is missing from CDI**, add a raw-input guard at the top of `ReflexRegistry.processIfReflex()` before the Pass 1 loop:
+
+**Verification:**
+```
+# Send via Telegram:
+store GITHUB_TOKEN=ghptest123
+
+# Expected log sequence:
+# NO "PII-REDACTED" line for this input
+# TelegramAgentHandler routes to StoreReflex or vault handler
+# SecretVaultImpl.store() called with key=GITHUB_TOKEN
+# [AUDIT-PROBE] type=VAULT_STORE session=<sid>
+# Bot replies: "Secret stored successfully"
+
+# NOT expected:
+# PII-REDACTED type=PHONE
+# Intent classified → role: coder
+# LLM response with Java code
+```
+
+***
+
+### 🟡 T-11: `[AUDIT]` Log Lines Absent — Wiring Verification
+
+**Symptom:**
+All security events (`PROMPT_INJECTION_BLOCKED`, `PII_SCAN_REDACTED`, `CHECKPOINT_CREATED`, `CHECKPOINT_COMPLETED`) fire correctly per their own component logs, but zero `[AUDIT]` lines appear in the application log. Audit table may be empty.
+
+**Root Cause (3 possible — diagnose in order):**
+
+**Cause A — JAR built before Phase 35 wiring was complete:**
+`AuditService.record()` call sites were added to `ReflexRegistry`, `StatefulAgentStoreImpl`, `ToolRegistry`, and `SecretVaultImpl` after the last `mvn clean package`. The running JAR does not contain the audit hooks.
+
+**Cause B — Silent exception swallowed in `AuditService.record()` catch block:**
+`AuditService.record()` wraps everything in `try/catch(Exception e)` and logs at `WARN`. If the log level for `com.arcclaw.core.audit` is set above `WARN` in `application.yaml`, the failure is completely invisible.
+
+**Cause C — `audit_event` table missing at runtime (production JAR):**
+`database.generation: update` is only set in test profile. Production JAR starts with no schema generation, `audit_event` table never created, every `em.persist()` throws `SQLiteException`, caught and swallowed silently.
+
+**Resolution — Diagnose with probe log:**
+
+Add one line at the very top of `AuditService.record()`:
+```java
+log.infof("[AUDIT-PROBE] type=%s session=%s", type, sessionId);
+```
+
+**For Cause C specifically** — ensure `application.yaml` production profile has schema generation:
+```yaml
+quarkus:
+  hibernate-orm:
+    database:
+      generation: update   # must be present in ALL profiles, not just %test
+    packages: com.arcclaw.core.state,com.arcclaw.core.security,com.arcclaw.core.audit
+```
+
+**Verification:**
+```bash
+# After deploying with probe log, send "Hello" via Telegram
+# Expected in logs:
+[AUDIT-PROBE] type=CHECKPOINT_CREATED session=6a26b16d-...
+[AUDIT-PROBE] type=LOOP_FINISH session=6a26b16d-...
+[AUDIT] session=6a26b16d-... type=CHECKPOINT_CREATED persisted
+
+# Verify SQLite directly:
+sqlite3 /path/to/arcclaw.db "SELECT event_type, event_detail, timestamp FROM audit_event ORDER BY sequence ASC LIMIT 10;"
+```
+
+---
+
+### 🟢 T-13: Hibernate DDL WARN on Startup — `index idx_audit_userId already exists`
+
+**Symptom:**
+```
+WARN (JPA Startup Thread) GenerationTarget encountered exception accepting command :
+Error executing DDL "create index idx_audit_userId on audit_event (userId)" via JDBC
+[[SQLITE_ERROR] SQL error or missing database (index idx_audit_userId already exists)]
+```
+Appears on every application restart after the first run. Application starts and operates correctly despite the WARN.
+
+**Root Cause:**
+Hibernate's `database.generation: update` emits `CREATE INDEX` statements for every `@Index` annotation on `@Table` during schema migration. SQLite's Hibernate community dialect does not support `IF NOT EXISTS` in the generated DDL — it always emits a bare `CREATE INDEX` with no existence guard. On the second and subsequent startups, the indexes already exist from the first run, so SQLite rejects the command and Hibernate logs it as a WARN. Since `halt-on-error` defaults to `false`, the application continues normally.
+
+**Resolution:**
+
+**Step 1 — Remove `@Index` annotations from `AuditEvent.java`:**
+```java
+@Table(name = "audit_event")   // remove indexes block entirely
+```
+
+**Step 2 — Add indexes to `AuditSchemaEnforcer.java` using native SQL `IF NOT EXISTS`:**
+
+**Why this works:**
+SQLite natively supports `CREATE INDEX IF NOT EXISTS` — it is a no-op if the index already exists, no error thrown. By moving index creation from Hibernate `@Index` DDL (which has no existence guard) to `AuditSchemaEnforcer` native SQL (which does), the startup is clean on every subsequent restart.
+
+**Verification:**
+```
+# Before fix — every restart shows:
+WARN GenerationTarget encountered exception... index idx_audit_userId already exists
+
+# After fix — clean startup shows:
+INFO AuditSchemaEnforcer: WORM triggers and indexes verified.
+
+# Indexes still present and used — verify via SQLite CLI:
+sqlite3 arcclaw.db ".indexes audit_event"
+# Output:
+# idx_audit_session
+# idx_audit_timestamp
+# idx_audit_userId
+```

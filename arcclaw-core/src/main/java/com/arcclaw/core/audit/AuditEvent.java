@@ -10,11 +10,7 @@ import java.util.UUID;
  * Includes an HMAC chain for tamper detection.
  */
 @Entity
-@Table(name = "audit_event", indexes = {
-    @Index(name = "idx_audit_session",   columnList = "sessionId"),
-    @Index(name = "idx_audit_timestamp", columnList = "timestamp"),
-    @Index(name = "idx_audit_userId",    columnList = "userId")
-})
+@Table(name = "audit_event")
 public class AuditEvent {
 
     @Id
