@@ -1775,7 +1775,7 @@ quarkus.hibernate-orm.database.generation=drop-and-create
   (user has no public @username set — Telegram API returns null;
   they must set a username in Telegram Settings → Username)
 
-  ## 29. Phase 33: Prompt Injection & Adversarial Defense
+## 29. Phase 33: Prompt Injection & Adversarial Defense
 
 ### Symptom (T-1): `NullPointerException` from `allowlistGuardMock.isAllowed` in Tests
 **Description**: Refactoring tests relying on package-private field `.allowedUsers` without proper setters causes fragile `null` states.
@@ -1797,3 +1797,85 @@ quarkus.hibernate-orm.database.generation=drop-and-create
 1. Verify `arcclaw.security.prompt-injection.enabled=true` in `application.yaml`.
 2. Ensure `ReflexRegistry` is invoking `reflex.matches()` and `reflex.execute()` before passing to the AI.
 3. Check the specific regex category. It may need to be expanded to cover new adversarial phrasings.
+
+---
+
+## 30. Phase 34: Tool Schema & Agent Tooling
+
+### 🔴 T-1: LLM Calls Tool with `null` Arguments (Sprint 25B Fix)
+**Symptom:** Log shows `LLM is attempting to call tool github with args null`. After approval, tool invokes `sandboxCommand()` but all params are `null`, causing the `gh` CLI to fail immediately. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/d4957404-3fb9-4132-98f4-07c709877095/paste.txt)
+
+**Root Cause:** `ToolSpecification` was built without `.parameters(...)`, so the OpenAI-compatible API received `parameters: { type: object, properties: {}, required: [] }`. With no schema, the LLM has no knowledge of what arguments to populate and sends an empty or null payload. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/5ed052c3-7512-4cd0-9776-a8d753150246/rsrini7-arcclaw.txt)
+
+**Resolution:**
+1. Add `JsonObjectSchema parametersSchema()` as a `default` method on `AgentTool` returning an empty schema — non-breaking for all existing tools.
+2. Override `parametersSchema()` in `GithubTool` to declare `action`, `command` (required), and `target` (optional).
+3. Wire it in `LangChainReasoningEngine` by adding `.parameters(tool.parametersSchema())` to the `ToolSpecification.builder()` chain.
+
+```java
+// AgentTool.java
+default JsonObjectSchema parametersSchema() {
+    return JsonObjectSchema.builder().build(); // no-op default for tools without parameters
+}
+
+// GithubTool.java
+@Override
+public JsonObjectSchema parametersSchema() {
+    return JsonObjectSchema.builder()
+        .addStringProperty("action",  "Action to perform: repo or gist")
+        .addStringProperty("command", "Command to run: view or list")
+        .addStringProperty("target",  "The owner/repo path for repo actions (optional)")
+        .required("action", "command")
+        .build();
+}
+
+// LangChainReasoningEngine.java — builder chain
+.map(tool -> ToolSpecification.builder()
+    .name(tool.name())
+    .description(tool.description())
+    .parameters(tool.parametersSchema())   // Sprint 25B fix
+    .build())
+```
+
+***
+
+### 🔴 T-2: Schema Jailbreak — LLM Invokes Unauthorized Tools (Sprint 25A Fix)
+**Symptom:** An agent persona (e.g., `coder`/Brahma) invokes tools not listed in its `allowedTools()`, bypassing per-persona restrictions. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/5ed052c3-7512-4cd0-9776-a8d753150246/rsrini7-arcclaw.txt)
+
+**Root Cause:** The original `LangChainReasoningEngine` built `ToolSpecification` from the full `toolRegistry.listTools()` without filtering by the agent's declared `allowedTools`. The LLM received the complete tool catalog and could select any tool.
+
+**Resolution:** Filter `toolRegistry.listTools()` with `allowedTools::contains` before building specifications. An empty `toolSpecifications` list causes LangChain4j to omit the `tools` array from the API call entirely — which is the correct behavior for `coder`/`debugger` personas that must not invoke any tools.
+
+```java
+// LangChainReasoningEngine.java
+List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
+    .filter(allowedTools::contains)   // Sprint 25A: Schema Jailbreak fix
+    .map(name -> toolRegistry.findTool(name).orElseThrow())
+    .map(tool -> ToolSpecification.builder()
+        .name(tool.name())
+        .description(tool.description())
+        .parameters(tool.parametersSchema())
+        .build())
+    .collect(Collectors.toList());
+```
+
+***
+
+### 🟡 T-3: `allowedTools` Filter Silently Drops New Tools
+**Symptom:** A newly registered `AgentTool` CDI bean is never invoked even when explicitly requested by the correct persona. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/5ed052c3-7512-4cd0-9776-a8d753150246/rsrini7-arcclaw.txt)
+
+**Root Cause:** Each `Agent` implementation (`VishnuAgent`, `BrahmaAgent`, etc.) hard-codes its `allowedTools()` list. A new tool name not added to the relevant agent's list will be silently filtered out by the Sprint 25A fix.
+
+**Resolution:** When adding a new `AgentTool`, always update the `allowedTools()` return value of every agent persona that should have access. Check `toolRegistry.listTools()` via the `/sessions/{id}/status/{role}` endpoint to verify the tool is discovered via CDI.
+
+***
+
+### 🟡 T-4: Truncated `// no-op` Comment on `AgentTool` Default
+**Symptom:** `parametersSchema()` default body has an incomplete inline comment: `// no-op default for tools without ` — sentence cut off. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/5ed052c3-7512-4cd0-9776-a8d753150246/rsrini7-arcclaw.txt)
+
+**Root Cause:** Copy-paste/edit truncation during diff authoring.
+
+**Resolution:** Fix the comment:
+```java
+return JsonObjectSchema.builder().build(); // no-op default for tools without parameters
+```
