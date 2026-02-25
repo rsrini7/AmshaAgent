@@ -5,11 +5,6 @@
 
 quarkus:
 
-  # Force SmallRye Config to load the .env file from the project root (parent directory)
-  # This fixes the issue where running `quarkus:dev` in a submodule misses the root .env
-  config:
-    locations: "../.env"
-
   application:
     name: arcclaw
     version: "1.0.0"
@@ -179,6 +174,12 @@ quarkus:
         level: INFO
       "ja.la.ProcessBuilder":
         level: INFO
+      "java.lang.ProcessBuilder":
+        level: WARN       # ← suppress DEBUG noise from sqlite-jdbc uname probe
+      "org.sqlite":
+        level: WARN       # ← suppress all sqlite-jdbc debug output
+      "java.lang":
+        level: WARN
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
@@ -194,12 +195,25 @@ quarkus:
 # ARCCLAW APPLICATION CONFIG
 # =============================================================================
 arcclaw:
+  security:
+    prompt-injection:
+      enabled: true
+
+  api:
+    keys:
+      internal: "${ARCCLAW_API_KEY_INTERNAL:key-internal-changeme}"
+      ci-pipeline: "${ARCCLAW_API_KEY_CI:key-ci-changeme}"
+    rate-limit:
+      requests-per-minute: 20
 
   channel:
     telegram:
       enabled: true
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
       default-autonomy-level: SUPERVISED
+      allowed-users: "${ARCCLAW_TELEGRAM_ALLOWED_USERS:mock-telegram-user}"
+      silent-block: false
+      block-response: "⛔ Access denied."
 
   pii:
     mode: REDACT_AND_FORWARD   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
@@ -329,6 +343,7 @@ mp:
     channel:
       telegram:
         bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
+        allowed-users: ""
     governance:
       budget-usd: 999.99
       approval-timeout-minutes: 60
@@ -341,10 +356,15 @@ mp:
       jdbc:
         url: "jdbc:sqlite::memory:"
   arcclaw:
+    security:
+      prompt-injection:
+        enabled: true
+
     channel:
       telegram:
         enabled: false
         bot-token: "mock-bot-token"
+        allowed-users: ""
     pii:
       mode: REDACT_AND_FORWARD   # Tests use default
     sandbox:

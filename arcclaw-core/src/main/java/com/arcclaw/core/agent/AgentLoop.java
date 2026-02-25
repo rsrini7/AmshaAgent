@@ -1,7 +1,10 @@
 package com.arcclaw.core.agent;
 
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
@@ -63,7 +66,10 @@ public class AgentLoop {
     ChatMemoryStore chatMemoryStore;
 
     @Inject
-    Instance<com.arcclaw.core.observability.AgentObserver> observers;
+    Instance<AgentObserver> observers;
+
+    @Inject
+    WorkspaceContext workspaceContext;
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle
@@ -211,24 +217,34 @@ public class AgentLoop {
         // --- RESUME HOOK ---
         agentStore.load(WorkspaceScopeHolder.get(), agentRole).ifPresent(checkpoint -> {
             if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                String pendingTool = checkpoint.getPendingToolName();
+                String pendingTool   = checkpoint.getPendingToolName();
                 String pendingParams = checkpoint.getPendingToolParametersJson();
-
                 log.infof("[AgentLoop] Resuming session %s: executing pending tool '%s'",
-                        WorkspaceScopeHolder.get(), pendingTool);
+                    WorkspaceScopeHolder.get(), pendingTool);
 
-                ToolResponse resumeResponse = toolRegistry.invokeTool(
+                try {
+                    // Elevate ONLY for this single tool call — never leak FULL autonomy
+                    workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+                    ToolResponse resumeResponse = toolRegistry.invokeTool(
                         pendingTool, pendingParams, WorkspaceScopeHolder.get());
 
-                history.add(new ReasoningStep("Human Approved", pendingTool,
-                        Map.of("parameters", pendingParams), resumeResponse.output(), 0, 0));
+                    history.add(new ReasoningStep(
+                        "Human Approved", pendingTool,
+                        Map.of("parameters", pendingParams),
+                        resumeResponse.output(), 0, 0));
 
-                checkpoint.setPendingToolName(null);
-                checkpoint.setPendingToolParametersJson(null);
-                checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-                agentStore.save(checkpoint);
+                    checkpoint.setPendingToolName(null);
+                    checkpoint.setPendingToolParametersJson(null);
+                    checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+                    agentStore.save(checkpoint);
+
+                } finally {
+                    // Always restore — even if tool throws
+                    workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+                }
             }
         });
+
 
         while (iteration < maxIterations) {
             iteration++;

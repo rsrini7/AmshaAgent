@@ -20,7 +20,7 @@ public class HaltReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId) {
+    public String execute(String sessionId, String userId, String input) {
         log.errorf("[HaltReflex] SYSTEM HALT issued by user=%s for session=%s", userId, sessionId);
         workspaceManager.terminateSession(sessionId);
         return "🛑 System Halted. Workspace terminated.";

@@ -24,7 +24,7 @@ public class StatusReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId) {
+    public String execute(String sessionId, String userId, String input) {
         String status = "NO_ACTIVE_STATE";
         for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
             Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role);

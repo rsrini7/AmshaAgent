@@ -3,6 +3,7 @@ package com.arcclaw.core.agent;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -21,6 +22,7 @@ import org.jboss.logging.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Collections;
 
 @ApplicationScoped
@@ -187,15 +189,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             default -> List.of();
         };
 
-        // 2. Dynamically filter the specifications to prevent Schema Jailbreaks
-        List<dev.langchain4j.agent.tool.ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
-                .filter(allowedTools::contains) // THE SPRINT 25A FIX
-                .map(name -> toolRegistry.findTool(name).orElseThrow())
-                .map(tool -> dev.langchain4j.agent.tool.ToolSpecification.builder()
-                        .name(tool.name())
-                        .description(tool.description())
-                        .build())
-                .collect(java.util.stream.Collectors.toList());
+        // 2. Dynamically filter + build specs with parameter schema
+        List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
+            .filter(allowedTools::contains)                             // Sprint 25A: Schema Jailbreak fix
+            .map(name -> toolRegistry.findTool(name).orElseThrow())
+            .map(tool -> ToolSpecification.builder()
+                .name(tool.name())
+                .description(tool.description())
+                .parameters(tool.parametersSchema())                    // Sprint 25B: Fix null args
+                .build())
+            .collect(Collectors.toList());
 
         // 3. Build the request (If empty, LangChain4j omits the tools array entirely from the API call)
         ChatRequest request = toolSpecifications.isEmpty()

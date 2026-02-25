@@ -2,6 +2,8 @@ package com.arcclaw.core.tools;
 
 import com.arcclaw.core.security.ToolOperation;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import java.util.List;
 import java.util.Map;
 
@@ -84,4 +86,9 @@ public interface AgentTool {
      * @return The execution result.
      */
     ToolResponse execute(Map<String, Object> params);
+
+    default JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder().build(); // no-op default for tools without parameters
+    }
 }
+

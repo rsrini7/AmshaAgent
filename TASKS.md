@@ -394,3 +394,38 @@
 - [x] Step 5: Route strict `sanitizedInput` into `IntentClassifierService` and `AgentLoop` in `TelegramAgentHandler`
 - [x] Step 6: Expand `PiiScanReflexTest` covering mixed inputs, idempotency, and mode-specific `matches()` behavior
 - [x] Step 7: Finalize Mockito configuration in `TelegramAgentHandlerTest` to default to `sanitizedInput`
+
+---
+
+## Phase 32 — REST API Authentication & Telegram Security
+- [x] Step 1: Create `AuthErrorResponse` and `RateLimitErrorResponse` records
+- [x] Step 2: Create `ClockProducer` and `ApiKeyRegistry` with rate limiting logic
+- [x] Step 3: Implement `ApiKeyAuthFilter` for API key validation on JAX-RS endpoints
+- [x] Step 4: Create `TelegramAllowlistGuard` for Telegram user authorization
+- [x] Step 5: Update `TelegramAgentHandler.java` to block unauthorized users
+- [x] Step 6: Add application.yaml properties for API keys and allowlists
+- [x] Step 7: Fix JAX-RS endpoint test failures due to missing authentication headers
+- [x] Step 8: Verify build success and test passes
+
+---
+
+## Phase 33 — Prompt Injection & Adversarial Defense
+- [x] Step 1: Update `AgentReflex` execute signature to accept raw `input`
+- [x] Step 2: Implement 15 injection vectors inside `PromptInjectionReflex.java` with 4 categorical tags
+- [x] Step 3: Update `ReflexRegistry` and implementors (`PiiScanReflex`, `HaltReflex`, etc.)
+- [x] Step 4: Write comprehensive tests inside `PromptInjectionReflexTest` and `PromptInjectionReflexDisabledTest` due to `@TestProfile` limitations
+- [x] Step 5: Test that `PromptInjectionReflex` shortcircuits before `PiiScanReflex`
+- [x] Step 6: Update `application.yaml` with the `arcclaw.security.prompt-injection.enabled` block
+- [x] Step 7: Fix regex boundary logic to properly capture optional trailing words
+- [x] Step 8: Verify test suite and update documentation
+
+---
+
+## Phase 34 — Tool Schema & Agent Tooling
+- [x] Step 1: Implement `parametersSchema()` default on `AgentTool`
+- [x] Step 2: Override `parametersSchema()` in `GithubTool` with action/command/target
+- [x] Step 3: Implement `ToolSpecification` builder parameter injection in `LangChainReasoningEngine`
+- [x] Step 4: Implement `allowedTools` filtering in `LangChainReasoningEngine` (Schema Jailbreak fix)
+- [x] Step 5: Fix T-4 truncated comment in `AgentTool.java`
+- [x] Step 6: Verify full build suite (`mvn clean verify`)
+- [x] Step 7: Update system documentation (PLAN, TASKS, TROUBLESHOOTING)

@@ -10,12 +10,15 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.virtual.threads.VirtualThreads;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -23,7 +26,10 @@ import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +65,9 @@ public class AgentResource {
     @VirtualThreads
     java.util.concurrent.ExecutorService vThreads;
 
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
+
     @POST
     public Response createSession() {
         String sessionId = UUID.randomUUID().toString();
@@ -82,6 +91,10 @@ public class AgentResource {
             
             // 2. Elevate Autonomy so tools trigger RequiresApprovalException instead of hard crashing
             workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
+            if (!devSeeder.isUnsatisfied()) {
+                devSeeder.get().seedDevSecrets();
+            }
 
             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
                     maxIterations);
@@ -112,34 +125,74 @@ public class AgentResource {
         log.info("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-        // Use Quarkus-managed @VirtualThreads executor to propagate Vert.x duplicated context
-        // (which carries CDI RequestScope) into the spawned virtual thread.
         vThreads.execute(() -> {
             try {
-                // 1. Activate the Workspace Scope for this background thread
+                // MUST be first — activates WorkspaceScoped context
                 WorkspaceScopeHolder.set(sessionId);
-                
-                // 2. Elevate Autonomy for the background task
-                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED); // ← safe now
 
-                AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
-                        maxIterations);
-                if (result.success()) {
-                    response.resume(Response.accepted().build());
+                boolean isApproval = "/approve".equalsIgnoreCase(request.goal());
+                boolean isDeny     = "/deny".equalsIgnoreCase(request.goal());
+
+                if (isDeny) {
+                    agentStore.load(sessionId, request.agentRole()).ifPresent(cp -> {
+                        cp.status     = CheckpointStatus.FAILED;
+                        cp.failedAt   = Instant.now();
+                        cp.failReason = "Human denied tool execution via REST.";
+                        agentStore.save(cp);
+                    });
+                    response.resume(Response.ok()
+                            .entity(Map.of(
+                                "status",  "DENIED",
+                                "message", "Tool execution denied. Session terminated."
+                            ))
+                            .build());
+                    return; // finally still runs — scope clears cleanly
+                }
+
+                workspaceContext.setAutonomyLevel(
+                    isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED
+                );
+
+                if (!devSeeder.isUnsatisfied()) {
+                   devSeeder.get().seedDevSecrets();
+                }
+
+                AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                        request.goal(), reasoningEngine, maxIterations);
+
+                if (result.awaitingApproval()) {
+                    response.resume(Response.accepted()
+                            .entity(Map.of(
+                                "status",  "AWAITING_APPROVAL",
+                                "message", "Agent is pending tool approval. POST /approve or /deny as goal.",
+                                "session", sessionId
+                            ))
+                            .build());
+                } else if (result.success()) {
+                    response.resume(Response.accepted()
+                            .entity(Map.of("status", "COMPLETED", "answer", result.finalAnswer()))
+                            .build());
                 } else {
-                    log.error("Async agent run completed with failure for session {}: {}", sessionId,
-                            result.terminationReason());
+                    log.error("Async agent run failed for session {}: {}", sessionId, result.terminationReason());
                     response.resume(Response.serverError()
-                            .entity(result.terminationReason())
+                            .entity(Map.of("status", "FAILED", "reason", result.terminationReason()))
                             .build());
                 }
+
             } catch (Exception e) {
                 log.error("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
-                response.resume(Response.serverError().entity(
-                        e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
+                response.resume(Response.serverError()
+                        .entity(Map.of("status", "ERROR", "message",
+                            e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
                         .build());
             } finally {
-                // 3. Clear scope to prevent memory leaks in the executor pool
+                 // Guard: only call setAutonomyLevel if scope is still active
+                try {
+                    workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+                } catch (jakarta.enterprise.context.ContextNotActiveException ignored) {
+                    // Scope already cleared or was never activated — safe to ignore
+                }
                 WorkspaceScopeHolder.clear();
             }
         });

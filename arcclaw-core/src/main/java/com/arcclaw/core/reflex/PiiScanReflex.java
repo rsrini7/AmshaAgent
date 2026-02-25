@@ -59,7 +59,7 @@ public class PiiScanReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId) {
+    public String execute(String sessionId, String userId, String input) {
         // Only reached in BLOCK_AND_NOTIFY mode
         return "⚠️ PII detected. Message has been sanitized and blocked.";
     }

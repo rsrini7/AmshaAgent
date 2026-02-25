@@ -1,3 +1,9 @@
+arcclaw:
+  api:
+    keys:
+      internal: "key-internal-changeme"
+      ci-pipeline: "key-ci-changeme"
+      
 quarkus:
   http:
     host: "localhost"

@@ -1340,3 +1340,110 @@ Implement local, offline PII detection and redaction within the ArcClaw ecosyste
 ## Verification
 - ✅ Verified by comprehensive JUnit parametrics covering 10 PII types and mixed formats.
 - ✅ `mvn clean test` yields `BUILD SUCCESS`.
+
+---
+
+# Phase 32 — REST API Authentication & Telegram Security
+
+Implement API key-based authentication with sliding-window rate limiting for the REST interface, and a Telegram user allowlist to prevent budget draining by unauthorized users.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **API Key Authentication**: Exposed REST API endpoints now require an `X-ArcClaw-API-Key` header. Implemented as a JAX-RS `@Provider` (`ApiKeyAuthFilter`) to intercept and validate requests before they hit the resource layer. Endpoints under `/q/*` (health/metrics) bypass authentication.
+> **Sliding Window Rate Limiting**: The `ApiKeyRegistry` tracks request rates using `ConcurrentHashMap<String, ConcurrentLinkedDeque<Instant>>` for thread-safe per-key sliding window counters. Exceeding `requests-per-minute` returns HTTP 429 with `Retry-After: 60` header.
+
+> [!TIP]
+> **Telegram Allowlist**: Added `TelegramAllowlistGuard` to enforce case-insensitive validation of Telegram usernames against `arcclaw.telegram.allowed-users`. If blocked, the handler silently drops the message or replies with an access denied message based on configuration.
+
+## Completed Changes
+
+#### [NEW] [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyRegistry.java)
+- `@ApplicationScoped` bean to load and validate configured API keys and enforce rate limits.
+
+#### [NEW] [ApiKeyAuthFilter.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java)
+- JAX-RS `ContainerRequestFilter` to intercept REST API calls and validate keys/rates.
+
+#### [NEW] [TelegramAllowlistGuard.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/TelegramAllowlistGuard.java)
+- Checks Telegram usernames against a configured list of allowed aliases.
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Injected `TelegramAllowlistGuard` to actively block messages originating from unapproved Telegram accounts.
+
+## Verification
+- ✅ Verified `ApiKeyRegistryTest` and `ApiKeyAuthFilterTest` endpoints return 401/429 appropriately.
+- ✅ Verified `TelegramAgentHandlerTest` properly blocks and logs unauthorized users.
+- ✅ `mvn clean verify` succeeds cleanly.
+
+---
+
+# Phase 33 — Prompt Injection & Adversarial Defense
+
+Implement an active defense mechanism against basic and complex prompt injection attacks targeting the LLM boundary.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Prompt Injection Blocking Strategy**: We assume explicit bypass attempts are adversarial. `PromptInjectionReflex` runs prior to all LLM requests, actively identifying subsets of language indicating instruction overrides. Requests matching pattern constraints are outright blocked and logged.
+
+> [!NOTE]
+> **Action Extensibility via Categorization**: The reflex leverages an internal `InjectionRule` record to map matched regex patterns to 4 explicit categories: `DIRECT_OVERRIDE`, `IDENTITY_HIJACKING`, `EXFILTRATION`, and `GOVERNANCE_BYPASS`. This provides clear logging on vector frequencies.
+
+> [!TIP]
+> **Reflex Execute Overload**: Refactored `AgentReflex.execute(sessionId, userId, input)` to accept the raw user input, preventing the need to duplicate matching cycles or rely on ThreadLocals to pull context elements for internal logging and dynamic reporting strings.
+
+## Proposed Changes
+
+#### [MODIFY] [AgentReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/AgentReflex.java)
+- Updated `execute()` signature to accept `String input` globally across all components.
+
+#### [NEW] [PromptInjectionReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/PromptInjectionReflex.java)
+- Added continuous blocking filter with 15 complex patterns utilizing Java Matchers.
+- Rejects message returning `⛔ Message blocked: adversarial instruction pattern detected.` to user.
+
+#### [NEW] [PromptInjectionReflexTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/reflex/PromptInjectionReflexTest.java)
+- Unit tests against numerous mock vectors and explicitly documenting False Positive boundaries.
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Introduced `arcclaw.security.prompt-injection.enabled` controls under the configuration tree, defaulted to true.
+
+## Verification
+- ✅ Tests ensure `PromptInjectionReflex` shortcircuits before `PiiScanReflex`.
+- ✅ Regex boundary analysis correctly isolates edge cases (e.g. `ignore your previous instructions`).
+- ✅ Verified full `arcclaw-core` and `arcclaw-app` test suites with passing `mvn clean test` execution.
+
+---
+
+# Phase 34 — Tool Schema & Agent Tooling
+
+Harden the tool invocation pipeline by implementing strict parameter schemas and enforcing agent-specific tool access (Schema Jailbreak prevention).
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Schema-Driven Tooling**: Introduced `JsonObjectSchema parametersSchema()` as a default method on the `AgentTool` interface. By declaring explicit parameter types and required fields, we provide the LLM with the necessary context to populate arguments correctly, resolving "null argument" failures.
+
+> [!NOTE]
+> **Schema Jailbreak Prevention**: The `LangChainReasoningEngine` now strictly filters the global tool registry against each agent's `allowedTools()` list before generating tool specifications. This ensures specialized agents (like `coder` or `debugger`) cannot be tricked into invoking unauthorized tools (like `github`).
+
+> [!TIP]
+> **Fail-Safe Defaults**: Existing tools without parameters simply inherit an empty `parametersSchema()`. The `LangChainReasoningEngine` builder chain was updated to append this schema to the `ToolSpecification` automatically.
+
+## Proposed Changes
+
+#### [MODIFY] [AgentTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java)
+- Added `default JsonObjectSchema parametersSchema()` providing an empty default for non-parameterized tools.
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Overrode `parametersSchema()` to explicitly define `action`, `command`, and `target` properties for the LLM.
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Injected `parameters()` into the `ToolSpecification` builder.
+- Implemented `allowedTools` filtering to prevent Schema Jailbreaks.
+
+## Verification
+- ✅ Verified `mvn clean verify` passes all integration and unit tests.
+- ✅ Verified `GithubTool` schema correctly populates in AI requests (simulated).
+- ✅ Verified `coder`/`Brahma` persona receives zero tool specifications.
+
+

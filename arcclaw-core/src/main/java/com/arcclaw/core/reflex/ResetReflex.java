@@ -24,7 +24,7 @@ public class ResetReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId) {
+    public String execute(String sessionId, String userId, String input) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
         
         // 1. Wipe the workspace scope (clears IN_PROGRESS / AWAITING_APPROVAL state)
