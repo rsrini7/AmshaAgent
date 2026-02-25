@@ -9,7 +9,7 @@ public interface AgentReflex {
     /**
      * Executes the deterministic logic and returns the response string to send directly to the user.
      */
-    String execute(String sessionId, String userId);
+    String execute(String sessionId, String userId, String input);
 
     /**
      * Sanitizes the input (e.g., PII redaction) before it reaches the LLM.

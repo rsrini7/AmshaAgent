@@ -1774,3 +1774,26 @@ quarkus.hibernate-orm.database.generation=drop-and-create
 - Telegram user always blocked despite being in allowed-users list
   (user has no public @username set — Telegram API returns null;
   they must set a username in Telegram Settings → Username)
+
+  ## 29. Phase 33: Prompt Injection & Adversarial Defense
+
+### Symptom (T-1): `NullPointerException` from `allowlistGuardMock.isAllowed` in Tests
+**Description**: Refactoring tests relying on package-private field `.allowedUsers` without proper setters causes fragile `null` states.
+**Resolution**: 
+1. Avoid package-private field mutation in `QuarkusTest`.
+2. Delete the monolithic test and create two `@TestProfile` classes (e.g., `TelegramAllowlistGuardOpenAccessTest` and `TelegramAllowlistGuardRestrictedTest`).
+3. Use `QuarkusTestProfile` to provide realistic `Map.of("arcclaw.channel.telegram.allowed-users", "...")` overrides.
+
+### Symptom (P-1): Prompt Injection Defense blocking legitimate user requests (False Positives)
+**Description**: The `PromptInjectionReflex` detects adversarial commands using greedy regex patterns (e.g., "forget", "ignore", "act as"). Certain benign prompts, such as "I want to act as a developer", may trigger these patterns.
+**Resolution**:
+1. Check standard logs for `[INJECTION-BLOCKED]` with the matched category.
+2. The user will receive a message to rephrase the request.
+3. If structural, verify the regex definitions in `PromptInjectionReflex.java`.
+
+### Symptom (P-2): Prompt Injection Reflex Not Firing
+**Description**: An adversarial message reaches the LLM instead of being blocked by the reflex.
+**Resolution**:
+1. Verify `arcclaw.security.prompt-injection.enabled=true` in `application.yaml`.
+2. Ensure `ReflexRegistry` is invoking `reflex.matches()` and `reflex.execute()` before passing to the AI.
+3. Check the specific regex category. It may need to be expanded to cover new adversarial phrasings.

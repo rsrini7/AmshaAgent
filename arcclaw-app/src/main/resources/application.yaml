@@ -194,6 +194,10 @@ quarkus:
 # ARCCLAW APPLICATION CONFIG
 # =============================================================================
 arcclaw:
+  security:
+    prompt-injection:
+      enabled: true
+
   api:
     keys:
       internal: "${ARCCLAW_API_KEY_INTERNAL:key-internal-changeme}"
@@ -351,6 +355,10 @@ mp:
       jdbc:
         url: "jdbc:sqlite::memory:"
   arcclaw:
+    security:
+      prompt-injection:
+        enabled: true
+
     channel:
       telegram:
         enabled: false

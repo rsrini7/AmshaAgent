@@ -1374,3 +1374,41 @@ Implement API key-based authentication with sliding-window rate limiting for the
 - ✅ Verified `ApiKeyRegistryTest` and `ApiKeyAuthFilterTest` endpoints return 401/429 appropriately.
 - ✅ Verified `TelegramAgentHandlerTest` properly blocks and logs unauthorized users.
 - ✅ `mvn clean verify` succeeds cleanly.
+
+---
+
+# Phase 33 — Prompt Injection & Adversarial Defense
+
+Implement an active defense mechanism against basic and complex prompt injection attacks targeting the LLM boundary.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Prompt Injection Blocking Strategy**: We assume explicit bypass attempts are adversarial. `PromptInjectionReflex` runs prior to all LLM requests, actively identifying subsets of language indicating instruction overrides. Requests matching pattern constraints are outright blocked and logged.
+
+> [!NOTE]
+> **Action Extensibility via Categorization**: The reflex leverages an internal `InjectionRule` record to map matched regex patterns to 4 explicit categories: `DIRECT_OVERRIDE`, `IDENTITY_HIJACKING`, `EXFILTRATION`, and `GOVERNANCE_BYPASS`. This provides clear logging on vector frequencies.
+
+> [!TIP]
+> **Reflex Execute Overload**: Refactored `AgentReflex.execute(sessionId, userId, input)` to accept the raw user input, preventing the need to duplicate matching cycles or rely on ThreadLocals to pull context elements for internal logging and dynamic reporting strings.
+
+## Proposed Changes
+
+#### [MODIFY] [AgentReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/AgentReflex.java)
+- Updated `execute()` signature to accept `String input` globally across all components.
+
+#### [NEW] [PromptInjectionReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/PromptInjectionReflex.java)
+- Added continuous blocking filter with 15 complex patterns utilizing Java Matchers.
+- Rejects message returning `⛔ Message blocked: adversarial instruction pattern detected.` to user.
+
+#### [NEW] [PromptInjectionReflexTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/reflex/PromptInjectionReflexTest.java)
+- Unit tests against numerous mock vectors and explicitly documenting False Positive boundaries.
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Introduced `arcclaw.security.prompt-injection.enabled` controls under the configuration tree, defaulted to true.
+
+## Verification
+- ✅ Tests ensure `PromptInjectionReflex` shortcircuits before `PiiScanReflex`.
+- ✅ Regex boundary analysis correctly isolates edge cases (e.g. `ignore your previous instructions`).
+- ✅ Verified full `arcclaw-core` and `arcclaw-app` test suites with passing `mvn clean test` execution.
+

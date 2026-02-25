@@ -406,3 +406,15 @@
 - [x] Step 6: Add application.yaml properties for API keys and allowlists
 - [x] Step 7: Fix JAX-RS endpoint test failures due to missing authentication headers
 - [x] Step 8: Verify build success and test passes
+
+---
+
+## Phase 33 — Prompt Injection & Adversarial Defense
+- [x] Step 1: Update `AgentReflex` execute signature to accept raw `input`
+- [x] Step 2: Implement 15 injection vectors inside `PromptInjectionReflex.java` with 4 categorical tags
+- [x] Step 3: Update `ReflexRegistry` and implementors (`PiiScanReflex`, `HaltReflex`, etc.)
+- [x] Step 4: Write comprehensive tests inside `PromptInjectionReflexTest` and `PromptInjectionReflexDisabledTest` due to `@TestProfile` limitations
+- [x] Step 5: Test that `PromptInjectionReflex` shortcircuits before `PiiScanReflex`
+- [x] Step 6: Update `application.yaml` with the `arcclaw.security.prompt-injection.enabled` block
+- [x] Step 7: Fix regex boundary logic to properly capture optional trailing words
+- [x] Step 8: Verify test suite and update documentation

@@ -26,7 +26,7 @@ public class ReflexRegistry {
             if (reflex.matches(input)) {
                 try {
                     // Pass 1: Command short-circuit — sanitizedInput is unused since LLM is bypassed
-                    return new ReflexResult(Optional.ofNullable(reflex.execute(sessionId, userId)), input);
+                    return new ReflexResult(Optional.ofNullable(reflex.execute(sessionId, userId, input)), input);
                 } catch (Exception e) {
                     String sanitizedInput = input.length() > 200 ? input.substring(0, 200) + "...[truncated]" : input;
                     log.errorf("[REFLEX-FAILURE] reflex=%s session=%s user=%s input=%s error=%s", 
