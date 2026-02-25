@@ -1,5 +1,6 @@
 package com.arcclaw.core.observability;
 
+import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningStep;
 
 /**
@@ -29,6 +30,10 @@ public interface AgentObserver {
     default void onStepComplete(String sessionId, String role, ReasoningStep step) {
         // no-op by default — existing implementations (GovernanceLayer,
         // AgentOtelContext) are unaffected.
+    }
+
+    default public void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result){
+        
     }
 
 }

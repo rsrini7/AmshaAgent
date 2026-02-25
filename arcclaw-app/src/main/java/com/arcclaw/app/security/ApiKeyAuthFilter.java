@@ -15,6 +15,7 @@ import io.vertx.core.http.HttpServerRequest;
 
 import java.time.Clock;
 import java.time.Instant;
+import org.jboss.logging.MDC;
 
 @Provider
 @Priority(Priorities.AUTHENTICATION)
@@ -79,6 +80,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         apiKeyRegistry.recordRequest(apiKey);
+        
+        // Push user identifier to MDC for Audit logs to pick up
+        String userId = apiKeyRegistry.getKeyName(apiKey);
+        if (userId != null) {
+            MDC.put("userId", userId);
+        }
+        
         logAudit(safeKey, path, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
     }
 

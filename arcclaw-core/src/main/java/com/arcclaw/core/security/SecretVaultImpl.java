@@ -3,6 +3,10 @@ package com.arcclaw.core.security;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import org.jboss.logging.MDC;
+
 import jakarta.transaction.Transactional;
 
 import java.util.Optional;
@@ -18,6 +22,9 @@ public class SecretVaultImpl implements SecretVault {
 
     @Inject
     EncryptedSecretRepository repository;
+
+    @Inject
+    AuditService auditService;
 
     @Override
     public void init(String sessionId) {
@@ -52,6 +59,10 @@ public class SecretVaultImpl implements SecretVault {
             entity.version = 1;
 
             repository.persist(entity);
+            
+            String userId = (String) MDC.get("userId");
+            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
+            
         } // sessionKey auto-closed (wiped) here
     }
 
@@ -64,7 +75,10 @@ public class SecretVaultImpl implements SecretVault {
 
         // 1. Fetch
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+        String userId = (String) MDC.get("userId");
+        
         if (entity == null) {
+            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE_MISS, "keyName=" + keyName);
             return Optional.empty();
         }
 
@@ -72,6 +86,7 @@ public class SecretVaultImpl implements SecretVault {
         try (VaultKey sessionKey = keyDerivation.deriveSessionKey(sessionId)) {
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
+            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
             // Log security event?

@@ -429,3 +429,23 @@
 - [x] Step 5: Fix T-4 truncated comment in `AgentTool.java`
 - [x] Step 6: Verify full build suite (`mvn clean verify`)
 - [x] Step 7: Update system documentation (PLAN, TASKS, TROUBLESHOOTING)
+
+---
+
+## Phase 35 — Immutable Audit Log (WORM)
+- [x] Create `AuditEvent` JPA Entity (id, sessionId, userId, eventType, hmacFields, etc.)
+- [x] Implement `AuditEventRepository` (HMAC chain generation, findLatestHash)
+- [x] Create `AuditService` API for loop-level and security-level events
+- [x] Implement `AuditVerifier` (Chain validator)
+- [x] Create `AuditSchemaEnforcer` (SQLite triggers `prevent_audit_update/delete`)
+- [x] Wire `AuditService` into:
+  - [x] `ToolRegistry` (INVOKED/BLOCKED)
+  - [x] `ReflexRegistry` (PROMPT_INJECTION/PII/APPROVAL)
+  - [x] `SecretVaultImpl` (STORE/RETRIEVE)
+  - [x] `StatefulAgentStoreImpl` (CHECKPOINT)
+  - [x] `AgentLoop` (Loop completion)
+  - [x] `TelegramAgentHandler` (LIFECYCLE)
+  - [x] `ApiKeyAuthFilter` (AUTH)
+- [x] Create `AuditResource` REST API (`GET /api/v1/audit/verify`)
+- [x] Add monotonic `sequence` field for millisecond-safe HMAC chaining
+- [x] Verify: All 4 audit test suites pass

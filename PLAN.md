@@ -1446,4 +1446,64 @@ Harden the tool invocation pipeline by implementing strict parameter schemas and
 - ✅ Verified `GithubTool` schema correctly populates in AI requests (simulated).
 - ✅ Verified `coder`/`Brahma` persona receives zero tool specifications.
 
+---
 
+# Phase 35 — Immutable Audit Log (WORM) ✅
+
+Implement a Write-Once-Read-Many (WORM) audit logging system with HMAC chaining for tamper detection and SQLite trigger enforcement.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **HMAC Chaining**: Each audit record contains `hmacHash = HMAC(prevHash | currentPayload)`. Validating a session's audit trail requires recomputing the chain from genesis. Any modification or deletion of a middle row invalidates all subsequent hashes.
+
+> [!CAUTION]
+> **Transaction Isolation**: `AuditService.record()` uses `@Transactional(REQUIRED)` (joining the caller's transaction) to ensure audit rows are only committed if the business operation succeeds. `REQUIRES_NEW` was avoided to prevent JDBC connection pool deadlock in single-connection SQLite environments.
+
+> [!NOTE]
+> **Sequence Ordering**: Uses a monotonic `sequence` field per session to guarantee deterministic chain ordering even when multiple events occur in the same millisecond.
+
+## Completed Changes
+
+### Core Module — Audit Infrastructure
+
+#### [NEW] [AuditEvent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEvent.java)
+- JPA Entity with `hmacHash`, `prevHash`, and `sequence`.
+- Immutable schema via Hibernate `updatable = false` annotations.
+
+#### [NEW] [AuditEventRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEventRepository.java)
+- Manages HMAC computation and sequence assignment during `record()`.
+- Provides `findLatestHash()` for chain continuation.
+
+#### [NEW] [AuditService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditService.java)
+- High-level orchestrator for recording loop events and security events.
+
+#### [NEW] [AuditVerifier.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditVerifier.java)
+- Cryptographic validator that recomputes chains and detects tampering.
+
+#### [NEW] [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java)
+- Installs SQLite `BEFORE UPDATE` and `BEFORE DELETE` triggers on `audit_event` to prevent modification.
+
+### Subsystem Integration
+
+#### [MODIFY] Wired audit hooks into:
+- `ToolRegistry`: `TOOL_INVOKED`, `TOOL_BLOCKED`
+- `ReflexRegistry`: `PROMPT_INJECTION_BLOCKED`, `PII_SCAN_REDACTED`, `APPROVAL_GRANTED`, etc.
+- `SecretVaultImpl`: `VAULT_STORE`, `VAULT_RETRIEVE`, `VAULT_RETRIEVE_MISS`
+- `StatefulAgentStoreImpl`: `CHECKPOINT_CREATED`, `CHECKPOINT_COMPLETED`, `CHECKPOINT_FAILED`
+- `AgentLoop`: Loop completion (tokens, cost, outcome)
+- `TelegramAgentHandler`: `SESSION_STARTED`, `SESSION_TERMINATED`
+- `ApiKeyAuthFilter`: `API_AUTH_SUCCESS`, `API_AUTH_FAILURE`
+
+## Verification
+
+- ✅ `AuditEventRepositoryTest`: HMAC chaining and sequence ordering.
+- ✅ `AuditObserverTest`: Agent loop integration.
+- ✅ `AuditVerifierTest`: Tamper detection (breaks chain on manipulated rows).
+- ✅ `AuditServiceIntegrationTest`: Cross-subsystem audit trigger verification.
+- ✅ Manual SQLite trigger testing: `UPDATE audit_event SET ...` fails with SQLITE_ERROR.
+
+---
+
+# Phase 36 — [Upcoming Feature] 🚧
+- [ ] Placeholder for next development cycle.

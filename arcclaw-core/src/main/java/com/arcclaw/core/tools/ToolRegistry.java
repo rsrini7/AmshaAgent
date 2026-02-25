@@ -11,7 +11,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +54,9 @@ public class ToolRegistry {
 
     @Inject
     ProcessIsolationExecutor isolationExecutor;
+
+    @Inject
+    AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -127,6 +133,12 @@ public class ToolRegistry {
 
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
+            
+            String userId = (String) MDC.get("userId");
+            String agentRole = (String) MDC.get("agentRole");
+            auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+                SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
+
             throw new SecurityException(
                     "Operation " + requiredOp + " not permitted at autonomy level " + level);
         }
@@ -145,6 +157,12 @@ public class ToolRegistry {
 
                 String output = isolationExecutor.executeSandboxed(
                         workspaceContext.getSessionId(), workspaceRoot, command, requiredSecrets);
+                
+                String userId = (String) MDC.get("userId");
+                String agentRole = (String) MDC.get("agentRole");
+                auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+                    SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
+                    
                 return ToolResponse.success(output);
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
@@ -155,7 +173,14 @@ public class ToolRegistry {
         }
 
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
-        return tool.execute(params);
+        ToolResponse response = tool.execute(params);
+        
+        String userId = (String) MDC.get("userId");
+        String agentRole = (String) MDC.get("agentRole");
+        auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+            SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
+            
+        return response;
     }
 
     /**

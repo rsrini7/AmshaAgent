@@ -51,8 +51,11 @@ quarkus:
     packages:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
+      - com.arcclaw.core.audit
     log:
       sql: false
+    schema-management:
+      halt-on-error: false 
 
   # ---------------------------------------------------------------------------
   # LANGCHAIN4J
@@ -63,6 +66,9 @@ quarkus:
     ollama:
       chat-model:
         enabled: false
+    groq:
+      timeout: 30s          # increase from default 10s
+      max-retries: 2        # retry on transient SSL/network failures
     openai:
       # Ollama provides native OpenAI compatibility on /v1
       # base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
@@ -180,6 +186,8 @@ quarkus:
         level: WARN       # ← suppress all sqlite-jdbc debug output
       "java.lang":
         level: WARN
+      "org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase":
+        level: ERROR   # suppress WARN → only show actual errors
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
@@ -234,6 +242,9 @@ arcclaw:
     session-ttl-minutes: 30
     gc-interval: "5m"
     heartbeat-interval: "60s"
+
+  audit:
+    hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 
   governance:
     token-limit: 100000
@@ -355,10 +366,15 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite::memory:"
+    hibernate-orm:
+      database:
+        generation: update
   arcclaw:
     security:
       prompt-injection:
         enabled: true
+    audit:
+      hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 
     channel:
       telegram:

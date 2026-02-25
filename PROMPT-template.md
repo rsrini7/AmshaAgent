@@ -43,6 +43,8 @@ Prior Phases Completed (DO NOT re-suggest or re-implement):
     sliding window rate limiter, ClockProducer for CDI Clock injection
     TelegramAllowlistGuard — null username safe, @ prefix stripping,
     case-insensitive, empty allowlist = open access
+- Phase 33 — Prompt Injection & Adversarial Defense
+- Phase 34 — Tool Schema & Agent Tooling
 
 ### Live Jailbreak Test — PASSED ✅
 - Attack: social engineering to execute Go HTTP scanner via Telegram
@@ -58,9 +60,36 @@ Prior Phases Completed (DO NOT re-suggest or re-implement):
 ## Known Architecture Nuances (ALWAYS apply these)
 1. SystemMessages are NEVER stored in SQLite Chat
 
+### Constraints:
+- SQLite backend (same WAL db) — no new infrastructure
+- Append-only: no UPDATE or DELETE on audit rows, enforced via
+  SQLite trigger (CREATE TRIGGER prevent_audit_update ...) in schema migration
+- HMAC-SHA256 chain: each row stores HMAC of (prev_row_hash || event_payload)
+  using a per-deployment secret key — enables tamper detection across the chain
+- CDI @ApplicationScoped AuditLogger bean — injected wherever events fire
+- Panache entity: AuditEvent (id, sessionId, eventType enum, payload JSON,
+  hmacHash, prevHash, createdAt — immutable, no setters)
+- AuditEventType enum: TOOL_INVOKED, APPROVAL_GRANTED, APPROVAL_DENIED,
+  BUDGET_CAP_HIT, INJECTION_BLOCKED, PII_REDACTED, SECRET_ACCESSED,
+  CHECKPOINT_TRANSITION, REFLEX_FIRED
+- prevHash bootstraps from SHA-256("GENESIS") on first row
+- AuditVerifier service: verifyChain(sessionId) — walks rows in createdAt order,
+  recomputes HMAC, returns VerificationResult(valid, brokenAtId, totalRows)
+- REST endpoint: GET /audit/{sessionId} (ApiKeyAuthFilter protected)
+  GET /audit/{sessionId}/verify
+- AuditService.record() MUST swallow all exceptions — it must never crash the calling component
+- Never store raw secrets, plaintext, PII, or full user input — hash or truncate always
+- All new injections use @Inject AuditService — no constructor injection needed
+- SecretVaultImpl is @Dependent scope — AuditService injection works fine there
+- ReflexRegistry does not currently have direct access to userId at the reflex level — 
+  pass it through from processIfReflex() which already receives userId as a parameter
+
+### Testing requirements:
+
+
 ## Once all done, review update below md files based on the ask and implementation
 
-TROUBLESHOOTING.md
-PLAN.md
-TASKS.md
-WALKTHROUGH.md
+TROUBLESHOOTING.md — add Phase X troubleshooting section
+PLAN.md — mark Phase X complete, add Phase 36 placeholder
+TASKS.md — tick off Phase X tasks
+WALKTHROUGH.md — add Phase X architecture walkthrough

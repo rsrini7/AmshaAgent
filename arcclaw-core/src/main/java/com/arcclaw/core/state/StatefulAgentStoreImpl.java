@@ -9,6 +9,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +41,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Inject
     EntityManager em;
 
+    @Inject
+    AuditService auditService;
+
     @Override
     @Transactional
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
@@ -60,6 +66,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.stateJson = json;
             checkpoint.status = CheckpointStatus.IN_PROGRESS;
             em.persist(checkpoint);
+            
+            String userId = (String) MDC.get("userId");
+            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
+            
             log.infof("Created checkpoint for session=%s, role=%s", sessionId, agentRole);
         }
 
@@ -105,6 +115,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.failedAt = Instant.now();
             checkpoint.failReason = reason;
             em.merge(checkpoint);
+            
+            String userId = (String) MDC.get("userId");
+            auditService.record(checkpoint.sessionId, userId, checkpoint.agentRole, SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
+            
             log.warnf("Checkpoint id=%d marked FAILED: %s", checkpointId, reason);
         }
     }
@@ -116,6 +130,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         if (checkpoint != null) {
             checkpoint.status = CheckpointStatus.COMPLETED;
             em.merge(checkpoint);
+            
+            String userId = (String) MDC.get("userId");
+            auditService.record(checkpoint.sessionId, userId, checkpoint.agentRole, SecurityEventType.CHECKPOINT_COMPLETED, null);
+            
             log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
         }
     }
