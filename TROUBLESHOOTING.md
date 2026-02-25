@@ -48,6 +48,9 @@
 | **Security** | Silent Credential Failure | Annotation moved from `execute()` to `sandboxCommand()`. | Refactored `extractRequiredSecrets` to accept a `methodName` parameter. |
 | **Sandbox** | Zombie Containers | JVM `SIGTERM` didn't signal the Podman process. | Verify the `@PreDestroy` method in `ProcessIsolationExecutor` is calling `podman stop`. |
 | **Native** | Predictable Nonces | BC initialized at build-time instead of run-time. | Verify fine-grained `native-image.properties` flags are correctly applied. |
+| **Build** | Split-Package Error | Tests in `arcclaw-app` sharing same package as `arcclaw-core`. | Moved all core-related tests to `arcclaw-core/src/test/java` and updated Maven profiles. |
+| **Observability** | Non-Mockable Tracer | OTel `Tracer` is final or provided by CDI in a way Mockito dislikes. | Use standalone `@Alternative` + `@Priority` pattern to provide a mock Tracer bean in test profiles. |
+| **Observability** | Disconnected Spans | Child spans not linked to session root. | Use `Context.current().with(parentSpan)` explicitly when creating child spans. |
 
 ---
 

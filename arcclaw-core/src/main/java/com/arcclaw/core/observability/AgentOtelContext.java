@@ -2,11 +2,13 @@ package com.arcclaw.core.observability;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * OTel session-level span management.
@@ -22,6 +24,8 @@ public class AgentOtelContext implements AgentObserver {
 
     private final ConcurrentHashMap<String, Span> rootSpans = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Scope> rootScopes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicLong> totalInputTokens = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicLong> totalOutputTokens = new ConcurrentHashMap<>();
 
     /**
      * Start a session-level root span.
@@ -52,6 +56,8 @@ public class AgentOtelContext implements AgentObserver {
         if (scope != null) {
             scope.close();
         }
+        totalInputTokens.remove(sessionId);
+        totalOutputTokens.remove(sessionId);
     }
 
     /**
@@ -62,15 +68,27 @@ public class AgentOtelContext implements AgentObserver {
      * @return The child {@link Span}.
      */
     public Span childSpan(String sessionId, String operationName) {
-        return tracer.spanBuilder(operationName).startSpan();
+        Span parent = rootSpans.get(sessionId);
+        Context parentContext = parent != null
+                ? Context.current().with(parent)
+                : Context.current();
+        return tracer.spanBuilder(operationName)
+                .setParent(parentContext)
+                .startSpan();
     }
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
         Span rootSpan = rootSpans.get(sessionId);
         if (rootSpan != null) {
-            rootSpan.setAttribute("llm.usage.prompt_tokens", inputTokens);
-            rootSpan.setAttribute("llm.usage.completion_tokens", outputTokens);
+            long totalIn = totalInputTokens
+                    .computeIfAbsent(sessionId, k -> new AtomicLong(0))
+                    .addAndGet(inputTokens);
+            long totalOut = totalOutputTokens
+                    .computeIfAbsent(sessionId, k -> new AtomicLong(0))
+                    .addAndGet(outputTokens);
+            rootSpan.setAttribute("llm.usage.prompt_tokens", totalIn);
+            rootSpan.setAttribute("llm.usage.completion_tokens", totalOut);
         }
     }
 }

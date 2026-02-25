@@ -14,7 +14,6 @@ import org.jboss.logging.Logger;
 import io.vertx.core.http.HttpServerRequest;
 
 import java.time.Clock;
-import java.time.Instant;
 import org.jboss.logging.MDC;
 
 @Provider

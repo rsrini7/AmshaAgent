@@ -210,4 +210,38 @@ class WorkspaceManagerTest {
             WorkspaceScopeHolder.clear();
         }
     }
+    /**
+     * Test 5: Zombie Recovery for AWAITING_APPROVAL.
+     */
+    @Test
+    @Transactional
+    void testZombieRecoveryMarksAwaitingApprovalAsFailed() {
+        String sessionId = "zombie-approval-1";
+        WorkspaceScopeHolder.set(sessionId);
+        try {
+            var steps = List.of(new ReasoningStep("thought", "action", Map.of(), null, 0, 0));
+            var cp = agentStore.save(sessionId, "coordinator", steps);
+
+            // Manually set to AWAITING_APPROVAL
+            cp.status = CheckpointStatus.AWAITING_APPROVAL;
+            em.merge(cp);
+            em.flush();
+        } finally {
+            WorkspaceScopeHolder.clear();
+        }
+
+        // Act
+        workspaceManager.onStartup(null);
+
+        // Assert
+        WorkspaceScopeHolder.set(sessionId);
+        try {
+            var loaded = agentStore.load(sessionId, "coordinator");
+            assertTrue(loaded.isPresent());
+            assertEquals(CheckpointStatus.FAILED, loaded.get().status);
+            assertTrue(loaded.get().failReason.contains("approval was pending at shutdown"));
+        } finally {
+            WorkspaceScopeHolder.clear();
+        }
+    }
 }

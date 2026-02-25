@@ -1505,5 +1505,42 @@ Implement a Write-Once-Read-Many (WORM) audit logging system with HMAC chaining 
 
 ---
 
-# Phase 36 — [Upcoming Feature] 🚧
-- [ ] Placeholder for next development cycle.
+# Phase 36 — OTel Fixes, REST HITL, Zombie Recovery & Scope Audit ✅
+
+Hardened the observability pipeline, added Human-in-the-Loop (HITL) redundancy via REST, and improved session recovery resilience.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Token Tracking Strategy**: LLM tokens are now tracked cumulatively across a session using `ConcurrentHashMap<String, AtomicLong>` in `AgentOtelContext`. This ensures that even if an agent loop spans multiple turns, the total cost is accurately reflected in the trace attributes.
+
+> [!NOTE]
+> **Context-Aware Child Spans**: Tools and Reflexes now explicitly use `Context.current().with(parentSpan)` to ensure they are nested correctly under the session root span, fixing disconnected traces in Jaeger.
+
+> [!TIP]
+> **Zombie Recovery Expansion**: Extended `WorkspaceManager.onStartup()` to query for both `IN_PROGRESS` and `AWAITING_APPROVAL` checkpoints. This ensures that sessions orphaned by a crash while waiting for a human are correctly cleaned up.
+
+## Completed Changes
+
+### Observability
+#### [MODIFY] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Cumulative token tracking via `ConcurrentHashMap`.
+- Correct span parenting for nested operations.
+
+### API & Governance
+#### [MODIFY] [AgentResource.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResource.java)
+- Added `/approve` and `/deny` endpoints for HITL redundancy.
+- Enforced `WorkspaceScopeHolder` safety in new endpoints.
+
+### Lifecycle
+#### [MODIFY] [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Extended startup recovery logic for `AWAITING_APPROVAL` status.
+
+## Verification
+
+- ✅ `mvn clean verify "-Dquarkus.test.profile=test" -am -pl arcclaw-app,arcclaw-core` passes (71/71 tests).
+- ✅ Verified `AgentOtelContextTest` cumulative behavior.
+- ✅ Verified `AgentResourceTest` for new REST endpoints.
+- ✅ Verified `WorkspaceManagerTest` for zombie recovery.
+
+---

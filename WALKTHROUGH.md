@@ -769,3 +769,29 @@ The `AuditService` is wired into 7 critical subsystems to provide a full transpa
 - ✅ `AuditVerifierTest` (Tamper detection validated)
 - ✅ `AuditServiceIntegrationTest` (Subsystem wiring validated)
 
+---
+
+## Phase 36: OTel Fixes, REST HITL, Zombie Recovery & Scope Audit ✅
+
+Hardened the observability pipeline, added Human-in-the-Loop (HITL) redundancy via REST, and improved session recovery resilience.
+
+### 1. OpenTelemetry Precision
+Fixed two critical bugs in the OTel providers:
+- **Token Accumulation**: LLM tokens are now tracked cumulatively across a session using `ConcurrentHashMap<String, AtomicLong>`, ensuring accurate cost reporting in long-running loops.
+- **Span Parenting**: Child spans (Tools/Reflexes) are now explicitly parented to the session root span via `Context.current().with(parent)`, ensuring correct trace visualization in Jaeger.
+
+### 2. REST HITL Endpoints
+Added dedicated endpoints for external approval/denial of agent actions, providing a redundancy path for the Telegram channel:
+- `POST /api/v1/sessions/{id}/approve`: Resumes a blocked agent loop.
+- `POST /api/v1/sessions/{id}/deny`: Finalizes the session as failed.
+- **Security**: Both endpoints enforce `WorkspaceScopeHolder` isolation and are protected by the `ApiKeyAuthFilter`.
+
+### 3. Zombie Recovery Evolution
+Extended `WorkspaceManager.onStartup()` to recover sessions stuck in `AWAITING_APPROVAL`. If the JVM crashes while an agent is waiting for a human, the recovery sweep now marks these as `FAILED` with a descriptive reason, allowing users to start fresh without manual DB intervention.
+
+### 4. Build & Test Hardening
+- **Split-Package Fix**: Resolved compilation errors by consolidating core tests into the `arcclaw-core` module, adhering to strict module-boundary constraints.
+- **OTel Mocking**: Addressed Mockito's inability to mock OTel's default `Tracer` by utilizing the standalone `@Alternative` + `@Priority` pattern for test-time overrides.
+
+**Verification**: `mvn clean verify "-Dquarkus.test.profile=test" -am -pl arcclaw-app,arcclaw-core` ✅ (71/71 tests passed)
+

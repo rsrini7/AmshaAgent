@@ -127,27 +127,50 @@ public class WorkspaceManager {
      */
     @Transactional
     public void onStartup(@Observes StartupEvent event) {
-        List<AgentCheckpoint> zombies = em.createQuery(
+        // 1. Recover IN_PROGRESS zombies
+        List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
                 .getResultList();
 
-        if (zombies.isEmpty()) {
+        if (!inProgressZombies.isEmpty()) {
+            log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
+                    inProgressZombies.size());
+            Instant now = Instant.now();
+            for (var checkpoint : inProgressZombies) {
+                checkpoint.status = CheckpointStatus.FAILED;
+                checkpoint.failedAt = now;
+                checkpoint.failReason = "JVM crash recovery — session was IN_PROGRESS at startup";
+                em.merge(checkpoint);
+                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
+                        checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+            }
+        } else {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
-            return;
         }
 
-        log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
-                zombies.size());
-        Instant now = Instant.now();
-        for (var checkpoint : zombies) {
-            checkpoint.status = CheckpointStatus.FAILED;
-            checkpoint.failedAt = now;
-            checkpoint.failReason = "JVM crash recovery — session was IN_PROGRESS at startup";
-            em.merge(checkpoint);
-            log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                    checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+        // 2. Recover AWAITING_APPROVAL zombies
+        List<AgentCheckpoint> approvalZombies = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .getResultList();
+
+        if (!approvalZombies.isEmpty()) {
+            log.warnf("Zombie recovery: found %d orphaned AWAITING_APPROVAL checkpoint(s) — marking FAILED",
+                    approvalZombies.size());
+            Instant now = Instant.now();
+            for (var checkpoint : approvalZombies) {
+                checkpoint.status = CheckpointStatus.FAILED;
+                checkpoint.failedAt = now;
+                checkpoint.failReason = "JVM crash recovery: approval was pending at shutdown";
+                em.merge(checkpoint);
+                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
+                        checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+            }
+        } else {
+            log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
         }
     }
 
