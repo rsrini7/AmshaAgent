@@ -10,6 +10,7 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -17,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.virtual.threads.VirtualThreads;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -63,6 +65,9 @@ public class AgentResource {
     @VirtualThreads
     java.util.concurrent.ExecutorService vThreads;
 
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
+
     @POST
     public Response createSession() {
         String sessionId = UUID.randomUUID().toString();
@@ -86,6 +91,10 @@ public class AgentResource {
             
             // 2. Elevate Autonomy so tools trigger RequiresApprovalException instead of hard crashing
             workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+
+            if (!devSeeder.isUnsatisfied()) {
+                devSeeder.get().seedDevSecrets();
+            }
 
             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
                     maxIterations);
@@ -144,6 +153,10 @@ public class AgentResource {
                 workspaceContext.setAutonomyLevel(
                     isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED
                 );
+
+                if (!devSeeder.isUnsatisfied()) {
+                   devSeeder.get().seedDevSecrets();
+                }
 
                 AgentResult result = agentLoop.run(sessionId, request.agentRole(),
                         request.goal(), reasoningEngine, maxIterations);

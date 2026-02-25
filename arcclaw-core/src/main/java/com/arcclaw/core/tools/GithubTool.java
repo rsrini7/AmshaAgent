@@ -47,15 +47,27 @@ public class GithubTool implements AgentTool {
         String command = (String) params.getOrDefault("command", "view");
         String target = (String) params.get("target");
 
+        // Guard: reject if target has no slash (LLM hallucinated owner)
+        if ("repo".equals(action) && target != null && !target.contains("/")) {
+            throw new IllegalArgumentException(
+                "Invalid target '" + target + "': must be 'owner/repo' format. " +
+                "Ask the user for the full owner/repo path.");
+        }
+
         List<String> cmd = new ArrayList<>();
         cmd.add("gh");
         cmd.add(action);
         cmd.add(command);
 
         if (target != null && !target.isBlank()) {
-            cmd.add(target);
+            // For "repo view" — pass as positional arg, not --repo flag
+            if ("repo".equals(action) && "view".equals(command)) {
+                cmd.add(target);
+            } else {
+                cmd.add("--repo");
+                cmd.add(target);
+            }
         }
-
         return cmd;
     }
 
