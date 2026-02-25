@@ -5,7 +5,6 @@ import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;

@@ -3,20 +3,16 @@ package com.arcclaw.core.api;
 import com.arcclaw.core.api.dto.AuditEventResponse;
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditEventRepository;
-import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditVerifier;
-import com.arcclaw.core.audit.SecurityEventType;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.time.Instant;
 import java.util.List;
 
 @Path("/api/v1/audit")
