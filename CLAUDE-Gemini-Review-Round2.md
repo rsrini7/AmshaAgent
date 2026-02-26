@@ -1,6 +1,6 @@
 Claude:
 
-Please go through my entire project end to end as a Senior Java Architect, , Security Reviewer & Senior Java Developer
+Please go through my entire project end to end as a Senior Java Architect, , Security Reviewer & Senior Java Developer. Please make sure to think like Gemini Research, Groq Search, ChatGPT Quickness do review end to end. My plan is the share your reviews with other AIs and its review with you to debate and solve. Make sure to deep dive and not just high level and only positive side. Not looking for any Constructive Feedback and Roadmap. Looking for Solid review be honest and you can give even strong feedback to make this project awesome.
 
 # ArcClaw — Full End-to-End Architectural & Security Review
 
