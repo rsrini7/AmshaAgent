@@ -74,6 +74,9 @@ public class AgentLoop {
     @Inject
     WorkspaceContext workspaceContext;
 
+    @Inject
+    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle
      * context).
@@ -138,9 +141,9 @@ public class AgentLoop {
                 // Save the reasoning steps and grab the entity ID
                 var cp = agentStore.save(sessionId, agentRole, result.steps());
                 if (result.success()) {
-                    agentStore.markCompleted(cp.id);
+                    agentStore.markCompleted(cp.getId());
                 } else {
-                    agentStore.markFailed(cp.id, result.terminationReason());
+                    agentStore.markFailed(cp.getId(), result.terminationReason());
                 }
             }
 
@@ -152,7 +155,7 @@ public class AgentLoop {
             // NEW: Ensure the database state doesn't get stuck if the loop crashes
             try {
                 agentStore.load(sessionId, agentRole).ifPresent(cp ->
-                    agentStore.markFailed(cp.id, "SYSTEM_ERROR: " + e.getMessage())
+                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + e.getMessage())
                 );
             } catch (Exception ignored) {}
 
@@ -295,12 +298,26 @@ public class AgentLoop {
                 // --- GOVERNANCE & OBSERVABILITY INTERCEPTION ---
                 if (step != null) {
                     try {
+                        // GOVERNANCE: Explicit budget check BEFORE other observers
+                        governanceLayer.recordLlmCall(
+                                WorkspaceScopeHolder.get(),
+                                step.inputTokens(),
+                                step.outputTokens());
+
                         for (var observer : observers) {
                             observer.recordLlmCall(
                                     WorkspaceScopeHolder.get(),
                                     step.inputTokens(),
                                     step.outputTokens());
                         }
+                    } catch (com.arcclaw.core.governance.BudgetWarningException bw) {
+                        log.warnf("Budget warning for session %s: %s",
+                            WorkspaceScopeHolder.get(), bw.getMessage());
+                        String warningObservation = "⚠️ BUDGET WARNING: " + bw.getMessage() +
+                            " Keep all subsequent responses to 1-2 sentences maximum.";
+                        step = step.withObservation(warningObservation);
+                        synchronized (history) { history.add(step); }
+                        // Non-terminating — continue the loop
                     } catch (com.arcclaw.core.governance.BudgetExceededException be) {
                         log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
                         String observationMessage = "System Intervention: " + be.getMessage() +
@@ -421,8 +438,8 @@ public class AgentLoop {
                 AgentCheckpoint cp = agentStore.load(WorkspaceScopeHolder.get(), agentRole)
                         .orElseGet(() -> {
                             var newCp = new AgentCheckpoint();
-                            newCp.sessionId = WorkspaceScopeHolder.get();
-                            newCp.agentRole = agentRole;
+                            newCp.setSessionId(WorkspaceScopeHolder.get());
+                            newCp.setAgentRole(agentRole);
                             return newCp;
                         });
                 cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);

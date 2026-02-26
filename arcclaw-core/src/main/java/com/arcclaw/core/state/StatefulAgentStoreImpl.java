@@ -55,16 +55,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         AgentCheckpoint checkpoint;
         if (existing.isPresent()) {
             checkpoint = existing.get();
-            checkpoint.stateJson = json;
-            checkpoint.status = CheckpointStatus.IN_PROGRESS;
+            checkpoint.setStateJson(json);
+            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint = em.merge(checkpoint);
             log.debugf("Updated checkpoint for session=%s, role=%s", sessionId, agentRole);
         } else {
             checkpoint = new AgentCheckpoint();
-            checkpoint.sessionId = sessionId;
-            checkpoint.agentRole = agentRole;
-            checkpoint.stateJson = json;
-            checkpoint.status = CheckpointStatus.IN_PROGRESS;
+            checkpoint.setSessionId(sessionId);
+            checkpoint.setAgentRole(agentRole);
+            checkpoint.setStateJson(json);
+            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             em.persist(checkpoint);
             
             String userId = (String) MDC.get("userId");
@@ -79,7 +79,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional
     public AgentCheckpoint save(AgentCheckpoint checkpoint) {
-        if (checkpoint.id == null) {
+        if (checkpoint.getId() == null) {
             em.persist(checkpoint);
             return checkpoint;
         } else {
@@ -95,13 +95,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
-        if (checkpoint.stateJson == null || checkpoint.stateJson.isBlank()) {
+        if (checkpoint.getStateJson() == null || checkpoint.getStateJson().isBlank()) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(checkpoint.stateJson, STEPS_TYPE);
+            return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize stateJson for checkpoint id=%d", checkpoint.id);
+            log.errorf(e, "Failed to deserialize stateJson for checkpoint id=%d", checkpoint.getId());
             return List.of();
         }
     }
@@ -111,13 +111,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public void markFailed(Long checkpointId, String reason) {
         AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
         if (checkpoint != null) {
-            checkpoint.status = CheckpointStatus.FAILED;
-            checkpoint.failedAt = Instant.now();
-            checkpoint.failReason = reason;
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            checkpoint.setFailedAt(Instant.now());
+            checkpoint.setFailReason(reason);
             em.merge(checkpoint);
             
             String userId = (String) MDC.get("userId");
-            auditService.record(checkpoint.sessionId, userId, checkpoint.agentRole, SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
+            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
             
             log.warnf("Checkpoint id=%d marked FAILED: %s", checkpointId, reason);
         }
@@ -128,11 +128,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public void markCompleted(Long checkpointId) {
         AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
         if (checkpoint != null) {
-            checkpoint.status = CheckpointStatus.COMPLETED;
+            checkpoint.setStatus(CheckpointStatus.COMPLETED);
             em.merge(checkpoint);
             
             String userId = (String) MDC.get("userId");
-            auditService.record(checkpoint.sessionId, userId, checkpoint.agentRole, SecurityEventType.CHECKPOINT_COMPLETED, null);
+            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_COMPLETED, null);
             
             log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
         }

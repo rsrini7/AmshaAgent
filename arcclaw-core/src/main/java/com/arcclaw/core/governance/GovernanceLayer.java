@@ -17,9 +17,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Implements hard financial limits and downgrades autonomy when exceeded.
  */
 @ApplicationScoped
-public class GovernanceLayer implements AgentObserver {
+public class GovernanceLayer {
 
     private static final Logger log = Logger.getLogger(GovernanceLayer.class);
+
+    private static final double WARNING_THRESHOLD = 0.80;
 
     private final ConcurrentHashMap<String, SessionBudget> budgets = new ConcurrentHashMap<>();
 
@@ -32,7 +34,8 @@ public class GovernanceLayer implements AgentObserver {
     @ConfigProperty(name = "arcclaw.governance.budget-usd", defaultValue = "10.00")
     double budgetUsd;
 
-    @Override
+    // The recordLlmCall method is now a public method of GovernanceLayer,
+    // to be called directly by AgentLoop or other components.
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
         if (sessionId == null) {
             return;
@@ -45,15 +48,29 @@ public class GovernanceLayer implements AgentObserver {
         budget.output.addAndGet(outputTokens);
         budget.addCost(cost);
 
-        log.debugf("Recorded LLM call for session %s: in=%d, out=%d, cost=$%.6f, total=$%.4f",
-                sessionId, inputTokens, outputTokens, cost, budget.getTotalCost());
+        double currentCost = budget.getTotalCost();
 
-        if (budget.getTotalCost() > budgetUsd) {
+        log.debugf("Recorded LLM call for session %s: in=%d, out=%d, cost=$%.6f, total=$%.4f",
+                sessionId, inputTokens, outputTokens, cost, currentCost);
+
+        // 1. SOFT WARNING FIRST
+        if (!budget.warningSent && currentCost >= budgetUsd * WARNING_THRESHOLD) {
+            budget.warningSent = true;
+            log.warnf("Session %s approaching budget limit: $%.4f / $%.2f (%.0f%%)",
+                sessionId, currentCost, budgetUsd,
+                (currentCost / budgetUsd) * 100);
+            throw new BudgetWarningException(String.format(
+                "Session budget is %.0f%% consumed ($%.4f of $%.2f). " +
+                "Responses will be concise to conserve budget.",
+                (currentCost / budgetUsd) * 100, currentCost, budgetUsd));
+        }
+
+        // 2. HARD LIMIT SECOND
+        if (currentCost > budgetUsd) {
             log.warnf("Session %s EXCEEDED budget ($%.2f > $%.2f). Downgrading to READ_ONLY.",
                     sessionId, budget.getTotalCost(), budgetUsd);
 
             downgradeAutonomy();
-
             throw new BudgetExceededException(
                     String.format("Session budget of $%.2f exceeded. Total cost: $%.4f", budgetUsd,
                             budget.getTotalCost()));
@@ -93,6 +110,20 @@ public class GovernanceLayer implements AgentObserver {
         return budget != null ? budget.getTotalCost() : 0.0;
     }
 
+    public double getBudgetUsd() { 
+        return budgetUsd; 
+    }
+
+    public int getSessionInputTokens(String sessionId) {
+        SessionBudget b = budgets.get(sessionId);
+        return b != null ? b.input.get() : 0;
+    }
+
+    public int getSessionOutputTokens(String sessionId) {
+        SessionBudget b = budgets.get(sessionId);
+        return b != null ? b.output.get() : 0;
+    }
+
     /**
      * Internal state representation of a session's budget.
      * Uses AtomicIntegers for tokens, and synchronized `addCost` for doubles
@@ -101,6 +132,7 @@ public class GovernanceLayer implements AgentObserver {
     private static final class SessionBudget {
         final AtomicInteger input = new AtomicInteger(0);
         final AtomicInteger output = new AtomicInteger(0);
+        volatile boolean warningSent = false;
 
         private double totalCost = 0.0;
 

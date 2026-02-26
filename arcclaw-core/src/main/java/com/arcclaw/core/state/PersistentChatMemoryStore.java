@@ -29,6 +29,22 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     private static final Logger log = Logger.getLogger(PersistentChatMemoryStore.class);
 
+    private static final java.util.regex.Pattern COMPLIANCE_INJECTION_PATTERN =
+        java.util.regex.Pattern.compile(
+            "(?i)(as per our agreement|" +
+            "as per your request[,]? i will provide|" +
+            "i'?ll provide .{0,30} instead of|" +
+            "i'?ll give .{0,30} equivalent|" +
+            "i cannot provide information on|" +
+            "i will not (answer|write|discuss|provide).{0,40}questions|" +
+            "going forward i will only)"
+        );
+
+    private boolean isComplianceInjection(ChatMessage msg) {
+        if (!(msg instanceof dev.langchain4j.data.message.AiMessage)) return false;
+        return COMPLIANCE_INJECTION_PATTERN.matcher(msg.toString()).find();
+    }
+
     @Inject
     EntityManager em;
 
@@ -82,10 +98,20 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     @Override
     @Transactional
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
-        String json = ChatMessageSerializer.messagesToJson(messages);
+        String sessionId = String.valueOf(memoryId);
+        List<ChatMessage> sanitized = messages.stream()
+            .filter(msg -> !isComplianceInjection(msg))
+            .collect(java.util.stream.Collectors.toList());
+
+        if (sanitized.size() < messages.size()) {
+            log.warnf("Filtered %d compliance injection AiMessage(s) from session %s",
+                messages.size() - sanitized.size(), sessionId);
+        }
+
+        String json = ChatMessageSerializer.messagesToJson(sanitized);
 
         // Use merge to either insert or update the record
-        em.merge(new ChatMemoryEntity(memoryId.toString(), json));
+        em.merge(new ChatMemoryEntity(sessionId, json));
     }
 
     @Override

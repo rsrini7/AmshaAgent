@@ -1,9 +1,14 @@
 package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.regex.Pattern;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -18,9 +23,15 @@ public class ResetReflex implements AgentReflex {
     @Inject
     ChatMemoryStore chatMemoryStore;
 
+    @Inject
+    CompactionSummaryRepository compactionSummaryRepository;
+
+    private static final Pattern MATCHES_PATTERN = 
+    Pattern.compile("(?i)^(/reset|clear\\s+(my\\s+)?history|reset\\s+(my\\s+)?history)$");
+
     @Override
     public boolean matches(String input) {
-        return input != null && input.trim().equalsIgnoreCase("/reset");
+        return input != null && MATCHES_PATTERN.matcher(input.trim()).matches();
     }
 
     @Override
@@ -33,7 +44,10 @@ public class ResetReflex implements AgentReflex {
         // 2. Wipe persistent chat memory from SQLite so context poisoning is cleared
         chatMemoryStore.deleteMessages(sessionId);
 
-        log.infof("[ResetReflex] Session %s fully reset — workspace and chat memory cleared", sessionId);
-        return "🧹 Session wiped. Memory and tool states cleared. Ready for a new task.";
+        // 3. NEW: Wipe the compaction ghost memory
+        compactionSummaryRepository.deleteBySessionId(sessionId);
+
+        log.infof("[ResetReflex] Session %s fully reset — workspace, chat memory, and compacted memory cleared", sessionId);
+        return "🧹 Conversation history, memory, and tool states have been completely wiped. We are starting fresh.";
     }
 }

@@ -141,9 +141,9 @@ public class AgentResource {
 
                 if (isDeny) {
                     agentStore.load(sessionId, request.agentRole()).ifPresent(cp -> {
-                        cp.status     = CheckpointStatus.FAILED;
-                        cp.failedAt   = Instant.now();
-                        cp.failReason = "Human denied tool execution via REST.";
+                        cp.setStatus(CheckpointStatus.FAILED);
+                        cp.setFailedAt(Instant.now());
+                        cp.setFailReason("Human denied tool execution via REST.");
                         agentStore.save(cp);
                     });
                     response.resume(Response.ok()
@@ -213,11 +213,11 @@ public class AgentResource {
                         List<ReasoningStep> steps = List.of();
                         
                         // 2. Safely check if stateJson actually contains data before parsing
-                        if (cp.stateJson != null && !cp.stateJson.isBlank()) {
-                            steps = objectMapper.readValue(cp.stateJson, new TypeReference<List<ReasoningStep>>() {});
+                        if (cp.getStateJson() != null && !cp.getStateJson().isBlank()) {
+                            steps = objectMapper.readValue(cp.getStateJson(), new TypeReference<List<ReasoningStep>>() {});
                         }
                         
-                        return Response.ok(new SessionStatusResponse(sessionId, cp.status.name(), steps, cp.failReason)).build();
+                        return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                     } catch (Exception e) {
                         log.errorf("Failed to parse stateJson for session %s: %s", sessionId, e.getMessage(), e);
                         return Response.serverError().entity(e.getMessage()).build();
@@ -245,7 +245,7 @@ public class AgentResource {
             workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
 
             var checkpoint = agentStore.load(sessionId, agentRole);
-            if (checkpoint.isEmpty() || checkpoint.get().status != CheckpointStatus.AWAITING_APPROVAL) {
+            if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
                 return Response.status(Response.Status.CONFLICT)
                         .entity(Map.of("error", "No pending approval for this session"))
                         .build();
@@ -272,14 +272,14 @@ public class AgentResource {
         try {
             WorkspaceScopeHolder.set(sessionId);
             var checkpoint = agentStore.load(sessionId, agentRole);
-            if (checkpoint.isEmpty() || checkpoint.get().status != CheckpointStatus.AWAITING_APPROVAL) {
+            if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
                 return Response.status(Response.Status.CONFLICT)
                         .entity(Map.of("error", "No pending approval for this session"))
                         .build();
             }
 
             MDC.put("userId", "rest:deny");
-            agentStore.markFailed(checkpoint.get().id, "Human denied via REST");
+            agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
             workspaceManager.removeHeartbeat(sessionId);
             return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
         } catch (Exception e) {

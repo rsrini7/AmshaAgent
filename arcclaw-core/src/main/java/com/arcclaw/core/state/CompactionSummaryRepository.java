@@ -14,7 +14,7 @@ public class CompactionSummaryRepository {
     EntityManager em;
 
     @Transactional
-    public Optional<CompactionSummaryEntity> findBySessionId(String sessionId) {
+    public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {
         CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
         return Optional.ofNullable(entity);
     }
@@ -30,6 +30,14 @@ public class CompactionSummaryRepository {
         } else {
             CompactionSummaryEntity newEntity = new CompactionSummaryEntity(sessionId, summaryText, Instant.now(), compactedCount);
             em.persist(newEntity);
+        }
+    }
+
+    @Transactional
+    public void deleteBySessionId(String sessionId) {
+        CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
+        if (entity != null) {
+            em.remove(entity);
         }
     }
 }

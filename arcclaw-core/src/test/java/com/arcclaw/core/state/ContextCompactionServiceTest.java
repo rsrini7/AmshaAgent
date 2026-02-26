@@ -1,7 +1,6 @@
 package com.arcclaw.core.state;
 
 import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -69,7 +68,7 @@ class ContextCompactionServiceTest {
         }
         
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
-        when(mockRepo.findBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.from("New Summary Text"))
                 .build());

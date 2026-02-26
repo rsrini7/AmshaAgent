@@ -8,6 +8,8 @@ import org.jboss.logging.Logger;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class IntentClassifierService {
@@ -20,6 +22,13 @@ public class IntentClassifierService {
     org.eclipse.microprofile.context.ManagedExecutor managedExecutor;
 
     private static final Logger Log = Logger.getLogger(IntentClassifierService.class);
+
+    private static final Set<String> TOOL_CAPABLE_ROLES =
+        Set.of("coordinator", "researcher", "saraswati");
+
+    private static final Pattern DESTRUCTIVE_PATTERN = Pattern.compile(
+        "(?i)\\b(delete|purge|drop|rm\\s*-rf|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+    );
 
     private static final String CLASSIFIER_PROMPT = """
             You are a router. Classify the following user message into exactly
@@ -47,7 +56,8 @@ public class IntentClassifierService {
             return CompletableFuture.supplyAsync(() -> {
                 String raw = classifierModel.chat(
                         CLASSIFIER_PROMPT.formatted(userMessage));
-                return sanitize(raw.trim().toLowerCase());
+                String sanitizedRole = sanitize(raw.trim().toLowerCase());
+                return applyDestructiveSafetyOverride(sanitizedRole, userMessage);
             }, managedExecutor).get(3, TimeUnit.SECONDS);
         } catch (Exception e) {
             Log.warnf("Intent classifier failed for '%s': %s — defaulting to coordinator",
@@ -55,6 +65,16 @@ public class IntentClassifierService {
                     e.getMessage());
             return "coordinator";
         }
+    }
+
+    private String applyDestructiveSafetyOverride(String role, String userMessage) {
+        if (TOOL_CAPABLE_ROLES.contains(role) &&
+            DESTRUCTIVE_PATTERN.matcher(userMessage).find()) {
+            Log.warnf("Destructive vocabulary detected in message routed to '%s'. " +
+                "Overriding to 'coordinator' with no-tool mode.", role);
+            return "coordinator";
+        }
+        return role;
     }
 
     private String sanitize(String raw) {

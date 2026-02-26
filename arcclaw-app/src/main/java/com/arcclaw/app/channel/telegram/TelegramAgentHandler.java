@@ -148,8 +148,8 @@ public class TelegramAgentHandler {
                     if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                         log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r);
                         cp.setStatus(CheckpointStatus.FAILED);
-                        cp.failReason = "User interrupted with a new message. Tool execution aborted.";
-                        cp.stateJson = "[]"; // Wipe the tool state
+                        cp.setFailReason("User interrupted with a new message. Tool execution aborted.");
+                        cp.setStateJson("[]"); // Wipe the tool state
                         statefulAgentStore.save(cp);
                     }
                 });
@@ -166,8 +166,8 @@ public class TelegramAgentHandler {
                     log.infof("Resetting ReAct state for session %s (%s) to start fresh goal.", baseId, cp.getStatus());
                     // 1. We keep the ChatMemory (DO NOT call terminateSession)
                     // 2. We just wipe the internal JSON tool-call array
-                    cp.stateJson = "[]";
-                    cp.failReason = null;
+                    cp.setStateJson("[]");
+                    cp.setFailReason(null);
                     cp.setStatus(CheckpointStatus.IN_PROGRESS);
                     statefulAgentStore.save(cp);
                 }

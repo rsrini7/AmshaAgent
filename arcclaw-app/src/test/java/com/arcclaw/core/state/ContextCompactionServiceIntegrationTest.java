@@ -83,7 +83,7 @@ class ContextCompactionServiceIntegrationTest {
         List<ChatMessage> kept = chatMemoryStore.getMessages(TEST_SESSION_ID);
         assertEquals(2, kept.size(), "Should keep exactly keep-recent=2 messages");
         
-        var summaryOpt = summaryRepository.findBySessionId(TEST_SESSION_ID);
+        var summaryOpt = summaryRepository.findLatestBySessionId(TEST_SESSION_ID);
         assertTrue(summaryOpt.isPresent());
         assertEquals("Prior session: user asked about X...", summaryOpt.get().summary);
         assertEquals(2, summaryOpt.get().messagesCompacted);

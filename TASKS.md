@@ -504,4 +504,27 @@
 - [x] Hardening: Update `ChatLanguageModel` to object-oriented API (`UserMessage`)
 - [x] Hardening: Standardize Groq config keys to MicroProfile dot-notation
 
+# Phase 40 — Antigravity (Security & Budget) ✅
+- [x] Implement destructive command override in `IntentClassifierService`
+- [x] Create `BudgetWarningException` and integrate with `GovernanceLayer`
+- [x] Update `AgentLoop` to intercept and log budget warnings
+- [x] Extend `/status` reflex with real-time token/cost/memory metrics
+- [x] Implement `/history` zero-cost reflex
+- [x] Add AiMessage compliance filter to `PersistentChatMemoryStore`
+- [x] Create `IntentClassifierServiceTest` and `HistoryReflexTest`
+- [x] Update `GovernanceLayerTest` for budget warnings
+- [x] Update `PersistentChatMemoryStoreTest` for compliance filtering
+- [x] Verify: `mvn clean verify` passes all Phase 40 checks
+
+# Phase 41: Resilience, Privacy & Observer Separation ✅
+- [x] Podman Circuit Breaker (CLOSED/OPEN/HALF_OPEN) with failure-threshold.
+- [x] AgentCheckpoint Field Privacy (Private fields + Accessors).
+- [x] AgentCheckpoint @JsonIgnore on pendingToolParametersJson.
+- [x] PII Pattern completeness (DOB, Passport-IN, GSTIN, IPv6, UPI VPA).
+- [x] PII Rule Ordering fix (GSTIN/PAN, Phone/Aadhaar overlap).
+- [x] GovernanceLayer decoupling from AgentObserver.
+- [x] AgentLoop direct budget enforcement call.
+- [x] Unit Tests: ProcessIsolationExecutorTest, AgentCheckpointTest, PiiScanReflexTest.
+- [x] Verification: `mvn clean verify` passes all Phase 41 checks.
+
 

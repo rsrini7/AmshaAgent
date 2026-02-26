@@ -50,17 +50,17 @@ class StatefulAgentStoreTest {
 
         // Save
         var checkpoint = store.save(SESSION, ROLE, steps);
-        assertNotNull(checkpoint.id, "Checkpoint should have a generated ID");
-        assertEquals(SESSION, checkpoint.sessionId);
-        assertEquals(ROLE, checkpoint.agentRole);
-        assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.status);
-        assertNotNull(checkpoint.stateJson);
-        assertNotNull(checkpoint.createdAt);
+        assertNotNull(checkpoint.getId(), "Checkpoint should have a generated ID");
+        assertEquals(SESSION, checkpoint.getSessionId());
+        assertEquals(ROLE, checkpoint.getAgentRole());
+        assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
+        assertNotNull(checkpoint.getStateJson());
+        assertNotNull(checkpoint.getCreatedAt());
 
         // Load
         var loaded = store.load(SESSION, ROLE);
         assertTrue(loaded.isPresent(), "Checkpoint should be loadable");
-        assertEquals(checkpoint.id, loaded.get().id);
+        assertEquals(checkpoint.getId(), loaded.get().getId());
 
         // Deserialize
         var deserializedSteps = store.deserializeSteps(loaded.get());
@@ -81,13 +81,13 @@ class StatefulAgentStoreTest {
                         Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
 
         var checkpoint = store.save(SESSION + "-fail", ROLE, steps);
-        store.markFailed(checkpoint.id, "LLM API timeout");
+        store.markFailed(checkpoint.getId(), "LLM API timeout");
 
         var loaded = store.load(SESSION + "-fail", ROLE);
         assertTrue(loaded.isPresent());
-        assertEquals(CheckpointStatus.FAILED, loaded.get().status);
-        assertNotNull(loaded.get().failedAt, "failedAt should be set");
-        assertEquals("LLM API timeout", loaded.get().failReason);
+        assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
+        assertNotNull(loaded.get().getFailedAt(), "failedAt should be set");
+        assertEquals("LLM API timeout", loaded.get().getFailReason());
     }
 
     /**
@@ -100,11 +100,11 @@ class StatefulAgentStoreTest {
                         Map.of("answer", "42"), "Task completed.", 0, 0));
 
         var checkpoint = store.save(SESSION + "-complete", ROLE, steps);
-        store.markCompleted(checkpoint.id);
+        store.markCompleted(checkpoint.getId());
 
         var loaded = store.load(SESSION + "-complete", ROLE);
         assertTrue(loaded.isPresent());
-        assertEquals(CheckpointStatus.COMPLETED, loaded.get().status);
+        assertEquals(CheckpointStatus.COMPLETED, loaded.get().getStatus());
     }
 
     /**
@@ -122,7 +122,7 @@ class StatefulAgentStoreTest {
         var cp1 = store.save(SESSION + "-upsert", ROLE, steps1);
         var cp2 = store.save(SESSION + "-upsert", ROLE, steps2);
 
-        assertEquals(cp1.id, cp2.id, "Upsert should update same entity, not create new");
+        assertEquals(cp1.getId(), cp2.getId(), "Upsert should update same entity, not create new");
 
         var deserialized = store.deserializeSteps(cp2);
         assertEquals(2, deserialized.size(), "Should have updated steps");

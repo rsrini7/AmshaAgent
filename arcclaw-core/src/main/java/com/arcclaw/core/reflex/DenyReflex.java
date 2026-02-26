@@ -45,7 +45,7 @@ public class DenyReflex implements AgentReflex {
             log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
             AgentCheckpoint cp = statefulAgentStore.load(sessionId, activeRole).orElseThrow();
             cp.setStatus(CheckpointStatus.FAILED);
-            cp.failReason = "Human denied the tool execution.";
+            cp.setFailReason("Human denied the tool execution.");
             statefulAgentStore.save(cp);
             return "🚫 Execution denied. The agent's task has been terminated.";
         } finally {
