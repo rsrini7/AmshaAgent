@@ -29,5 +29,8 @@ public enum SecurityEventType {
     // Checkpoint lifecycle
     CHECKPOINT_CREATED,    // new entity persisted
     CHECKPOINT_COMPLETED,  // stateful store markCompleted()
-    CHECKPOINT_FAILED      // stateful store markFailed()
+    CHECKPOINT_FAILED,     // stateful store markFailed()
+    
+    // Context memory
+    CONTEXT_COMPACTED      // session history summary created
 }

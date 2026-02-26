@@ -32,7 +32,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.slf4j.MDC;
+
+import org.jboss.logging.MDC;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Path("/sessions")
@@ -44,7 +46,7 @@ public class AgentResource {
     public record ApprovalRequest(String agentRole) {}
 
     @Inject
-    org.jboss.logging.Logger log;
+    Logger log;
 
     @Inject
     WorkspaceContext workspaceContext;

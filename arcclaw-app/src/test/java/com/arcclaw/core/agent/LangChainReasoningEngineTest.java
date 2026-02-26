@@ -18,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import java.util.Optional;
 
 import java.util.List;
 import java.util.Collections;
@@ -35,6 +37,9 @@ class LangChainReasoningEngineTest {
     @InjectMock
     ChatLanguageModel chatLanguageModel;
 
+    @InjectMock
+    CompactionSummaryRepository compactionSummaryRepository;
+
     @Test
     void testNextStepReturnsFinish() {
         // Arrange
@@ -47,9 +52,10 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
 
         // Act
-        ReasoningStep step = reasoningEngine.nextStep("coordinator", "Do something", List.of());
+        ReasoningStep step = reasoningEngine.nextStep("test-session", "coordinator", "Do something", List.of());
 
         // Assert
         assertEquals(ReasoningStep.FINISH, step.action());
@@ -75,9 +81,10 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
 
         // Act
-        ReasoningStep step = reasoningEngine.nextStep("coordinator", "Do something", List.of());
+        ReasoningStep step = reasoningEngine.nextStep("test-session", "coordinator", "Do something", List.of());
 
         // Assert
         assertEquals("github", step.action());
@@ -116,9 +123,10 @@ class LangChainReasoningEngineTest {
         // Capture the request to verify filtered messages
         org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
+        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
 
         // Act
-        reasoningEngine.nextStep("coordinator", "Actual Goal", List.of());
+        reasoningEngine.nextStep(sessionId, "coordinator", "Actual Goal", List.of());
 
         // Assert
         ChatRequest capturedRequest = requestCaptor.getValue();
@@ -154,8 +162,9 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
 
-        reasoningEngine.nextStep("coder", "Write a sort", List.of());
+        reasoningEngine.nextStep("test-session", "coder", "Write a sort", List.of());
 
         ChatRequest sent = captor.getValue();
         assertTrue(sent.toolSpecifications() == null 
@@ -173,8 +182,9 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
 
-        reasoningEngine.nextStep("debugger", "Find the NPE", List.of());
+        reasoningEngine.nextStep("test-session", "debugger", "Find the NPE", List.of());
 
         ChatRequest sent = captor.getValue();
         assertTrue(sent.toolSpecifications() == null 
@@ -195,7 +205,8 @@ class LangChainReasoningEngineTest {
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
-        reasoningEngine.nextStep("researcher", "Find Quarkus docs", List.of());
+        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        reasoningEngine.nextStep("test-session", "researcher", "Find Quarkus docs", List.of());
 
         ChatRequest sent = captor.getValue();
         assertNotNull(sent.toolSpecifications());

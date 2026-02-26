@@ -1,5 +1,7 @@
 package com.arcclaw.core.scope;
 
+import org.jboss.logging.Logger;
+
 /**
  * Thread-local holder for the current workspace session ID.
  * <p>
@@ -36,7 +38,7 @@ public final class WorkspaceScopeHolder {
 
     // TODO: Migrate to ScopedValue (JEP 506) when fully dropping JDK 21 support
     private static final ThreadLocal<String> CURRENT_SESSION = new ThreadLocal<>();
-    private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(WorkspaceScopeHolder.class);
+    private static final Logger LOG = Logger.getLogger(WorkspaceScopeHolder.class);
 
     private WorkspaceScopeHolder() {
         // utility class — no instantiation

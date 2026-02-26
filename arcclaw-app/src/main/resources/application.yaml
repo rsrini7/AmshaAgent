@@ -67,8 +67,11 @@ quarkus:
       chat-model:
         enabled: false
     groq:
+      api-key: "${GROQ_API_KEY}"
       log-requests: true
       log-responses: true
+      chat-model:
+        max-tokens: 768
     openai:
       # Ollama provides native OpenAI compatibility on /v1
       # base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
@@ -90,6 +93,7 @@ quarkus:
         temperature: 0.1
         log-requests: true
         log-responses: true
+        max-tokens: 768
 
   # ---------------------------------------------------------------------------
   # OBSERVABILITY
@@ -211,6 +215,12 @@ arcclaw:
   security:
     prompt-injection:
       enabled: true
+  memory:
+    compaction:
+      enabled: true
+      threshold: 10
+      keep-recent: 6
+      model: "llama-3.1-8b-instant"
   chat-memory:
     max-messages: 20
   api:
@@ -339,8 +349,11 @@ mp:
         devservices:
           enabled: false
     groq:
+      api-key: "${GROQ_API_KEY}"
       log-requests: true
       log-responses: true
+      chat-model:
+        max-tokens: 768
     hibernate-orm:
       log:
         sql: false
@@ -376,7 +389,15 @@ mp:
     hibernate-orm:
       database:
         generation: update
+    langchain4j:
+      groq:
+        api-key: "mock-api-key"
   arcclaw:
+    memory:
+      compaction:
+        enabled: false
+        threshold: 4
+        keep-recent: 2
     security:
       prompt-injection:
         enabled: true
@@ -399,8 +420,11 @@ mp:
   quarkus:
     langchain4j:
       groq:
+        api-key: "${GROQ_API_KEY}"
         log-requests: ${ARCCLAW_DEBUG_LLM:false}
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
+        chat-model:
+          max-tokens: 768
   arcclaw:
     governance:
       budget-usd: 50.00
@@ -413,8 +437,11 @@ mp:
   quarkus:
     langchain4j:
       groq:
+        api-key: "${GROQ_API_KEY}"
         log-requests: ${ARCCLAW_DEBUG_LLM:false}
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
+        chat-model:
+          max-tokens: 768
       openai:
         log-requests: ${ARCCLAW_DEBUG_LLM:false}
         log-responses: ${ARCCLAW_DEBUG_LLM:false}

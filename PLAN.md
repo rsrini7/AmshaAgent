@@ -1631,3 +1631,55 @@ Implement critical security guards, performance optimizations for rate limiting,
 - ✅ `AgentCheckpointVersionTest`: Verifies `OptimisticLockException`.
 - ✅ `EncryptedSecretVersionTest`: Verifies secret version increments.
 - ✅ `WorkspaceManagerGcSweepTest`: Verifies bulk query count and Hibernate proxy compatibility.
+
+---
+
+# Phase 38 — Context Compaction ✅
+
+Implement a summarization engine to prevent unbounded context growth in long-running agent sessions.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **No Panache**: `arcclaw-core` has no Quarkus app runtime. `CompactionSummaryRepository` uses plain `EntityManager`.
+
+> [!NOTE]
+> **LLM Model**: Created a dedicated `CompactionModelProducer` to yield a `ChatLanguageModel` named `@Identifier("compaction")` using `OpenAiChatModel.builder()`.
+
+> [!TIP]
+> **SystemMessage Filtering**: The compaction service filters out fixed system prompts from the history to avoid re-summarizing static instructions.
+
+> [!IMPORTANT]
+> **Thread-Safe Concurrency**: Context compaction is executed within the virtual thread (`executor.submit`) in `TelegramAgentHandler` to prevent blocking the reactive Camel/Vert.x event loop during network I/O.
+
+## Completed Changes
+
+### Core Entities & Repositories
+#### [NEW] [CompactionSummaryEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryEntity.java)
+- Plain JPA Entity tracking summaries and message counts.
+
+#### [NEW] [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java)
+- `@ApplicationScoped` repository injecting `EntityManager` for upserting summaries.
+
+### Services & Orchestration
+#### [NEW] [ContextCompactionService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ContextCompactionService.java)
+- Orchestrates history compaction, handles threshold checks, fires `SecurityEventType.CONTEXT_COMPACTED` audit events.
+- Uses explicit `UserMessage` and `ChatResponse` objects for LangChain4j 1.0.0-beta4 compatibility.
+
+#### [NEW] [CompactionModelProducer.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java)
+- Configures the independent LLM client for compaction using `@Identifier("compaction")`.
+- Uses MicroProfile dot-notation config keys (`quarkus.langchain4j.groq.api-key`) for environment variable resolution.
+
+### Workflow Integration
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Injects prior summaries from `CompactionSummaryRepository`, handles explicitly passed `sessionId`.
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Performs asynchronous context compaction before executing `AgentLoop.run`.
+
+## Verification
+- ✅ `ContextCompactionServiceTest`: Verified threshold handling and summary blanks. Updated to match object-oriented API.
+- ✅ `ContextCompactionServiceIntegrationTest`: Verified end-to-end functionality including database persistence and LLM summarization (using mocked API key).
+- ✅ Verified non-blocking Camel event loop behavior by offloading compaction to virtual threads.
+- ✅ Maintained 100% build health across all impacted tests updating mock signatures.
+

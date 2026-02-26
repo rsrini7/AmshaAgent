@@ -263,6 +263,14 @@ public class AgentLoop {
                     checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
                     agentStore.save(checkpoint);
 
+                }  catch (Exception e) {
+                    // CRITICAL: Must mark failed, not leave as AWAITING_APPROVAL
+                    checkpoint.setStatus(CheckpointStatus.FAILED);
+                    checkpoint.setPendingToolName(null);
+                    checkpoint.setPendingToolParametersJson(null);
+                    agentStore.save(checkpoint);
+                    log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
+                        WorkspaceScopeHolder.get(), pendingTool, e.getMessage());
                 } finally {
                     // Always restore — even if tool throws
                     workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
@@ -283,7 +291,7 @@ public class AgentLoop {
                     currentGoal = goal + "\n\n" + transientError;
                     transientError = null;
                 }
-                step = engine.nextStep(agentRole, currentGoal, Collections.unmodifiableList(history));
+                step = engine.nextStep(sessionId, agentRole, currentGoal, Collections.unmodifiableList(history));
 
                 // --- GOVERNANCE & OBSERVABILITY INTERCEPTION ---
                 if (step != null) {

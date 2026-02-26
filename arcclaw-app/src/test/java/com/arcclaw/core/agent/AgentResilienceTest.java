@@ -51,7 +51,7 @@ class AgentResilienceTest {
     void testHallucinatedToolHandledGracefully() {
         var callCount = new AtomicInteger(0);
 
-        ReasoningEngine engine = (role, goal, history) -> {
+        ReasoningEngine engine = (sessionId, role, goal, history) -> {
             int call = callCount.incrementAndGet();
             if (call == 1) {
                 // First call: LLM hallucinates a tool that doesn't exist
@@ -89,7 +89,7 @@ class AgentResilienceTest {
     @Test
     void testMaxIterationsTerminatesRunawayLoop() {
         // Engine that always requests the same tool (never finishes)
-        ReasoningEngine engine = (role, goal, history) -> ReasoningStep.pending(
+        ReasoningEngine engine = (sessionId, role, goal, history) -> ReasoningStep.pending(
                 "I'll keep trying the github tool.",
                 "github",
                 Map.of("repo", "test/repo"), 0, 0);
@@ -110,7 +110,7 @@ class AgentResilienceTest {
      */
     @Test
     void testFinishActionReturnsCorrectResult() {
-        ReasoningEngine engine = (role, goal, history) -> ReasoningStep.pending(
+        ReasoningEngine engine = (sessionId, role, goal, history) -> ReasoningStep.pending(
                 "I already know the answer.",
                 ReasoningStep.FINISH,
                 Map.of("answer", "42 is the answer."), 0, 0);
@@ -128,7 +128,7 @@ class AgentResilienceTest {
      */
     @Test
     void testNullStepTerminatesGracefully() {
-        ReasoningEngine engine = (role, goal, history) -> null;
+        ReasoningEngine engine = (sessionId, role, goal, history) -> null;
 
         AgentResult result = agentLoop.run("null test", engine);
 
@@ -142,7 +142,7 @@ class AgentResilienceTest {
      */
     @Test
     void testEngineExceptionHandled() {
-        ReasoningEngine engine = (role, goal, history) -> {
+        ReasoningEngine engine = (sessionId, role, goal, history) -> {
             throw new RuntimeException("LLM API timeout");
         };
 
