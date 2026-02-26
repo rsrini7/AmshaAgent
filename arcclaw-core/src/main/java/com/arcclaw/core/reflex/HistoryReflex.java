@@ -1,0 +1,78 @@
+package com.arcclaw.core.reflex;
+
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+
+@ApplicationScoped
+public class HistoryReflex implements AgentReflex {
+
+    private static final Pattern MATCHES_PATTERN =
+        Pattern.compile("(?i)^/history$");
+
+    @Inject
+    ChatMemoryStore chatMemoryStore;
+
+    @Inject
+    CompactionSummaryRepository compactionSummaryRepository;
+
+    @Override
+    public boolean matches(String input) {
+        return input != null && MATCHES_PATTERN.matcher(input.trim()).matches();
+    }
+
+    @Override
+    public String execute(String sessionId, String userId, String input) {
+        StringBuilder sb = new StringBuilder();
+
+        // Use findLatestBySessionId for consistency
+        compactionSummaryRepository.findLatestBySessionId(sessionId).ifPresent(s -> {
+            sb.append("🗜️ *Compacted Summary* (")
+              .append(s.messagesCompacted)
+              .append(" messages):\n")
+              .append(s.summary)
+              .append("\n\n");
+        });
+
+        List<ChatMessage> messages = chatMemoryStore.getMessages(sessionId);
+        if (messages == null || messages.isEmpty()) {
+            if (sb.isEmpty()) {
+                return "📭 No conversation history found for this session.";
+            }
+            return sb.toString().trim();
+        }
+
+        sb.append("💬 *Active Window* (")
+          .append(messages.size())
+          .append(" messages):\n");
+
+        AtomicInteger idx = new AtomicInteger(1);
+        for (ChatMessage msg : messages) {
+            if (msg instanceof UserMessage) {
+                sb.append(idx.getAndIncrement())
+                  .append(". 👤 *You:* ")
+                  .append(truncate(msg.toString(), 200))
+                  .append("\n");
+            } else if (msg instanceof AiMessage) {
+                sb.append(idx.getAndIncrement())
+                  .append(". 🤖 *ArcClaw:* ")
+                  .append(truncate(msg.toString(), 200))
+                  .append("\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        return text.length() <= maxLen ? text : text.substring(0, maxLen) + "...";
+    }
+}

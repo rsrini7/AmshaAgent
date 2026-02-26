@@ -839,4 +839,24 @@ Implemented an automated context compaction engine to handle unbounded session h
 - ✅ **Concurrency Verification**: Compaction is now correctly offloaded to a virtual thread inside `TelegramAgentHandler`, preventing Camel event loop blocking.
 - ✅ **Configuration Validation**: Verified dot-notation config keys for Groq API are correctly resolved via `application.yaml`.
 
+---
 
+## Phase 40: Security Hardening, Budget Awareness, and Zero-Cost Reflexes ✅
+
+Engineered robust security and observability layers to protect against token bleeding and destructive prompt injection.
+
+| File | Purpose |
+|------|---------|
+| [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/IntentClassifierService.java) | Safety override for destructive commands using regex patterns. |
+| [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java) | Real-time budget tracking with 80% warning threshold. |
+| [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) | Observes and handles `BudgetWarningException` mid-iteration. |
+| [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java) | Compliance filter to prevent saving AI conversation boilerplate. |
+| [StatusReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/StatusReflex.java) | Extended metrics including budget %, token counts, and memory state. |
+| [HistoryReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/HistoryReflex.java) | Zero-cost local history retrieval with compaction summaries. |
+
+### Verification:
+- ✅ **`IntentClassifierServiceTest`**: Verified that `delete` and `purge` commands are safely routed to secondary agents.
+- ✅ **`GovernanceLayerTest`**: Verified that warnings trigger at 80% budget consumption without halting the loop.
+- ✅ **`PersistentChatMemoryStoreTest`**: Verified that "As per our agreement" strings are filtered from history.
+- ✅ **`HistoryReflexTest`**: Verified that `/history` provides visibility into prior compaction summaries and current window.
+- ✅ **`mvn clean verify`**: 100% pass across all core and app modules.

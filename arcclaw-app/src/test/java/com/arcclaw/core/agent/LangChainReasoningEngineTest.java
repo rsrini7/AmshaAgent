@@ -52,7 +52,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
 
         // Act
         ReasoningStep step = reasoningEngine.nextStep("test-session", "coordinator", "Do something", List.of());
@@ -81,7 +81,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
 
         // Act
         ReasoningStep step = reasoningEngine.nextStep("test-session", "coordinator", "Do something", List.of());
@@ -123,7 +123,7 @@ class LangChainReasoningEngineTest {
         // Capture the request to verify filtered messages
         org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
 
         // Act
         reasoningEngine.nextStep(sessionId, "coordinator", "Actual Goal", List.of());
@@ -162,7 +162,7 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
-        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
 
         reasoningEngine.nextStep("test-session", "coder", "Write a sort", List.of());
 
@@ -182,7 +182,7 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
-        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
 
         reasoningEngine.nextStep("test-session", "debugger", "Find the NPE", List.of());
 
@@ -205,7 +205,7 @@ class LangChainReasoningEngineTest {
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
-        when(compactionSummaryRepository.findBySessionId(any())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         reasoningEngine.nextStep("test-session", "researcher", "Find Quarkus docs", List.of());
 
         ChatRequest sent = captor.getValue();

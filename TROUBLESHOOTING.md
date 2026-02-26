@@ -2576,3 +2576,20 @@ matched benign conversational phrases.
 `'jailbroken'`, `'bypass your rules'`, `'ignore instructions'`,
 `'pretend you have no restrictions'`, `'act as DAN'`, `'act without restrictions'`.
 Explicitly excluded ordinary follow-up questions and history requests.
+
+## 35. Phase 40: Security Hardening & Budget Awareness
+
+### 🔴 T-1: Intent Override Falsely Blocks Benign Messages
+**Symptom**: A user message like "delete my typo" is routed to `coordinator` instead of being handled by a coder agent, or a researcher agent is blocked from listing repositories.
+**Root Cause**: The `DESTRUCTIVE_PATTERN` in `IntentClassifierService` is intentionally aggressive. Words like `delete`, `purge`, and `archive` trigger the override if the predicted role is `researcher` or `coordinator`.
+**Resolution**: If a specific destructive operation is legitimate (e.g., deleting a file in a sandbox), the agent must be guided to use a specific tool (if available) or the user must rephrase to avoid the prohibited keywords in the initial classification pass. Note that `coder` (Brahma) and `debugger` (Shiva) roles are currently exempt to allow technical discussion about destructive code.
+
+### 🟠 T-2: Budget Warning Exception Floods Logs
+**Symptom**: Logs are filled with `BudgetWarningException` stack traces despite the loop continuing.
+**Root Cause**: `GovernanceLayer` throws the exception at every LLM call once the 80% threshold is reached. `AgentLoop` catches and logs it as a warning.
+**Resolution**: This is by design to ensure observability of high-cost sessions. Each session will only trigger the `log.warnf("Session %s approaching budget limit...")` once due to the `warningSent` flag, but the exception itself is thrown iteratively to allow the `AgentLoop` to inject the warning into the LLM context.
+
+### 🟡 T-3: `/status` Shows 0.0% Cost Despite LLM Calls
+**Symptom**: The `/status` reflex returns `$0.0000 / $10.00 (0.0%)` even after verifyable interaction.
+**Root Cause**: Either the `sessionId` passed to `StatusReflex` does not match the one in `GovernanceLayer`, or the Price-per-1k-tokens is set to 0.0 in `application.yaml`.
+**Resolution**: Verify that the deterministic session ID generation in `TelegramAgentHandler` is consistent. Check `arcclaw.governance.price-per-1k-input` and `output` values in the active profile.

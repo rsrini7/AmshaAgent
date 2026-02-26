@@ -16,6 +16,9 @@ public class StatusReflex implements AgentReflex {
     StatefulAgentStore statefulAgentStore;
 
     @Inject
+    com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
+
+    @Inject
     GovernanceLayer governanceLayer;
 
     @Override
@@ -53,9 +56,30 @@ public class StatusReflex implements AgentReflex {
             }
         }
 
+        double budgetUsd = governanceLayer.getBudgetUsd();
         double cost = governanceLayer.getSessionCost(sessionId);
+        double pct = budgetUsd > 0 ? (cost / budgetUsd) * 100 : 0;
+        int inputTokens = governanceLayer.getSessionInputTokens(sessionId);
+        int outputTokens = governanceLayer.getSessionOutputTokens(sessionId);
+        int totalTokens = inputTokens + outputTokens;
+
+        // Use findLatestBySessionId for consistency
+        String memoryLine = compactionSummaryRepository
+            .findLatestBySessionId(sessionId)
+            .map(s -> String.format("Compacted (msgs summarized: %d) | Active window running",
+                s.messagesCompacted))
+            .orElse("Not compacted — session within active window");
+
         String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;
 
-        return String.format("📊 Status: %s | Cost: $%.4f | Session: %s", status, cost, shortId);
+        return String.format(
+            "📊 *Status:* %s\n" +
+            "💰 *Cost:* $%.4f / $%.2f (%.1f%%)\n" +
+            "🔢 *Tokens:* %d prompt + %d completion = %d total\n" +
+            "🧠 *Memory:* %s\n" +
+            "⏱️ *Session:* %s",
+            status, cost, budgetUsd, pct,
+            inputTokens, outputTokens, totalTokens,
+            memoryLine, shortId);
     }
 }

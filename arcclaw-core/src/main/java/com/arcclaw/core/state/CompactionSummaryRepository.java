@@ -14,7 +14,7 @@ public class CompactionSummaryRepository {
     EntityManager em;
 
     @Transactional
-    public Optional<CompactionSummaryEntity> findBySessionId(String sessionId) {
+    public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {
         CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
         return Optional.ofNullable(entity);
     }

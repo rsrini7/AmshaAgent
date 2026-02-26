@@ -1683,3 +1683,36 @@ Implement a summarization engine to prevent unbounded context growth in long-run
 - ✅ Verified non-blocking Camel event loop behavior by offloading compaction to virtual threads.
 - ✅ Maintained 100% build health across all impacted tests updating mock signatures.
 
+---
+
+# Phase 40 — Security Hardening, Budget Awareness, and Zero-Cost Reflexes ✅
+
+Implement production-level security overrides, thread-safe budget observability, and non-LLM reflexes to optimize cost and safety.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Safety Overrides**: Implemented `IntentClassifierService` level overrides that force `coordinator` role when destructive vocabulary is detected, bypassing LLM-based role selection.
+> **Budget Warning**: Introduced a soft warning threshold at 80% budget consumption via `BudgetWarningException`. This allows the agent to self-correct and become concise before hitting the hard stop.
+> **Zero-Cost Utility**: Moved `/status` and `/history` into dedicated `AgentReflex` implementations to guarantee O(1) latency and zero LLM cost for session monitoring.
+
+## Proposed Changes
+
+### Core Module — Governance & Reflexes
+- [NEW] `BudgetWarningException.java`: Signal for soft budget limits.
+- [NEW] `HistoryReflex.java`: Local conversation history display.
+- [MODIFY] `GovernanceLayer.java`: Added warning threshold logic and budget/token metrics getters.
+- [MODIFY] `StatusReflex.java`: Enhanced with budget percentage, token counts, and memory compaction status.
+
+### App Module — Integration
+- [MODIFY] `IntentClassifierService.java`: Added static pattern matching for destructive commands and an override hook.
+- [MODIFY] `AgentLoop.java`: Added catch logic for `BudgetWarningException` to inject budget alerts as context observations.
+
+### Persistence
+- [MODIFY] `PersistentChatMemoryStore.java`: Added regex filters to purge compliance-injection boilerplate from saved AI messages.
+
+## Verification
+- ✅ **Test Suites**: Created `IntentClassifierServiceTest`, `HistoryReflexTest` and updated `GovernanceLayerTest`, `PersistentChatMemoryStoreTest`.
+- ✅ **Zero-Cost**: Verified `/history` and `/status` bypass the LLM reasoning loop.
+- ✅ **Compliance**: Verified filtering of repetitive AI compliance phrasing during message updates.
+

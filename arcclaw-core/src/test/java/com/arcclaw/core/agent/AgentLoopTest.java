@@ -47,7 +47,8 @@ class AgentLoopTest {
         objectMapper = new ObjectMapper();
         chatMemoryStore = mock(ChatMemoryStore.class);
         compactionSummaryRepository = mock(com.arcclaw.core.state.CompactionSummaryRepository.class);
-        when(compactionSummaryRepository.findBySessionId(anyString())).thenReturn(Optional.empty());
+        when(compactionSummaryRepository.findLatestBySessionId(anyString()))
+                .thenReturn(Optional.empty());
         
         engine = new LangChainReasoningEngine();
         engine.chatLanguageModel = model;

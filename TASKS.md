@@ -504,4 +504,16 @@
 - [x] Hardening: Update `ChatLanguageModel` to object-oriented API (`UserMessage`)
 - [x] Hardening: Standardize Groq config keys to MicroProfile dot-notation
 
+# Phase 40 — Antigravity (Security & Budget) ✅
+- [x] Implement destructive command override in `IntentClassifierService`
+- [x] Create `BudgetWarningException` and integrate with `GovernanceLayer`
+- [x] Update `AgentLoop` to intercept and log budget warnings
+- [x] Extend `/status` reflex with real-time token/cost/memory metrics
+- [x] Implement `/history` zero-cost reflex
+- [x] Add AiMessage compliance filter to `PersistentChatMemoryStore`
+- [x] Create `IntentClassifierServiceTest` and `HistoryReflexTest`
+- [x] Update `GovernanceLayerTest` for budget warnings
+- [x] Update `PersistentChatMemoryStoreTest` for compliance filtering
+- [x] Verify: `mvn clean verify` passes all Phase 40 checks
+
 

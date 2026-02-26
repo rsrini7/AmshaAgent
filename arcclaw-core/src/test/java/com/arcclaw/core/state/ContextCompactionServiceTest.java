@@ -69,7 +69,7 @@ class ContextCompactionServiceTest {
         }
         
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
-        when(mockRepo.findBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.from("New Summary Text"))
                 .build());

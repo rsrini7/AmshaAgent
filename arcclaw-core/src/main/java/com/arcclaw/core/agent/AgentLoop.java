@@ -301,6 +301,14 @@ public class AgentLoop {
                                     step.inputTokens(),
                                     step.outputTokens());
                         }
+                    } catch (com.arcclaw.core.governance.BudgetWarningException bw) {
+                        log.warnf("Budget warning for session %s: %s",
+                            WorkspaceScopeHolder.get(), bw.getMessage());
+                        String warningObservation = "⚠️ BUDGET WARNING: " + bw.getMessage() +
+                            " Keep all subsequent responses to 1-2 sentences maximum.";
+                        step = step.withObservation(warningObservation);
+                        synchronized (history) { history.add(step); }
+                        // Non-terminating — continue the loop
                     } catch (com.arcclaw.core.governance.BudgetExceededException be) {
                         log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
                         String observationMessage = "System Intervention: " + be.getMessage() +

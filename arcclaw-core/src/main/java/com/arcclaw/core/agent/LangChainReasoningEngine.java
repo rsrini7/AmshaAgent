@@ -270,7 +270,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 2. FETCH AND INJECT LONG-TERM HISTORY (Sprint 2 Memory)
         if (sessionId != null) {
-            compactionSummaryRepository.findBySessionId(sessionId).ifPresent(s -> {
+            compactionSummaryRepository.findLatestBySessionId(sessionId).ifPresent(s -> {
                 messages.add(UserMessage.from(
                         "[CONTEXT FROM PRIOR SESSION - FOR REFERENCE ONLY]\n" +
                                 "[Memory compacted at: " + s.compactedAt + " | Messages summarized: " + s.messagesCompacted + "]\n" +

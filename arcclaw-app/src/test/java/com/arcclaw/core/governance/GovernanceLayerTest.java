@@ -13,6 +13,9 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.governance.BudgetExceededException;
+
 @QuarkusTest
 class GovernanceLayerTest {
 
@@ -42,48 +45,64 @@ class GovernanceLayerTest {
     @Test
     void testCostAccumulationUnderBudget() {
         // Price: In=$0.003/1k, Out=$0.015/1k
-        // Let's record 10k input ($0.03) and 2k output ($0.03) -> Total: $0.06
-        assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 10000, 2000));
+        // Let's record 1k input ($0.003) and 1k output ($0.015) -> Total: $0.018
+        assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 1000, 1000));
         assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel(), "Autonomy should not be downgraded.");
+        
+        assertEquals(0.018, governanceLayer.getSessionCost(sessionId), 0.0001);
+        assertEquals(1000, governanceLayer.getSessionInputTokens(sessionId));
+        assertEquals(1000, governanceLayer.getSessionOutputTokens(sessionId));
+    }
+
+    @Test
+    void testBudgetWarningAt80Percent() {
+        // Budget is $10.00. 80% is $8.00.
+        // Record enough to hit $8.00 but not $10.00.
+        // 100,000 input tokens = $0.30
+        // 500,000 output tokens = $7.50 -> Total $7.80 (Under 80%)
+        assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 100000, 500000));
+        
+        // Next call hits warning threshold.
+        // Add $0.30 more -> Total $8.10 (> $8.00)
+        BudgetWarningException ex = assertThrows(BudgetWarningException.class, 
+            () -> governanceLayer.recordLlmCall(sessionId, 100000, 0));
+        
+        assertTrue(ex.getMessage().contains("budget is 81% consumed"));
+        assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel(), "Warning should NOT downgrade autonomy.");
     }
 
     @Test
     void testBudgetExceededTriggersDowngradeAndException() {
-        // Budget is $10.00 in our application.yaml default.
-        // Let's create a massive transaction to blow the budget.
-        // 1 Million input tokens = $3.00
-        // 1 Million output tokens = $15.00 -> Total $18.00 (exceeds $10)
-
-        // Pre-condition
-        assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel());
-
-        BudgetExceededException ex = assertThrows(BudgetExceededException.class,
+        // Budget is $10.00. 
+        // 1st massive call triggers WARNING first (Stage 1)
+        assertThrows(BudgetWarningException.class,
                 () -> governanceLayer.recordLlmCall(sessionId, 1000000, 1000000));
 
-        assertTrue(ex.getMessage().contains("exceeded"), "Exception should state budget was exceeded");
+        // 2nd call triggers EXCEEDED (Stage 2)
+        BudgetExceededException ex = assertThrows(BudgetExceededException.class,
+                () -> governanceLayer.recordLlmCall(sessionId, 1, 1));
 
-        // Key logic: Autonomy must be downgraded
-        assertEquals(AutonomyLevel.READONLY, workspaceContext.getAutonomyLevel(),
-                "Autonomy level should be downgraded to READONLY instantly");
+        assertTrue(ex.getMessage().contains("exceeded"));
+        assertEquals(AutonomyLevel.READONLY, workspaceContext.getAutonomyLevel());
     }
 
     @Test
     void testSessionIsolation() {
         String sessionB = UUID.randomUUID().toString();
-        // Switch to sessionB context temporarily
         WorkspaceScopeHolder.set(sessionB);
         try {
-            governanceLayer.recordLlmCall(sessionB, 1000000, 1000000); // Blows budget B
-        } catch (BudgetExceededException e) {
-            // expected
+            // Stage 1: Warning
+            try {
+                governanceLayer.recordLlmCall(sessionB, 1000000, 1000000);
+            } catch (BudgetWarningException e) {}
+            
+            // Stage 2: Exceeded
+            try {
+                governanceLayer.recordLlmCall(sessionB, 1, 1);
+            } catch (BudgetExceededException e) {}
         } finally {
-            // Switch back to original sessionId context
             WorkspaceScopeHolder.set(sessionId);
         }
-
-        // We are querying `workspaceContext` for 'sessionId' (currently bound to
-        // thread)
-        // It should still be FULL because sessionB caused the failure
         assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel());
     }
 }
