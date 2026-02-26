@@ -6,8 +6,8 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @ApplicationScoped
 public class StatusReflex implements AgentReflex {
@@ -25,12 +25,29 @@ public class StatusReflex implements AgentReflex {
 
     @Override
     public String execute(String sessionId, String userId, String input) {
-        String status = "NO_ACTIVE_STATE";
+        List<AgentCheckpoint> checkpoints = new ArrayList<>();
+        
         for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
-            Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role);
-            if (cpOpt.isPresent()) {
-                status = cpOpt.get().getStatus().name();
-                if (status.equals("AWAITING_APPROVAL") || status.equals("IN_PROGRESS")) {
+            statefulAgentStore.load(sessionId, role).ifPresent(checkpoints::add);
+        }
+
+        String status = "NO_ACTIVE_STATE";
+        
+        if (!checkpoints.isEmpty()) {
+            // 1. Default to the most recently updated checkpoint's status
+            checkpoints.sort((c1, c2) -> {
+                if (c1.updatedAt == null) return 1;
+                if (c2.updatedAt == null) return -1;
+                return c2.updatedAt.compareTo(c1.updatedAt); // Descending (newest first)
+            });
+            
+            status = checkpoints.get(0).getStatus().name();
+
+            // 2. Override: If ANY role is currently running or waiting, that is the session's true status
+            for (AgentCheckpoint cp : checkpoints) {
+                String cpStatus = cp.getStatus().name();
+                if (cpStatus.equals("AWAITING_APPROVAL") || cpStatus.equals("IN_PROGRESS")) {
+                    status = cpStatus;
                     break;
                 }
             }
