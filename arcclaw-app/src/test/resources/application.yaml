@@ -43,6 +43,8 @@ quarkus:
   log:
     level: INFO
     category:
+      "dev.langchain4j.model.chat.listener.ListenersUtil":
+        level: ERROR
       "com.arcclaw.core.agent":
         level: "OFF"
       "com.arcclaw.core.tools":

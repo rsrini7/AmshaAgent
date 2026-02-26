@@ -9,6 +9,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.
@@ -17,6 +18,9 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class GithubTool implements AgentTool {
+
+    private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
     @Override
     public String name() {
@@ -48,6 +52,23 @@ public class GithubTool implements AgentTool {
         String action = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");
         String target = (String) params.get("target");
+
+        // ── ALLOWLIST GUARD (Java layer — second line of defence) ──────────
+        if (!ALLOWED_ACTIONS.contains(action)) {
+            throw new IllegalArgumentException(
+                "Action '" + action + "' is not permitted. " +
+                "Only 'repo' and 'gist' are supported."
+            );
+        }
+        if (!ALLOWED_COMMANDS.contains(command)) {
+            throw new IllegalArgumentException(
+                "Command '" + command + "' is not permitted. " +
+                "Only 'view' and 'list' are supported. " +
+                "Destructive operations (delete, rename, archive, fork, transfer) " +
+                "are not available through this tool."
+            );
+        }
+        // ── END ALLOWLIST GUARD ────────────────────────────────────────────
 
         // SMART GUARDRAILS: Teach the LLM how to use the CLI correctly if it makes a mistake
         if ("repo".equals(action) && target != null) {
@@ -85,9 +106,13 @@ public class GithubTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("action",  "Action to perform: 'repo' or 'gist'")
-            .addStringProperty("command", "Command to run: 'view' or 'list'")
-            .addStringProperty("target",  "For 'view', use 'owner/repo' format. For 'list', use ONLY the 'owner' name.")
+            .addEnumProperty("action",  List.of("repo", "gist"),
+                "Action to perform")
+            .addEnumProperty("command", List.of("view", "list"),
+                "Command to run. NEVER use delete, create, rename, archive, or fork.")
+            .addStringProperty("target",
+                "For 'view', use 'owner/repo' format. " +
+                "For 'list', use ONLY the 'owner' name.")
             .required("action", "command")
             .build();
     }

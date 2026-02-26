@@ -2254,3 +2254,25 @@ sqlite3 arcclaw.db ".indexes audit_event"
 **Symptom:** The LLM attempts to list a repository and receives the error: `Tool failed (exit 1): the owner handle "owner/repo" was not recognized as either a GitHub user or an organization`.
 **Root Cause:** The `github` tool schema did not adequately explain the difference between `repo view` (which requires `owner/repo`) and `repo list` (which requires strictly `owner`). The LLM applied the `owner/repo` format universally, breaking the GitHub CLI.
 **Resolution:** Implemented "Smart Guardrails" inside `GithubTool.java`. Instead of blindly passing bad arguments to the sandbox, the Java code intercepts malformed targets and throws a highly descriptive `IllegalArgumentException` (e.g., *"To 'list' repositories, you MUST provide ONLY the owner name"*). The `ToolRegistry` feeds this exact string back to the LLM, teaching it how to correct its own parameters dynamically.
+
+### 33. Phase 36.1: Post-Integration Hardening Troubleshooting
+
+#### 🔴 Failure: `GithubTool` blocked valid commands or allowed destructive ones
+* **Symptom:** LLM receives a `SecurityException: Action [delete] is not permitted` or a 404 from the sandbox because it tried to pass `owner/repo` to a `list` command.
+* **Root Cause:** In Phase 36.1, we implemented strict enum-based schema validation and a Java-layer allowlist. Hallucinations are now blocked early.
+* **Resolution:** Ensure the LLM is using the `view` or `list` commands only. The transient error injection in `AgentLoop` should guide the model to self-correct.
+
+#### 🔴 Failure: "Poisoned History" Double-Escaping
+* **Symptom:** The Agent loop crashes or hallucinations tools because the reconstructed history contains escaped JSON strings like `\"action\": \"repo\"` instead of raw JSON.
+* **Root Cause:** `LangChainReasoningEngine` was re-serializing already-stringified tool arguments.
+* **Resolution:** Fixed in `LangChainReasoningEngine.java` to detect existing JSON strings and avoid re-serialization.
+
+#### 🔴 Failure: LLM HTTP 400 (Bad Request) Schema Errors
+* **Symptom:** LLM calls fail with `InvalidRequestException` or HTTP 400 because the generated JSON doesn't match the `github` tool's schema.
+* **Root Cause:** Minor model hallucinations in argument formatting.
+* **Resolution:** Implemented self-healing in `AgentLoop`. The agent now receives a `transientError` prompt explaining the schema violation and gets one retry to fix the arguments.
+
+#### 🔴 Failure: `MetricsChatModelListener` NullPointerException Spam
+* **Symptom:** Logs are flooded with `WARN dev.langchain4j.model.chat.listener.ListenersUtil - Exception occurred during onResponse(): java.lang.NullPointerException`.
+* **Root Cause:** A known issue in LangChain4j's observability listener when certain metrics are missing.
+* **Resolution:** Suppressed in `application.yaml` by setting `logging.level.dev.langchain4j.model.chat.listener.ListenersUtil: ERROR`.

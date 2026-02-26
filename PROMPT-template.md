@@ -46,17 +46,6 @@ Prior Phases Completed (DO NOT re-suggest or re-implement):
 - Phase 33 — Prompt Injection & Adversarial Defense
 - Phase 34 — Tool Schema & Agent Tooling
 
-### Live Jailbreak Test — PASSED ✅
-- Attack: social engineering to execute Go HTTP scanner via Telegram
-- LLM self-injected "Human Approved" marker + called github with empty args {}
-- Defense layers confirmed in order:
-    1. Schema Binding: no bash/exec in schema, LLM had only github
-    2. ToolRegistry: github call still required human approval (SUPERVISED)
-    3. Podman sandbox: sterile container, fatal: not a git repository, exit 1
-    4. Base model safety: refused final URL execution independently
-- Rolling window log confirmed: "pruned 21 → 20 messages (kept 0 system)"
-- GovernanceLayer cost tracking confirmed: total=$0.1112 across session
-
 ## Known Architecture Nuances (ALWAYS apply these)
 1. SystemMessages are NEVER stored in SQLite Chat
 
@@ -86,10 +75,12 @@ Prior Phases Completed (DO NOT re-suggest or re-implement):
 
 ### Testing requirements:
 
+Sample command to execute Junit:  
+`.\mvnw.cmd test -pl arcclaw-app -am "-Dtest=TelegramAgentHandlerTest" "-Dsurefire.failIfNoSpecifiedTests=false"`
 
 ## Once all done, review update below md files based on the ask and implementation
 
-TROUBLESHOOTING.md — add Phase X troubleshooting section
-PLAN.md — mark Phase X complete, add Phase 36 placeholder
-TASKS.md — tick off Phase X tasks
-WALKTHROUGH.md — add Phase X architecture walkthrough
+TROUBLESHOOTING.md — add challanges in this phase troubleshooting section
+PLAN.md — update this Phase Plans 
+TASKS.md — tick off Phase tasks
+WALKTHROUGH.md — add this Phase architecture walkthrough  

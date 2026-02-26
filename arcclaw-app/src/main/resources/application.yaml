@@ -166,6 +166,8 @@ quarkus:
   log:
     level: INFO
     category:
+      "dev.langchain4j.model.chat.listener.ListenersUtil":
+        level: ERROR
       "com.arcclaw":
         level: DEBUG
       "io.quarkus":

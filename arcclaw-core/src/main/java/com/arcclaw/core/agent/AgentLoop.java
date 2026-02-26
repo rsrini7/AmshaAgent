@@ -15,6 +15,8 @@ import com.arcclaw.core.audit.AuditHashUtil;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InvalidRequestException;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -206,6 +208,8 @@ public class AgentLoop {
         // Mutable state — guarded by synchronized (JEP 491 safe)
         final List<ReasoningStep> history = new ArrayList<>(resumedHistory);
         int iteration = 0;
+        int llmSchemaErrorCount = 0;
+        String transientError = null;
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
 
@@ -274,7 +278,12 @@ public class AgentLoop {
             // --- THOUGHT + PLAN ---
             ReasoningStep step;
             try {
-                step = engine.nextStep(agentRole, goal, Collections.unmodifiableList(history));
+                String currentGoal = goal;
+                if (transientError != null) {
+                    currentGoal = transientError;
+                    transientError = null;
+                }
+                step = engine.nextStep(agentRole, currentGoal, Collections.unmodifiableList(history));
 
                 // --- GOVERNANCE & OBSERVABILITY INTERCEPTION ---
                 if (step != null) {
@@ -298,6 +307,28 @@ public class AgentLoop {
                 }
 
             } catch (Exception e) {
+                boolean isSchemaError = e instanceof InvalidRequestException;
+                if (!isSchemaError && e instanceof HttpException) {
+                    isSchemaError = ((HttpException) e).statusCode() == 400;
+                }
+                
+                if (isSchemaError) {
+                    log.warnf("[AGENT-LOOP] LLM API rejected tool call schema for session %s: %s",
+                        WorkspaceScopeHolder.get(), e.getMessage());
+                    llmSchemaErrorCount++;
+                    if (llmSchemaErrorCount >= 2) {
+                        log.errorf("[AGENT-LOOP] session %s exceeded schema self-correction limit", WorkspaceScopeHolder.get());
+                        synchronized (history) {
+                            return AgentResult.error(List.copyOf(history), "SCHEMA_ERROR");
+                        }
+                    }
+                    transientError = "System: Your previous tool call was rejected by the API because the " +
+                          "arguments did not match the required schema. Error: " + e.getMessage() +
+                          ". Please review the tool schema and correct your arguments. " +
+                          "Only 'view' and 'list' are valid commands for the github tool.";
+                    continue;
+                }
+
                 log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
                 synchronized (history) {
                     return AgentResult.error(List.copyOf(history), "ReasoningEngine error: " + e.getMessage());

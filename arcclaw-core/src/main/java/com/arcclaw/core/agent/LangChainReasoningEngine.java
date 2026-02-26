@@ -146,7 +146,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 String argsJson = "{}";
                 try {
                     if (step.actionInput() != null) {
-                        argsJson = objectMapper.writeValueAsString(step.actionInput());
+                        Map<String, Object> input = step.actionInput();
+                        if (input.size() == 1 && input.containsKey("parameters") && input.get("parameters") instanceof String) {
+                            argsJson = (String) input.get("parameters");
+                        } else {
+                            argsJson = objectMapper.writeValueAsString(input);
+                        }
                     }
                 } catch (Exception e) {
                     // Ignore serialization errors for now
@@ -178,7 +183,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 4. Add the CURRENT goal ONLY if it is an internal system command (like resuming)
         // Regular user prompts are already fetched from the ChatMemoryStore in Step 2!
-        if ("The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)) {
+        if (goal != null && (goal.startsWith("The tool execution") || goal.startsWith("System: Your previous tool call"))) {
             messages.add(UserMessage.from(goal));
         }
 
