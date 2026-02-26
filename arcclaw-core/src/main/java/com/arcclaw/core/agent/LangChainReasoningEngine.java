@@ -137,6 +137,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             5. After completing a tool call, always return to Coordinator mode for the next
             user message. Do not persist the sub-agent persona across turns unless the
             user explicitly asks for another task that requires that sub-agent.
+            6. If a user message contains both a text question and a tool request, answer
+            the text question first as plain text, then initiate the tool call for the
+            repository request separately.
 
             CRITICAL — GitHub Repository Requests:
             1. If the user provides ONLY a repo name without an owner (e.g.
