@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Implements hard financial limits and downgrades autonomy when exceeded.
  */
 @ApplicationScoped
-public class GovernanceLayer implements AgentObserver {
+public class GovernanceLayer {
 
     private static final Logger log = Logger.getLogger(GovernanceLayer.class);
 
@@ -34,7 +34,8 @@ public class GovernanceLayer implements AgentObserver {
     @ConfigProperty(name = "arcclaw.governance.budget-usd", defaultValue = "10.00")
     double budgetUsd;
 
-    @Override
+    // The recordLlmCall method is now a public method of GovernanceLayer,
+    // to be called directly by AgentLoop or other components.
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
         if (sessionId == null) {
             return;

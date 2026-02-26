@@ -516,4 +516,15 @@
 - [x] Update `PersistentChatMemoryStoreTest` for compliance filtering
 - [x] Verify: `mvn clean verify` passes all Phase 40 checks
 
+# Phase 41: Resilience, Privacy & Observer Separation ✅
+- [x] Podman Circuit Breaker (CLOSED/OPEN/HALF_OPEN) with failure-threshold.
+- [x] AgentCheckpoint Field Privacy (Private fields + Accessors).
+- [x] AgentCheckpoint @JsonIgnore on pendingToolParametersJson.
+- [x] PII Pattern completeness (DOB, Passport-IN, GSTIN, IPv6, UPI VPA).
+- [x] PII Rule Ordering fix (GSTIN/PAN, Phone/Aadhaar overlap).
+- [x] GovernanceLayer decoupling from AgentObserver.
+- [x] AgentLoop direct budget enforcement call.
+- [x] Unit Tests: ProcessIsolationExecutorTest, AgentCheckpointTest, PiiScanReflexTest.
+- [x] Verification: `mvn clean verify` passes all Phase 41 checks.
+
 

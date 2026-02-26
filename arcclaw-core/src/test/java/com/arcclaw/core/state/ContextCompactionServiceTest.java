@@ -1,7 +1,6 @@
 package com.arcclaw.core.state;
 
 import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;

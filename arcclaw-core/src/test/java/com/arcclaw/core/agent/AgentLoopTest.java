@@ -36,6 +36,7 @@ class AgentLoopTest {
     private ObjectMapper objectMapper;
     private ChatMemoryStore chatMemoryStore;
     private com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
+    private com.arcclaw.core.governance.GovernanceLayer governanceLayer;
 
     
     private LangChainReasoningEngine engine;
@@ -104,6 +105,7 @@ class AgentLoopTest {
         loop.chatMemoryStore = mock(ChatMemoryStore.class);
         loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
         loop.toolRegistry = mock(ToolRegistry.class);
+        loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
 
         // Throw InvalidRequestException on first call
         InvalidRequestException ex = new InvalidRequestException("missing properties: action");
@@ -130,6 +132,7 @@ class AgentLoopTest {
         loop.chatMemoryStore = mock(ChatMemoryStore.class);
         loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
         loop.toolRegistry = mock(ToolRegistry.class);
+        loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
 
         InvalidRequestException ex = new InvalidRequestException("missing properties");
         // Always throw

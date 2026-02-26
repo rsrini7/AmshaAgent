@@ -145,12 +145,12 @@ public class WorkspaceManager {
                     inProgressZombies.size());
             Instant now = Instant.now();
             for (var checkpoint : inProgressZombies) {
-                checkpoint.status = CheckpointStatus.FAILED;
-                checkpoint.failedAt = now;
-                checkpoint.failReason = "JVM crash recovery — session was IN_PROGRESS at startup";
+                checkpoint.setStatus(CheckpointStatus.FAILED);
+                checkpoint.setFailedAt(now);
+                checkpoint.setFailReason("JVM crash recovery — session was IN_PROGRESS at startup");
                 em.merge(checkpoint);
                 log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                        checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+                        checkpoint.getId(), checkpoint.getSessionId(), checkpoint.getAgentRole());
             }
         } else {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
@@ -168,12 +168,12 @@ public class WorkspaceManager {
                     approvalZombies.size());
             Instant now = Instant.now();
             for (var checkpoint : approvalZombies) {
-                checkpoint.status = CheckpointStatus.FAILED;
-                checkpoint.failedAt = now;
-                checkpoint.failReason = "JVM crash recovery: approval was pending at shutdown";
+                checkpoint.setStatus(CheckpointStatus.FAILED);
+                checkpoint.setFailedAt(now);
+                checkpoint.setFailReason("JVM crash recovery: approval was pending at shutdown");
                 em.merge(checkpoint);
                 log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                        checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+                        checkpoint.getId(), checkpoint.getSessionId(), checkpoint.getAgentRole());
             }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
@@ -238,8 +238,8 @@ public class WorkspaceManager {
                 .getResultList();
 
         for (var cp : timedOut) {
-            log.warnf("Approval timeout session=%s. Terminating.", cp.sessionId);
-            terminateSession(cp.sessionId);
+            log.warnf("Approval timeout session=%s. Terminating.", cp.getSessionId());
+            terminateSession(cp.getSessionId());
         }
     }
 
@@ -354,9 +354,9 @@ public class WorkspaceManager {
 
         Instant now = Instant.now();
         for (var checkpoint : checkpoints) {
-            checkpoint.status = CheckpointStatus.FAILED;
-            checkpoint.failedAt = now;
-            checkpoint.failReason = "Session terminated by WorkspaceManager";
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            checkpoint.setFailedAt(now);
+            checkpoint.setFailReason("Session terminated by WorkspaceManager");
             em.merge(checkpoint);
         }
         if (!checkpoints.isEmpty()) {

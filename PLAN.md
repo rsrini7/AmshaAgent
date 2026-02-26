@@ -1716,3 +1716,48 @@ Implement production-level security overrides, thread-safe budget observability,
 - ✅ **Zero-Cost**: Verified `/history` and `/status` bypass the LLM reasoning loop.
 - ✅ **Compliance**: Verified filtering of repetitive AI compliance phrasing during message updates.
 
+---
+
+# Phase 41 — Resilience, Privacy & Observer Separation ✅
+
+Implement critical hardening for Podman execution, PII detection completeness, and architectural separation of Governance observers.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Podman Circuit Breaker**: Introduced a 3-state (CLOSED, OPEN, HALF_OPEN) circuit breaker in `ProcessIsolationExecutor` to prevent system thrashing during Podman daemon failures.
+> **Privacy Enforcement**: Hardened `AgentCheckpoint` by making all fields private and using `@JsonIgnore` on sensitive tool parameters.
+> **PII Pattern Completeness**: Expanded local redaction to include India-specific identifiers (Passport, GSTIN, Aadhaar/Phone re-ordering) and global IPv6/UPI patterns.
+> **Observer Separation**: GovernanceLayer was decoupled from `AgentObserver` to ensure budget enforcement happens *before* any other observability logic.
+
+## Completed Changes
+
+### [arcclaw-core]
+#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Implemented Circuit Breaker state machine (CLOSED, OPEN, HALF_OPEN).
+- Added public getters for configuration monitoring.
+
+#### [MODIFY] [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java)
+- All fields private; added standard getters and setters.
+- Added `@JsonIgnore` to `pendingToolParametersJson`.
+
+#### [MODIFY] [PiiScanReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/PiiScanReflex.java)
+- Added DATE_OF_BIRTH, PASSPORT_IN, GSTIN, IPV6, and UPI_VPA patterns.
+- Reordered Rules: `GSTIN` before `PAN`, `PHONE` before `AADHAAR_COMPACT`.
+
+#### [MODIFY] [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java)
+- No longer implements `AgentObserver`.
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- Explicitly calls `governanceLayer.recordLlmCall()` before observer iteration.
+
+### [arcclaw-app]
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Configured failure threshold and reset timeout for Podman.
+
+## Verification
+- ✅ **Resilience**: Verified circuit breaker in native environment.
+- ✅ **Privacy**: Verified field privacy via reflection tests.
+- ✅ **PII**: Verified 19+ patterns including Indian edge cases.
+- ✅ **Regression**: 100% build success across `arcclaw-core` and `arcclaw-app`.
+

@@ -143,8 +143,8 @@ public class TelegramAgentHandlerTest {
 
         // Mock a COMPLETED checkpoint
         AgentCheckpoint checkpoint = new AgentCheckpoint();
-        checkpoint.id = 1L;
-        checkpoint.status = CheckpointStatus.COMPLETED;
+        checkpoint.setId(1L);
+        checkpoint.setStatus(CheckpointStatus.COMPLETED);
         String deterministicId = UUID.nameUUIDFromBytes("chat456:123".getBytes(StandardCharsets.UTF_8)).toString();
 
         when(intentClassifierMock.classify("hello again")).thenReturn("coordinator");
@@ -156,7 +156,7 @@ public class TelegramAgentHandlerTest {
         // Assert
         verify(workspaceManagerMock, never()).terminateSession(anyString());
         verify(statefulAgentStoreMock)
-                .save(argThat(cp -> cp.status == CheckpointStatus.IN_PROGRESS && "[]".equals(cp.stateJson)));
+                .save(argThat(cp -> cp.getStatus() == CheckpointStatus.IN_PROGRESS && "[]".equals(cp.getStateJson())));
 
         verify(agentLoopMock).run(eq(deterministicId), eq("coordinator"), eq("hello again"), any(), eq(5));
     }

@@ -64,7 +64,7 @@ class WorkspaceManagerTest {
         try {
             var loaded = agentStore.load("zombie-session-1", "coordinator");
             assertTrue(loaded.isPresent(), "Checkpoint should exist");
-            assertEquals(CheckpointStatus.IN_PROGRESS, loaded.get().status);
+            assertEquals(CheckpointStatus.IN_PROGRESS, loaded.get().getStatus());
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -77,9 +77,9 @@ class WorkspaceManagerTest {
         try {
             var afterRecovery = agentStore.load("zombie-session-1", "coordinator");
             assertTrue(afterRecovery.isPresent(), "Checkpoint should still exist");
-            assertEquals(CheckpointStatus.FAILED, afterRecovery.get().status);
-            assertNotNull(afterRecovery.get().failedAt, "failedAt should be set");
-            assertTrue(afterRecovery.get().failReason.contains("JVM crash recovery"),
+            assertEquals(CheckpointStatus.FAILED, afterRecovery.get().getStatus());
+            assertNotNull(afterRecovery.get().getFailedAt(), "failedAt should be set");
+            assertTrue(afterRecovery.get().getFailReason().contains("JVM crash recovery"),
                     "Fail reason should mention crash recovery");
         } finally {
             WorkspaceScopeHolder.clear();
@@ -128,8 +128,8 @@ class WorkspaceManagerTest {
         try {
             var cp = agentStore.load(sessionId, "debugger");
             assertTrue(cp.isPresent());
-            assertEquals(CheckpointStatus.FAILED, cp.get().status);
-            assertTrue(cp.get().failReason.contains("WorkspaceManager"));
+            assertEquals(CheckpointStatus.FAILED, cp.get().getStatus());
+            assertTrue(cp.get().getFailReason().contains("WorkspaceManager"));
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -164,8 +164,8 @@ class WorkspaceManagerTest {
             var debuggerCp = agentStore.load(sessionId, "debugger");
             assertTrue(coordinatorCp.isPresent());
             assertTrue(debuggerCp.isPresent());
-            assertEquals(CheckpointStatus.FAILED, coordinatorCp.get().status);
-            assertEquals(CheckpointStatus.FAILED, debuggerCp.get().status);
+            assertEquals(CheckpointStatus.FAILED, coordinatorCp.get().getStatus());
+            assertEquals(CheckpointStatus.FAILED, debuggerCp.get().getStatus());
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -183,7 +183,7 @@ class WorkspaceManagerTest {
         try {
             var cp = agentStore.save(sessionId, "researcher",
                     List.of(new ReasoningStep("done", "FINISH", Map.of("answer", "42"), "Task completed.", 0, 0)));
-            agentStore.markCompleted(cp.id);
+            agentStore.markCompleted(cp.getId());
         } finally {
             WorkspaceScopeHolder.clear();
         }
@@ -204,7 +204,7 @@ class WorkspaceManagerTest {
             // should be invalidated, even completed ones.
             var cp = agentStore.load(sessionId, "researcher");
             assertTrue(cp.isPresent());
-            assertEquals(CheckpointStatus.FAILED, cp.get().status,
+            assertEquals(CheckpointStatus.FAILED, cp.get().getStatus(),
                     "Terminated sessions should mark ALL non-FAILED checkpoints as FAILED");
         } finally {
             WorkspaceScopeHolder.clear();
@@ -223,7 +223,7 @@ class WorkspaceManagerTest {
             var cp = agentStore.save(sessionId, "coordinator", steps);
 
             // Manually set to AWAITING_APPROVAL
-            cp.status = CheckpointStatus.AWAITING_APPROVAL;
+            cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             em.merge(cp);
             em.flush();
         } finally {
@@ -238,8 +238,8 @@ class WorkspaceManagerTest {
         try {
             var loaded = agentStore.load(sessionId, "coordinator");
             assertTrue(loaded.isPresent());
-            assertEquals(CheckpointStatus.FAILED, loaded.get().status);
-            assertTrue(loaded.get().failReason.contains("approval was pending at shutdown"));
+            assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
+            assertTrue(loaded.get().getFailReason().contains("approval was pending at shutdown"));
         } finally {
             WorkspaceScopeHolder.clear();
         }

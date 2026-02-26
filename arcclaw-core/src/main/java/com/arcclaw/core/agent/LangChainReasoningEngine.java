@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent;
 
+import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -42,7 +43,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     ChatMemoryStore chatMemoryStore;
 
     @Inject
-    com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
+    CompactionSummaryRepository compactionSummaryRepository;
 
     /**
      * Returns the strict tool binding constraint for the given agent role.

@@ -860,3 +860,22 @@ Engineered robust security and observability layers to protect against token ble
 - ✅ **`PersistentChatMemoryStoreTest`**: Verified that "As per our agreement" strings are filtered from history.
 - ✅ **`HistoryReflexTest`**: Verified that `/history` provides visibility into prior compaction summaries and current window.
 - ✅ **`mvn clean verify`**: 100% pass across all core and app modules.
+
+## Phase 41 — Resilience, Privacy & Observer Separation ✅
+
+Harden the kernel with circuit breakers, PII completeness, and strict observer isolation.
+
+### Completed Components:
+| Component | Responsibility |
+|-----------|----------------|
+| [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java) | 3-state Circuit Breaker for Podman resilience. |
+| [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java) | Strict field privacy and `@JsonIgnore` security annotations. |
+| [PiiScanReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/PiiScanReflex.java) | India-specific PII plus IPv6/UPI; reordered rules for overlap resolution. |
+| [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java) | Independent security component (removed `AgentObserver`). |
+| [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) | Direct budget check enforcement at loop start. |
+
+### Verification:
+- ✅ **`ProcessIsolationExecutorTest`**: Verified circuit breaker injector and configuration visibility.
+- ✅ **`AgentCheckpointTest`**: Verified field privacy and serialization exclusion (using reflection).
+- ✅ **`PiiScanReflexTest`**: Verified GSTIN, Passport, DOB, IPv6, and UPI VPA; confirmed rule ordering prevents shadowing.
+- ✅ **`mvn clean verify`**: 100% pass across 21+ Phase 41 unit tests.

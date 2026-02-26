@@ -162,8 +162,8 @@ class ReflexRegistryTest {
     void testDenyReflexSetsCheckpointFailed() {
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.sessionId = "session-deny";
-        cp.agentRole = "coordinator";
+        cp.setSessionId("session-deny");
+        cp.setAgentRole("coordinator");
         when(statefulAgentStore.load("session-deny", "coordinator"))
                 .thenReturn(Optional.of(cp));
 
@@ -171,7 +171,7 @@ class ReflexRegistryTest {
 
         verify(statefulAgentStore).save(argThat(saved ->
                 saved.getStatus() == CheckpointStatus.FAILED &&
-                "Human denied the tool execution.".equals(saved.failReason)
+                "Human denied the tool execution.".equals(saved.getFailReason())
         ));
     }
 

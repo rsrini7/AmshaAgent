@@ -35,7 +35,17 @@ public class PiiScanReflex implements AgentReflex {
     private static final Pattern PAN = Pattern.compile("[A-Z]{5}[0-9]{4}[A-Z]{1}");
     private static final Pattern CREDIT_CARD = Pattern.compile("\\b(?:\\d{4}[\\s\\-]?){3}\\d{4}\\b");
     private static final Pattern IPV4 = Pattern.compile("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b");
+    private static final Pattern IPV6 = Pattern.compile("(?i)\\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\\b");
     private static final Pattern JWT = Pattern.compile("eyJ[a-zA-Z0-9_\\-]+\\.eyJ[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+");
+    private static final Pattern DATE_OF_BIRTH = Pattern.compile("(?i)(?:DOB|Date\\s*of\\s*Birth|Birthdate)[\\s:=-]*(?:\\d{4}-\\d{2}-\\d{2}|\\d{2}-\\d{2}-\\d{4})");
+    private static final Pattern PASSPORT_IN = Pattern.compile("(?<![\\w])[A-Z][0-9]{7}(?![\\w])");
+    private static final Pattern GSTIN = Pattern.compile("(?<![\\w])[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}(?![\\w])");
+
+    // UPI VPA — runs AFTER EMAIL to avoid double-redaction.
+    // Negative lookahead excludes common email TLDs.
+    private static final Pattern UPI_VPA = Pattern.compile(
+        "\\b[a-zA-Z0-9.\\-_]{2,256}@(?![^@]*\\.(com|in|org|net|io|co\\.in)\\b)[a-zA-Z]{2,64}\\b"
+    );
 
     private record PiiRule(Pattern pattern, String type, String replacement) {}
 
@@ -44,12 +54,19 @@ public class PiiScanReflex implements AgentReflex {
         new PiiRule(EMAIL, "EMAIL", "[REDACTED-EMAIL]"),
         new PiiRule(CREDIT_CARD, "CARD", "[REDACTED-CARD]"),
         new PiiRule(AADHAAR_SPACED, "AADHAAR", "[REDACTED-AADHAAR]"),
-        new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[REDACTED-AADHAAR]"),
         new PiiRule(SSN, "SSN", "[REDACTED-SSN]"),
+        // Order Fix Phase 41: GSTIN must be before PAN because PAN is a subset of GSTIN
+        new PiiRule(GSTIN, "GSTIN", "[REDACTED-GSTIN]"),
         new PiiRule(PAN, "PAN", "[REDACTED-PAN]"),
-        new PiiRule(IPV4, "IP", "[REDACTED-IP]"),
+        // Order Fix Phase 41: Phone must be before Aadhaar because Indian mobile numbers with +91 can look like 12-digit Aadhaar
         new PiiRule(PHONE_INDIA, "PHONE", "[REDACTED-PHONE]"),
-        new PiiRule(PHONE_INTL, "PHONE", "[REDACTED-PHONE]")
+        new PiiRule(PHONE_INTL, "PHONE", "[REDACTED-PHONE]"),
+        new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[REDACTED-AADHAAR]"),
+        new PiiRule(PASSPORT_IN, "PASSPORT", "[REDACTED-PASSPORT]"),
+        new PiiRule(DATE_OF_BIRTH, "DOB", "[REDACTED-DOB]"),
+        new PiiRule(IPV4, "IP", "[REDACTED-IP]"),
+        new PiiRule(IPV6, "IP", "[REDACTED-IP]"),
+        new PiiRule(UPI_VPA, "UPI", "[REDACTED-UPI]")
     );
 
     // Private detection — mode-independent

@@ -39,9 +39,9 @@ public class StatusReflex implements AgentReflex {
         if (!checkpoints.isEmpty()) {
             // 1. Default to the most recently updated checkpoint's status
             checkpoints.sort((c1, c2) -> {
-                if (c1.updatedAt == null) return 1;
-                if (c2.updatedAt == null) return -1;
-                return c2.updatedAt.compareTo(c1.updatedAt); // Descending (newest first)
+                if (c1.getUpdatedAt() == null) return 1;
+                if (c2.getUpdatedAt() == null) return -1;
+                return c2.getUpdatedAt().compareTo(c1.getUpdatedAt()); // Descending (newest first)
             });
             
             status = checkpoints.get(0).getStatus().name();

@@ -20,8 +20,10 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeUnit;
 
 /**
  * OS-level process isolation for tool execution.
@@ -72,9 +74,25 @@ public class ProcessIsolationExecutor {
     private static final String CONTAINER_PIDS_LIMIT = "64";
 
     // Circuit breaker state
+    public enum CircuitBreakerState { CLOSED, OPEN, HALF_OPEN }
+
+    private final AtomicReference<CircuitBreakerState> state = new AtomicReference<>(CircuitBreakerState.CLOSED);
     private final AtomicInteger podmanFailures = new AtomicInteger(0);
-    private static final int PODMAN_FAILURE_THRESHOLD = 3;
-    private volatile boolean podmanCircuitOpen = false;
+    private final AtomicLong openedAt = new AtomicLong(0L);
+
+    @ConfigProperty(name = "arcclaw.sandbox.podman.failure-threshold", defaultValue = "3")
+    int podmanFailureThreshold;
+
+    @ConfigProperty(name = "arcclaw.sandbox.podman.reset-timeout-seconds", defaultValue = "30")
+    int resetTimeoutSeconds;
+
+    public int getPodmanFailureThreshold() {
+        return podmanFailureThreshold;
+    }
+
+    public int getResetTimeoutSeconds() {
+        return resetTimeoutSeconds;
+    }
 
     /**
      * Fix G2: Tracks names of all currently-running Podman containers.
@@ -96,13 +114,18 @@ public class ProcessIsolationExecutor {
                 boolean ok = proc.waitFor(5, TimeUnit.SECONDS);
                 if (!ok || proc.exitValue() != 0) {
                     log.warn("Podman not available — circuit open, falling back to NAMESPACE strategy.");
-                    podmanCircuitOpen = true;
+                    openCircuit();
                 }
             } catch (Exception e) {
                 log.warn("Podman not found on PATH — isolation degraded to NAMESPACE strategy", e);
-                podmanCircuitOpen = true;
+                openCircuit();
             }
         }
+    }
+
+    private void openCircuit() {
+        state.set(CircuitBreakerState.OPEN);
+        openedAt.set(System.currentTimeMillis());
     }
 
     /**
@@ -151,23 +174,43 @@ public class ProcessIsolationExecutor {
             return executeDirectly(workspaceRoot, command);
         }
 
-        if ("PODMAN".equalsIgnoreCase(sandboxStrategy) && !podmanCircuitOpen) {
-            try {
-                String result = executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
-                podmanFailures.set(0);
-                return result;
-            } catch (ToolExecutionException e) {
-                // THE FIX: The tool ran but failed. Do NOT fall back. 
-                // Throw immediately so the LLM sees the tool's error output.
-                throw e;
-            } catch (Exception e) {
-                int failures = podmanFailures.incrementAndGet();
-                log.errorf("Podman execution failed (session=%s, failureCount=%d): %s",
-                        sessionId, failures, e.getMessage());
+        if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
+            CircuitBreakerState currentState = state.get();
+            
+            // Handle HALF_OPEN transition
+            if (currentState == CircuitBreakerState.OPEN) {
+                long elapsed = System.currentTimeMillis() - openedAt.get();
+                if (elapsed >= TimeUnit.SECONDS.toMillis(resetTimeoutSeconds)) {
+                    log.infof("Podman circuit breaker reset timeout reached. Transitioning to HALF_OPEN.");
+                    state.compareAndSet(CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN);
+                    currentState = state.get();
+                }
+            }
 
-                if (failures >= PODMAN_FAILURE_THRESHOLD) {
-                    log.errorf("Podman failed %d times — opening circuit breaker, falling back to NAMESPACE", failures);
-                    podmanCircuitOpen = true;
+            if (currentState != CircuitBreakerState.OPEN) {
+                try {
+                    String result = executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
+                    
+                    // Success! 
+                    if (state.get() == CircuitBreakerState.HALF_OPEN) {
+                        log.infof("Podman successful in HALF_OPEN state. Closing circuit breaker.");
+                    }
+                    state.set(CircuitBreakerState.CLOSED);
+                    podmanFailures.set(0);
+                    return result;
+                } catch (ToolExecutionException e) {
+                    // THE FIX: The tool ran but failed. Do NOT fall back. 
+                    // Throw immediately so the LLM sees the tool's error output.
+                    throw e;
+                } catch (Exception e) {
+                    int failures = podmanFailures.incrementAndGet();
+                    log.errorf("Podman execution failed (session=%s, failureCount=%d, state=%s): %s",
+                            sessionId, failures, state.get(), e.getMessage());
+
+                    if (state.get() == CircuitBreakerState.HALF_OPEN || failures >= podmanFailureThreshold) {
+                        log.errorf("Podman failed. Opening circuit breaker (state was %s).", state.get());
+                        openCircuit();
+                    }
                 }
             }
         }

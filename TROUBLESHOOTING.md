@@ -2593,3 +2593,20 @@ Explicitly excluded ordinary follow-up questions and history requests.
 **Symptom**: The `/status` reflex returns `$0.0000 / $10.00 (0.0%)` even after verifyable interaction.
 **Root Cause**: Either the `sessionId` passed to `StatusReflex` does not match the one in `GovernanceLayer`, or the Price-per-1k-tokens is set to 0.0 in `application.yaml`.
 **Resolution**: Verify that the deterministic session ID generation in `TelegramAgentHandler` is consistent. Check `arcclaw.governance.price-per-1k-input` and `output` values in the active profile.
+
+## 36. Phase 41: Resilience, Privacy & Observer Separation
+
+### 🔴 T-1: PII Pattern Shadowing (PAN vs GSTIN)
+**Symptom**: A GSTIN like `22AAAAA0000A1Z5` is redacted as `[REDACTED-PAN]A1Z5` instead of `[REDACTED-GSTIN]`.
+**Root Cause**: The PAN regex is a significant subset of the GSTIN regex. If the PAN rule appears before the GSTIN rule in `PiiScanReflex`, it will consume the 10 characters identified as a PAN, leaving the GSTIN rule unvisited.
+**Resolution**: Rule order in `PiiScanReflex.java` is critical. `GSTIN` is now ordered before `PAN`, and `PHONE` is ordered before `AADHAAR_COMPACT` to handle overlapping numeric patterns.
+
+### 🟠 T-2: Circuit Breaker Configuration Injection
+**Symptom**: `ProcessIsolationExecutor` fails to enter `HALF_OPEN` state or never resets after failure.
+**Root Cause**: Incorrect property naming in `application.yaml` or missing standard getters in the Quarkus bean, which can lead to default values (0) being used in tests if manual validation is performed on the proxy.
+**Resolution**: Ensure properties match `arcclaw.sandbox.podman.failure-threshold` and `reset-timeout-seconds`. Use the newly added public getters (`getPodmanFailureThreshold()`, `getResetTimeoutSeconds()`) to verify configuration state during integration tests.
+
+### 🟡 T-3: Checkpoint Privacy Breakage in Tests
+**Symptom**: Compilation errors in legacy tests after making `AgentCheckpoint` fields private.
+**Root Cause**: Many existing tests directly manipulated fields like `agentRole`, `status`, or `failReason`.
+**Resolution**: All tests must use the public getters and setters (e.g., `getAgentRole()`, `setStatus()`). Direct field access is strictly prohibited for architectural encapsulation.

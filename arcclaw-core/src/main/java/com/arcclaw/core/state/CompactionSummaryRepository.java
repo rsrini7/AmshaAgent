@@ -32,4 +32,12 @@ public class CompactionSummaryRepository {
             em.persist(newEntity);
         }
     }
+
+    @Transactional
+    public void deleteBySessionId(String sessionId) {
+        CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
+        if (entity != null) {
+            em.remove(entity);
+        }
+    }
 }

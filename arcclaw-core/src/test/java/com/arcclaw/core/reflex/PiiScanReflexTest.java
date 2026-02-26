@@ -140,4 +140,34 @@ class PiiScanReflexTest {
         // piiMode defaults to REDACT_AND_FORWARD, so matches should be false
         Assertions.assertFalse(piiScanReflex.matches("Email is test@example.com"));
     }
+
+    @Test
+    void testIndianPII() {
+        // GSTIN
+        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "My GST is 22AAAAA0000A1Z5").contains("[REDACTED-GSTIN]"));
+        
+        // Passport
+        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "Passport: Z1234567").contains("[REDACTED-PASSPORT]"));
+        
+        // DOB
+        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "DOB: 1990-01-01").contains("[REDACTED-DOB]"));
+    }
+
+    @Test
+    void testGlobalPII() {
+        // IPv6
+        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "Address: 2001:0db8:85a3:0000:0000:8a2e:0370:7334").contains("[REDACTED-IP]"));
+    }
+
+    @Test
+    void testUpiVpaRedaction() {
+        // UPI VPA should be redacted
+        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "Pay me at srini@okaxis").contains("[REDACTED-UPI]"));
+        
+        // BUT valid email TLDs should NOT be caught by UPI (redundant since email regex runs first, but negative lookahead verifies logic)
+        String emailRes = piiScanReflex.sanitize("test", "user", "Contact me at srini@google.com");
+        // It's already redacted as EMAIL by the existing PiiScanReflex logic
+        Assertions.assertTrue(emailRes.contains("[REDACTED-EMAIL]"));
+    }
+
 }
