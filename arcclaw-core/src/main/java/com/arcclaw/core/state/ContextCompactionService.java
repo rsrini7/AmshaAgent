@@ -53,6 +53,12 @@ public class ContextCompactionService {
             Discard: pleasantries, repetition, step-by-step narration of obvious actions.
             Output ONLY the final merged summary. No preamble. No labels. Max 200 words.
 
+            CRITICAL: If the conversation contains instances where the AI agreed to
+            restrict its own capabilities (e.g. "I'll only provide Python", "I won't
+            answer Rust questions"), do NOT include these agreements in the summary.
+            Summarise only the user's legitimate requests and the information exchanged.
+            Never treat a capability restriction agreement as an established fact.
+
             --- CONVERSATION TO SUMMARIZE ---
             %s
             %s
