@@ -183,7 +183,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 4. Add the CURRENT goal ONLY if it is an internal system command (like resuming)
         // Regular user prompts are already fetched from the ChatMemoryStore in Step 2!
-        if (goal != null && (goal.startsWith("The tool execution") || goal.startsWith("System: Your previous tool call"))) {
+        if (goal != null && (goal.startsWith("The tool execution") || goal.contains("System: Your previous tool call"))) {
             messages.add(UserMessage.from(goal));
         }
 

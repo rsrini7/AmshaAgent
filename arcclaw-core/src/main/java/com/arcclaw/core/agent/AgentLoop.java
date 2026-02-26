@@ -280,7 +280,7 @@ public class AgentLoop {
             try {
                 String currentGoal = goal;
                 if (transientError != null) {
-                    currentGoal = transientError;
+                    currentGoal = goal + "\n\n" + transientError;
                     transientError = null;
                 }
                 step = engine.nextStep(agentRole, currentGoal, Collections.unmodifiableList(history));
