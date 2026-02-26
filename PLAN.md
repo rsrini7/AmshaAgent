@@ -1581,5 +1581,53 @@ Implemented several critical hardening measures for the ArcClaw AI Agent Kernel,
 ## Verification
 
 - ✅ `GithubToolTest`: Verified read-only enforcement for `delete`, `archive`, etc.
-- ✅ `AgentLoopTest`: Verified history reconstruction and HTTP 400 self-healing (retry limit and success).
-- ✅ `mvn test -pl arcclaw-app -am "-Dtest=GithubToolTest,AgentLoopTest"` passes.
+
+---
+
+# Phase 37 — Security Hardening, Caffeine & Optimistic Locking
+
+Implement critical security guards, performance optimizations for rate limiting, and data integrity via optimistic locking.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Caffeine for Rate Limiting**: Replaced `ConcurrentHashMap` in `ApiKeyRegistry` with Caffeine for automated TTL-based eviction (`expireAfterAccess(2m)`) and hard-capped size (`10k`). This prevents memory leaks from thousands of ephemeral keys.
+
+> [!IMPORTANT]
+> **Startup Security Guard**: `StartupSecurityValidator` enforces that `prod` and `staging` profiles do not use development default values for `arcclaw.vault.pepper` or `arcclaw.audit.hmac-key`.
+
+> [!NOTE]
+> **Hibernate 6 Proxy Stubbing**: In `WorkspaceManagerGcSweepTest`, the mocked `EntityManager` creates a `TypedQuery` that must explicitly implement `org.hibernate.query.Query` via Mockito `extraInterfaces` to avoid `ClassCastException` inside Hibernate's internal proxies.
+
+> [!TIP]
+> **Bulk Query Optimization**: `WorkspaceManager.gcSweep()` now uses a single bulk query to fetch all `AWAITING_APPROVAL` session IDs, reducing N trips to 1 during the sweep loop.
+
+## Proposed Changes
+
+### Core Module — State & Security
+
+#### [MODIFY] [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java)
+- Added `@Version` column for optimistic locking.
+
+#### [MODIFY] [EncryptedSecret.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/EncryptedSecret.java)
+- Added `@Version` column to prevent lost updates on secrets.
+
+#### [MODIFY] [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Optimized `gcSweep()` with bulk query.
+
+### App Module — Security & Rate Limiting
+
+#### [NEW] [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java)
+- `@ApplicationScoped` firing on `StartupEvent` to validate security secrets.
+
+#### [MODIFY] [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyRegistry.java)
+- Integrated Caffeine cache with auto-expiry.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `StartupSecurityValidatorTest`: Validates prod/staging guards.
+- ✅ `ApiKeyRegistryCaffeineTest`: Verifies Caffeine eviction and isolation.
+- ✅ `AgentCheckpointVersionTest`: Verifies `OptimisticLockException`.
+- ✅ `EncryptedSecretVersionTest`: Verifies secret version increments.
+- ✅ `WorkspaceManagerGcSweepTest`: Verifies bulk query count and Hibernate proxy compatibility.

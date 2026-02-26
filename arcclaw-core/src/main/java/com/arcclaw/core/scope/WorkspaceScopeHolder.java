@@ -34,7 +34,8 @@ package com.arcclaw.core.scope;
  */
 public final class WorkspaceScopeHolder {
 
-    private static final InheritableThreadLocal<String> CURRENT_SESSION = new InheritableThreadLocal<>();
+    // TODO: Migrate to ScopedValue (JEP 506) when fully dropping JDK 21 support
+    private static final ThreadLocal<String> CURRENT_SESSION = new ThreadLocal<>();
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(WorkspaceScopeHolder.class);
 
     private WorkspaceScopeHolder() {

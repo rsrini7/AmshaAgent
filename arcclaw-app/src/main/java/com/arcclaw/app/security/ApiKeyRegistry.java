@@ -4,6 +4,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.time.Duration;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -22,7 +26,10 @@ public class ApiKeyRegistry {
     @Inject
     Clock clock;
 
-    private final ConcurrentHashMap<String, ConcurrentLinkedDeque<Instant>> rateLimiter = new ConcurrentHashMap<>();
+    private final Cache<String, ConcurrentLinkedDeque<Instant>> rateLimiter = Caffeine.newBuilder()
+        .expireAfterAccess(Duration.ofMinutes(2)) // Auto-evicts idle keys after 2 minutes
+        .maximumSize(10_000)                      // Hard cap to prevent heap exhaustion
+        .build();
 
     public boolean isValidKey(String key) {
         if (key == null) return false;
@@ -40,11 +47,14 @@ public class ApiKeyRegistry {
     }
 
     public boolean isRateLimited(String key) {
+        
         if (key == null) return false;
 
-        ConcurrentLinkedDeque<Instant> requests = rateLimiter.computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
         Instant now = clock.instant();
         Instant windowStart = now.minusSeconds(60);
+
+        // Only fetch the existing queue (or return an empty one), do NOT add a timestamp here
+        ConcurrentLinkedDeque<Instant> requests = rateLimiter.get(key, k -> new ConcurrentLinkedDeque<>());
 
         // Evict expired entries
         while (!requests.isEmpty() && requests.peekFirst().isBefore(windowStart)) {
@@ -56,7 +66,10 @@ public class ApiKeyRegistry {
 
     public void recordRequest(String key) {
         if (key == null) return;
-        ConcurrentLinkedDeque<Instant> requests = rateLimiter.computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
-        requests.addLast(clock.instant());
+        Instant now = clock.instant();
+        // 1. Fetch or create the queue
+        ConcurrentLinkedDeque<Instant> requests = rateLimiter.get(key, k -> new ConcurrentLinkedDeque<>());
+        // 2. Add the timestamp on a separate line to avoid the void return type mismatch
+        requests.addLast(now);
     }
 }

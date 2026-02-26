@@ -3,6 +3,7 @@ package com.arcclaw.core.state;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import jakarta.persistence.Version;
 
 /**
  * JPA entity for persisting agent reasoning loop state.
@@ -29,6 +30,10 @@ public class AgentCheckpoint {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @Version
+    @Column(nullable = false)
+    public int version;
 
     /** The workspace session ID this checkpoint belongs to. */
     @Column(nullable = false, length = 128)
