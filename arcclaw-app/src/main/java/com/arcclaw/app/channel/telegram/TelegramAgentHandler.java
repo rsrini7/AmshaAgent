@@ -1,5 +1,6 @@
 package com.arcclaw.app.channel.telegram;
 
+import com.arcclaw.app.util.AgentErrorMessageUtil;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
@@ -20,6 +21,7 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.MDC;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -195,14 +197,14 @@ public class TelegramAgentHandler {
             } else if (result.success()) {
                 reply(chatId, result.finalAnswer());
             } else {
-                reply(chatId, "❌ **Task Failed**\n\nReason: " + result.terminationReason());
+                reply(chatId, "❌ **Task Failed**\n\nReason: " + AgentErrorMessageUtil.sanitizeErrorMessage(result.terminationReason()));
             }
 
         } catch (Exception e) {
             log.error("Failed to process agent loop for session: " + baseId, e);
             reply(chatId, "⚠️ System Error: " + e.getMessage());
         } finally {
-            org.jboss.logging.MDC.remove("userId");
+            MDC.remove("userId");
             WorkspaceScopeHolder.clear();
         }
     }

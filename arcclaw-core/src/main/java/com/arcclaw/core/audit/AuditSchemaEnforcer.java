@@ -8,6 +8,7 @@ import jakarta.interceptor.Interceptor;
 import jakarta.annotation.Priority;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
 
 /**
  * Enforces WORM (Write-Once-Read-Many) compliance at the database level using SQLite triggers.
@@ -22,7 +23,7 @@ public class AuditSchemaEnforcer {
     EntityManager em;
 
     @Inject
-    org.jboss.logging.Logger log;
+    Logger log;
 
     @Transactional
     public void onStart(
