@@ -2334,3 +2334,18 @@ which is already mapped to `${GROQ_API_KEY}` in `application.yaml`.
 Update integration test mock accordingly:
 `when(compactionModel.chat(any(ChatRequest.class))).thenReturn(
     ChatResponse.builder().aiMessage(AiMessage.from("summary")).build())`
+
+### 🔴 Runtime: Groq 400 `tool_use_failed` — LLM Generates `<function=...>` Syntax
+**Symptom:** All tool calls fail with HTTP 400. `failed_generation` in Groq response
+shows `<function=github {...}></function>` instead of valid OpenAI tool_call JSON.
+AgentLoop hits schema self-correction limit and marks checkpoint FAILED: SCHEMA_ERROR.
+**Root Cause:** `llama-3.3-70b-versatile` falls back to legacy `<function>` tag
+format when the `[PRIOR CONTEXT SUMMARY]` SystemMessage is injected between the
+main system prompt and the tool definitions, disrupting the model's function-calling
+instruction pathway.
+**Resolution:**
+1. Purge poisoned session: DELETE FROM compaction_summary WHERE sessionId = '...';
+2. Change summary injection from SystemMessage to UserMessage with
+   `[CONTEXT FROM PRIOR SESSION - FOR REFERENCE ONLY]` prefix in LangChainReasoningEngine.
+3. Filter `[PRIOR CONTEXT SUMMARY]` content out of the compaction input to prevent
+   recursive self-referential summaries.

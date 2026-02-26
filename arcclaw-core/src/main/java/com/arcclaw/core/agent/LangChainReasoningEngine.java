@@ -116,7 +116,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // 2. FETCH AND INJECT LONG-TERM HISTORY (Sprint 2 Memory)
         if (sessionId != null) {
             compactionSummaryRepository.findBySessionId(sessionId).ifPresent(s -> {
-                messages.add(SystemMessage.from("[PRIOR CONTEXT SUMMARY]\n" + s.summary));
+                messages.add(UserMessage.from("[CONTEXT FROM PRIOR SESSION - FOR REFERENCE ONLY]\n" + s.summary));
             });
             List<ChatMessage> chatHistory = chatMemoryStore.getMessages(sessionId);
             if (chatHistory != null && !chatHistory.isEmpty()) {
@@ -187,8 +187,18 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 4. Add the CURRENT goal ONLY if it is an internal system command (like resuming)
         // Regular user prompts are already fetched from the ChatMemoryStore in Step 2!
-        if (goal != null && (goal.startsWith("The tool execution") || goal.contains("System: Your previous tool call"))) {
+        if (goal != null && goal.startsWith("The tool execution")) {
+            // Resume approval — keep as UserMessage (this is correct for resume flow)
             messages.add(UserMessage.from(goal));
+        } else if (goal != null && goal.contains("System: Your previous tool call")) {
+            // Schema correction — split goal from the error hint
+            // The part before "\n\nSystem:" is the original user goal (already in ChatMemoryStore)
+            // Only inject the correction as a SystemMessage — do NOT re-add the user goal
+            String correctionHint = goal.substring(goal.indexOf("System: Your previous tool call"));
+            messages.add(SystemMessage.from(
+                correctionHint +
+                "\nIMPORTANT: Do NOT attempt another tool call. Output your final answer as plain text only."
+            ));
         }
 
         // 1. Determine which tools the current persona is allowed to see

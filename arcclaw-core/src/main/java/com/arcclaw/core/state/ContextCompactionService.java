@@ -81,6 +81,8 @@ public class ContextCompactionService {
 
         String messagesToCompactStr = toCompact.stream()
                 .map(ChatMessage::toString)
+                .filter(text -> !text.contains("[PRIOR CONTEXT SUMMARY]"))
+                .filter(text -> !text.contains("[CONTEXT FROM PRIOR SESSION"))
                 .collect(Collectors.joining("\n"));
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
