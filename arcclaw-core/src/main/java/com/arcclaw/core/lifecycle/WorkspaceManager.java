@@ -25,7 +25,9 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Lifecycle orchestrator connecting CDI scope, state store, and workspace
@@ -197,23 +199,22 @@ public class WorkspaceManager {
         log.debugf("GC sweep: checking %d session(s) against TTL=%dm (cutoff=%s)",
                 heartbeats.size(), sessionTtlMinutes, cutoff);
 
+        // 1 Bulk Query instead of N+1 individual queries
+        Set<String> awaitingApprovalIds = em.createQuery(
+                "SELECT c.sessionId FROM AgentCheckpoint c WHERE c.status = :status", String.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .getResultStream()
+                .collect(Collectors.toSet());
+
         heartbeats.forEach((sessionId, lastHeartbeat) -> {
             if (lastHeartbeat.isBefore(cutoff)) {
-                // Step 6: Sprint 2B - Skip GC if session is AWAITING_APPROVAL
-                boolean awaitingApproval = em.createQuery(
-                        "SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status",
-                        Long.class)
-                        .setParameter("sid", sessionId)
-                        .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                        .getSingleResult() > 0;
-
-                if (awaitingApproval) {
+                // Check memory Set instead of making a DB trip
+                if (awaitingApprovalIds.contains(sessionId)) {
                     log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
                     return;
                 }
 
-                log.warnf("GC sweep: session=%s expired (last heartbeat=%s, cutoff=%s)",
-                        sessionId, lastHeartbeat, cutoff);
+                log.warnf("GC sweep: session=%s expired (last heartbeat=%s, cutoff=%s)", sessionId, lastHeartbeat, cutoff);
                 terminateSession(sessionId);
             }
         });

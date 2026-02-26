@@ -474,5 +474,13 @@
 - [x] Clear JVM in-memory ChatMemory cache via `.clear()`
 - [x] Update `terminateSession` and `resetSessionState` in `WorkspaceManager`
 - [x] Add architectural comments for re-persistence behavior
-- [x] Verify: Full build (`mvn clean verify`) passes with 58/58 core tests
+
+## Phase 37 — Security Hardening, Caffeine & Optimistic Locking
+- [x] Implement `StartupSecurityValidator` (Prod/Staging secret guards)
+- [x] Replace `ConcurrentHashMap` with `Caffeine` in `ApiKeyRegistry` (Rate limit eviction)
+- [x] Add `@Version` to `AgentCheckpoint` (Optimistic locking)
+- [x] Add `@Version` to `EncryptedSecret` (Optimistic locking)
+- [x] Optimize `WorkspaceManager.gcSweep()` (Bulk query for AWAITING_APPROVAL)
+- [x] Verify: All 5 Phase 37 test suites pass (21 tests total)
+- [x] Verify: Hibernate 6 Proxy compatibility in `WorkspaceManagerGcSweepTest`
 

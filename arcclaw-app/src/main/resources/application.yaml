@@ -396,6 +396,11 @@ mp:
       pepper: "test-pepper-00000000000000000000000000000000"
 
 "%staging":
+  quarkus:
+    langchain4j:
+      groq:
+        log-requests: ${ARCCLAW_DEBUG_LLM:false}
+        log-responses: ${ARCCLAW_DEBUG_LLM:false}
   arcclaw:
     governance:
       budget-usd: 50.00
@@ -406,6 +411,13 @@ mp:
 
 "%prod":
   quarkus:
+    langchain4j:
+      groq:
+        log-requests: ${ARCCLAW_DEBUG_LLM:false}
+        log-responses: ${ARCCLAW_DEBUG_LLM:false}
+      openai:
+        log-requests: ${ARCCLAW_DEBUG_LLM:false}
+        log-responses: ${ARCCLAW_DEBUG_LLM:false}
     log:
       level: INFO
       console:

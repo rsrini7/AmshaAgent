@@ -9,17 +9,17 @@ Now I have a thorough understanding of the project. Let me provide a comprehensi
 
 ## ArcClaw — Project Understanding
 
-**ArcClaw V1.0.0** is an enterprise-grade, multi-agent AI kernel built on **Quarkus 3.23 + Java 21/25 + LangChain4J**, designed with a paranoid security posture, financial guardrails, and multi-channel support. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+**ArcClaw V1.0.0** is an enterprise-grade, multi-agent AI kernel built on **Quarkus 3.23 + Java 21/25 + LangChain4J**, designed with a paranoid security posture, financial guardrails, and multi-channel support.
 
 ### Architecture at a Glance
 
-The project follows a **3-module Maven reactor**: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+The project follows a **3-module Maven reactor**:
 
 - **`arcclaw-core`** — Domain kernel: agents, tools, security, state, governance (no Quarkus app runtime)
 - **`arcclaw-deployment`** — Quarkus build-time processor (`WorkspaceScopeProcessor`) for the custom CDI scope
 - **`arcclaw-app`** — REST, CLI, Telegram channel, security filters, config assembly
 
-The **multi-agent model** (Hindu Trimurti/Tridevi-inspired) uses 4 specialists routed by an LLM intent classifier (`llama-3.1-8b-instant`): [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+The **multi-agent model** (Hindu Trimurti/Tridevi-inspired) uses 4 specialists routed by an LLM intent classifier (`llama-3.1-8b-instant`):
 - **Vishnu** (coordinator) — Decomposes goals, routes, synthesizes
 - **Brahma** (coder) — Pure code/logic, refuses conversation
 - **Saraswati** (researcher) — Facts/GitHub only, never fabricates
@@ -38,17 +38,17 @@ The **multi-agent model** (Hindu Trimurti/Tridevi-inspired) uses 4 specialists r
 
 ### Phases Completed (up to Phase 36.2)
 
-- **Ph 0–10**: Scaffolding, Security Vault, Sandbox, Tools, Agent Orchestration, State, Lifecycle, Governance, OTel, Health [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 29**: Memory optimization — rolling window pruning, dynamic tool schema binding [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 30**: `ReflexRegistry` — `HaltReflex`, `StatusReflex`, `ResetReflex`, `ApproveReflex`, `DenyReflex` [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 31**: `PiiScanReflex` — 10 regex patterns, `REDACT_AND_FORWARD` / `BLOCK_AND_NOTIFY` modes [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 32**: `ApiKeyAuthFilter`, `ApiKeyRegistry` (sliding-window rate limiter), `TelegramAllowlistGuard` [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 33**: `PromptInjectionReflex` — 15 injection vectors, 4 category tags [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 34**: Tool schema binding — `parametersSchema`, `ToolSpecification` injection, schema jailbreak fix [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 35**: Immutable Audit Log (WORM) — `AuditEvent` Panache entity, HMAC-SHA256 chain, `AuditVerifier`, SQLite triggers [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 36**: OTel token accumulation fix, REST HITL (`/approve`, `/deny` endpoints), AWAITINGAPPROVAL zombie recovery [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 36.1**: Read-only enforcement for `GithubTool`, `AgentLoop` poisoned history fix, LLM HTTP 400 self-healing retry [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
-- **Ph 36.2**: `WorkspaceManager` persistence fix — JVM in-memory ChatMemory cache clear on terminate/reset [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+- **Ph 0–10**: Scaffolding, Security Vault, Sandbox, Tools, Agent Orchestration, State, Lifecycle, Governance, OTel, Health
+- **Ph 29**: Memory optimization — rolling window pruning, dynamic tool schema binding
+- **Ph 30**: `ReflexRegistry` — `HaltReflex`, `StatusReflex`, `ResetReflex`, `ApproveReflex`, `DenyReflex`
+- **Ph 31**: `PiiScanReflex` — 10 regex patterns, `REDACT_AND_FORWARD` / `BLOCK_AND_NOTIFY` modes
+- **Ph 32**: `ApiKeyAuthFilter`, `ApiKeyRegistry` (sliding-window rate limiter), `TelegramAllowlistGuard`
+- **Ph 33**: `PromptInjectionReflex` — 15 injection vectors, 4 category tags
+- **Ph 34**: Tool schema binding — `parametersSchema`, `ToolSpecification` injection, schema jailbreak fix
+- **Ph 35**: Immutable Audit Log (WORM) — `AuditEvent` Panache entity, HMAC-SHA256 chain, `AuditVerifier`, SQLite triggers
+- **Ph 36**: OTel token accumulation fix, REST HITL (`/approve`, `/deny` endpoints), AWAITINGAPPROVAL zombie recovery
+- **Ph 36.1**: Read-only enforcement for `GithubTool`, `AgentLoop` poisoned history fix, LLM HTTP 400 self-healing retry
+- **Ph 36.2**: `WorkspaceManager` persistence fix — JVM in-memory ChatMemory cache clear on terminate/reset
 
 ***
 
@@ -57,7 +57,7 @@ The **multi-agent model** (Hindu Trimurti/Tridevi-inspired) uses 4 specialists r
 Given the trajectory of the project, here are the **strongest candidates** for Phase 37, ranked by architectural readiness and value. I'll be direct so Gemini can verify and debate each point:
 
 ### Option A — Context Compaction & Summarization Engine (High Priority)
-**Why now**: `PersistentChatMemoryStore` stores up to 100 messages (`max-messages: 100`) but **never summarizes**. Long sessions will silently degrade LLM quality by 40–90% as the context window fills with stale turns. This is the biggest correctness gap post-Phase 36. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+**Why now**: `PersistentChatMemoryStore` stores up to 100 messages (`max-messages: 100`) but **never summarizes**. Long sessions will silently degrade LLM quality by 40–90% as the context window fills with stale turns. This is the biggest correctness gap post-Phase 36.
 
 **Proposed scope**:
 - `ContextCompactionService` — triggers when `chatMemoryStore.getMessages(sessionId).size() >= threshold` (configurable, default 80)
@@ -66,7 +66,7 @@ Given the trajectory of the project, here are the **strongest candidates** for P
 - Fires an `AuditEventType.CONTEXT_COMPACTED` audit event (reuses Phase 35 infra)
 
 ### Option B — Tool Authorization Matrix (YAML-Driven)
-**Why now**: Each agent's `allowedTools` is **hardcoded in the agent class**. You cannot change permissions without redeployment. With HITL, Audit, and Governance all in place, this is now the weakest link for enterprise ops. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+**Why now**: Each agent's `allowedTools` is **hardcoded in the agent class**. You cannot change permissions without redeployment. With HITL, Audit, and Governance all in place, this is now the weakest link for enterprise ops.
 
 **Proposed scope**:
 - Move `arcclaw.agents.roles.allowed-tools` to `application.yaml`
@@ -75,7 +75,7 @@ Given the trajectory of the project, here are the **strongest candidates** for P
 - Optional: runtime reload via Quarkus `@ConfigMapping` live-reload
 
 ### Option C — Agent Memory RAG (SQLite FTS5 Hybrid Retrieval)
-**Why now**: Beyond the rolling window, there is **zero long-term retrieval**. A coordinator asking "what did we discuss 3 sessions ago?" gets nothing. Quarkus doesn't need pgvector for this — SQLite FTS5 is already in your stack. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+**Why now**: Beyond the rolling window, there is **zero long-term retrieval**. A coordinator asking "what did we discuss 3 sessions ago?" gets nothing. Quarkus doesn't need pgvector for this — SQLite FTS5 is already in your stack.
 
 **Proposed scope**:
 - `LongTermMemoryStore` backed by SQLite FTS5 virtual table
@@ -84,7 +84,7 @@ Given the trajectory of the project, here are the **strongest candidates** for P
 - Stays zero-infrastructure — same SQLite WAL DB, no new containers
 
 ### Option D — Vault Pepper Startup Guard + Secrets Hardening
-**Why now**: The dev default pepper (`dev-pepper-not-for-production-...`) is hardcoded in `application.yaml` for dev/test profiles. If a prod `.env` accidentally omits the pepper override, the vault is silently insecure. This is a **P0 security gap** never formally closed. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/8c296303-c717-4f19-99ee-0df254c4231f/rsrini7-arcclaw.txt)
+**Why now**: The dev default pepper (`dev-pepper-not-for-production-...`) is hardcoded in `application.yaml` for dev/test profiles. If a prod `.env` accidentally omits the pepper override, the vault is silently insecure. This is a **P0 security gap** never formally closed.
 
 **Proposed scope**:
 - `@Observes StartupEvent` validation bean throws `IllegalStateException` if running `prod` profile with the dev-default pepper

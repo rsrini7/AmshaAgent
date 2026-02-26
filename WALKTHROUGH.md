@@ -794,7 +794,24 @@ Extended `WorkspaceManager.onStartup()` to recover sessions stuck in `AWAITING_A
 - **OTel Mocking**: Addressed Mockito's inability to mock OTel's default `Tracer` by utilizing the standalone `@Alternative` + `@Priority` pattern for test-time overrides.
 - **Status Check Resilience**: Hardened `AgentResource.getSessionStatus` to gracefully handle `null` or empty `stateJson` when a session is paused for approval on its first iteration.
 - **Sandbox Robustness**: Improved `ToolRegistry` and `AgentLoop` to catch and report sandbox execution failures back to the LLM as Tool failures, preventing thread crashes and orphaned sessions.
-- **Smart Guardrails**: Injected argument validation logic into `GithubTool` to prevent common LLM parameter hallucinations (e.g., passing `owner/repo` to a list command) and provide actionable feedback for self-correction.
 
-**Verification**: `mvn clean verify "-Dquarkus.test.profile=test" -am -pl arcclaw-app,arcclaw-core` ✅ (71/71 tests passed)
+---
+
+## Phase 37: Security Hardening, Caffeine & Optimistic Locking ✅
+
+Implemented critical security guards, performance optimizations for rate limiting, and data integrity via optimistic locking.
+
+| File | Purpose |
+|------|---------|
+| [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java) | Prevents boot in `prod`/`staging` with default development secrets. |
+| [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyRegistry.java) | Caffeine-backed rate limiting with auto-eviction and size capping. |
+| [AgentCheckpoint.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java) | Added `@Version` for JPA optimistic locking. |
+| [EncryptedSecret.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/EncryptedSecret.java) | Added `@Version` to protect sensitive vault data. |
+| [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java) | Optimized GC sweep with a single bulk query for `AWAITING_APPROVAL` sessions. |
+
+### Verification:
+- ✅ **`StartupSecurityValidatorTest`**: Verified that `prod` profile throws exceptions if development secrets are used.
+- ✅ **`ApiKeyRegistryCaffeineTest`**: Verified key isolation and Caffeine eviction behavior.
+- ✅ **`AgentCheckpointVersionTest` & `EncryptedSecretVersionTest`**: Verified that stale updates trigger `OptimisticLockException`.
+- ✅ **`WorkspaceManagerGcSweepTest`**: Verified that the GC sweep optimization correctly handles awaiting-approval sessions and uses a single bulk query (100% Hibernate 6 Proxy compatible).
 

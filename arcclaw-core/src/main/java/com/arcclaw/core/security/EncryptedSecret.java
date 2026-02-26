@@ -5,6 +5,7 @@ import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -16,14 +17,15 @@ public class EncryptedSecret {
     @EmbeddedId
     public EncryptedSecretId id;
 
+    @Version
+    @Column(nullable = false)
+    public int version;
+
     @Column(nullable = false)
     public byte[] ciphertext;
 
     @Column(nullable = false)
     public byte[] nonce;
-
-    @Column(nullable = false)
-    public int version;
 
     // Composite Key Class
     @Embeddable
