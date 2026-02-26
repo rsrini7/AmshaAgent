@@ -484,3 +484,21 @@
 - [x] Verify: All 5 Phase 37 test suites pass (21 tests total)
 - [x] Verify: Hibernate 6 Proxy compatibility in `WorkspaceManagerGcSweepTest`
 
+---
+
+## Phase 38 — Context Compaction
+- [x] Create `CompactionSummaryEntity` (JPA/SQLite persistence without Panache)
+- [x] Create `CompactionSummaryRepository`
+- [x] Config `CompactionModelProducer` for `@Identifier("compaction")` LangChain model
+- [x] Implement `ContextCompactionService` logic and prompt definition 
+- [x] Integrate `ContextCompactionService` in `TelegramAgentHandler`
+- [x] Modify `ReasoningEngine` and implementors to require `sessionId`
+- [x] Update `LangChainReasoningEngine` to inject prior summaries
+- [x] Inject `sessionId` parameter across all tests (`AgentResilienceTest`, `AgentLoopTest`, etc.)
+- [x] Add `CONTEXT_COMPACTED` to `SecurityEventType`
+- [x] Create `CompactionTestProfile` with mock `quarkus.langchain4j.groq.api-key`
+- [x] Add unit tests `ContextCompactionServiceTest`
+- [x] Add integration tests `ContextCompactionServiceIntegrationTest`
+- [x] Verify: All related integration and unit tests pass
+
+

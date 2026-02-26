@@ -38,6 +38,9 @@
 | 33 | Prompt Injection | PromptInjectionReflexTest | Pass 1 short-circuiting of adversarial instructions |
 | 34 | Tool Schema | 68/68 JUnit Passes | JSON Schema for tool arguments + Schema Jailbreak fix |
 | 35 | Immutable Audit Log | 12/12 Audit tests | HMAC Chaining + SQLite WORM triggers + monotonic sequence |
+| 36 | REST HITL & Zombie Recovery | 71/71 tests | Traces parented properly, REST HITL APIs |
+| 37 | Security Hardening & Optimistic Locking | 21/21 tests | Caffeine registry, Optimistic Locking |
+| 38 | Context Compaction | ContextCompactionServiceTest | Plain EntityManager in core, offloaded async compaction |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -814,4 +817,24 @@ Implemented critical security guards, performance optimizations for rate limitin
 - ✅ **`ApiKeyRegistryCaffeineTest`**: Verified key isolation and Caffeine eviction behavior.
 - ✅ **`AgentCheckpointVersionTest` & `EncryptedSecretVersionTest`**: Verified that stale updates trigger `OptimisticLockException`.
 - ✅ **`WorkspaceManagerGcSweepTest`**: Verified that the GC sweep optimization correctly handles awaiting-approval sessions and uses a single bulk query (100% Hibernate 6 Proxy compatible).
+
+---
+
+## Phase 38: Context Compaction ✅
+
+Implemented an automated context compaction engine to handle unbounded session histories, preventing context window exhaustion and excess API costs on long-running tasks.
+
+| File | Purpose |
+|------|---------|
+| [CompactionSummaryEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryEntity.java) | JPA entity for storing generated session summaries. |
+| [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java) | Manages summary persistence explicitly using `EntityManager` (no Panache). |
+| [ContextCompactionService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ContextCompactionService.java) | Governs the compaction threshold and interacts with the language model to synthesize history. |
+| [CompactionModelProducer.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java) | Configures a segregated `ChatLanguageModel` `@Identifier("compaction")` for summary generation. |
+| [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | Intercepts pre-execution flows to dispatch context compaction asynchronously. |
+
+### Verification:
+- ✅ **`ContextCompactionServiceTest`**: Verified accurate condition evaluation for when compaction should/should not execute based on message thresholds.
+- ✅ **`ContextCompactionServiceIntegrationTest`**: Verified correct persistence sequence and audit trail generation (`CONTEXT_COMPACTED`).
+- ✅ **`LangChainReasoningEngineTest`**: Updated to support the new `sessionId` propagation and prompt injection logic.
+
 

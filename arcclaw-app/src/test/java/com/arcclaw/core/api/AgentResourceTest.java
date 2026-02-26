@@ -28,7 +28,7 @@ class AgentResourceTest {
         void setupMock() {
                 ReasoningStep finishStep = new ReasoningStep("Calculated final answer", ReasoningStep.FINISH,
                                 java.util.Map.of("response", "42"), null, 0, 0);
-                Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), any())).thenReturn(finishStep);
+                Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
 
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
                 Mockito.when(apiKeyRegistry.isRateLimited(anyString())).thenReturn(false);

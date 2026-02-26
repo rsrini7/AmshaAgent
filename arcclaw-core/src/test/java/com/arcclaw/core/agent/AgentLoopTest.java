@@ -19,11 +19,14 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 class AgentLoopTest {
@@ -32,6 +35,8 @@ class AgentLoopTest {
     private ToolRegistry toolRegistry;
     private ObjectMapper objectMapper;
     private ChatMemoryStore chatMemoryStore;
+    private com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
+
     
     private LangChainReasoningEngine engine;
 
@@ -41,12 +46,16 @@ class AgentLoopTest {
         toolRegistry = mock(ToolRegistry.class);
         objectMapper = new ObjectMapper();
         chatMemoryStore = mock(ChatMemoryStore.class);
+        compactionSummaryRepository = mock(com.arcclaw.core.state.CompactionSummaryRepository.class);
+        when(compactionSummaryRepository.findBySessionId(anyString())).thenReturn(Optional.empty());
         
         engine = new LangChainReasoningEngine();
         engine.chatLanguageModel = model;
         engine.toolRegistry = toolRegistry;
         engine.objectMapper = objectMapper;
         engine.chatMemoryStore = chatMemoryStore;
+        engine.compactionSummaryRepository = compactionSummaryRepository;
+
 
         WorkspaceScopeHolder.set("test-session");
     }
@@ -63,7 +72,7 @@ class AgentLoopTest {
             ChatResponse.builder().aiMessage(AiMessage.from("response")).build()
         );
 
-        engine.nextStep("coordinator", "goal", List.of(step));
+        engine.nextStep("test-session", "coordinator", "goal", List.of(step));
 
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         verify(model).chat(captor.capture());
@@ -100,7 +109,7 @@ class AgentLoopTest {
         // Second call succeeds
         ReasoningStep finishStep = ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "success"), 0, 0);
 
-        when(mockEngine.nextStep(any(), any(), any()))
+        when(mockEngine.nextStep(any(), any(), any(), any()))
             .thenThrow(ex)
             .thenReturn(finishStep);
 
@@ -123,7 +132,7 @@ class AgentLoopTest {
 
         InvalidRequestException ex = new InvalidRequestException("missing properties");
         // Always throw
-        when(mockEngine.nextStep(any(), any(), any())).thenThrow(ex);
+        when(mockEngine.nextStep(any(), any(), any(), any())).thenThrow(ex);
 
         AgentResult result = loop.run("test goal", mockEngine, 5);
         assertFalse(result.success(), "Loop should fail since it exceeds schema retry limit");

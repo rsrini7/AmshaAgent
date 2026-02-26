@@ -42,6 +42,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject
     ChatMemoryStore chatMemoryStore;
 
+    @Inject
+    com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
+
     /**
      * Returns the strict tool binding constraint for the given agent role.
      * This is injected into the system prompt to prevent tool bias.
@@ -70,7 +73,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     @Override
-    public ReasoningStep nextStep(String agentRole, String goal, List<ReasoningStep> history) {
+    public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
         // 1. Add the Base System Prompt
@@ -112,8 +115,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         messages.add(SystemMessage.from(finalSystemPrompt));
 
         // 2. FETCH AND INJECT LONG-TERM HISTORY (Sprint 2 Memory)
-        String sessionId = WorkspaceScopeHolder.get();
         if (sessionId != null) {
+            compactionSummaryRepository.findBySessionId(sessionId).ifPresent(s -> {
+                messages.add(SystemMessage.from("[PRIOR CONTEXT SUMMARY]\n" + s.summary));
+            });
             List<ChatMessage> chatHistory = chatMemoryStore.getMessages(sessionId);
             if (chatHistory != null && !chatHistory.isEmpty()) {
                 for (ChatMessage msg : chatHistory) {

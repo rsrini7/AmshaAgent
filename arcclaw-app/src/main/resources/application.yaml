@@ -211,6 +211,12 @@ arcclaw:
   security:
     prompt-injection:
       enabled: true
+  memory:
+    compaction:
+      enabled: true
+      threshold: 16
+      keep-recent: 6
+      model: "llama-3.1-8b-instant"
   chat-memory:
     max-messages: 20
   api:
@@ -376,7 +382,15 @@ mp:
     hibernate-orm:
       database:
         generation: update
+    langchain4j:
+      groq:
+        api-key: "mock-api-key"
   arcclaw:
+    memory:
+      compaction:
+        enabled: false
+        threshold: 4
+        keep-recent: 2
     security:
       prompt-injection:
         enabled: true

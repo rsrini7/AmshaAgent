@@ -39,6 +39,9 @@ public class TelegramAgentHandler {
     WorkspaceManager workspaceManager;
 
     @Inject
+    com.arcclaw.core.state.ContextCompactionService compactionService;
+
+    @Inject
     StatefulAgentStore statefulAgentStore;
 
     @Inject
@@ -178,6 +181,12 @@ public class TelegramAgentHandler {
             }
 
             log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
+
+            try {
+                compactionService.compactIfNeeded(baseId);
+            } catch (Exception e) {
+                log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
+            }
 
             AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
 

@@ -16,11 +16,12 @@ public interface ReasoningEngine {
      * Computes the next reasoning step given the current agent role, goal, 
      * and prior step history.
      *
+     * @param sessionId The sessionId for the active workspace.
      * @param agentRole The active persona role (e.g., "coordinator", "coder").
      *                  Used to enforce strict tool binding per persona.
      * @param goal      The current task goal.
      * @param history   The prior reasoning steps in this loop iteration.
      * @return The next reasoning step.
      */
-    ReasoningStep nextStep(String agentRole, String goal, List<ReasoningStep> history);
+    ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history);
 }

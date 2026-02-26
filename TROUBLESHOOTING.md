@@ -2283,10 +2283,26 @@ sqlite3 arcclaw.db ".indexes audit_event"
 
 ### 🔴 Failure: Missing Groq API Key During Integration Tests
 **Symptom:** `ContextCompactionServiceIntegrationTest` crashes on startup with `IllegalArgumentException: groq api key must be defined. It can be set via 'quarkus.langchain4j.groq.api-key' property.`
-**Root Cause:** The `ContextCompactionService` injects the `@Named("compaction")` `ChatLanguageModel` which requires a Groq API key to initialize. While the main application fetches this from `.env`, the `@QuarkusTest` environment lacks it natively and does not resolve `.env` gracefully.
+**Root Cause:** The `ContextCompactionService` injects the `@Identifier("compaction")` `ChatLanguageModel` which requires a Groq API key to initialize. While the main application fetches this from `.env`, the `@QuarkusTest` environment lacks it natively and does not resolve `.env` gracefully.
 **Resolution:** Created a dedicated `CompactionTestProfile.java` (implementing `QuarkusTestProfile`) that cleanly overrides `quarkus.langchain4j.groq.api-key` with a mock value (`mock-key-for-tests-only`) specifically for these test executions.
 
 ### 🔴 Failure: Incompatible ReasoningEngine Method Signatures in Mockito Tests
 **Symptom:** Widespread compilation and runtime failures in tests like `AgentResilienceTest`, `AgentLoopTest`, and `AgentResourceTest` asserting `Invalid use of argument matchers...`.
 **Root Cause:** The signature of `ReasoningEngine.nextStep` was refactored to explicitly accept `sessionId` as the first argument, moving the rest of the arguments. Pre-existing test setups utilizing Mockito's `any(String.class)` or lambda mock definitions fell out of alignment.
 **Resolution:** Migrated all lambda definitions in `AgentResilienceTest` (e.g., `(role, goal, history)` -> `(sessionId, role, goal, history)`) and updated `Mockito.when()` / `verify()` signatures to explicitly include `eq(sessionId)` or `anyString()` for the new parameter across all affected test classes.
+
+***
+
+### 🔴 T-14: `UnsatisfiedResolutionException` for `@Named("compaction")`
+
+**Symptom:**
+```
+jakarta.enterprise.inject.UnsatisfiedResolutionException: Unsatisfied dependency for type dev.langchain4j.model.chat.ChatLanguageModel and qualifiers [@Named("compaction")]
+```
+The application fails to boot even when the `@Named("compaction")` producer is present.
+
+**Root Cause:**
+Quarkus and SmallRye occasionally experience issues with `@Named` qualifiers for synthetic beans or cross-module injections. The framework's preferred way to identify specific beans by string is via the `@Identifier` annotation.
+
+**Resolution:**
+Consistently use `@io.smallrye.common.annotation.Identifier("compaction")` instead of `@jakarta.inject.Named("compaction")` in both the `CompactionModelProducer` and the `ContextCompactionService` injection point.

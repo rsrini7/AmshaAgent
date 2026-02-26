@@ -283,7 +283,7 @@ public class AgentLoop {
                     currentGoal = goal + "\n\n" + transientError;
                     transientError = null;
                 }
-                step = engine.nextStep(agentRole, currentGoal, Collections.unmodifiableList(history));
+                step = engine.nextStep(sessionId, agentRole, currentGoal, Collections.unmodifiableList(history));
 
                 // --- GOVERNANCE & OBSERVABILITY INTERCEPTION ---
                 if (step != null) {
