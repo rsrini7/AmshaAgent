@@ -193,7 +193,24 @@ public class TelegramAgentHandler {
             AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
 
             if (result.awaitingApproval()) {
-                reply(chatId, "⚠️ **Approval Required**\n\nThe agent is attempting a secure network operation. Please review the trace and reply with `/approve` or `/deny`.");
+                String approvalDetail = statefulAgentStore.load(baseId, activeRole)
+                    .map(cp -> {
+                        String tool = cp.getPendingToolName() != null
+                            ? cp.getPendingToolName() : "unknown";
+                        String params = cp.getPendingToolParametersJson() != null
+                            ? cp.getPendingToolParametersJson() : "{}";
+                        return String.format(
+                            "🤖 *Agent:* %s\n" +
+                            "🔧 *Tool:* %s\n" +
+                            "📋 *Parameters:* `%s`",
+                            activeRole, tool, params);
+                    })
+                    .orElse("⚠️ Tool details unavailable.");
+
+                reply(chatId,
+                    "⚠️ *Approval Required*\n\n" +
+                    approvalDetail + "\n\n" +
+                    "Reply `/approve` to allow or `/deny` to cancel.");
             } else if (result.success()) {
                 reply(chatId, result.finalAnswer());
             } else {
@@ -201,8 +218,8 @@ public class TelegramAgentHandler {
             }
 
         } catch (Exception e) {
-            log.error("Failed to process agent loop for session: " + baseId, e);
-            reply(chatId, "⚠️ System Error: " + e.getMessage());
+            log.errorf(e, "Unhandled exception in runAgent for session=%s", baseId);
+            reply(chatId, "⚠️ An unexpected error occurred. Please try again.");
         } finally {
             MDC.remove("userId");
             WorkspaceScopeHolder.clear();

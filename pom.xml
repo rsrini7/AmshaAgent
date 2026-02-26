@@ -17,9 +17,9 @@
   </modules>
 
   <properties>
-    <java.version>21</java.version>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
+    <java.version>25</java.version>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.version>3.23.0</quarkus.version>
     <langchain4j.quarkus.version>0.26.1</langchain4j.quarkus.version>
@@ -95,8 +95,8 @@
           <artifactId>maven-compiler-plugin</artifactId>
           <version>3.13.0</version>
           <configuration>
-            <source>21</source>
-            <target>21</target>
+            <source>25</source>
+            <target>25</target>
           </configuration>
         </plugin>
         <plugin>

@@ -240,43 +240,42 @@ public class AgentLoop {
         }
 
         // --- RESUME HOOK ---
-        agentStore.load(WorkspaceScopeHolder.get(), agentRole).ifPresent(checkpoint -> {
+        var resumeOpt = agentStore.load(WorkspaceScopeHolder.get(), agentRole);
+        if (resumeOpt.isPresent()) {
+            var checkpoint = resumeOpt.get();
             if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                String pendingTool   = checkpoint.getPendingToolName();
+                String pendingTool = checkpoint.getPendingToolName();
                 String pendingParams = checkpoint.getPendingToolParametersJson();
-                log.infof("[AgentLoop] Resuming session %s: executing pending tool '%s'",
+                log.infof("AgentLoop Resuming session %s executing pending tool %s",
                     WorkspaceScopeHolder.get(), pendingTool);
-
                 try {
-                    // Elevate ONLY for this single tool call — never leak FULL autonomy
                     workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
                     ToolResponse resumeResponse = toolRegistry.invokeTool(
                         pendingTool, pendingParams, WorkspaceScopeHolder.get());
-
                     history.add(new ReasoningStep(
                         "Human Approved", pendingTool,
                         Map.of("parameters", pendingParams),
                         resumeResponse.output(), 0, 0));
-
                     checkpoint.setPendingToolName(null);
                     checkpoint.setPendingToolParametersJson(null);
                     checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
                     agentStore.save(checkpoint);
-
-                }  catch (Exception e) {
-                    // CRITICAL: Must mark failed, not leave as AWAITING_APPROVAL
+                } catch (Exception e) {
                     checkpoint.setStatus(CheckpointStatus.FAILED);
                     checkpoint.setPendingToolName(null);
                     checkpoint.setPendingToolParametersJson(null);
                     agentStore.save(checkpoint);
                     log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
                         WorkspaceScopeHolder.get(), pendingTool, e.getMessage());
+                    synchronized (history) {
+                        return AgentResult.error(List.copyOf(history),
+                            "TOOL_EXECUTION_FAILED: " + e.getMessage());
+                    }
                 } finally {
-                    // Always restore — even if tool throws
                     workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
                 }
             }
-        });
+        }
 
 
         while (iteration < maxIterations) {
