@@ -9,6 +9,11 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.audit.AuditEvent;
+import com.arcclaw.core.audit.AuditVerifier;
+import com.arcclaw.core.audit.AuditEventRepository;
+
 @QuarkusTest
 public class AuditVerifierTest {
 
@@ -22,9 +27,9 @@ public class AuditVerifierTest {
     @Transactional
     public void testValidChain() {
         String sessionId = "test-verify-valid-" + System.currentTimeMillis();
-        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.TOOL_INVOKED, null));
-        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.TOOL_INVOKED, null));
-        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.TOOL_INVOKED, null));
+        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
+        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
+        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
 
         AuditVerifier.VerificationResult result = verifier.verifyChain(sessionId);
         assertTrue(result.valid());
@@ -35,9 +40,9 @@ public class AuditVerifierTest {
     @Transactional
     public void testTamperedRowBreaksChain() {
         String sessionId = "test-verify-tamper-" + System.currentTimeMillis();
-        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.TOOL_INVOKED, "A"));
-        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.TOOL_INVOKED, "B"));
-        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.TOOL_INVOKED, "C"));
+        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "A"));
+        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "B"));
+        repository.record(AuditEvent.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "C"));
 
         List<AuditEvent> events = repository.findBySessionId(sessionId);
         AuditEvent middle = events.get(1);

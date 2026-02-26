@@ -9,6 +9,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.
@@ -17,6 +18,9 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class GithubTool implements AgentTool {
+
+    private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
     @Override
     public String name() {
@@ -29,7 +33,7 @@ public class GithubTool implements AgentTool {
                 "Parameters: " +
                 "1. 'action': 'repo' or 'gist'. " +
                 "2. 'command': 'view' or 'list'. " +
-                "3. 'target': (Optional) The owner/repo path for 'repo' actions.";
+                "3. 'target': (Optional) The target owner or owner/repo path.";
     }
 
     @Override
@@ -49,11 +53,37 @@ public class GithubTool implements AgentTool {
         String command = (String) params.getOrDefault("command", "view");
         String target = (String) params.get("target");
 
-        // Guard: reject if target has no slash (LLM hallucinated owner)
-        if ("repo".equals(action) && target != null && !target.contains("/")) {
+        // ── ALLOWLIST GUARD (Java layer — second line of defence) ──────────
+        if (!ALLOWED_ACTIONS.contains(action)) {
             throw new IllegalArgumentException(
-                "Invalid target '" + target + "': must be 'owner/repo' format. " +
-                "Ask the user for the full owner/repo path.");
+                "Action '" + action + "' is not permitted. " +
+                "Only 'repo' and 'gist' are supported."
+            );
+        }
+        if (!ALLOWED_COMMANDS.contains(command)) {
+            throw new IllegalArgumentException(
+                "Command '" + command + "' is not permitted. " +
+                "Only 'view' and 'list' are supported. " +
+                "Destructive operations (delete, rename, archive, fork, transfer) " +
+                "are not available through this tool."
+            );
+        }
+        // ── END ALLOWLIST GUARD ────────────────────────────────────────────
+
+        // SMART GUARDRAILS: Teach the LLM how to use the CLI correctly if it makes a mistake
+        if ("repo".equals(action) && target != null) {
+            if ("view".equals(command) && !target.contains("/")) {
+                throw new IllegalArgumentException(
+                    "Invalid target '" + target + "'. To 'view' a repository, you MUST provide the full 'owner/repo' format. " +
+                    "Ask the user for the repository name if they only provided the owner."
+                );
+            }
+            if ("list".equals(command) && target.contains("/")) {
+                throw new IllegalArgumentException(
+                    "Invalid target '" + target + "'. To 'list' repositories, you MUST provide ONLY the owner name (e.g., '" + target.split("/")[0] + "'). " +
+                    "If you meant to view details of a specific repository, change the command to 'view'."
+                );
+            }
         }
 
         List<String> cmd = new ArrayList<>();
@@ -62,14 +92,9 @@ public class GithubTool implements AgentTool {
         cmd.add(command);
 
         if (target != null && !target.isBlank()) {
-            // For "repo view" — pass as positional arg, not --repo flag
-            if ("repo".equals(action) && "view".equals(command)) {
-                cmd.add(target);
-            } else {
-                cmd.add("--repo");
-                cmd.add(target);
-            }
+            cmd.add(target);
         }
+        
         return cmd;
     }
 
@@ -81,9 +106,13 @@ public class GithubTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("action",  "Action to perform: repo or gist")
-            .addStringProperty("command", "Command to run: view or list")
-            .addStringProperty("target",  "The owner/repo path for repo actions (optional)")
+            .addEnumProperty("action",  List.of("repo", "gist"),
+                "Action to perform")
+            .addEnumProperty("command", List.of("view", "list"),
+                "Command to run. NEVER use delete, create, rename, archive, or fork.")
+            .addStringProperty("target",
+                "For 'view', use 'owner/repo' format. " +
+                "For 'list', use ONLY the 'owner' name.")
             .required("action", "command")
             .build();
     }

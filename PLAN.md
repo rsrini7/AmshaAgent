@@ -1505,5 +1505,81 @@ Implement a Write-Once-Read-Many (WORM) audit logging system with HMAC chaining 
 
 ---
 
-# Phase 36 — [Upcoming Feature] 🚧
-- [ ] Placeholder for next development cycle.
+# Phase 36 — OTel Fixes, REST HITL, Zombie Recovery & Scope Audit ✅
+
+Hardened the observability pipeline, added Human-in-the-Loop (HITL) redundancy via REST, and improved session recovery resilience.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Token Tracking Strategy**: LLM tokens are now tracked cumulatively across a session using `ConcurrentHashMap<String, AtomicLong>` in `AgentOtelContext`. This ensures that even if an agent loop spans multiple turns, the total cost is accurately reflected in the trace attributes.
+
+> [!NOTE]
+> **Context-Aware Child Spans**: Tools and Reflexes now explicitly use `Context.current().with(parentSpan)` to ensure they are nested correctly under the session root span, fixing disconnected traces in Jaeger.
+
+> [!TIP]
+> **Zombie Recovery Expansion**: Extended `WorkspaceManager.onStartup()` to query for both `IN_PROGRESS` and `AWAITING_APPROVAL` checkpoints. This ensures that sessions orphaned by a crash while waiting for a human are correctly cleaned up.
+
+## Completed Changes
+
+### Observability
+#### [MODIFY] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Cumulative token tracking via `ConcurrentHashMap`.
+- Correct span parenting for nested operations.
+
+### API & Governance
+#### [MODIFY] [AgentResource.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResource.java)
+- Added `/approve` and `/deny` endpoints for HITL redundancy.
+- Enforced `WorkspaceScopeHolder` safety in new endpoints.
+
+### Lifecycle
+#### [MODIFY] [WorkspaceManager.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Extended startup recovery logic for `AWAITING_APPROVAL` status.
+
+## Verification
+
+- ✅ `mvn clean verify "-Dquarkus.test.profile=test" -am -pl arcclaw-app,arcclaw-core` passes (71/71 tests).
+- ✅ Verified `AgentOtelContextTest` cumulative behavior.
+- ✅ Verified `AgentResourceTest` for new REST endpoints.
+- ✅ Verified `WorkspaceManagerTest` for zombie recovery.
+
+---
+
+# Phase 36.1 — Post-Integration Hardening ✅
+
+Implemented several critical hardening measures for the ArcClaw AI Agent Kernel, focusing on read-only enforcement for sensitive tools, fixing history reconstruction bugs, and enabling LLM self-healing for schema errors.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Layered Defensive Enforcement**: For the `GithubTool`, we implemented a layered defense strategy. We use the LangChain4j `JsonObjectSchema` with `enum` properties to restrict allowed actions at the LLM level, and a secondary Java-layer allowlist guard in `sandboxCommand()` as a fallback in case of schema injection or model hallucination.
+
+> [!NOTE]
+> **History Reconstruction Precision**: Fixed a "double-escaping" bug in `LangChainReasoningEngine` where tool arguments were being re-serialized into escaped JSON strings when reconstructing history. The fix checks if the input is already a JSON string and uses it directly.
+
+> [!TIP]
+> **LLM Self-Healing**: Implemented a retry mechanism in `AgentLoop` that detects HTTP 400 (Bad Request) errors from the LLM (typically schema validation failures). Instead of failing immediately, the system injects a corrective prompt pointing out the error, allowing the model one attempt to self-correct its tool arguments.
+
+## Completed Changes
+
+### Tool Hardening
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Restricted `action` to `repo` and `gist`.
+- Restricted `command` to `view` and `list`.
+- Implemented Java-layer allowlist guard.
+
+### Reasoning Engine
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Fixed double-escaping of tool arguments in history reconstruction.
+
+### Agent Loop
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- Implemented HTTP 400 self-healing with retry counter.
+- Added transient error injection for schema correction.
+- Suppressed `MetricsChatModelListener` NPE logs via `application.yaml`.
+
+## Verification
+
+- ✅ `GithubToolTest`: Verified read-only enforcement for `delete`, `archive`, etc.
+- ✅ `AgentLoopTest`: Verified history reconstruction and HTTP 400 self-healing (retry limit and success).
+- ✅ `mvn test -pl arcclaw-app -am "-Dtest=GithubToolTest,AgentLoopTest"` passes.

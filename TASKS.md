@@ -449,3 +449,30 @@
 - [x] Create `AuditResource` REST API (`GET /api/v1/audit/verify`)
 - [x] Add monotonic `sequence` field for millisecond-safe HMAC chaining
 - [x] Verify: All 4 audit test suites pass
+
+---
+
+## Phase 36 — OTel Fixes, REST HITL, Zombie Recovery & Scope Audit
+- [x] Fix OTel token accumulation (ConcurrentHashMap + AtomicLong)
+- [x] Fix OTel child span parenting to root session span
+- [x] Implement REST HITL endpoints: `POST /api/v1/sessions/{id}/approve` and `/deny`
+- [x] Implement `AWAITING_APPROVAL` zombie recovery in `WorkspaceManager.onStartup()`
+- [x] Audit `WorkspaceScopeHolder.set()` call sites for try-finally `clear()`
+- [x] Resolve split-package test compilation issues (moved tests to `arcclaw-core`)
+- [x] Resolve Mockito OTel mock failures via standalone `@Alternative` HealthCheck pattern
+- [x] Verify: Full build (`mvn clean verify`) passes with 71/71 tests
+
+## Phase 36.1 — Post-Integration Hardening
+- [x] Read-Only Enforcement for GithubTool (Schema + Java Guards)
+- [x] AgentLoop Poisoned History Fix (JSON serialization)
+- [x] AgentLoop LLM HTTP 400 Self-Healing (Retry mechanism)
+- [x] MetricsChatModelListener NPE Suppression (Log level ERROR)
+- [x] Documentation Sync (PLAN, TASKS, TROUBLESHOOTING, WALKTHROUGH)
+- [x] Verify: GithubToolTest and AgentLoopTest pass
+
+## Phase 36.2 — WorkspaceManager Persistence Fix
+- [x] Clear JVM in-memory ChatMemory cache via `.clear()`
+- [x] Update `terminateSession` and `resetSessionState` in `WorkspaceManager`
+- [x] Add architectural comments for re-persistence behavior
+- [x] Verify: Full build (`mvn clean verify`) passes with 58/58 core tests
+

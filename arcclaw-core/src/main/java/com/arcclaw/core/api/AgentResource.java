@@ -3,6 +3,7 @@ package com.arcclaw.core.api;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
@@ -31,8 +32,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 @ApplicationScoped
 @Path("/sessions")
@@ -41,7 +41,10 @@ import org.slf4j.LoggerFactory;
 @RunOnVirtualThread
 public class AgentResource {
 
-    private static final Logger log = LoggerFactory.getLogger(AgentResource.class);
+    public record ApprovalRequest(String agentRole) {}
+
+    @Inject
+    org.jboss.logging.Logger log;
 
     @Inject
     WorkspaceContext workspaceContext;
@@ -71,7 +74,7 @@ public class AgentResource {
     @POST
     public Response createSession() {
         String sessionId = UUID.randomUUID().toString();
-        log.info("Creating new session: {}", sessionId);
+        log.infof("Creating new session: {}", sessionId);
         workspaceManager.recordHeartbeat(sessionId);
         return Response.status(Response.Status.CREATED)
                 .entity(new CreateSessionResponse(sessionId))
@@ -81,7 +84,7 @@ public class AgentResource {
     @POST
     @Path("/{id}/run")
     public Response runAgentSync(@PathParam("id") String sessionId, @Valid RunAgentRequest request) {
-        log.info("Running agent sync for session: {}, role: {}, goal: {}", sessionId, request.agentRole(),
+        log.infof("Running agent sync for session: {}, role: {}, goal: {}", sessionId, request.agentRole(),
                 request.goal());
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
@@ -101,14 +104,14 @@ public class AgentResource {
             if (result.success()) {
                 return Response.ok(result).build();
             } else {
-                log.error("Sync agent run completed with failure for session {}: {}", sessionId,
+                log.errorf("Sync agent run completed with failure for session {}: {}", sessionId,
                         result.terminationReason());
                 return Response.serverError()
                         .entity(result.terminationReason())
                         .build();
             }
         } catch (Exception e) {
-            log.error("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+            log.errorf("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
             return Response.serverError()
                     .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
@@ -122,7 +125,7 @@ public class AgentResource {
     @Path("/{id}/run-async")
     public void runAgentAsync(@PathParam("id") String sessionId, @Valid RunAgentRequest request,
             @Suspended AsyncResponse response) {
-        log.info("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
+        log.infof("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         vThreads.execute(() -> {
@@ -174,14 +177,14 @@ public class AgentResource {
                             .entity(Map.of("status", "COMPLETED", "answer", result.finalAnswer()))
                             .build());
                 } else {
-                    log.error("Async agent run failed for session {}: {}", sessionId, result.terminationReason());
+                    log.errorf("Async agent run failed for session {}: {}", sessionId, result.terminationReason());
                     response.resume(Response.serverError()
                             .entity(Map.of("status", "FAILED", "reason", result.terminationReason()))
                             .build());
                 }
 
             } catch (Exception e) {
-                log.error("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+                log.errorf("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
                 response.resume(Response.serverError()
                         .entity(Map.of("status", "ERROR", "message",
                             e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
@@ -204,14 +207,18 @@ public class AgentResource {
         return agentStore.load(sessionId, role)
                 .map(cp -> {
                     try {
-                        List<com.arcclaw.core.agent.ReasoningStep> steps = objectMapper.readValue(
-                                cp.stateJson,
-                                new TypeReference<List<com.arcclaw.core.agent.ReasoningStep>>() {
-                                });
-                        return Response.ok(new SessionStatusResponse(sessionId, cp.status.name(), steps)).build();
+                        // 1. Default to an empty list
+                        List<ReasoningStep> steps = List.of();
+                        
+                        // 2. Safely check if stateJson actually contains data before parsing
+                        if (cp.stateJson != null && !cp.stateJson.isBlank()) {
+                            steps = objectMapper.readValue(cp.stateJson, new TypeReference<List<ReasoningStep>>() {});
+                        }
+                        
+                        return Response.ok(new SessionStatusResponse(sessionId, cp.status.name(), steps, cp.failReason)).build();
                     } catch (Exception e) {
-                        log.error("Failed to deserialize state JSON for session {}", sessionId, e);
-                        return Response.serverError().build();
+                        log.errorf("Failed to parse stateJson for session %s: %s", sessionId, e.getMessage(), e);
+                        return Response.serverError().entity(e.getMessage()).build();
                     }
                 })
                 .orElseGet(() -> Response.status(Response.Status.NOT_FOUND).build());
@@ -220,8 +227,65 @@ public class AgentResource {
     @DELETE
     @Path("/{id}")
     public Response terminateSession(@PathParam("id") String sessionId) {
-        log.info("Terminating session: {}", sessionId);
+        log.infof("Terminating session: {}", sessionId);
         workspaceManager.terminateSession(sessionId);
         return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/{id}/approve")
+    public Response approveSession(
+            @PathParam("id") String sessionId,
+            @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
+        log.infof("REST approve for session %s role %s", sessionId, agentRole);
+        try {
+            WorkspaceScopeHolder.set(sessionId);
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+
+            var checkpoint = agentStore.load(sessionId, agentRole);
+            if (checkpoint.isEmpty() || checkpoint.get().status != CheckpointStatus.AWAITING_APPROVAL) {
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "No pending approval for this session"))
+                        .build();
+            }
+
+            MDC.put("userId", "rest:approve");
+            agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
+            return Response.ok(Map.of("status", "APPROVED", "session", sessionId)).build();
+        } catch (Exception e) {
+            log.errorf("Failed to approve session " + sessionId, e);
+            return Response.serverError().entity(e.getMessage()).build();
+        } finally {
+            WorkspaceScopeHolder.clear();
+            MDC.remove("userId");
+        }
+    }
+
+    @POST
+    @Path("/{id}/deny")
+    public Response denySession(
+            @PathParam("id") String sessionId,
+            @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
+        log.infof("REST deny for session %s role %s", sessionId, agentRole);
+        try {
+            WorkspaceScopeHolder.set(sessionId);
+            var checkpoint = agentStore.load(sessionId, agentRole);
+            if (checkpoint.isEmpty() || checkpoint.get().status != CheckpointStatus.AWAITING_APPROVAL) {
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "No pending approval for this session"))
+                        .build();
+            }
+
+            MDC.put("userId", "rest:deny");
+            agentStore.markFailed(checkpoint.get().id, "Human denied via REST");
+            workspaceManager.removeHeartbeat(sessionId);
+            return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
+        } catch (Exception e) {
+            log.error("Failed to deny session " + sessionId, e);
+            return Response.serverError().entity(e.getMessage()).build();
+        } finally {
+            WorkspaceScopeHolder.clear();
+            MDC.remove("userId");
+        }
     }
 }

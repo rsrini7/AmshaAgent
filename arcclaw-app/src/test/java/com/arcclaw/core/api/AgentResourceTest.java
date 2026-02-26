@@ -123,4 +123,26 @@ class AgentResourceTest {
                                 .then()
                                 .statusCode(202); // Accepted immediately
         }
+
+        @Test
+        void testApproveEndpointReturns409ForNoCheckpoint() {
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .when().post("/api/v1/sessions/no-such-session/approve")
+                                .then()
+                                .statusCode(409)
+                                .body("error", containsString("No pending approval"));
+        }
+
+        @Test
+        void testDenyEndpointReturns409ForNoCheckpoint() {
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .when().post("/api/v1/sessions/no-such-session/deny")
+                                .then()
+                                .statusCode(409)
+                                .body("error", containsString("No pending approval"));
+        }
 }

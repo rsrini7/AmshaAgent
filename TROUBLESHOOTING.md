@@ -48,6 +48,9 @@
 | **Security** | Silent Credential Failure | Annotation moved from `execute()` to `sandboxCommand()`. | Refactored `extractRequiredSecrets` to accept a `methodName` parameter. |
 | **Sandbox** | Zombie Containers | JVM `SIGTERM` didn't signal the Podman process. | Verify the `@PreDestroy` method in `ProcessIsolationExecutor` is calling `podman stop`. |
 | **Native** | Predictable Nonces | BC initialized at build-time instead of run-time. | Verify fine-grained `native-image.properties` flags are correctly applied. |
+| **Build** | Split-Package Error | Tests in `arcclaw-app` sharing same package as `arcclaw-core`. | Moved all core-related tests to `arcclaw-core/src/test/java` and updated Maven profiles. |
+| **Observability** | Non-Mockable Tracer | OTel `Tracer` is final or provided by CDI in a way Mockito dislikes. | Use standalone `@Alternative` + `@Priority` pattern to provide a mock Tracer bean in test profiles. |
+| **Observability** | Disconnected Spans | Child spans not linked to session root. | Use `Context.current().with(parentSpan)` explicitly when creating child spans. |
 
 ---
 
@@ -2233,3 +2236,43 @@ sqlite3 arcclaw.db ".indexes audit_event"
 # idx_audit_timestamp
 # idx_audit_userId
 ```
+
+## 32. Phase 36: REST HITL Approval & Tool Sandbox Integration
+
+### 🔴 T-1: `IllegalArgumentException: argument "content" is null` on Status Check
+**Symptom:** Calling `GET /api/v1/sessions/{id}/status/{role}` throws an HTTP 500 with a Jackson `ObjectMapper` error when a session pauses for approval on its very first iteration.
+**Root Cause:** If a tool triggers `AWAITING_APPROVAL` before any full reasoning steps are completed, `StatefulAgentStoreImpl` may persist a `null` or empty `stateJson`. Jackson's `readValue` cannot parse a null string, crashing the REST endpoint.
+**Resolution:** Implemented safe null-checking in `AgentResource.getSessionStatus` to return an empty list (`List.of()`) if `stateJson` is null or blank. Additionally, hardened `StatefulAgentStoreImpl.save()` to serialize empty step lists as `"[]"` instead of `null`.
+
+### 🔴 T-2: Unhandled Sandbox Exceptions Crash AgentLoop (Session Stuck)
+**Symptom:** The LLM hallucinates an invalid CLI flag (e.g., `unknown flag: --repo`), the sandbox throws a `ToolExecutionException`, and the entire `AgentLoop` thread crashes. The database checkpoint remains permanently stuck in `AWAITING_APPROVAL` or `IN_PROGRESS`.
+**Root Cause:** `ToolRegistry.invokeTool()` only caught `SecurityException`. General sandbox execution failures bubbled up, crashing the virtual thread and bypassing both the LLM's self-healing ReAct loop and the `finally` block's state machine management.
+**Resolution:** 1. Added a general `catch (Exception e)` in `ToolRegistry.invokeTool()` to return a `ToolResponse.failure()`. This feeds the CLI error back to the LLM so it can learn and retry.
+2. Added a global `catch (Exception e)` in `AgentLoop.run()` to forcefully call `agentStore.markFailed()` if a catastrophic crash does occur, preventing orphaned sessions.
+
+### 🔴 T-3: LLM Hallucinates Positional Arguments for `gh` CLI
+**Symptom:** The LLM attempts to list a repository and receives the error: `Tool failed (exit 1): the owner handle "owner/repo" was not recognized as either a GitHub user or an organization`.
+**Root Cause:** The `github` tool schema did not adequately explain the difference between `repo view` (which requires `owner/repo`) and `repo list` (which requires strictly `owner`). The LLM applied the `owner/repo` format universally, breaking the GitHub CLI.
+**Resolution:** Implemented "Smart Guardrails" inside `GithubTool.java`. Instead of blindly passing bad arguments to the sandbox, the Java code intercepts malformed targets and throws a highly descriptive `IllegalArgumentException` (e.g., *"To 'list' repositories, you MUST provide ONLY the owner name"*). The `ToolRegistry` feeds this exact string back to the LLM, teaching it how to correct its own parameters dynamically.
+
+### 33. Phase 36.1: Post-Integration Hardening Troubleshooting
+
+#### 🔴 Failure: `GithubTool` blocked valid commands or allowed destructive ones
+* **Symptom:** LLM receives a `SecurityException: Action [delete] is not permitted` or a 404 from the sandbox because it tried to pass `owner/repo` to a `list` command.
+* **Root Cause:** In Phase 36.1, we implemented strict enum-based schema validation and a Java-layer allowlist. Hallucinations are now blocked early.
+* **Resolution:** Ensure the LLM is using the `view` or `list` commands only. The transient error injection in `AgentLoop` should guide the model to self-correct.
+
+#### 🔴 Failure: "Poisoned History" Double-Escaping
+* **Symptom:** The Agent loop crashes or hallucinations tools because the reconstructed history contains escaped JSON strings like `\"action\": \"repo\"` instead of raw JSON.
+* **Root Cause:** `LangChainReasoningEngine` was re-serializing already-stringified tool arguments.
+* **Resolution:** Fixed in `LangChainReasoningEngine.java` to detect existing JSON strings and avoid re-serialization.
+
+#### 🔴 Failure: LLM HTTP 400 (Bad Request) Schema Errors
+* **Symptom:** LLM calls fail with `InvalidRequestException` or HTTP 400 because the generated JSON doesn't match the `github` tool's schema.
+* **Root Cause:** Minor model hallucinations in argument formatting.
+* **Resolution:** Implemented self-healing in `AgentLoop`. The agent now receives a `transientError` prompt explaining the schema violation and gets one retry to fix the arguments.
+
+#### 🔴 Failure: `MetricsChatModelListener` NullPointerException Spam
+* **Symptom:** Logs are flooded with `WARN dev.langchain4j.model.chat.listener.ListenersUtil - Exception occurred during onResponse(): java.lang.NullPointerException`.
+* **Root Cause:** A known issue in LangChain4j's observability listener when certain metrics are missing.
+* **Resolution:** Suppressed in `application.yaml` by setting `logging.level.dev.langchain4j.model.chat.listener.ListenersUtil: ERROR`.

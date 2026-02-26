@@ -13,6 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -76,6 +77,9 @@ public class WorkspaceManager {
     @ConfigProperty(name = "arcclaw.governance.approval-timeout-minutes", defaultValue = "60")
     long approvalTimeoutMinutes;
 
+    @ConfigProperty(name = "arcclaw.chat-memory.max-messages", defaultValue = "100")
+    int maxMessages;
+
     void onShutdown(@Observes ShutdownEvent event) {
         shuttingDown = true;
     }
@@ -127,27 +131,50 @@ public class WorkspaceManager {
      */
     @Transactional
     public void onStartup(@Observes StartupEvent event) {
-        List<AgentCheckpoint> zombies = em.createQuery(
+        // 1. Recover IN_PROGRESS zombies
+        List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
                 .getResultList();
 
-        if (zombies.isEmpty()) {
+        if (!inProgressZombies.isEmpty()) {
+            log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
+                    inProgressZombies.size());
+            Instant now = Instant.now();
+            for (var checkpoint : inProgressZombies) {
+                checkpoint.status = CheckpointStatus.FAILED;
+                checkpoint.failedAt = now;
+                checkpoint.failReason = "JVM crash recovery — session was IN_PROGRESS at startup";
+                em.merge(checkpoint);
+                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
+                        checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+            }
+        } else {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
-            return;
         }
 
-        log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
-                zombies.size());
-        Instant now = Instant.now();
-        for (var checkpoint : zombies) {
-            checkpoint.status = CheckpointStatus.FAILED;
-            checkpoint.failedAt = now;
-            checkpoint.failReason = "JVM crash recovery — session was IN_PROGRESS at startup";
-            em.merge(checkpoint);
-            log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                    checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+        // 2. Recover AWAITING_APPROVAL zombies
+        List<AgentCheckpoint> approvalZombies = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .getResultList();
+
+        if (!approvalZombies.isEmpty()) {
+            log.warnf("Zombie recovery: found %d orphaned AWAITING_APPROVAL checkpoint(s) — marking FAILED",
+                    approvalZombies.size());
+            Instant now = Instant.now();
+            for (var checkpoint : approvalZombies) {
+                checkpoint.status = CheckpointStatus.FAILED;
+                checkpoint.failedAt = now;
+                checkpoint.failReason = "JVM crash recovery: approval was pending at shutdown";
+                em.merge(checkpoint);
+                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
+                        checkpoint.id, checkpoint.sessionId, checkpoint.agentRole);
+            }
+        } else {
+            log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
         }
     }
 
@@ -227,7 +254,8 @@ public class WorkspaceManager {
      * <li>Remove from heartbeat tracking</li>
      * <li>Mark any DB checkpoints as FAILED</li>
      * <li>Wipe the physical workspace directory</li>
-     * <li>Delete chat memory from persistence</li>
+     * <li><b>Clear in-memory LangChain4j ChatMemory</b> (prevent stale re-persistence)</li>
+     * <li>Delete chat memory from SQLite</li>
      * <li>Destroy the CDI scope (all @WorkspaceScoped beans)</li>
      * </ol>
      */
@@ -246,7 +274,14 @@ public class WorkspaceManager {
         // 3. Wipe workspace directory
         wipeWorkspaceDir(sessionId);
 
-        // 3a. Delete chat memory
+        // 4. Clear in-memory LangChain4j ChatMemory
+        // We MUST call .clear() on the MessageWindowChatMemory bean BEFORE deleting SQLite rows.
+        // LangChain4j often keeps a cached list of messages in the JVM heap; if we only delete 
+        // from SQLite, the next turn will see the cached messages and re-persist them into DB,
+        // poisoning the "new" session with old history.
+        clearInMemoryChatMemory(sessionId);
+
+        // 5. Delete chat memory from persistence (belt-and-suspenders guarantee)
         try {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
@@ -254,7 +289,7 @@ public class WorkspaceManager {
             log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
         }
 
-        // 4. Destroy CDI scope
+        // 6. Destroy CDI scope
         try {
             var context = (WorkspaceScopeContext) Arc.container()
                     .getActiveContext(WorkspaceScoped.class);
@@ -264,6 +299,46 @@ public class WorkspaceManager {
             }
         } catch (Exception e) {
             log.warnf("Failed to destroy CDI scope for session=%s: %s", sessionId, e.getMessage());
+        }
+    }
+
+    /**
+     * Reset the session state while keeping the session record (WORM compliance).
+     * <p>
+     * Clears in-memory cache and deletes SQLite messages. Checkpoints are preserved.
+     */
+    public void resetSessionState(String sessionId) {
+        log.infof("Resetting session state for: %s", sessionId);
+        
+        // 1. Clear in-memory cache to prevent re-persistence
+        clearInMemoryChatMemory(sessionId);
+        
+        // 2. Wipe SQLite DB records
+        try {
+            chatMemoryStore.deleteMessages(sessionId);
+            log.debugf("Chat memory deleted for session=%s", sessionId);
+        } catch (Exception e) {
+            log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
+        }
+    }
+
+    /**
+     * Internal helper to flush LangChain4j's in-memory MessageWindowChatMemory.
+     */
+    private void clearInMemoryChatMemory(String sessionId) {
+        try {
+            // Build a transient instance keyed by sessionId to find the cached memory in JVM heap
+            MessageWindowChatMemory.builder()
+                    .id(sessionId)
+                    .maxMessages(maxMessages)
+                    .chatMemoryStore(chatMemoryStore)
+                    .build()
+                    .clear();
+            log.debugf("In-memory chat memory cleared for session=%s", sessionId);
+        } catch (Exception e) {
+            // Non-fatal: do not block session termination if memory clearing fails
+            log.warnf("Failed to clear in-memory chat memory for session=%s (non-fatal): %s", 
+                sessionId, e.getMessage());
         }
     }
 
