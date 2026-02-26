@@ -24,7 +24,7 @@ public class CompactionSummaryRepository {
         CompactionSummaryEntity existing = em.find(CompactionSummaryEntity.class, sessionId);
         if (existing != null) {
             existing.summary = summaryText;
-            existing.messagesCompacted += compactedCount;
+            existing.messagesCompacted = compactedCount;
             existing.compactedAt = Instant.now();
             em.merge(existing);
         } else {

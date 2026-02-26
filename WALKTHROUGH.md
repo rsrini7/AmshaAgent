@@ -833,8 +833,10 @@ Implemented an automated context compaction engine to handle unbounded session h
 | [TelegramAgentHandler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java) | Intercepts pre-execution flows to dispatch context compaction asynchronously. |
 
 ### Verification:
-- ✅ **`ContextCompactionServiceTest`**: Verified accurate condition evaluation for when compaction should/should not execute based on message thresholds.
-- ✅ **`ContextCompactionServiceIntegrationTest`**: Verified correct persistence sequence and audit trail generation (`CONTEXT_COMPACTED`).
+- ✅ **`ContextCompactionServiceTest`**: Verified accurate condition evaluation for when compaction should/should not execute based on message thresholds. Updated to match the `ChatLanguageModel` object-oriented API.
+- ✅ **`ContextCompactionServiceIntegrationTest`**: Verified correct persistence sequence and audit trail generation (`CONTEXT_COMPACTED`). Hardened mock setup with `ChatResponse` and `AiMessage`.
 - ✅ **`LangChainReasoningEngineTest`**: Updated to support the new `sessionId` propagation and prompt injection logic.
+- ✅ **Concurrency Verification**: Compaction is now correctly offloaded to a virtual thread inside `TelegramAgentHandler`, preventing Camel event loop blocking.
+- ✅ **Configuration Validation**: Verified dot-notation config keys for Groq API are correctly resolved via `application.yaml`.
 
 

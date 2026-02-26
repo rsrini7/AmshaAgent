@@ -11,10 +11,10 @@ import java.time.Duration;
 
 @ApplicationScoped
 public class CompactionModelProducer {
-    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url", defaultValue = "https://api.groq.com/openai/v1/")
+    @ConfigProperty(name = "quarkus.langchain4j.groq.base-url", defaultValue = "https://api.groq.com/openai/v1/")
     String groqBaseUrl;
 
-    @ConfigProperty(name = "GROQ_API_KEY") 
+    @ConfigProperty(name = "quarkus.langchain4j.groq.api-key", defaultValue = "mock-key-must-be-overridden")
     String apiKey;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.model", defaultValue = "llama-3.1-8b-instant")

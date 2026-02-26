@@ -1,6 +1,5 @@
 package com.arcclaw.core.agent;
 
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;

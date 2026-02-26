@@ -20,8 +20,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.model.chat.request.ChatRequest;
 
 @QuarkusTest
 @TestProfile(CompactionTestProfile.class)
@@ -66,7 +69,10 @@ class ContextCompactionServiceIntegrationTest {
         }
         chatMemoryStore.updateMessages(TEST_SESSION_ID, seedMessages);
 
-        when(compactionModel.chat(anyString())).thenReturn("Prior session: user asked about X...");
+        when(compactionModel.chat(any(dev.langchain4j.data.message.UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Prior session: user asked about X..."))
+                        .build());
 
         // Act
         boolean result = service.compactIfNeeded(TEST_SESSION_ID);

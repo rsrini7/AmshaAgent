@@ -67,6 +67,7 @@ quarkus:
       chat-model:
         enabled: false
     groq:
+      api-key: "${GROQ_API_KEY}"
       log-requests: true
       log-responses: true
     openai:
@@ -345,6 +346,7 @@ mp:
         devservices:
           enabled: false
     groq:
+      api-key: "${GROQ_API_KEY}"
       log-requests: true
       log-responses: true
     hibernate-orm:
@@ -413,6 +415,7 @@ mp:
   quarkus:
     langchain4j:
       groq:
+        api-key: "${GROQ_API_KEY}"
         log-requests: ${ARCCLAW_DEBUG_LLM:false}
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
   arcclaw:
@@ -427,6 +430,7 @@ mp:
   quarkus:
     langchain4j:
       groq:
+        api-key: "${GROQ_API_KEY}"
         log-requests: ${ARCCLAW_DEBUG_LLM:false}
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
       openai:

@@ -2283,8 +2283,8 @@ sqlite3 arcclaw.db ".indexes audit_event"
 
 ### 🔴 Failure: Missing Groq API Key During Integration Tests
 **Symptom:** `ContextCompactionServiceIntegrationTest` crashes on startup with `IllegalArgumentException: groq api key must be defined. It can be set via 'quarkus.langchain4j.groq.api-key' property.`
-**Root Cause:** The `ContextCompactionService` injects the `@Identifier("compaction")` `ChatLanguageModel` which requires a Groq API key to initialize. While the main application fetches this from `.env`, the `@QuarkusTest` environment lacks it natively and does not resolve `.env` gracefully.
-**Resolution:** Created a dedicated `CompactionTestProfile.java` (implementing `QuarkusTestProfile`) that cleanly overrides `quarkus.langchain4j.groq.api-key` with a mock value (`mock-key-for-tests-only`) specifically for these test executions.
+**Root Cause:** The `ContextCompactionService` injects the `@Identifier("compaction")` `ChatLanguageModel` which requires a Groq API key to initialize. Using raw environment variables like `@ConfigProperty(name = "GROQ_API_KEY")` fails because MicroProfile requires dot-notation or explicit mapping.
+**Resolution:** Created a dedicated `CompactionTestProfile.java` and updated `CompactionModelProducer` to use `@ConfigProperty(name = "quarkus.langchain4j.groq.api-key")` which is mapped to `${GROQ_API_KEY}` in `application.yaml`.
 
 ### 🔴 Failure: Incompatible ReasoningEngine Method Signatures in Mockito Tests
 **Symptom:** Widespread compilation and runtime failures in tests like `AgentResilienceTest`, `AgentLoopTest`, and `AgentResourceTest` asserting `Invalid use of argument matchers...`.
@@ -2306,3 +2306,31 @@ Quarkus and SmallRye occasionally experience issues with `@Named` qualifiers for
 
 **Resolution:**
 Consistently use `@io.smallrye.common.annotation.Identifier("compaction")` instead of `@jakarta.inject.Named("compaction")` in both the `CompactionModelProducer` and the `ContextCompactionService` injection point.
+
+### 🔴 Bug: Compaction Blocks Camel Event Loop Thread
+**Symptom:** Under moderate load (10+ concurrent Telegram users), bot response latency
+spikes. Camel route thread pool exhausts while waiting for Groq compaction LLM call.
+**Root Cause:** `compactionService.compactIfNeeded()` was placed BEFORE the
+`executor.submit()` call, blocking the Camel Vert.x thread during network I/O.
+**Resolution:** Move the entire compaction call INSIDE the virtual thread lambda,
+strictly before `agentLoop.run()`. Virtual threads are unpooled — blocking them
+has zero impact on the Camel route thread pool.
+
+### 🔴 Bug: `@ConfigProperty(name = "GROQ_API_KEY")` Fails at Startup
+**Symptom:** `DeploymentException: No config value of type [class java.lang.String]
+exists for: GROQ_API_KEY`
+**Root Cause:** MicroProfile `@ConfigProperty` uses dot-notation config keys.
+Raw env var names like `GROQ_API_KEY` are not valid `@ConfigProperty` names even
+when the env var exists.
+**Resolution:** Use `@ConfigProperty(name = "quarkus.langchain4j.groq.api-key")`
+which is already mapped to `${GROQ_API_KEY}` in `application.yaml`.
+
+### 🔴 Bug: `ChatLanguageModel.chat(String)` Does Not Exist
+**Symptom:** `NoSuchMethodError` or compile error: `cannot find symbol: chat(String)`.
+**Root Cause:** `ChatLanguageModel` in LangChain4J 1.0.0-beta4 does not expose a
+`chat(String)` convenience method. Only `chat(ChatRequest)` exists.
+**Resolution:** Replace `compactionModel.chat(prompt)` with:
+`compactionModel.chat(UserMessage.from(prompt)).aiMessage().text()`
+Update integration test mock accordingly:
+`when(compactionModel.chat(any(ChatRequest.class))).thenReturn(
+    ChatResponse.builder().aiMessage(AiMessage.from("summary")).build())`

@@ -170,3 +170,28 @@ openssl rand -hex 32
 
 # Base64 string (~44 chars = 32 bytes)
 openssl rand -base64 32
+
+
+## Manual Compaction Trigger Test
+
+Once `mvn clean verify` is green:
+
+```bash
+# Start the app
+mvn quarkus:dev -pl arcclaw-app -am
+```
+
+Send **17 messages** in a single Telegram session (any content). Then verify:
+
+```bash
+# Check compaction fired in logs — look for:
+# INFO  Context compacted for session <id>. Compacted N messages, kept M.
+
+# Check SQLite directly
+sqlite3 arcclaw-meta.db "SELECT * FROM compaction_summary;"
+# Should show 1 row with your sessionId, summary text, compactedAt timestamp
+
+sqlite3 arcclaw-meta.db "SELECT eventType, sessionId, timestamp FROM audit_event WHERE eventType = 'CONTEXT_COMPACTED';"
+
+# Should show 1 row
+```

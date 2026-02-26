@@ -492,6 +492,7 @@
 - [x] Config `CompactionModelProducer` for `@Identifier("compaction")` LangChain model
 - [x] Implement `ContextCompactionService` logic and prompt definition 
 - [x] Integrate `ContextCompactionService` in `TelegramAgentHandler`
+- [x] Fix: Camel thread blocking (move compaction inside `executor.submit`)
 - [x] Modify `ReasoningEngine` and implementors to require `sessionId`
 - [x] Update `LangChainReasoningEngine` to inject prior summaries
 - [x] Inject `sessionId` parameter across all tests (`AgentResilienceTest`, `AgentLoopTest`, etc.)
@@ -500,5 +501,7 @@
 - [x] Add unit tests `ContextCompactionServiceTest`
 - [x] Add integration tests `ContextCompactionServiceIntegrationTest`
 - [x] Verify: All related integration and unit tests pass
+- [x] Hardening: Update `ChatLanguageModel` to object-oriented API (`UserMessage`)
+- [x] Hardening: Standardize Groq config keys to MicroProfile dot-notation
 
 

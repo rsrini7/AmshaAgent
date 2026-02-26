@@ -11,6 +11,7 @@ import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import dev.langchain4j.data.message.UserMessage;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -84,7 +85,8 @@ public class ContextCompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        String newSummary = compactionModel.chat(prompt).trim();
+        String newSummary = compactionModel.chat(UserMessage.from(prompt))
+                .aiMessage().text().trim();
 
         if (newSummary.isBlank()) {
             log.warnf("Compaction returned blank summary for session %s. Aborting compaction.", sessionId);

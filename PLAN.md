@@ -1647,7 +1647,10 @@ Implement a summarization engine to prevent unbounded context growth in long-run
 > **LLM Model**: Created a dedicated `CompactionModelProducer` to yield a `ChatLanguageModel` named `@Identifier("compaction")` using `OpenAiChatModel.builder()`.
 
 > [!TIP]
-> **SystemMessage Filtering**: The compaction service filters out fixed system prompts from the history to avoid re-summarizing static instructions, injecting the summarized history back securely.
+> **SystemMessage Filtering**: The compaction service filters out fixed system prompts from the history to avoid re-summarizing static instructions.
+
+> [!IMPORTANT]
+> **Thread-Safe Concurrency**: Context compaction is executed within the virtual thread (`executor.submit`) in `TelegramAgentHandler` to prevent blocking the reactive Camel/Vert.x event loop during network I/O.
 
 ## Completed Changes
 
@@ -1661,9 +1664,11 @@ Implement a summarization engine to prevent unbounded context growth in long-run
 ### Services & Orchestration
 #### [NEW] [ContextCompactionService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ContextCompactionService.java)
 - Orchestrates history compaction, handles threshold checks, fires `SecurityEventType.CONTEXT_COMPACTED` audit events.
+- Uses explicit `UserMessage` and `ChatResponse` objects for LangChain4j 1.0.0-beta4 compatibility.
 
 #### [NEW] [CompactionModelProducer.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java)
 - Configures the independent LLM client for compaction using `@Identifier("compaction")`.
+- Uses MicroProfile dot-notation config keys (`quarkus.langchain4j.groq.api-key`) for environment variable resolution.
 
 ### Workflow Integration
 #### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
@@ -1673,7 +1678,8 @@ Implement a summarization engine to prevent unbounded context growth in long-run
 - Performs asynchronous context compaction before executing `AgentLoop.run`.
 
 ## Verification
-- ✅ `ContextCompactionServiceTest`: Verified threshold handling and summary blanks.
+- ✅ `ContextCompactionServiceTest`: Verified threshold handling and summary blanks. Updated to match object-oriented API.
 - ✅ `ContextCompactionServiceIntegrationTest`: Verified end-to-end functionality including database persistence and LLM summarization (using mocked API key).
+- ✅ Verified non-blocking Camel event loop behavior by offloading compaction to virtual threads.
 - ✅ Maintained 100% build health across all impacted tests updating mock signatures.
 
