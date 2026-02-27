@@ -1,6 +1,5 @@
 package com.arcclaw.core.governance;
 
-import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.security.AutonomyLevel;

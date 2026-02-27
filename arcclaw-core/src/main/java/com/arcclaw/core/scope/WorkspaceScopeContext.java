@@ -2,7 +2,6 @@ package com.arcclaw.core.scope;
 
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
-import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 

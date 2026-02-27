@@ -39,12 +39,17 @@ public class DevSecretSeeder {
         // Add other dev tool env vars here as needed
     }
 
+    @SuppressWarnings("unused")
     private void seedFromHostEnv(String vaultKeyName) {
         // Idempotency check — avoid re-deriving Argon2id key on every message
         try {
             var optionalKey = secretVault.get(vaultKeyName);
             if (optionalKey.isPresent()) {
-                // CRITICAL FIX: Must close the VaultKey to zero the byte array!
+                // CRITICAL SECURITY PATTERN: Heap Privacy
+                // We must close the VaultKey to zero-out the decrypted byte array!
+                // The variable 'key' is intentionally unused; the try-with-resources 
+                // block forces the JVM to immediately call key.close() and scrub RAM
+                // to prevent plaintext exposure during a memory dump.
                 try (VaultKey key = optionalKey.get()) {
                     log.debugf("Dev DX: %s already in vault for this session, skipping seed.", vaultKeyName);
                 }
@@ -74,6 +79,7 @@ public class DevSecretSeeder {
         } catch (Exception e) {
             log.warnf("Dev DX: Failed to seed %s into vault: %s", vaultKeyName, e.getMessage());
         } finally {
+            // Instantly zero the raw bytes before garbage collection
             Arrays.fill(secretBytes, (byte) 0);
         }
     }

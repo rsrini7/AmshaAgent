@@ -1,6 +1,5 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -25,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.model.chat.request.ChatRequest;
 
 @QuarkusTest
 @TestProfile(CompactionTestProfile.class)

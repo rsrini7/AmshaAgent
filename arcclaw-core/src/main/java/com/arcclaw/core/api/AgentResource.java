@@ -10,7 +10,6 @@ import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceExecutors;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;

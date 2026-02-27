@@ -1,7 +1,6 @@
 package com.arcclaw.core.persistence;
 
 import com.arcclaw.core.audit.SecurityEventType;
-import jakarta.persistence.Entity;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
