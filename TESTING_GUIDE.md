@@ -229,3 +229,63 @@ mvn test -Dtest=TmpfsSecretTransportTest
 *Expected Result:*
 - `testLifecycle`: Verifies file creation and automatic deletion.
 - `testZeroCopyWrite`: Verifies `byte[]` are zeroed out in memory after the write operation.
+
+
+## Testing SQLite FTS5 engine and the LLM's behavioral orchestration.
+
+Here is your 3-step testing protocol for the **Agent Memory RAG** pipeline.
+
+### Step 1: Verify the FTS5 Schema on Boot
+
+Since you are using `drop-and-create` in development, the first test is simply starting the application.
+
+1. Run `./mvnw compile quarkus:dev`.
+2. Watch the console logs during startup.
+3. Look for the log line from `AuditSchemaEnforcer`:
+`[INFO] AuditSchemaEnforcer: FTS5 memory index and triggers verified.`
+*If you don't see this, or if SQLite throws a syntax error, the virtual table wasn't created, and the tool will fail.*
+
+### Step 2: Run the Automated Test Suite
+
+Run the specific commands outlined in your plan to verify the Java bindings and Tenant Isolation work before you spend LLM tokens.
+
+**Test the Repository (FTS5 & Tenant Isolation):**
+
+```powershell
+.\mvnw.cmd test -pl arcclaw-core -Dtest=CompactionSummaryRepositoryTest -Dsurefire.failIfNoSpecifiedTests=false
+
+```
+
+**Test the Tool (ScopedValue & Output Formatting):**
+
+```powershell
+.\mvnw.cmd test -pl arcclaw-app -Dtest=MemorySearchToolTest -Dsurefire.failIfNoSpecifiedTests=false
+
+```
+
+### Step 3: The Telegram E2E "Vibe Check"
+
+This is the most important test. You need to verify the `COORDINATOR` and `RESEARCHER` actually understand how and when to invoke `memory_search`.
+
+1. **Establish a Fact:** Open your Telegram bot and send a very specific, unique fact that the LLM wouldn't know otherwise.
+* *Example:* "Let's brainstorm a project called Project Neon. It's a Java-based autonomous drone system."
+
+
+2. **Force Compaction:** Continue chatting until you hit your compaction threshold (which is set to `10` in your `application.yaml`), OR manually trigger your `/compact` or `/reset` reflex if you have one wired up to force the session summary into the database.
+3. **Wait for the TTL / Start a New Session:** To truly test long-term memory, the agent's short-term `ChatMemoryStore` needs to be cleared. You can either wait for the session TTL to expire, or simulate a new session.
+4. **Trigger the Tool:** Ask the agent a historical question:
+* *"What was the name of that Java drone project we discussed?"*
+* *"What did we decide about Project Neon?"*
+
+
+5. **Watch the Logs:** Immediately look at your Quarkus console. You should see:
+* The LLM emitting a tool call for `memory_search` with the query argument (e.g., `{"query": "Project Neon"}`).
+* The `AuditService` logging: `[AUDIT-PROBE] type=TOOL_INVOKED session=... detail=tool=memory_search query_length=12`.
+
+
+### 🛡️ The Paranoid Security Test (Optional but Recommended)
+
+If you have access to a second Telegram account (or a friend's phone):
+
+1. Message the bot from Account B: *"What was the name of the drone project?"*
+2. Verify the bot returns nothing. Because `WorkspaceScopeHolder.USER_ID` is strictly bound to Account B's Telegram ID, the `memory_search` tool will execute but the `CompactionSummaryRepository` will return an empty list, proving your **Hard Tenant Isolation** is bulletproof.
