@@ -29,6 +29,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.MDC;
 
+import java.lang.ScopedValue;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
@@ -134,7 +135,8 @@ public class TelegramAgentHandler {
         // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
-        WorkspaceScopeHolder.run(baseId, () -> {
+        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userId)
+                   .run(() -> WorkspaceScopeHolder.run(baseId, () -> {
             try {
                 // Push userId to MDC for Audit logs
                 MDC.put("userId", userId);
@@ -244,7 +246,7 @@ public class TelegramAgentHandler {
             } finally {
                 MDC.remove("userId");
             }
-        });
+        }));
     }
 
 

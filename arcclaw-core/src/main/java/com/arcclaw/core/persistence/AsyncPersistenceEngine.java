@@ -43,7 +43,8 @@ public class AsyncPersistenceEngine {
     private static final int MAX_RETRIES = 5;
     private static final long BACKOFF_BASE_MS = 50;
 
-    private final LinkedBlockingQueue<PersistenceEvent> queue = new LinkedBlockingQueue<>();
+    private static final int QUEUE_CAPACITY = 10000;
+    private final LinkedBlockingQueue<PersistenceEvent> queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
 
     @Inject
     EntityManager em;
@@ -82,7 +83,15 @@ public class AsyncPersistenceEngine {
         if (event.getTier() != PersistenceEvent.Tier.CRITICAL) {
             throw new IllegalArgumentException("submitCritical requires a CRITICAL event");
         }
-        queue.add(event);
+        
+        try {
+            // put() blocks the caller if the queue is full, providing natural backpressure
+            queue.put(event);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+        }
+
         // Block the caller until the consumer confirms or fails the future
         try {
             event.getFuture().join();
@@ -102,7 +111,11 @@ public class AsyncPersistenceEngine {
         if (event.getTier() != PersistenceEvent.Tier.TELEMETRY) {
             throw new IllegalArgumentException("submitTelemetry requires a TELEMETRY event");
         }
-        queue.add(event);
+        // offer() returns false if the queue is full. We drop telemetry under pressure.
+        if (!queue.offer(event)) {
+            log.warnf("[AsyncPersistenceEngine] Telemetry queue full (%d items) — dropping event %s for session %s",
+                    QUEUE_CAPACITY, event.getEventType(), event.getSessionId());
+        }
     }
 
     private final java.util.concurrent.atomic.AtomicBoolean processing = new java.util.concurrent.atomic.AtomicBoolean(false);

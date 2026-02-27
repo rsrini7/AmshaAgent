@@ -4,9 +4,12 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import java.lang.ScopedValue;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,5 +82,59 @@ class CompactionSummaryRepositoryTest {
         em.clear();
 
         assertTrue(repository.findLatestBySessionId(sessionId).isEmpty());
+    }
+
+    // ── Phase 45: FTS5 Memory Search Tests ──────────────────────────────
+
+    @Test
+    @Transactional
+    void testSearchMemoryWithFts5Match() {
+        String sessionId = "fts5-search-" + System.currentTimeMillis();
+        String userId = "user-fts5-" + System.currentTimeMillis();
+
+        // Use repository.upsertSummary within ScopedValue to ensure FTS sync and userId
+        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userId).run(() -> {
+            repository.upsertSummary(sessionId, "Discussed blockchain consensus algorithms", 5);
+        });
+        
+        em.flush();
+        em.clear();
+
+        List<CompactionSummaryEntity> results = repository.searchMemory(userId, "blockchain", 5);
+
+        assertFalse(results.isEmpty(), "FTS5 search should return matching results");
+        assertEquals(sessionId, results.get(0).sessionId);
+        assertTrue(results.get(0).summary.contains("blockchain"));
+    }
+
+    @Test
+    @Transactional
+    void testSearchMemoryTenantIsolation() {
+        String ts = String.valueOf(System.currentTimeMillis());
+        String userA = "userA-" + ts;
+        String userB = "userB-" + ts;
+
+        // Persist session for User A
+        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userA).run(() -> {
+            repository.upsertSummary("session-a-" + ts, "Discussed quantum computing breakthroughs", 3);
+        });
+
+        // Persist session for User B
+        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userB).run(() -> {
+            repository.upsertSummary("session-b-" + ts, "Discussed quantum physics experiments", 4);
+        });
+
+        em.flush();
+        em.clear();
+
+        // User A should only see their own results
+        List<CompactionSummaryEntity> resultsA = repository.searchMemory(userA, "quantum", 5);
+        assertEquals(1, resultsA.size(), "User A should only see their own sessions");
+        assertEquals(userA, resultsA.get(0).userId);
+
+        // User B should only see their own results
+        List<CompactionSummaryEntity> resultsB = repository.searchMemory(userB, "quantum", 5);
+        assertEquals(1, resultsB.size(), "User B should only see their own sessions");
+        assertEquals(userB, resultsB.get(0).userId);
     }
 }

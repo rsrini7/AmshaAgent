@@ -19,6 +19,7 @@ import java.util.concurrent.Callable;
 public final class WorkspaceScopeHolder {
 
     private static final ScopedValue<String> WORKSPACE_ID = ScopedValue.newInstance();
+    public static final ScopedValue<String> USER_ID = ScopedValue.newInstance();
     private static final Logger LOG = Logger.getLogger(WorkspaceScopeHolder.class);
 
     // Bridge for MicroProfile Context Propagation which doesn't support ScopedValue natively

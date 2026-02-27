@@ -193,7 +193,7 @@ class LangChainReasoningEngineTest {
     }
 
     @Test
-    void testResearcherRoleReceivesGithubSchemaOnly() {
+    void testResearcherRoleReceivesPermittedSchemas() {
         AiMessage msg = AiMessage.from("Searching...");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(msg).tokenUsage(new TokenUsage(5, 10))
@@ -210,8 +210,9 @@ class LangChainReasoningEngineTest {
 
         ChatRequest sent = captor.getValue();
         assertNotNull(sent.toolSpecifications());
-        // Depending on Tools registered, there could be multiple, but the test ensures we have some
-        assertEquals(1, sent.toolSpecifications().size());
-        assertEquals("github", sent.toolSpecifications().get(0).name());
+        // Phase 45: Researcher now has 2 tools: github, memory_search
+        assertEquals(2, sent.toolSpecifications().size());
+        assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("github")));
+        assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("memory_search")));
     }
 }

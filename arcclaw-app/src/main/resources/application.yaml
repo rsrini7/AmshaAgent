@@ -43,6 +43,7 @@ quarkus:
       additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 5
+      initial-sql: "ATTACH DATABASE '${ARCCLAW_DATA_DIR:./data}/arcclaw-fts.db' AS fts"
 
   hibernate-orm:
     dialect: org.hibernate.community.dialect.SQLiteDialect
@@ -390,6 +391,7 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite::memory:"
+        initial-sql: "ATTACH DATABASE ':memory:' AS fts"
     hibernate-orm:
       database:
         generation: update
