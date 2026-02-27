@@ -1765,7 +1765,7 @@ Implement critical hardening for Podman execution, PII detection completeness, a
 
 # Phase 42 — ScopedValue & Virtual Thread Context Migration ✅
 
-Migrate the core session scoping mechanism from `ThreadLocal` to the modern JDK `ScopedValue` API (JEP 464) to ensure safe and efficient context propagation across virtual threads.
+Migrate the core session scoping mechanism from `ThreadLocal` to the modern JDK 25 `ScopedValue` API (JEP 464) to ensure safe and efficient context propagation across virtual threads.
 
 ## Design Decisions
 
