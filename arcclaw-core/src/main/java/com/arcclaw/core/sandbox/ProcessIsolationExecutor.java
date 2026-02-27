@@ -252,6 +252,7 @@ public class ProcessIsolationExecutor {
             var podmanCmd = new ArrayList<>(List.of(
                     podmanPath, "run", "--rm",
                     "--name", containerName, // Fix G2: named for tracking + graceful stop
+                    "--pull", "never",
                     "--network=bridge",
                     "--read-only",
                     "--security-opt=no-new-privileges",
@@ -291,16 +292,28 @@ public class ProcessIsolationExecutor {
 
             int exitCode = process.exitValue();
             
-            // Catch Podman Infrastructure Failures
-            if (exitCode == 125) {
-                // Podman engine failed (VM down, socket dead, bad arguments)
-                // Throwing IOException forces the circuit breaker to catch it and fall back
-                throw new IOException("Podman engine failure (exit 125): " + output);
+            if (exitCode != 0) {
+                // Intercept the "Image Not Found" case
+                if (output.contains("not known") || output.contains("not found")) {
+                    log.warn("**====================================================================**");
+                    log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.", containerImage);
+                    log.warn("To use the secure Podman sandbox, please build the runner image:");
+                    log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner . ", containerImage);
+                    log.warn("Falling back to host execution...");
+                    log.warn("**====================================================================**");
+                    
+                    // Throw IOException to trigger the Graceful Degradation circuit breaker
+                    throw new IOException("Missing sandbox image: " + containerImage);
+                }
+                
+                // Handle other infrastructure failures (exit 125)
+                if (exitCode == 125) {
+                    throw new IOException("Podman engine failure (exit 125): " + output);
+                }
+
+                throw new ToolExecutionException("Tool failed (exit " + exitCode + "): " + output);
             }
 
-            if (exitCode != 0) {
-                throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
-            }
             span.setStatus(StatusCode.OK);
             return output;
 
