@@ -5,6 +5,7 @@ import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -81,6 +82,9 @@ public class TelegramAgentHandler {
     com.arcclaw.core.reflex.ReflexRegistry reflexRegistry;
 
     @Inject
+    RoleRegistry roleRegistry;
+
+    @Inject
     com.arcclaw.app.security.TelegramAllowlistGuard allowlistGuard;
 
     /**
@@ -142,7 +146,7 @@ public class TelegramAgentHandler {
 
                 // Auto-cancel any dangling tool approvals if the user
                 // sends a free-text message instead of clicking /approve or /deny
-                for (AgentRoleEnum r : AgentRoleEnum.values()) {
+                for (com.arcclaw.core.agent.AgentRoleEnum r : com.arcclaw.core.agent.AgentRoleEnum.values()) {
                     statefulAgentStore.load(baseId, r.toScopedName()).ifPresent(cp -> {
                         if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                             log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r.toScopedName());
@@ -157,10 +161,20 @@ public class TelegramAgentHandler {
                     });
                 }
 
-                String activeRole = intentClassifier.classify(safeInput);
+                String classifiedRole = intentClassifier.classify(safeInput);
 
-                log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
-                        safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, activeRole);
+                com.arcclaw.core.agent.AgentRoleEnum resolvedRole;
+                try {
+                    resolvedRole = com.arcclaw.core.agent.AgentRoleEnum.fromString(classifiedRole);
+                } catch (IllegalArgumentException e) {
+                    resolvedRole = com.arcclaw.core.agent.AgentRoleEnum.COORDINATOR;
+                    log.warnf("[TelegramHandler] Unknown role classification '%s', defaulting to COORDINATOR", classifiedRole);
+                }
+
+                final String activeRole = resolvedRole.toScopedName();
+
+                log.infof("[TelegramHandler] Intent classified '%s' -> original: %s | active: %s (enum: %s)",
+                        safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, classifiedRole, activeRole, resolvedRole);
 
                 // Session Continuity Check (Soft Reset only)
                 statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
@@ -193,7 +207,7 @@ public class TelegramAgentHandler {
                     log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
                 }
 
-                AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
+                AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, roleRegistry.defaultMaxIterations(resolvedRole));
 
                 if (result.awaitingApproval()) {
                     String approvalDetail = statefulAgentStore.load(baseId, activeRole)

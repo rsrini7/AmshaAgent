@@ -1,8 +1,11 @@
 package com.arcclaw.app.channel.telegram;
 
+import com.arcclaw.app.security.TelegramAllowlistGuard;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -55,7 +58,10 @@ public class TelegramAgentHandlerTest {
     ReflexRegistry reflexRegistryMock;
 
     @InjectMock
-    com.arcclaw.app.security.TelegramAllowlistGuard allowlistGuardMock;
+    TelegramAllowlistGuard allowlistGuardMock;
+
+    @InjectMock
+    RoleRegistry roleRegistryMock;
 
     ProducerTemplate producerTemplateMock;
 
@@ -93,6 +99,9 @@ public class TelegramAgentHandlerTest {
 
         // Default mock for allowlist guard
         when(allowlistGuardMock.isAllowed(any())).thenReturn(true);
+
+        // Default mock for RoleRegistry
+        when(roleRegistryMock.defaultMaxIterations(any())).thenReturn(5);
     }
 
     @Test
@@ -118,6 +127,7 @@ public class TelegramAgentHandlerTest {
         String expectedSessionId = UUID.nameUUIDFromBytes("chat456:123".getBytes(StandardCharsets.UTF_8)).toString();
 
         verify(intentClassifierMock).classify("hello");
+        verify(roleRegistryMock).defaultMaxIterations(AgentRoleEnum.COORDINATOR);
         verify(agentLoopMock).run(eq(expectedSessionId), eq("coordinator"), eq("hello"), any(), eq(5));
         verify(producerTemplateMock).sendBodyAndHeaders(contains("telegram:bots"), eq("mock-answer"),
                 eq(java.util.Map.of("CamelTelegramChatId", "chat456")));
@@ -158,6 +168,7 @@ public class TelegramAgentHandlerTest {
         verify(statefulAgentStoreMock)
                 .save(argThat(cp -> cp.getStatus() == CheckpointStatus.IN_PROGRESS && "[]".equals(cp.getStateJson())));
 
+        verify(roleRegistryMock).defaultMaxIterations(AgentRoleEnum.COORDINATOR);
         verify(agentLoopMock).run(eq(deterministicId), eq("coordinator"), eq("hello again"), any(), eq(5));
     }
 

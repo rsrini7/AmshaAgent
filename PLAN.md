@@ -1875,4 +1875,5 @@ Address critical production instability related to SQLite lock contention and re
 ## Verification
 
 - ✅ `GithubToolTest`: Verified correct command generation for repo/gist actions.
+- ✅ `RoleRegistry Integration`: Refactored `LangChainReasoningEngine` and `TelegramAgentHandler` for dynamic role-based orchestration.
 - ✅ `mvn clean test`: All core and app tests pass with 0 regressions.

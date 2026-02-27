@@ -37,6 +37,7 @@ class AgentLoopTest {
     private ObjectMapper objectMapper;
     private ChatMemoryStore chatMemoryStore;
     private CompactionSummaryRepository compactionSummaryRepository;
+    private RoleRegistry roleRegistry;
     private LangChainReasoningEngine engine;
 
     @BeforeEach
@@ -46,6 +47,7 @@ class AgentLoopTest {
         objectMapper = new ObjectMapper();
         chatMemoryStore = mock(ChatMemoryStore.class);
         compactionSummaryRepository = mock(CompactionSummaryRepository.class);
+        roleRegistry = mock(RoleRegistry.class);
         when(compactionSummaryRepository.findLatestBySessionId(anyString()))
                 .thenReturn(Optional.empty());
 
@@ -55,6 +57,7 @@ class AgentLoopTest {
         engine.objectMapper = objectMapper;
         engine.chatMemoryStore = chatMemoryStore;
         engine.compactionSummaryRepository = compactionSummaryRepository;
+        engine.roleRegistry = roleRegistry;
     }
 
     @Test

@@ -46,6 +46,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject
     CompactionSummaryRepository compactionSummaryRepository;
 
+    @Inject
+    RoleRegistry roleRegistry;
+
     /**
      * Returns the strict tool binding constraint for the given agent role.
      * Resolves via {@link AgentRoleEnum} to handle both canonical names and deity aliases.
@@ -382,11 +385,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
 
         // 1. Determine which tools the current persona is allowed to see
-        List<String> allowedTools = switch (agentRole.toLowerCase()) {
-            case "coder", "brahma", "debugger", "shiva" -> List.of(); // NO tools in schema
-            case "researcher", "saraswati", "coordinator", "vishnu" -> List.of("github");
-            default -> List.of();
-        };
+        List<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
 
         // 2. Dynamically filter + build specs with parameter schema
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()

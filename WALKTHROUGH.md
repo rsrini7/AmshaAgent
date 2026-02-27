@@ -44,7 +44,7 @@
 | 40 | Antigravity (Security & Budget) | 21/21 tests | Zero-cost local reflexes |
 | 41 | Resilience, Privacy & Observer Separation | 100% success | 19+ PII patterns |
 | 42 | ScopedValue Context Migration | 100% success | Bridge for MicroProfile |
-| 44 | Production Hardening | 100% success | JDBC `transaction_mode=IMMEDIATE` + TCCL propagation |
+| 44 | Production Hardening | 100% success | JDBC `IMMEDIATE` + dynamic `RoleRegistry` refactor |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -949,8 +949,10 @@ Addressed critical production instability related to SQLite lock contention and 
 2. **Logging Traceability**: Connected background persistence logs to front-end sessions by automatically propagating the `sessionId` through the CDI scope bridge to the JBoss Logging MDC.
 3. **Resilient Persistence**: Hardened the asynchronous persistence consumer with TCCL propagation and enhanced exception introspection (`LockAcquisitionException`, `OptimisticLockException`).
 4. **Tool command Safety**: Corrected `GithubTool` logic to handle `gh gist list` (authenticated-user-only) and enforced required parameters for `gh gist view`, preventing runtime syntax errors prompted by LLM assumptions.
+5. **Architectural Purity**: Fully refactored the reasoning engine and Telegram handler to use the `RoleRegistry`, eliminating legacy hardcoded tool lists and iteration magic numbers.
 
 ### Verification:
 - ✅ **Unit Tests**: `GithubToolTest` coverage for all gist and repo action permutations.
 - ✅ **Stability Test**: Zero lock-related failures during long-running concurrent audit simulations.
-- ✅ **Build**: `mvn clean package -pl arcclaw-app -am` successful.
+- ✅ **Integration**: `TelegramAgentHandlerTest` verified dynamic iteration limits (e.g. 10 for Coordinator, 15 for Researcher).
+- ✅ **Build**: `mvn clean test -pl arcclaw-core,arcclaw-app` successful (5/5 tests passed).
