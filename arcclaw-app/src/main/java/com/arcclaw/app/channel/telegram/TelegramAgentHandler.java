@@ -208,7 +208,7 @@ public class TelegramAgentHandler {
                 log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
                 try {
-                    compactionService.compactIfNeeded(baseId);
+                    compactionService.compactIfNeeded(baseId, userId);
                 } catch (Exception e) {
                     log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
                 }

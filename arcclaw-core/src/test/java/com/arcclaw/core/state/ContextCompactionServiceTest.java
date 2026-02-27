@@ -47,7 +47,7 @@ class ContextCompactionServiceTest {
     @Test
     void testBypassWhenDisabled() {
         service.enabled = false;
-        assertFalse(service.compactIfNeeded("session1"));
+        assertFalse(service.compactIfNeeded("session1", "test-user"));
         verifyNoInteractions(mockChatStore);
     }
 
@@ -55,7 +55,7 @@ class ContextCompactionServiceTest {
     void testBelowThresholdNoop() {
         List<ChatMessage> msgs = List.of(UserMessage.from("1"), AiMessage.from("2"));
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
-        assertFalse(service.compactIfNeeded("session1"));
+        assertFalse(service.compactIfNeeded("session1", "test-user"));
         verifyNoInteractions(mockModel);
     }
 
@@ -73,10 +73,10 @@ class ContextCompactionServiceTest {
                 .aiMessage(AiMessage.from("New Summary Text"))
                 .build());
 
-        assertTrue(service.compactIfNeeded("session1"));
+        assertTrue(service.compactIfNeeded("session1", "test-user"));
 
         verify(mockModel, times(1)).chat(any(UserMessage.class));
-        verify(mockRepo, times(1)).upsertSummary("session1", "New Summary Text", 5);
+        verify(mockRepo, times(1)).upsertSummary("session1", "test-user", "New Summary Text", 5);
         verify(mockChatStore, times(1)).updateMessages(eq("session1"), anyList());
         verify(mockAudit, times(1)).record(eq("session1"), eq("system"), eq("system"), any(), anyString());
     }
@@ -92,7 +92,7 @@ class ContextCompactionServiceTest {
                 .aiMessage(AiMessage.from("   \n "))
                 .build());
 
-        assertFalse(service.compactIfNeeded("session1"));
-        verify(mockRepo, never()).upsertSummary(any(), any(), anyInt());
+        assertFalse(service.compactIfNeeded("session1", "test-user"));
+        verify(mockRepo, never()).upsertSummary(any(), any(), any(), anyInt());
     }
 }

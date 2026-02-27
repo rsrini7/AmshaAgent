@@ -35,7 +35,7 @@ class CompactionSummaryRepositoryTest {
     @Transactional
     void testUpsertSummary_insertsNewEntity() {
         String sessionId = "insert-" + System.currentTimeMillis();
-        repository.upsertSummary(sessionId, "summary-1", 3);
+        repository.upsertSummary(sessionId, "test-user", "summary-1", 3);
         em.flush();
         em.clear();
 
@@ -52,13 +52,13 @@ class CompactionSummaryRepositoryTest {
     @Transactional
     void testUpsertSummary_updatesExistingEntity() {
         String sessionId = "update-" + System.currentTimeMillis();
-        repository.upsertSummary(sessionId, "summary-1", 1);
+        repository.upsertSummary(sessionId, "test-user", "summary-1", 1);
         em.flush();
         em.clear();
 
         Instant firstCompactedAt = repository.findLatestBySessionId(sessionId).orElseThrow().compactedAt;
 
-        repository.upsertSummary(sessionId, "summary-2", 4);
+        repository.upsertSummary(sessionId, "test-user", "summary-2", 4);
         em.flush();
         em.clear();
 
@@ -73,7 +73,7 @@ class CompactionSummaryRepositoryTest {
     @Transactional
     void testDeleteBySessionId_removesEntity() {
         String sessionId = "delete-" + System.currentTimeMillis();
-        repository.upsertSummary(sessionId, "summary-1", 2);
+        repository.upsertSummary(sessionId, "test-user", "summary-1", 2);
         em.flush();
         em.clear();
 
@@ -92,10 +92,7 @@ class CompactionSummaryRepositoryTest {
         String sessionId = "fts5-search-" + System.currentTimeMillis();
         String userId = "user-fts5-" + System.currentTimeMillis();
 
-        // Use repository.upsertSummary within ScopedValue to ensure FTS sync and userId
-        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userId).run(() -> {
-            repository.upsertSummary(sessionId, "Discussed blockchain consensus algorithms", 5);
-        });
+        repository.upsertSummary(sessionId, userId, "Discussed blockchain consensus algorithms", 5);
         
         em.flush();
         em.clear();
@@ -115,14 +112,10 @@ class CompactionSummaryRepositoryTest {
         String userB = "userB-" + ts;
 
         // Persist session for User A
-        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userA).run(() -> {
-            repository.upsertSummary("session-a-" + ts, "Discussed quantum computing breakthroughs", 3);
-        });
+        repository.upsertSummary("session-a-" + ts, userA, "Discussed quantum computing breakthroughs", 3);
 
         // Persist session for User B
-        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userB).run(() -> {
-            repository.upsertSummary("session-b-" + ts, "Discussed quantum physics experiments", 4);
-        });
+        repository.upsertSummary("session-b-" + ts, userB, "Discussed quantum physics experiments", 4);
 
         em.flush();
         em.clear();

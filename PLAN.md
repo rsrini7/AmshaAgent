@@ -1918,3 +1918,43 @@ Implement long-term memory retrieval for agents using SQLite's native FTS5 exten
 - ✅ `CompactionSummaryRepositoryTest`: Verified memory search with FTS5 and strict tenant isolation.
 - ✅ `LangChainReasoningEngineTest`: Verified that agents correctly retrieve memory via the repository.
 - ✅ Verified 21/21 tests passing across the `arcclaw-core` module.
+
+---
+
+# Phase 45.1 — FTS5 Hardening & Robustness ✅
+
+Apply targeted patches to the SQLite FTS5 implementation to ensure stability across connection pools and threading boundaries.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **JDBC Connection Interception**: We implement `FtsConnectionInterceptor` (AgroalPoolInterceptor) to robustly `ATTACH` the `arcclaw-fts.db` schema on every connection acquisition. This ensures that even in multi-threaded pooling environments, the `fts` schema is always available. We use `PRAGMA database_list` to avoid duplicate attachment errors.
+
+> [!NOTE]
+> **Explicit Tenant Context**: Relying on `ScopedValue` inside the persistence layer is fragile due to executor boundary crossings (e.g., Virtual Threads). We refactored `upsertSummary` and `compactIfNeeded` to accept `userId` as an explicit parameter, ensuring tenant isolation is maintained regardless of the calling thread's context.
+
+> [!TIP]
+> **Idempotent Seed Guard**: The startup seeding logic in `AuditSchemaEnforcer` was converted from an active `INSERT` to a passive `COUNT(*)` guard. This prevents redundant operations and log noise on restarts, as the sync is already handled by the repository's manual synchronization logic.
+
+## Proposed Changes
+
+### Core & App Modules
+
+#### [MODIFY] [FtsConnectionInterceptor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/FtsConnectionInterceptor.java)
+- Implemented robust JDBC schema attachment with `PRAGMA` check.
+
+#### [MODIFY] [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java)
+- Updated `upsertSummary(sessionId, userId, summary, count)` for explicit tenant passing.
+
+#### [MODIFY] [ContextCompactionService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ContextCompactionService.java)
+- Updated `compactIfNeeded` to accept and propagate `userId`.
+
+#### [MODIFY] [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java)
+- Replaced active seeding with passive `COUNT(*)` state verification.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `CompactionSummaryRepositoryTest`: Verified sync with explicit `userId`.
+- ✅ `ContextCompactionServiceIntegrationTest`: Verified end-to-end flow from app module.
+- ✅ `mvn clean verify`: All tests pass with new signatures.

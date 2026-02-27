@@ -66,26 +66,22 @@ public class AuditSchemaEnforcer {
         // Isolated in 'fts' schema to prevent Hibernate metadata scan crashes.
         // Standalone pattern (no external content) bypasses trigger qualification rules.
 
-        // Ensure 'fts' schema is attached (redundant but safe for the current connection)
-        String dataDir = System.getProperty("ARCCLAW_DATA_DIR", 
-                System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
-        String ftsPath = dataDir + "/arcclaw-fts.db";
-        if (ftsPath.contains(":memory:")) ftsPath = ":memory:";
-
-        em.createNativeQuery("ATTACH DATABASE '" + ftsPath + "' AS fts").executeUpdate();
-
         // FTS5 standalone table — stores sessionId for manual mapping
         em.createNativeQuery("""
             CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts
             USING fts5(sessionId UNINDEXED, summary)
             """).executeUpdate();
 
-        // SEED: Synchronize any missing rows (one-time or recovery)
-        em.createNativeQuery("""
-            INSERT INTO fts.compaction_summary_fts(sessionId, summary)
-            SELECT sessionId, summary FROM main.compaction_summary
-            WHERE sessionId NOT IN (SELECT sessionId FROM fts.compaction_summary_fts)
-            """).executeUpdate();
+        // SEED: Idempotent guard (clean start)
+        long ftsCount = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM fts.compaction_summary_fts")
+            .getSingleResult()).longValue();
+
+        if (ftsCount == 0L) {
+            log.info("AuditSchemaEnforcer: FTS index empty. Skipping backfill (clean start).");
+        } else {
+            log.debugf("AuditSchemaEnforcer: FTS index has %d entries, verified.", ftsCount);
+        }
 
         log.info("AuditSchemaEnforcer: FTS5 isolated memory index verified (standalone).");
 

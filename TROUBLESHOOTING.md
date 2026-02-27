@@ -2838,4 +2838,15 @@ While the `individually` strategy helps, the most robust solution for ArcClaw wa
 - [x] Perform `DELETE` and `INSERT` on `fts.compaction_summary_fts` within the repository's `@Transactional` methods.
 - [x] Enforce `userId` filtering in FTS search queries to maintain tenant isolation.
 
+#### 🟠 Hardening: Connection Pool & Threading Robustness
+
+In multi-threaded environments with connection pooling (Agroal), relying on a one-time `ATTACH` or `ScopedValue` propagation can lead to "no such table" or missing tenant context failures.
+
+**Resolutions Applied:**
+1. **`FtsConnectionInterceptor`**: We implemented a JDBC-level interceptor that runs `PRAGMA database_list` on every connection acquisition. If the `fts` schema is missing (e.g., on a new pool thread), it automatically performs the `ATTACH DATABASE` operation.
+2. **Explicit Parameter Passing**: To ensure 100% reliability across Virtual Thread and executor boundaries, we refactored the compaction call chain to pass the `userId` as an explicit method parameter (`compactIfNeeded(sessionId, userId)`), rather than pulling it from a thread-local or `ScopedValue` inside the repository.
+3. **Passive Startup Initialization**: We moved to a passive `COUNT(*)` guard in `AuditSchemaEnforcer`, ensuring that startup seeding is idempotent and doesn't conflict with active connection attachments.
+
+```
+
 ```

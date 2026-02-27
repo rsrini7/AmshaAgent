@@ -22,9 +22,8 @@ public class CompactionSummaryRepository {
     }
 
     @Transactional
-    public void upsertSummary(String sessionId, String summaryText, int compactedCount) {
+    public void upsertSummary(String sessionId, String userId, String summaryText, int compactedCount) {
         CompactionSummaryEntity existing = em.find(CompactionSummaryEntity.class, sessionId);
-        String userId = WorkspaceScopeHolder.USER_ID.isBound() ? WorkspaceScopeHolder.USER_ID.get() : null;
 
         if (existing != null) {
             existing.summary = summaryText;
