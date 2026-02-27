@@ -137,7 +137,7 @@ public class TelegramAgentHandler {
         WorkspaceScopeHolder.run(baseId, () -> {
             try {
                 // Push userId to MDC for Audit logs
-                org.jboss.logging.MDC.put("userId", userId);
+                MDC.put("userId", userId);
 
                 // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
                 ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
