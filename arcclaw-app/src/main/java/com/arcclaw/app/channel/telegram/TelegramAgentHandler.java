@@ -1,6 +1,5 @@
 package com.arcclaw.app.channel.telegram;
 
-import com.arcclaw.app.util.AgentErrorMessageUtil;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
@@ -10,6 +9,8 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
+
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;

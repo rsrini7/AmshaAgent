@@ -53,8 +53,6 @@ quarkus:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
-    unsupported-properties:
-      "hibernate.hbm2ddl.jdbc_metadata_extraction_strategy": "individually"
     log:
       sql: false
     schema-management:
