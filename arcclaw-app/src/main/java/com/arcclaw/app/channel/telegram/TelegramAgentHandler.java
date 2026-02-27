@@ -3,6 +3,7 @@ package com.arcclaw.app.channel.telegram;
 import com.arcclaw.app.util.AgentErrorMessageUtil;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -139,20 +140,19 @@ public class TelegramAgentHandler {
 
                 String safeInput = reflexResult.sanitizedInput();
 
-                // Auto-cancel any dangling tool approvals if the user 
+                // Auto-cancel any dangling tool approvals if the user
                 // sends a free-text message instead of clicking /approve or /deny
-                for (String r : java.util.List.of("architect", "coordinator", "coder", "researcher", "debugger")) {
-                    statefulAgentStore.load(baseId, r).ifPresent(cp -> {
+                for (AgentRoleEnum r : AgentRoleEnum.values()) {
+                    statefulAgentStore.load(baseId, r.toScopedName()).ifPresent(cp -> {
                         if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                            log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r);
-                            // Correcting compilation error: status/reason fields are managed via store methods or setters
+                            log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r.toScopedName());
                             cp.setStatus(CheckpointStatus.FAILED);
                             cp.setFailReason("User interrupted with a new message. Tool execution aborted.");
-                            cp.setStateJson("[]"); // Wipe the tool state
+                            cp.setStateJson("[]");
                             cp.setPendingToolName(null);
                             cp.setPendingToolParametersJson(null);
                             statefulAgentStore.save(cp);
-                            log.infof("[TelegramHandler] Successfully auto-canceled tool approval for role: %s", r);
+                            log.infof("[TelegramHandler] Successfully auto-canceled tool approval for role: %s", r.toScopedName());
                         }
                     });
                 }

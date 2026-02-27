@@ -2,6 +2,7 @@ package com.arcclaw.core.agent;
 
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -35,10 +36,7 @@ class AgentLoopTest {
     private ToolRegistry toolRegistry;
     private ObjectMapper objectMapper;
     private ChatMemoryStore chatMemoryStore;
-    private com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
-    private com.arcclaw.core.governance.GovernanceLayer governanceLayer;
-
-    
+    private CompactionSummaryRepository compactionSummaryRepository;
     private LangChainReasoningEngine engine;
 
     @BeforeEach
@@ -47,7 +45,7 @@ class AgentLoopTest {
         toolRegistry = mock(ToolRegistry.class);
         objectMapper = new ObjectMapper();
         chatMemoryStore = mock(ChatMemoryStore.class);
-        compactionSummaryRepository = mock(com.arcclaw.core.state.CompactionSummaryRepository.class);
+        compactionSummaryRepository = mock(CompactionSummaryRepository.class);
         when(compactionSummaryRepository.findLatestBySessionId(anyString()))
                 .thenReturn(Optional.empty());
 

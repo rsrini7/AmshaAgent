@@ -45,46 +45,49 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     AuditService auditService;
 
     @Override
-    @Transactional
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
-        String json = serializeSteps(steps);
+        return withRetry(() -> {
+            return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
+                String json = serializeSteps(steps);
+                Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
-        // Upsert: find existing or create new
-        Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
-
-        AgentCheckpoint checkpoint;
-        if (existing.isPresent()) {
-            checkpoint = existing.get();
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            checkpoint = em.merge(checkpoint);
-            log.debugf("Updated checkpoint for session=%s, role=%s", sessionId, agentRole);
-        } else {
-            checkpoint = new AgentCheckpoint();
-            checkpoint.setSessionId(sessionId);
-            checkpoint.setAgentRole(agentRole);
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            em.persist(checkpoint);
-            
-            String userId = (String) MDC.get("userId");
-            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
-            
-            log.infof("Created checkpoint for session=%s, role=%s", sessionId, agentRole);
-        }
-
-        return checkpoint;
+                AgentCheckpoint checkpoint;
+                if (existing.isPresent()) {
+                    checkpoint = existing.get();
+                    checkpoint.setStateJson(json);
+                    checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+                    checkpoint = em.merge(checkpoint);
+                    log.debugf("Updated checkpoint for session=%s, role=%s", sessionId, agentRole);
+                } else {
+                    checkpoint = new AgentCheckpoint();
+                    checkpoint.setSessionId(sessionId);
+                    checkpoint.setAgentRole(agentRole);
+                    checkpoint.setStateJson(json);
+                    checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+                    em.persist(checkpoint);
+                    
+                    String userId = (String) MDC.get("userId");
+                    auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
+                    
+                    log.infof("Created checkpoint for session=%s, role=%s", sessionId, agentRole);
+                }
+                return checkpoint;
+            });
+        }, "save-upsert");
     }
 
     @Override
-    @Transactional
     public AgentCheckpoint save(AgentCheckpoint checkpoint) {
-        if (checkpoint.getId() == null) {
-            em.persist(checkpoint);
-            return checkpoint;
-        } else {
-            return em.merge(checkpoint);
-        }
+        return withRetry(() -> {
+            return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
+                if (checkpoint.getId() == null) {
+                    em.persist(checkpoint);
+                    return checkpoint;
+                } else {
+                    return em.merge(checkpoint);
+                }
+            });
+        }, "save-entity");
     }
 
     @Override
@@ -107,43 +110,102 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional
     public void markFailed(Long checkpointId, String reason) {
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
-        if (checkpoint != null) {
-            markFailed(checkpoint, reason);
-        }
+        withRetry(() -> {
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
+                if (checkpoint != null) {
+                    doMarkFailed(checkpoint, reason);
+                }
+            });
+            return null;
+        }, "markFailed-id");
     }
 
     @Override
-    @Transactional
     public void markFailed(AgentCheckpoint checkpoint, String reason) {
-        if (checkpoint != null) {
-            checkpoint.setStatus(CheckpointStatus.FAILED);
-            checkpoint.setFailedAt(Instant.now());
-            checkpoint.setFailReason(reason);
-            em.merge(checkpoint);
-            
-            String userId = (String) MDC.get("userId");
-            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
-            
-            log.warnf("Checkpoint session=%s role=%s marked FAILED: %s", checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
-        }
+        withRetry(() -> {
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                doMarkFailed(checkpoint, reason);
+            });
+            return null;
+        }, "markFailed-entity");
+    }
+
+    private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {
+        checkpoint.setStatus(CheckpointStatus.FAILED);
+        checkpoint.setFailedAt(Instant.now());
+        checkpoint.setFailReason(reason);
+        em.merge(checkpoint);
+        
+        String userId = (String) MDC.get("userId");
+        auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
+        
+        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s", checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
     }
 
     @Override
-    @Transactional
     public void markCompleted(Long checkpointId) {
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
-        if (checkpoint != null) {
-            checkpoint.setStatus(CheckpointStatus.COMPLETED);
-            em.merge(checkpoint);
-            
-            String userId = (String) MDC.get("userId");
-            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_COMPLETED, null);
-            
-            log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
+        withRetry(() -> {
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
+                if (checkpoint != null) {
+                    checkpoint.setStatus(CheckpointStatus.COMPLETED);
+                    em.merge(checkpoint);
+                    
+                    String userId = (String) MDC.get("userId");
+                    auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_COMPLETED, null);
+                    
+                    log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
+                }
+            });
+            return null;
+        }, "markCompleted");
+    }
+
+    private <T> T withRetry(java.util.concurrent.Callable<T> task, String operation) {
+        int maxRetries = 5;
+        long backoffMs = 50;
+        Exception lastEx = null;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return task.call();
+            } catch (Exception e) {
+                lastEx = e;
+                if (isSqliteBusy(e)) {
+                    log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
+                            operation, attempt, maxRetries, backoffMs * attempt);
+                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new RuntimeException(ie); }
+                } else {
+                    throw (e instanceof RuntimeException re) ? re : new RuntimeException(e);
+                }
+            }
         }
+        throw new RuntimeException("Action failed after " + maxRetries + " retries for " + operation, lastEx);
+    }
+
+    private boolean isSqliteBusy(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String className = t.getClass().getSimpleName();
+            if (className.equals("LockAcquisitionException") || 
+                className.equals("OptimisticLockException") ||
+                className.equals("SQLiteException")) {
+                return true;
+            }
+
+            String msg = t.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("busy") || 
+                    lower.contains("database is locked") || 
+                    lower.contains("sqlite_busy") ||
+                    lower.contains("snapshot")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {

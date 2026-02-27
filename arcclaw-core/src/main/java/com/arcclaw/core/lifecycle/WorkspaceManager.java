@@ -1,6 +1,7 @@
 package com.arcclaw.core.lifecycle;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -65,7 +66,7 @@ public class WorkspaceManager {
     EntityManager em;
 
     @Inject
-    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+    GovernanceLayer governanceLayer;
 
     @Inject
     ChatMemoryStore chatMemoryStore;
@@ -131,8 +132,33 @@ public class WorkspaceManager {
      * <p>
      * This ensures no orphaned sessions linger with stale state.
      */
-    @Transactional
     public void onStartup(@Observes StartupEvent event) {
+        int maxRetries = 5;
+        long backoffMs = 50;
+        Exception lastEx = null;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                    doRecoverZombies();
+                });
+                return; // success
+            } catch (Exception e) {
+                lastEx = e;
+                if (isSqliteBusy(e)) {
+                    log.warnf("SQLite BUSY on onStartup attempt %d/%d — retrying in %dms",
+                            attempt, maxRetries, backoffMs * attempt);
+                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                } else {
+                    log.errorf(e, "Non-retryable error during onStartup zombie recovery");
+                    return;
+                }
+            }
+        }
+        log.errorf(lastEx, "Failed onStartup zombie recovery after %d retries", maxRetries);
+    }
+
+    private void doRecoverZombies() {
         // 1. Recover IN_PROGRESS zombies
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
@@ -343,25 +369,83 @@ public class WorkspaceManager {
         }
     }
 
-    @Transactional
+    /**
+     * Marks all non-FAILED checkpoints for a session as FAILED.
+     * <p>
+     * Includes a lightweight retry loop (up to 5 attempts with linear backoff) to
+     * handle {@code SQLITE_BUSY} lock contention with the
+     * {@link com.arcclaw.core.persistence.AsyncPersistenceEngine} background thread.
+     * SQLite WAL mode allows only one writer at a time; a concurrent TELEMETRY write
+     * can transiently block this call.
+     */
     void markCheckpointsFailed(String sessionId) {
-        List<AgentCheckpoint> checkpoints = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status != :failed",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("failed", CheckpointStatus.FAILED)
-                .getResultList();
+        int maxRetries = 5;
+        long backoffMs = 50;
+        Exception lastEx = null;
 
-        Instant now = Instant.now();
-        for (var checkpoint : checkpoints) {
-            checkpoint.setStatus(CheckpointStatus.FAILED);
-            checkpoint.setFailedAt(now);
-            checkpoint.setFailReason("Session terminated by WorkspaceManager");
-            em.merge(checkpoint);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                    List<AgentCheckpoint> checkpoints = em.createQuery(
+                            "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status != :failed",
+                            AgentCheckpoint.class)
+                            .setParameter("sid", sessionId)
+                            .setParameter("failed", CheckpointStatus.FAILED)
+                            .getResultList();
+
+                    Instant now = Instant.now();
+                    for (var checkpoint : checkpoints) {
+                        checkpoint.setStatus(CheckpointStatus.FAILED);
+                        checkpoint.setFailedAt(now);
+                        checkpoint.setFailReason("Session terminated by WorkspaceManager");
+                        em.merge(checkpoint);
+                    }
+                    if (!checkpoints.isEmpty()) {
+                        log.infof("Marked %d checkpoint(s) FAILED for session=%s", checkpoints.size(), sessionId);
+                    }
+                });
+                return; // success
+            } catch (Exception e) {
+                lastEx = e;
+                if (isSqliteBusy(e)) {
+                    log.warnf("SQLite BUSY on markCheckpointsFailed attempt %d/%d for session=%s — retrying in %dms",
+                            attempt, maxRetries, sessionId, backoffMs * attempt);
+                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                } else {
+                    log.errorf(e, "Non-retryable error marking checkpoints FAILED for session=%s", sessionId);
+                    throw e; // Rethrow to let it bubble up
+                }
+            }
         }
-        if (!checkpoints.isEmpty()) {
-            log.infof("Marked %d checkpoint(s) FAILED for session=%s", checkpoints.size(), sessionId);
+        log.errorf(lastEx, "Failed to mark checkpoints FAILED after %d retries for session=%s", maxRetries, sessionId);
+        if (lastEx != null) throw new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, lastEx);
+    }
+
+    /** Traverses getCause() chain to detect SQLite BUSY / locked errors. */
+    private static boolean isSqliteBusy(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String msg = t.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("busy") || 
+                    lower.contains("database is locked") || 
+                    lower.contains("sqlite_busy") ||
+                    lower.contains("snapshot")) {
+                    return true;
+                }
+            }
+            if (t.getClass().getSimpleName().equals("SQLiteException")) {
+                try {
+                    var method = t.getClass().getMethod("getResultCode");
+                    Object code = method.invoke(t);
+                    if (code instanceof Integer rc) {
+                        // 5 = SQLITE_BUSY, 6 = SQLITE_LOCKED, 261 = SQLITE_BUSY_SNAPSHOT
+                        if (rc == 5 || rc == 6 || rc == 261) return true;
+                    }
+                } catch (Exception ignored) { /* best-effort */ }
+            }
         }
+        return false;
     }
 
     private void wipeWorkspaceDir(String sessionId) {

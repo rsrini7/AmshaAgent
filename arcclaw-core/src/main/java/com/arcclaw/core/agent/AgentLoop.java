@@ -13,6 +13,8 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.agent.AgentRoleEnum;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -130,32 +132,38 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
+        // --- Resolve agentRole string to enum at API boundary ---
+        AgentRoleEnum resolvedRole;
+        try {
+            resolvedRole = AgentRoleEnum.fromString(agentRole);
+        } catch (IllegalArgumentException e) {
+            log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
+            resolvedRole = AgentRoleEnum.COORDINATOR;
+        }
+        final String canonicalRole = resolvedRole.toScopedName();
+
         // --- CONTEXT SETUP ---
-        // Context is assumed to be bound via WorkspaceScopeHolder.run/call at entry points
         MDC.put("sessionId", sessionId);
-        MDC.put("agentRole", agentRole);
+        MDC.put("agentRole", canonicalRole);
 
         AgentResult result = null;
         try {
             // --- CHECKPOINT RESUME ---
             List<ReasoningStep> resumedHistory = List.of();
-            var existingCheckpoint = agentStore.load(sessionId, agentRole);
+            var existingCheckpoint = agentStore.load(sessionId, canonicalRole);
             if (existingCheckpoint.isPresent()) {
                 resumedHistory = agentStore.deserializeSteps(existingCheckpoint.get());
                 log.infof("Resumed %d steps from checkpoint (session=%s, role=%s)",
-                        resumedHistory.size(), sessionId, agentRole);
+                        resumedHistory.size(), sessionId, canonicalRole);
             }
 
-            result = runLoop(sessionId, goal, engine, maxIterations, resumedHistory, agentRole);
+            result = runLoop(sessionId, goal, engine, maxIterations, resumedHistory, canonicalRole);
 
             // --- CHECKPOINT FINAL STATE ---
             if (result.awaitingApproval()) {
-                // DO NOTHING: runLoop() already saved the checkpoint state as AWAITING_APPROVAL.
-                // We must not overwrite it with COMPLETED or FAILED.
                 log.debugf("Session %s paused, waiting for human approval.", sessionId);
             } else {
-                // Save the reasoning steps and grab the entity ID
-                var cp = agentStore.save(sessionId, agentRole, result.steps());
+                var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                 if (result.success()) {
                     agentStore.markCompleted(cp.getId());
                 } else {
@@ -164,24 +172,33 @@ public class AgentLoop {
             }
 
             return result;
-        } catch (Exception e) {
-            // result is null here — create synthetic result for audit
-            result = AgentResult.error(List.of(), "SYSTEM_ERROR: " + e.getMessage());
-            
-            // NEW: Ensure the database state doesn't get stuck if the loop crashes
+        } catch (ComplianceViolationException cve) {
+            // FAIL-CLOSED: mandatory audit write failed — agent MUST halt immediately.
+            // No further LLM calls or tool executions permitted with a broken audit trail.
+            log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",
+                    sessionId, cve.getEventType());
+            result = AgentResult.error(List.of(), "COMPLIANCE_VIOLATION: " + cve.getMessage());
             try {
-                agentStore.load(sessionId, agentRole).ifPresent(cp ->
+                agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                    cp.setStatus(CheckpointStatus.COMPROMISED);
+                    agentStore.save(cp);
+                });
+            } catch (Exception ignored) {}
+            throw cve; // re-throw to physically halt the call stack
+        } catch (Exception e) {
+            result = AgentResult.error(List.of(), "SYSTEM_ERROR: " + e.getMessage());
+            try {
+                agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
                     agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + e.getMessage())
                 );
             } catch (Exception ignored) {}
-
             throw e;
         } finally {
             if (result != null) {
                 String goalHash = AuditHashUtil.sha256hex(goal);
                 String userId = MDC.get("userId") != null ? (String) MDC.get("userId") : "unknown";
                 final AgentResult finalResult = result;
-                observers.forEach(o -> o.onLoopComplete(sessionId, userId, agentRole, goalHash, finalResult));
+                observers.forEach(o -> o.onLoopComplete(sessionId, userId, canonicalRole, goalHash, finalResult));
             }
             // --- CONTEXT TEARDOWN ---
             MDC.remove("sessionId");

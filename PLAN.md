@@ -1833,3 +1833,46 @@ Eliminate plaintext secret residence in the JVM heap by leveraging memory-reside
 - ✅ **`TmpfsSecretTransportTest`**: Verified atomic creation, correct permissions, and automatic memory zeroing.
 - ✅ **Integration**: Verified that Podman correctly reads secrets from `/run/arcclaw/secrets` (on Linux) or `/tmp` (as fallback).
 - ✅ **Security Audit**: Verified 0 `String` objects containing plaintext secrets are created during the injection pipeline.
+---
+
+# Phase 44 — Production Hardening & Tool Refinement ✅
+
+Address critical production instability related to SQLite lock contention and refine tool command syntax for the GitHub CLI.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **SQLite Transaction Guard**: Moving from `DEFERRED` to `IMMEDIATE` transactions at the JDBC driver level. This ensures write-locks are acquired at the start of a transaction, preventing late-upgrade snapshot conflicts during concurrent background audit writes.
+
+> [!TIP]
+> **Automatic MDC Propagation**: Leveraging `WorkspaceScopeHolder` to manage `sessionId` (sid) in the JBoss Logging MDC automatically. This guarantees log traceability for all virtual threads.
+
+## Completed Changes
+
+### Configuration & Core
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Appended `transaction_mode=IMMEDIATE` to the SQLite JDBC URL.
+
+#### [MODIFY] [WorkspaceScopeHolder.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java)
+- Added automatic MDC `sessionId` binding/unbinding to the `run()` method.
+
+### Persistence Hardening
+
+#### [MODIFY] [AsyncPersistenceEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java)
+- Propagated TCCL to background consumer to fix `ServiceConfigurationError`.
+- Enhanced `isSqliteBusy` to detect Hibernate's `LockAcquisitionException` and `OptimisticLockException`.
+
+#### [MODIFY] [StatefulAgentStoreImpl.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java)
+- Standardized `isSqliteBusy` detection logic.
+
+### Tool Refinement
+
+#### [MODIFY] [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Fixed `gh gist list` syntax (dropped invalid positional username).
+- Added guardrail for `gist view` (required target).
+
+## Verification
+
+- ✅ `GithubToolTest`: Verified correct command generation for repo/gist actions.
+- ✅ `mvn clean test`: All core and app tests pass with 0 regressions.

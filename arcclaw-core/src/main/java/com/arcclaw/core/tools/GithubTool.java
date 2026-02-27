@@ -19,6 +19,8 @@ import java.util.Set;
 @ApplicationScoped
 public class GithubTool implements AgentTool {
 
+    private static final org.jboss.logging.Logger log = org.jboss.logging.Logger.getLogger(GithubTool.class);
+
     private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
@@ -63,25 +65,33 @@ public class GithubTool implements AgentTool {
         if (!ALLOWED_COMMANDS.contains(command)) {
             throw new IllegalArgumentException(
                 "Command '" + command + "' is not permitted. " +
-                "Only 'view' and 'list' are supported. " +
-                "Destructive operations (delete, rename, archive, fork, transfer) " +
-                "are not available through this tool."
+                "Only 'view' and 'list' are supported."
             );
         }
         // ── END ALLOWLIST GUARD ────────────────────────────────────────────
 
-        // SMART GUARDRAILS: Teach the LLM how to use the CLI correctly if it makes a mistake
-        if ("repo".equals(action) && target != null) {
-            if ("view".equals(command) && !target.contains("/")) {
+        // SMART GUARDRAILS: Teach the LLM how to use the CLI correctly
+        if ("repo".equals(action)) {
+            if ("view".equals(command) && (target == null || !target.contains("/"))) {
                 throw new IllegalArgumentException(
-                    "Invalid target '" + target + "'. To 'view' a repository, you MUST provide the full 'owner/repo' format. " +
-                    "Ask the user for the repository name if they only provided the owner."
+                    "Invalid target '" + target + "'. To 'view' a repository, you MUST provide the full 'owner/repo' format."
                 );
             }
-            if ("list".equals(command) && target.contains("/")) {
+            if ("list".equals(command) && target != null && target.contains("/")) {
                 throw new IllegalArgumentException(
-                    "Invalid target '" + target + "'. To 'list' repositories, you MUST provide ONLY the owner name (e.g., '" + target.split("/")[0] + "'). " +
-                    "If you meant to view details of a specific repository, change the command to 'view'."
+                    "Invalid target '" + target + "'. To 'list' repositories, provide ONLY the owner name."
+                );
+            }
+        } else if ("gist".equals(action)) {
+            if ("list".equals(command) && target != null && !target.isBlank()) {
+                // gh gist list does not take a username. It lists for the auth user.
+                // We drop the target to avoid "unknown command" errors.
+                log.warnf("Dropping target '%s' for 'gh gist list' as it only supports listing for the authenticated user.", target);
+                target = null; 
+            }
+            if ("view".equals(command) && (target == null || target.isBlank())) {
+                throw new IllegalArgumentException(
+                    "To 'view' a gist, you MUST provide the Gist ID or URL as the 'target'."
                 );
             }
         }
@@ -109,10 +119,12 @@ public class GithubTool implements AgentTool {
             .addEnumProperty("action",  List.of("repo", "gist"),
                 "Action to perform")
             .addEnumProperty("command", List.of("view", "list"),
-                "Command to run. NEVER use delete, create, rename, archive, or fork.")
+                "Command to run.")
             .addStringProperty("target",
-                "For 'view', use 'owner/repo' format. " +
-                "For 'list', use ONLY the 'owner' name.")
+                "For 'repo view', use 'owner/repo'. " +
+                "For 'repo list', use 'owner'. " +
+                "For 'gist view', use 'GistID'. " +
+                "For 'gist list', OMIT this parameter (it lists your own gists).")
             .required("action", "command")
             .build();
     }

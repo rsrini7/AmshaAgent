@@ -148,7 +148,8 @@ public class AgentResource {
                 boolean isDeny     = "/deny".equalsIgnoreCase(request.goal());
 
                 if (isDeny) {
-                    agentStore.load(sessionId, request.agentRole()).ifPresent(cp -> {
+                    String canonicalRole = com.arcclaw.core.agent.AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                    agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
                         cp.setStatus(CheckpointStatus.FAILED);
                         cp.setFailedAt(Instant.now());
                         cp.setFailReason("Human denied tool execution via REST.");
@@ -213,7 +214,8 @@ public class AgentResource {
     @GET
     @Path("/{id}/status/{role}")
     public Response getSessionStatus(@PathParam("id") String sessionId, @PathParam("role") String role) {
-        return agentStore.load(sessionId, role)
+        String canonicalRole = com.arcclaw.core.agent.AgentRoleEnum.fromString(role).toScopedName();
+        return agentStore.load(sessionId, canonicalRole)
                 .map(cp -> {
                     try {
                         // 1. Default to an empty list
@@ -251,7 +253,8 @@ public class AgentResource {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
 
-                var checkpoint = agentStore.load(sessionId, agentRole);
+                String canonicalRole = com.arcclaw.core.agent.AgentRoleEnum.fromString(agentRole).toScopedName();
+                var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
                     return Response.status(Response.Status.CONFLICT)
                             .entity(Map.of("error", "No pending approval for this session"))
@@ -278,7 +281,8 @@ public class AgentResource {
         log.infof("REST deny for session %s role %s", sessionId, agentRole);
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
-                var checkpoint = agentStore.load(sessionId, agentRole);
+                String canonicalRole = com.arcclaw.core.agent.AgentRoleEnum.fromString(agentRole).toScopedName();
+                var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
                     return Response.status(Response.Status.CONFLICT)
                             .entity(Map.of("error", "No pending approval for this session"))

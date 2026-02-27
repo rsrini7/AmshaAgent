@@ -79,7 +79,12 @@ public final class WorkspaceScopeHolder {
     public static void run(String sessionId, Runnable runnable) {
         validate(sessionId);
         LOG.debugf("Binding session: %s on thread: %s", sessionId, Thread.currentThread());
-        ScopedValue.where(WORKSPACE_ID, sessionId).run(runnable);
+        org.jboss.logging.MDC.put("sessionId", sessionId);
+        try {
+            ScopedValue.where(WORKSPACE_ID, sessionId).run(runnable);
+        } finally {
+            org.jboss.logging.MDC.remove("sessionId");
+        }
     }
 
     public static <T> T call(String sessionId, Callable<T> callable) throws Exception {

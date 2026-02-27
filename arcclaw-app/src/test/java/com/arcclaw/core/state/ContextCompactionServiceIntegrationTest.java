@@ -48,6 +48,9 @@ class ContextCompactionServiceIntegrationTest {
     @Identifier("compaction")
     ChatLanguageModel compactionModel;
 
+    @Inject
+    com.arcclaw.core.audit.AuditService auditService;
+
     @BeforeEach
     void setup() {
         WorkspaceScopeHolder.set(TEST_SESSION_ID);
@@ -89,6 +92,8 @@ class ContextCompactionServiceIntegrationTest {
         assertEquals(2, summaryOpt.get().messagesCompacted);
 
         // Find the audit event
+        auditService.waitForIdle();
+        em.clear();
         long count = em.createQuery("SELECT count(e) FROM AuditEvent e WHERE e.sessionId = :sessionId AND e.eventType = :type", Long.class)
                 .setParameter("sessionId", TEST_SESSION_ID)
                 .setParameter("type", SecurityEventType.CONTEXT_COMPACTED)

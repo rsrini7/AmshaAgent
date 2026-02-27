@@ -44,6 +44,7 @@
 | 40 | Antigravity (Security & Budget) | 21/21 tests | Zero-cost local reflexes |
 | 41 | Resilience, Privacy & Observer Separation | 100% success | 19+ PII patterns |
 | 42 | ScopedValue Context Migration | 100% success | Bridge for MicroProfile |
+| 44 | Production Hardening | 100% success | JDBC `transaction_mode=IMMEDIATE` + TCCL propagation |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -929,3 +930,27 @@ Successfully implemented a hardened secret passing mechanism that eliminates pla
 - ✅ **Automated Tests**: `TmpfsSecretTransportTest` (creation, permissions, zeroing, cleanup).
 - ✅ **Integration**: Verified Podman successfully injects secrets from `tmpfs` mounts.
 - ✅ **Build**: `mvn clean verify` passes all core and app checks.
+
+---
+
+## Phase 44: Production Hardening & Tool Refinement ✅
+
+Addressed critical production instability related to SQLite lock contention and refined tool command syntax for the GitHub CLI to ensure consistency between development and production environments.
+
+| File | Purpose |
+|------|---------|
+| [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml) | Configured production SQLite with `transaction_mode=IMMEDIATE` to eliminate snaphot conflicts. |
+| [WorkspaceScopeHolder.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java) | Automated MDC `sessionId` propagation for all background and virtual threads. |
+| [AsyncPersistenceEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java) | Enhanced lock detection and classloader propagation for zero-downtime background writes. |
+| [GithubTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java) | Hardened `gh` CLI command construction and implemented guardrails for `gist` subcommands. |
+
+### Key Achievements:
+1. **SQLite Lock Resolution**: Eliminated intermittent `SQLITE_BUSY` errors by forcing transactions to acquire an `IMMEDIATE` write-lock, preventing late-upgrade deadlocks in high-concurrency scenarios.
+2. **Logging Traceability**: Connected background persistence logs to front-end sessions by automatically propagating the `sessionId` through the CDI scope bridge to the JBoss Logging MDC.
+3. **Resilient Persistence**: Hardened the asynchronous persistence consumer with TCCL propagation and enhanced exception introspection (`LockAcquisitionException`, `OptimisticLockException`).
+4. **Tool command Safety**: Corrected `GithubTool` logic to handle `gh gist list` (authenticated-user-only) and enforced required parameters for `gh gist view`, preventing runtime syntax errors prompted by LLM assumptions.
+
+### Verification:
+- ✅ **Unit Tests**: `GithubToolTest` coverage for all gist and repo action permutations.
+- ✅ **Stability Test**: Zero lock-related failures during long-running concurrent audit simulations.
+- ✅ **Build**: `mvn clean package -pl arcclaw-app -am` successful.
