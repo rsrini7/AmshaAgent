@@ -71,6 +71,9 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
+    @ConfigProperty(name = "arcclaw.sandbox.tmpfs-path", defaultValue = "/run/arcclaw/secrets")
+    String tmpfsPath;
+
     private static final String CONTAINER_PIDS_LIMIT = "64";
 
     // Circuit breaker state
@@ -228,8 +231,11 @@ public class ProcessIsolationExecutor {
             Map<String, String> requiredSecrets) throws Exception {
 
         var resolvedSecrets = resolveSecrets(requiredSecrets);
-        var envFile = writeEphemeralEnvFile(sessionId, resolvedSecrets);
-        // Note: resolvedSecrets byte arrays are zeroed inside writeEphemeralEnvFile's finally block.
+        
+        // Use the unified Tier 1 tmpfs secure transport.
+        // The transport strictly zeroes the memory arrays when closed.
+        try (var transport = new TmpfsSecretTransport(sessionId, tmpfsPath)) {
+            List<String> transportArgs = transport.prepare(resolvedSecrets);
 
         // Fix G2: deterministic container name for tracking + graceful stop on shutdown.
         // Format: zc-<sessionId truncated to 8 chars>-<nonce> to stay within 64-char limit.
@@ -255,9 +261,12 @@ public class ProcessIsolationExecutor {
                     "--memory=" + containerMemoryLimit, // Fix C2: OOM kill before host impact
                     "--cpus=" + containerCpuLimit,      // Fix C2: prevent CPU saturation
                     "--pids-limit=" + CONTAINER_PIDS_LIMIT, // Fix C2: block fork bombs
-                    "--ulimit=nofile=256:256",           // Fix C2: limit open file descriptors
-                    "--env-file", envFile.toAbsolutePath().toString()     // secrets via env-file, not process args
+                    "--ulimit=nofile=256:256"            // Fix C2: limit open file descriptors
             ));
+            
+            // Inject the transport args (e.g. --env-file /run/arcclaw/secrets/<nonce>.env)
+            podmanCmd.addAll(transportArgs);
+            
             podmanCmd.add(containerImage);
             podmanCmd.addAll(command);
 
@@ -267,10 +276,10 @@ public class ProcessIsolationExecutor {
             if (!Files.exists(workspaceDir)) {
                 throw new IOException("workspace dir not exist");
             }
-            pb.directory(workspaceDir.toFile());
             pb.redirectErrorStream(true);
 
             var process = pb.start();
+            transport.deliver(process);
             var output = new String(process.getInputStream().readAllBytes());
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
 
@@ -291,7 +300,7 @@ public class ProcessIsolationExecutor {
         } finally {
             span.end();
             activeContainerNames.remove(containerName); // Fix G2: deregister on normal exit
-            deleteEphemeralEnvFile(envFile);
+        }
         }
     }
 
@@ -396,11 +405,12 @@ public class ProcessIsolationExecutor {
      * secret byte array in {@code secrets} are zeroed in the {@code finally} block,
      * regardless of success or failure. The caller must not access {@code secrets}
      * values after this method returns.
-     *
+     * @deprecated Retained for backward compatibility with NAMESPACE strategy. Podman now uses {@link TmpfsSecretTransport}.
      * @param sessionId the workspace session ID (used to scope the temp file location)
      * @param secrets   map of envVar → raw secret bytes (will be zeroed on return)
      * @return path to the written env-file (caller is responsible for deletion)
      */
+    @Deprecated(forRemoval = true)
     private Path writeEphemeralEnvFile(String sessionId, Map<String, byte[]> secrets) throws IOException {
         Path workspaceDir = Path.of(workspaceRootDir, sessionId);
         if (!Files.exists(workspaceDir)) {
@@ -460,7 +470,11 @@ public class ProcessIsolationExecutor {
             }
         }
     }
+    
+    // Check if process was wrapped in block.
+    // Ensure pb block terminates at line 299 as intended.
 
+    @Deprecated(forRemoval = true)
     private void deleteEphemeralEnvFile(Path f) {
         try {
             Files.deleteIfExists(f);
