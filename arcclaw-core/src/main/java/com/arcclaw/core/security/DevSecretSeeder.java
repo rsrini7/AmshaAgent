@@ -1,9 +1,10 @@
 package com.arcclaw.core.security;
 
-import io.quarkus.arc.profile.IfBuildProfile;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
+import io.quarkus.arc.profile.IfBuildProfile;
+import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -22,7 +23,8 @@ import java.util.Arrays;
 @IfBuildProfile("dev")
 public class DevSecretSeeder {
 
-    private static final Logger log = Logger.getLogger(DevSecretSeeder.class);
+    @Inject
+    Logger log;
 
     @Inject
     SecretVault secretVault;
@@ -53,9 +55,14 @@ public class DevSecretSeeder {
                     vaultKeyName, e.getMessage());
         }
 
-        String hostValue = System.getenv(vaultKeyName);
+        // Use Quarkus ConfigProvider instead of System.getenv(). 
+        // This natively parses the .env file and OS environment variables safely.
+        String hostValue = ConfigProvider.getConfig()
+                .getOptionalValue(vaultKeyName, String.class)
+                .orElse(null);
+
         if (hostValue == null || hostValue.isBlank()) {
-            log.warnf("Dev DX: %s not found in host OS environment. " +
+            log.warnf("Dev DX: %s not found in Config Provider or .env file. " +
                       "Provide it manually via Telegram /store command.", vaultKeyName);
             return;
         }
@@ -63,7 +70,7 @@ public class DevSecretSeeder {
         byte[] secretBytes = hostValue.getBytes(StandardCharsets.UTF_8);
         try {
             secretVault.store(vaultKeyName, secretBytes);
-            log.infof("Dev DX: Seeded %s into SecretVault from host OS.", vaultKeyName);
+            log.infof("Dev DX: Seeded %s into SecretVault from local config.", vaultKeyName);
         } catch (Exception e) {
             log.warnf("Dev DX: Failed to seed %s into vault: %s", vaultKeyName, e.getMessage());
         } finally {

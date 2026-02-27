@@ -536,5 +536,17 @@
 - [x] Fix: Checked exceptions handling in `ScopedValue.CallableOp` wrapper.
 - [x] Verification: `mvn clean verify` passes all Phase 42 checks.
 
+# Phase 43: Secure Secret Passing ✅
+- [x] Implement `TmpfsSecretTransport` for memory-resident secret creation.
+- [x] Refactor `ProcessIsolationExecutor` to use `TmpfsSecretTransport`.
+- [x] Implement zero-copy `byte[]` passing and immediate memory zeroing.
+- [x] Implement atomic POSIX permission setting (`rw-------`).
+- [x] Implement graceful degradation to `java.io.tmpdir` for dev environments.
+- [x] Hardening: Intercept Podman `exit 125` to force circuit breaker fallback.
+- [x] Hardening: Standardize error propagation using `ToolExecutionException`.
+- [x] Unit Tests: `TmpfsSecretTransportTest` for creation, zeroing, and cleanup.
+- [x] Verification: `mvn clean verify` passes all Phase 43 checks.
+
+
 
 

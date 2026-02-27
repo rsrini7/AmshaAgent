@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -82,8 +81,17 @@ public class AgentLoop {
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
     // Compile once for performance.
-    private static final Pattern GITHUB_TRIGGER_PATTERN = 
-        Pattern.compile("(?i)\\b(repo|repository|github|gh|fetch|gist|clone|pull request|pr)\\b");
+    // NOTE: Intentionally using string concatenation, NOT a Java text block.
+    // Text blocks preserve embedded newlines and leading whitespace, which
+    // would corrupt the regex alternation groups and silently break matching.
+    // If a text block is needed, add (?x) free-spacing flag — but plain
+    // concatenation is clearer and zero-surprise for future maintainers.
+    private static final Pattern GITHUB_TRIGGER_PATTERN =
+    Pattern.compile(
+        "(?i)\\b(repo|repository|github|gh|fetch|gist|clone|" +
+        "pull\\s+request|pr|get|show|describe|description|desc|" +
+        "star|fork|issue|commit|branch|tag|readme|release)\\b"
+    );
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle

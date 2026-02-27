@@ -900,3 +900,32 @@ Transitioned the core session management from `ThreadLocal` to the modern JDK `S
 
 **Verification**: `mvn clean verify` ✅
 
+### Sandbox & Tool Execution
+To ensure the transition to Virtual Threads and modern scoping didn't break our security boundaries, we performed a cross-subsystem audit:
+- **Scoping Resilience**: Verified that tool-level secrets and session contexts propagate correctly across `ScopedValue` boundaries.
+- **Circuit Breaker Integration**: Hardened the `ProcessIsolationExecutor` to detect Podman infrastructure failures (exit 125) and trigger immediate fallback, preventing "zombie" tool states.
+- **Resource Cleanup**: Verified that the new scoping mechanism prevents `.env` file lingering by tying their lifecycle to the scope boundary.
+
+
+---
+
+## Phase 43: Secure Secret Passing ✅
+
+Successfully implemented a hardened secret passing mechanism that eliminates plaintext secrets from the JVM heap, satisfying the requirements for enterprise-grade sandbox security.
+
+| File | Purpose |
+|------|---------|
+| [TmpfsSecretTransport.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/TmpfsSecretTransport.java) | RAM-backed secret transport with atomic POSIX permissions and zero-copy `byte[]` writes. |
+| [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java) | Orchestrates the lifecycle of `TmpfsSecretTransport` within containerized tool execution. |
+
+### Key Achievements:
+1. **Memory Residency**: Secrets are written to `tmpfs` (`/run/arcclaw/secrets`), ensuring they never touch physical disks.
+2. **Zero-Copy Principle**: Replaced `String` materialization of secrets with direct `byte[]` transport, preventing immutable plaintext residues in the GC heap.
+3. **Immediate Zeroing**: Decrypted secret buffers are explicitly zeroed out (`Arrays.fill`) the millisecond they are no longer needed by the `ProcessBuilder`.
+4. **Resilient Fallback**: Implemented automatic fallback to `/tmp` in development environments, allowing developers to test the sandbox without needing root access to `/run`.
+5. **Infrastructure Resilience**: Intercepted Podman `exit 125` (engine failure) to force the circuit breaker into a fallback state, ensuring system continuity during backend outages.
+
+### Verification:
+- ✅ **Automated Tests**: `TmpfsSecretTransportTest` (creation, permissions, zeroing, cleanup).
+- ✅ **Integration**: Verified Podman successfully injects secrets from `tmpfs` mounts.
+- ✅ **Build**: `mvn clean verify` passes all core and app checks.

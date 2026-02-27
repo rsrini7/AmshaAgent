@@ -195,3 +195,37 @@ sqlite3 arcclaw-meta.db "SELECT eventType, sessionId, timestamp FROM audit_event
 
 # Should show 1 row
 ```
+
+## 🔐 Secure Secret Passing Verification (Phase 43)
+
+To verify that secrets are being passed securely without JVM heap residue:
+
+### 1. Production Tmpfs Verification (Linux/WSL2 Native)
+If running on Linux with a configured `tmpfs` path:
+
+```bash
+# Verify the mount exists
+mount | grep arcclaw-secrets
+
+# Trigger an agent tool that requires secrets (e.g., github)
+# During execution, attempt to list the secrets directory (should be empty after process starts)
+ls -la /run/arcclaw/secrets
+```
+
+### 2. Development Fallback Verification
+If running in `%dev` mode or without root access:
+
+```bash
+# Check logs for the fallback message:
+# INFO  tmpfs path /run/arcclaw/secrets is inaccessible. Falling back to /tmp/...
+```
+
+### 3. Automated Memory Security Check
+Run the specialized transport tests:
+
+```bash
+mvn test -Dtest=TmpfsSecretTransportTest
+```
+*Expected Result:*
+- `testLifecycle`: Verifies file creation and automatic deletion.
+- `testZeroCopyWrite`: Verifies `byte[]` are zeroed out in memory after the write operation.
