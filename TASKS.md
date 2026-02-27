@@ -557,3 +557,12 @@
 - [x] Fix `gh gist list` command syntax in `GithubTool` <!-- id: 119 -->
 - [x] Add guardrail for `gist view` in `GithubTool` <!-- id: 120 -->
 - [x] Verify: `GithubToolTest` passes <!-- id: 121 -->
+
+# Phase 45: Agent Memory RAG via SQLite FTS5 ✅
+- [x] Implement isolated FTS schema (`arcclaw-fts.db`) to bypass Hibernate startup crash. <!-- id: 122 -->
+- [x] Create `compaction_summary_fts` virtual table in the `fts` schema with manual content-sync. <!-- id: 123 -->
+- [x] Implement manual FTS synchronization in `CompactionSummaryRepository.upsertSummary`. <!-- id: 124 -->
+- [x] Ensure tenant isolation by inferring `userId` from `WorkspaceScopeHolder.USER_ID`. <!-- id: 125 -->
+- [x] Update `CompactionSummaryRepository.searchMemory` to use FTS5 `MATCH` with `userId` filtering. <!-- id: 126 -->
+- [x] Verify: `CompactionSummaryRepositoryTest` passes with tenant isolation and FTS search. <!-- id: 127 -->
+- [x] Verify: `LangChainReasoningEngineTest` passes. <!-- id: 128 -->

@@ -2776,3 +2776,66 @@ sudo systemctl enable --now arcclaw-secrets.mount
 * **Symptom**: `GithubTool` execution fails with `unknown command "username" for "gh gist list"`.
 * **Root Cause**: The LLM incorrectly assumes `gh gist list` accepts a username as a positional argument (like `gh repo list`). In the GitHub CLI, `gist list` only lists gists for the authenticated user and expects any filtering via flags.
 * **Resolution**: Refactored `GithubTool.java` to explicitly drop any `target` parameter when the command is `gist list`. Updated the `parametersSchema` to instruct the LLM to omit the target for this specific action.
+
+---
+
+## 20. Phase 45: Agent Memory RAG via SQLite FTS5
+
+### 🐛 Hibernate 6 Startup Crash with SQLite FTS5 (`NoSuchElementException`)
+
+**Symptom:**
+When starting the application in `dev` mode (or any profile where Hibernate schema generation is set to `update` or `validate`), the application crashes immediately during boot with the following stack trace:
+
+```text
+ERROR [io.qu.ru.Application] Failed to start application
+java.lang.RuntimeException: Failed to start quarkus
+...
+Caused by: jakarta.persistence.PersistenceException: [PersistenceUnit: <default>] Unable to build Hibernate SessionFactory
+...
+Caused by: java.util.NoSuchElementException
+    at java.base/java.util.StringTokenizer.nextToken(StringTokenizer.java:349)
+    at org.hibernate.tool.schema.extract.internal.AbstractInformationExtractorImpl.addExtractedColumnInformation(...)
+    at org.hibernate.tool.schema.extract.internal.InformationExtractorJdbcDatabaseMetaDataImpl.processColumnsResultSet(...)
+
+```
+
+**Context:**
+This occurs when you are using **SQLite FTS5** (Full-Text Search) virtual tables alongside **Hibernate 6**.
+
+**Root Cause:**
+
+1. **FTS Shadow Tables:** When you execute `CREATE VIRTUAL TABLE fts_table USING fts5(...)`, SQLite secretly creates several hidden "shadow tables" (e.g., `fts_table_data`, `fts_table_idx`, `fts_table_docsize`) to manage the search index.
+2. **The JDBC Metadata Bug:** These shadow tables return non-standard, empty, or highly irregular column metadata via the SQLite JDBC driver.
+3. **Hibernate's `grouped` Strategy:** By default, Hibernate 6 uses the `grouped` JDBC metadata extraction strategy. When booting, it asks the database for the metadata of *every single table* that exists. When Hibernate's internal `StringTokenizer` attempts to parse the irregular column types from the SQLite shadow tables, it throws a `NoSuchElementException` and crashes the entire boot process.
+4. **Why SchemaFilters fail:** A custom `SchemaFilterProvider` will not prevent this crash, because the crash occurs during the raw JDBC metadata extraction phase, *before* Hibernate applies the user-defined filters.
+
+**Resolution:**
+You must change Hibernate's metadata extraction strategy to `individually`. This forces Hibernate to only request metadata for the explicit `@Table` names defined by your JPA `@Entity` classes, completely bypassing the SQLite shadow tables.
+
+Add the following to your `application.yaml`:
+
+```yaml
+  hibernate-orm:
+    dialect: org.hibernate.community.dialect.SQLiteDialect
+    database:
+      generation: update
+    unsupported-properties:
+      # CRITICAL FIX: Prevents StringTokenizer crash on SQLite FTS5 shadow tables
+      "hibernate.hbm2ddl.jdbc_metadata_extraction_strategy": "individually"
+
+#### 🟢 Final Resolution: Isolated FTS Schema (Architectural Hide)
+
+While the `individually` strategy helps, the most robust solution for ArcClaw was to move FTS5 tables to a separate SQLite database file (`arcclaw-fts.db`) and attach it as a secondary schema (`fts`) at runtime.
+
+**Why this is superior:**
+1. **Hibernate Isolation**: Hibernate 6 only scans the `main` schema by default. By placing FTS5 shadow tables in the `fts` schema, they become invisible to Hibernate's metadata extraction, completely eliminating the risk of `NoSuchElementException` during boot.
+2. **Transparent Persistence**: The `main` database remains a clean, standard JPA/Hibernate target, while the `fts` database handles the specialized virtual tables.
+3. **Manual Sync Safety**: Since SQLite triggers cannot write to attached databases, we use manual synchronization in `CompactionSummaryRepository.java`. This guarantees that FTS records are only written after the JPA transaction has successfully flushed to the main database.
+
+**Implementation Checklist:**
+- [x] Use `em.createNativeQuery("ATTACH DATABASE ... AS fts")` in `AuditSchemaEnforcer`.
+- [x] Create virtual tables with the `fts.` prefix: `CREATE VIRTUAL TABLE fts.compaction_summary_fts ...`.
+- [x] Perform `DELETE` and `INSERT` on `fts.compaction_summary_fts` within the repository's `@Transactional` methods.
+- [x] Enforce `userId` filtering in FTS search queries to maintain tenant isolation.
+
+```

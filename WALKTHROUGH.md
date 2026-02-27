@@ -956,3 +956,26 @@ Addressed critical production instability related to SQLite lock contention and 
 - ✅ **Stability Test**: Zero lock-related failures during long-running concurrent audit simulations.
 - ✅ **Integration**: `TelegramAgentHandlerTest` verified dynamic iteration limits (e.g. 10 for Coordinator, 15 for Researcher).
 - ✅ **Build**: `mvn clean test -pl arcclaw-core,arcclaw-app` successful (5/5 tests passed).
+
+---
+
+## Phase 45: Agent Memory RAG via SQLite FTS5 ✅
+
+Implemented high-performance, long-term memory retrieval using SQLite's FTS5 extension, with a robust architectural fix for Hibernate's metadata extraction limitations.
+
+| File | Purpose |
+|------|---------|
+| [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java) | Manages the attached FTS database schema and virtual table creation. |
+| [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java) | Implements manual FTS synchronization and tenant-isolated search queries. |
+| [WorkspaceScopeHolder.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java) | Provides the `USER_ID` context for implicit tenant isolation. |
+
+### Key Achievements:
+1. **Hibernate Crash Resolution**: Bypassed the Hibernate 6 `StringTokenizer` crash by isolating FTS5 virtual tables into a separate `fts` SQLite schema.
+2. **Robust Multi-Tenancy**: Enforced tenant isolation at the repository level by automatically binding FTS operations to the active `ScopedValue` user context.
+3. **Manual Sync Pipeline**: Implemented a reliable manual synchronization trigger within the JPA transaction lifecycle to update the FTS index during compaction.
+4. **Enhanced Discovery**: Verified that agents can successfully retrieve and utilize memory from past sessions via the FTS-backed retrieval engine.
+
+### Verification:
+- ✅ **`CompactionSummaryRepositoryTest`**: 100% pass for FTS search and tenant isolation logic.
+- ✅ **`LangChainReasoningEngineTest`**: Verified that specialized agents successfully receive and use memory from the repository.
+- ✅ **System Build**: `mvn clean verify` passes all core integration tests with 0 regressions.
