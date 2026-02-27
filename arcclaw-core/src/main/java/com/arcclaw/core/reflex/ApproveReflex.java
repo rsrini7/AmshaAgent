@@ -46,41 +46,43 @@ public class ApproveReflex implements AgentReflex {
 
     @Override
     public String execute(String sessionId, String userId, String input) {
-        WorkspaceScopeHolder.set(sessionId);
         try {
-            String activeRole = null;
-            for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
-                Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role);
-                if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                    activeRole = role;
-                    break;
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                String activeRole = null;
+                for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
+                    Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role);
+                    if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                        activeRole = role;
+                        break;
+                    }
                 }
-            }
 
-            if (activeRole == null) {
-                return "No pending tool executions require approval for this session.";
-            }
+                if (activeRole == null) {
+                    return "No pending tool executions require approval for this session.";
+                }
 
-            log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+                log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
+                workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
 
-            if (!devSeeder.isUnsatisfied()) {
-                devSeeder.get().seedDevSecrets();
-            }
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
+                }
 
-            AgentResult result = agentLoop.run(
-                    sessionId, activeRole,
-                    "Resuming task after approval",
-                    reasoningEngine, 5
-            );
+                AgentResult result = agentLoop.run(
+                        sessionId, activeRole,
+                        "Resuming task after approval",
+                        reasoningEngine, 5
+                );
 
-            if (result.success()) {
-                return result.finalAnswer();
-            } else {
-                return "❌ **Task Failed after approval**\n\nReason: " + result.terminationReason();
-            }
-        } finally {
-            WorkspaceScopeHolder.clear();
+                if (result.success()) {
+                    return result.finalAnswer();
+                } else {
+                    return "❌ **Task Failed after approval**\n\nReason: " + result.terminationReason();
+                }
+            });
+        } catch (Exception e) {
+            log.errorf("Failed to process approval for session %s: %s", sessionId, e.getMessage(), e);
+            return "❌ **Approval Error**: An internal fault occurred while resuming the task.";
         }
     }
 }

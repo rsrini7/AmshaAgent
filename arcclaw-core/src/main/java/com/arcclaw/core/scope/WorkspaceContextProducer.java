@@ -9,7 +9,7 @@ public class WorkspaceContextProducer {
     @Produces
     @WorkspaceScoped
     public WorkspaceContext produceWorkspaceContext() {
-        String sessionId = WorkspaceScopeHolder.get();
+        String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) {
             throw new IllegalStateException("No active workspace session");
         }

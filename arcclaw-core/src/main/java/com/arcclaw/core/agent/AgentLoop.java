@@ -115,7 +115,7 @@ public class AgentLoop {
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
         // --- CONTEXT SETUP ---
-        WorkspaceScopeHolder.set(sessionId);
+        // Context is assumed to be bound via WorkspaceScopeHolder.run/call at entry points
         MDC.put("sessionId", sessionId);
         MDC.put("agentRole", agentRole);
 
@@ -130,7 +130,7 @@ public class AgentLoop {
                         resumedHistory.size(), sessionId, agentRole);
             }
 
-            result = runLoop(goal, engine, maxIterations, resumedHistory, agentRole);
+            result = runLoop(sessionId, goal, engine, maxIterations, resumedHistory, agentRole);
 
             // --- CHECKPOINT FINAL STATE ---
             if (result.awaitingApproval()) {
@@ -160,7 +160,6 @@ public class AgentLoop {
             } catch (Exception ignored) {}
 
             throw e;
-            // result stays null → finally's if (result != null) is false → no double-call
         } finally {
             if (result != null) {
                 String goalHash = AuditHashUtil.sha256hex(goal);
@@ -171,7 +170,6 @@ public class AgentLoop {
             // --- CONTEXT TEARDOWN ---
             MDC.remove("sessionId");
             MDC.remove("agentRole");
-            WorkspaceScopeHolder.clear();
             otelContext.endSessionSpan(sessionId);
         }
     }
@@ -194,19 +192,20 @@ public class AgentLoop {
      * @return The final result with reasoning trace.
      */
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
-        return runLoop(goal, engine, maxIterations, List.of(), null);
+        return runLoop(WorkspaceScopeHolder.getRequired(), goal, engine, maxIterations, List.of(), null);
     }
 
     /**
      * Core reasoning loop — drives the Thought-Plan-Act-Observe pattern.
      *
+     * @param sessionId      Current workspace session.
      * @param goal           The user's goal.
      * @param engine         The reasoning engine.
      * @param maxIterations  Iteration limit.
      * @param resumedHistory Pre-existing steps from a checkpoint (empty if fresh).
      * @return The final result.
      */
-    private AgentResult runLoop(String goal, ReasoningEngine engine,
+    private AgentResult runLoop(String sessionId, String goal, ReasoningEngine engine,
             int maxIterations, List<ReasoningStep> resumedHistory, String agentRole) {
         // Mutable state — guarded by synchronized (JEP 491 safe)
         final List<ReasoningStep> history = new ArrayList<>(resumedHistory);
@@ -215,8 +214,6 @@ public class AgentLoop {
         String transientError = null;
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
-
-        String sessionId = WorkspaceScopeHolder.get();
 
         // --- SPRINT 2: Save user prompt BEFORE anything else happens ---
         if (sessionId != null && goal != null && !goal.isEmpty()) {
@@ -243,18 +240,18 @@ public class AgentLoop {
         }
 
         // --- RESUME HOOK ---
-        var resumeOpt = agentStore.load(WorkspaceScopeHolder.get(), agentRole);
+        var resumeOpt = agentStore.load(sessionId, agentRole);
         if (resumeOpt.isPresent()) {
             var checkpoint = resumeOpt.get();
             if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                 String pendingTool = checkpoint.getPendingToolName();
                 String pendingParams = checkpoint.getPendingToolParametersJson();
                 log.infof("AgentLoop Resuming session %s executing pending tool %s",
-                    WorkspaceScopeHolder.get(), pendingTool);
+                    sessionId, pendingTool);
                 try {
                     workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
                     ToolResponse resumeResponse = toolRegistry.invokeTool(
-                        pendingTool, pendingParams, WorkspaceScopeHolder.get());
+                        pendingTool, pendingParams, sessionId);
                     history.add(new ReasoningStep(
                         "Human Approved", pendingTool,
                         Map.of("parameters", pendingParams),
@@ -269,7 +266,7 @@ public class AgentLoop {
                     checkpoint.setPendingToolParametersJson(null);
                     agentStore.save(checkpoint);
                     log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
-                        WorkspaceScopeHolder.get(), pendingTool, e.getMessage());
+                        sessionId, pendingTool, e.getMessage());
                     synchronized (history) {
                         return AgentResult.error(List.copyOf(history),
                             "TOOL_EXECUTION_FAILED: " + e.getMessage());
@@ -300,19 +297,19 @@ public class AgentLoop {
                     try {
                         // GOVERNANCE: Explicit budget check BEFORE other observers
                         governanceLayer.recordLlmCall(
-                                WorkspaceScopeHolder.get(),
+                                sessionId,
                                 step.inputTokens(),
                                 step.outputTokens());
 
                         for (var observer : observers) {
                             observer.recordLlmCall(
-                                    WorkspaceScopeHolder.get(),
+                                    sessionId,
                                     step.inputTokens(),
                                     step.outputTokens());
                         }
                     } catch (com.arcclaw.core.governance.BudgetWarningException bw) {
                         log.warnf("Budget warning for session %s: %s",
-                            WorkspaceScopeHolder.get(), bw.getMessage());
+                            sessionId, bw.getMessage());
                         String warningObservation = "⚠️ BUDGET WARNING: " + bw.getMessage() +
                             " Keep all subsequent responses to 1-2 sentences maximum.";
                         step = step.withObservation(warningObservation);
@@ -338,10 +335,10 @@ public class AgentLoop {
                 
                 if (isSchemaError) {
                     log.warnf("[AGENT-LOOP] LLM API rejected tool call schema for session %s: %s",
-                        WorkspaceScopeHolder.get(), e.getMessage());
+                        sessionId, e.getMessage());
                     llmSchemaErrorCount++;
                     if (llmSchemaErrorCount >= 2) {
-                        log.errorf("[AGENT-LOOP] session %s exceeded schema self-correction limit", WorkspaceScopeHolder.get());
+                        log.errorf("[AGENT-LOOP] session %s exceeded schema self-correction limit", sessionId);
                         synchronized (history) {
                             return AgentResult.error(List.copyOf(history), "SCHEMA_ERROR");
                         }
@@ -394,7 +391,7 @@ public class AgentLoop {
                     history.add(completedStep);
                 }
                 observers.forEach(o -> o.onStepComplete(
-                        WorkspaceScopeHolder.get(), agentRole, completedStep));
+                        sessionId, agentRole, completedStep));
                 synchronized (history) {
                     return AgentResult.finished(answer, List.copyOf(history));
                 }
@@ -415,7 +412,7 @@ public class AgentLoop {
                     history.add(completedStep);
                 }
                 observers.forEach(o -> o.onStepComplete(
-                        WorkspaceScopeHolder.get(), agentRole, completedStep));
+                        sessionId, agentRole, completedStep));
                 continue;
             }
 
@@ -435,10 +432,10 @@ public class AgentLoop {
                 }
             } catch (RequiresApprovalException e) {
                 // --- CHANGE B: APPROVAL PAUSE ---
-                AgentCheckpoint cp = agentStore.load(WorkspaceScopeHolder.get(), agentRole)
+                AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
                         .orElseGet(() -> {
                             var newCp = new AgentCheckpoint();
-                            newCp.setSessionId(WorkspaceScopeHolder.get());
+                            newCp.setSessionId(sessionId);
                             newCp.setAgentRole(agentRole);
                             return newCp;
                         });
@@ -449,7 +446,7 @@ public class AgentLoop {
                 agentStore.save(cp);
 
                 log.infof("[AgentLoop] Pausing session %s for human approval of tool '%s'",
-                        WorkspaceScopeHolder.get(), e.getToolName());
+                        sessionId, e.getToolName());
 
                 return AgentResult.awaitingApproval(
                         "⚠️ The agent wants to run the `" + e.getToolName() + "` tool.\n" +
@@ -471,7 +468,7 @@ public class AgentLoop {
                 history.add(completedStep);
             }
             observers.forEach(o -> o.onStepComplete(
-                    WorkspaceScopeHolder.get(), agentRole, completedStep));
+                    sessionId, agentRole, completedStep));
             log.debugf("Observation for '%s': %s",
                     toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
         }

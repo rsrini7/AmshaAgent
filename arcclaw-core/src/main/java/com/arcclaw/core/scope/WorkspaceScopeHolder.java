@@ -2,78 +2,116 @@ package com.arcclaw.core.scope;
 
 import org.jboss.logging.Logger;
 
+import java.lang.ScopedValue;
+import java.util.concurrent.Callable;
+
 /**
- * Thread-local holder for the current workspace session ID.
+ * Scoped value holder for the current workspace session ID.
  * <p>
- * REST filters and WebSocket lifecycle handlers call {@link #set(String)} on
- * entry
- * and {@link #clear()} on exit. The {@link WorkspaceScopeContext} reads the
- * current
- * session ID via {@link #get()} to resolve the correct per-session bean store.
- *
- * <h2>JDK 25 Migration — JEP 506 (Scoped Values)</h2>
- * 
- * <pre>{@code
- * // Current (JDK 21+): ThreadLocal-based
- * private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
- *
- * // Future (JDK 25 GA / JEP 506): ScopedValue-based
- * // ScopedValue is final in JDK 25 — no longer preview.
- * // private static final ScopedValue<String> CURRENT =
- * // ScopedValue.newInstance();
- * //
- * // Activation becomes:
- * // ScopedValue.where(CURRENT, sessionId).run(() -> { ... });
- * //
- * // Benefits:
- * // - Immutable within scope (no accidental overwrites)
- * // - Automatic cleanup (no try-finally needed)
- * // - Better structured concurrency integration
- * // - No memory leak risk from forgotten clear()
- * }</pre>
+ * REST filters and WebSocket lifecycle handlers call {@link #run(String, Runnable)}
+ * or {@link #call(String, Callable)} at entry points. The {@link WorkspaceScopeContext}
+ * reads the current session ID via {@link #getIfActive()} to resolve the correct
+ * per-session bean store.
  *
  * @see WorkspaceScopeContext
  */
 public final class WorkspaceScopeHolder {
 
-    // TODO: Migrate to ScopedValue (JEP 506) when fully dropping JDK 21 support
-    private static final ThreadLocal<String> CURRENT_SESSION = new ThreadLocal<>();
+    private static final ScopedValue<String> WORKSPACE_ID = ScopedValue.newInstance();
     private static final Logger LOG = Logger.getLogger(WorkspaceScopeHolder.class);
+
+    // Bridge for MicroProfile Context Propagation which doesn't support ScopedValue natively
+    private static final ThreadLocal<String> PROPAGATION_BRIDGE = new ThreadLocal<>();
 
     private WorkspaceScopeHolder() {
         // utility class — no instantiation
     }
 
+    public static boolean isActive() {
+        return WORKSPACE_ID.isBound() || PROPAGATION_BRIDGE.get() != null;
+    }
+
+    public static String getIfActive() {
+        if (WORKSPACE_ID.isBound()) {
+            return WORKSPACE_ID.get();
+        }
+        return PROPAGATION_BRIDGE.get();
+    }
+
+    public static String getRequired() {
+        String sessionId = getIfActive();
+        if (sessionId == null) {
+            throw new IllegalStateException("No active workspace session");
+        }
+        return sessionId;
+    }
+
     /**
-     * Bind a workspace session to the current thread.
-     *
-     * @param sessionId non-null session identifier
-     * @throws IllegalArgumentException if sessionId is null or blank
+     * Manual session management for tests or non-standard scenarios.
+     * <p>
+     * Prefer {@link #run(String, Runnable)} or {@link #call(String, Callable)}
+     * whenever possible. This method uses the propagation bridge ({@code ThreadLocal}).
      */
     public static void set(String sessionId) {
+        validate(sessionId);
+        setBridge(sessionId);
+    }
+
+    /**
+     * Clear the current session ID from the propagation bridge.
+     */
+    public static void clear() {
+        setBridge(null);
+    }
+
+    /**
+     * Internal method for MicroProfile Context Propagation.
+     * Do not use directly in application code.
+     */
+    static void setBridge(String sessionId) {
+        if (sessionId == null) {
+            PROPAGATION_BRIDGE.remove();
+        } else {
+            PROPAGATION_BRIDGE.set(sessionId);
+        }
+    }
+
+    public static void run(String sessionId, Runnable runnable) {
+        validate(sessionId);
+        LOG.debugf("Binding session: %s on thread: %s", sessionId, Thread.currentThread());
+        ScopedValue.where(WORKSPACE_ID, sessionId).run(runnable);
+    }
+
+    public static <T> T call(String sessionId, Callable<T> callable) throws Exception {
+        validate(sessionId);
+        LOG.debugf("Binding session: %s on thread: %s", sessionId, Thread.currentThread());
+        return ScopedValue.where(WORKSPACE_ID, sessionId).call(new ScopedValue.CallableOp<T, Exception>() {
+            @Override
+            public T call() throws Exception {
+                return callable.call();
+            }
+        });
+    }
+
+    public static Runnable wrap(Runnable runnable) {
+        String sessionId = getIfActive();
+        if (sessionId == null) {
+            return runnable;
+        }
+        return () -> run(sessionId, runnable);
+    }
+
+    public static <T> Callable<T> wrap(Callable<T> callable) {
+        String sessionId = getIfActive();
+        if (sessionId == null) {
+            return callable;
+        }
+        return () -> call(sessionId, callable);
+    }
+
+    private static void validate(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("sessionId must not be null or blank");
         }
-        LOG.debugf("Setting session: %s on thread: %s", sessionId, Thread.currentThread());
-        CURRENT_SESSION.set(sessionId);
-    }
-
-    /**
-     * Returns the session ID bound to the current thread, or {@code null}
-     * if no session is active.
-     */
-    public static String get() {
-        return CURRENT_SESSION.get();
-    }
-
-    /**
-     * Unbind the session from the current thread.
-     * <p>
-     * <b>Must</b> be called in a {@code finally} block to prevent ThreadLocal leaks
-     * on pooled threads. With JDK 25 ScopedValue migration, this becomes
-     * unnecessary.
-     */
-    public static void clear() {
-        CURRENT_SESSION.remove();
     }
 }

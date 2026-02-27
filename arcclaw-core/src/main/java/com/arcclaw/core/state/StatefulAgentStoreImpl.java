@@ -111,6 +111,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public void markFailed(Long checkpointId, String reason) {
         AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
         if (checkpoint != null) {
+            markFailed(checkpoint, reason);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void markFailed(AgentCheckpoint checkpoint, String reason) {
+        if (checkpoint != null) {
             checkpoint.setStatus(CheckpointStatus.FAILED);
             checkpoint.setFailedAt(Instant.now());
             checkpoint.setFailReason(reason);
@@ -119,7 +127,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             String userId = (String) MDC.get("userId");
             auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
             
-            log.warnf("Checkpoint id=%d marked FAILED: %s", checkpointId, reason);
+            log.warnf("Checkpoint session=%s role=%s marked FAILED: %s", checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
         }
     }
 

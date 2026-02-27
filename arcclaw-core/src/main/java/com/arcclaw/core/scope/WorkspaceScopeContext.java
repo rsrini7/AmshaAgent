@@ -55,7 +55,7 @@ public class WorkspaceScopeContext implements InjectableContext {
 
     @Override
     public boolean isActive() {
-        return WorkspaceScopeHolder.get() != null;
+        return WorkspaceScopeHolder.isActive();
     }
 
     @Override
@@ -108,7 +108,7 @@ public class WorkspaceScopeContext implements InjectableContext {
     @Override
     public <T> T getIfActive(Contextual<T> contextual,
             Function<Contextual<T>, CreationalContext<T>> creationalContextSupplier) {
-        String sessionId = WorkspaceScopeHolder.get();
+        String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) {
             return null; // scope not active → return null, not exception
         }
@@ -152,7 +152,7 @@ public class WorkspaceScopeContext implements InjectableContext {
      */
     @Override
     public void destroy() {
-        String sessionId = WorkspaceScopeHolder.get();
+        String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId != null) {
             destroySession(sessionId);
         }
@@ -187,7 +187,7 @@ public class WorkspaceScopeContext implements InjectableContext {
 
     @Override
     public ContextState getState() {
-        String sessionId = WorkspaceScopeHolder.get();
+        String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) {
             return new WorkspaceContextState(Collections.emptyMap());
         }
@@ -224,12 +224,7 @@ public class WorkspaceScopeContext implements InjectableContext {
     // ── Internal helpers ───────────────────────────────────────────────────
 
     private SessionStore getActiveStore() {
-        String sessionId = WorkspaceScopeHolder.get();
-        if (sessionId == null) {
-            throw new ContextNotActiveException(
-                    "@WorkspaceScoped context is not active. " +
-                            "Ensure WorkspaceScopeHolder.set(sessionId) was called before accessing scoped beans.");
-        }
+        String sessionId = WorkspaceScopeHolder.getRequired();
         return sessions.computeIfAbsent(sessionId, k -> new SessionStore());
     }
 

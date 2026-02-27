@@ -4,8 +4,6 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,21 +16,13 @@ public class WorkspaceGovernanceTest {
 
     private static final String TEST_SESSION_ID = "gov-test-session";
 
-    @BeforeEach
-    void setup() {
-        WorkspaceScopeHolder.set(TEST_SESSION_ID);
-    }
-
-    @AfterEach
-    void tearDown() {
-        WorkspaceScopeHolder.clear();
-    }
-
     @Test
     void testWorkspaceContextInjection() {
-        assertNotNull(context);
-        assertEquals(TEST_SESSION_ID, context.getSessionId());
-        assertEquals(AutonomyLevel.READONLY, context.getAutonomyLevel());
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            assertNotNull(context);
+            assertEquals(TEST_SESSION_ID, context.getSessionId());
+            assertEquals(AutonomyLevel.READONLY, context.getAutonomyLevel());
+        });
     }
 
     @Test
@@ -53,10 +43,12 @@ public class WorkspaceGovernanceTest {
 
     @Test
     void testContextStatePersistence() {
-        context.setAutonomyLevel(AutonomyLevel.FULL);
-        context.setAttribute("test-attr", "test-val");
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            context.setAutonomyLevel(AutonomyLevel.FULL);
+            context.setAttribute("test-attr", "test-val");
 
-        assertEquals(AutonomyLevel.FULL, context.getAutonomyLevel());
-        assertEquals("test-val", context.getAttribute("test-attr"));
+            assertEquals(AutonomyLevel.FULL, context.getAutonomyLevel());
+            assertEquals("test-val", context.getAttribute("test-attr"));
+        });
     }
 }

@@ -50,96 +50,101 @@ class AgentLoopTest {
         compactionSummaryRepository = mock(com.arcclaw.core.state.CompactionSummaryRepository.class);
         when(compactionSummaryRepository.findLatestBySessionId(anyString()))
                 .thenReturn(Optional.empty());
-        
+
         engine = new LangChainReasoningEngine();
         engine.chatLanguageModel = model;
         engine.toolRegistry = toolRegistry;
         engine.objectMapper = objectMapper;
         engine.chatMemoryStore = chatMemoryStore;
         engine.compactionSummaryRepository = compactionSummaryRepository;
-
-
-        WorkspaceScopeHolder.set("test-session");
     }
 
     @Test
     void testResumedHistoryHasFlatToolArguments() {
-        // Create a ReasoningStep with toolName="github",
-        // toolArguments="..." but stored via actionInput wrapped in "parameters" exactly like AgentLoop does
-        Map<String, Object> params = Map.of("parameters", "{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}");
-        ReasoningStep step = new ReasoningStep("thought", "github", params, "obs", 0, 0);
+        WorkspaceScopeHolder.run("test-session", () -> {
+            // Create a ReasoningStep with toolName="github",
+            // toolArguments="..." but stored via actionInput wrapped in "parameters" exactly like AgentLoop does
+            Map<String, Object> params = Map.of("parameters", "{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}");
+            ReasoningStep step = new ReasoningStep("thought", "github", params, "obs", 0, 0);
 
-        // Mock response to just return something
-        when(model.chat(any(ChatRequest.class))).thenReturn(
-            ChatResponse.builder().aiMessage(AiMessage.from("response")).build()
-        );
+            // Mock response to just return something
+            when(model.chat(any(ChatRequest.class))).thenReturn(
+                    ChatResponse.builder().aiMessage(AiMessage.from("response")).build()
+            );
 
-        engine.nextStep("test-session", "coordinator", "goal", List.of(step));
+            engine.nextStep("test-session", "coordinator", "goal", List.of(step));
 
-        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(model).chat(captor.capture());
+            ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+            verify(model).chat(captor.capture());
 
-        // Extract the messages and find the AiMessage that corresponds to the history
-        List<ChatMessage> messages = captor.getValue().messages();
-        boolean found = false;
-        for (ChatMessage msg : messages) {
-            if (msg instanceof AiMessage m && m.hasToolExecutionRequests()) {
-                ToolExecutionRequest req = m.toolExecutionRequests().get(0);
-                if ("github".equals(req.name())) {
-                    found = true;
-                    assertEquals("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}", req.arguments());
+            // Extract the messages and find the AiMessage that corresponds to the history
+            List<ChatMessage> messages = captor.getValue().messages();
+            boolean found = false;
+            for (ChatMessage msg : messages) {
+                if (msg instanceof AiMessage m && m.hasToolExecutionRequests()) {
+                    ToolExecutionRequest req = m.toolExecutionRequests().get(0);
+                    if ("github".equals(req.name())) {
+                        found = true;
+                        assertEquals("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}",
+                                req.arguments());
+                    }
                 }
             }
-        }
-        assertTrue(found, "Should have found the reconstructed ToolExecutionRequest in chat messages");
+            assertTrue(found, "Should have found the reconstructed ToolExecutionRequest in chat messages");
+        });
     }
 
     @Test
     void testSelfHealingOnHttp400() {
-        ReasoningEngine mockEngine = mock(ReasoningEngine.class);
-        AgentLoop loop = new AgentLoop();
-        jakarta.enterprise.inject.Instance<AgentObserver> mockObservers = mock(jakarta.enterprise.inject.Instance.class);
-        when(mockObservers.iterator()).thenReturn(java.util.Collections.emptyIterator());
-        doNothing().when(mockObservers).forEach(any());
-        loop.observers = mockObservers;
-        loop.chatMemoryStore = mock(ChatMemoryStore.class);
-        loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
-        loop.toolRegistry = mock(ToolRegistry.class);
-        loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
+        WorkspaceScopeHolder.run("test-session", () -> {
+            ReasoningEngine mockEngine = mock(ReasoningEngine.class);
+            AgentLoop loop = new AgentLoop();
+            jakarta.enterprise.inject.Instance<AgentObserver> mockObservers = mock(jakarta.enterprise.inject.Instance.class);
+            when(mockObservers.iterator()).thenReturn(java.util.Collections.emptyIterator());
+            doNothing().when(mockObservers).forEach(any());
+            loop.observers = mockObservers;
+            loop.chatMemoryStore = mock(ChatMemoryStore.class);
+            loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
+            loop.toolRegistry = mock(ToolRegistry.class);
+            loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
 
-        // Throw InvalidRequestException on first call
-        InvalidRequestException ex = new InvalidRequestException("missing properties: action");
-        // Second call succeeds
-        ReasoningStep finishStep = ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "success"), 0, 0);
+            // Throw InvalidRequestException on first call
+            InvalidRequestException ex = new InvalidRequestException("missing properties: action");
+            // Second call succeeds
+            ReasoningStep finishStep = ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "success"), 0,
+                    0);
 
-        when(mockEngine.nextStep(any(), any(), any(), any()))
-            .thenThrow(ex)
-            .thenReturn(finishStep);
+            when(mockEngine.nextStep(any(), any(), any(), any()))
+                    .thenThrow(ex)
+                    .thenReturn(finishStep);
 
-        AgentResult result = loop.run("test goal", mockEngine, 5);
-        assertTrue(result.success(), "Loop should complete successfully after self-healing");
-        assertEquals("success", result.finalAnswer());
+            AgentResult result = loop.run("test goal", mockEngine, 5);
+            assertTrue(result.success(), "Loop should complete successfully after self-healing");
+            assertEquals("success", result.finalAnswer());
+        });
     }
 
     @Test
     void testSchemaErrorLimitExceeded() {
-        ReasoningEngine mockEngine = mock(ReasoningEngine.class);
-        AgentLoop loop = new AgentLoop();
-        jakarta.enterprise.inject.Instance<AgentObserver> mockObservers = mock(jakarta.enterprise.inject.Instance.class);
-        when(mockObservers.iterator()).thenReturn(java.util.Collections.emptyIterator());
-        doNothing().when(mockObservers).forEach(any());
-        loop.observers = mockObservers;
-        loop.chatMemoryStore = mock(ChatMemoryStore.class);
-        loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
-        loop.toolRegistry = mock(ToolRegistry.class);
-        loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
+        WorkspaceScopeHolder.run("test-session", () -> {
+            ReasoningEngine mockEngine = mock(ReasoningEngine.class);
+            AgentLoop loop = new AgentLoop();
+            jakarta.enterprise.inject.Instance<AgentObserver> mockObservers = mock(jakarta.enterprise.inject.Instance.class);
+            when(mockObservers.iterator()).thenReturn(java.util.Collections.emptyIterator());
+            doNothing().when(mockObservers).forEach(any());
+            loop.observers = mockObservers;
+            loop.chatMemoryStore = mock(ChatMemoryStore.class);
+            loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
+            loop.toolRegistry = mock(ToolRegistry.class);
+            loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
 
-        InvalidRequestException ex = new InvalidRequestException("missing properties");
-        // Always throw
-        when(mockEngine.nextStep(any(), any(), any(), any())).thenThrow(ex);
+            InvalidRequestException ex = new InvalidRequestException("missing properties");
+            // Always throw
+            when(mockEngine.nextStep(any(), any(), any(), any())).thenThrow(ex);
 
-        AgentResult result = loop.run("test goal", mockEngine, 5);
-        assertFalse(result.success(), "Loop should fail since it exceeds schema retry limit");
-        assertTrue(result.terminationReason().contains("SCHEMA_ERROR"));
+            AgentResult result = loop.run("test goal", mockEngine, 5);
+            assertFalse(result.success(), "Loop should fail since it exceeds schema retry limit");
+            assertTrue(result.terminationReason().contains("SCHEMA_ERROR"));
+        });
     }
 }

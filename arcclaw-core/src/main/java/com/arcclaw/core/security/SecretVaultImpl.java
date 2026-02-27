@@ -38,10 +38,7 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional
     public void store(String keyName, byte[] secret) {
-        String sessionId = WorkspaceScopeHolder.get();
-        if (sessionId == null) {
-            throw new IllegalStateException("Active session required to store secrets");
-        }
+        String sessionId = WorkspaceScopeHolder.getRequired();
 
         // 1. Derive Key
         try (VaultKey sessionKey = keyDerivation.deriveSessionKey(sessionId)) {
@@ -68,10 +65,7 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public Optional<VaultKey> get(String keyName) {
-        String sessionId = WorkspaceScopeHolder.get();
-        if (sessionId == null) {
-            throw new IllegalStateException("Active session required to retrieve secrets");
-        }
+        String sessionId = WorkspaceScopeHolder.getRequired();
 
         // 1. Fetch
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);

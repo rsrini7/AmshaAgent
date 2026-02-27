@@ -123,7 +123,7 @@ public class TelegramAgentHandlerTest {
                 eq(java.util.Map.of("CamelTelegramChatId", "chat456")));
 
         // Context should be cleared
-        assertNull(WorkspaceScopeHolder.get());
+        assertFalse(WorkspaceScopeHolder.isActive());
     }
 
     @Test

@@ -527,4 +527,14 @@
 - [x] Unit Tests: ProcessIsolationExecutorTest, AgentCheckpointTest, PiiScanReflexTest.
 - [x] Verification: `mvn clean verify` passes all Phase 41 checks.
 
+# Phase 42: ScopedValue & Virtual Thread Context Migration ✅
+- [x] Migrate `WorkspaceScopeHolder` to `ScopedValue<String>`.
+- [x] Implement `PROPAGATION_BRIDGE` (`ThreadLocal`) for MicroProfile compatibility.
+- [x] Implement `run(sessionId, Runnable)` and `call(sessionId, Callable)` binding.
+- [x] Implement `wrap(Runnable)` and `wrap(Callable)` for async propagation.
+- [x] Re-introduce `set(sessionId)` and `clear()` as aliases for the bridge.
+- [x] Fix: Checked exceptions handling in `ScopedValue.CallableOp` wrapper.
+- [x] Verification: `mvn clean verify` passes all Phase 42 checks.
+
+
 

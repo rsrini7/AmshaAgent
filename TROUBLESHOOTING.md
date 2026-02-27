@@ -2610,3 +2610,29 @@ Explicitly excluded ordinary follow-up questions and history requests.
 **Symptom**: Compilation errors in legacy tests after making `AgentCheckpoint` fields private.
 **Root Cause**: Many existing tests directly manipulated fields like `agentRole`, `status`, or `failReason`.
 **Resolution**: All tests must use the public getters and setters (e.g., `getAgentRole()`, `setStatus()`). Direct field access is strictly prohibited for architectural encapsulation.
+
+---
+
+## 37. Phase 42: ScopedValue & Virtual Thread Context Migration
+
+### 🔴 Failure: `ScopedValue` Immutability Breaks Test Setup (`@BeforeEach`)
+**Symptom:** Tests using `WorkspaceScopeHolder.set(sessionId)` in `@BeforeEach` fail with `IllegalStateException` or `ContextNotActiveException` because the scope is not bound.
+**Root Cause:** `ScopedValue` is strictly bound to a `run()` or `call()` block and cannot be "set" globally for a thread like a `ThreadLocal`.
+**Resolution:**
+- Re-introduced `set(String)` and `clear()` methods in `WorkspaceScopeHolder` as aliases for the `PROPAGATION_BRIDGE` (`ThreadLocal`).
+- This allows legacy tests to continue working while production code migrates to the safer `run(sessionId, Runnable)` pattern.
+
+### 🔴 Failure: Ambiguous Method Reference with Lambdas
+**Symptom:** `WorkspaceScopeHolder.run(sessionId, () -> { ... })` fails to compile with "cannot find symbol" or ambiguity errors in some Java environments.
+**Root Cause:** Overlapping functional interfaces or compiler difficulty inferring the correct overload when mixing `Runnable` and `Callable` in the same class.
+**Resolution:** Explicitly cast lambdas to `(Runnable)` or use anonymous classes to clarify intent to the compiler.
+
+### 🔴 Failure: Context Loss in MicroProfile Context Propagation
+**Symptom:** `ScopedValue` is lost when moving between JAX-RS filters and business logic on different threads.
+**Root Cause:** `ScopedValue` does not natively propagate via `smallrye-context-propagation` yet.
+**Resolution:** Implemented a `PROPAGATION_BRIDGE` using `ThreadLocal` inside `WorkspaceScopeHolder`. This bridge is automatically checked by `getIfActive()` if `WORKSPACE_ID` is not bound.
+
+### 🔴 Failure: Checked Exceptions in `WorkspaceScopeHolder.call()`
+**Symptom:** `ScopedValue.where(ID, val).call(callable)` fails to compile if the `callable` throws a checked exception.
+**Root Cause:** The standard `Callable` interface doesn't align perfectly with the `ScopedValue.CallableOp` expected by the JDK API for error handling.
+**Resolution:** Wrapped the user-provided `Callable` in an anonymous `ScopedValue.CallableOp` that correctly propagates exceptions.

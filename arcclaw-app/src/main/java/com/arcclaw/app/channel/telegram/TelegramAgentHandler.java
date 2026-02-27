@@ -125,105 +125,108 @@ public class TelegramAgentHandler {
         // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
-        try {
-            // Activate CDI Workspace Scope initially
-            WorkspaceScopeHolder.set(baseId);
+        WorkspaceScopeHolder.run(baseId, () -> {
+            try {
+                // Push userId to MDC for Audit logs
+                org.jboss.logging.MDC.put("userId", userId);
 
-            // Push userId to MDC for Audit logs
-            org.jboss.logging.MDC.put("userId", userId);
+                // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
+                com.arcclaw.core.reflex.ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
+                if (reflexResult.commandResponse().isPresent()) {
+                    reply(chatId, reflexResult.commandResponse().get());
+                    return; // Terminate execution immediately, bypassed LLM
+                }
 
-            // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
-            com.arcclaw.core.reflex.ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
-            if (reflexResult.commandResponse().isPresent()) {
-                reply(chatId, reflexResult.commandResponse().get());
-                return; // Terminate execution immediately, bypassed LLM
-            }
+                String safeInput = reflexResult.sanitizedInput();
 
-            String safeInput = reflexResult.sanitizedInput();
+                // Auto-cancel any dangling tool approvals if the user 
+                // sends a free-text message instead of clicking /approve or /deny
+                for (String r : java.util.List.of("architect", "coordinator", "coder", "researcher", "debugger")) {
+                    statefulAgentStore.load(baseId, r).ifPresent(cp -> {
+                        if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                            log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r);
+                            // Correcting compilation error: status/reason fields are managed via store methods or setters
+                            cp.setStatus(CheckpointStatus.FAILED);
+                            cp.setFailReason("User interrupted with a new message. Tool execution aborted.");
+                            cp.setStateJson("[]"); // Wipe the tool state
+                            cp.setPendingToolName(null);
+                            cp.setPendingToolParametersJson(null);
+                            statefulAgentStore.save(cp);
+                            log.infof("[TelegramHandler] Successfully auto-canceled tool approval for role: %s", r);
+                        }
+                    });
+                }
 
-            // Auto-cancel any dangling tool approvals if the user 
-            // sends a free-text message instead of clicking /approve or /deny
-            for (String r : java.util.List.of("coordinator", "coder", "researcher", "debugger")) {
-                statefulAgentStore.load(baseId, r).ifPresent(cp -> {
-                    if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                        log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r);
-                        cp.setStatus(CheckpointStatus.FAILED);
-                        cp.setFailReason("User interrupted with a new message. Tool execution aborted.");
-                        cp.setStateJson("[]"); // Wipe the tool state
+                String activeRole = intentClassifier.classify(safeInput);
+
+                log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
+                        safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, activeRole);
+
+                // Session Continuity Check (Soft Reset only)
+                statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
+                    if (cp.getStatus() == CheckpointStatus.FAILED || cp.getStatus() == CheckpointStatus.COMPLETED) {
+                        log.infof("Resetting ReAct state for session %s (%s) to start fresh goal.", baseId, cp.getStatus());
+                        // 1. We keep the ChatMemory (DO NOT call terminateSession)
+                        // 2. We just wipe the internal JSON tool-call array
+                        cp.setStateJson("[]");
+                        cp.setFailReason(null);
+                        cp.setPendingToolName(null);
+                        cp.setPendingToolParametersJson(null);
+                        cp.setStatus(CheckpointStatus.IN_PROGRESS);
                         statefulAgentStore.save(cp);
                     }
                 });
-            }
 
-            String activeRole = intentClassifier.classify(safeInput);
+                // Re-assert the scope and elevate autonomy AFTER the potential termination!
+                workspaceContext.setAutonomyLevel(autonomyLevel);
 
-            log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
-                    safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, activeRole);
-
-            // Session Continuity Check (Soft Reset only)
-            statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
-                if (cp.getStatus() == CheckpointStatus.FAILED || cp.getStatus() == CheckpointStatus.COMPLETED) {
-                    log.infof("Resetting ReAct state for session %s (%s) to start fresh goal.", baseId, cp.getStatus());
-                    // 1. We keep the ChatMemory (DO NOT call terminateSession)
-                    // 2. We just wipe the internal JSON tool-call array
-                    cp.setStateJson("[]");
-                    cp.setFailReason(null);
-                    cp.setStatus(CheckpointStatus.IN_PROGRESS);
-                    statefulAgentStore.save(cp);
+                // Dev DX: seed host OS tokens into vault (idempotent — skips if already seeded)
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
                 }
-            });
 
-            // 👉 THE FIX: Re-assert the scope and elevate autonomy AFTER the potential termination!
-            WorkspaceScopeHolder.set(baseId);
-            workspaceContext.setAutonomyLevel(autonomyLevel);
+                log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
-            // Dev DX: seed host OS tokens into vault (idempotent — skips if already seeded)
-            if (!devSeeder.isUnsatisfied()) {
-                devSeeder.get().seedDevSecrets();
-            }
+                try {
+                    compactionService.compactIfNeeded(baseId);
+                } catch (Exception e) {
+                    log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
+                }
 
-            log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
+                AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
 
-            try {
-                compactionService.compactIfNeeded(baseId);
+                if (result.awaitingApproval()) {
+                    String approvalDetail = statefulAgentStore.load(baseId, activeRole)
+                        .map(cp -> {
+                            String tool = cp.getPendingToolName() != null
+                                ? cp.getPendingToolName() : "unknown";
+                            String params = cp.getPendingToolParametersJson() != null
+                                ? cp.getPendingToolParametersJson() : "{}";
+                            return String.format(
+                                "🤖 *Agent:* %s\n" +
+                                "🔧 *Tool:* %s\n" +
+                                "📋 *Parameters:* `%s`",
+                                activeRole, tool, params);
+                        })
+                        .orElse("⚠️ Tool details unavailable.");
+
+                    reply(chatId,
+                        "⚠️ *Approval Required*\n\n" +
+                        approvalDetail + "\n\n" +
+                        "Reply `/approve` to allow or `/deny` to cancel.");
+                } else if (result.success()) {
+                    reply(chatId, result.finalAnswer());
+                } else {
+                    reply(chatId, "❌ **Task Failed**\n\nReason: " + AgentErrorMessageUtil.sanitizeErrorMessage(result.terminationReason()));
+                }
+
             } catch (Exception e) {
-                log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
+                log.errorf(e, "Unhandled exception in runAgent for session=%s", baseId);
+                reply(chatId, "⚠️ An unexpected error occurred. Please try again.");
+            } finally {
+                MDC.remove("userId");
             }
-
-            AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
-
-            if (result.awaitingApproval()) {
-                String approvalDetail = statefulAgentStore.load(baseId, activeRole)
-                    .map(cp -> {
-                        String tool = cp.getPendingToolName() != null
-                            ? cp.getPendingToolName() : "unknown";
-                        String params = cp.getPendingToolParametersJson() != null
-                            ? cp.getPendingToolParametersJson() : "{}";
-                        return String.format(
-                            "🤖 *Agent:* %s\n" +
-                            "🔧 *Tool:* %s\n" +
-                            "📋 *Parameters:* `%s`",
-                            activeRole, tool, params);
-                    })
-                    .orElse("⚠️ Tool details unavailable.");
-
-                reply(chatId,
-                    "⚠️ *Approval Required*\n\n" +
-                    approvalDetail + "\n\n" +
-                    "Reply `/approve` to allow or `/deny` to cancel.");
-            } else if (result.success()) {
-                reply(chatId, result.finalAnswer());
-            } else {
-                reply(chatId, "❌ **Task Failed**\n\nReason: " + AgentErrorMessageUtil.sanitizeErrorMessage(result.terminationReason()));
-            }
-
-        } catch (Exception e) {
-            log.errorf(e, "Unhandled exception in runAgent for session=%s", baseId);
-            reply(chatId, "⚠️ An unexpected error occurred. Please try again.");
-        } finally {
-            MDC.remove("userId");
-            WorkspaceScopeHolder.clear();
-        }
+        });
     }
 
 

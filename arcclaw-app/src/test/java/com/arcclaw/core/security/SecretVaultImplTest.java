@@ -4,8 +4,6 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -32,20 +30,6 @@ public class SecretVaultImplTest {
     private static final String API_KEY_NAME = "OPENAI_API_KEY";
     private static final byte[] SECRET_PAYLOAD = "sk-live-test-1234567890".getBytes(StandardCharsets.UTF_8);
 
-    @BeforeEach
-    void setup() {
-        // Ensure clean state for DB
-        cleanDb();
-        // Set session *after* cleanup might have cleared it (if we reused logic)
-        WorkspaceScopeHolder.set(TEST_SESSION_ID);
-    }
-
-    @AfterEach
-    void tearDown() {
-        cleanDb();
-        WorkspaceScopeHolder.clear();
-    }
-
     @Transactional
     void cleanDb() {
         repository.deleteBySessionId(TEST_SESSION_ID);
@@ -53,54 +37,63 @@ public class SecretVaultImplTest {
 
     @Test
     void testEncryptDecryptCycle() {
-        // 1. Store
-        vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            cleanDb();
+            // 1. Store
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
-        // 2. Retrieve
-        Optional<VaultKey> retrieved = vault.get(API_KEY_NAME);
+            // 2. Retrieve
+            Optional<VaultKey> retrieved = vault.get(API_KEY_NAME);
 
-        assertTrue(retrieved.isPresent(), "Secret should be found");
-        try (VaultKey key = retrieved.get()) {
-            assertArrayEquals(SECRET_PAYLOAD, key.get(), "Decrypted payload must match original");
-        }
+            assertTrue(retrieved.isPresent(), "Secret should be found");
+            try (VaultKey key = retrieved.get()) {
+                assertArrayEquals(SECRET_PAYLOAD, key.get(), "Decrypted payload must match original");
+            }
+        });
     }
 
     @Test
     void testTamperDetection_BitFlip() {
-        // 1. Store
-        vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            cleanDb();
+            // 1. Store
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
-        // 2. Tamper: Direct DB access to flip a bit in ciphertext
-        EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
-        assertNotNull(entity);
+            // 2. Tamper: Direct DB access to flip a bit in ciphertext
+            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+            assertNotNull(entity);
 
-        // Flip the last bit of the ciphertext
-        entity.ciphertext[entity.ciphertext.length - 1] ^= 1;
-        saveEntity(entity);
+            // Flip the last bit of the ciphertext
+            entity.ciphertext[entity.ciphertext.length - 1] ^= 1;
+            saveEntity(entity);
 
-        // 3. Retrieve - Expect SecurityException (AEAD failure)
-        assertThrows(SecurityException.class, () -> vault.get(API_KEY_NAME));
+            // 3. Retrieve - Expect SecurityException (AEAD failure)
+            assertThrows(SecurityException.class, () -> vault.get(API_KEY_NAME));
+        });
     }
 
     @Test
     void testKeySwappingProtection_AADMismatch() {
-        // Scenario: Attacker tries to move the ciphertext from "OPENAI_API_KEY" to
-        // "GITHUB_TOKEN"
-        // Since AAD binds the ciphertext to the keyName, this must fail.
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            cleanDb();
+            // Scenario: Attacker tries to move the ciphertext from "OPENAI_API_KEY" to
+            // "GITHUB_TOKEN"
+            // Since AAD binds the ciphertext to the keyName, this must fail.
 
-        String targetKeyName = "GITHUB_TOKEN";
+            String targetKeyName = "GITHUB_TOKEN";
 
-        // 1. Store legitimate secret for OPENAI
-        vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+            // 1. Store legitimate secret for OPENAI
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
-        // 2. Steal ciphertext/nonce
-        EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+            // 2. Steal ciphertext/nonce
+            EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
 
-        // 3. Inject into GITHUB_TOKEN slot
-        insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.ciphertext, sorceEntity.nonce);
+            // 3. Inject into GITHUB_TOKEN slot
+            insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.ciphertext, sorceEntity.nonce);
 
-        // 4. Try to decrypt as GITHUB_TOKEN - Expect SecurityException
-        assertThrows(SecurityException.class, () -> vault.get(targetKeyName));
+            // 4. Retrieve GITHUB_TOKEN - Expect SecurityException
+            assertThrows(SecurityException.class, () -> vault.get(targetKeyName));
+        });
     }
 
     @Transactional

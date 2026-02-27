@@ -55,20 +55,20 @@ public class AskCommand implements Runnable {
     public void run() {
         String sessionId = UUID.randomUUID().toString();
         try {
-            CliAgentObserver.enabled = true;
-            WorkspaceScopeHolder.set(sessionId);
-            
-            // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
-            if (!devSeeder.isUnsatisfied()) {
-                devSeeder.get().seedDevSecrets();
-            }
+            WorkspaceScopeHolder.run(sessionId, () -> {
+                CliAgentObserver.enabled = true;
 
-            AgentResult result = agentLoop.run(sessionId, role, goal,
-                    reasoningEngine, 5);
-            System.out.println("\n✅ Final Answer:\n" + result.finalAnswer());
+                // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
+                }
+
+                AgentResult result = agentLoop.run(sessionId, role, goal,
+                        reasoningEngine, 5);
+                System.out.println("\n✅ Final Answer:\n" + result.finalAnswer());
+            });
         } finally {
             CliAgentObserver.enabled = false;
-            WorkspaceScopeHolder.clear();
             workspaceManager.terminateSession(sessionId);
         }
     }
