@@ -10,6 +10,7 @@ import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.audit.AuditHashUtil;
 import dev.langchain4j.data.message.AiMessage;
@@ -29,6 +30,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Stateful Thought-Plan-Act-Observe reasoning loop with resilience guardrails.
@@ -75,7 +78,12 @@ public class AgentLoop {
     WorkspaceContext workspaceContext;
 
     @Inject
-    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+    GovernanceLayer governanceLayer;
+
+    // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
+    // Compile once for performance.
+    private static final Pattern GITHUB_TRIGGER_PATTERN = 
+        Pattern.compile("(?i)\\b(repo|repository|github|gh|fetch|gist|clone|pull request|pr)\\b");
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle
@@ -414,6 +422,27 @@ public class AgentLoop {
                 observers.forEach(o -> o.onStepComplete(
                         sessionId, agentRole, completedStep));
                 continue;
+            }
+
+            // Verify the original user goal actually mentions a GitHub-related keyword
+            // before allowing the github tool to execute. Prevents LLM from mapping
+            // general queries (job searches, news, etc.) to github tool calls.
+            if ("github".equals(toolName)) {
+                if (!GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
+                    String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
+                        "the user's request does not reference a GitHub resource. " +
+                        "Please answer the user's question using your own knowledge " +
+                        "and respond with FINISH. Do not call any tools.";
+                    
+                    log.warnf("[TOOL-INTENT-GUARD] github blocked session=%s goal='%s'",
+                        sessionId, goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
+                    
+                    step = step.withObservation(guardObs);
+                    final ReasoningStep guardedStep = step;
+                    synchronized (history) { history.add(guardedStep); }
+                    observers.forEach(o -> o.onStepComplete(sessionId, agentRole, guardedStep));
+                    continue;  // Re-enter loop so LLM can self-correct
+                }
             }
 
             // --- SCHEMA VALIDATION ---
