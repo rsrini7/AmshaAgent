@@ -2667,3 +2667,73 @@ Install and enable the provided systemd mount unit:
 sudo cp arcclaw-secrets.mount /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now arcclaw-secrets.mount
+
+
+### Sandbox & Tool Execution
+
+#### Podman Fails with "Cannot connect to Podman... target machine actively refused it"
+
+* **Symptom**: When running an agent task, execution crashes with an `exit 125` error: `dial tcp 127.0.0.1:60953: connectex: No connection could be made because the target machine actively refused it`.
+* **Root Cause**: On Windows/macOS, the Podman backend Virtual Machine (WSL2 or Hyper-V) is stopped. The client cannot communicate with the container engine.
+
+* **Resolution**:
+1. Open your terminal and run: `podman machine start`.
+2. If it doesn't exist, initialize it first: `podman machine init`.
+3. Verify connectivity: `podman system connection list`.
+
+### "chroot: failed to run command ‘gh’: No such file or directory"
+
+* **Symptom**: Agent loops fail immediately after approval. Logs show an `AccessDeniedException` for `/run/arcclaw` followed by a failed `chroot` attempt.
+* **Root Cause**:
+1. **Permission Denial**: The system tried to create the RAM-backed secret directory at `/run/arcclaw/secrets` (root-owned) while running as a standard user.
+2. **Graceful Degradation Failure**: The system fell back to `chroot` on the host, which lacks the specialized `gh` (GitHub CLI) installed in the Alpine container.
+
+* **Resolution**:
+1. **Production**: Mount the `tmpfs` slice using the provided systemd unit: `sudo systemctl enable --now arcclaw-secrets.mount`.
+2. **Development**: Ensure `TmpfsSecretTransport.java` includes the catch block for `AccessDeniedException` to fallback to `java.io.tmpdir` (`/tmp`) automatically.
+
+### Tool Execution Fails but No Fallback Occurs (The Exit 125/126 Trap)
+
+* **Symptom**: Infrastructure errors (like the Podman VM being down) bubble up as "Tool failed" instead of triggering a fallback to the host.
+* **Root Cause**: The JVM successfully executes the `podman.exe` process, so no `IOException` is thrown. The circuit breaker ignores the exit code 125, treating it as a successful launch where the *tool* failed.
+* **Resolution**: Update `ProcessIsolationExecutor.java` to intercept `exit 125` (Infrastructure Error) and explicitly throw an `IOException` to force the fallback circuit breaker to engage.
+
+### 🔐 2. Identity & Scoping
+
+### "ContextNotActiveException" in Async Tasks
+
+* **Symptom**: Accessing `@WorkspaceScoped` beans inside a background Virtual Thread or reactive callback throws an error.
+* **Root Cause**: `ScopedValue` bindings are immutable and tied to the lexical scope of the parent thread. They are not automatically inherited by standard `ExecutorService` threads.
+
+* **Resolution**:
+1. Use `WorkspaceExecutors.wrap(executor)` to create a context-aware wrapper that captures and re-binds the `WORKSPACE_ID` automatically.
+2. Ensure `WorkspaceThreadContextProvider` is active in `mp.context.propagators` to handle Vert.x event loop boundaries.
+
+### ThreadLocal Context Leaks
+
+* **Symptom**: One user session occasionally "sees" the workspace or chat history of a previous session.
+* **Root Cause**: Relying on manual `ThreadLocal.set()` and `clear()` calls is prone to failure if an exception bypasses the `finally` block or if threads are reused in a pool.
+* **Resolution**: Migrate the `WorkspaceScopeHolder` to use JDK 25 `ScopedValue`. This ensures the binding is mathematically guaranteed to drop when the request or task block exits.
+
+
+### 💻 3. Developer Experience (DX)
+
+### "Required secret not in vault: GITHUB_TOKEN" (Even with .env present)
+
+* **Symptom**: You have a `.env` file, but the Podman sandbox crashes claiming the secret is missing.
+* **Root Cause**: `DevSecretSeeder.java` used `System.getenv()`, which reads the OS process environment and ignores the Quarkus-managed `.env` file.
+* **Resolution**: Use the MicroProfile `ConfigProvider` to resolve secrets. This ensures the seeder looks in `.env`, `application.yaml`, and system variables in the correct priority order.
+
+### Github Tool Blocked by "Tool Intent Guard"
+
+* **Symptom**: You ask about a repo, but ArcClaw says: *"Tool 'github' was blocked... the user's request does not reference a GitHub resource."*
+* **Root Cause**: The `AgentLoop` uses a strict Regex word-boundary check (`\b`) to prevent prompt injection or LLM hallucinations from accidentally triggering expensive tool calls.
+* **Resolution**: Ensure your request includes one of the trigger words: `repo`, `repository`, `github`, `gh`, `fetch`, `gist`, `clone`, or `pr`. Substrings like "prepare" (containing "pr") will be correctly ignored by the guard.
+
+## 📁 4. Clean-Up & Maintenance
+
+### Lingering `.env` files in Workspaces
+
+* **Symptom**: Plaintext secret files are left behind in `data/workspaces/<sid>/`.
+* **Root Cause**: The legacy `writeEphemeralEnvFile` strategy writes to the disk-backed workspace and may fail to delete if the JVM crashes.
+* **Resolution**: Verify that `arcclaw.sandbox.secret-transport` is set to `TMPFS`. This ensures secrets are written to RAM (`tmpfs`), zero-filled before deletion, and never touch the physical disk platter.

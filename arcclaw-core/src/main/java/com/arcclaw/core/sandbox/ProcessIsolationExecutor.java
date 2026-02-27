@@ -286,9 +286,19 @@ public class ProcessIsolationExecutor {
 
             if (!finished) {
                 process.destroyForcibly();
-                throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
+                throw new ToolExecutionException("Tool timed out after " + timeoutSeconds + "s");
             }
-            if (process.exitValue() != 0) {
+
+            int exitCode = process.exitValue();
+            
+            // Catch Podman Infrastructure Failures
+            if (exitCode == 125) {
+                // Podman engine failed (VM down, socket dead, bad arguments)
+                // Throwing IOException forces the circuit breaker to catch it and fall back
+                throw new IOException("Podman engine failure (exit 125): " + output);
+            }
+
+            if (exitCode != 0) {
                 throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
             }
             span.setStatus(StatusCode.OK);

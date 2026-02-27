@@ -1815,6 +1815,9 @@ Eliminate plaintext secret residence in the JVM heap by leveraging memory-reside
 > [!TIP]
 > **Atomic Permissions & Fallback**: Secrets are created with strict POSIX permissions (`rw-------`) atomically. In development or non-root environments where `/run/arcclaw` is inaccessible, the system gracefully degrades to `java.io.tmpdir`, ensuring developer velocity without compromising the production security posture.
 
+> [!IMPORTANT]
+> **Infrastructure-Aware Fallback**: Podman errors involving environment failures (e.g., VM down, socket dead) return `exit 125`. The `ProcessIsolationExecutor` now explicitly intercepts this code and throws an `IOException`. This forces the Podman Circuit Breaker to trip, allowing the system to gracefully fall back to the host environment instead of treating it as a standard tool failure.
+
 ## Proposed Changes
 
 ### Core Module — Sandbox
