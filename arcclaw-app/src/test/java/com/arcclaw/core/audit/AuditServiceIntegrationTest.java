@@ -1,5 +1,6 @@
 package com.arcclaw.core.audit;
 
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -48,7 +49,7 @@ public class AuditServiceIntegrationTest {
     public void setup() {
         sessionId = "test-integration-" + System.currentTimeMillis();
         WorkspaceScopeHolder.set(sessionId);
-        workspaceContext.setAutonomyLevel(com.arcclaw.core.security.AutonomyLevel.FULL);
+        workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
         secretVault.init(sessionId);
     }
 

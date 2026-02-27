@@ -1,6 +1,7 @@
 package com.arcclaw.core.state;
 
 import com.arcclaw.core.audit.AuditEvent;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import dev.langchain4j.data.message.ChatMessage;
@@ -49,7 +50,7 @@ class ContextCompactionServiceIntegrationTest {
     ChatLanguageModel compactionModel;
 
     @Inject
-    com.arcclaw.core.audit.AuditService auditService;
+    AuditService auditService;
 
     @BeforeEach
     void setup() {

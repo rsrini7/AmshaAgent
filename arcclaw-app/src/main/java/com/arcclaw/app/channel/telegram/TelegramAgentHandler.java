@@ -14,6 +14,10 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
+import com.arcclaw.app.security.TelegramAllowlistGuard;
+import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
+import com.arcclaw.core.state.ContextCompactionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
@@ -43,7 +47,7 @@ public class TelegramAgentHandler {
     WorkspaceManager workspaceManager;
 
     @Inject
-    com.arcclaw.core.state.ContextCompactionService compactionService;
+    ContextCompactionService compactionService;
 
     @Inject
     StatefulAgentStore statefulAgentStore;
@@ -79,13 +83,13 @@ public class TelegramAgentHandler {
     Instance<DevSecretSeeder> devSeeder;
 
     @Inject
-    com.arcclaw.core.reflex.ReflexRegistry reflexRegistry;
+    ReflexRegistry reflexRegistry;
 
     @Inject
     RoleRegistry roleRegistry;
 
     @Inject
-    com.arcclaw.app.security.TelegramAllowlistGuard allowlistGuard;
+    TelegramAllowlistGuard allowlistGuard;
 
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
@@ -136,7 +140,7 @@ public class TelegramAgentHandler {
                 org.jboss.logging.MDC.put("userId", userId);
 
                 // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
-                com.arcclaw.core.reflex.ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
+                ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
                 if (reflexResult.commandResponse().isPresent()) {
                     reply(chatId, reflexResult.commandResponse().get());
                     return; // Terminate execution immediately, bypassed LLM
@@ -146,7 +150,7 @@ public class TelegramAgentHandler {
 
                 // Auto-cancel any dangling tool approvals if the user
                 // sends a free-text message instead of clicking /approve or /deny
-                for (com.arcclaw.core.agent.AgentRoleEnum r : com.arcclaw.core.agent.AgentRoleEnum.values()) {
+                for (AgentRoleEnum r : AgentRoleEnum.values()) {
                     statefulAgentStore.load(baseId, r.toScopedName()).ifPresent(cp -> {
                         if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                             log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r.toScopedName());
@@ -163,11 +167,11 @@ public class TelegramAgentHandler {
 
                 String classifiedRole = intentClassifier.classify(safeInput);
 
-                com.arcclaw.core.agent.AgentRoleEnum resolvedRole;
+                AgentRoleEnum resolvedRole;
                 try {
-                    resolvedRole = com.arcclaw.core.agent.AgentRoleEnum.fromString(classifiedRole);
+                    resolvedRole = AgentRoleEnum.fromString(classifiedRole);
                 } catch (IllegalArgumentException e) {
-                    resolvedRole = com.arcclaw.core.agent.AgentRoleEnum.COORDINATOR;
+                    resolvedRole = AgentRoleEnum.COORDINATOR;
                     log.warnf("[TelegramHandler] Unknown role classification '%s', defaulting to COORDINATOR", classifiedRole);
                 }
 

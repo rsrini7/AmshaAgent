@@ -1,8 +1,10 @@
 package com.arcclaw.core.agent;
 
+import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -14,10 +16,12 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.enterprise.inject.Instance;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,14 +104,14 @@ class AgentLoopTest {
         WorkspaceScopeHolder.run("test-session", () -> {
             ReasoningEngine mockEngine = mock(ReasoningEngine.class);
             AgentLoop loop = new AgentLoop();
-            jakarta.enterprise.inject.Instance<AgentObserver> mockObservers = mock(jakarta.enterprise.inject.Instance.class);
-            when(mockObservers.iterator()).thenReturn(java.util.Collections.emptyIterator());
+            Instance<AgentObserver> mockObservers = mock(Instance.class);
+            when(mockObservers.iterator()).thenReturn(Collections.emptyIterator());
             doNothing().when(mockObservers).forEach(any());
             loop.observers = mockObservers;
             loop.chatMemoryStore = mock(ChatMemoryStore.class);
-            loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
+            loop.agentStore = mock(StatefulAgentStore.class);
             loop.toolRegistry = mock(ToolRegistry.class);
-            loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
+            loop.governanceLayer = mock(GovernanceLayer.class);
 
             // Throw InvalidRequestException on first call
             InvalidRequestException ex = new InvalidRequestException("missing properties: action");
@@ -130,14 +134,14 @@ class AgentLoopTest {
         WorkspaceScopeHolder.run("test-session", () -> {
             ReasoningEngine mockEngine = mock(ReasoningEngine.class);
             AgentLoop loop = new AgentLoop();
-            jakarta.enterprise.inject.Instance<AgentObserver> mockObservers = mock(jakarta.enterprise.inject.Instance.class);
-            when(mockObservers.iterator()).thenReturn(java.util.Collections.emptyIterator());
+            Instance<AgentObserver> mockObservers = mock(Instance.class);
+            when(mockObservers.iterator()).thenReturn(Collections.emptyIterator());
             doNothing().when(mockObservers).forEach(any());
             loop.observers = mockObservers;
             loop.chatMemoryStore = mock(ChatMemoryStore.class);
-            loop.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
+            loop.agentStore = mock(StatefulAgentStore.class);
             loop.toolRegistry = mock(ToolRegistry.class);
-            loop.governanceLayer = mock(com.arcclaw.core.governance.GovernanceLayer.class);
+            loop.governanceLayer = mock(GovernanceLayer.class);
 
             InvalidRequestException ex = new InvalidRequestException("missing properties");
             // Always throw

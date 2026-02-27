@@ -8,6 +8,7 @@ import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -95,7 +96,7 @@ public class TelegramAgentHandlerTest {
 
         // Default mock for reflex registry (simulate no commands hit, passthrough sanitized input)
         when(reflexRegistryMock.processIfReflex(anyString(), anyString(), anyString()))
-                .thenAnswer(inv -> new com.arcclaw.core.reflex.ReflexResult(Optional.empty(), inv.getArgument(2)));
+                .thenAnswer(inv -> new ReflexResult(Optional.empty(), inv.getArgument(2)));
 
         // Default mock for allowlist guard
         when(allowlistGuardMock.isAllowed(any())).thenReturn(true);
@@ -203,7 +204,7 @@ public class TelegramAgentHandlerTest {
 
         // Mock ReflexRegistry to return a status response
         when(reflexRegistryMock.processIfReflex(anyString(), anyString(), eq("/status")))
-                .thenReturn(new com.arcclaw.core.reflex.ReflexResult(Optional.of("📊 Status: COMPLETED | Cost: $0.05 | Session: abcd1234"), "/status"));
+                .thenReturn(new ReflexResult(Optional.of("📊 Status: COMPLETED | Cost: $0.05 | Session: abcd1234"), "/status"));
 
         // Act
         handler.receiveMessage(exchange);
