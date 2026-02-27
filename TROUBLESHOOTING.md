@@ -2636,3 +2636,34 @@ Explicitly excluded ordinary follow-up questions and history requests.
 **Symptom:** `ScopedValue.where(ID, val).call(callable)` fails to compile if the `callable` throws a checked exception.
 **Root Cause:** The standard `Callable` interface doesn't align perfectly with the `ScopedValue.CallableOp` expected by the JDK API for error handling.
 **Resolution:** Wrapped the user-provided `Callable` in an anonymous `ScopedValue.CallableOp` that correctly propagates exceptions.
+
+## 38. Phase 43: Secure Secret Passing: Eliminating Heap-Resident Plaintext in Sandbox Execution
+
+### Podman Sandbox Fails with "chroot: failed to run command ‘gh’: No such file or directory"
+
+### 🔴 Symptoms
+When attempting to run an agent loop that invokes a tool (like `github`), the tool execution fails immediately. You may see the following sequence in your logs:
+1. `ERROR ... Podman execution failed (session=..., state=CLOSED): /run/arcclaw`
+2. `ERROR ... Tool 'github' execution failed: Tool failed (exit 127): chroot: failed to run command ‘gh’: No such file or directory`
+
+### 🔍 Root Cause
+This is a cascading failure caused by OS-level permissions in local development environments, specifically related to the **Secure Secret Passing Architecture**:
+
+1. **The Permission Denial:** ArcClaw's `TmpfsSecretTransport` attempts to create a secure, RAM-backed directory at `/run/arcclaw/secrets` to pass environment variables to Podman without writing to disk. On Linux, `/run` is strictly owned by `root`. If you are running ArcClaw locally as a standard user, this throws a swallowed `java.nio.file.AccessDeniedException`.
+2. **The Circuit Breaker:** The `ProcessIsolationExecutor` catches this exception, assumes the Podman subsystem is broken, and triggers the "Graceful Degradation" circuit breaker.
+3. **The Sandbox Fallback:** The system falls back from `PODMAN` to the `NONE` strategy (direct Linux `chroot` execution on the host). 
+4. **The Missing Binary:** Because the host filesystem is not the specialized Alpine tool-runner container, the `gh` (GitHub CLI) binary is missing, resulting in the final `exit 127` error.
+
+### ✅ Resolution
+
+**For Local Development:**
+The `TmpfsSecretTransport` has been updated to support graceful degradation. If it cannot access `/run/arcclaw/secrets`, it will automatically catch the `IOException` and fall back to the user's standard temporary directory (`java.io.tmpdir`, typically `/tmp`). Ensure you are running the latest version of `TmpfsSecretTransport.java`. No special local setup is required.
+
+**For Production Environments:**
+To achieve true zero-copy, memory-resident security in production, you must ensure the `tmpfs` volume is mounted *before* ArcClaw starts. 
+
+Install and enable the provided systemd mount unit:
+```bash
+sudo cp arcclaw-secrets.mount /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now arcclaw-secrets.mount

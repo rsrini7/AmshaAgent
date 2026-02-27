@@ -276,6 +276,7 @@ public class ProcessIsolationExecutor {
             if (!Files.exists(workspaceDir)) {
                 throw new IOException("workspace dir not exist");
             }
+            pb.directory(workspaceDir.toFile());
             pb.redirectErrorStream(true);
 
             var process = pb.start();

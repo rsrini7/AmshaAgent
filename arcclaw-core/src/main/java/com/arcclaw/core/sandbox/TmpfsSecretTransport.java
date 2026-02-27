@@ -41,20 +41,27 @@ public class TmpfsSecretTransport implements SecretTransport {
         this.managedSecrets = secrets;
 
         // 1. Ensure target path exists and is somewhat sane
-        if (!Files.exists(tmpfsMountPath)) {
-            // In a properly configured production Linux host, this is a distinct systemd tmpfs mount.
-            // On Windows/macOS dev environments, we gracefully degrade to standard disk creating it.
-            Files.createDirectories(tmpfsMountPath);
+        Path actualMountPath = tmpfsMountPath;
+        try {
+            if (!Files.exists(actualMountPath)) {
+                // In a production Linux host, this is a distinct systemd tmpfs mount.
+                Files.createDirectories(actualMountPath);
+            }
+        } catch (IOException e) {
+            // Graceful degradation: If /run/arcclaw is denied (running locally as non-root),
+            // fallback to the standard OS temp directory to prevent crashing the Podman pipeline.
+            log.warnf("Cannot access tmpfs path %s (%s). Falling back to java.io.tmpdir.", tmpfsMountPath, e.getMessage());
+            actualMountPath = Path.of(System.getProperty("java.io.tmpdir"));
         }
 
         // 2. Atomically create the restricted file
         try {
             var strictAttrs = PosixFilePermissions.asFileAttribute(
                     PosixFilePermissions.fromString("rw-------"));
-            envFile = Files.createTempFile(tmpfsMountPath, "secrets-" + sessionId + "-", ".env", strictAttrs);
-        } catch (UnsupportedOperationException e) {
-            // Graceful degradation for Dev/Windows
-            envFile = Files.createTempFile(tmpfsMountPath, "secrets-" + sessionId + "-", ".env");
+            envFile = Files.createTempFile(actualMountPath, "secrets-" + sessionId + "-", ".env", strictAttrs);
+        } catch (UnsupportedOperationException | IllegalArgumentException e) {
+            // Graceful degradation for Dev/Windows/macOS
+            envFile = Files.createTempFile(actualMountPath, "secrets-" + sessionId + "-", ".env");
             envFile.toFile().setReadable(true, true);
             envFile.toFile().setWritable(true, true);
         }

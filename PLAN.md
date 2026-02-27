@@ -1798,3 +1798,35 @@ Migrate the core session scoping mechanism from `ThreadLocal` to the modern JDK 
 ---
 
 
+---
+
+# Phase 43 — Secure Secret Passing: Heap Privacy Hardening ✅
+
+Eliminate plaintext secret residence in the JVM heap by leveraging memory-resident `tmpfs` mounts and zero-copy `byte[]` transport for sandbox execution.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Tmpfs Secret Transport**: Migrated from ephemeral disk-based `.env` files to a specialized `TmpfsSecretTransport`. This mechanism creates files directly in a RAM-backed directory (`/run/arcclaw/secrets`), ensuring secrets never touch physical storage.
+
+> [!CAUTION]
+> **Heap Privacy (Zero-Copy)**: Secrets are handled exclusively as `byte[]` arrays. The transport mechanism populates a `ByteBuffer` and writes the backing array directly to the `tmpfs` file. Immediately after the process starts, the `byte[]` is zeroed out using `Arrays.fill(bytes, (byte)0)`, minimizing the window of vulnerability.
+
+> [!TIP]
+> **Atomic Permissions & Fallback**: Secrets are created with strict POSIX permissions (`rw-------`) atomically. In development or non-root environments where `/run/arcclaw` is inaccessible, the system gracefully degrades to `java.io.tmpdir`, ensuring developer velocity without compromising the production security posture.
+
+## Proposed Changes
+
+### Core Module — Sandbox
+#### [NEW] [TmpfsSecretTransport.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/TmpfsSecretTransport.java)
+- Manages the lifecycle of memory-resident secret files.
+- Implements `AutoCloseable` for guaranteed memory zeroing and file deletion.
+
+#### [MODIFY] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
+- Integrated `TmpfsSecretTransport` into the `executeInContainer` workflow.
+- Replaced `String`-based env-file generation with `byte[]` secure transport.
+
+## Verification
+- ✅ **`TmpfsSecretTransportTest`**: Verified atomic creation, correct permissions, and automatic memory zeroing.
+- ✅ **Integration**: Verified that Podman correctly reads secrets from `/run/arcclaw/secrets` (on Linux) or `/tmp` (as fallback).
+- ✅ **Security Audit**: Verified 0 `String` objects containing plaintext secrets are created during the injection pipeline.
