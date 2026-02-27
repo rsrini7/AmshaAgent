@@ -1,6 +1,5 @@
 package com.arcclaw.app.channel.telegram;
 
-import com.arcclaw.app.util.AgentErrorMessageUtil;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
@@ -10,6 +9,8 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
+
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -29,6 +30,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.MDC;
 
+import java.lang.ScopedValue;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
@@ -134,7 +136,8 @@ public class TelegramAgentHandler {
         // Derive base UUID deterministically
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
-        WorkspaceScopeHolder.run(baseId, () -> {
+        ScopedValue.where(WorkspaceScopeHolder.USER_ID, userId)
+                   .run(() -> WorkspaceScopeHolder.run(baseId, () -> {
             try {
                 // Push userId to MDC for Audit logs
                 MDC.put("userId", userId);
@@ -206,7 +209,7 @@ public class TelegramAgentHandler {
                 log.infof("[TelegramHandler] Session %s | AutonomyLevel: %s | Model target: Groq", baseId, autonomyLevel);
 
                 try {
-                    compactionService.compactIfNeeded(baseId);
+                    compactionService.compactIfNeeded(baseId, userId);
                 } catch (Exception e) {
                     log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
                 }
@@ -244,7 +247,7 @@ public class TelegramAgentHandler {
             } finally {
                 MDC.remove("userId");
             }
-        });
+        }));
     }
 
 

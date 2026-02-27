@@ -1,4 +1,4 @@
-package com.arcclaw.app.util;
+package com.arcclaw.core.util;
 
 public final class AgentErrorMessageUtil {
 

@@ -1877,3 +1877,84 @@ Address critical production instability related to SQLite lock contention and re
 - ✅ `GithubToolTest`: Verified correct command generation for repo/gist actions.
 - ✅ `RoleRegistry Integration`: Refactored `LangChainReasoningEngine` and `TelegramAgentHandler` for dynamic role-based orchestration.
 - ✅ `mvn clean test`: All core and app tests pass with 0 regressions.
+
+---
+
+# Phase 45 — Agent Memory RAG via SQLite FTS5 ✅
+
+Implement long-term memory retrieval for agents using SQLite's native FTS5 extension, ensuring tenant isolation and bypassing Hibernate metadata extraction crashes.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Isolated FTS Schema**: Hibernate 6 crashes during metadata extraction when it encounters FTS5 shadow tables in the main schema. We resolve this by moving all FTS5 virtual tables to a separate SQLite database (`arcclaw-fts.db`) attached as the `fts` schema at runtime. This keeps the shadow tables hidden from Hibernate's default scanning.
+
+> [!NOTE]
+> **Manual Synchronization**: Since SQLite triggers cannot write to attached databases, we implement manual synchronization in the repository layer. The `upsertSummary` and `deleteBySessionId` methods explicitly flush the JPA entity and then execute the FTS operations in the same transaction.
+
+> [!TIP]
+> **Implicit Tenant Isolation**: The `userId` is inferred from `WorkspaceScopeHolder.USER_ID` (the active `ScopedValue`) during `upsertSummary` and `searchMemory`, ensuring that FTS records are always correctly associated with the owning user without requiring explicit parameters from the LLM.
+
+## Proposed Changes
+
+### Core Module — Persistence & Scope
+
+#### [MODIFY] [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java)
+- Updated `upsertSummary` to infer `userId` from `ScopedValue` and perform manual FTS sync (Delete-then-Insert).
+- Updated `deleteBySessionId` to remove records from both main and FTS schemas.
+- Updated `searchMemory` to use the FTS5 `MATCH` operator on the `fts.compaction_summary_fts` virtual table.
+
+#### [MODIFY] [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java)
+- Added native SQL to `ATTACH` the `arcclaw-fts.db` database as the `fts` schema.
+- Added `CREATE VIRTUAL TABLE IF NOT EXISTS` for the FTS5 memory index.
+- Added a one-time "Seed" query to synchronize any existing summaries into the FTS index.
+
+#### [MODIFY] [CompactionSummaryRepositoryTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/state/CompactionSummaryRepositoryTest.java)
+- Wrapped upsert calls in `ScopedValue.where(WorkspaceScopeHolder.USER_ID, userId).run(...)` to verify tenant isolation.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `CompactionSummaryRepositoryTest`: Verified memory search with FTS5 and strict tenant isolation.
+- ✅ `LangChainReasoningEngineTest`: Verified that agents correctly retrieve memory via the repository.
+- ✅ Verified 21/21 tests passing across the `arcclaw-core` module.
+
+---
+
+# Phase 45.1 — FTS5 Hardening & Robustness ✅
+
+Apply targeted patches to the SQLite FTS5 implementation to ensure stability across connection pools and threading boundaries.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **JDBC Connection Interception**: We implement `FtsConnectionInterceptor` (AgroalPoolInterceptor) to robustly `ATTACH` the `arcclaw-fts.db` schema on every connection acquisition. This ensures that even in multi-threaded pooling environments, the `fts` schema is always available. We use `PRAGMA database_list` to avoid duplicate attachment errors.
+
+> [!NOTE]
+> **Explicit Tenant Context**: Relying on `ScopedValue` inside the persistence layer is fragile due to executor boundary crossings (e.g., Virtual Threads). We refactored `upsertSummary` and `compactIfNeeded` to accept `userId` as an explicit parameter, ensuring tenant isolation is maintained regardless of the calling thread's context.
+
+> [!TIP]
+> **Idempotent Seed Guard**: The startup seeding logic in `AuditSchemaEnforcer` was converted from an active `INSERT` to a passive `COUNT(*)` guard. This prevents redundant operations and log noise on restarts, as the sync is already handled by the repository's manual synchronization logic.
+
+## Proposed Changes
+
+### Core & App Modules
+
+#### [MODIFY] [FtsConnectionInterceptor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/FtsConnectionInterceptor.java)
+- Implemented robust JDBC schema attachment with `PRAGMA` check.
+
+#### [MODIFY] [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java)
+- Updated `upsertSummary(sessionId, userId, summary, count)` for explicit tenant passing.
+
+#### [MODIFY] [ContextCompactionService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ContextCompactionService.java)
+- Updated `compactIfNeeded` to accept and propagate `userId`.
+
+#### [MODIFY] [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java)
+- Replaced active seeding with passive `COUNT(*)` state verification.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `CompactionSummaryRepositoryTest`: Verified sync with explicit `userId`.
+- ✅ `ContextCompactionServiceIntegrationTest`: Verified end-to-end flow from app module.
+- ✅ `mvn clean verify`: All tests pass with new signatures.

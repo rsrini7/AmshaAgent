@@ -557,3 +557,10 @@
 - [x] Fix `gh gist list` command syntax in `GithubTool` <!-- id: 119 -->
 - [x] Add guardrail for `gist view` in `GithubTool` <!-- id: 120 -->
 - [x] Verify: `GithubToolTest` passes <!-- id: 121 -->
+
+# Phase 45: Agent Memory RAG via SQLite FTS5 ✅
+- [x] Initial Implementation: Isolated FTS schema, manual sync repository, and tenant-isolated search. <!-- id: 122 -->
+- [x] Implement `FtsConnectionInterceptor` for thread-safe database schema attachment. <!-- id: 123 -->
+- [x] Refactor `upsertSummary` and `compactIfNeeded` for explicit `userId` parameter passing. <!-- id: 124 -->
+- [x] Convert `AuditSchemaEnforcer` seed logic to passive, idempotent `COUNT(*)` guard. <!-- id: 125 -->
+- [x] Verify: All core and app integration tests pass with 0 regressions. <!-- id: 126 -->

@@ -69,7 +69,7 @@ public class ContextCompactionService {
         --- END ---
         """;
 
-    public boolean compactIfNeeded(String sessionId) {
+    public boolean compactIfNeeded(String sessionId, String userId) {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
@@ -109,7 +109,7 @@ public class ContextCompactionService {
             newSummary = newSummary.substring(0, 1985) + "...[truncated]";
         }
 
-        summaryRepository.upsertSummary(sessionId, newSummary, toCompact.size());
+        summaryRepository.upsertSummary(sessionId, userId, newSummary, toCompact.size());
 
         List<ChatMessage> filteredKeep = toKeep.stream()
                 .filter(m -> !(m instanceof SystemMessage))

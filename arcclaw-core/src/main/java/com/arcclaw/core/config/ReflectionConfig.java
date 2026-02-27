@@ -10,6 +10,7 @@ import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.tools.MemorySearchTool;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -27,7 +28,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         AuditEvent.class,
         AuditOutcome.class,
         SecurityEventType.class,
-        GithubTool.class
+        GithubTool.class,
+        MemorySearchTool.class
 })
 public class ReflectionConfig {
 }

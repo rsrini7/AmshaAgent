@@ -11,6 +11,8 @@ import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -77,7 +79,8 @@ public class ApproveReflex implements AgentReflex {
                 if (result.success()) {
                     return result.finalAnswer();
                 } else {
-                    return "❌ **Task Failed after approval**\n\nReason: " + result.terminationReason();
+                    String sanitizedReason = AgentErrorMessageUtil.sanitizeErrorMessage(result.terminationReason());
+                    return "❌ **Task Failed after approval**\n\nReason: " + sanitizedReason;
                 }
             });
         } catch (Exception e) {

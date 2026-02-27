@@ -4,9 +4,12 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import java.lang.ScopedValue;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,7 +35,7 @@ class CompactionSummaryRepositoryTest {
     @Transactional
     void testUpsertSummary_insertsNewEntity() {
         String sessionId = "insert-" + System.currentTimeMillis();
-        repository.upsertSummary(sessionId, "summary-1", 3);
+        repository.upsertSummary(sessionId, "test-user", "summary-1", 3);
         em.flush();
         em.clear();
 
@@ -49,13 +52,13 @@ class CompactionSummaryRepositoryTest {
     @Transactional
     void testUpsertSummary_updatesExistingEntity() {
         String sessionId = "update-" + System.currentTimeMillis();
-        repository.upsertSummary(sessionId, "summary-1", 1);
+        repository.upsertSummary(sessionId, "test-user", "summary-1", 1);
         em.flush();
         em.clear();
 
         Instant firstCompactedAt = repository.findLatestBySessionId(sessionId).orElseThrow().compactedAt;
 
-        repository.upsertSummary(sessionId, "summary-2", 4);
+        repository.upsertSummary(sessionId, "test-user", "summary-2", 4);
         em.flush();
         em.clear();
 
@@ -70,7 +73,7 @@ class CompactionSummaryRepositoryTest {
     @Transactional
     void testDeleteBySessionId_removesEntity() {
         String sessionId = "delete-" + System.currentTimeMillis();
-        repository.upsertSummary(sessionId, "summary-1", 2);
+        repository.upsertSummary(sessionId, "test-user", "summary-1", 2);
         em.flush();
         em.clear();
 
@@ -79,5 +82,52 @@ class CompactionSummaryRepositoryTest {
         em.clear();
 
         assertTrue(repository.findLatestBySessionId(sessionId).isEmpty());
+    }
+
+    // ── Phase 45: FTS5 Memory Search Tests ──────────────────────────────
+
+    @Test
+    @Transactional
+    void testSearchMemoryWithFts5Match() {
+        String sessionId = "fts5-search-" + System.currentTimeMillis();
+        String userId = "user-fts5-" + System.currentTimeMillis();
+
+        repository.upsertSummary(sessionId, userId, "Discussed blockchain consensus algorithms", 5);
+        
+        em.flush();
+        em.clear();
+
+        List<CompactionSummaryEntity> results = repository.searchMemory(userId, "blockchain", 5);
+
+        assertFalse(results.isEmpty(), "FTS5 search should return matching results");
+        assertEquals(sessionId, results.get(0).sessionId);
+        assertTrue(results.get(0).summary.contains("blockchain"));
+    }
+
+    @Test
+    @Transactional
+    void testSearchMemoryTenantIsolation() {
+        String ts = String.valueOf(System.currentTimeMillis());
+        String userA = "userA-" + ts;
+        String userB = "userB-" + ts;
+
+        // Persist session for User A
+        repository.upsertSummary("session-a-" + ts, userA, "Discussed quantum computing breakthroughs", 3);
+
+        // Persist session for User B
+        repository.upsertSummary("session-b-" + ts, userB, "Discussed quantum physics experiments", 4);
+
+        em.flush();
+        em.clear();
+
+        // User A should only see their own results
+        List<CompactionSummaryEntity> resultsA = repository.searchMemory(userA, "quantum", 5);
+        assertEquals(1, resultsA.size(), "User A should only see their own sessions");
+        assertEquals(userA, resultsA.get(0).userId);
+
+        // User B should only see their own results
+        List<CompactionSummaryEntity> resultsB = repository.searchMemory(userB, "quantum", 5);
+        assertEquals(1, resultsB.size(), "User B should only see their own sessions");
+        assertEquals(userB, resultsB.get(0).userId);
     }
 }

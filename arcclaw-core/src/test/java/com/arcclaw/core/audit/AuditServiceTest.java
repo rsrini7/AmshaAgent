@@ -79,7 +79,7 @@ class AuditServiceTest {
 
     @Test
     void testRecordSwallowsExceptions() {
-        doThrow(new RuntimeException("queue full")).when(persistenceEngine).submitTelemetry(any());
+        doThrow(new RuntimeException("mock telemetry failure")).when(persistenceEngine).submitTelemetry(any());
 
         // Must not throw — caller must not be affected by TELEMETRY failures
         assertDoesNotThrow(() ->

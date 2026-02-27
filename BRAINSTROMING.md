@@ -1,3 +1,12 @@
+We have a highly concurrent, WORM-compliant, multi-agent kernel with persistent ReAct memory and a zero-infrastructure FTS5 database.
+
+Docker/Podman Tool Sandboxing: Give the CODER role a tool to actually execute the Java/Python code it writes in an isolated, ephemeral container.
+Observability & Telemetry: Hook up OpenTelemetry or Micrometer to export your WORM audit events and token usage to Grafana/Prometheus.
+New Agent Roles: Introduce a REVIEWER or QA_ENGINEER role to critique the CODER's output before it's finalized.
+Document RAG: Expand the FTS5 engine to parse and index PDF/Markdown files uploaded via Telegram, not just session summaries.
+
+---
+
 ## ArcClaw vs OpenClaw: Current State
 
 ![OpenClaw-Arch.png](OpenClaw-Arch.png)
