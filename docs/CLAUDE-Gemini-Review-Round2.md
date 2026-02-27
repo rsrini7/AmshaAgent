@@ -1,18 +1,18 @@
 Claude:
 
-Please go through my entire project end to end as a Senior Java Architect, , Security Reviewer & Senior Java Developer
+Please go through my entire project end to end as a Senior Java Architect, , Security Reviewer & Senior Java Developer. Please make sure to think like Gemini Research, Groq Search, ChatGPT Quickness do review end to end. My plan is the share your reviews with other AIs and its review with you to debate and solve. Make sure to deep dive and not just high level and only positive side. Not looking for any Constructive Feedback and Roadmap. Looking for Solid review be honest and you can give even strong feedback to make this project awesome.
 
 # ArcClaw — Full End-to-End Architectural & Security Review
 
 ## Executive Summary
 
-**ArcClaw** is an impressive, production-grade multi-agent AI framework built on **Java 21 + Quarkus 3.23 + LangChain4J 0.26.1**, following a clean tri-module Maven layout. The overall design reflects serious engineering investment — a custom CDI scope, AES-GCM-SIV encrypted vault, ReAct reasoning loop, PII redaction pipeline, governance layers, and multi-channel support (REST + Telegram). The code quality is well above average for an agentic Java project. This review identifies **strengths, architectural gaps, security findings, and improvement recommendations** across all layers. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+**ArcClaw** is an impressive, production-grade multi-agent AI framework built on **Java 21 + Quarkus 3.23 + LangChain4J 0.26.1**, following a clean tri-module Maven layout. The overall design reflects serious engineering investment — a custom CDI scope, AES-GCM-SIV encrypted vault, ReAct reasoning loop, PII redaction pipeline, governance layers, and multi-channel support (REST + Telegram). The code quality is well above average for an agentic Java project. This review identifies **strengths, architectural gaps, security findings, and improvement recommendations** across all layers.
 
 ***
 
 ## Module Architecture
 
-The project follows a well-separated **3-module Maven structure**: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The project follows a well-separated **3-module Maven structure**:
 
 | Module | Role | Notes |
 |---|---|---|
@@ -20,27 +20,27 @@ The project follows a well-separated **3-module Maven structure**: [ppl-ai-file-
 | `arcclaw-deployment` | Quarkus build-time processor — custom `@WorkspaceScoped` CDI registration | Correct Quarkus Extension pattern |
 | `arcclaw-app` | Runtime assembly — REST, CLI, Telegram, security filters, config | Depends on `arcclaw-core` only |
 
-This separation is architecturally sound. The `arcclaw-deployment` module correctly follows the Quarkus extension pattern (split runtime/deployment jars), registering `WorkspaceScopeContext` at build-time via `WorkspaceScopeProcessor`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+This separation is architecturally sound. The `arcclaw-deployment` module correctly follows the Quarkus extension pattern (split runtime/deployment jars), registering `WorkspaceScopeContext` at build-time via `WorkspaceScopeProcessor`.
 
 ***
 
 ## Agent Design — Strengths
 
-The **ReAct (Reason-Act-Observe) loop** in `AgentLoop` is well-crafted with three key resilience guardrails: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The **ReAct (Reason-Act-Observe) loop** in `AgentLoop` is well-crafted with three key resilience guardrails:
 
 - **Hallucination Interception** — unknown tool names inject a self-correcting error observation rather than crashing
 - **Max Iteration Guard** — runaway loops are capped at `maxIterations` (default 5)
 - **Schema Jailbreak Prevention** — `LangChainReasoningEngine` filters `ToolSpecification` per role, so `BrahmaAgent` and `ShivaAgent` receive zero tool schemas, preventing schema-level exploitation
 
-The **Hindu Trimurti persona model** (Brahma=coder, Vishnu=coordinator, Shiva=debugger, Saraswati=researcher) is creative and functional. Each persona has hard-coded system prompts with STRICT RULES and a `TOOL BINDING CONTRACT` block injected at runtime. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The **Hindu Trimurti persona model** (Brahma=coder, Vishnu=coordinator, Shiva=debugger, Saraswati=researcher) is creative and functional. Each persona has hard-coded system prompts with STRICT RULES and a `TOOL BINDING CONTRACT` block injected at runtime.
 
 ### ⚠️ Agent Design Issues
 
-1. **`AgentLoop.run()` overloads with CDI scope gaps** — The convenience overload `run(goal, engine)` does not activate `@ActivateRequestContext`, meaning `@WorkspaceScoped` beans injected during that call path will be null on non-CDI threads. The full signature `run(sessionId, role, goal, engine, maxIterations)` handles this correctly via the calling context. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+1. **`AgentLoop.run()` overloads with CDI scope gaps** — The convenience overload `run(goal, engine)` does not activate `@ActivateRequestContext`, meaning `@WorkspaceScoped` beans injected during that call path will be null on non-CDI threads. The full signature `run(sessionId, role, goal, engine, maxIterations)` handles this correctly via the calling context.
 
-2. **`synchronized(history)` on an `ArrayList`** — The loop uses `synchronized(history)` blocks but `history` is a local `ArrayList`, not shared across threads. This is dead synchronization — harmless but misleading. Since `AgentLoop` is `@ApplicationScoped`, if two requests coincidentally share a `history` reference (they won't, because it's method-local), this would still fail. Remove the `synchronized` blocks. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+2. **`synchronized(history)` on an `ArrayList`** — The loop uses `synchronized(history)` blocks but `history` is a local `ArrayList`, not shared across threads. This is dead synchronization — harmless but misleading. Since `AgentLoop` is `@ApplicationScoped`, if two requests coincidentally share a `history` reference (they won't, because it's method-local), this would still fail. Remove the `synchronized` blocks.
 
-3. **`WorkspaceScopeHolder` uses `ThreadLocal`** — Noted in code comments as a candidate for JDK 25 `ScopedValue`. With Quarkus Virtual Threads enabled, `ThreadLocal` can leak across virtual thread continuations if `clear()` is not called in `finally`. The code does call `clear()` in `finally` consistently, but a `ScopedValue` migration is recommended when targeting JDK 25+ seriously. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+3. **`WorkspaceScopeHolder` uses `ThreadLocal`** — Noted in code comments as a candidate for JDK 25 `ScopedValue`. With Quarkus Virtual Threads enabled, `ThreadLocal` can leak across virtual thread continuations if `clear()` is not called in `finally`. The code does call `clear()` in `finally` consistently, but a `ScopedValue` migration is recommended when targeting JDK 25+ seriously.
 
 ***
 
@@ -48,18 +48,18 @@ The **Hindu Trimurti persona model** (Brahma=coder, Vishnu=coordinator, Shiva=de
 
 ### ✅ Excellent Security Implementations
 
-- **AES-GCM-SIV** (RFC 8452) via BouncyCastle with proper AAD binding (keyName as AAD) — this prevents key-swapping attacks. The `SecretVaultImplTest` validates this with a tamper-detection and key-swap test. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- **Argon2id** key derivation (64MB memory, 3 iterations, `pepper + sessionId` as input) — industry-standard password hashing for key derivation [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- **`VaultKey implements AutoCloseable`** with zero-wipe on close — prevents secret lingering in heap until GC [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- **`PiiScanReflex`** — pre-LLM redaction of EMAIL, AADHAAR, PAN, CARD, SSN, IP, PHONE, JWT patterns [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- **`PromptInjectionReflex`** — blocks GOVERNANCE_BYPASS, DIRECT_OVERRIDE, IDENTITY_HIJACKING, and EXFILTRATION patterns [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- **`TelegramAllowlistGuard`** — case-insensitive username matching with silent-block and open-access modes [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- **`ApiKeyAuthFilter`** with rate limiting (sliding 60s window via `ConcurrentLinkedDeque`) and audit logging [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+- **AES-GCM-SIV** (RFC 8452) via BouncyCastle with proper AAD binding (keyName as AAD) — this prevents key-swapping attacks. The `SecretVaultImplTest` validates this with a tamper-detection and key-swap test.
+- **Argon2id** key derivation (64MB memory, 3 iterations, `pepper + sessionId` as input) — industry-standard password hashing for key derivation
+- **`VaultKey implements AutoCloseable`** with zero-wipe on close — prevents secret lingering in heap until GC
+- **`PiiScanReflex`** — pre-LLM redaction of EMAIL, AADHAAR, PAN, CARD, SSN, IP, PHONE, JWT patterns
+- **`PromptInjectionReflex`** — blocks GOVERNANCE_BYPASS, DIRECT_OVERRIDE, IDENTITY_HIJACKING, and EXFILTRATION patterns
+- **`TelegramAllowlistGuard`** — case-insensitive username matching with silent-block and open-access modes
+- **`ApiKeyAuthFilter`** with rate limiting (sliding 60s window via `ConcurrentLinkedDeque`) and audit logging
 
 ### 🔴 Critical Security Findings
 
 **SEC-1: API Key Validation Uses `containsValue()` — O(n) Linear Scan**
-`ApiKeyRegistry.isValidKey()` calls `apiKeys.containsValue(key)`. If you have 1000 API keys, every request performs a full map scan. More critically, this is **not constant-time comparison**, making it vulnerable to timing side-channel attacks — an attacker can measure response latency to enumerate valid key prefixes. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+`ApiKeyRegistry.isValidKey()` calls `apiKeys.containsValue(key)`. If you have 1000 API keys, every request performs a full map scan. More critically, this is **not constant-time comparison**, making it vulnerable to timing side-channel attacks — an attacker can measure response latency to enumerate valid key prefixes.
 
 **Fix:**
 ```java
@@ -73,76 +73,76 @@ public boolean isValidKey(String key) {
 ```
 
 **SEC-2: Telegram Bot Token Exposed in Camel URI**
-In `TelegramChannelRoute.configure()` and `TelegramAgentHandler.reply()`, the bot token is interpolated directly into the Camel URI string: `"telegram:bots?authorizationToken=" + botToken`. This means the **token appears in Camel route logs, JMX, and any Camel DevConsole output**. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+In `TelegramChannelRoute.configure()` and `TelegramAgentHandler.reply()`, the bot token is interpolated directly into the Camel URI string: `"telegram:bots?authorizationToken=" + botToken`. This means the **token appears in Camel route logs, JMX, and any Camel DevConsole output**.
 
 **Fix:** Use Camel's `#bean:` reference or a header-based token, or ensure the Camel endpoint URI is masked in all log/diagnostic outputs.
 
 **SEC-3: `DevSecretSeeder` Uses `@IfBuildProfile("dev")` but Seeds via `SecretVault`**
-The `DevSecretSeeder` reads `GITHUB_TOKEN` from OS environment variables and stores it into the encrypted vault during dev. If a developer accidentally sets `QUARKUS_PROFILE=prod` in a `.env` file while testing locally, the `@IfBuildProfile("dev")` **build-time check still compiles out the bean**, but the intent is unclear. The profile check is at build-time (not runtime) — confirm this aligns with your deployment pipeline. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The `DevSecretSeeder` reads `GITHUB_TOKEN` from OS environment variables and stores it into the encrypted vault during dev. If a developer accidentally sets `QUARKUS_PROFILE=prod` in a `.env` file while testing locally, the `@IfBuildProfile("dev")` **build-time check still compiles out the bean**, but the intent is unclear. The profile check is at build-time (not runtime) — confirm this aligns with your deployment pipeline.
 
 **SEC-4: Rate Limiter is Per-Key In-Memory — No Distributed State**
-The `ConcurrentLinkedDeque` rate limiter lives in JVM heap. In a multi-instance deployment (Kubernetes, horizontal scaling), each pod has its own limiter state — a client can make 20 × (number of pods) requests per minute. Migrate to a Redis-backed sliding window or Quarkus's built-in SmallRye Fault Tolerance `@RateLimit`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The `ConcurrentLinkedDeque` rate limiter lives in JVM heap. In a multi-instance deployment (Kubernetes, horizontal scaling), each pod has its own limiter state — a client can make 20 × (number of pods) requests per minute. Migrate to a Redis-backed sliding window or Quarkus's built-in SmallRye Fault Tolerance `@RateLimit`.
 
 **SEC-5: `ReflexRegistry` Prompt Injection Patterns Are Static Strings**
-`PromptInjectionReflex` uses keyword matching (`"ignore all previous"`, `"DAN"`, etc.). Sophisticated adversaries can bypass with unicode homoglyphs, base64 encoding, or indirect injection via tool outputs (the LLM reads a GitHub README that contains injection text). Consider integrating a lightweight LLM-based guardrail (LangChain4J's `InputGuardrail`) as a secondary defense layer. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+`PromptInjectionReflex` uses keyword matching (`"ignore all previous"`, `"DAN"`, etc.). Sophisticated adversaries can bypass with unicode homoglyphs, base64 encoding, or indirect injection via tool outputs (the LLM reads a GitHub README that contains injection text). Consider integrating a lightweight LLM-based guardrail (LangChain4J's `InputGuardrail`) as a secondary defense layer.
 
 ***
 
 ## State Management
 
-The **dual-layer memory model** is well thought out: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The **dual-layer memory model** is well thought out:
 
 - **Short-term**: ReAct step history (`List<ReasoningStep>`) — lives per request loop
 - **Long-term**: `PersistentChatMemoryStore` → SQLite via Hibernate ORM — rolling window of 20 non-system messages preserving all `SystemMessage` entries
 
-The rolling window implementation in `PersistentChatMemoryStore` is correct and well-tested (22-message test verifying Message 5–24 are retained). [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The rolling window implementation in `PersistentChatMemoryStore` is correct and well-tested (22-message test verifying Message 5–24 are retained).
 
 ### ⚠️ State Issues
 
-1. **`StatefulAgentStoreImpl.save()` uses Hibernate `merge()` without an explicit unique constraint** on `(sessionId, agentRole)` in `AgentCheckpoint`. If concurrent requests arrive for the same session/role, two checkpoint rows can be created before either `merge()` completes (SQLite WAL doesn't prevent this — the constraint must be at the schema level). Add `@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"session_id", "agent_role"}))`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+1. **`StatefulAgentStoreImpl.save()` uses Hibernate `merge()` without an explicit unique constraint** on `(sessionId, agentRole)` in `AgentCheckpoint`. If concurrent requests arrive for the same session/role, two checkpoint rows can be created before either `merge()` completes (SQLite WAL doesn't prevent this — the constraint must be at the schema level). Add `@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"session_id", "agent_role"}))`.
 
-2. **Zombie Recovery on startup** (`WorkspaceManager.onStartup`) marks `IN_PROGRESS` checkpoints as `FAILED` — good practice. However, `AWAITING_APPROVAL` checkpoints are **not included** in zombie recovery. After a JVM crash, approval-pending tools will never timeout unless the `approvalTimeoutMinutes` scheduled sweep also catches them. Verify the scheduled GC sweep covers `AWAITING_APPROVAL` status. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+2. **Zombie Recovery on startup** (`WorkspaceManager.onStartup`) marks `IN_PROGRESS` checkpoints as `FAILED` — good practice. However, `AWAITING_APPROVAL` checkpoints are **not included** in zombie recovery. After a JVM crash, approval-pending tools will never timeout unless the `approvalTimeoutMinutes` scheduled sweep also catches them. Verify the scheduled GC sweep covers `AWAITING_APPROVAL` status.
 
 ***
 
 ## Governance Layer
 
-The `GovernanceLayer` with `BudgetExceededException` and `RequiresApprovalException` provides a solid framework. The `AutonomyPolicy.Default` correctly maps: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The `GovernanceLayer` with `BudgetExceededException` and `RequiresApprovalException` provides a solid framework. The `AutonomyPolicy.Default` correctly maps:
 
 - `READONLY` → only `READ_FS`
 - `SUPERVISED` → `READ_FS` only (everything else → approval)
 - `FULL` → all operations
 
-The **approval resume flow** in `AgentLoop` correctly restores `SUPERVISED` after the approved tool executes via a `try/finally` block — preventing autonomy level leaks. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The **approval resume flow** in `AgentLoop` correctly restores `SUPERVISED` after the approved tool executes via a `try/finally` block — preventing autonomy level leaks.
 
 ### ⚠️ Governance Issues
 
-1. **Budget check happens inside `observer.recordLlmCall()`** — mixing observability and control flow. The `MetricsAgentObserver` and `GovernanceLayer` both implement `AgentObserver`. If the `GovernanceLayer` throws `BudgetExceededException`, it interrupts the observer loop. Separate governance enforcement from metric collection by introducing a dedicated `GovernanceObserver` that always runs first (use `@Priority`). [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+1. **Budget check happens inside `observer.recordLlmCall()`** — mixing observability and control flow. The `MetricsAgentObserver` and `GovernanceLayer` both implement `AgentObserver`. If the `GovernanceLayer` throws `BudgetExceededException`, it interrupts the observer loop. Separate governance enforcement from metric collection by introducing a dedicated `GovernanceObserver` that always runs first (use `@Priority`).
 
-2. **Token budget is counted per-loop-step, not per-session** — the `agentLoop` accumulates token counts across the reasoning steps. Verify whether the `GovernanceLayer` tracks budget **cumulatively across all sessions** or **per-step**. The current `application.yaml` sets `budget-usd: ${ARCCLAW_SESSION_BUDGET_USD:10.00}` suggesting it's per-session, but the implementation needs confirmation. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+2. **Token budget is counted per-loop-step, not per-session** — the `agentLoop` accumulates token counts across the reasoning steps. Verify whether the `GovernanceLayer` tracks budget **cumulatively across all sessions** or **per-step**. The current `application.yaml` sets `budget-usd: ${ARCCLAW_SESSION_BUDGET_USD:10.00}` suggesting it's per-session, but the implementation needs confirmation.
 
 ***
 
 ## Configuration & Infrastructure
 
 ### ✅ Good Practices
-- `DotenvConfigSourceProvider` correctly bridges `.env` files into SmallRye Config at ordinal 295 (above `application.yaml` at 250, below system properties at 400) [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- SQLite WAL mode with `synchronous=NORMAL` and `busy_timeout=10000` is the correct tuning for embedded concurrent writes [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-- `native-image.properties` with fine-grained BouncyCastle initialization (not broad `initialize-at-build-time=org.bouncycastle`) reflects good GraalVM discipline [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+- `DotenvConfigSourceProvider` correctly bridges `.env` files into SmallRye Config at ordinal 295 (above `application.yaml` at 250, below system properties at 400)
+- SQLite WAL mode with `synchronous=NORMAL` and `busy_timeout=10000` is the correct tuning for embedded concurrent writes
+- `native-image.properties` with fine-grained BouncyCastle initialization (not broad `initialize-at-build-time=org.bouncycastle`) reflects good GraalVM discipline
 
 ### ⚠️ Configuration Issues
 
-1. **`log-requests: true` and `log-responses: true` in prod profile** — `application.yaml` enables LangChain4J request/response logging in the OpenAI config with no profile guard. LLM request logs will contain user prompts and model responses in production logs — a serious **PII/data-leak risk** if logs are shipped to an external SIEM. Gate this with `${ARCCLAW_LOG_LLM:false}`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+1. **`log-requests: true` and `log-responses: true` in prod profile** — `application.yaml` enables LangChain4J request/response logging in the OpenAI config with no profile guard. LLM request logs will contain user prompts and model responses in production logs — a serious **PII/data-leak risk** if logs are shipped to an external SIEM. Gate this with `${ARCCLAW_LOG_LLM:false}`.
 
-2. **`quarkus.http.cors.origins` defaults to `http://localhost:3000`** — any production deployment will have CORS misconfigured unless this env var is explicitly set. Add a startup validation check. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+2. **`quarkus.http.cors.origins` defaults to `http://localhost:3000`** — any production deployment will have CORS misconfigured unless this env var is explicitly set. Add a startup validation check.
 
-3. **Virtual threads enabled but `core-threads: 1`** — this is correct for virtual thread workloads (platform threads are only used as carriers). However, ensure all blocking operations (SQLite JDBC, BouncyCastle Argon2id) are called from `@RunOnVirtualThread` or `ManagedExecutor` contexts, not the Vert.x event loop. The `TelegramAgentHandler` correctly offloads to `ManagedExecutor`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+3. **Virtual threads enabled but `core-threads: 1`** — this is correct for virtual thread workloads (platform threads are only used as carriers). However, ensure all blocking operations (SQLite JDBC, BouncyCastle Argon2id) are called from `@RunOnVirtualThread` or `ManagedExecutor` contexts, not the Vert.x event loop. The `TelegramAgentHandler` correctly offloads to `ManagedExecutor`.
 
 ***
 
 ## Testing Quality
 
-The test suite is **comprehensive and well-structured** with proper CDI integration using `@QuarkusTest`: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The test suite is **comprehensive and well-structured** with proper CDI integration using `@QuarkusTest`:
 
 - `ApiKeyRegistryTest` — validates rate limiter eviction with mocked `Clock`
 - `SecretVaultImplTest` — bit-flip tamper detection + key-swap AAD mismatch
@@ -152,9 +152,9 @@ The test suite is **comprehensive and well-structured** with proper CDI integrat
 
 ### ⚠️ Test Gaps
 
-1. **No integration test for `PromptInjectionReflex` with obfuscated payloads** — the test suite covers direct keyword matches but not unicode or encoding-based bypass attempts [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-2. **`ChatCommand` has no test** — the interactive CLI loop lacks any test coverage [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
-3. **No contract test for the REST API** — `AgentResourceTest` exists but verify it covers the full 404/400/204 contract documented in `api2.http` [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+1. **No integration test for `PromptInjectionReflex` with obfuscated payloads** — the test suite covers direct keyword matches but not unicode or encoding-based bypass attempts
+2. **`ChatCommand` has no test** — the interactive CLI loop lacks any test coverage
+3. **No contract test for the REST API** — `AgentResourceTest` exists but verify it covers the full 404/400/204 contract documented in `api2.http`
 
 ***
 
@@ -293,7 +293,7 @@ To "make it awesome" and enterprise-ready, focus your debate with Claude on:
 
 Claude - after 2 or 3 discussion:
 
-Here is the definitive, code-verified, consolidated end-to-end priority stack for ArcClaw — combining all three review rounds (mine + both Gemini responses), de-duplicated, and ordered by actual risk impact. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+Here is the definitive, code-verified, consolidated end-to-end priority stack for ArcClaw — combining all three review rounds (mine + both Gemini responses), de-duplicated, and ordered by actual risk impact.
 
 ***
 
@@ -551,31 +551,31 @@ Low-severity today. Do these when the project matures toward multi-node or enter
 
 ### T3-1 · Introduce `PersistencePort` Interface for Storage Abstraction
 
-The current `StatefulAgentStore` is already an interface — finish the abstraction by ensuring all Hibernate/Panache specifics live in `StatefulAgentStoreImpl` with no domain leakage. This makes a future PostgreSQL swap a new `@Alternative` implementation, not a refactor. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The current `StatefulAgentStore` is already an interface — finish the abstraction by ensuring all Hibernate/Panache specifics live in `StatefulAgentStoreImpl` with no domain leakage. This makes a future PostgreSQL swap a new `@Alternative` implementation, not a refactor.
 
 ***
 
 ### T3-2 · `DevSecretSeeder` — Bytes from File, Not String Pool
 
-Low severity (dev-only bean, stripped from prod JAR). For completeness, read secrets as `Files.readAllBytes(Path)` from a mounted file rather than `System.getenv()` to honour the Zero-String Rule even in dev mode. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+Low severity (dev-only bean, stripped from prod JAR). For completeness, read secrets as `Files.readAllBytes(Path)` from a mounted file rather than `System.getenv()` to honour the Zero-String Rule even in dev mode.
 
 ***
 
 ### T3-3 · PII Pattern Completeness
 
-Add Amex (15-digit), unformatted SSN (`\b\d{9}\b` with false-positive caution), and international phone variants to `PiiScanReflex`. Long term, evaluate **Microsoft Presidio** (Python sidecar) or **Apache OpenNLP** for production-grade NLP-based PII detection. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+Add Amex (15-digit), unformatted SSN (`\b\d{9}\b` with false-positive caution), and international phone variants to `PiiScanReflex`. Long term, evaluate **Microsoft Presidio** (Python sidecar) or **Apache OpenNLP** for production-grade NLP-based PII detection.
 
 ***
 
 ### T3-4 · `AWAITING_APPROVAL` Inclusion in Zombie Recovery
 
-The `WorkspaceManager.onStartup()` zombie sweep recovers `IN_PROGRESS` checkpoints but skips `AWAITING_APPROVAL` ones. After a JVM crash, approval-pending tools hang forever unless the scheduled GC sweep catches them. Add `AWAITING_APPROVAL` to the startup recovery JPQL query. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+The `WorkspaceManager.onStartup()` zombie sweep recovers `IN_PROGRESS` checkpoints but skips `AWAITING_APPROVAL` ones. After a JVM crash, approval-pending tools hang forever unless the scheduled GC sweep catches them. Add `AWAITING_APPROVAL` to the startup recovery JPQL query.
 
 ***
 
 ### T3-5 · MDC Enrichment — Add `agentRole` to All Log Lines
 
-`sessionId` is already in MDC. Adding `agentRole` gives you per-role log filtering in Grafana/Loki without code changes to individual log statements. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/2cb77de3-e5cc-4bd6-916f-258c5e130632/rsrini7-arcclaw-8a5edab282632443.txt)
+`sessionId` is already in MDC. Adding `agentRole` gives you per-role log filtering in Grafana/Loki without code changes to individual log statements.
 
 ***
 

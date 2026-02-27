@@ -3,10 +3,11 @@ Task: <tobe filled> for ArcClaw ecosystem.
 
 Architecture Context:
 A production-grade, enterprise AI Agent Kernel built with:
-  - Java 21 + Quarkus 3.23 + LangChain4J 0.26.1
+  - Java 25 + Quarkus 3.23 + LangChain4J 0.26.1
   - GraalVM Native Image (Podman container build)
   - SQLite WAL (single-node, strict singleton topology)
   - Apache Camel (Telegram channel via camel-quarkus-telegram)
+  - OpenTelemetry — span tracing via AgentOtelContext
   - Podman process isolation (sandbox strategy, network=none)
   - AES-GCM-SIV SecretVault (Argon2id key derivation)
   - GovernanceLayer (USD budget cap, AutonomyLevel: FULL/SUPERVISED/READONLY)
@@ -45,33 +46,42 @@ Prior Phases Completed (DO NOT re-suggest or re-implement):
     case-insensitive, empty allowlist = open access
 - Phase 33 — Prompt Injection & Adversarial Defense
 - Phase 34 — Tool Schema & Agent Tooling
+- Phase 35: Immutable WORM Audit Log (AuditEvent, AuditEventRepository insert-only,
+            HMAC SHA-256 chain, SQLite triggers)
+- Phase 36: OTel child span parenting, token accumulation, REST /approve + /deny
+- Phase 36.1: GithubTool Read-Only Schema Jail, LLM 400 Error Self-Healing,
+              in-memory ChatMemory clear() on reset
+- Phase 37: PodmanToolRunner Circuit Breaker CLOSED→OPEN (3 failures), breaker
+            blocks all calls in OPEN state — no half-open/reset logic yet
+- Phase 38: Context Compaction (ContextCompactionService, CompactionSummaryRepository,
+            rolling summary, virtual-thread safe)
+- Phase 39: Java/Maven migration 21→25, /history zero-cost reflex, destructive
+            vocab override, AiMessage compliance filter
+- Phase 40: Budget warning at 80% soft threshold (BudgetWarningException),
+            /status extended output (cost, tokens, compaction state, session ID),
+            GovernanceLayer warning-before-hard-limit ordering confirmed
 
 ## Known Architecture Nuances (ALWAYS apply these)
 1. SystemMessages are NEVER stored in SQLite Chat
 
-### Constraints:
-- SQLite backend (same WAL db) — no new infrastructure
-- Append-only: no UPDATE or DELETE on audit rows, enforced via
-  SQLite trigger (CREATE TRIGGER prevent_audit_update ...) in schema migration
-- HMAC-SHA256 chain: each row stores HMAC of (prev_row_hash || event_payload)
-  using a per-deployment secret key — enables tamper detection across the chain
-- CDI @ApplicationScoped AuditLogger bean — injected wherever events fire
-- Panache entity: AuditEvent (id, sessionId, eventType enum, payload JSON,
-  hmacHash, prevHash, createdAt — immutable, no setters)
-- AuditEventType enum: TOOL_INVOKED, APPROVAL_GRANTED, APPROVAL_DENIED,
-  BUDGET_CAP_HIT, INJECTION_BLOCKED, PII_REDACTED, SECRET_ACCESSED,
-  CHECKPOINT_TRANSITION, REFLEX_FIRED
-- prevHash bootstraps from SHA-256("GENESIS") on first row
-- AuditVerifier service: verifyChain(sessionId) — walks rows in createdAt order,
-  recomputes HMAC, returns VerificationResult(valid, brokenAtId, totalRows)
-- REST endpoint: GET /audit/{sessionId} (ApiKeyAuthFilter protected)
-  GET /audit/{sessionId}/verify
-- AuditService.record() MUST swallow all exceptions — it must never crash the calling component
-- Never store raw secrets, plaintext, PII, or full user input — hash or truncate always
-- All new injections use @Inject AuditService — no constructor injection needed
-- SecretVaultImpl is @Dependent scope — AuditService injection works fine there
-- ReflexRegistry does not currently have direct access to userId at the reflex level — 
-  pass it through from processIfReflex() which already receives userId as a parameter
+## IMPLEMENTATION REQUIREMENTS:
+Common Requirements:
+
+1. 
+2.
+
+Compoenent  1 - <title>
+File: <file full path>
+
+Current Problem:
+
+Required Changes:
+..
+
+TEST: <test-file-path>
+ <update or add new testcases>
+
+ Same repeat Component 2 on-wards...
 
 ### Testing requirements:
 

@@ -1761,3 +1761,40 @@ Implement critical hardening for Podman execution, PII detection completeness, a
 - ✅ **PII**: Verified 19+ patterns including Indian edge cases.
 - ✅ **Regression**: 100% build success across `arcclaw-core` and `arcclaw-app`.
 
+---
+
+# Phase 42 — ScopedValue & Virtual Thread Context Migration ✅
+
+Migrate the core session scoping mechanism from `ThreadLocal` to the modern JDK 25 `ScopedValue` API (JEP 464) to ensure safe and efficient context propagation across virtual threads.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Structured Concurrency Compatibility**: `ThreadLocal` variables are inherited by child threads but are mutable and can leak memory if not cleared correctly. `ScopedValue` provides a modern, immutable alternative that is naturally bounded to a specific scope (`run()` or `call()` block), making it the preferred choice for Virtual Threads.
+
+> [!NOTE]
+> **The Propagation Bridge**: Since MicroProfile Context Propagation and some legacy libraries do not yet natively support `ScopedValue`, we implemented a `PROPAGATION_BRIDGE` using `ThreadLocal`. `WorkspaceScopeHolder.getIfActive()` checks the `ScopedValue` first, falling back to the bridge for cross-boundary continuity (e.g., JAX-RS Filters to Camel Routes).
+
+> [!TIP]
+> **Legacy Test Support**: Test frameworks like JUnit often use `@BeforeEach` to set up state. Because `ScopedValue` must be bound at call-time, we preserved the `set(sessionId)` and `clear()` methods as aliases for the `PROPAGATION_BRIDGE`, allowing legacy tests to function without a full rewrite.
+
+## Proposed Changes
+
+### Core Module — Scope
+
+#### [MODIFY] [WorkspaceScopeHolder.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java)
+- Replaced `ThreadLocal<String> WORKSPACE_ID` with `ScopedValue<String> WORKSPACE_ID`.
+- Implemented `PROPAGATION_BRIDGE` for MicroProfile compatibility.
+- Added `run(String, Runnable)` and `call(String, Callable)` for idiomatic scope binding.
+- Added `wrap(Runnable)` and `wrap(Callable)` for capturing scope across asynchronous boundaries.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `WorkspaceScopeTest`: Verified session isolation and cross-thread propagation using `wrap()`.
+- ✅ `WorkspaceScopeHolderTest`: Verified `ScopedValue` takes precedence over `PROPAGATION_BRIDGE`.
+- ✅ `AgentResourceTest`: Verified JAX-RS filter integration via bridge continues to function.
+
+---
+
+

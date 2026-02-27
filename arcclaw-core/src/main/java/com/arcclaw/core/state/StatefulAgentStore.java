@@ -57,6 +57,14 @@ public interface StatefulAgentStore {
     void markFailed(Long checkpointId, String reason);
 
     /**
+     * Mark a checkpoint as failed.
+     * 
+     * @param checkpoint The checkpoint to mark as failed.
+     * @param reason     Human-readable failure reason.
+     */
+    void markFailed(AgentCheckpoint checkpoint, String reason);
+
+    /**
      * Mark a checkpoint as completed.
      *
      * @param checkpointId The checkpoint entity ID.

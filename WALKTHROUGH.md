@@ -41,6 +41,9 @@
 | 36 | REST HITL & Zombie Recovery | 71/71 tests | Traces parented properly, REST HITL APIs |
 | 37 | Security Hardening & Optimistic Locking | 21/21 tests | Caffeine registry, Optimistic Locking |
 | 38 | Context Compaction | ContextCompactionServiceTest | Plain EntityManager in core, offloaded async compaction |
+| 40 | Antigravity (Security & Budget) | 21/21 tests | Zero-cost local reflexes |
+| 41 | Resilience, Privacy & Observer Separation | 100% success | 19+ PII patterns |
+| 42 | ScopedValue Context Migration | 100% success | Bridge for MicroProfile |
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -879,3 +882,21 @@ Harden the kernel with circuit breakers, PII completeness, and strict observer i
 - ✅ **`AgentCheckpointTest`**: Verified field privacy and serialization exclusion (using reflection).
 - ✅ **`PiiScanReflexTest`**: Verified GSTIN, Passport, DOB, IPv6, and UPI VPA; confirmed rule ordering prevents shadowing.
 - ✅ **`mvn clean verify`**: 100% pass across 21+ Phase 41 unit tests.
+
+---
+
+## Phase 42 — ScopedValue & Virtual Thread Context Migration ✅
+
+Transitioned the core session management from `ThreadLocal` to the modern JDK `ScopedValue` API to enable efficient and safe context propagation for Virtual Threads and Structured Concurrency.
+
+| File | Purpose |
+|------|---------|
+| [WorkspaceScopeHolder.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java) | `ScopedValue` orchestration and `PROPAGATION_BRIDGE` |
+
+### Key Improvements:
+- **Safety**: `ScopedValue` is immutable and scope-bounded, preventing context leaks.
+- **Performance**: Optimized for Virtual Threads (JEP 464).
+- **Interoperability**: Maintained compatibility with MicroProfile Context Propagation via a bridge.
+
+**Verification**: `mvn clean verify` ✅
+

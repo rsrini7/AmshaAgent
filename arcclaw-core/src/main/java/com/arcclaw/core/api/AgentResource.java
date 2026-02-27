@@ -9,6 +9,7 @@ import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceExecutors;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
@@ -91,35 +92,31 @@ public class AgentResource {
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         try {
-            // 1. Activate the Workspace Scope for this REST request thread
-            WorkspaceScopeHolder.set(sessionId);
-            
-            // 2. Elevate Autonomy so tools trigger RequiresApprovalException instead of hard crashing
-            workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                // Elevate Autonomy so tools trigger RequiresApprovalException instead of hard crashing
+                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
 
-            if (!devSeeder.isUnsatisfied()) {
-                devSeeder.get().seedDevSecrets();
-            }
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
+                }
 
-            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
-                    maxIterations);
-            if (result.success()) {
-                return Response.ok(result).build();
-            } else {
-                log.errorf("Sync agent run completed with failure for session {}: {}", sessionId,
-                        result.terminationReason());
-                return Response.serverError()
-                        .entity(result.terminationReason())
-                        .build();
-            }
+                AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
+                        maxIterations);
+                if (result.success()) {
+                    return Response.ok(result).build();
+                } else {
+                    log.errorf("Sync agent run completed with failure for session {}: {}", sessionId,
+                            result.terminationReason());
+                    return Response.serverError()
+                            .entity(result.terminationReason())
+                            .build();
+                }
+            });
         } catch (Exception e) {
             log.errorf("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
             return Response.serverError()
                     .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
-        } finally {
-            // 3. ALWAYS clear the thread scope when done to prevent memory leaks!
-            WorkspaceScopeHolder.clear();
         }
     }
 
@@ -130,11 +127,22 @@ public class AgentResource {
         log.infof("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-        vThreads.execute(() -> {
+        // --- ARCHITECTURE NOTE: Context Propagation ---
+        // We intentionally DO NOT use WorkspaceExecutors.wrap(vThreads) here.
+        // This method is a system entry point (REST boundary). The calling HTTP 
+        // worker thread does not yet have an active workspace session to propagate. 
+        // Instead of inheriting context, we are establishing the root lexical 
+        // scope from scratch using WorkspaceScopeHolder.run(sessionId, ...).
+        //
+        // WHERE TO USE wrap():
+        // WorkspaceExecutors.wrap() should only be used deep inside the agent 
+        // kernel (e.g., AgentLoop parallelizing multiple Tool executions), where 
+        // a parent thread already has an active session that must be seamlessly 
+        // inherited by asynchronous child tasks.
+        // ----------------------------------------------
+        vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
-                // MUST be first — activates WorkspaceScoped context
-                WorkspaceScopeHolder.set(sessionId);
-                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED); // ← safe now
+                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
 
                 boolean isApproval = "/approve".equalsIgnoreCase(request.goal());
                 boolean isDeny     = "/deny".equalsIgnoreCase(request.goal());
@@ -152,7 +160,7 @@ public class AgentResource {
                                 "message", "Tool execution denied. Session terminated."
                             ))
                             .build());
-                    return; // finally still runs — scope clears cleanly
+                    return;
                 }
 
                 workspaceContext.setAutonomyLevel(
@@ -195,12 +203,11 @@ public class AgentResource {
                  // Guard: only call setAutonomyLevel if scope is still active
                 try {
                     workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
-                } catch (jakarta.enterprise.context.ContextNotActiveException ignored) {
+                } catch (Exception ignored) {
                     // Scope already cleared or was never activated — safe to ignore
                 }
-                WorkspaceScopeHolder.clear();
             }
-        });
+        }));
     }
 
     @GET
@@ -241,24 +248,24 @@ public class AgentResource {
             @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
         log.infof("REST approve for session %s role %s", sessionId, agentRole);
         try {
-            WorkspaceScopeHolder.set(sessionId);
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
 
-            var checkpoint = agentStore.load(sessionId, agentRole);
-            if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(Map.of("error", "No pending approval for this session"))
-                        .build();
-            }
+                var checkpoint = agentStore.load(sessionId, agentRole);
+                if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+                    return Response.status(Response.Status.CONFLICT)
+                            .entity(Map.of("error", "No pending approval for this session"))
+                            .build();
+                }
 
-            MDC.put("userId", "rest:approve");
-            agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
-            return Response.ok(Map.of("status", "APPROVED", "session", sessionId)).build();
+                MDC.put("userId", "rest:approve");
+                agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
+                return Response.ok(Map.of("status", "APPROVED", "session", sessionId)).build();
+            });
         } catch (Exception e) {
             log.errorf("Failed to approve session " + sessionId, e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
-            WorkspaceScopeHolder.clear();
             MDC.remove("userId");
         }
     }
@@ -270,23 +277,23 @@ public class AgentResource {
             @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
         log.infof("REST deny for session %s role %s", sessionId, agentRole);
         try {
-            WorkspaceScopeHolder.set(sessionId);
-            var checkpoint = agentStore.load(sessionId, agentRole);
-            if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(Map.of("error", "No pending approval for this session"))
-                        .build();
-            }
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                var checkpoint = agentStore.load(sessionId, agentRole);
+                if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+                    return Response.status(Response.Status.CONFLICT)
+                            .entity(Map.of("error", "No pending approval for this session"))
+                            .build();
+                }
 
-            MDC.put("userId", "rest:deny");
-            agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
-            workspaceManager.removeHeartbeat(sessionId);
-            return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
+                MDC.put("userId", "rest:deny");
+                agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
+                workspaceManager.removeHeartbeat(sessionId);
+                return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
+            });
         } catch (Exception e) {
             log.error("Failed to deny session " + sessionId, e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
-            WorkspaceScopeHolder.clear();
             MDC.remove("userId");
         }
     }

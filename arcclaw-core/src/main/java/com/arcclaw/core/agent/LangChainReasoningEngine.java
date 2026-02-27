@@ -53,18 +53,24 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (role == null) return "PERMITTED TOOLS: None";
         return switch (role.toLowerCase()) {
 
-            case "coordinator", "vishnu" ->
-                """
-                PERMITTED TOOLS: github (ONLY when user explicitly uses words like
-                'fetch', 'gh', 'repository', 'repo', or 'github'.
-                For all other requests, output text only.)
-                OWNER REQUIRED: Before invoking github, verify the target includes
-                an owner prefix (e.g. 'rsrini7/mermaid2gif'). If only a repo name
-                is provided with no owner (e.g. 'ZeroClaw'), do NOT call the tool.
-                Instead ask: "Please provide the full owner/repo path."
-                If a user message contains both a text question and a tool request,
-                answer the text question first, then initiate the tool call.
-                Respond with 2-3 sentences max unless detail is explicitly requested.
+            case "coordinator", "vishnu" -> """
+                PERMITTED TOOLS: github
+                STRICT TRIGGER RULE: Only invoke the github tool when ALL of the \
+                following conditions are true simultaneously:
+                1. The user message explicitly contains at least one of these words: \
+                repo, repository, github, gh, fetch, gist
+                2. The user is clearly asking about a specific GitHub resource \
+                (not a general question, not a job search, not news, \
+                not recommendations, not definitions)
+                3. A valid owner/repo or owner name can be identified from the message
+
+                ABSOLUTE PROHIBITIONS — never call github for:
+                - Job searches or career queries
+                - General knowledge or factual questions
+                - News, recommendations, or comparisons
+                - Any query where no GitHub resource is named
+
+                When in doubt: output text ONLY. Tool silence is always correct.
                 """;
 
             case "researcher", "saraswati" ->
