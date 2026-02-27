@@ -48,6 +48,40 @@ class GithubToolTest {
             "command", "list",
             "target", "rsrini7"
         );
-        assertDoesNotThrow(() -> tool.sandboxCommand(params));
+        var cmd = tool.sandboxCommand(params);
+        assertTrue(cmd.contains("rsrini7"));
+    }
+
+    @Test
+    void testGistListDropsTarget() {
+        Map<String, Object> params = Map.of(
+            "action", "gist",
+            "command", "list",
+            "target", "rsrini7"
+        );
+        var cmd = tool.sandboxCommand(params);
+        assertTrue(cmd.contains("gist"));
+        assertTrue(cmd.contains("list"));
+        org.junit.jupiter.api.Assertions.assertFalse(cmd.contains("rsrini7"), "gist list should NOT contain username");
+    }
+
+    @Test
+    void testGistViewRequiresTarget() {
+        Map<String, Object> params = Map.of(
+            "action", "gist",
+            "command", "view"
+        );
+        assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(params));
+    }
+
+    @Test
+    void testGistViewWithId() {
+        Map<String, Object> params = Map.of(
+            "action", "gist",
+            "command", "view",
+            "target", "abc-123"
+        );
+        var cmd = tool.sandboxCommand(params);
+        assertTrue(cmd.contains("abc-123"));
     }
 }

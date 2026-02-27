@@ -1,6 +1,6 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.audit.AuditEvent;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import dev.langchain4j.data.message.ChatMessage;
@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.model.chat.request.ChatRequest;
 
 @QuarkusTest
 @TestProfile(CompactionTestProfile.class)
@@ -47,6 +46,9 @@ class ContextCompactionServiceIntegrationTest {
     @InjectMock
     @Identifier("compaction")
     ChatLanguageModel compactionModel;
+
+    @Inject
+    AuditService auditService;
 
     @BeforeEach
     void setup() {
@@ -89,6 +91,8 @@ class ContextCompactionServiceIntegrationTest {
         assertEquals(2, summaryOpt.get().messagesCompacted);
 
         // Find the audit event
+        auditService.waitForIdle();
+        em.clear();
         long count = em.createQuery("SELECT count(e) FROM AuditEvent e WHERE e.sessionId = :sessionId AND e.eventType = :type", Long.class)
                 .setParameter("sessionId", TEST_SESSION_ID)
                 .setParameter("type", SecurityEventType.CONTEXT_COMPACTED)

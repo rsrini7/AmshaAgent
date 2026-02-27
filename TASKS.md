@@ -547,6 +547,13 @@
 - [x] Unit Tests: `TmpfsSecretTransportTest` for creation, zeroing, and cleanup.
 - [x] Verification: `mvn clean verify` passes all Phase 43 checks.
 
+---
 
-
-
+## Phase 44 — Production Hardening & Tool Refinement
+- [x] Apply `transaction_mode=IMMEDIATE` to production JDBC URL <!-- id: 115 -->
+- [x] Propagate TCCL to `AsyncPersistenceEngine` consumer thread <!-- id: 116 -->
+- [x] Implement automatic MDC `sessionId` propagation in `WorkspaceScopeHolder` <!-- id: 117 -->
+- [x] Enhance `isSqliteBusy` to detect Hibernate lock exceptions <!-- id: 118 -->
+- [x] Fix `gh gist list` command syntax in `GithubTool` <!-- id: 119 -->
+- [x] Add guardrail for `gist view` in `GithubTool` <!-- id: 120 -->
+- [x] Verify: `GithubToolTest` passes <!-- id: 121 -->

@@ -3,7 +3,9 @@ package com.arcclaw.app.channel.telegram;
 import com.arcclaw.app.util.AgentErrorMessageUtil;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -12,6 +14,10 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
+import com.arcclaw.app.security.TelegramAllowlistGuard;
+import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
+import com.arcclaw.core.state.ContextCompactionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
@@ -41,7 +47,7 @@ public class TelegramAgentHandler {
     WorkspaceManager workspaceManager;
 
     @Inject
-    com.arcclaw.core.state.ContextCompactionService compactionService;
+    ContextCompactionService compactionService;
 
     @Inject
     StatefulAgentStore statefulAgentStore;
@@ -77,10 +83,13 @@ public class TelegramAgentHandler {
     Instance<DevSecretSeeder> devSeeder;
 
     @Inject
-    com.arcclaw.core.reflex.ReflexRegistry reflexRegistry;
+    ReflexRegistry reflexRegistry;
 
     @Inject
-    com.arcclaw.app.security.TelegramAllowlistGuard allowlistGuard;
+    RoleRegistry roleRegistry;
+
+    @Inject
+    TelegramAllowlistGuard allowlistGuard;
 
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
@@ -128,10 +137,10 @@ public class TelegramAgentHandler {
         WorkspaceScopeHolder.run(baseId, () -> {
             try {
                 // Push userId to MDC for Audit logs
-                org.jboss.logging.MDC.put("userId", userId);
+                MDC.put("userId", userId);
 
                 // --- REFLEX INTERCEPTOR: O(1) Deterministic Bypass ---
-                com.arcclaw.core.reflex.ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
+                ReflexResult reflexResult = reflexRegistry.processIfReflex(baseId, userId, text);
                 if (reflexResult.commandResponse().isPresent()) {
                     reply(chatId, reflexResult.commandResponse().get());
                     return; // Terminate execution immediately, bypassed LLM
@@ -139,28 +148,37 @@ public class TelegramAgentHandler {
 
                 String safeInput = reflexResult.sanitizedInput();
 
-                // Auto-cancel any dangling tool approvals if the user 
+                // Auto-cancel any dangling tool approvals if the user
                 // sends a free-text message instead of clicking /approve or /deny
-                for (String r : java.util.List.of("architect", "coordinator", "coder", "researcher", "debugger")) {
-                    statefulAgentStore.load(baseId, r).ifPresent(cp -> {
+                for (AgentRoleEnum r : AgentRoleEnum.values()) {
+                    statefulAgentStore.load(baseId, r.toScopedName()).ifPresent(cp -> {
                         if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                            log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r);
-                            // Correcting compilation error: status/reason fields are managed via store methods or setters
+                            log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r.toScopedName());
                             cp.setStatus(CheckpointStatus.FAILED);
                             cp.setFailReason("User interrupted with a new message. Tool execution aborted.");
-                            cp.setStateJson("[]"); // Wipe the tool state
+                            cp.setStateJson("[]");
                             cp.setPendingToolName(null);
                             cp.setPendingToolParametersJson(null);
                             statefulAgentStore.save(cp);
-                            log.infof("[TelegramHandler] Successfully auto-canceled tool approval for role: %s", r);
+                            log.infof("[TelegramHandler] Successfully auto-canceled tool approval for role: %s", r.toScopedName());
                         }
                     });
                 }
 
-                String activeRole = intentClassifier.classify(safeInput);
+                String classifiedRole = intentClassifier.classify(safeInput);
 
-                log.infof("[TelegramHandler] Intent classified '%s' -> role: %s",
-                        safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, activeRole);
+                AgentRoleEnum resolvedRole;
+                try {
+                    resolvedRole = AgentRoleEnum.fromString(classifiedRole);
+                } catch (IllegalArgumentException e) {
+                    resolvedRole = AgentRoleEnum.COORDINATOR;
+                    log.warnf("[TelegramHandler] Unknown role classification '%s', defaulting to COORDINATOR", classifiedRole);
+                }
+
+                final String activeRole = resolvedRole.toScopedName();
+
+                log.infof("[TelegramHandler] Intent classified '%s' -> original: %s | active: %s (enum: %s)",
+                        safeInput.length() > 50 ? safeInput.substring(0, 50) + "..." : safeInput, classifiedRole, activeRole, resolvedRole);
 
                 // Session Continuity Check (Soft Reset only)
                 statefulAgentStore.load(baseId, activeRole).ifPresent(cp -> {
@@ -193,7 +211,7 @@ public class TelegramAgentHandler {
                     log.warnf("Compaction failed for session=%s, proceeding without: %s", baseId, e.getMessage());
                 }
 
-                AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, 5);
+                AgentResult result = agentLoop.run(baseId, activeRole, safeInput, reasoningEngine, roleRegistry.defaultMaxIterations(resolvedRole));
 
                 if (result.awaitingApproval()) {
                     String approvalDetail = statefulAgentStore.load(baseId, activeRole)

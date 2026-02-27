@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -15,7 +16,6 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
-import java.util.List;
 import java.util.Optional;
 
 @ApplicationScoped
@@ -49,10 +49,10 @@ public class ApproveReflex implements AgentReflex {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 String activeRole = null;
-                for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
-                    Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role);
+                for (AgentRoleEnum role : AgentRoleEnum.values()) {
+                    Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role.toScopedName());
                     if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                        activeRole = role;
+                        activeRole = role.toScopedName();
                         break;
                     }
                 }

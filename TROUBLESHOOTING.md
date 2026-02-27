@@ -2737,3 +2737,42 @@ sudo systemctl enable --now arcclaw-secrets.mount
 * **Symptom**: Plaintext secret files are left behind in `data/workspaces/<sid>/`.
 * **Root Cause**: The legacy `writeEphemeralEnvFile` strategy writes to the disk-backed workspace and may fail to delete if the JVM crashes.
 * **Resolution**: Verify that `arcclaw.sandbox.secret-transport` is set to `TMPFS`. This ensures secrets are written to RAM (`tmpfs`), zero-filled before deletion, and never touch the physical disk platter.
+
+---
+
+## 20. Phase 44: Persistence Hardening & Role Normalization
+
+### 🔴 Failure: `SQLITE_BUSY_SNAPSHOT` and `Snapshot too old`
+* **Symptom**: Integration tests crash with `ArcUndeclaredThrowable` or `SQLITE_BUSY_SNAPSHOT`.
+* **Root Cause**: Concurrent writes from `AsyncPersistenceEngine` (telemetry) and session management led to locks. A writer attempting to upgrade a read-transaction to a write-transaction fails if another writer committed meanwhile.
+* **Resolution**:
+  1.  **JDBC Configuration**: Added `transaction_mode=IMMEDIATE` to the JDBC URL for tests to acquire `EXCLUSIVE` locks early.
+  2.  **Explicit Retries**: Hardened `StatefulAgentStoreImpl` and `WorkspaceManager` with 5-retry loops and `QuarkusTransaction.requiringNew()`.
+  3.  **Synchronization**: Introduced `waitForIdle()` in `AsyncPersistenceEngine` and `AuditService` so tests can wait for background queue drainage before assertions.
+
+### 🔴 Failure: `ArcUndeclaredThrowable` / Masked JTA Exceptions
+* **Symptom**: Tests fail with generic CDI exceptions instead of underlying `SQLITE_BUSY`.
+* **Root Cause**: `@Transactional` on test methods created long-running transactions that conflicted with internal manual `QuarkusTransaction` calls.
+* **Resolution**: Removed `@Transactional` from test methods. Used manual JTA management (`QuarkusTransaction.requiringNew().run(...)`) inside setup and core logic blocks.
+
+### 🔴 Failure: Rest API 404 on Session Status
+* **Symptom**: `AgentResourceTest` returns 404 even if the session was just run.
+* **Root Cause**: Case sensitivity mismatch between the new type-safe `AgentRoleEnum` (lowercase "coordinator") and mixed-case API/test requests ("COORDINATOR").
+* **Resolution**: Standardized all API entry points to normalize role names via `AgentRoleEnum.fromString(role).toScopedName()` before persistence operations.
+
+### 🔴 Failure: `ServiceConfigurationError` in Background Consumer
+* **Symptom**: `io.smallrye.config.SmallRyeConfigFactory: QuarkusConfigFactory not a subtype` error in `arcclaw-persistence-consumer` thread.
+* **Root Cause**: The unmanaged virtual thread was started without the Quarkus runtime Thread Context Class Loader (TCCL), causing `ServiceLoader` to fail during configuration lookups.
+* **Resolution**: Captured the TCCL during `@PostConstruct` and explicitly applied it to the virtual thread in `AsyncPersistenceEngine.startConsumer()`.
+### 🔴 Failure: `SQLITE_BUSY` or `database is locked` in Production
+* **Symptom**: Intermittent failures in long-running chat sessions with `SQLITE_BUSY` errors, often wrapped in `OptimisticLockException` or `LockAcquisitionException`.
+* **Root Cause**: SQLite's default transaction mode is `DEFERRED`. When multiple threads (e.g., the background audit thread and the foreground agent loop) attempt to write, one may be upgraded from a read-lock while another already holds a write-lock, causing a "busy" state that the driver cannot always resolve automatically.
+* **Resolution**:
+  1.  **JDBC URL**: Ensure `transaction_mode=IMMEDIATE` is present in the `quarkus.datasource.jdbc.url`. This forces SQLite to acquire a write-lock at the *start* of the transaction, preventing mid-transaction upgrade failures.
+  2.  **MDC Propagation**: Enable automatic `sessionId` propagation to MDC in `WorkspaceScopeHolder` to ensure background thread logs are traceable.
+  3.  **Enhanced Detection**: Ensure `isSqliteBusy` logic inspects Hibernate's `LockAcquisitionException` and `OptimisticLockException` by class name, as they frequently wrap the underlying SQLite error.
+
+### 🔴 Failure: `gh gist list` Unknown Command
+* **Symptom**: `GithubTool` execution fails with `unknown command "username" for "gh gist list"`.
+* **Root Cause**: The LLM incorrectly assumes `gh gist list` accepts a username as a positional argument (like `gh repo list`). In the GitHub CLI, `gist list` only lists gists for the authenticated user and expects any filtering via flags.
+* **Resolution**: Refactored `GithubTool.java` to explicitly drop any `target` parameter when the command is `gist list`. Updated the `parametersSchema` to instruct the LLM to omit the target for this specific action.

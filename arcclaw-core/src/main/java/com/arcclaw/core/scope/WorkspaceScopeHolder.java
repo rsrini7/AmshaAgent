@@ -1,6 +1,7 @@
 package com.arcclaw.core.scope;
 
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 import java.lang.ScopedValue;
 import java.util.concurrent.Callable;
@@ -79,7 +80,12 @@ public final class WorkspaceScopeHolder {
     public static void run(String sessionId, Runnable runnable) {
         validate(sessionId);
         LOG.debugf("Binding session: %s on thread: %s", sessionId, Thread.currentThread());
-        ScopedValue.where(WORKSPACE_ID, sessionId).run(runnable);
+        MDC.put("sessionId", sessionId);
+        try {
+            ScopedValue.where(WORKSPACE_ID, sessionId).run(runnable);
+        } finally {
+            MDC.remove("sessionId");
+        }
     }
 
     public static <T> T call(String sessionId, Callable<T> callable) throws Exception {

@@ -1,5 +1,6 @@
 package com.arcclaw.core.audit;
 
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -48,7 +49,7 @@ public class AuditServiceIntegrationTest {
     public void setup() {
         sessionId = "test-integration-" + System.currentTimeMillis();
         WorkspaceScopeHolder.set(sessionId);
-        workspaceContext.setAutonomyLevel(com.arcclaw.core.security.AutonomyLevel.FULL);
+        workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
         secretVault.init(sessionId);
     }
 
@@ -61,7 +62,8 @@ public class AuditServiceIntegrationTest {
     public void testVaultStoreTriggersAudit() {
         secretVault.store("my-secret", "super-secret-value".getBytes());
 
-        // Force flush and clear L1 cache before querying
+        // Wait for async persistence
+        auditService.waitForIdle();
         em.clear();
 
         List<AuditEvent> events = repository.findBySessionId(sessionId);
@@ -76,6 +78,10 @@ public class AuditServiceIntegrationTest {
     public void testVaultRetrieveMissTriggersAudit() {
         secretVault.get("non-existent-key");
 
+        // Wait for async persistence
+        auditService.waitForIdle();
+        em.clear();
+
         List<AuditEvent> events = repository.findBySessionId(sessionId);
         assertEquals(1, events.size());
         
@@ -87,6 +93,10 @@ public class AuditServiceIntegrationTest {
     @Test
     public void testCheckpointCreatedTriggersAudit() {
         statefulAgentStore.save(sessionId, "coordinator", List.of());
+
+        // Wait for async persistence
+        auditService.waitForIdle();
+        em.clear();
 
         List<AuditEvent> events = repository.findBySessionId(sessionId);
         assertEquals(1, events.size());

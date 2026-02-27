@@ -1,0 +1,135 @@
+package com.arcclaw.core.persistence;
+
+import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Unit tests for {@link AsyncPersistenceEngine}.
+ * Uses @QuarkusTest to provide the necessary CDI and Transactional context.
+ */
+@QuarkusTest
+class AsyncPersistenceEngineTest {
+
+    @InjectMock
+    EntityManager em;
+
+    @Inject
+    AsyncPersistenceEngine engine;
+
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testCriticalEventBlocksUntilWritten() {
+        AtomicBoolean written = new AtomicBoolean(false);
+
+        PersistenceEvent event = PersistenceEvent.critical("ses-1", SecurityEventType.TOOL_INVOKED,
+                em2 -> {
+                    written.set(true);
+                });
+
+        // submitCritical blocks until the consumer completes the future
+        engine.submitCritical(event);
+
+        assertTrue(written.get());
+    }
+
+    @Test
+    void testTelemetryEventIsFireAndForget() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+
+        PersistenceEvent event = PersistenceEvent.telemetry("ses-2", SecurityEventType.REFLEX_COMMAND,
+                em2 -> latch.countDown());
+
+        engine.submitTelemetry(event);
+
+        // We do NOT block — just assert the consumer runs it eventually
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void testSqliteBusyRetryExhaustedThrowsCompliance() {
+        AtomicInteger attempts = new AtomicInteger(0);
+        RuntimeException busyEx = new RuntimeException("SQLITE_BUSY: database is locked");
+
+        PersistenceEvent event = PersistenceEvent.critical("ses-3", SecurityEventType.VAULT_ACCESS,
+                em2 -> {
+                    attempts.incrementAndGet();
+                    throw busyEx;
+                });
+
+        ComplianceViolationException ex = assertThrows(ComplianceViolationException.class, () -> engine.submitCritical(event));
+        assertTrue(ex.getMessage().contains("ses-3"));
+
+        // Should have attempted MAX_RETRIES times
+        assertEquals(5, attempts.get());
+    }
+
+    @Test
+    void testSqliteBusyRetryExhaustedDiscardsWithWarnForTelemetry() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(5);
+        RuntimeException busyEx = new RuntimeException("database is locked");
+
+        PersistenceEvent event = PersistenceEvent.telemetry("ses-4", SecurityEventType.CONTEXT_COMPACTED,
+                em2 -> {
+                    latch.countDown();
+                    throw busyEx;
+                });
+
+        engine.submitTelemetry(event);
+
+        // All 5 attempts happen (fire-and-forget, no exception thrown to the test thread)
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void testPerEventScopeBinding() throws InterruptedException {
+        List<String> captured = new ArrayList<>();
+        CountDownLatch latch = new CountDownLatch(2);
+
+        PersistenceEvent e1 = PersistenceEvent.telemetry("session-AAA", SecurityEventType.LOOP_FINISH,
+                em2 -> {
+                    captured.add(WorkspaceScopeHolder.getIfActive());
+                    latch.countDown();
+                });
+        PersistenceEvent e2 = PersistenceEvent.telemetry("session-BBB", SecurityEventType.LOOP_FINISH,
+                em2 -> {
+                    captured.add(WorkspaceScopeHolder.getIfActive());
+                    latch.countDown();
+                });
+
+        engine.submitTelemetry(e1);
+        engine.submitTelemetry(e2);
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+
+        // Each event must see its own session, not bleed across
+        assertTrue(captured.contains("session-AAA"));
+        assertTrue(captured.contains("session-BBB"));
+        assertEquals(2, captured.size());
+    }
+
+    @Test
+    void testIsSqliteBusyDetectsWrappedCause() {
+        // The engine must traverse getCause() chain — not just top-level message
+        RuntimeException outer = new RuntimeException("Transaction rollback",
+                new RuntimeException("JPA error",
+                        new RuntimeException("SQLITE_BUSY: database is locked")));
+
+        assertTrue(AsyncPersistenceEngine.isSqliteBusy(outer));
+    }
+}

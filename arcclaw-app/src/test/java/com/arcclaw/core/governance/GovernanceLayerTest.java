@@ -13,9 +13,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.BudgetExceededException;
-
 @QuarkusTest
 class GovernanceLayerTest {
 

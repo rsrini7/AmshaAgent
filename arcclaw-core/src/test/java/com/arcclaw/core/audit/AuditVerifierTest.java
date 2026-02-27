@@ -9,11 +9,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.audit.AuditEvent;
-import com.arcclaw.core.audit.AuditVerifier;
-import com.arcclaw.core.audit.AuditEventRepository;
-
 @QuarkusTest
 public class AuditVerifierTest {
 

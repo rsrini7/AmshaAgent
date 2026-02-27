@@ -2,6 +2,7 @@ package com.arcclaw.core.agent;
 
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.agent.AgentRoleEnum;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
@@ -45,15 +46,23 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject
     CompactionSummaryRepository compactionSummaryRepository;
 
+    @Inject
+    RoleRegistry roleRegistry;
+
     /**
      * Returns the strict tool binding constraint for the given agent role.
-     * This is injected into the system prompt to prevent tool bias.
+     * Resolves via {@link AgentRoleEnum} to handle both canonical names and deity aliases.
      */
     private String getRoleBinding(String role) {
         if (role == null) return "PERMITTED TOOLS: None";
-        return switch (role.toLowerCase()) {
-
-            case "coordinator", "vishnu" -> """
+        AgentRoleEnum resolvedRole;
+        try {
+            resolvedRole = AgentRoleEnum.fromString(role);
+        } catch (IllegalArgumentException e) {
+            return "PERMITTED TOOLS: None";
+        }
+        return switch (resolvedRole) {
+            case COORDINATOR -> """
                 PERMITTED TOOLS: github
                 STRICT TRIGGER RULE: Only invoke the github tool when ALL of the \
                 following conditions are true simultaneously:
@@ -73,7 +82,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 When in doubt: output text ONLY. Tool silence is always correct.
                 """;
 
-            case "researcher", "saraswati" ->
+            case RESEARCHER ->
                 """
                 PERMITTED TOOLS: github
                 STRICT RULE: ONLY invoke github when the user explicitly mentions a
@@ -95,7 +104,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 in the conversation.
                 """;
 
-            case "coder", "brahma" ->
+            case CODER ->
                 """
                 PERMITTED TOOLS: None. You are a pure code generation engine.
                 Do not invoke any tools under any circumstances. Output code only.
@@ -109,7 +118,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 mid-session." Then fulfil the request in the language asked.
                 """;
 
-            case "debugger", "shiva" ->
+            case DEBUGGER ->
                 """
                 PERMITTED TOOLS: None. You are a pure analysis engine.
                 Analyze only the information provided. Do not invoke any tools.
@@ -376,11 +385,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
 
         // 1. Determine which tools the current persona is allowed to see
-        List<String> allowedTools = switch (agentRole.toLowerCase()) {
-            case "coder", "brahma", "debugger", "shiva" -> List.of(); // NO tools in schema
-            case "researcher", "saraswati", "coordinator", "vishnu" -> List.of("github");
-            default -> List.of();
-        };
+        List<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
 
         // 2. Dynamically filter + build specs with parameter schema
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()

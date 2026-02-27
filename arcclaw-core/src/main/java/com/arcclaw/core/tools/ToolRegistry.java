@@ -170,8 +170,8 @@ public class ToolRegistry {
                 // Catch sandbox failures so the LLM can see the error and retry
                 log.errorf(e, "Tool '%s' execution failed: %s", toolName, e.getMessage());
                 
-                String userId = (String) org.jboss.logging.MDC.get("userId");
-                String agentRole = (String) org.jboss.logging.MDC.get("agentRole");
+                String userId = (String) MDC.get("userId");
+                String agentRole = (String) MDC.get("agentRole");
                 auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
                     

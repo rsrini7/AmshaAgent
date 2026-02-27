@@ -84,7 +84,7 @@ class ToolRegistryTest {
         workspaceContext.setAutonomyLevel(AutonomyLevel.READONLY);
 
         var ex = assertThrows(SecurityException.class,
-                () -> registry.invokeTool("github", Map.<String, Object>of("repo", "test/repo")));
+                () -> registry.invokeTool("github", Map.<String, Object>of("target", "test/repo")));
 
         assertTrue(ex.getMessage().contains("NETWORK_OUTBOUND"),
                 "SecurityException should mention the blocked operation");
@@ -105,7 +105,7 @@ class ToolRegistryTest {
         // This will *not* throw SecurityException (governance passes).
         // The tool itself may fail (no 'gh' binary) — that's fine; we're
         // testing governance, not the gh CLI.
-        ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("repo", "test/repo"));
+        ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
         assertNotNull(response, "Should get a response (even if tool execution failed)");
     }
 

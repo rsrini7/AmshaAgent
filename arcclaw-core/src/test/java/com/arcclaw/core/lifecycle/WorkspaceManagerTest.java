@@ -2,6 +2,7 @@ package com.arcclaw.core.lifecycle;
 
 import com.arcclaw.core.agent.ReasoningStep;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.test.junit.QuarkusTest;
@@ -48,7 +49,6 @@ class WorkspaceManagerTest {
      * method and verify it gets marked FAILED.
      */
     @Test
-    @Transactional
     void testZombieRecoveryMarksInProgressAsFailed() {
         // Arrange: create an IN_PROGRESS checkpoint (simulates a crash)
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
@@ -178,17 +178,18 @@ class WorkspaceManagerTest {
      * Test 5: Zombie Recovery for AWAITING_APPROVAL.
      */
     @Test
-    @Transactional
     void testZombieRecoveryMarksAwaitingApprovalAsFailed() {
         String sessionId = "zombie-approval-1";
         WorkspaceScopeHolder.run(sessionId, () -> {
             var steps = List.of(new ReasoningStep("thought", "action", Map.of(), null, 0, 0));
             var cp = agentStore.save(sessionId, "coordinator", steps);
 
-            // Manually set to AWAITING_APPROVAL
-            cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-            em.merge(cp);
-            em.flush();
+            // Manually set to AWAITING_APPROVAL in a separate transaction
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                AgentCheckpoint managedCp = em.find(AgentCheckpoint.class, cp.getId());
+                managedCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+                em.merge(managedCp);
+            });
         });
 
         // Act
