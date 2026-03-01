@@ -82,3 +82,10 @@ git diff --name-only --staged | ForEach-Object { Get-Content $_ } | Set-Content 
 
 ---
 
+git diff --name-only --diff-filter=AM origin/main...HEAD |
+Where-Object { $_ -notmatch "\.(md|txt)$" } |
+ForEach-Object {
+    "===== $_ ====="
+    Get-Content -Raw $_
+    ""
+} | Set-Content modified_files_full_content.txt
