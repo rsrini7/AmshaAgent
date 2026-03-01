@@ -34,7 +34,11 @@ public class AuditService {
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
-            log.warnf(e, "[AUDIT] Failed to submit TELEMETRY event %s for session %s", type, sessionId);
+            if (e.getMessage() != null && e.getMessage().contains("[TEST-EXPECTED]")) {
+                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, e.getMessage());
+            } else {
+                log.warnf(e, "[AUDIT] Failed to submit TELEMETRY event %s for session %s", type, sessionId);
+            }
         }
     }
 
@@ -77,7 +81,11 @@ public class AuditService {
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
-            log.warnf(e, "[AUDIT] Failed to submit loop completion TELEMETRY for session %s", sessionId);
+            if (e.getMessage() != null && e.getMessage().contains("[TEST-EXPECTED]")) {
+                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, e.getMessage());
+            } else {
+                log.warnf(e, "[AUDIT] Failed to submit loop completion TELEMETRY for session %s", sessionId);
+            }
         }
     }
 
