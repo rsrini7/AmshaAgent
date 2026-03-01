@@ -296,4 +296,135 @@ class AgentCronRepositoryTest {
         assertEquals(1, otherJobs.size(), "Other user's jobs must remain intact");
         assertEquals(job3.id, otherJobs.get(0).id);
     }
+
+    @Test
+    @Transactional
+    void testReclaimStaleCronsDoesNotReclaimFailedOrCompletedRows() {
+        Instant threshold = Instant.now().minus(10, ChronoUnit.MINUTES);
+        Instant oldTime   = Instant.now().minus(20, ChronoUnit.MINUTES); // older than threshold
+
+        // Row 1: RUNNING + null lastFireTime + old createdAt → MUST be reclaimed
+        AgentCronEntity stuckRunning = new AgentCronEntity();
+        stuckRunning.id             = UUID.randomUUID().toString();
+        stuckRunning.userId         = "user-1";
+        stuckRunning.chatId         = "chat-1";
+        stuckRunning.sessionId      = "session-1";
+        stuckRunning.goal           = "CRON: test";
+        stuckRunning.cronExpression = "0 9 * * *";
+        stuckRunning.timezone       = "UTC";
+        stuckRunning.status         = "RUNNING";
+        stuckRunning.lastFireTime   = null;
+        stuckRunning.createdAt      = oldTime;
+        stuckRunning.nextFireTime   = oldTime;
+        repository.persist(stuckRunning);
+
+        // Row 2: FAILED + null lastFireTime + old createdAt → MUST NOT be reclaimed
+        AgentCronEntity failedRow = new AgentCronEntity();
+        failedRow.id             = UUID.randomUUID().toString();
+        failedRow.userId         = "user-1";
+        failedRow.chatId         = "chat-1";
+        failedRow.sessionId      = "session-2";
+        failedRow.goal           = "CRON: test";
+        failedRow.cronExpression = "0 9 * * *";
+        failedRow.timezone       = "UTC";
+        failedRow.status         = "FAILED";
+        failedRow.lastFireTime   = null;
+        failedRow.createdAt      = oldTime;
+        failedRow.nextFireTime   = oldTime;
+        repository.persist(failedRow);
+
+        // Row 3: COMPLETED + null lastFireTime + old createdAt → MUST NOT be reclaimed
+        AgentCronEntity completedRow = new AgentCronEntity();
+        completedRow.id             = UUID.randomUUID().toString();
+        completedRow.userId         = "user-1";
+        completedRow.chatId         = "chat-1";
+        completedRow.sessionId      = "session-3";
+        completedRow.goal           = "CRON: test";
+        completedRow.cronExpression = "0 9 * * *";
+        completedRow.timezone       = "UTC";
+        completedRow.status         = "COMPLETED";
+        completedRow.lastFireTime   = null;
+        completedRow.createdAt      = oldTime;
+        completedRow.nextFireTime   = oldTime;
+        repository.persist(completedRow);
+
+        // Row 4: RUNNING + stale lastFireTime (non-null) → MUST be reclaimed
+        AgentCronEntity stuckRunning2 = new AgentCronEntity();
+        stuckRunning2.id             = UUID.randomUUID().toString();
+        stuckRunning2.userId         = "user-1";
+        stuckRunning2.chatId         = "chat-1";
+        stuckRunning2.sessionId      = "session-4";
+        stuckRunning2.goal           = "CRON: test";
+        stuckRunning2.cronExpression = "0 9 * * *";
+        stuckRunning2.timezone       = "UTC";
+        stuckRunning2.status         = "RUNNING";
+        stuckRunning2.lastFireTime   = oldTime; // stale non-null
+        stuckRunning2.createdAt      = oldTime;
+        stuckRunning2.nextFireTime   = oldTime;
+        repository.persist(stuckRunning2);
+
+        // Row 5: RUNNING + recent lastFireTime → MUST NOT be reclaimed (still executing)
+        AgentCronEntity activeRunning = new AgentCronEntity();
+        activeRunning.id             = UUID.randomUUID().toString();
+        activeRunning.userId         = "user-1";
+        activeRunning.chatId         = "chat-1";
+        activeRunning.sessionId      = "session-5";
+        activeRunning.goal           = "CRON: test";
+        activeRunning.cronExpression = "0 9 * * *";
+        activeRunning.timezone       = "UTC";
+        activeRunning.status         = "RUNNING";
+        activeRunning.lastFireTime   = Instant.now().minus(1, ChronoUnit.MINUTES); // recent
+        activeRunning.createdAt      = oldTime;
+        activeRunning.nextFireTime   = oldTime;
+        repository.persist(stuckRunning);
+        repository.persist(failedRow);
+        repository.persist(completedRow);
+        repository.persist(stuckRunning2);
+        repository.persist(activeRunning);
+
+        em.flush();
+        em.clear();
+
+        // Act
+        repository.reclaimStaleCrons(threshold);
+
+        em.flush();
+        em.clear();
+
+        // Assert — reload all rows fresh
+        AgentCronEntity r1 = findById(stuckRunning.id);
+        AgentCronEntity r2 = findById(failedRow.id);
+        AgentCronEntity r3 = findById(completedRow.id);
+        AgentCronEntity r4 = findById(stuckRunning2.id);
+        AgentCronEntity r5 = findById(activeRunning.id);
+
+        // Row 1: RUNNING + null createdAt old → must be ACTIVE now
+        assertEquals("ACTIVE", r1.status,
+                "RUNNING row with null lastFireTime older than threshold must be reclaimed to ACTIVE");
+
+        // Row 2: FAILED must stay FAILED — the SQL bug would flip this to ACTIVE
+        assertEquals("FAILED", r2.status,
+                "FAILED row must NOT be reclaimed — SQL operator precedence bug if this fails");
+
+        // Row 3: COMPLETED must stay COMPLETED
+        assertEquals("COMPLETED", r3.status,
+                "COMPLETED row must NOT be reclaimed — SQL operator precedence bug if this fails");
+
+        // Row 4: RUNNING + stale non-null lastFireTime → must be ACTIVE
+        assertEquals("ACTIVE", r4.status,
+                "RUNNING row with stale lastFireTime must be reclaimed to ACTIVE");
+
+        // Row 5: RUNNING + recent lastFireTime → must stay RUNNING
+        assertEquals("RUNNING", r5.status,
+                "RUNNING row with recent lastFireTime must NOT be reclaimed — still executing");
+        }
+
+        private AgentCronEntity findById(String id) {
+                return (AgentCronEntity) em.createNativeQuery(
+                        "SELECT * FROM agentcron WHERE id = :id", AgentCronEntity.class)
+                        .setParameter("id", id)
+                        .getSingleResult();
+        }
+
+
 }
