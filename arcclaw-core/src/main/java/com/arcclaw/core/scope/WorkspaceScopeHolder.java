@@ -20,6 +20,7 @@ public final class WorkspaceScopeHolder {
 
     private static final ScopedValue<String> WORKSPACE_ID = ScopedValue.newInstance();
     public static final ScopedValue<String> USER_ID = ScopedValue.newInstance();
+    public static final ScopedValue<String> CHAT_ID = ScopedValue.newInstance();
     private static final Logger LOG = Logger.getLogger(WorkspaceScopeHolder.class);
 
     // Bridge for MicroProfile Context Propagation which doesn't support ScopedValue natively
@@ -49,17 +50,6 @@ public final class WorkspaceScopeHolder {
     }
 
     /**
-     * Manual session management for tests or non-standard scenarios.
-     * <p>
-     * Prefer {@link #run(String, Runnable)} or {@link #call(String, Callable)}
-     * whenever possible. This method uses the propagation bridge ({@code ThreadLocal}).
-     */
-    public static void set(String sessionId) {
-        validate(sessionId);
-        setBridge(sessionId);
-    }
-
-    /**
      * Clear the current session ID from the propagation bridge.
      */
     public static void clear() {
@@ -79,25 +69,60 @@ public final class WorkspaceScopeHolder {
     }
 
     public static void run(String sessionId, Runnable runnable) {
+        run(sessionId, null, null, runnable);
+    }
+
+    public static void run(String sessionId, String userId, String chatId, Runnable runnable) {
         validate(sessionId);
-        LOG.debugf("Binding session: %s on thread: %s", sessionId, Thread.currentThread());
+        LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
+                sessionId, userId, chatId, Thread.currentThread());
+        
         MDC.put("sessionId", sessionId);
+        if (userId != null) MDC.put("userId", userId);
+        
         try {
-            ScopedValue.where(WORKSPACE_ID, sessionId).run(runnable);
+            var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
+            if (userId != null) {
+                scope = scope.where(USER_ID, userId);
+            }
+            if (chatId != null) {
+                scope = scope.where(CHAT_ID, chatId);
+            }
+            scope.run(runnable);
         } finally {
             MDC.remove("sessionId");
+            MDC.remove("userId");
         }
     }
 
     public static <T> T call(String sessionId, Callable<T> callable) throws Exception {
+        return call(sessionId, null, null, callable);
+    }
+
+    public static <T> T call(String sessionId, String userId, String chatId, Callable<T> callable) throws Exception {
         validate(sessionId);
-        LOG.debugf("Binding session: %s on thread: %s", sessionId, Thread.currentThread());
-        return ScopedValue.where(WORKSPACE_ID, sessionId).call(new ScopedValue.CallableOp<T, Exception>() {
-            @Override
-            public T call() throws Exception {
-                return callable.call();
+        LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
+                sessionId, userId, chatId, Thread.currentThread());
+        
+        MDC.put("sessionId", sessionId);
+        if (userId != null) MDC.put("userId", userId);
+        
+        try {
+            var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
+            if (userId != null) {
+                scope = scope.where(USER_ID, userId);
             }
-        });
+
+            return scope.call(new ScopedValue.CallableOp<T, Exception>() {
+                @Override
+                public T call() throws Exception {
+                    return callable.call();
+                }
+            });
+        } finally {
+            MDC.remove("sessionId");
+            MDC.remove("userId");
+        }
     }
 
     public static Runnable wrap(Runnable runnable) {
