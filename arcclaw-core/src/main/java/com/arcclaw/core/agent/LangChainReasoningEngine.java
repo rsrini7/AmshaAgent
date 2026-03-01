@@ -92,11 +92,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    - Recurring tasks ("every day", "weekly", "every Monday"):
                        runOnce=false. Use wildcard cron e.g. "0 9 * * 1"
                    - NEVER use "* * * * *" — this fires every minute forever.
-                3. For one-shot tasks, start from SYSTEM TIME UTC shown below.
-                   If the user says "in 5 minutes" at 12:47 IST, that is 07:17 UTC.
-                   Convert their local time to UTC before computing the cron fields.
-                   If the user mentions their timezone explicitly, use it.
-                   Otherwise assume UTC unless context clearly implies otherwise.
+                3. TIME MATH FOR ONE-SHOT TASKS:
+                    Start from the SYSTEM TIME UTC shown below.
+                    If the user says "in X minutes", you MUST mathematically add X to the current system minute.
+                    Example: If SYSTEM TIME is 09:50 UTC and user says "in 1 min", 50 + 1 = 51. The cron is "51 9 * * *".
+                    Do NOT just put "X" in the minute field. If minutes exceed 59, carry over to the next hour.
+                    If the user mentions their timezone explicitly, convert it. Otherwise assume UTC.
                 4. THE 1-MINUTE BOUNDARY (NO SECONDS):
                    Standard UNIX cron does NOT support scheduling by the second.
                     - If the user asks for "seconds" (e.g., "every 40 secs", "after 30 seconds"), you MUST decline with plain text: "I can only schedule tasks with a minimum interval of 1 minute."
