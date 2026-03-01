@@ -51,11 +51,11 @@
 | **Build** | Split-Package Error | Tests in `arcclaw-app` sharing same package as `arcclaw-core`. | Moved all core-related tests to `arcclaw-core/src/test/java` and updated Maven profiles. |
 | **Observability** | Non-Mockable Tracer | OTel `Tracer` is final or provided by CDI in a way Mockito dislikes. | Use standalone `@Alternative` + `@Priority` pattern to provide a mock Tracer bean in test profiles. |
 | **Observability** | Disconnected Spans | Child spans not linked to session root. | Use `Context.current().with(parentSpan)` explicitly when creating child spans. |
-54: | **Cron** | `SQLITE_BUSY` (polling) | Read locks blocking write-lock upgrades during fire cycle. | Use split transactions (move reads outside write-transaction block). |
-55: | **Security** | `NPE` in Validator | Missing `Optional` injection in unit tests for startup checks. | Ensure `@ConfigProperty` fields are correctly set using `injectFields` in mocks. |
-56: 
-57: ---
-
+| **Cron** | `SQLITE_BUSY` (polling) | Read locks blocking write-lock upgrades during fire cycle. | Use split transactions (move reads outside write-transaction block). |
+| **Security** | `NPE` in Validator | Missing `Optional` injection in unit tests for startup checks. | Ensure `@ConfigProperty` fields are correctly set using `injectFields` in mocks. |
+| **Cron** | `@Scheduled` methods never fire after first build |`quarkus-scheduler` dependency missing from `arcclaw-app/pom.xml` —`@Scheduled` is a no-op without it | Add `<dependency><groupId>io.quarkus</groupId><artifactId>quarkus-scheduler</artifactId></dependency>` to `arcclaw-app/pom.xml` |
+| **Cron** | `Unknown agent role: coordinator` error in JAR mode |`ArcClawSupervisor` re-introduced — its CDI `Instance<Agent>` lookup is empty on virtual threads in JAR mode (lazy instantiation timing) |`AgentCronScheduler` must inject `AgentLoop` directly. Remove `ArcClawSupervisor` and do NOT re-add it. |
+ 
 ---
 
 ## 3. Build & Infrastructure Troubleshooting
@@ -2851,6 +2851,3 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 2. **Explicit Parameter Passing**: To ensure 100% reliability across Virtual Thread and executor boundaries, we refactored the compaction call chain to pass the `userId` as an explicit method parameter (`compactIfNeeded(sessionId, userId)`), rather than pulling it from a thread-local or `ScopedValue` inside the repository.
 3. **Passive Startup Initialization**: We moved to a passive `COUNT(*)` guard in `AuditSchemaEnforcer`, ensuring that startup seeding is idempotent and doesn't conflict with active connection attachments.
 
-```
-
-```

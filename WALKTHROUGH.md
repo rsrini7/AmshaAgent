@@ -1019,7 +1019,7 @@ ArcClaw has been upgraded from a reactive chatbot into a **proactive agent** cap
 ### Safety & Concurrency
 
 - **Fork Bomb Prevention**: Fired cron jobs use a `cron-` prefixed `sessionId`. The `LangChainReasoningEngine` detects this and removes all scheduling tools from the LLM prompt, making it impossible for an agent to schedule more tasks from a background task.
-- **Crash Recovery**: The scheduler automatically reclaims "RUNNING" jobs that exceed a heartbeat threshold, ensuring tasks aren't stuck after system restarts.
+- **Crash Recovery**: The scheduler automatically reclaims `RUNNING` jobs that exceed a 5-minute heartbeat threshold, ensuring tasks aren't stuck after restarts. Two cases are covered: (1) jobs where `lastFireTime` is set but stale (JVM died during execution), and (2) jobs where `lastFireTime IS NULL` — claimed via `claimForFire` but the JVM crashed before `executeCronJob` began — reclaimed via the `createdAt < threshold` fallback in `reclaimStaleCrons`.
 - **Tenant Isolation**: All cron operations (list/delete/fire) are strictly scoped by `userId`. User A cannot see or manage User B's scheduled tasks.
 - **Production Guard**: `StartupSecurityValidator` now hard-fails if the bot is deployed with empty Telegram allowlists in production, preventing unauthorized public access.
 

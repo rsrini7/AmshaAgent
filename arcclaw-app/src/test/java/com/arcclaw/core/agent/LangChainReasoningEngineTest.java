@@ -218,7 +218,7 @@ class LangChainReasoningEngineTest {
         .toList();
         // Researcher MUST have these four — hard contract
         assertTrue(toolNames.contains("github"),        "researcher must have github");
-        assertTrue(toolNames.contains("memorysearch"),  "researcher must have memorysearch");
+        assertTrue(toolNames.contains("memory_search"), "researcher must have memory_search");
         assertTrue(toolNames.contains("scheduletask"),  "researcher must have scheduletask");
         assertTrue(toolNames.contains("manageschedule"),"researcher must have manageschedule");
         // Researcher must NOT have shell or vault access — safety boundary
