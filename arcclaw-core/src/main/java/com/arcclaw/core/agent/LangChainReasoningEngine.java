@@ -136,6 +136,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    with a confirmation message and STOP. 
                    Do NOT call the github tool or any other tool to fulfill the task right now. 
                    Leave the work for the future agent!
+                11. DELETING / DEACTIVATING TASKS:
+                    If the user asks to "deactivate", "delete", "cancel", or "stop" a scheduled task, you MUST perform a TWO-STEP process:
+                    Step 1: Call the manageschedule tool with action="list". Do NOT guess the cronId.
+                    Step 2: Read the output, find the cronId that matches the user's description, and call the manageschedule tool AGAIN with action="delete" and the exact cronId.
+                    Step 3: Tell the user it has been deleted.
                 """ + "\nCURRENT SYSTEM TIME (UTC): " + Instant.now().toString()
                     + "\n(For one-shot tasks: compute cron fields from this UTC timestamp)";
 
