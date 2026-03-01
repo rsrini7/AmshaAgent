@@ -28,15 +28,15 @@ class TelegramAllowlistGuardRestrictedTest {
     @Test
     void testRestrictedAllowlist() {
         // Valid users
-        assertTrue(guard.isAllowed("Alice"));
-        assertTrue(guard.isAllowed("@Alice")); // user provides leading @, should still match Alice
-        assertTrue(guard.isAllowed("Bob"));    // configured with @, user provides without
-        assertTrue(guard.isAllowed("@Bob"));   // configured with @, user provides with @
-        assertTrue(guard.isAllowed("CHARLIE")); // case insensitive
+        assertTrue(guard.isAllowed(null, "Alice"));
+        assertTrue(guard.isAllowed(null, "@Alice")); // user provides leading @, should still match Alice
+        assertTrue(guard.isAllowed(null, "Bob"));    // configured with @, user provides without
+        assertTrue(guard.isAllowed(null, "@Bob"));   // configured with @, user provides with @
+        assertTrue(guard.isAllowed(null, "CHARLIE")); // case insensitive
         
         // Invalid users
-        assertFalse(guard.isAllowed("eve"));
-        assertFalse(guard.isAllowed(null));
-        assertFalse(guard.isAllowed(""));
+        assertFalse(guard.isAllowed(null, "eve"));
+        assertFalse(guard.isAllowed(null, null));
+        assertFalse(guard.isAllowed(null, ""));
     }
 }

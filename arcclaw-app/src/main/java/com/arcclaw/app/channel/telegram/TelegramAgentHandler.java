@@ -113,7 +113,7 @@ public class TelegramAgentHandler {
 
         log.infof("Received Telegram message from user %s (@%s) in chat %s: %s", userId, username, chatId, text);
 
-        if (!allowlistGuard.isAllowed(username)) {
+        if (!allowlistGuard.isAllowed(msg.getFrom().getId(), username)) {
             if (!allowlistGuard.isSilentBlock()) {
                 reply(chatId, allowlistGuard.getBlockResponse());
             }
@@ -137,6 +137,7 @@ public class TelegramAgentHandler {
         String baseId = UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes(StandardCharsets.UTF_8)).toString();
 
         ScopedValue.where(WorkspaceScopeHolder.USER_ID, userId)
+                   .where(WorkspaceScopeHolder.CHAT_ID, chatId)
                    .run(() -> WorkspaceScopeHolder.run(baseId, () -> {
             try {
                 // Push userId to MDC for Audit logs
@@ -255,7 +256,7 @@ public class TelegramAgentHandler {
         producerTemplate.sendBodyAndHeaders(
                 "telegram:bots?authorizationToken=" + botToken,
                 message,
-                java.util.Map.of("CamelTelegramChatId", chatId)
+                new java.util.HashMap<>(java.util.Map.of("CamelTelegramChatId", chatId))
         );
     }
 }

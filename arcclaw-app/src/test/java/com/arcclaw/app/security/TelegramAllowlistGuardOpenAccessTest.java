@@ -16,8 +16,8 @@ class TelegramAllowlistGuardOpenAccessTest {
     void testAllowlistOpenAccess() {
         // In the default application.yaml test profile, allowed-users is "" (empty)
         // This signifies open access.
-        assertTrue(guard.isAllowed("anyuser"));
-        assertTrue(guard.isAllowed(null));
-        assertTrue(guard.isAllowed(""));
+        assertTrue(guard.isAllowed(null, "anyuser"));
+        assertTrue(guard.isAllowed(null, null));
+        assertTrue(guard.isAllowed(null, ""));
     }
 }

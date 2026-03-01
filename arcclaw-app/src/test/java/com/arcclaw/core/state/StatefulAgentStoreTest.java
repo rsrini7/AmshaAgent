@@ -32,7 +32,8 @@ class StatefulAgentStoreTest {
 
     @BeforeEach
     void activate() {
-        // No-op
+        // Clear any pending background writes from previous tests
+        auditService.waitForIdle();
     }
 
     @AfterEach

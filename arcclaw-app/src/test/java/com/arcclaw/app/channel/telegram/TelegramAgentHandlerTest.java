@@ -95,11 +95,11 @@ public class TelegramAgentHandlerTest {
                 .thenReturn(AgentResult.finished("mock-answer", List.of()));
 
         // Default mock for reflex registry (simulate no commands hit, passthrough sanitized input)
-        when(reflexRegistryMock.processIfReflex(anyString(), anyString(), anyString()))
-                .thenAnswer(inv -> new ReflexResult(Optional.empty(), inv.getArgument(2)));
+        when(reflexRegistryMock.processIfReflex(any(), any(), any()))
+                .thenAnswer(inv -> new ReflexResult(Optional.empty(), (String) inv.getArgument(2)));
 
         // Default mock for allowlist guard
-        when(allowlistGuardMock.isAllowed(any())).thenReturn(true);
+        when(allowlistGuardMock.isAllowed(any(), any())).thenReturn(true);
 
         // Default mock for RoleRegistry
         when(roleRegistryMock.defaultMaxIterations(any())).thenReturn(5);
@@ -235,7 +235,7 @@ public class TelegramAgentHandlerTest {
         when(in.getBody(IncomingMessage.class)).thenReturn(msg);
         when(in.getHeader("CamelTelegramChatId", String.class)).thenReturn("chat999");
 
-        when(allowlistGuardMock.isAllowed("hacker")).thenReturn(false);
+        when(allowlistGuardMock.isAllowed(any(), eq("hacker"))).thenReturn(false);
         when(allowlistGuardMock.isSilentBlock()).thenReturn(false);
         when(allowlistGuardMock.getBlockResponse()).thenReturn("⛔ Access denied.");
 
