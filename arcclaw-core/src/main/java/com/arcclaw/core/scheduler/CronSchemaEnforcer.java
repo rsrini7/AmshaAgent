@@ -92,19 +92,27 @@ public class CronSchemaEnforcer {
      */
     private boolean hasColumn(String tableName, String columnName) {
         try {
+            // Using a more robust check that works across different SQLite/JDBC versions
             @SuppressWarnings("unchecked")
-            java.util.List<Object[]> columns = em.createNativeQuery(
+            java.util.List<Object> results = em.createNativeQuery(
                     "PRAGMA table_info(" + tableName + ")"
             ).getResultList();
 
-            for (Object[] row : columns) {
-                // pragma_table_info columns: cid, name, type, notnull, dflt_value, pk
-                if (columnName.equalsIgnoreCase(row[1].toString())) {
-                    return true;
+            for (Object row : results) {
+                if (row instanceof Object[] columns) {
+                    // PRAGMA table_info returns: [cid, name, type, notnull, dflt_value, pk]
+                    if (columns.length > 1 && columnName.equalsIgnoreCase(String.valueOf(columns[1]))) {
+                        return true;
+                    }
+                } else if (row instanceof String name) {
+                    // Some drivers might return just the name if the query is different
+                    if (columnName.equalsIgnoreCase(name)) {
+                        return true;
+                    }
                 }
             }
         } catch (Exception e) {
-            log.warnf("Failed to check column existence for %s.%s: %s", tableName, columnName, e.getMessage());
+            log.debugf("Failed to check column existence for %s.%s: %s", tableName, columnName, e.getMessage());
         }
         return false;
     }

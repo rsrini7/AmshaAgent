@@ -220,8 +220,14 @@ public class AgentCronScheduler {
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     SecurityEventType.CRONFAILED,
                     "cronId=" + job.id + " reason=" + t.getMessage());
-                    
-            log.warnf(t, "CRON-FAIL cronId=%s", job.id);
+
+            // Avoid log pollution for expected test failures
+            if (t.getMessage() != null && t.getMessage().contains("[TEST-EXPECTED]")) {
+                log.warnf("CRON-FAIL (EXPECTED) cronId=%s: %s", job.id, t.getMessage());
+            } else {
+                log.warnf(t, "CRON-FAIL cronId=%s", job.id);
+            }
+            
             try {
                 camelProducer.sendBodyAndHeaders(
                         telegramEndpoint,
