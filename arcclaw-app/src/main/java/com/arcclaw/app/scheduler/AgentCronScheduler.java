@@ -215,10 +215,12 @@ public class AgentCronScheduler {
         } catch (Throwable t) {
             // Inner Throwable catches OOME during AgentLoop/Telegram
             cronRepository.markFailed(job.id, t.getMessage());
-            auditService.record(job.sessionId, job.userId,
+            String cronSessionId = "cron-" + job.id; // Recompute to ensure audit correlation
+            auditService.record(cronSessionId, job.userId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     SecurityEventType.CRONFAILED,
                     "cronId=" + job.id + " reason=" + t.getMessage());
+                    
             log.warnf(t, "CRON-FAIL cronId=%s", job.id);
             try {
                 camelProducer.sendBodyAndHeaders(

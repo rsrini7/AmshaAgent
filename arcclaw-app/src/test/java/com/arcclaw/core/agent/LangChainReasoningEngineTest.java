@@ -217,4 +217,27 @@ class LangChainReasoningEngineTest {
         assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("scheduletask")));
         assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("manageschedule")));
     }
+
+    @Test
+    void testCronFiredSessionStripsScheduleTools() {
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(captor.capture())).thenReturn(
+                ChatResponse.builder().aiMessage(AiMessage.from("OK")).build());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+
+        // Act: Use a sessionId starting with "cron-"
+        reasoningEngine.nextStep("cron-12345", "coordinator", "CRON: Do background task", List.of());
+
+        ChatRequest sent = captor.getValue();
+        assertNotNull(sent.toolSpecifications());
+        
+        // Assert scheduletask and manageschedule are physically missing
+        boolean hasScheduleTask = sent.toolSpecifications().stream()
+                .anyMatch(t -> t.name().equals("scheduletask"));
+        boolean hasManageSchedule = sent.toolSpecifications().stream()
+                .anyMatch(t -> t.name().equals("manageschedule"));
+        
+        assertFalse(hasScheduleTask, "scheduletask MUST be stripped from cron sessions to prevent fork bombs");
+        assertFalse(hasManageSchedule, "manageschedule MUST be stripped from cron sessions");
+    }
 }

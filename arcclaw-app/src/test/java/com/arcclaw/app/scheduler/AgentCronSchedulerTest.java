@@ -24,6 +24,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -137,16 +142,35 @@ class AgentCronSchedulerTest {
     }
 
     @Test
-    void testThrottledJobReleasedNotFailed() {
+    void testThrottledJobReleasedNotFailed() throws Exception {
         AgentCronEntity job = createDueJob(false);
         when(cronRepository.findDueCrons()).thenReturn(List.of(job));
         when(cronRepository.claimForFire(job.id)).thenReturn(true);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
-                .thenReturn(AgentResult.finished("OK", List.of()));
 
-        scheduler.pollAndDispatch();
+        // 1. Unwrap the CDI proxy to access the underlying instance
+        AgentCronScheduler instance = scheduler;
+        if (scheduler instanceof io.quarkus.arc.ClientProxy) {
+            instance = (AgentCronScheduler) ((io.quarkus.arc.ClientProxy) scheduler).arc_contextualInstance();
+        }
 
-        verify(cronRepository, never()).markFailed(eq(job.id), contains("throttle"));
+        // 2. Use reflection to force the semaphore to 0 permits
+        java.lang.reflect.Field limiterField = AgentCronScheduler.class.getDeclaredField("concurrencyLimiter");
+        limiterField.setAccessible(true);
+        java.util.concurrent.Semaphore originalSemaphore = (java.util.concurrent.Semaphore) limiterField.get(instance);
+        limiterField.set(instance, new java.util.concurrent.Semaphore(0));
+
+        try {
+            // 3. Execute — this will immediately hit the !concurrencyLimiter.tryAcquire() block
+            scheduler.pollAndDispatch();
+
+            // 4. Verify throttle recovery logic
+            verify(cronRepository).releaseClaimToActive(eq(job.id));
+            verify(cronRepository, never()).markFailed(eq(job.id), org.mockito.ArgumentMatchers.anyString());
+            verify(agentLoop, never()).run(anyString(), anyString(), anyString(), any(), anyInt());
+        } finally {
+            // 5. Restore the original semaphore so subsequent tests aren't broken
+            limiterField.set(instance, originalSemaphore);
+        }
     }
 
     @Test

@@ -241,4 +241,24 @@ class AgentCronRepositoryTest {
         AgentCronEntity deleted = em.find(AgentCronEntity.class, e.id);
         assertNull(deleted, "User A should be able to delete their own cron");
     }
+
+    @Test
+    @Transactional
+    void testReclaimStaleCronsHandlesNullLastFireTime() {
+        AgentCronEntity stale = createEntity("user-stale-null", "RUNNING", 
+                Instant.now().plus(1, ChronoUnit.HOURS));
+        stale.lastFireTime = null; // Claimed but JVM crashed before AgentLoop started
+        stale.createdAt = Instant.now().minus(10, ChronoUnit.MINUTES);
+        em.persist(stale);
+        em.flush();
+        em.clear();
+
+        repository.reclaimStaleCrons(Instant.now().minus(5, ChronoUnit.MINUTES));
+        em.flush();
+        em.clear();
+
+        AgentCronEntity updated = em.find(AgentCronEntity.class, stale.id);
+        assertEquals("ACTIVE", updated.status, 
+                "RUNNING job with null lastFireTime should be reclaimed based on createdAt");
+    }    
 }
