@@ -4,8 +4,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import java.lang.ScopedValue;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

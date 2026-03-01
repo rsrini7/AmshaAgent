@@ -52,8 +52,9 @@ class ContextCompactionServiceIntegrationTest {
 
     @BeforeEach
     void setup() {
+        // Clear any pending background writes from previous tests
+        auditService.waitForIdle();
         WorkspaceScopeHolder.set(TEST_SESSION_ID);
-        // Clear old DB state just in case
         chatMemoryStore.deleteMessages(TEST_SESSION_ID);
     }
 

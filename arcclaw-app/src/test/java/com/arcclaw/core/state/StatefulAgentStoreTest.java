@@ -1,6 +1,7 @@
 package com.arcclaw.core.state;
 
 import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -26,8 +27,13 @@ class StatefulAgentStoreTest {
     @Inject
     StatefulAgentStore store;
 
+    @Inject
+    AuditService auditService;
+
     @BeforeEach
     void activate() {
+        // Clear any pending background writes from previous tests
+        auditService.waitForIdle();
         WorkspaceScopeHolder.set(SESSION);
     }
 

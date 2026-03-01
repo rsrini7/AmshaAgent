@@ -2,7 +2,6 @@ package com.arcclaw.core.agent;
 
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.agent.AgentRoleEnum;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;

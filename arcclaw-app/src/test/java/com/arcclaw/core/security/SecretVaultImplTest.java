@@ -1,5 +1,6 @@
 package com.arcclaw.core.security;
 
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -24,6 +25,9 @@ public class SecretVaultImplTest {
     EncryptedSecretRepository repository;
 
     @Inject
+    AuditService auditService;
+
+    @Inject
     jakarta.persistence.EntityManager entityManager;
 
     private static final String TEST_SESSION_ID = "test-session-auth";
@@ -32,6 +36,8 @@ public class SecretVaultImplTest {
 
     @Transactional
     void cleanDb() {
+        // Wait for background audit writes to finish
+        auditService.waitForIdle();
         repository.deleteBySessionId(TEST_SESSION_ID);
     }
 
@@ -41,6 +47,9 @@ public class SecretVaultImplTest {
             cleanDb();
             // 1. Store
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+
+            // Wait for background audit write
+            auditService.waitForIdle();
 
             // 2. Retrieve
             Optional<VaultKey> retrieved = vault.get(API_KEY_NAME);
@@ -58,6 +67,9 @@ public class SecretVaultImplTest {
             cleanDb();
             // 1. Store
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+
+            // Wait for background audit write
+            auditService.waitForIdle();
 
             // 2. Tamper: Direct DB access to flip a bit in ciphertext
             EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
@@ -85,6 +97,9 @@ public class SecretVaultImplTest {
             // 1. Store legitimate secret for OPENAI
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
+            // Wait for background audit write
+            auditService.waitForIdle();
+
             // 2. Steal ciphertext/nonce
             EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
 
@@ -99,15 +114,19 @@ public class SecretVaultImplTest {
     @Transactional
     void saveEntity(EncryptedSecret entity) {
         entityManager.merge(entity);
+        entityManager.flush();
+        entityManager.clear();
     }
 
     @Transactional
     void insertForgedSecret(String sessionId, String keyName, byte[] ciphertext, byte[] nonce) {
         EncryptedSecret forged = new EncryptedSecret();
         forged.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
-        forged.ciphertext = ciphertext;
-        forged.nonce = nonce;
+        forged.ciphertext = ciphertext.clone();
+        forged.nonce = nonce.clone();
         forged.version = 1;
         repository.persist(forged);
+        entityManager.flush();
+        entityManager.clear();
     }
 }
