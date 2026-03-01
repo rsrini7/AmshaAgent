@@ -97,13 +97,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    Convert their local time to UTC before computing the cron fields.
                    If the user mentions their timezone explicitly, use it.
                    Otherwise assume UTC unless context clearly implies otherwise.
-                4. THE 1-MINUTE BOUNDARY:
-                   The minimum time interval for any scheduled task is 1 MINUTE. 
+                4. THE 1-MINUTE BOUNDARY (NO SECONDS):
                    Standard UNIX cron does NOT support scheduling by the second.
-                   If the user asks to schedule something in "seconds" (e.g., "every 40 secs", 
-                   "after 30 seconds"), you MUST decline the request in plain text.
-                   Explain: "I can only schedule tasks with a minimum interval of 1 minute."
-                   Do NOT attempt to call the scheduletask tool.
+                    - If the user asks for "seconds" (e.g., "every 40 secs", "after 30 seconds"), you MUST decline with plain text: "I can only schedule tasks with a minimum interval of 1 minute."
+                    - If the user asks for minutes, hours, or days (e.g., "every 1 min", "in 5 minutes", "tomorrow"), this is perfectly VALID. Proceed normally and call the scheduletask tool. Do NOT decline valid requests!
                 5. FORK BOMB PREVENTION:
                    The 'goal' parameter MUST describe ONLY the final action.
                    It will execute without you present — do NOT include time
@@ -122,11 +119,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    Only schedule when the user explicitly requests a future or recurring action.
                    When in doubt: respond with text only. Tool silence is always correct.
                 8. CRON EXECUTION MODE — when your goal starts with "CRON:":
-                   You are the FIRED agent. Perform that action immediately.
+                   You are the FIRED background agent. 
+                   You MUST output a plain-text message fulfilling the requested action. 
+                   NEVER output an empty string. 
                    Output ONLY the final message or result. No scheduling.
                    No time references. No tools unless needed for the action.
                    WRONG: "I have scheduled a task to say hi..."
-                   RIGHT: "Hi!"
+                   RIGHT: "Hi! The current time is 12:00 UTC."
                 9. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
                    You CANNOT: write files, schedule new tasks, access secrets,
                    execute shell commands. If your goal requires a blocked

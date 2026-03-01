@@ -176,15 +176,19 @@ public class AgentCronScheduler {
                     cronMaxIterations
             );
 
-            String answer = result.finalAnswer() != null
-                    ? result.finalAnswer() : "(no output)";
+            String rawAnswer = result.finalAnswer() != null ? result.finalAnswer() : "";
+            
+            // Defensive Guard against empty LLM outputs crashing Telegram
+            String finalAnswer = rawAnswer.trim().isEmpty() 
+                    ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.goal 
+                    : rawAnswer;
 
             // DELIVERY ORDER: idempotency key → Telegram → DB update
             String deliveryId = UUID.randomUUID().toString();
             cronRepository.setDeliveryId(job.id, deliveryId);
 
             camelProducer.sendBodyAndHeaders(
-                    telegramEndpoint, answer,
+                    telegramEndpoint, finalAnswer,
                     new HashMap<>(Map.of("CamelTelegramChatId", job.chatId))
             );
 
