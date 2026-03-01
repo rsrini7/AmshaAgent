@@ -6,6 +6,9 @@ import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 
+import java.util.List;
+import java.util.Optional;
+
 @ApplicationScoped
 public class StartupSecurityValidator {
 
@@ -18,6 +21,12 @@ public class StartupSecurityValidator {
     @ConfigProperty(name = "quarkus.profile")
     String profile;
 
+    @ConfigProperty(name = "arcclaw.channel.telegram.allowed-user-ids")
+    Optional<List<Long>> allowedUserIds;
+
+    @ConfigProperty(name = "arcclaw.channel.telegram.allowed-users")
+    Optional<List<String>> allowedUsers;
+
     void onStart(@Observes StartupEvent ev) {
         if ("prod".equals(profile) || "staging".equals(profile)) {
             if (pepper.startsWith("dev-pepper")) {
@@ -29,6 +38,19 @@ public class StartupSecurityValidator {
                 throw new IllegalStateException(
                     "[SECURITY] arcclaw.audit.hmac-key is using the dev default. " +
                     "Set ARCCLAW_AUDIT_HMAC_KEY in your .env before running in prod.");
+            }
+
+            // Phase 46: Allowlist presence check — open access is forbidden in production
+            boolean hasUserIds = allowedUserIds.isPresent()
+                    && !allowedUserIds.get().isEmpty();
+            boolean hasUsernames = allowedUsers.isPresent()
+                    && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
+            if (!hasUserIds && !hasUsernames) {
+                throw new jakarta.enterprise.inject.spi.DeploymentException(
+                    "[SECURITY] Both arcclaw.channel.telegram.allowed-user-ids and " +
+                    "arcclaw.channel.telegram.allowed-users are empty in " + profile + " profile. " +
+                    "Open access is strictly forbidden in production. " +
+                    "Configure at least one allowlist before deploying.");
             }
         }
     }

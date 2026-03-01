@@ -1915,46 +1915,57 @@ Implement long-term memory retrieval for agents using SQLite's native FTS5 exten
 ## Verification Plan
 
 ### Automated Tests
-- ✅ `CompactionSummaryRepositoryTest`: Verified memory search with FTS5 and strict tenant isolation.
-- ✅ `LangChainReasoningEngineTest`: Verified that agents correctly retrieve memory via the repository.
-- ✅ Verified 21/21 tests passing across the `arcclaw-core` module.
+- ✅ `CompactionSummaryRepositoryTest`: Verified sync with explicit `userId`.
+- ✅ `ContextCompactionServiceIntegrationTest`: Verified end-to-end flow from app module.
+- ✅ `mvn clean verify`: All tests pass with new signatures.
 
 ---
 
-# Phase 45.1 — FTS5 Hardening & Robustness ✅
+# Phase 46: Proactive Autonomy via Agent-Writable Cron ✅
 
-Apply targeted patches to the SQLite FTS5 implementation to ensure stability across connection pools and threading boundaries.
+Transitioned ArcClaw from a reactive chatbot into a proactive agent capable of scheduling its own future tasks via a SQLite-backed cron system.
 
 ## Design Decisions
 
 > [!IMPORTANT]
-> **JDBC Connection Interception**: We implement `FtsConnectionInterceptor` (AgroalPoolInterceptor) to robustly `ATTACH` the `arcclaw-fts.db` schema on every connection acquisition. This ensures that even in multi-threaded pooling environments, the `fts` schema is always available. We use `PRAGMA database_list` to avoid duplicate attachment errors.
+> **Fork Bomb Prevention**: To prevent agents from scheduling infinite recursive tasks, the `scheduletask` and `manageschedule` tools are **physically removed** from the LLM tool specification whenever the `sessionId` starts with `cron-`. This ensures a fired cron job cannot schedule another cron job.
 
 > [!NOTE]
-> **Explicit Tenant Context**: Relying on `ScopedValue` inside the persistence layer is fragile due to executor boundary crossings (e.g., Virtual Threads). We refactored `upsertSummary` and `compactIfNeeded` to accept `userId` as an explicit parameter, ensuring tenant isolation is maintained regardless of the calling thread's context.
+> **BACKGROUND Autonomy**: Introduced a new autonomy level between `READONLY` and `SUPERVISED`. BACKGROUND allows read access to the filesystem and outbound network calls (to allow the agent to research or monitor status) but blocks file mutations, secret access, and further scheduling.
 
 > [!TIP]
-> **Idempotent Seed Guard**: The startup seeding logic in `AuditSchemaEnforcer` was converted from an active `INSERT` to a passive `COUNT(*)` guard. This prevents redundant operations and log noise on restarts, as the sync is already handled by the repository's manual synchronization logic.
+> **SQLite WAL Concurrency**: To avoid `SQLITE_BUSY` errors during high-frequency polling, we use a "Split Transaction" strategy in the `AgentCronRepository`. Reads use `NOT_SUPPORTED` (or `SUPPORTS`) to avoid holding locks, while writes use `REQUIRED` to acquire an `IMMEDIATE` lock only during the atomic claim/update window.
 
 ## Proposed Changes
 
 ### Core & App Modules
 
-#### [MODIFY] [FtsConnectionInterceptor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/FtsConnectionInterceptor.java)
-- Implemented robust JDBC schema attachment with `PRAGMA` check.
+#### [NEW] [AgentCronEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronEntity.java)
+- JPA entity for the `agentcron` table, using `InstantToTextConverter` for sort-safe ISO 8601 timestamps.
 
-#### [MODIFY] [CompactionSummaryRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryRepository.java)
-- Updated `upsertSummary(sessionId, userId, summary, count)` for explicit tenant passing.
+#### [NEW] [AgentCronRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronRepository.java)
+- Implements atomic `claimForFire()` and tenant-isolated CRUD operations with split-transaction logic.
 
-#### [MODIFY] [ContextCompactionService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ContextCompactionService.java)
-- Updated `compactIfNeeded` to accept and propagate `userId`.
+#### [NEW] [CronSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scheduler/CronSchemaEnforcer.java)
+- DDL enforcer for the `agentcron` table, indexes, and idempotent migrations.
 
-#### [MODIFY] [AuditSchemaEnforcer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditSchemaEnforcer.java)
-- Replaced active seeding with passive `COUNT(*)` state verification.
+#### [NEW] [ScheduleTaskTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ScheduleTaskTool.java)
+- Tool for agents to schedule tasks with `cron-utils` validation and a "naked pronoun" guard.
+
+#### [NEW] [AgentCronScheduler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java)
+- Poll-dispatch-execute cycle using `ManagedExecutor` for virtual threads and `BACKGROUND` autonomy.
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Implemented tool specification filtering for fork bomb prevention and injected `SYSTEM TIME UTC`.
+
+#### [MODIFY] [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java)
+- Added a hard-fail guard to ensure Telegram allowlists are configured in `prod`/`staging`.
 
 ## Verification Plan
 
 ### Automated Tests
-- ✅ `CompactionSummaryRepositoryTest`: Verified sync with explicit `userId`.
-- ✅ `ContextCompactionServiceIntegrationTest`: Verified end-to-end flow from app module.
-- ✅ `mvn clean verify`: All tests pass with new signatures.
+- ✅ **`ScheduleTaskToolTest`**: Verified cron expression validation and tenant isolation.
+- ✅ **`AgentCronRepositoryTest`**: Verified SQLite WAL concurrency and atomic claiming.
+- ✅ **`AgentCronSchedulerTest`**: Verified poll-fire logic, crash recovery, and virtual thread dispatch.
+- ✅ **Regression**: 147/147 core tests and 101/101 app tests pass (248/248 total).
+

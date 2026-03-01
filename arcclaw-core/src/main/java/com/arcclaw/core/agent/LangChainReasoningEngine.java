@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.jboss.logging.Logger;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +63,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
         return switch (resolvedRole) {
             case COORDINATOR -> """
-                PERMITTED TOOLS: github
+                PERMITTED TOOLS: github, scheduletask, manageschedule
                 STRICT TRIGGER RULE: Only invoke the github tool when ALL of the \
                 following conditions are true simultaneously:
                 1. The user message explicitly contains at least one of these words: \
@@ -79,7 +80,46 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 - Any query where no GitHub resource is named
 
                 When in doubt: output text ONLY. Tool silence is always correct.
-                """;
+
+                SCHEDULING RULES:
+                1. You can schedule yourself to wake up and perform tasks in the future.
+                2. ONE-SHOT vs RECURRING — set the runOnce parameter correctly:
+                   - One-time tasks ("remind me once", "in X minutes", "tomorrow"):
+                       runOnce=true. Compute the EXACT target UTC datetime as a
+                       specific cron: "minute hour dayOfMonth month *"
+                       Example: "say hi in 1 min" at 12:15 UTC Feb 28 →
+                       cronExpression="16 12 28 2 *", runOnce=true
+                   - Recurring tasks ("every day", "weekly", "every Monday"):
+                       runOnce=false. Use wildcard cron e.g. "0 9 * * 1"
+                   - NEVER use "* * * * *" — this fires every minute forever.
+                3. For one-shot tasks, start from current UTC time (injected below),
+                   add the user's offset, then express as specific date fields.
+                   dayOfMonth AND month MUST be the exact target date.
+                4. FORK BOMB PREVENTION:
+                   The 'goal' parameter MUST describe ONLY the final action.
+                   It will execute without you present — do NOT include time
+                   references or re-scheduling instructions.
+                   WRONG: "Say hi in 1 minute" (future agent re-schedules)
+                   RIGHT: "Send a Telegram message to the user saying: Hi!"
+                   WRONG: "Remind me to check DB tomorrow"
+                   RIGHT: "Query database status and report results to user."
+                5. GOAL MATERIALIZATION: The goal must be fully self-contained.
+                   WRONG: "Deploy it to production"
+                   RIGHT: "Deploy commit abc123 via: gh workflow run deploy.yml"
+                   If you cannot write a fully explicit goal, ask the user for
+                   the missing technical details BEFORE calling scheduletask.
+                6. CRON EXECUTION MODE — when your goal starts with "CRON:":
+                   You are the FIRED agent. Perform that action immediately.
+                   Output ONLY the final message or result. No scheduling.
+                   No time references. No tools unless needed for the action.
+                   WRONG: "I have scheduled a task to say hi..."
+                   RIGHT: "Hi!"
+                7. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
+                   You CANNOT: write files, schedule new tasks, access secrets,
+                   execute shell commands. If your goal requires a blocked
+                   operation, explain this to the user and FINISH immediately.
+                   Do NOT retry blocked tools.
+                """ + "\nSYSTEM TIME UTC: " + Instant.now().toString();
 
             case RESEARCHER ->
                 """
@@ -192,6 +232,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             6. If a user message contains both a text question and a tool request, answer
             the text question first as plain text, then initiate the tool call for the
             repository request separately.
+            7. TOOL REJECTION HANDLING:
+            If a tool call returns a message containing "Security violation", "not permitted",
+            or "autonomy level", this is a hard system boundary — NOT a transient error.
+            Do NOT retry the same tool call.
+            Immediately respond to the user with plain text explaining what happened.
+            Example: "I was unable to schedule this task due to a permission restriction.
+            Please ask an administrator to adjust the autonomy level."
 
             CRITICAL — GitHub Repository Requests:
             1. If the user provides ONLY a repo name without an owner (e.g.
@@ -387,8 +434,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         List<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
 
         // 2. Dynamically filter + build specs with parameter schema
+        // Phase 46: Fork bomb structural exclusion — physically remove scheduling
+        // tools from the schema when executing inside a cron-fired session.
+        boolean isCronFired = sessionId != null && sessionId.startsWith("cron-");
+
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
             .filter(allowedTools::contains)                             // Sprint 25A: Schema Jailbreak fix
+            .filter(name -> !isCronFired
+                    || (!name.equals("scheduletask") && !name.equals("manageschedule")))
             .map(name -> toolRegistry.findTool(name).orElseThrow())
             .map(tool -> ToolSpecification.builder()
                 .name(tool.name())

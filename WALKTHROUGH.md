@@ -648,9 +648,7 @@ To prevent the "Dangling Approval" bug (where a user greets the bot while a tool
 ### 2. Hardened Semantic Guardrails
 Refined the `IntentClassifierService` with strict guardrails to handle compound intents. By prioritizing **Actions** (e.g., CREATE) over **Context** (e.g., GITHUB), we resolved regressions where the LLM would incorrectly route creation tasks to the `researcher` role simply due to the presence of the "GitHub" keyword.
 
-**Verification**: Verified "Hi" cancels pending tools and "Create repo" routes to `brahma`. ✅
-
-
+**Verification**: Verified that receiving a new message during a pending approval correctly cancels the tool and resets the agent to the new prompt. ✅
 
 ---
 
@@ -1002,3 +1000,35 @@ Applied targeted patches to ensure the SQLite FTS5 implementation is resilient t
 - ✅ **`CompactionSummaryRepositoryTest`**: 100% pass with new explicit `userId` signatures.
 - ✅ **`ContextCompactionServiceIntegrationTest`**: Verified end-to-end reliability from the application layer.
 - ✅ **Full System Build**: `mvn clean verify` successful across all modules.
+
+---
+
+## Phase 46: Proactive Autonomy via Agent-Writable Cron ✅
+
+ArcClaw has been upgraded from a reactive chatbot into a **proactive agent** capable of scheduling its own future tasks via a SQLite-backed cron system.
+
+### Key Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **Scheduler** | [AgentCronScheduler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java) | Poll-dispatch-execute engine using virtual threads and `BACKGROUND` autonomy. |
+| **Tooling** | [ScheduleTaskTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/ScheduleTaskTool.java) | Validates cron expressions and prevents "naked pronoun" goals. |
+| **Governance** | [AutonomyPolicy.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/AutonomyPolicy.java) | New `BACKGROUND` level allows read-only FS/Network but blocks scheduling and mutations. |
+| **Persistence**| [AgentCronRepository.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronRepository.java) | Optimized for SQLite WAL with split transactions to prevent `SQLITE_BUSY`. |
+
+### Safety & Concurrency
+
+- **Fork Bomb Prevention**: Fired cron jobs use a `cron-` prefixed `sessionId`. The `LangChainReasoningEngine` detects this and removes all scheduling tools from the LLM prompt, making it impossible for an agent to schedule more tasks from a background task.
+- **Crash Recovery**: The scheduler automatically reclaims "RUNNING" jobs that exceed a heartbeat threshold, ensuring tasks aren't stuck after system restarts.
+- **Tenant Isolation**: All cron operations (list/delete/fire) are strictly scoped by `userId`. User A cannot see or manage User B's scheduled tasks.
+- **Production Guard**: `StartupSecurityValidator` now hard-fails if the bot is deployed with empty Telegram allowlists in production, preventing unauthorized public access.
+
+### Verification Results
+
+| Suite | Result |
+|-------|--------|
+| `ScheduleTaskToolTest` | ✅ 6/6 pass |
+| `AgentCronRepositoryTest` | ✅ 11/11 pass |
+| `AgentCronSchedulerTest` | ✅ 10/10 pass |
+| **Total Phase 46 Tests** | ✅ **27/27 pass** |
+| **Full System Regression** | ✅ **248/248 pass** |

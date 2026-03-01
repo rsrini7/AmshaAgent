@@ -1,5 +1,7 @@
 package com.arcclaw.core.config;
 
+import org.hibernate.community.dialect.SQLiteDialect;
+
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
@@ -11,6 +13,11 @@ import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.MemorySearchTool;
+import com.arcclaw.core.tools.ScheduleTaskTool;
+import com.arcclaw.core.tools.ManageScheduleTool;
+import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.InstantToTextConverter;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -29,7 +36,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         AuditOutcome.class,
         SecurityEventType.class,
         GithubTool.class,
-        MemorySearchTool.class
+        MemorySearchTool.class,
+        AgentCronEntity.class,
+        InstantToTextConverter.class,
+        ScheduleTaskTool.class,
+        ManageScheduleTool.class,
+        AgentCronRepository.class,
+        SQLiteDialect.class
 })
 public class ReflectionConfig {
 }

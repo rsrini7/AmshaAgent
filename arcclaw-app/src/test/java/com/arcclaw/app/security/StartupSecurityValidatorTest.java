@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -88,6 +90,9 @@ class StartupSecurityValidatorTest {
         injectFields("prod", 
             "prod-secure-pepper-000000000000000000000000000000", 
             "prod-secure-hmac-key-000000000000000000000000000000");
+        // Phase 46: inject allowlist fields so the new allowlist check passes
+        setField("allowedUserIds", Optional.of(List.of(123L)));
+        setField("allowedUsers", Optional.empty());
         
         assertDoesNotThrow(() -> validator.onStart(new StartupEvent()));
     }

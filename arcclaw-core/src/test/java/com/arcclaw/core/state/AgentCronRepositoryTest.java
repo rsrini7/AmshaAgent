@@ -1,0 +1,244 @@
+package com.arcclaw.core.state;
+
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration tests for {@link AgentCronRepository} using real in-memory SQLite.
+ * <p>
+ * Note: Tests that call {@code findDueCrons()} (native SQL) must NOT share
+ * a transaction with the insert path. Use {@code repository.persist()} which
+ * commits its own micro-transaction, then call {@code findDueCrons()} outside
+ * any test-scoped transaction to avoid SQLite locking contention.
+ */
+@QuarkusTest
+class AgentCronRepositoryTest {
+
+    @Inject
+    AgentCronRepository repository;
+
+    @Inject
+    EntityManager em;
+
+    private AgentCronEntity createEntity(String userId, String status, Instant nextFireTime) {
+        AgentCronEntity e = new AgentCronEntity();
+        e.id = UUID.randomUUID().toString();
+        e.sessionId = "session-" + e.id;
+        e.userId = userId;
+        e.chatId = "chat-1";
+        e.cronExpression = "0 9 * * 1";
+        e.timezone = "UTC";
+        e.runOnce = false;
+        e.goal = "CRON: Test goal";
+        e.nextFireTime = nextFireTime;
+        e.status = status;
+        e.createdAt = Instant.now();
+        return e;
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Tests using native SQL findDueCrons() — NO @Transactional
+    // Uses repository.persist() which commits its own micro-transaction
+    // ──────────────────────────────────────────────────────────────
+
+    @Test
+    void testFindDueCronsReturnsDueRows() {
+        AgentCronEntity e = createEntity("user-due-1", "ACTIVE",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        repository.persist(e);
+
+        List<AgentCronEntity> due = repository.findDueCrons();
+        assertTrue(due.stream().anyMatch(d -> d.id.equals(e.id)),
+                "Due cron should be returned");
+    }
+
+    @Test
+    void testFindDueCronsExcludesFutureRows() {
+        AgentCronEntity e = createEntity("user-due-2", "ACTIVE",
+                Instant.now().plus(1, ChronoUnit.HOURS));
+        repository.persist(e);
+
+        List<AgentCronEntity> due = repository.findDueCrons();
+        assertFalse(due.stream().anyMatch(d -> d.id.equals(e.id)),
+                "Future cron should NOT be returned");
+    }
+
+    @Test
+    void testFindDueCronsExcludesNonActiveRows() {
+        AgentCronEntity e = createEntity("user-due-3", "COMPLETED",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        repository.persist(e);
+
+        List<AgentCronEntity> due = repository.findDueCrons();
+        assertFalse(due.stream().anyMatch(d -> d.id.equals(e.id)),
+                "COMPLETED cron should NOT be returned by findDueCrons");
+    }
+
+    @Test
+    void testMarkCompletedSetsTerminalState() {
+        AgentCronEntity e = createEntity("user-complete-1", "RUNNING",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        repository.persist(e);
+
+        repository.markCompleted(e.id, Instant.now());
+
+        // findDueCrons should not return COMPLETED rows
+        List<AgentCronEntity> due = repository.findDueCrons();
+        assertFalse(due.stream().anyMatch(d -> d.id.equals(e.id)));
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Tests using only JPQL/EntityManager — CAN use @Transactional
+    // ──────────────────────────────────────────────────────────────
+
+    @Test
+    @Transactional
+    void testClaimForFireIsIdempotent() {
+        AgentCronEntity e = createEntity("user-claim-1", "ACTIVE",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        em.persist(e);
+        em.flush();
+        em.clear();
+
+        boolean first = repository.claimForFire(e.id);
+        assertTrue(first, "First claim should succeed");
+
+        boolean second = repository.claimForFire(e.id);
+        assertFalse(second, "Second claim should fail (already RUNNING)");
+    }
+
+    @Test
+    @Transactional
+    void testMarkFiredUpdatesNextFireTime() {
+        AgentCronEntity e = createEntity("user-fire-1", "RUNNING",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        em.persist(e);
+        em.flush();
+        em.clear();
+
+        Instant newNext = Instant.now().plus(7, ChronoUnit.DAYS);
+        repository.markFired(e.id, Instant.now(), newNext);
+        em.flush();
+        em.clear();
+
+        AgentCronEntity updated = em.find(AgentCronEntity.class, e.id);
+        assertEquals("ACTIVE", updated.status);
+        assertNotNull(updated.lastFireTime);
+        assertNotNull(updated.nextFireTime);
+    }
+
+    @Test
+    @Transactional
+    void testMarkFailedRecordsReason() {
+        AgentCronEntity e = createEntity("user-fail-1", "RUNNING",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        em.persist(e);
+        em.flush();
+        em.clear();
+
+        repository.markFailed(e.id, "Test failure reason");
+        em.flush();
+        em.clear();
+
+        AgentCronEntity updated = em.find(AgentCronEntity.class, e.id);
+        assertEquals("FAILED", updated.status);
+        assertEquals("Test failure reason", updated.errorReason);
+    }
+
+    @Test
+    @Transactional
+    void testReleaseClaimToActiveResetsRunningOnly() {
+        AgentCronEntity running = createEntity("user-release-1", "RUNNING",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        em.persist(running);
+
+        AgentCronEntity failed = createEntity("user-release-1", "FAILED",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        em.persist(failed);
+        em.flush();
+        em.clear();
+
+        repository.releaseClaimToActive(running.id);
+        repository.releaseClaimToActive(failed.id);
+        em.flush();
+        em.clear();
+
+        AgentCronEntity updatedRunning = em.find(AgentCronEntity.class, running.id);
+        assertEquals("ACTIVE", updatedRunning.status, "RUNNING should become ACTIVE");
+
+        AgentCronEntity updatedFailed = em.find(AgentCronEntity.class, failed.id);
+        assertEquals("FAILED", updatedFailed.status, "FAILED should remain unchanged");
+    }
+
+    @Test
+    @Transactional
+    void testReclaimStaleCronsResetsRunning() {
+        AgentCronEntity stale = createEntity("user-stale-1", "RUNNING",
+                Instant.now().minus(10, ChronoUnit.MINUTES));
+        stale.lastFireTime = Instant.now().minus(10, ChronoUnit.MINUTES);
+        em.persist(stale);
+        em.flush();
+        em.clear();
+
+        repository.reclaimStaleCrons(Instant.now().minus(5, ChronoUnit.MINUTES));
+        em.flush();
+        em.clear();
+
+        AgentCronEntity updated = em.find(AgentCronEntity.class, stale.id);
+        assertEquals("ACTIVE", updated.status, "Stale RUNNING job should be reclaimed to ACTIVE");
+    }
+
+    @Test
+    @Transactional
+    void testSetDeliveryIdPersists() {
+        AgentCronEntity e = createEntity("user-delivery-1", "RUNNING",
+                Instant.now().minus(1, ChronoUnit.MINUTES));
+        em.persist(e);
+        em.flush();
+        em.clear();
+
+        String deliveryId = UUID.randomUUID().toString();
+        repository.setDeliveryId(e.id, deliveryId);
+        em.flush();
+        em.clear();
+
+        AgentCronEntity updated = em.find(AgentCronEntity.class, e.id);
+        assertEquals(deliveryId, updated.lastDeliveryId);
+    }
+
+    @Test
+    @Transactional
+    void testDeleteByIdAndUserIdEnforcesTenantIsolation() {
+        AgentCronEntity e = createEntity("user-tenant-A", "ACTIVE",
+                Instant.now().plus(1, ChronoUnit.HOURS));
+        em.persist(e);
+        em.flush();
+        em.clear();
+
+        // User B tries to delete User A's job — should have no effect
+        repository.deleteByIdAndUserId(e.id, "user-tenant-B");
+        em.flush();
+        em.clear();
+
+        AgentCronEntity stillExists = em.find(AgentCronEntity.class, e.id);
+        assertNotNull(stillExists, "User B should NOT be able to delete User A's cron");
+
+        // User A deletes their own job — should succeed
+        repository.deleteByIdAndUserId(e.id, "user-tenant-A");
+        em.flush();
+        em.clear();
+
+        AgentCronEntity deleted = em.find(AgentCronEntity.class, e.id);
+        assertNull(deleted, "User A should be able to delete their own cron");
+    }
+}

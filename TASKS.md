@@ -564,3 +564,17 @@
 - [x] Refactor `upsertSummary` and `compactIfNeeded` for explicit `userId` parameter passing. <!-- id: 124 -->
 - [x] Convert `AuditSchemaEnforcer` seed logic to passive, idempotent `COUNT(*)` guard. <!-- id: 125 -->
 - [x] Verify: All core and app integration tests pass with 0 regressions. <!-- id: 126 -->
+
+---
+
+# Phase 46: Proactive Autonomy via Agent-Writable Cron ✅
+- [x] Create `agentcron` schema + DDL migrations (`CronSchemaEnforcer`) <!-- id: 127 -->
+- [x] Implement split-transaction repository for SQLite WAL concurrency <!-- id: 128 -->
+- [x] Implement `ScheduleTaskTool` + `ManageScheduleTool` with `cron-utils` <!-- id: 129 -->
+- [x] Implement fast-path listing/deletion reflexes <!-- id: 130 -->
+- [x] Implement `AgentCronScheduler` poll-fire cycle via virtual threads <!-- id: 131 -->
+- [x] Implement Fork Bomb prevention (tool filtering in cron sessions) <!-- id: 132 -->
+- [x] Add `BACKGROUND` autonomy level and security policy logic <!-- id: 133 -->
+- [x] Enforce production Telegram allowlist check at startup <!-- id: 134 -->
+- [x] Verify: Full system regression (248/248 tests pass) <!-- id: 135 -->
+

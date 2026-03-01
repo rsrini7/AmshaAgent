@@ -29,7 +29,7 @@ public class RoleRegistry {
         if (role == null) return List.of();
         
         return switch (role) {
-            case RESEARCHER, COORDINATOR -> List.of("github", "memory_search");
+            case RESEARCHER, COORDINATOR -> List.of("github", "memory_search", "scheduletask", "manageschedule");
             case ARCHITECT, CODER, DEBUGGER -> List.of();
         };
     }

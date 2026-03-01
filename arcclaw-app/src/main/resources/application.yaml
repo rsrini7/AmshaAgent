@@ -238,6 +238,7 @@ arcclaw:
   cron:
     poll-interval: 30s
     max-concurrent: 10
+    max-iterations: 2
 
   channel:
     telegram:

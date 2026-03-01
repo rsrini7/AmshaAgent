@@ -51,6 +51,10 @@
 | **Build** | Split-Package Error | Tests in `arcclaw-app` sharing same package as `arcclaw-core`. | Moved all core-related tests to `arcclaw-core/src/test/java` and updated Maven profiles. |
 | **Observability** | Non-Mockable Tracer | OTel `Tracer` is final or provided by CDI in a way Mockito dislikes. | Use standalone `@Alternative` + `@Priority` pattern to provide a mock Tracer bean in test profiles. |
 | **Observability** | Disconnected Spans | Child spans not linked to session root. | Use `Context.current().with(parentSpan)` explicitly when creating child spans. |
+54: | **Cron** | `SQLITE_BUSY` (polling) | Read locks blocking write-lock upgrades during fire cycle. | Use split transactions (move reads outside write-transaction block). |
+55: | **Security** | `NPE` in Validator | Missing `Optional` injection in unit tests for startup checks. | Ensure `@ConfigProperty` fields are correctly set using `injectFields` in mocks. |
+56: 
+57: ---
 
 ---
 

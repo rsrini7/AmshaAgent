@@ -210,9 +210,11 @@ class LangChainReasoningEngineTest {
 
         ChatRequest sent = captor.getValue();
         assertNotNull(sent.toolSpecifications());
-        // Phase 45: Researcher now has 2 tools: github, memory_search
-        assertEquals(2, sent.toolSpecifications().size());
+        // Phase 46: Researcher now has 4 tools: github, memory_search, scheduletask, manageschedule
+        assertEquals(4, sent.toolSpecifications().size());
         assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("github")));
         assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("memory_search")));
+        assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("scheduletask")));
+        assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("manageschedule")));
     }
 }
