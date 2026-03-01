@@ -125,6 +125,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    execute shell commands. If your goal requires a blocked
                    operation, explain this to the user and FINISH immediately.
                    Do NOT retry blocked tools.
+                9. IMMEDIATE STOP AFTER SCHEDULING:
+                   Once you successfully call the scheduletask tool, you MUST reply to the user 
+                   with a confirmation message and STOP. 
+                   Do NOT call the github tool or any other tool to fulfill the task right now. 
+                   Leave the work for the future agent!
                 """ + "\nCURRENT SYSTEM TIME (UTC): " + Instant.now().toString()
                     + "\n(For one-shot tasks: compute cron fields from this UTC timestamp)";
 
