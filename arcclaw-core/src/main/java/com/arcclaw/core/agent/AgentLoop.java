@@ -308,7 +308,8 @@ public class AgentLoop {
         // --- SPRINT 2: Save user prompt BEFORE anything else happens ---
         if (sessionId != null && goal != null && !goal.isEmpty()) {
             if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
-                && !"Resuming task after approval".equals(goal)) {
+                && !"Resuming task after approval".equals(goal)
+                && !("Resuming task after denial").equals(goal)) {
 
                 List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
                 if (currentHistory == null) currentHistory = new ArrayList<>();
@@ -331,23 +332,52 @@ public class AgentLoop {
     }
 
     private AgentResult handleResumeHook(String sessionId, String agentRole, List<ReasoningStep> history) {
-        // --- RESUME HOOK ---
         var resumeOpt = agentStore.load(sessionId, agentRole);
         if (resumeOpt.isPresent()) {
             var checkpoint = resumeOpt.get();
             if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                 String pendingTool = checkpoint.getPendingToolName();
                 String pendingParams = checkpoint.getPendingToolParametersJson();
-                log.infof("AgentLoop Resuming session %s executing pending tool %s",
-                    sessionId, pendingTool);
+
+                // The goal passed in is the safeInput from TelegramAgentHandler:
+                // "Resuming task after denial" signals user sent /deny <cronId>
+                // We check the current goal via the session's latest UserMessage in ChatMemory
+                List<ChatMessage> mem = chatMemoryStore.getMessages(sessionId);
+                boolean isDenial = !mem.isEmpty()
+                        && mem.get(mem.size() - 1) instanceof UserMessage lastMsg
+                        && lastMsg.text() != null
+                        && lastMsg.text().toLowerCase().contains("denial");
+
+                if (isDenial) {
+                    log.infof("[AgentLoop] User denied tool execution for session %s, tool %s",
+                            sessionId, pendingTool);
+                    checkpoint.setStatus(CheckpointStatus.FAILED);
+                    checkpoint.setFailReason("User denied tool execution.");
+                    checkpoint.setPendingToolName(null);
+                    checkpoint.setPendingToolParametersJson(null);
+                    agentStore.save(checkpoint);
+                    synchronized (history) {
+                        return AgentResult.finished(
+                                "❌ Tool execution was denied and the scheduled task has been cancelled.",
+                                List.copyOf(history));
+                    }
+                }
+
+                // --- Normal approval path ---
+                log.infof("[AgentLoop] Resuming session %s executing pending tool %s",
+                        sessionId, pendingTool);
+
+                // Capture current autonomy level to RESTORE it after, not hardcode SUPERVISED
+                AutonomyLevel previousLevel = workspaceContext.getAutonomyLevel();
                 try {
                     workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-                    ToolResponse resumeResponse = toolRegistry.invokeTool(
-                        pendingTool, pendingParams, sessionId);
-                    history.add(new ReasoningStep(
-                        "Human Approved", pendingTool,
-                        Map.of("parameters", pendingParams),
-                        resumeResponse.output(), 0, 0));
+                    ToolResponse resumeResponse = toolRegistry.invokeTool(pendingTool, pendingParams, sessionId);
+                    synchronized (history) {
+                        history.add(new ReasoningStep(
+                                "Human Approved", pendingTool,
+                                Map.of("parameters", pendingParams),
+                                resumeResponse.output(), 0, 0));
+                    }
                     checkpoint.setPendingToolName(null);
                     checkpoint.setPendingToolParametersJson(null);
                     checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
@@ -358,18 +388,19 @@ public class AgentLoop {
                     checkpoint.setPendingToolParametersJson(null);
                     agentStore.save(checkpoint);
                     log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
-                        sessionId, pendingTool, e.getMessage());
+                            sessionId, pendingTool, e.getMessage());
                     synchronized (history) {
                         return AgentResult.error(List.copyOf(history),
-                            "TOOL_EXECUTION_FAILED: " + e.getMessage());
+                                "TOOL_EXECUTION_FAILED: " + e.getMessage());
                     }
                 } finally {
-                    workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
+                    workspaceContext.setAutonomyLevel(previousLevel); // restore, NOT hardcode
                 }
             }
         }
         return null;
-     }
+    }
+
 
     private AgentResult handleFinishAction(String sessionId, String agentRole, List<ReasoningStep> history, ReasoningStep step, int iteration) {
         // --- FINISH CHECK ---

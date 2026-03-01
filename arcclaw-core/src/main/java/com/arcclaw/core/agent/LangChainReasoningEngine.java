@@ -2,6 +2,8 @@ package com.arcclaw.core.agent;
 
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
+
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
@@ -479,7 +481,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 ? ChatRequest.builder().messages(messages).build()
                 : ChatRequest.builder().messages(messages).toolSpecifications(toolSpecifications).build();
 
-        ChatResponse response = chatLanguageModel.chat(request);
+        ChatResponse response;
+        try {
+            response = chatLanguageModel.chat(request);
+        } catch (Exception e) {
+            // Collapse Groq JSON / HTTP errors into a friendly sentence
+            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+            throw new RuntimeException(clean, e);
+        }
 
         AiMessage aiMessage = response.aiMessage();
         int inputTokens = response.tokenUsage() != null ? response.tokenUsage().inputTokenCount() : 0;

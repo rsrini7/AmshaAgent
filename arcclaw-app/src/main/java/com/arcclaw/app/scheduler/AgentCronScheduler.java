@@ -172,6 +172,9 @@ public class AgentCronScheduler {
             MDC.put("userId", job.userId);
             workspaceContext.setAutonomyLevel(AutonomyLevel.BACKGROUND);
 
+            // so it is available when TelegramAgentHandler queries it during HITL
+            cronRepository.setDeliveryId(job.id, executionId);
+
             AgentResult result = agentLoop.run(
                 cronSessionId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
@@ -184,11 +187,6 @@ public class AgentCronScheduler {
             String rawAnswer;
 
             if (wasApprovalRequested) {
-                // rawAnswer = result.terminationReason() != null
-                //         ? result.terminationReason()
-                //         : "⚠️ Approval Required for a scheduled task.\n\n" +
-                //         "Reply `/approve` or `/deny` in this chat to continue.";
-
                 rawAnswer = "⚠️ Approval Required for scheduled task.\n\n" +
                     "Cron ID: " + job.id + "\n" +
                     "Tool: github\n" +
