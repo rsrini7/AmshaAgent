@@ -63,7 +63,15 @@ public class ScheduleTaskTool implements AgentTool {
     @Override
     public String description() {
         return "Schedule a future autonomous task using a cron expression. " +
-               "The task will execute at the specified time(s) without user interaction.";
+                "The task will execute at the specified time(s) without user interaction. " +
+                "Parameters: " +
+                "1. 'cronExpression' - Standard UNIX 5-field cron (minute hour dom month dow). " +
+                        "Example: '0 9 * * 1-5' = weekdays 9 AM, '30 14 15 3 *' = March 15 at 14:30. " +
+                "2. 'goal' - Fully self-contained instructions. Must describe ONLY the final action. " +
+                        "Do NOT include time references or re-scheduling instructions in the goal. " +
+                "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
+                "4. 'runOnce' - true for one-time tasks, false for recurring. " +
+                "Returns the scheduled task ID immediately. Does NOT execute the goal now.";
     }
 
     @Override

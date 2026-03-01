@@ -92,9 +92,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    - Recurring tasks ("every day", "weekly", "every Monday"):
                        runOnce=false. Use wildcard cron e.g. "0 9 * * 1"
                    - NEVER use "* * * * *" — this fires every minute forever.
-                3. For one-shot tasks, start from current UTC time (injected below),
-                   add the user's offset, then express as specific date fields.
-                   dayOfMonth AND month MUST be the exact target date.
+                3. For one-shot tasks, start from SYSTEM TIME UTC shown below.
+                   If the user says "in 5 minutes" at 12:47 IST, that is 07:17 UTC.
+                   Convert their local time to UTC before computing the cron fields.
+                   If the user mentions their timezone explicitly, use it.
+                   Otherwise assume UTC unless context clearly implies otherwise.
                 4. FORK BOMB PREVENTION:
                    The 'goal' parameter MUST describe ONLY the final action.
                    It will execute without you present — do NOT include time
@@ -108,18 +110,23 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    RIGHT: "Deploy commit abc123 via: gh workflow run deploy.yml"
                    If you cannot write a fully explicit goal, ask the user for
                    the missing technical details BEFORE calling scheduletask.
-                6. CRON EXECUTION MODE — when your goal starts with "CRON:":
+                6. TOOL SILENCE RULE:
+                   Do NOT call scheduletask speculatively.
+                   Only schedule when the user explicitly requests a future or recurring action.
+                   When in doubt: respond with text only. Tool silence is always correct.
+                7. CRON EXECUTION MODE — when your goal starts with "CRON:":
                    You are the FIRED agent. Perform that action immediately.
                    Output ONLY the final message or result. No scheduling.
                    No time references. No tools unless needed for the action.
                    WRONG: "I have scheduled a task to say hi..."
                    RIGHT: "Hi!"
-                7. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
+                8. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
                    You CANNOT: write files, schedule new tasks, access secrets,
                    execute shell commands. If your goal requires a blocked
                    operation, explain this to the user and FINISH immediately.
                    Do NOT retry blocked tools.
-                """ + "\nSYSTEM TIME UTC: " + Instant.now().toString();
+                """ + "\nCURRENT SYSTEM TIME (UTC): " + Instant.now().toString()
+                    + "\n(For one-shot tasks: compute cron fields from this UTC timestamp)";
 
             case RESEARCHER ->
                 """

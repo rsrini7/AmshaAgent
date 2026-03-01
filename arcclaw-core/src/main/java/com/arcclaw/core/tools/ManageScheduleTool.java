@@ -39,8 +39,12 @@ public class ManageScheduleTool implements AgentTool {
     @Override
     public String description() {
         return "List or delete scheduled autonomous tasks. " +
-               "Use action='list' to see all scheduled tasks, " +
-               "or action='delete' with cronId to remove a specific task.";
+                "Parameters: " +
+                "1. 'action' - 'list' to show all your scheduled tasks, " +
+                    "'delete' to remove a specific task. " +
+                "2. 'cronId' - Required when action is 'delete'. " +
+                    "Obtain the cronId first by calling with action='list'. " +
+                "Returns a formatted list of tasks with their IDs, cron expressions, and next fire times.";
     }
 
     @Override
