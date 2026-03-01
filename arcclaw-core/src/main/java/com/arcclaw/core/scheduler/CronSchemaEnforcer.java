@@ -67,22 +67,45 @@ public class CronSchemaEnforcer {
         ).executeUpdate();
 
         // 3. Schema migrations — safe ALTER TABLE for upgrades from older schemas
-        try {
-            em.createNativeQuery(
-                    "ALTER TABLE agentcron ADD COLUMN runOnce INTEGER NOT NULL DEFAULT 0"
-            ).executeUpdate();
-        } catch (Exception ignored) {
-            // Column already exists — expected on subsequent startups
+        // Check if columns exist before trying to add them to avoid SQLITE_ERROR log pollution
+        if (!hasColumn("agentcron", "runOnce")) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE agentcron ADD COLUMN runOnce INTEGER NOT NULL DEFAULT 0"
+                ).executeUpdate();
+            } catch (Exception ignored) {}
         }
 
-        try {
-            em.createNativeQuery(
-                    "ALTER TABLE agentcron ADD COLUMN lastDeliveryId TEXT"
-            ).executeUpdate();
-        } catch (Exception ignored) {
-            // Column already exists — expected on subsequent startups
+        if (!hasColumn("agentcron", "lastDeliveryId")) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE agentcron ADD COLUMN lastDeliveryId TEXT"
+                ).executeUpdate();
+            } catch (Exception ignored) {}
         }
 
         log.info("CronSchemaEnforcer: agentcron table, indexes, and migrations verified.");
+    }
+
+    /**
+     * Checks if a column exists in a table using SQLite's pragma_table_info.
+     */
+    private boolean hasColumn(String tableName, String columnName) {
+        try {
+            @SuppressWarnings("unchecked")
+            java.util.List<Object[]> columns = em.createNativeQuery(
+                    "PRAGMA table_info(" + tableName + ")"
+            ).getResultList();
+
+            for (Object[] row : columns) {
+                // pragma_table_info columns: cid, name, type, notnull, dflt_value, pk
+                if (columnName.equalsIgnoreCase(row[1].toString())) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.warnf("Failed to check column existence for %s.%s: %s", tableName, columnName, e.getMessage());
+        }
+        return false;
     }
 }

@@ -179,11 +179,11 @@ class AgentCronSchedulerTest {
         when(cronRepository.findDueCrons()).thenReturn(List.of(job));
         when(cronRepository.claimForFire(job.id)).thenReturn(true);
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
-                .thenThrow(new RuntimeException("LLM timeout"));
+                .thenThrow(new RuntimeException("[TEST-EXPECTED] LLM timeout"));
 
         scheduler.pollAndDispatch();
 
-        verify(cronRepository).markFailed(eq(job.id), contains("LLM timeout"));
+        verify(cronRepository).markFailed(eq(job.id), contains("[TEST-EXPECTED] LLM timeout"));
         verify(auditService).record(
                 anyString(), eq(job.userId),
                 eq(AgentRoleEnum.COORDINATOR.toScopedName()),
@@ -264,13 +264,13 @@ class AgentCronSchedulerTest {
         when(cronRepository.claimForFire(job.id)).thenReturn(true);
 
         // This mock will trigger the catch(Throwable) inside the dispatch lambda
-        doThrow(new RuntimeException("Simulated failure in loop"))
+        doThrow(new RuntimeException("[TEST-EXPECTED] Simulated failure in loop"))
                 .when(workspaceContext).setAutonomyLevel(any());
 
         scheduler.pollAndDispatch();
 
         // The outer catch(Throwable t) must: release semaphore + call markFailed
-        verify(cronRepository).markFailed(eq(job.id), contains("Simulated failure"));
+        verify(cronRepository).markFailed(eq(job.id), contains("[TEST-EXPECTED] Simulated failure"));
 
         // Verify semaphore was released by checking a second job can be dispatched
         AgentCronEntity job2 = createDueJob(true);
