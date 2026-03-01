@@ -2847,7 +2847,42 @@ While the `individually` strategy helps, the most robust solution for ArcClaw wa
 In multi-threaded environments with connection pooling (Agroal), relying on a one-time `ATTACH` or `ScopedValue` propagation can lead to "no such table" or missing tenant context failures.
 
 **Resolutions Applied:**
+
 1. **`FtsConnectionInterceptor`**: We implemented a JDBC-level interceptor that runs `PRAGMA database_list` on every connection acquisition. If the `fts` schema is missing (e.g., on a new pool thread), it automatically performs the `ATTACH DATABASE` operation.
 2. **Explicit Parameter Passing**: To ensure 100% reliability across Virtual Thread and executor boundaries, we refactored the compaction call chain to pass the `userId` as an explicit method parameter (`compactIfNeeded(sessionId, userId)`), rather than pulling it from a thread-local or `ScopedValue` inside the repository.
 3. **Passive Startup Initialization**: We moved to a passive `COUNT(*)` guard in `AuditSchemaEnforcer`, ensuring that startup seeding is idempotent and doesn't conflict with active connection attachments.
+
+---
+
+## 21. Phase 46: Proactive Autonomy via Agent-Writable Cron - ✅Test Suite Stability & SQLite Locking Hardening
+
+### 🔴 Failure: `SQLITE_LOCKED_SHAREDCACHE` and `SQLITE_BUSY_SNAPSHOT` in Tests
+**Symptom**: Integration tests (especially `WorkspaceManagerTest` and `ContextCompactionServiceIntegrationTest`) fail intermittently with "database table is locked" or "Another database connection has already written".
+**Root Cause**: 
+1. **Shared Cache Contention**: SQLite's legacy `cache=shared` mode for in-memory databases is extremely sensitive to lock upgrades when multiple pooled connections or background threads (like `AsyncPersistenceEngine`) write simultaneously.
+2. **Snapshot Isolation**: In `WAL` mode, a transaction starting as a reader will fail with `BUSY_SNAPSHOT` if it tries to upgrade to a writer after another connection has committed.
+**Resolution**:
+- **Switch to File-based DB**: Moved test databases to `target/core-test.db`. This enables robust OS-level file locking and `WAL` mode.
+- **Immediate Transactions**: Added `transaction_mode=IMMEDIATE` to the JDBC URL. This forces SQLite to acquire a write-lock at the *start* of the transaction, preventing mid-transaction upgrade failures.
+- **Connection Pool Tuning**: Set `max-size: 4` and `acquisition-timeout: 10s` in test profiles. This provides enough overhead for concurrent test steps and background telemetry while keeping the writer serialized via `IMMEDIATE` mode.
+- **Scheduler Isolation**: Disabled the background `AgentCronScheduler` in test profiles (`quarkus.scheduler.enabled=false`) to eliminate unmanaged DB activity during test runs.
+
+### 🔴 Failure: `SQLITE_ERROR (duplicate column name)` Log Pollution
+**Symptom**: Every test startup logs an `ERROR` from `SqlExceptionHelper` claiming a column (like `runOnce`) already exists.
+**Root Cause**: `CronSchemaEnforcer` was running `ALTER TABLE` migrations on every startup. SQLite's `ALTER TABLE` does not support `IF NOT EXISTS` for columns, and the previous existence check was failing to parse the `PRAGMA table_info` metadata correctly.
+**Resolution**: Implemented a robust `hasColumn` check using `PRAGMA table_info` that handles both `Object[]` and `String` result formats across different SQLite/JDBC versions. The `ALTER` command is now only executed if the column is physically missing.
+
+### 🟡 DX: Log Pollution from Expected Test Failures
+**Symptom**: Large stack traces for simulated LLM timeouts or OOMEs clutter the terminal during successful test runs.
+**Root Cause**: `AgentCronScheduler` and `AgentLoop` were logging the full stack trace for every caught `Throwable`, including those intentionally triggered by tests.
+**Resolution**: 
+- Added a `[TEST-EXPECTED]` marker to exceptions thrown in test mocks.
+- Updated `AgentCronScheduler.java` to detect this marker and log a concise `WARN` instead of a full stack trace.
+- Standardized test mocks in `AgentCronSchedulerTest.java` to use this marker.
+
+### 🔴 Failure: `memorysearch` vs `memory_search` Tool Name Mismatch
+**Symptom**: `LangChainReasoningEngineTest` fails with "researcher must have memorysearch ==> expected: <true> but was: <false>".
+**Root Cause**: A typo in the test case was looking for `memorysearch` while the system-wide tool name is `memory_search`.
+**Resolution**: Standardized the tool name to `memory_search` in `LangChainReasoningEngineTest.java` to match the `RoleRegistry` and `ToolRegistry` definitions.
+
 
