@@ -48,6 +48,11 @@ public class IntentClassifierService {
             2. (UNLESS SCHEDULING) If the user mentions GitHub, gists, or repositories to CREATE, BUILD, or GENERATE new content -> brahma.
             3. Only output 'shiva' if the user provides actual error text, stack traces, or explicitly says "fix", "broken", "not working" with technical detail. Negative words like "no", "none", or "missing" alone are NOT debugging signals.
             4. "Hi", "Hello", greetings, or vague messages -> coordinator only.
+            5. Phrases like "then in X", "and then X", "also X" are CONTINUATION
+               phrases joining two code/writing requests — NEVER treat them as
+               scheduling signals. Only route to coordinator for scheduling if the
+               user explicitly uses time words like "in 5 mins", "at 3pm",
+               "every day", "after 2 hours", "remind me", "schedule".
 
             User message: "%s"
 
