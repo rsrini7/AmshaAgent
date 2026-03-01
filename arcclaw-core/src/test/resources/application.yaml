@@ -22,8 +22,9 @@ quarkus:
   datasource:
     jdbc:
       url: "jdbc:sqlite:./target/core-test.db?busy_timeout=10000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
-      max-size: 10
+      max-size: 1
       initial-size: 1
   hibernate-orm:
     database:
