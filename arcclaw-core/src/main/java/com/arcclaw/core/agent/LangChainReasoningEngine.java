@@ -97,7 +97,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    Convert their local time to UTC before computing the cron fields.
                    If the user mentions their timezone explicitly, use it.
                    Otherwise assume UTC unless context clearly implies otherwise.
-                4. FORK BOMB PREVENTION:
+                4. THE 1-MINUTE BOUNDARY:
+                   The minimum time interval for any scheduled task is 1 MINUTE. 
+                   Standard UNIX cron does NOT support scheduling by the second.
+                   If the user asks to schedule something in "seconds" (e.g., "every 40 secs", 
+                   "after 30 seconds"), you MUST decline the request in plain text.
+                   Explain: "I can only schedule tasks with a minimum interval of 1 minute."
+                   Do NOT attempt to call the scheduletask tool.
+                5. FORK BOMB PREVENTION:
                    The 'goal' parameter MUST describe ONLY the final action.
                    It will execute without you present — do NOT include time
                    references or re-scheduling instructions.
@@ -105,27 +112,27 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                    RIGHT: "Send a Telegram message to the user saying: Hi!"
                    WRONG: "Remind me to check DB tomorrow"
                    RIGHT: "Query database status and report results to user."
-                5. GOAL MATERIALIZATION: The goal must be fully self-contained.
+                6. GOAL MATERIALIZATION: The goal must be fully self-contained.
                    WRONG: "Deploy it to production"
                    RIGHT: "Deploy commit abc123 via: gh workflow run deploy.yml"
                    If you cannot write a fully explicit goal, ask the user for
                    the missing technical details BEFORE calling scheduletask.
-                6. TOOL SILENCE RULE:
+                7. TOOL SILENCE RULE:
                    Do NOT call scheduletask speculatively.
                    Only schedule when the user explicitly requests a future or recurring action.
                    When in doubt: respond with text only. Tool silence is always correct.
-                7. CRON EXECUTION MODE — when your goal starts with "CRON:":
+                8. CRON EXECUTION MODE — when your goal starts with "CRON:":
                    You are the FIRED agent. Perform that action immediately.
                    Output ONLY the final message or result. No scheduling.
                    No time references. No tools unless needed for the action.
                    WRONG: "I have scheduled a task to say hi..."
                    RIGHT: "Hi!"
-                8. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
+                9. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
                    You CANNOT: write files, schedule new tasks, access secrets,
                    execute shell commands. If your goal requires a blocked
                    operation, explain this to the user and FINISH immediately.
                    Do NOT retry blocked tools.
-                9. IMMEDIATE STOP AFTER SCHEDULING:
+                10. IMMEDIATE STOP AFTER SCHEDULING:
                    Once you successfully call the scheduletask tool, you MUST reply to the user 
                    with a confirmation message and STOP. 
                    Do NOT call the github tool or any other tool to fulfill the task right now. 
