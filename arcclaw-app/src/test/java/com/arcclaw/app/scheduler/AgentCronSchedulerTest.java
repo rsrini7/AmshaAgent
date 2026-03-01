@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
 /**
@@ -118,7 +119,7 @@ class AgentCronSchedulerTest {
 
         verify(cronRepository).claimForFire(job.id);
         verify(agentLoop).run(
-                eq("cron-" + job.id),
+                startsWith("cron-" + job.id + "-"),
                 eq(AgentRoleEnum.COORDINATOR.toScopedName()),
                 eq(job.goal),
                 any(LangChainReasoningEngine.class),

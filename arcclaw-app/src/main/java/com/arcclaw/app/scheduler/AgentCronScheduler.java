@@ -166,7 +166,11 @@ public class AgentCronScheduler {
             workspaceContext.setAutonomyLevel(AutonomyLevel.BACKGROUND);
 
             // Isolated session — zero chat history loaded (bounded token usage)
-            String cronSessionId = "cron-" + job.id;
+           // Generate a unique execution ID for THIS specific fire
+            String executionId = UUID.randomUUID().toString();
+
+            // Isolated session per FIRE — prevents history buildup across recurring jobs!
+            String cronSessionId = "cron-" + job.id + "-" + executionId;
 
             AgentResult result = agentLoop.run(
                     cronSessionId,
@@ -184,8 +188,8 @@ public class AgentCronScheduler {
                     : rawAnswer;
 
             // DELIVERY ORDER: idempotency key → Telegram → DB update
-            String deliveryId = UUID.randomUUID().toString();
-            cronRepository.setDeliveryId(job.id, deliveryId);
+            // We can safely reuse the executionId as our delivery idempotency key
+            cronRepository.setDeliveryId(job.id, executionId);
 
             camelProducer.sendBodyAndHeaders(
                     telegramEndpoint, finalAnswer,
