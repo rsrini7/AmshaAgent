@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -212,15 +211,19 @@ class LangChainReasoningEngineTest {
         ChatRequest sent = captor.getValue();
         assertNotNull(sent.toolSpecifications());
         
-        // Phase 46: Researcher now has 4 tools: github, memory_search, scheduletask, manageschedule
         List<String> toolNames = sent.toolSpecifications().stream()
-        .map(ToolSpecification::name)
-        .toList();
-        // Researcher MUST have these four — hard contract
+                .map(dev.langchain4j.agent.tool.ToolSpecification::name)
+                .toList();
+                
+        // Phase 46 Fix: Researcher ONLY has github and memory_search. 
+        // Coordinator handles all scheduling to prevent tool hallucinations.
         assertTrue(toolNames.contains("github"),        "researcher must have github");
         assertTrue(toolNames.contains("memory_search"), "researcher must have memory_search");
-        assertTrue(toolNames.contains("scheduletask"),  "researcher must have scheduletask");
-        assertTrue(toolNames.contains("manageschedule"),"researcher must have manageschedule");
+        
+        // Researcher MUST NOT have scheduling tools
+        assertFalse(toolNames.contains("scheduletask"),   "researcher must NOT have scheduletask");
+        assertFalse(toolNames.contains("manageschedule"), "researcher must NOT have manageschedule");
+        
         // Researcher must NOT have shell or vault access — safety boundary
         assertFalse(toolNames.contains("executeshell"), "researcher must NOT have executeshell");
         assertFalse(toolNames.contains("vaultaccess"),  "researcher must NOT have vaultaccess");
