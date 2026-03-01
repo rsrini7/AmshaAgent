@@ -1,6 +1,7 @@
 package com.arcclaw.core.lifecycle;
 
 import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -33,11 +34,17 @@ class WorkspaceManagerTest {
     StatefulAgentStore agentStore;
 
     @Inject
+    AuditService auditService;
+
+    @Inject
     EntityManager em;
 
     @BeforeEach
     @Transactional
     void cleanup() {
+        // Wait for any background audit writes to finish to avoid lock contention
+        auditService.waitForIdle();
+
         // Clear all checkpoints between tests
         em.createQuery("DELETE FROM AgentCheckpoint").executeUpdate();
         workspaceManager.clearAll();
@@ -184,6 +191,9 @@ class WorkspaceManagerTest {
             var steps = List.of(new ReasoningStep("thought", "action", Map.of(), null, 0, 0));
             var cp = agentStore.save(sessionId, "coordinator", steps);
 
+            // Wait for background audit write from save() to finish
+            auditService.waitForIdle();
+
             // Manually set to AWAITING_APPROVAL in a separate transaction
             io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
                 AgentCheckpoint managedCp = em.find(AgentCheckpoint.class, cp.getId());
@@ -191,6 +201,9 @@ class WorkspaceManagerTest {
                 em.merge(managedCp);
             });
         });
+
+        // Wait for background audit write from merge() to finish
+        auditService.waitForIdle();
 
         // Act
         workspaceManager.onStartup(null);

@@ -52,51 +52,54 @@ class ContextCompactionServiceIntegrationTest {
 
     @BeforeEach
     void setup() {
-        WorkspaceScopeHolder.set(TEST_SESSION_ID);
-        // Clear old DB state just in case
-        chatMemoryStore.deleteMessages(TEST_SESSION_ID);
+        // No-op
     }
 
     @AfterEach
     void teardown() {
-        WorkspaceScopeHolder.clear();
+        // No-op
     }
 
     @Test
     void testEndToEndCompaction() {
-        // Arrange
-        List<ChatMessage> seedMessages = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
-            seedMessages.add(UserMessage.from("User msg " + i));
-        }
-        chatMemoryStore.updateMessages(TEST_SESSION_ID, seedMessages);
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            // Arrange
+            // Clear old DB state just in case
+            chatMemoryStore.deleteMessages(TEST_SESSION_ID);
 
-        when(compactionModel.chat(any(dev.langchain4j.data.message.UserMessage.class)))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Prior session: user asked about X..."))
-                        .build());
+            List<ChatMessage> seedMessages = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                seedMessages.add(UserMessage.from("User msg " + i));
+            }
+            chatMemoryStore.updateMessages(TEST_SESSION_ID, seedMessages);
 
-        // Act
-        boolean result = service.compactIfNeeded(TEST_SESSION_ID, "test-user");
+            when(compactionModel.chat(any(dev.langchain4j.data.message.UserMessage.class)))
+                    .thenReturn(ChatResponse.builder()
+                            .aiMessage(AiMessage.from("Prior session: user asked about X..."))
+                            .build());
 
-        // Assert
-        assertTrue(result, "Compaction should have taken place");
-        
-        List<ChatMessage> kept = chatMemoryStore.getMessages(TEST_SESSION_ID);
-        assertEquals(2, kept.size(), "Should keep exactly keep-recent=2 messages");
-        
-        var summaryOpt = summaryRepository.findLatestBySessionId(TEST_SESSION_ID);
-        assertTrue(summaryOpt.isPresent());
-        assertEquals("Prior session: user asked about X...", summaryOpt.get().summary);
-        assertEquals(2, summaryOpt.get().messagesCompacted);
+            // Act
+            boolean result = service.compactIfNeeded(TEST_SESSION_ID, "test-user");
 
-        // Find the audit event
-        auditService.waitForIdle();
-        em.clear();
-        long count = em.createQuery("SELECT count(e) FROM AuditEvent e WHERE e.sessionId = :sessionId AND e.eventType = :type", Long.class)
-                .setParameter("sessionId", TEST_SESSION_ID)
-                .setParameter("type", SecurityEventType.CONTEXT_COMPACTED)
-                .getSingleResult();
-        assertTrue(count > 0, "AuditService should fire CONTEXT_COMPACTED");
+            // Assert
+            assertTrue(result, "Compaction should have taken place");
+            
+            List<ChatMessage> kept = chatMemoryStore.getMessages(TEST_SESSION_ID);
+            assertEquals(2, kept.size(), "Should keep exactly keep-recent=2 messages");
+            
+            var summaryOpt = summaryRepository.findLatestBySessionId(TEST_SESSION_ID);
+            assertTrue(summaryOpt.isPresent());
+            assertEquals("Prior session: user asked about X...", summaryOpt.get().summary);
+            assertEquals(2, summaryOpt.get().messagesCompacted);
+
+            // Find the audit event
+            auditService.waitForIdle();
+            em.clear();
+            long count = em.createQuery("SELECT count(e) FROM AuditEvent e WHERE e.sessionId = :sessionId AND e.eventType = :type", Long.class)
+                    .setParameter("sessionId", TEST_SESSION_ID)
+                    .setParameter("type", SecurityEventType.CONTEXT_COMPACTED)
+                    .getSingleResult();
+            assertTrue(count > 0, "AuditService should fire CONTEXT_COMPACTED");
+        });
     }
 }

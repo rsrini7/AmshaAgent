@@ -18,6 +18,9 @@ public class AuditObserverTest {
     @Inject
     AuditEventRepository repository;
 
+    @Inject
+    AuditService auditService;
+
     @Test
     public void testLoopCompletionFiresAudit() {
         String sessionId = "test-observe-" + System.currentTimeMillis();
@@ -30,6 +33,8 @@ public class AuditObserverTest {
         String goalHash = "testhash";
         
         observer.onLoopComplete(sessionId, "userX", "coder", goalHash, result);
+        
+        auditService.waitForIdle();
 
         List<AuditEvent> events = repository.findBySessionId(sessionId);
         assertEquals(1, events.size());

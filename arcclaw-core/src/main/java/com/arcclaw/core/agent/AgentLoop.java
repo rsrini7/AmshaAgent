@@ -14,7 +14,6 @@ import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.ComplianceViolationException;
-import com.arcclaw.core.agent.AgentRoleEnum;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;

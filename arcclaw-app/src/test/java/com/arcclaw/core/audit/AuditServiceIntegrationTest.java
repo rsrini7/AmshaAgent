@@ -48,61 +48,73 @@ public class AuditServiceIntegrationTest {
     @BeforeEach
     public void setup() {
         sessionId = "test-integration-" + System.currentTimeMillis();
-        WorkspaceScopeHolder.set(sessionId);
-        workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-        secretVault.init(sessionId);
     }
 
     @AfterEach
     public void teardown() {
-        WorkspaceScopeHolder.clear();
+        // No-op
     }
 
     @Test
     public void testVaultStoreTriggersAudit() {
-        secretVault.store("my-secret", "super-secret-value".getBytes());
+        WorkspaceScopeHolder.run(sessionId, () -> {
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            secretVault.init(sessionId);
+            
+            secretVault.store("my-secret", "super-secret-value".getBytes());
 
-        // Wait for async persistence
-        auditService.waitForIdle();
-        em.clear();
+            // Wait for async persistence
+            auditService.waitForIdle();
+            em.clear();
 
-        List<AuditEvent> events = repository.findBySessionId(sessionId);
-        assertEquals(1, events.size());
-        
-        AuditEvent event = events.get(0);
-        assertEquals(SecurityEventType.VAULT_STORE, event.eventType);
-        assertTrue(event.eventDetail.contains("keyName=my-secret"));
+            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            assertEquals(1, events.size());
+            
+            AuditEvent event = events.get(0);
+            assertEquals(SecurityEventType.VAULT_STORE, event.eventType);
+            assertTrue(event.eventDetail.contains("keyName=my-secret"));
+        });
     }
 
     @Test
     public void testVaultRetrieveMissTriggersAudit() {
-        secretVault.get("non-existent-key");
+        WorkspaceScopeHolder.run(sessionId, () -> {
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            secretVault.init(sessionId);
+            
+            secretVault.get("non-existent-key");
 
-        // Wait for async persistence
-        auditService.waitForIdle();
-        em.clear();
+            // Wait for async persistence
+            auditService.waitForIdle();
+            em.clear();
 
-        List<AuditEvent> events = repository.findBySessionId(sessionId);
-        assertEquals(1, events.size());
-        
-        AuditEvent event = events.get(0);
-        assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS, event.eventType);
-        assertTrue(event.eventDetail.contains("keyName=non-existent-key"));
+            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            assertEquals(1, events.size());
+            
+            AuditEvent event = events.get(0);
+            assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS, event.eventType);
+            assertTrue(event.eventDetail.contains("keyName=non-existent-key"));
+        });
     }
 
     @Test
     public void testCheckpointCreatedTriggersAudit() {
-        statefulAgentStore.save(sessionId, "coordinator", List.of());
+        WorkspaceScopeHolder.run(sessionId, () -> {
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            secretVault.init(sessionId); // statefulAgentStore might need vault
 
-        // Wait for async persistence
-        auditService.waitForIdle();
-        em.clear();
+            statefulAgentStore.save(sessionId, "coordinator", List.of());
 
-        List<AuditEvent> events = repository.findBySessionId(sessionId);
-        assertEquals(1, events.size());
-        
-        AuditEvent event = events.get(0);
-        assertEquals(SecurityEventType.CHECKPOINT_CREATED, event.eventType);
-        assertEquals("coordinator", event.agentRole);
+            // Wait for async persistence
+            auditService.waitForIdle();
+            em.clear();
+
+            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            assertEquals(1, events.size());
+            
+            AuditEvent event = events.get(0);
+            assertEquals(SecurityEventType.CHECKPOINT_CREATED, event.eventType);
+            assertEquals("coordinator", event.agentRole);
+        });
     }
 }

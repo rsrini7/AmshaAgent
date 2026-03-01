@@ -8,7 +8,6 @@ import com.arcclaw.core.state.CompactionSummaryRepository;
 
 import org.junit.jupiter.api.Test;
 
-import java.lang.ScopedValue;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +38,7 @@ class MemorySearchToolTest {
     }
 
     @Test
-    void testSearchReturnsRankedResults() {
+    void testSearchReturnsRankedResults() throws Exception {
         MemorySearchTool tool = createTool();
 
         CompactionSummaryEntity e1 = new CompactionSummaryEntity();
@@ -55,15 +54,8 @@ class MemorySearchToolTest {
         when(repository.searchMemory("user-42", "blockchain", 5))
                 .thenReturn(List.of(e1, e2));
 
-        ToolResponse result = ScopedValue.where(WorkspaceScopeHolder.USER_ID, "user-42")
-                .call(() -> {
-                    WorkspaceScopeHolder.set("test-session");
-                    try {
-                        return tool.execute(Map.of("query", "blockchain"));
-                    } finally {
-                        WorkspaceScopeHolder.clear();
-                    }
-                });
+        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
+                tool.execute(Map.of("query", "blockchain")));
 
         assertTrue(result.success());
         assertTrue(result.output().contains("session-1"));
@@ -82,18 +74,11 @@ class MemorySearchToolTest {
     }
 
     @Test
-    void testBlankQueryReturnsEmptyGracefully() {
+    void testBlankQueryReturnsEmptyGracefully() throws Exception {
         MemorySearchTool tool = createTool();
 
-        ToolResponse result = ScopedValue.where(WorkspaceScopeHolder.USER_ID, "user-42")
-                .call(() -> {
-                    WorkspaceScopeHolder.set("test-session");
-                    try {
-                        return tool.execute(Map.of("query", "   "));
-                    } finally {
-                        WorkspaceScopeHolder.clear();
-                    }
-                });
+        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
+                tool.execute(Map.of("query", "   ")));
 
         assertTrue(result.success());
         assertEquals("No query provided", result.output());
@@ -106,15 +91,8 @@ class MemorySearchToolTest {
         when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
                 .thenReturn(List.of());
 
-        ScopedValue.where(WorkspaceScopeHolder.USER_ID, "user-42")
-                .run(() -> {
-                    WorkspaceScopeHolder.set("test-session");
-                    try {
-                        tool.execute(Map.of("query", "architecture"));
-                    } finally {
-                        WorkspaceScopeHolder.clear();
-                    }
-                });
+        WorkspaceScopeHolder.run("test-session", "user-42", null, () -> 
+                tool.execute(Map.of("query", "architecture")));
 
         verify(auditService).record(
                 eq("test-session"),

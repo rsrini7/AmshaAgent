@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import java.util.Optional;
 
@@ -105,51 +106,50 @@ class LangChainReasoningEngineTest {
     void testApprovalMarkerMessagesAreFilteredFromHistory() {
         // Arrange
         String sessionId = "test-session";
-        com.arcclaw.core.scope.WorkspaceScopeHolder.set(sessionId);
 
-        List<ChatMessage> storedMessages = List.of(
-            SystemMessage.from("Ignore me"),
-            AiMessage.from("Human Approved: ..."),
-            UserMessage.from("Actual Goal"),
-            UserMessage.from("Resuming task after approval")
-        );
-        when(chatMemoryStore.getMessages(sessionId)).thenReturn(storedMessages);
+        WorkspaceScopeHolder.run(sessionId, () -> {
+            List<ChatMessage> storedMessages = List.of(
+                SystemMessage.from("Ignore me"),
+                AiMessage.from("Human Approved: ..."),
+                UserMessage.from("Actual Goal"),
+                UserMessage.from("Resuming task after approval")
+            );
+            when(chatMemoryStore.getMessages(sessionId)).thenReturn(storedMessages);
 
-        AiMessage mockAiMessage = AiMessage.from("Processing");
-        ChatResponse mockResponse = ChatResponse.builder()
-                .aiMessage(mockAiMessage)
-                .build();
+            AiMessage mockAiMessage = AiMessage.from("Processing");
+            ChatResponse mockResponse = ChatResponse.builder()
+                    .aiMessage(mockAiMessage)
+                    .build();
 
-        // Capture the request to verify filtered messages
-        org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+            // Capture the request to verify filtered messages
+            org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
+            when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
+            when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
 
-        // Act
-        reasoningEngine.nextStep(sessionId, "coordinator", "Actual Goal", List.of());
+            // Act
+            reasoningEngine.nextStep(sessionId, "coordinator", "Actual Goal", List.of());
 
-        // Assert
-        ChatRequest capturedRequest = requestCaptor.getValue();
-        List<ChatMessage> filtered = capturedRequest.messages();
+            // Assert
+            ChatRequest capturedRequest = requestCaptor.getValue();
+            List<ChatMessage> filtered = capturedRequest.messages();
 
-        // Should have: 
-        // 1. Initial System Message (Trimurti prompt)
-        // 2. "Actual Goal" (from history)
-        // Count: 2
-        
-        // Let's verify specifically that "Ignore me", "Human Approved", and "Resuming" were skipped
-        boolean foundSystemStore = filtered.stream().anyMatch(m -> m instanceof SystemMessage && ((SystemMessage)m).text().equals("Ignore me"));
-        boolean foundApproved = filtered.stream().anyMatch(m -> m.toString().contains("Human Approved"));
-        boolean foundResuming = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().contains("Resuming"));
+            // Should have: 
+            // 1. Initial System Message (Trimurti prompt)
+            // 2. "Actual Goal" (from history)
+            // Count: 2
+            
+            // Let's verify specifically that "Ignore me", "Human Approved", and "Resuming" were skipped
+            boolean foundSystemStore = filtered.stream().anyMatch(m -> m instanceof SystemMessage && ((SystemMessage)m).text().equals("Ignore me"));
+            boolean foundApproved = filtered.stream().anyMatch(m -> m.toString().contains("Human Approved"));
+            boolean foundResuming = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().contains("Resuming"));
 
-        assertFalse(foundSystemStore, "System message from store should be filtered out");
-        assertFalse(foundApproved, "Approval marker should be filtered out");
-        assertFalse(foundResuming, "Resuming marker should be filtered out");
-        
-        boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().equals("Actual Goal"));
-        assertTrue(foundGoal, "Real goal should be preserved");
-        
-        com.arcclaw.core.scope.WorkspaceScopeHolder.clear();
+            assertFalse(foundSystemStore, "System message from store should be filtered out");
+            assertFalse(foundApproved, "Approval marker should be filtered out");
+            assertFalse(foundResuming, "Resuming marker should be filtered out");
+            
+            boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().equals("Actual Goal"));
+            assertTrue(foundGoal, "Real goal should be preserved");
+        });
     }
 
     @Test

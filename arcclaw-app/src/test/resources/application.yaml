@@ -5,6 +5,13 @@ arcclaw:
       ci-pipeline: "key-ci-changeme"
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+  channel:
+    telegram:
+      bot-token: "test-bot-token"
+  vault:
+    pepper: "test-pepper"
+    master-key: "test-master-key-32-chars-padded!"
+  data-dir: ":memory:"
       
 quarkus:
   index-dependency:
@@ -18,9 +25,15 @@ quarkus:
     host: "localhost"
     port: 9000
     enabled: true
+  otel:
+    sdk:
+      disabled: true
+  native:
+    additional-build-args: --enable-native-access=ALL-UNNAMED
   datasource:
     jdbc:
-      url: "jdbc:sqlite::memory:"
+      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=10000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 1
       initial-size: 1

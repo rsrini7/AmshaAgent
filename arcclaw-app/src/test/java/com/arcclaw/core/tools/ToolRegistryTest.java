@@ -38,12 +38,12 @@ class ToolRegistryTest {
 
     @BeforeEach
     void activate() {
-        WorkspaceScopeHolder.set(TEST_SESSION);
+        // No-op. Scopes must be activated per-test using WorkspaceScopeHolder.run().
     }
 
     @AfterEach
     void deactivate() {
-        WorkspaceScopeHolder.clear();
+        // No-op.
     }
 
     /**
@@ -81,15 +81,17 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceBlocksNetworkOutbound() {
-        workspaceContext.setAutonomyLevel(AutonomyLevel.READONLY);
+        WorkspaceScopeHolder.run(TEST_SESSION, () -> {
+            workspaceContext.setAutonomyLevel(AutonomyLevel.READONLY);
 
-        var ex = assertThrows(SecurityException.class,
-                () -> registry.invokeTool("github", Map.<String, Object>of("target", "test/repo")));
+            var ex = assertThrows(SecurityException.class,
+                    () -> registry.invokeTool("github", Map.<String, Object>of("target", "test/repo")));
 
-        assertTrue(ex.getMessage().contains("NETWORK_OUTBOUND"),
-                "SecurityException should mention the blocked operation");
-        assertTrue(ex.getMessage().contains("READONLY"),
-                "SecurityException should mention the autonomy level");
+            assertTrue(ex.getMessage().contains("NETWORK_OUTBOUND"),
+                    "SecurityException should mention the blocked operation");
+            assertTrue(ex.getMessage().contains("READONLY"),
+                    "SecurityException should mention the autonomy level");
+        });
     }
 
     /**
@@ -100,13 +102,15 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceAllowsFullAutonomy() {
-        workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+        WorkspaceScopeHolder.run(TEST_SESSION, () -> {
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
 
-        // This will *not* throw SecurityException (governance passes).
-        // The tool itself may fail (no 'gh' binary) — that's fine; we're
-        // testing governance, not the gh CLI.
-        ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
-        assertNotNull(response, "Should get a response (even if tool execution failed)");
+            // This will *not* throw SecurityException (governance passes).
+            // The tool itself may fail (no 'gh' binary) — that's fine; we're
+            // testing governance, not the gh CLI.
+            ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
+            assertNotNull(response, "Should get a response (even if tool execution failed)");
+        });
     }
 
     /**
@@ -125,8 +129,10 @@ class ToolRegistryTest {
      */
     @Test
     void testInvokeUnknownToolThrows() {
-        workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-        assertThrows(IllegalArgumentException.class,
-                () -> registry.invokeTool("nonexistent-tool", java.util.Collections.emptyMap()));
+        WorkspaceScopeHolder.run(TEST_SESSION, () -> {
+            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            assertThrows(IllegalArgumentException.class,
+                    () -> registry.invokeTool("nonexistent-tool", java.util.Collections.emptyMap()));
+        });
     }
 }

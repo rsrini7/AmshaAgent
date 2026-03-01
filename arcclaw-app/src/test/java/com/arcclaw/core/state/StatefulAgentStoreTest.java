@@ -1,6 +1,7 @@
 package com.arcclaw.core.state;
 
 import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -26,14 +27,17 @@ class StatefulAgentStoreTest {
     @Inject
     StatefulAgentStore store;
 
+    @Inject
+    AuditService auditService;
+
     @BeforeEach
     void activate() {
-        WorkspaceScopeHolder.set(SESSION);
+        // No-op
     }
 
     @AfterEach
     void deactivate() {
-        WorkspaceScopeHolder.clear();
+        // No-op
     }
 
     /**
@@ -42,33 +46,35 @@ class StatefulAgentStoreTest {
      */
     @Test
     void testSaveAndLoadCheckpoint() {
-        var steps = List.of(
-                new ReasoningStep("Analyzing the repo", "github",
-                        Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
-                new ReasoningStep("Done analyzing", ReasoningStep.FINISH,
-                        Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
+        WorkspaceScopeHolder.run(SESSION, () -> {
+            var steps = List.of(
+                    new ReasoningStep("Analyzing the repo", "github",
+                            Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
+                    new ReasoningStep("Done analyzing", ReasoningStep.FINISH,
+                            Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
 
-        // Save
-        var checkpoint = store.save(SESSION, ROLE, steps);
-        assertNotNull(checkpoint.getId(), "Checkpoint should have a generated ID");
-        assertEquals(SESSION, checkpoint.getSessionId());
-        assertEquals(ROLE, checkpoint.getAgentRole());
-        assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
-        assertNotNull(checkpoint.getStateJson());
-        assertNotNull(checkpoint.getCreatedAt());
+            // Save
+            var checkpoint = store.save(SESSION, ROLE, steps);
+            assertNotNull(checkpoint.getId(), "Checkpoint should have a generated ID");
+            assertEquals(SESSION, checkpoint.getSessionId());
+            assertEquals(ROLE, checkpoint.getAgentRole());
+            assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
+            assertNotNull(checkpoint.getStateJson());
+            assertNotNull(checkpoint.getCreatedAt());
 
-        // Load
-        var loaded = store.load(SESSION, ROLE);
-        assertTrue(loaded.isPresent(), "Checkpoint should be loadable");
-        assertEquals(checkpoint.getId(), loaded.get().getId());
+            // Load
+            var loaded = store.load(SESSION, ROLE);
+            assertTrue(loaded.isPresent(), "Checkpoint should be loadable");
+            assertEquals(checkpoint.getId(), loaded.get().getId());
 
-        // Deserialize
-        var deserializedSteps = store.deserializeSteps(loaded.get());
-        assertEquals(2, deserializedSteps.size());
-        assertEquals("Analyzing the repo", deserializedSteps.get(0).thought());
-        assertEquals("github", deserializedSteps.get(0).action());
-        assertEquals("Repository has 10 files", deserializedSteps.get(0).observation());
-        assertEquals(ReasoningStep.FINISH, deserializedSteps.get(1).action());
+            // Deserialize
+            var deserializedSteps = store.deserializeSteps(loaded.get());
+            assertEquals(2, deserializedSteps.size());
+            assertEquals("Analyzing the repo", deserializedSteps.get(0).thought());
+            assertEquals("github", deserializedSteps.get(0).action());
+            assertEquals("Repository has 10 files", deserializedSteps.get(0).observation());
+            assertEquals(ReasoningStep.FINISH, deserializedSteps.get(1).action());
+        });
     }
 
     /**
@@ -76,18 +82,21 @@ class StatefulAgentStoreTest {
      */
     @Test
     void testMarkFailed() {
-        var steps = List.of(
-                new ReasoningStep("Trying something", "github",
-                        Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
+        String sessionFail = SESSION + "-fail";
+        WorkspaceScopeHolder.run(sessionFail, () -> {
+            var steps = List.of(
+                    new ReasoningStep("Trying something", "github",
+                            Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
 
-        var checkpoint = store.save(SESSION + "-fail", ROLE, steps);
-        store.markFailed(checkpoint.getId(), "LLM API timeout");
+            var checkpoint = store.save(sessionFail, ROLE, steps);
+            store.markFailed(checkpoint.getId(), "LLM API timeout");
 
-        var loaded = store.load(SESSION + "-fail", ROLE);
-        assertTrue(loaded.isPresent());
-        assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
-        assertNotNull(loaded.get().getFailedAt(), "failedAt should be set");
-        assertEquals("LLM API timeout", loaded.get().getFailReason());
+            var loaded = store.load(sessionFail, ROLE);
+            assertTrue(loaded.isPresent());
+            assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
+            assertNotNull(loaded.get().getFailedAt(), "failedAt should be set");
+            assertEquals("LLM API timeout", loaded.get().getFailReason());
+        });
     }
 
     /**
@@ -95,16 +104,19 @@ class StatefulAgentStoreTest {
      */
     @Test
     void testMarkCompleted() {
-        var steps = List.of(
-                new ReasoningStep("All done", ReasoningStep.FINISH,
-                        Map.of("answer", "42"), "Task completed.", 0, 0));
+        String sessionComplete = SESSION + "-complete";
+        WorkspaceScopeHolder.run(sessionComplete, () -> {
+            var steps = List.of(
+                    new ReasoningStep("All done", ReasoningStep.FINISH,
+                            Map.of("answer", "42"), "Task completed.", 0, 0));
 
-        var checkpoint = store.save(SESSION + "-complete", ROLE, steps);
-        store.markCompleted(checkpoint.getId());
+            var checkpoint = store.save(sessionComplete, ROLE, steps);
+            store.markCompleted(checkpoint.getId());
 
-        var loaded = store.load(SESSION + "-complete", ROLE);
-        assertTrue(loaded.isPresent());
-        assertEquals(CheckpointStatus.COMPLETED, loaded.get().getStatus());
+            var loaded = store.load(sessionComplete, ROLE);
+            assertTrue(loaded.isPresent());
+            assertEquals(CheckpointStatus.COMPLETED, loaded.get().getStatus());
+        });
     }
 
     /**
@@ -113,18 +125,21 @@ class StatefulAgentStoreTest {
      */
     @Test
     void testUpsertBehavior() {
-        var steps1 = List.of(
-                new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0));
-        var steps2 = List.of(
-                new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0),
-                new ReasoningStep("Step 2", "github", Map.of(), "obs2", 0, 0));
+        String sessionUpsert = SESSION + "-upsert";
+        WorkspaceScopeHolder.run(sessionUpsert, () -> {
+            var steps1 = List.of(
+                    new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0));
+            var steps2 = List.of(
+                    new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0),
+                    new ReasoningStep("Step 2", "github", Map.of(), "obs2", 0, 0));
 
-        var cp1 = store.save(SESSION + "-upsert", ROLE, steps1);
-        var cp2 = store.save(SESSION + "-upsert", ROLE, steps2);
+            var cp1 = store.save(sessionUpsert, ROLE, steps1);
+            var cp2 = store.save(sessionUpsert, ROLE, steps2);
 
-        assertEquals(cp1.getId(), cp2.getId(), "Upsert should update same entity, not create new");
+            assertEquals(cp1.getId(), cp2.getId(), "Upsert should update same entity, not create new");
 
-        var deserialized = store.deserializeSteps(cp2);
-        assertEquals(2, deserialized.size(), "Should have updated steps");
+            var deserialized = store.deserializeSteps(cp2);
+            assertEquals(2, deserialized.size(), "Should have updated steps");
+        });
     }
 }

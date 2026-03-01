@@ -1,0 +1,37 @@
+arcclaw:
+  vault:
+    pepper: "test-pepper-value-not-used-in-tests"
+    master-key: "test-master-key-32-chars-padded!"
+  data-dir: ":memory:"
+  channel:
+    telegram:
+      bot-token: "test-bot-token"
+
+quarkus:
+  langchain4j:
+    chat-model:
+      provider: openai
+    openai:
+      api-key: "dummy-test-key"
+      base-url: "http://localhost:9999"
+      chat-model:
+        model-name: "gpt-4o-mini"
+  otel:
+    sdk:
+      disabled: true
+  datasource:
+    jdbc:
+      url: "jdbc:sqlite:./target/core-test.db?busy_timeout=10000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 1
+      initial-size: 1
+  hibernate-orm:
+    database:
+      generation: drop-and-create
+    packages:
+      - com.arcclaw.core.state
+      - com.arcclaw.core.security
+      - com.arcclaw.core.audit
+  native:
+    additional-build-args: --enable-native-access=ALL-UNNAMED
