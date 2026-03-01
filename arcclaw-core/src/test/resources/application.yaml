@@ -21,7 +21,7 @@ quarkus:
       disabled: true
   datasource:
     jdbc:
-      url: "jdbc:sqlite:./target/core-test.db?busy_timeout=10000&journal_mode=WAL"
+      url: "jdbc:sqlite:./target/core-test.db?busy_timeout=10000&journal_mode=WAL&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 10
       initial-size: 1

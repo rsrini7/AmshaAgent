@@ -32,7 +32,7 @@ quarkus:
     additional-build-args: --enable-native-access=ALL-UNNAMED
   datasource:
     jdbc:
-      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=10000&journal_mode=WAL"
+      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=10000&journal_mode=WAL&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 10
       initial-size: 1
