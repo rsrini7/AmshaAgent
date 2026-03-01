@@ -243,6 +243,7 @@ public class AgentLoop {
         final List<ReasoningStep> history = new ArrayList<>(resumedHistory);
         int iteration = 0;
         int llmSchemaErrorCount = 0;
+        int consecutiveFailures = 0; // NEW: Circuit breaker counter
         String transientError = null;
 
         log.infof("AgentLoop starting for goal: '%s' (maxIterations=%d)", goal, maxIterations);
@@ -308,7 +309,6 @@ public class AgentLoop {
                 }
             }
         }
-
 
         while (iteration < maxIterations) {
             iteration++;
@@ -445,12 +445,19 @@ public class AgentLoop {
                 }
                 observers.forEach(o -> o.onStepComplete(
                         sessionId, agentRole, completedStep));
+                        
+                // Increment circuit breaker for hallucination loops
+                consecutiveFailures++;
+                if (consecutiveFailures >= 2) {
+                    synchronized (history) {
+                        return AgentResult.finished("❌ I encountered repeated errors trying to execute that task. " +
+                                "Please rephrase your request or check the parameters.", List.copyOf(history));
+                    }
+                }
                 continue;
             }
 
             // Verify the original user goal actually mentions a GitHub-related keyword
-            // before allowing the github tool to execute. Prevents LLM from mapping
-            // general queries (job searches, news, etc.) to github tool calls.
             if ("github".equals(toolName)) {
                 if (!GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
                     String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
@@ -477,11 +484,14 @@ public class AgentLoop {
 
             // --- ACT ---
             String observation;
+            boolean stepFailed = false; // NEW: Track if the tool failed
+
             try {
                 ToolResponse response = toolRegistry.invokeTool(toolName, params);
                 observation = response.output();
                 if (!response.success()) {
                     observation = "Tool execution failed (exit=" + response.exitCode() + "): " + observation;
+                    stepFailed = true; // Mark as failed
                 }
             } catch (RequiresApprovalException e) {
                 // --- CHANGE B: APPROVAL PAUSE ---
@@ -509,9 +519,11 @@ public class AgentLoop {
                 observation = "Security violation: " + e.getMessage() +
                         ". The current autonomy level does not permit this operation.";
                 log.warnf("Tool '%s' blocked by governance: %s", toolName, e.getMessage());
+                stepFailed = true; // Mark as failed
             } catch (Exception e) {
                 observation = "Tool execution error: " + e.getMessage();
                 log.errorf(e, "Tool '%s' threw unexpected exception", toolName);
+                stepFailed = true; // Mark as failed
             }
 
             // --- OBSERVE ---
@@ -524,6 +536,36 @@ public class AgentLoop {
                     sessionId, agentRole, completedStep));
             log.debugf("Observation for '%s': %s",
                     toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
+
+            // --- NEW: CIRCUIT BREAKER LOGIC ---
+            if (stepFailed) {
+                consecutiveFailures++;
+                if (consecutiveFailures >= 2) {
+                    log.warnf("[AGENT-LOOP] Circuit breaker tripped for session %s. Tool '%s' failed %d times consecutively.", 
+                            sessionId, toolName, consecutiveFailures);
+                    synchronized (history) {
+                        return AgentResult.finished(
+                                "❌ I encountered repeated errors trying to execute that task. " +
+                                "Please rephrase your request or check the parameters.", 
+                                List.copyOf(history));
+                    }
+                }
+            } else {
+                consecutiveFailures = 0; // Reset counter on successful tool execution
+                
+                // --- NEW: FAST-PATH EXIT FOR SCHEDULING ---
+                // If we successfully scheduled a task, skip the final LLM summary call to save tokens!
+                if ("scheduletask".equals(toolName) || "manageschedule".equals(toolName)) {
+                    log.infof("[AGENT-LOOP] Fast-path exit triggered for tool '%s' to save LLM quota.", toolName);
+                    
+                    // Clean up the observation string (remove the Jedi Mind Trick text we added earlier)
+                    String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
+                    
+                    synchronized (history) {
+                        return AgentResult.finished("✅ " + cleanOutput, List.copyOf(history));
+                    }
+                }
+            }
         }
 
         // Loop exhausted
