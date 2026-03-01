@@ -56,18 +56,21 @@ public class HistoryReflex implements AgentReflex {
 
         AtomicInteger idx = new AtomicInteger(1);
         for (ChatMessage msg : messages) {
-            if (msg instanceof UserMessage) {
+            if (msg instanceof UserMessage um) {
+                String text =  um.singleText();
                 sb.append(idx.getAndIncrement())
-                  .append(". 👤 *You:* ")
-                  .append(truncate(msg.toString(), 200))
-                  .append("\n");
-            } else if (msg instanceof AiMessage) {
+                .append(". 👤 *You:* ")
+                .append(truncate(text, 200))
+                .append("\n");
+            } else if (msg instanceof AiMessage am) {
+                String text = am.text();
                 sb.append(idx.getAndIncrement())
-                  .append(". 🤖 *ArcClaw:* ")
-                  .append(truncate(msg.toString(), 200))
-                  .append("\n");
+                .append(". 🤖 *ArcClaw:* ")
+                .append(truncate(text, 200))
+                .append("\n");
             }
         }
+
         return sb.toString().trim();
     }
 

@@ -37,26 +37,88 @@ public final class AgentErrorMessageUtil {
         }
     }
 
-    public static String sanitizeErrorMessage(String terminationReason) {
-        if (terminationReason == null) {
-            return "❌ Task failed. Please try again.";
+    public static String sanitizeErrorMessage(String raw) {
+        if (raw == null) return "Unknown error.";
+
+        // Per-minute / per-request rate limit (existing)
+        if (raw.contains("rate_limit_exceeded") && raw.contains("Please try again in")) {
+            return buildThrottleMessage(raw);
         }
-        if (terminationReason.contains("rate_limit_exceeded")) {
-            String wait = extractWaitTime(terminationReason);
-            return "⚠️ I'm temporarily throttled due to high demand. " +
-                   "Please try again in " + wait + ".";
+
+        // Per-day token limit (TPD) — different wording: "tokens per day"
+        if (raw.contains("rate_limit_exceeded") && raw.contains("tokens per day")) {
+            return buildTpdThrottleMessage(raw);
         }
-        if (terminationReason.contains("SCHEMA_ERROR")) {
-            return "❌ I encountered a tool execution error. " +
-                   "Please rephrase your request.";
+
+        // Generic Groq error wrapper
+        if (raw.contains("ReasoningEngine error") || raw.contains("\"error\"")) {
+            return "⚠️ The AI service returned an error. Please try again shortly.";
         }
-        if (terminationReason.contains("Budget Exceeded")) {
-            return "⚠️ Session budget limit reached. " +
-                   "Please start a new session.";
+
+        return raw;
+    }
+
+    private static String buildThrottleMessage(String raw) {
+        // Extract "Please try again in Xm Ys" from the message
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)")
+                .matcher(raw);
+        if (m.find()) {
+            String wait = humanReadableWait(m.group(1));
+            return "⚠️ I'm temporarily throttled due to high demand. Please try again in " + wait + ".";
         }
-        if (terminationReason.contains("SYSTEM_ERROR")) {
-            return "❌ An internal error occurred. Please try again.";
+        return "⚠️ I'm temporarily throttled. Please try again in a few minutes.";
+    }
+
+    // NEW: handles TPD limit which includes "Xm Ys" format like "39m48.96s"
+    private static String buildTpdThrottleMessage(String raw) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)")
+                .matcher(raw);
+        if (m.find()) {
+            String wait = humanReadableWait(m.group(1));
+            return "⚠️ Daily token limit reached. Please try again in " + wait + ".";
         }
-        return "❌ Task failed. Please try again.";
+        return "⚠️ Daily token limit reached. Please try again later today.";
+    }
+
+    private static String humanReadableWait(String rawInterval) {
+        // rawInterval examples: "39m48.96s", "120s", "5m"
+        int minutes = 0;
+        int seconds = 0;
+
+        String s = rawInterval.trim();
+
+        // Match "<minutes>m<seconds>s" or "<minutes>m"
+        java.util.regex.Matcher m1 = java.util.regex.Pattern
+                .compile("(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?")
+                .matcher(s);
+        if (m1.matches()) {
+            if (m1.group(1) != null) {
+                minutes = Integer.parseInt(m1.group(1));
+            }
+            if (m1.group(2) != null) {
+                double sec = Double.parseDouble(m1.group(2));
+                seconds = (int) Math.round(sec);
+            }
+        } else if (s.endsWith("s")) {
+            // Fallback: "120s"
+            String num = s.substring(0, s.length() - 1);
+            seconds = (int) Math.round(Double.parseDouble(num));
+        }
+
+        // Normalize >60s into minutes
+        minutes += seconds / 60;
+        seconds = seconds % 60;
+
+        if (minutes > 0 && seconds > 0) {
+            return minutes + " minutes and " + seconds + " seconds";
+        } else if (minutes > 0) {
+            return minutes + " minutes";
+        } else if (seconds > 0) {
+            return seconds + " seconds";
+        } else {
+            return "a few moments";
+        }
     }
 }

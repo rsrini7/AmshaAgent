@@ -12,6 +12,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.cronutils.model.CronType;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.model.time.ExecutionTime;
@@ -258,7 +259,8 @@ public class AgentCronScheduler {
             try {
                 camelProducer.sendBodyAndHeaders(
                         telegramEndpoint,
-                        "Scheduled task failed: " + t.getMessage(),
+                        "❌ Scheduled task failed.\n\nReason: "
+                            + AgentErrorMessageUtil.sanitizeErrorMessage(t.getMessage()),
                         new HashMap<>(Map.of("CamelTelegramChatId", job.chatId))
                 );
             } catch (Exception notifyEx) {
