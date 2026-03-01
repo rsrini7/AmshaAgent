@@ -19,6 +19,7 @@ import com.arcclaw.app.security.TelegramAllowlistGuard;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.state.ContextCompactionService;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
@@ -93,6 +94,14 @@ public class TelegramAgentHandler {
     @Inject
     TelegramAllowlistGuard allowlistGuard;
 
+    // Cache the endpoint URI to prevent rebuilding it on every message
+    private String telegramEndpoint;
+
+    @PostConstruct
+    void init() {
+        this.telegramEndpoint = "telegram:bots?authorizationToken=" + botToken;
+    }
+
     /**
      * Executes on the Vert.x worker thread directly from the Camel route.
      * All Camel Exchange data must be extracted synchronously before offloading
@@ -152,11 +161,17 @@ public class TelegramAgentHandler {
 
                 String safeInput = reflexResult.sanitizedInput();
 
+                // --- NEW: Check if the user is currently in the approval flow
+                boolean isApprovalFlow = safeInput.trim().equalsIgnoreCase("/approve") || 
+                                         safeInput.trim().equalsIgnoreCase("/deny") || 
+                                         safeInput.contains("Resuming task after approval");
+
                 // Auto-cancel any dangling tool approvals if the user
                 // sends a free-text message instead of clicking /approve or /deny
                 for (AgentRoleEnum r : AgentRoleEnum.values()) {
                     statefulAgentStore.load(baseId, r.toScopedName()).ifPresent(cp -> {
-                        if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                        // FIX: Only cancel if the input is NOT an approval command
+                        if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL && !isApprovalFlow) {
                             log.infof("[TelegramHandler] User sent free-text. Auto-canceling dangling tool approval for role: %s", r.toScopedName());
                             cp.setStatus(CheckpointStatus.FAILED);
                             cp.setFailReason("User interrupted with a new message. Tool execution aborted.");
@@ -251,10 +266,9 @@ public class TelegramAgentHandler {
         }));
     }
 
-
     private void reply(String chatId, String message) {
         producerTemplate.sendBodyAndHeaders(
-                "telegram:bots?authorizationToken=" + botToken,
+                telegramEndpoint,
                 message,
                 new java.util.HashMap<>(java.util.Map.of("CamelTelegramChatId", chatId))
         );

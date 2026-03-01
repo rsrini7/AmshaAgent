@@ -44,12 +44,12 @@ import java.util.concurrent.Semaphore;
  * <p>
  * Architecture decisions (see ARCHITECTURAL_DECISIONS.md AD-017):
  * <ul>
- *   <li>ManagedExecutor (not raw virtual threads) for CDI context propagation + GraalVM AOT safety</li>
- *   <li>Split transactions (read then claim) to avoid SQLite SQLITE_BUSY</li>
- *   <li>Semaphore for concurrency limiting with Throwable safety</li>
- *   <li>BACKGROUND autonomy level for cron-fired sessions</li>
- *   <li>Isolated session IDs ("cron-{id}") for zero chat history loading</li>
- *   <li>Delivery order: AgentLoop → Telegram → DB update (recoverable on failure)</li>
+ * <li>ManagedExecutor (not raw virtual threads) for CDI context propagation + GraalVM AOT safety</li>
+ * <li>Split transactions (read then claim) to avoid SQLite SQLITE_BUSY</li>
+ * <li>Semaphore for concurrency limiting with Throwable safety</li>
+ * <li>BACKGROUND autonomy level for cron-fired sessions</li>
+ * <li>Isolated session IDs ("cron-{id}") for zero chat history loading</li>
+ * <li>Delivery order: AgentLoop → Telegram → DB update (recoverable on failure)</li>
  * </ul>
  */
 @ApplicationScoped
@@ -161,16 +161,15 @@ public class AgentCronScheduler {
      * with isolated session → deliver via Telegram → update DB state.
      */
     private void executeCronJob(AgentCronEntity job) {
+        
+        // FIXED: Hoist these outside the try block so the catch block can access the exact execution ID
+        String executionId = UUID.randomUUID().toString();
+        // Isolated session per FIRE — prevents history buildup across recurring jobs!
+        String cronSessionId = "cron-" + job.id + "-" + executionId;
+        
         try {
             MDC.put("userId", job.userId);
             workspaceContext.setAutonomyLevel(AutonomyLevel.BACKGROUND);
-
-            // Isolated session — zero chat history loaded (bounded token usage)
-           // Generate a unique execution ID for THIS specific fire
-            String executionId = UUID.randomUUID().toString();
-
-            // Isolated session per FIRE — prevents history buildup across recurring jobs!
-            String cronSessionId = "cron-" + job.id + "-" + executionId;
 
             AgentResult result = agentLoop.run(
                     cronSessionId,
@@ -180,7 +179,17 @@ public class AgentCronScheduler {
                     cronMaxIterations
             );
 
-            String rawAnswer = result.finalAnswer() != null ? result.finalAnswer() : "";
+            String rawAnswer;
+            boolean wasApprovalRequested = result.awaitingApproval();
+
+            if (wasApprovalRequested) {
+                // If the cron job requires approval, extract the warning message
+                rawAnswer = result.terminationReason() != null ? result.terminationReason() : "⚠️ Approval Required";
+                // Mark as failed for now so it doesn't run away.
+                cronRepository.markFailed(job.id, "Paused for human approval");
+            } else {
+                rawAnswer = result.finalAnswer() != null ? result.finalAnswer() : "";
+            }
             
             // Defensive Guard against empty LLM outputs crashing Telegram
             String finalAnswer = rawAnswer.trim().isEmpty() 
@@ -196,34 +205,38 @@ public class AgentCronScheduler {
                     new HashMap<>(Map.of("CamelTelegramChatId", job.chatId))
             );
 
-            if (job.runOnce) {
-                cronRepository.markCompleted(job.id, Instant.now());
-                auditService.record(cronSessionId, job.userId,
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
-                        SecurityEventType.CRONFIRED,
-                        "cronId=" + job.id + " runOnce=true status=COMPLETED");
-                log.infof("CRON-COMPLETED one-shot cronId=%s", job.id);
-            } else {
-                ZonedDateTime next = ExecutionTime
-                        .forCron(new CronParser(
-                                CronDefinitionBuilder.instanceDefinitionFor(
-                                        CronType.UNIX))
-                                .parse(job.cronExpression))
-                        .nextExecution(ZonedDateTime.now(ZoneId.of(job.timezone)))
-                        .orElseThrow(() -> new IllegalStateException(
-                                "No next execution for: " + job.cronExpression));
-                cronRepository.markFired(job.id, Instant.now(), next.toInstant());
-                auditService.record(cronSessionId, job.userId,
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
-                        SecurityEventType.CRONFIRED,
-                        "cronId=" + job.id + " runOnce=false nextFire=" + next);
-                log.infof("CRON-FIRED cronId=%s nextFire=%s", job.id, next);
+            // Only mark successful completions if it wasn't paused for approval
+            if (!wasApprovalRequested) {
+                if (job.runOnce) {
+                    cronRepository.markCompleted(job.id, Instant.now());
+                    auditService.record(cronSessionId, job.userId,
+                            AgentRoleEnum.COORDINATOR.toScopedName(),
+                            SecurityEventType.CRONFIRED,
+                            "cronId=" + job.id + " runOnce=true status=COMPLETED");
+                    log.infof("CRON-COMPLETED one-shot cronId=%s", job.id);
+                } else {
+                    ZonedDateTime next = ExecutionTime
+                            .forCron(new CronParser(
+                                    CronDefinitionBuilder.instanceDefinitionFor(
+                                            CronType.UNIX))
+                                    .parse(job.cronExpression))
+                            .nextExecution(ZonedDateTime.now(ZoneId.of(job.timezone)))
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "No next execution for: " + job.cronExpression));
+                    cronRepository.markFired(job.id, Instant.now(), next.toInstant());
+                    auditService.record(cronSessionId, job.userId,
+                            AgentRoleEnum.COORDINATOR.toScopedName(),
+                            SecurityEventType.CRONFIRED,
+                            "cronId=" + job.id + " runOnce=false nextFire=" + next);
+                    log.infof("CRON-FIRED cronId=%s nextFire=%s", job.id, next);
+                }
             }
 
         } catch (Throwable t) {
             // Inner Throwable catches OOME during AgentLoop/Telegram
             cronRepository.markFailed(job.id, t.getMessage());
-            String cronSessionId = "cron-" + job.id; // Recompute to ensure audit correlation
+            
+            // FIXED: Use the hoisted cronSessionId containing the execution UUID.
             auditService.record(cronSessionId, job.userId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     SecurityEventType.CRONFAILED,
