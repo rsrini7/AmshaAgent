@@ -21,9 +21,14 @@ public class ListCronsReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        String t = input == null ? "" : input.trim().toLowerCase();
-        return t.equals("crons") || t.equals("cron")
-                || t.equals("list crons") || t.startsWith("list my cron");
+        if (input == null) return false;
+        String trimmed = input.trim().toLowerCase();
+        return trimmed.equals("/crons")
+            || trimmed.equals("/cron")
+            || trimmed.equals("/list crons")
+            || trimmed.startsWith("/jobs")
+            || trimmed.startsWith("/schedule")
+            || trimmed.startsWith("list my cron");
     }
 
     @Override

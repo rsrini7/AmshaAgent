@@ -184,6 +184,9 @@ public class ScheduleTaskTool implements AgentTool {
 
         return ToolResponse.success("Task scheduled successfully. " +
                 "ID: " + entity.id + " | Next fire: " +
-                InstantToTextConverter.format(nextFireTime));
+                InstantToTextConverter.format(nextFireTime) + 
+                "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
+                "You MUST NOT execute the goal yourself right now. " +
+                "Reply to the user with a plain text confirmation of the schedule and FINISH immediately.");
     }
 }
