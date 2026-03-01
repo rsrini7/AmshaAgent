@@ -172,21 +172,27 @@ public class AgentCronScheduler {
             workspaceContext.setAutonomyLevel(AutonomyLevel.BACKGROUND);
 
             AgentResult result = agentLoop.run(
-                    cronSessionId,
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
-                    job.goal,  // already prefixed with "CRON: " by ScheduleTaskTool
-                    engine,
-                    cronMaxIterations
+                cronSessionId,
+                AgentRoleEnum.COORDINATOR.toScopedName(),
+                job.goal,
+                engine,
+                cronMaxIterations
             );
 
-            String rawAnswer;
             boolean wasApprovalRequested = result.awaitingApproval();
+            String rawAnswer;
 
             if (wasApprovalRequested) {
-                // If the cron job requires approval, extract the warning message
-                rawAnswer = result.terminationReason() != null ? result.terminationReason() : "⚠️ Approval Required";
-                // Mark as failed for now so it doesn't run away.
-                cronRepository.markFailed(job.id, "Paused for human approval");
+                // rawAnswer = result.terminationReason() != null
+                //         ? result.terminationReason()
+                //         : "⚠️ Approval Required for a scheduled task.\n\n" +
+                //         "Reply `/approve` or `/deny` in this chat to continue.";
+
+                rawAnswer = "⚠️ Approval Required for scheduled task.\n\n" +
+                    "Cron ID: " + job.id + "\n" +
+                    "Tool: github\n" +
+                    "Goal: " + job.goal + "\n\n" +
+                    "Reply `/approve " + job.id + "` to run it once now, or `/deny " + job.id + "` to cancel.";
             } else {
                 rawAnswer = result.finalAnswer() != null ? result.finalAnswer() : "";
             }
