@@ -127,6 +127,11 @@
       <artifactId>quarkus-picocli</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-scheduler</artifactId>
+    </dependency>
+
     <!-- Channels -->
     <dependency>
       <groupId>org.apache.camel.quarkus</groupId>

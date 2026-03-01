@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -130,6 +131,24 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             });
             return null;
         }, "markFailed-entity");
+    }
+
+    @Override
+    public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
+        String sessionPrefix = "cron-" + cronId + "-";
+
+        TypedQuery<AgentCheckpoint> q = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId LIKE :sessionPrefix " +
+                "  AND c.status = :status " +
+                "ORDER BY c.updatedAt DESC",
+                AgentCheckpoint.class
+        );
+        q.setParameter("sessionPrefix", sessionPrefix + "%");
+        q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
+
+        q.setMaxResults(1);
+        return q.getResultList().stream().findFirst();
     }
 
     private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {

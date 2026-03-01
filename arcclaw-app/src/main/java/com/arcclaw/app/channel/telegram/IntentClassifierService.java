@@ -38,13 +38,21 @@ public class IntentClassifierService {
             - brahma: CREATING new code, building new features, writing new scripts
             - shiva: FIXING existing code, diagnosing bugs, analyzing stack traces
             - saraswati: research, facts, finding information, GitHub actions
-            - coordinator: planning, general questions, coordination, anything else
+            - coordinator: SCHEDULING tasks, planning, general questions, coordination, anything else
+
+            PRIORITY ROUTING RULES:
+            1. SCHEDULING OVERRIDES ALL CONTEXT: If the user requests to schedule a task, set a reminder, or delay execution (e.g., "after 1 min", "schedule", "remind me", "every day"), you MUST route the request to 'coordinator'. Do this EVEN IF the request mentions GitHub, code, or research. The 'coordinator' is the only persona authorized to schedule future tasks.
 
             CRITICAL GUARDRAILS:
-            1. If the user mentions GitHub, gists, or repositories to LIST, FETCH, or VIEW existing content -> saraswati.
-            2. If the user mentions GitHub, gists, or repositories to CREATE, BUILD, or GENERATE new content -> brahma. GitHub context does NOT override creation intent.
+            1. (UNLESS SCHEDULING) If the user mentions GitHub, gists, or repositories to LIST, FETCH, or VIEW existing content -> saraswati.
+            2. (UNLESS SCHEDULING) If the user mentions GitHub, gists, or repositories to CREATE, BUILD, or GENERATE new content -> brahma.
             3. Only output 'shiva' if the user provides actual error text, stack traces, or explicitly says "fix", "broken", "not working" with technical detail. Negative words like "no", "none", or "missing" alone are NOT debugging signals.
             4. "Hi", "Hello", greetings, or vague messages -> coordinator only.
+            5. Phrases like "then in X", "and then X", "also X" are CONTINUATION
+               phrases joining two code/writing requests — NEVER treat them as
+               scheduling signals. Only route to coordinator for scheduling if the
+               user explicitly uses time words like "in 5 mins", "at 3pm",
+               "every day", "after 2 hours", "remind me", "schedule".
 
             User message: "%s"
 

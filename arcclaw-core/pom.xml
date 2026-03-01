@@ -81,6 +81,12 @@
       </exclusions>
     </dependency>
 
+    <!-- Scheduler / Cron -->
+    <dependency>
+      <groupId>com.cronutils</groupId>
+      <artifactId>cron-utils</artifactId>
+      <version>9.2.1</version>
+    </dependency>
 
     <!-- Observability -->
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-micrometer-registry-prometheus</artifactId></dependency>

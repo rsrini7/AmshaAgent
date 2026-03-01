@@ -27,5 +27,10 @@ public enum ToolOperation {
     /**
      * Storing or retrieving secrets from the vault.
      */
-    VAULT_ACCESS
+    VAULT_ACCESS,
+
+    /**
+     * Writing durable autonomous agent tasks (cron scheduling).
+     */
+    SCHEDULE_AUTONOMOUS
 }

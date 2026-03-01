@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.AgentCronRepository;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,6 +27,9 @@ public class ResetReflex implements AgentReflex {
     @Inject
     CompactionSummaryRepository compactionSummaryRepository;
 
+    @Inject
+    AgentCronRepository cronRepository;
+
     private static final Pattern MATCHES_PATTERN = 
     Pattern.compile("(?i)^(/reset|clear\\s+(my\\s+)?history|reset\\s+(my\\s+)?history)$");
 
@@ -44,10 +48,15 @@ public class ResetReflex implements AgentReflex {
         // 2. Wipe persistent chat memory from SQLite so context poisoning is cleared
         chatMemoryStore.deleteMessages(sessionId);
 
-        // 3. NEW: Wipe the compaction ghost memory
+        // 3. Wipe the compaction ghost memory
         compactionSummaryRepository.deleteBySessionId(sessionId);
 
-        log.infof("[ResetReflex] Session %s fully reset — workspace, chat memory, and compacted memory cleared", sessionId);
-        return "🧹 Conversation history, memory, and tool states have been completely wiped. We are starting fresh.";
+        // 4. NEW: Wipe all scheduled background cron jobs for this WORM tenant
+        long deletedCrons = cronRepository.deleteAllByUserId(userId);
+
+        log.infof("[ResetReflex] Session %s fully reset — workspace, chat memory, compacted memory, and %d cron jobs cleared", 
+                sessionId, deletedCrons);
+                
+        return "🧹 Conversation history, memory, and " + deletedCrons + " scheduled task(s) have been completely wiped. We are starting fresh.";
     }
 }

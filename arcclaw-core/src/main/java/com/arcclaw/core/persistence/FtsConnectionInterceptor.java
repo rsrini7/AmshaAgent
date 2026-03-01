@@ -19,7 +19,7 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     private static final Logger log = Logger.getLogger(FtsConnectionInterceptor.class);
 
-    @ConfigProperty(name = "ARCCLAW_DATA_DIR", defaultValue = "./data")
+    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
     String dataDir;
 
     @Override

@@ -20,17 +20,15 @@ public interface AutonomyPolicy {
     class Default implements AutonomyPolicy {
         @Override
         public boolean isAllowed(AutonomyLevel level, ToolOperation operation) {
-            if (level == AutonomyLevel.FULL) {
-                return true;
-            }
-            if (level == AutonomyLevel.READONLY) {
-                return operation == ToolOperation.READ_FS;
-            }
-            if (level == AutonomyLevel.SUPERVISED) {
-                // Partial allows reads, but flags everything else for approval
-                return operation == ToolOperation.READ_FS;
-            }
-            return false;
+            return switch (level) {
+                case FULL -> true;
+                case SUPERVISED -> operation == ToolOperation.READ_FS
+                        || operation == ToolOperation.NETWORK_OUTBOUND
+                        || operation == ToolOperation.SCHEDULE_AUTONOMOUS;
+                case BACKGROUND -> operation == ToolOperation.READ_FS
+                        || operation == ToolOperation.NETWORK_OUTBOUND;
+                case READONLY -> operation == ToolOperation.READ_FS;
+            };
         }
     }
 }

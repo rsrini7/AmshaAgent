@@ -4,6 +4,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +29,7 @@ public class SecretVaultImplTest {
     AuditService auditService;
 
     @Inject
-    jakarta.persistence.EntityManager entityManager;
+    EntityManager entityManager;
 
     private static final String TEST_SESSION_ID = "test-session-auth";
     private static final String API_KEY_NAME = "OPENAI_API_KEY";

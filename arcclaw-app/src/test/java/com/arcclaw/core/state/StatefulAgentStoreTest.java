@@ -32,7 +32,8 @@ class StatefulAgentStoreTest {
 
     @BeforeEach
     void activate() {
-        // No-op
+        // Clear any pending background writes from previous tests
+        auditService.waitForIdle();
     }
 
     @AfterEach
@@ -142,4 +143,52 @@ class StatefulAgentStoreTest {
             assertEquals(2, deserialized.size(), "Should have updated steps");
         });
     }
+
+    @Test
+    void testFindLatestAwaitingApprovalForCron() {
+        WorkspaceScopeHolder.run("cron-test-session", () -> {
+            // Given: three checkpoints for the same cronId, different sessions and statuses
+            String role = "coordinator";
+            String cronId = "12345";
+
+            // 1) Old AWAITING_APPROVAL
+            var steps1 = List.of(
+                    new ReasoningStep("Thinking 1", "github",
+                            Map.of("repo", "old"), "obs", 0, 0)
+            );
+            var cp1 = store.save("cron-" + cronId + "-old", role, steps1);
+            cp1.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            store.save(cp1);
+
+            // 2) Newer AWAITING_APPROVAL
+            var steps2 = List.of(
+                    new ReasoningStep("Thinking 2", "github",
+                            Map.of("repo", "new"), "obs", 0, 0)
+            );
+            var cp2 = store.save("cron-" + cronId + "-new", role, steps2);
+            cp2.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            store.save(cp2);
+
+            // 3) COMPLETED (should be ignored)
+            var steps3 = List.of(
+                    new ReasoningStep("Done", ReasoningStep.FINISH,
+                            Map.of("answer", "42"), "Task completed.", 0, 0)
+            );
+            var cp3 = store.save("cron-" + cronId + "-completed", role, steps3);
+            cp3.setStatus(CheckpointStatus.COMPLETED);
+            store.save(cp3);
+
+            // When: we query latest awaiting approval for this cronId
+            var found = store.findLatestAwaitingApprovalForCron(cronId);
+
+            // Then: we get the newest AWAITING_APPROVAL checkpoint (cp2)
+            assertTrue(found.isPresent(), "Expected an awaiting-approval checkpoint");
+            AgentCheckpoint checkpoint = found.get();
+            assertEquals("cron-" + cronId + "-new", checkpoint.getSessionId(),
+                        "Should return the latest AWAITING_APPROVAL cron session");
+            assertEquals(CheckpointStatus.AWAITING_APPROVAL, checkpoint.getStatus());
+            assertEquals(role, checkpoint.getAgentRole());
+        });
+    }
+
 }

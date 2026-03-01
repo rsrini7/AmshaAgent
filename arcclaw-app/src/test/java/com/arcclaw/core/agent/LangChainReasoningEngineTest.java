@@ -210,9 +210,45 @@ class LangChainReasoningEngineTest {
 
         ChatRequest sent = captor.getValue();
         assertNotNull(sent.toolSpecifications());
-        // Phase 45: Researcher now has 2 tools: github, memory_search
-        assertEquals(2, sent.toolSpecifications().size());
-        assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("github")));
-        assertTrue(sent.toolSpecifications().stream().anyMatch(t -> t.name().equals("memory_search")));
+        
+        List<String> toolNames = sent.toolSpecifications().stream()
+                .map(dev.langchain4j.agent.tool.ToolSpecification::name)
+                .toList();
+                
+        // Phase 46 Fix: Researcher ONLY has github and memory_search. 
+        // Coordinator handles all scheduling to prevent tool hallucinations.
+        assertTrue(toolNames.contains("github"),        "researcher must have github");
+        assertTrue(toolNames.contains("memory_search"), "researcher must have memory_search");
+        
+        // Researcher MUST NOT have scheduling tools
+        assertFalse(toolNames.contains("scheduletask"),   "researcher must NOT have scheduletask");
+        assertFalse(toolNames.contains("manageschedule"), "researcher must NOT have manageschedule");
+        
+        // Researcher must NOT have shell or vault access — safety boundary
+        assertFalse(toolNames.contains("executeshell"), "researcher must NOT have executeshell");
+        assertFalse(toolNames.contains("vaultaccess"),  "researcher must NOT have vaultaccess");
+    }
+
+    @Test
+    void testCronFiredSessionStripsScheduleTools() {
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        when(chatLanguageModel.chat(captor.capture())).thenReturn(
+                ChatResponse.builder().aiMessage(AiMessage.from("OK")).build());
+        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+
+        // Act: Use a sessionId starting with "cron-"
+        reasoningEngine.nextStep("cron-12345", "coordinator", "CRON: Do background task", List.of());
+
+        ChatRequest sent = captor.getValue();
+        assertNotNull(sent.toolSpecifications());
+        
+        // Assert scheduletask and manageschedule are physically missing
+        boolean hasScheduleTask = sent.toolSpecifications().stream()
+                .anyMatch(t -> t.name().equals("scheduletask"));
+        boolean hasManageSchedule = sent.toolSpecifications().stream()
+                .anyMatch(t -> t.name().equals("manageschedule"));
+        
+        assertFalse(hasScheduleTask, "scheduletask MUST be stripped from cron sessions to prevent fork bombs");
+        assertFalse(hasManageSchedule, "manageschedule MUST be stripped from cron sessions");
     }
 }

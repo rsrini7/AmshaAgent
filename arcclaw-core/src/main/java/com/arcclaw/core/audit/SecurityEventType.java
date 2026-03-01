@@ -36,7 +36,13 @@ public enum SecurityEventType {
     CONTEXT_COMPACTED,     // session history summary created
 
     // Compliance
-    BUDGET_EXCEEDED;       // Phase 44: standalone mandatory budget violation event
+    BUDGET_EXCEEDED,       // Phase 44: standalone mandatory budget violation event
+
+    // Cron lifecycle (Phase 46)
+    CRONCREATED,           // ScheduleTaskTool persisted a new cron row
+    CRONFIRED,             // AgentCronScheduler dispatched successfully
+    CRONFAILED,            // AgentCronScheduler caught exception
+    CRONDELETED;           // Reflex or tool deleted a cron row
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -46,7 +52,8 @@ public enum SecurityEventType {
     public boolean isMandatory() {
         return switch (this) {
             case VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
-                 PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED -> true;
+                 PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
+                 CRONFIRED, CRONFAILED -> true;
             default -> false;
         };
     }

@@ -27,9 +27,9 @@ public class RoleRegistry {
      */
     public List<String> permittedTools(AgentRoleEnum role) {
         if (role == null) return List.of();
-        
         return switch (role) {
-            case RESEARCHER, COORDINATOR -> List.of("github", "memory_search");
+            case COORDINATOR -> List.of("github", "memory_search", "scheduletask", "manageschedule");
+            case RESEARCHER -> List.of("github", "memory_search");
             case ARCHITECT, CODER, DEBUGGER -> List.of();
         };
     }

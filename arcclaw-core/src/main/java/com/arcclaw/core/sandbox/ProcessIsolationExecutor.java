@@ -14,10 +14,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -419,91 +417,6 @@ public class ProcessIsolationExecutor {
             }
         }
         return resolved;
-    }
-
-    /**
-     * Writes secrets to a strictly permissioned ephemeral env-file using a single
-     * pre-sized byte array — no intermediate copies.
-     * <p>
-     * Memory contract: both the assembled {@code payload} array and each individual
-     * secret byte array in {@code secrets} are zeroed in the {@code finally} block,
-     * regardless of success or failure. The caller must not access {@code secrets}
-     * values after this method returns.
-     * @deprecated Retained for backward compatibility with NAMESPACE strategy. Podman now uses {@link TmpfsSecretTransport}.
-     * @param sessionId the workspace session ID (used to scope the temp file location)
-     * @param secrets   map of envVar → raw secret bytes (will be zeroed on return)
-     * @return path to the written env-file (caller is responsible for deletion)
-     */
-    @Deprecated(forRemoval = true)
-    private Path writeEphemeralEnvFile(String sessionId, Map<String, byte[]> secrets) throws IOException {
-        Path workspaceDir = Path.of(workspaceRootDir, sessionId);
-        if (!Files.exists(workspaceDir)) {
-            Files.createDirectories(workspaceDir);
-        }
-
-        Path envFile;
-        try {
-            var strictAttrs = PosixFilePermissions.asFileAttribute(
-                    PosixFilePermissions.fromString("rw-------"));
-            envFile = Files.createTempFile(workspaceDir, "secrets-", ".env", strictAttrs);
-        } catch (UnsupportedOperationException e) {
-            envFile = Files.createTempFile(workspaceDir, "secrets-", ".env");
-            envFile.toFile().setReadable(true, true);
-            envFile.toFile().setWritable(true, true);
-        }
-
-        if (secrets == null || secrets.isEmpty()) {
-            return envFile;
-        }
-
-        // Pre-calculate exact payload size to avoid ByteArrayOutputStream's internal
-        // buffer — which would create a second uncontrolled copy of the secret bytes.
-        int totalSize = 0;
-        for (var entry : secrets.entrySet()) {
-            totalSize += entry.getKey().getBytes(StandardCharsets.UTF_8).length; // key
-            totalSize += 1;                    // '='
-            totalSize += entry.getValue().length; // secret bytes
-            totalSize += 1;                    // '\n'
-        }
-
-        byte[] payload = new byte[totalSize];
-        try {
-            int pos = 0;
-            for (var entry : secrets.entrySet()) {
-                byte[] keyBytes = (entry.getKey() + "=").getBytes(StandardCharsets.UTF_8);
-                System.arraycopy(keyBytes, 0, payload, pos, keyBytes.length);
-                pos += keyBytes.length;
-
-                byte[] val = entry.getValue();
-                System.arraycopy(val, 0, payload, pos, val.length);
-                pos += val.length;
-
-                payload[pos++] = '\n';
-            }
-            Files.write(envFile, payload);
-            return envFile;
-
-        } finally {
-            // Zero the assembled payload — the only in-memory copy of all secrets combined.
-            Arrays.fill(payload, (byte) 0);
-            // Zero each individual secret byte array — they are now dead.
-            for (byte[] secretBytes : secrets.values()) {
-                if (secretBytes != null) {
-                    Arrays.fill(secretBytes, (byte) 0);
-                }
-            }
-        }
-    }
-    
-    // Check if process was wrapped in block.
-    // Ensure pb block terminates at line 299 as intended.
-
-    @Deprecated(forRemoval = true)
-    private void deleteEphemeralEnvFile(Path f) {
-        try {
-            Files.deleteIfExists(f);
-        } catch (Exception ignored) {
-        }
     }
     public static class ToolExecutionException extends RuntimeException {
         public ToolExecutionException(String message) { super(message); }

@@ -64,6 +64,28 @@ java \
   -jar arcclaw-app/target/quarkus-app/quarkus-run.jar \
   serve
 
+java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED  --add-opens=java.base/java.lang=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
+
 ----
 
 podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
+
+---
+
+git fetch origin
+git diff origin/main...HEAD  > diff-phaseX.md
+
+
+git diff --name-only --staged | xargs cat > all_staged_content.txt
+
+git diff --name-only --staged | ForEach-Object { Get-Content $_ } | Set-Content all_staged_content.txt
+
+---
+
+git diff --name-only --diff-filter=AM origin/main...HEAD |
+Where-Object { $_ -notmatch "\.(md|txt)$" } |
+ForEach-Object {
+    "===== $_ ====="
+    Get-Content -Raw $_
+    ""
+} | Set-Content modified_files_full_content.txt

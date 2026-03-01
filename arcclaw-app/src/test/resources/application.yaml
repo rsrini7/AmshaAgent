@@ -32,11 +32,14 @@ quarkus:
     additional-build-args: --enable-native-access=ALL-UNNAMED
   datasource:
     jdbc:
-      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=10000&journal_mode=WAL&transaction_mode=IMMEDIATE"
-      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
+      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
       min-size: 1
-      max-size: 1
+      max-size: 4
       initial-size: 1
+      acquisition-timeout: 10s
+  scheduler:
+    enabled: false
   hibernate-orm:
     database:
       generation: update

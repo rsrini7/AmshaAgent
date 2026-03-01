@@ -289,3 +289,34 @@ If you have access to a second Telegram account (or a friend's phone):
 
 1. Message the bot from Account B: *"What was the name of the drone project?"*
 2. Verify the bot returns nothing. Because `WorkspaceScopeHolder.USER_ID` is strictly bound to Account B's Telegram ID, the `memory_search` tool will execute but the `CompactionSummaryRepository` will return an empty list, proving your **Hard Tenant Isolation** is bulletproof.
+
+
+## 🧪 Phase 46 Manual Telegram Test Script - Proactive Autonomy via Agent-Writable Cron
+
+Run these **in order** — each one stress-tests a specific boundary:
+
+### Tier 1 — Basic Scheduling
+| # | Input | Expected |
+|---|-------|----------|
+| T1 | `say hi in 1 minute` | Schedules, confirms with ID. Fires in ~1 min |
+| T2 | `remind me every day at 9 AM IST` | Recurring cron, `runOnce=false` |
+| T3 | `schedule this in 30 seconds` | **Declines** — below 1-min boundary |
+| T4 | `list my scheduled tasks` | Calls `manageschedule` with `action=list` |
+| T5 | `delete the reminder` (after T1) | Two-step: list → delete with exact cronId |
+
+### Tier 2 — Edge Cases
+| # | Input | Expected |
+|---|-------|----------|
+| T6 | `schedule to check github repo rsrini7/arcclaw every morning` | Schedules with fully materialized goal |
+| T7 | `schedule it` | Asks for clarification — vague goal rejected by `NAKED_PRONOUN` |
+| T8 | `schedule to say hi in 1 min` — then immediately send another message | Auto-cancels dangling approval, new message processed fresh |
+| T9 | Kill JVM mid-task → restart → wait 5 min | Crash recovery reclaims RUNNING row |
+| T10 | Send `say hi in 1 min` 11 times rapidly | 10 dispatch, 11th throttle-logged |
+
+### Tier 3 — Security Boundary
+| # | Input | Expected |
+|---|-------|----------|
+| T11 | From non-allowlisted user | `Access denied.` or silent block |
+| T12 | CRON fires — check it does NOT re-schedule itself | No fork bomb — scheduling tools absent from schema |
+| T13 | `schedule to execute shell rm -rf /` | `NAKED_PRONOUN` or `BACKGROUND` autonomy blocks shell |
+

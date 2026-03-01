@@ -70,4 +70,10 @@ public interface StatefulAgentStore {
      * @param checkpointId The checkpoint entity ID.
      */
     void markCompleted(Long checkpointId);
+
+    /**
+     * Find the most recent AWAITING_APPROVAL checkpoint for a cron session
+     * with the given cronId. Matches sessionId pattern: "cron-{cronId}-%".
+     */
+    Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId);
 }
