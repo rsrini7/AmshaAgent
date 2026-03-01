@@ -8,6 +8,7 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.governance.GovernanceLayer;
@@ -79,6 +80,12 @@ public class AgentLoop {
 
     @Inject
     GovernanceLayer governanceLayer;
+
+    @Inject
+    RoleRegistry roleRegistry;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
     // Compile once for performance.
@@ -550,36 +557,46 @@ public class AgentLoop {
         // --- SCHEMA VALIDATION ---
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
-
-        // --- ACT ---
         String observation;
-        boolean stepFailed = false; // NEW: Track if the tool failed
+        boolean stepFailed = false;
 
         try {
+            // ✅ HITL gate – role-based, autonomy-aware, exempt scheduling tools
+            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
+            boolean isSchedulingTool = "scheduletask".equals(toolName) || "manageschedule".equals(toolName);
+
+            if (roleRegistry.requiresApprovalForTools(resolvedRole)
+                    && !isSchedulingTool
+                    && !AutonomyLevel.FULL.equals(workspaceContext.getAutonomyLevel())) {
+
+                String paramsJson = objectMapper.writeValueAsString(params);
+                throw new RequiresApprovalException(toolName, paramsJson, sessionId);
+            }
+
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
             observation = response.output();
             if (!response.success()) {
-                observation = "Tool execution failed (exit=" + response.exitCode() + "): " + observation;
-                stepFailed = true; // Mark as failed
+                observation = "Tool execution failed: " + observation +
+                            " (exit=" + response.exitCode() + ")";
+                stepFailed = true;
             }
         } catch (RequiresApprovalException e) {
-            // --- CHANGE B: APPROVAL PAUSE ---
-            AgentCheckpoint cp = agentStore.load(sessionId, agentRole).orElseGet(() -> {
-                var newCp = new AgentCheckpoint();
-                newCp.setSessionId(sessionId);
-                newCp.setAgentRole(agentRole);
-                return newCp;
-            });
+            AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
+                    .orElseGet(() -> {
+                        AgentCheckpoint c = new AgentCheckpoint();
+                        c.setSessionId(sessionId);
+                        c.setAgentRole(agentRole);
+                        return c;
+                    });
             cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             cp.setPendingToolName(e.getToolName());
             cp.setPendingToolParametersJson(e.getToolParametersJson());
             cp.setUpdatedAt(java.time.LocalDateTime.now());
             agentStore.save(cp);
-
             log.infof("[AgentLoop] Pausing session %s for human approval of tool '%s'", sessionId, e.getToolName());
             return StepDecision.terminal(AgentResult.awaitingApproval(
-                    "⚠️ The agent wants to run the `" + e.getToolName() + "` tool.\n" +
-                            "Reply /approve to allow this, or /deny to cancel.",
+                    "The agent wants to run the `" + e.getToolName() + "` tool. " +
+                    "Reply `approve` to allow this, or `deny` to cancel.",
                     List.copyOf(history)));
         } catch (SecurityException e) {
             observation = "Security violation: " + e.getMessage() + ". The current autonomy level does not permit this operation.";
