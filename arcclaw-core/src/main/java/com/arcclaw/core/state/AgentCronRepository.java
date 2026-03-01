@@ -164,4 +164,11 @@ public class AgentCronRepository {
          .setParameter("userId", userId)
          .executeUpdate();
     }
+
+    @Transactional(Transactional.TxType.REQUIRED)
+    public long deleteAllByUserId(String userId) {
+        return em.createQuery("DELETE FROM AgentCronEntity c WHERE c.userId = :userId")
+                 .setParameter("userId", userId)
+                 .executeUpdate();
+    }
 }

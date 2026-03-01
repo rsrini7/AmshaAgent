@@ -260,5 +260,40 @@ class AgentCronRepositoryTest {
         AgentCronEntity updated = em.find(AgentCronEntity.class, stale.id);
         assertEquals("ACTIVE", updated.status, 
                 "RUNNING job with null lastFireTime should be reclaimed based on createdAt");
-    }    
+    }
+
+    @Test
+    @Transactional
+    void testDeleteAllByUserId() {
+        // Arrange: Create jobs for two different users
+        String targetUserId = "user-delete-target";
+        String otherUserId = "user-delete-other";
+
+        AgentCronEntity job1 = createEntity(targetUserId, "ACTIVE", Instant.now().plusSeconds(3600));
+        AgentCronEntity job2 = createEntity(targetUserId, "COMPLETED", Instant.now().minusSeconds(3600));
+        AgentCronEntity job3 = createEntity(otherUserId, "ACTIVE", Instant.now().plusSeconds(3600));
+
+        em.persist(job1);
+        em.persist(job2);
+        em.persist(job3);
+        em.flush();
+        em.clear(); // Clear persistence context so subsequent queries hit the DB
+
+        // Act: Delete all jobs for the target user
+        long deletedCount = repository.deleteAllByUserId(targetUserId);
+        em.flush();
+        em.clear();
+
+        // Assert: Count should exactly match the number of jobs target user had
+        assertEquals(2, deletedCount, "Should have deleted exactly 2 jobs for the target user");
+
+        // Assert: Verify target user's jobs are actually gone from the DB
+        List<AgentCronEntity> targetJobs = repository.findByUserId(targetUserId);
+        assertTrue(targetJobs.isEmpty(), "Target user should have 0 jobs remaining");
+
+        // Assert: Verify tenant isolation (other user's jobs are untouched)
+        List<AgentCronEntity> otherJobs = repository.findByUserId(otherUserId);
+        assertEquals(1, otherJobs.size(), "Other user's jobs must remain intact");
+        assertEquals(job3.id, otherJobs.get(0).id);
+    }
 }
