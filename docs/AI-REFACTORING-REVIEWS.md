@@ -5413,10 +5413,67 @@ public final class WorkspaceContext {
     public static AutonomyLevel autonomy()   // defaults to SUPERVISED if unbound
 }
 
-Migrate all callers:
-  - TelegramAgentHandler: replace workspaceContext.setAutonomyLevel() calls
-  - AgentLoop: replace workspaceContext.getAutonomyLevel()
-  - ToolRegistry: replace all policy reads
+Migrate ALL callers — production code:
+
+  TelegramAgentHandler.java:
+    REMOVE: @Inject WorkspaceContext workspaceContext;
+    REMOVE: workspaceContext.setAutonomyLevel(...)
+    These calls move into WorkspaceContext.run() at the pipeline entry point.
+
+  AgentLoop.java:
+    REPLACE: workspaceContext.getAutonomyLevel()
+    WITH:    WorkspaceContext.autonomy()
+
+    REPLACE: workspaceContext.getSessionId()
+    WITH:    WorkspaceContext.requireSessionId()
+
+  ToolRegistry.java:
+    REMOVE: @Inject WorkspaceContext workspaceContext;
+    REPLACE: workspaceContext.getAutonomyLevel()
+    WITH:    WorkspaceContext.autonomy()
+    REPLACE: workspaceContext.getSessionId()
+    WITH:    WorkspaceContext.requireSessionId()
+    NOTE: ToolRegistry must NOT inject WorkspaceContext after C3 —
+          it is no longer a CDI bean. Any @Inject WorkspaceContext field
+          will cause Quarkus startup failure (unsatisfied dependency).
+          ScopedValue reads are static method calls, no injection needed.
+
+  CliAgentObserver.java:
+    All workspaceContext.setAutonomyLevel() calls handled by C17 — skip here.
+
+Migrate ALL callers — test files (ALL 5 MUST be updated in the same C3 commit
+or the test suite will fail immediately after C3):
+
+  GovernanceLayerTest.java:
+    REPLACE every: workspaceContext.setAutonomyLevel(AutonomyLevel.FULL)
+    WITH: wrap the test body in:
+          WorkspaceContext.runWithFullAutonomy(
+              "test-session", "test-user", "test-chat", "coordinator",
+              () -> { /* existing test logic here */ return null; });
+
+  WorkspaceGovernanceTest.java:
+    REPLACE: context.setAutonomyLevel(AutonomyLevel.FULL)
+    WITH:    WorkspaceContext.runWithFullAutonomy(..., callable)
+             (same wrapping pattern as above)
+
+  WorkspaceScopeTest.java:
+    REPLACE: workspaceContext.setAutonomyLevel via WorkspaceScopeHolder.run
+    WITH:    WorkspaceContext.run(sessionId, userId, chatId, autonomy, role, callable)
+    This test class may test WorkspaceScopeHolder directly — if WorkspaceScopeHolder
+    is now just a thin delegate to WorkspaceContext, update accordingly.
+
+  SecretVaultImplTest.java:
+    REPLACE: all old WorkspaceContext API calls
+    WITH:    WorkspaceContext.run(...) wrapping the vault operation under test
+
+  ProcessIsolationExecutorTest.java:
+    REPLACE: WorkspaceScopeHolder.run with old mutable API
+    WITH:    WorkspaceContext.run(...) wrapping the executor invocation
+
+  NOTE FOR ALL 5 FILES: If a test only needs to assert autonomy level reads
+  (not a full agent run), use the minimal form:
+    WorkspaceContext.run("s","u","c", AutonomyLevel.FULL, "coordinator",
+                          () -> { assertions here; return null; });
 
 ────────────────────────────────────────────────────────────────
 TEST: arcclaw-core/src/test/java/com/arcclaw/core/scope/WorkspaceContextTest.java
@@ -5716,8 +5773,28 @@ public sealed interface AgentResult
 }
 
 Migrate ALL callers to use new factories and pattern matching:
-  - AgentLoop.java: replace AgentResult.error(), AgentResult.finished(),
-    AgentResult.awaitingApproval(), AgentResult.loopExceeded()
+  - AgentLoop.java: replace ALL AgentResult.error(), AgentResult.finished(),
+    AgentResult.awaitingApproval(), AgentResult.loopExceeded() factory calls.
+
+    CRITICAL — AgentResult.error() sweep:
+    Search the entire codebase for: AgentResult.error(
+    There are at least 9 distinct callsites in AgentLoop alone.
+    Every single one maps to a new factory as follows:
+
+      AgentResult.error(history, reason)
+        → AgentResult.failed(reason, FailureCategory.SYSTEM_ERROR, history)
+
+      AgentResult.error(history, "Tool X compliance violation")
+        → AgentResult.failed(reason, FailureCategory.COMPLIANCE_VIOLATION, history)
+
+      AgentResult.error(history, "Budget exceeded")
+        → AgentResult.failed(reason, FailureCategory.BUDGET_EXCEEDED, history)
+
+    Rule: default mapping is SYSTEM_ERROR. Reclassify to a more specific
+    FailureCategory only if the surrounding catch block catches
+    ComplianceViolationException, BudgetExceededException, or similar.
+    Do NOT leave any AgentResult.error( call unreplaced — the method no
+    longer exists and the class will not compile.
   - TelegramAgentHandler.java: replace result.success(), result.awaitingApproval()
   - AgentResource.java: exhaustive switch (updated in C14)
   - AskCommand.java: update result handling
@@ -5822,6 +5899,51 @@ public sealed interface AgentState
             case Thinking t       → AgentResult.loopExceeded(t.iteration(), t.history());
             case ExecutingTool e  → AgentResult.loopExceeded(e.iteration(), e.priorHistory());
         };
+    }
+}
+
+────────────────────────────────────────────────────────────────
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentExecutionContext.java
+Action: CREATE NEW — required by AgentStateMachineRunner and AgentResource
+────────────────────────────────────────────────────────────────
+// This record is the single contract passed into AgentStateMachineRunner.run()
+// and AgentResource. Define it once here — do NOT let C8 and C14 invent
+// incompatible versions independently.
+
+public record AgentExecutionContext(
+    String sessionId,        // Stable session identifier — set by SessionResolutionHandler
+    String userId,           // Channel platform user ID
+    String chatId,           // Channel platform chat ID (Telegram chatId, Discord channelId, etc.)
+    String agentRole,        // Resolved role name — e.g. "coordinator", "researcher"
+    String goal,             // The sanitized user input to act upon
+    int maxIterations,       // Sourced from AgentRoleEnum.definition().maxIterations()
+    AutonomyLevel autonomyLevel  // Sourced from WorkspaceContext.autonomy() at dispatch time
+) {
+    // Compact constructor — validate required fields
+    public AgentExecutionContext {
+        if (sessionId == null || sessionId.isBlank())
+            throw new IllegalArgumentException("sessionId required");
+        if (agentRole == null || agentRole.isBlank())
+            throw new IllegalArgumentException("agentRole required");
+        if (goal == null || goal.isBlank())
+            throw new IllegalArgumentException("goal required");
+        if (maxIterations <= 0)
+            throw new IllegalArgumentException("maxIterations must be > 0");
+        autonomyLevel = (autonomyLevel == null) ? AutonomyLevel.SUPERVISED : autonomyLevel;
+    }
+
+    // Builder-style static factory for REST adapter (C14)
+    public static AgentExecutionContext from(AgentRequest req) {
+        AgentRoleEnum role = AgentRoleEnum.fromString(req.agentRole());
+        return new AgentExecutionContext(
+            req.sessionId(),
+            req.userId(),
+            req.chatId(),
+            role.toScopedName(),
+            req.goal(),
+            role.definition().maxIterations(),
+            AutonomyLevel.SUPERVISED  // REST API always starts supervised
+        );
     }
 }
 
@@ -6259,6 +6381,19 @@ Action: REFACTOR — move from com.arcclaw.app.channel.telegram
   Move it to PromptInjectionReflex or a new SecurityVocabularyFilter.
   Classification and security filtering are separate responsibilities.
 
+  - UPDATE TelegramAgentHandler.java import:
+    REMOVE: import com.arcclaw.app.channel.telegram.IntentClassifierService;
+    ADD:    import com.arcclaw.core.routing.IntentClassifierService;
+
+    NOTE: After C9, TelegramAgentHandler is already stripped to ≤25 lines
+    and no longer calls IntentClassifierService directly (IntentClassification
+    moved into IntentClassificationHandler at Priority 50 inside the pipeline).
+    However, if the IDE session processes C12 before C9 is fully applied,
+    this import update must be present to avoid a compilation error on
+    the @Inject field that still exists in the pre-C9 handler.
+    Make both the import fix and the C9 handler strip in the same commit
+    if possible.
+
 ────────────────────────────────────────────────────────────────
 TEST: IntentClassifierServiceTest.java — UPDATE
 ────────────────────────────────────────────────────────────────
@@ -6637,13 +6772,57 @@ Action: UPDATE @Entity
 - REMOVE or @Deprecated annotate:
     private String stateJson;           // No longer used — steps in own table
 
-- ADD OneToMany relationship:
-    @OneToMany(mappedBy = "sessionId", fetch = FetchType.LAZY,
-               cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ReasoningStepEntity> steps = new ArrayList<>();
+  DO NOT add @OneToMany to AgentCheckpoint.
+  JPA mappedBy must reference a field name on the owning entity, not a
+  column name. ReasoningStepEntity has no @ManyToOne back-reference to
+  AgentCheckpoint, so Hibernate will throw MappingException at startup.
+  For SQLite WAL mode, explicit JOIN relationships also add unnecessary
+  locking risk.
 
-  Note: relationship is by sessionId + agentRole convention, not FK,
-  to keep SQLite schema simple and avoid JOIN complexity on WAL mode.
+  Instead, load steps exclusively via repository query:
+
+────────────────────────────────────────────────────────────────
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/ReasoningStepRepository.java
+Action: CREATE NEW
+────────────────────────────────────────────────────────────────
+  @ApplicationScoped
+  public class ReasoningStepRepository
+          implements PanacheRepositoryBase<ReasoningStepEntity, Long> {
+
+      public List<ReasoningStepEntity> findSteps(String sessionId, String agentRole) {
+          return list("sessionId = ?1 AND agentRole = ?2 ORDER BY stepIndex ASC",
+                      sessionId, agentRole);
+      }
+
+      @Transactional
+      public void persistStep(String sessionId, String agentRole,
+                               int stepIndex, ReasoningStep step) {
+          ReasoningStepEntity entity = new ReasoningStepEntity();
+          entity.setSessionId(sessionId);
+          entity.setAgentRole(agentRole);
+          entity.setStepIndex(stepIndex);
+          entity.setThought(step.thought());
+          entity.setAction(step.action());
+          entity.setActionInputJson(toJson(step.actionInput()));
+          entity.setObservation(step.observation());
+          entity.setInputTokens(step.inputTokens());
+          entity.setOutputTokens(step.outputTokens());
+          persist(entity);
+      }
+  }
+
+  StatefulAgentStore.java — UPDATE loadState() to call:
+    List<ReasoningStepEntity> rows =
+        stepRepository.findSteps(sessionId, agentRole);
+    List<ReasoningStep> history = rows.stream()
+        .map(ReasoningStepMapper::toDomain)
+        .collect(Collectors.toList());
+
+  AgentCheckpoint.java — KEEP stateDiscriminant field, pendingTool,
+  pendingParamsJson fields. REMOVE or @Deprecated stateJson TEXT field.
+  DO NOT add any @OneToMany, @ManyToOne, or JPA relationship annotations.
+  The checkpoint and its steps are linked by sessionId + agentRole
+  convention only — no foreign key constraint in SQLite schema.
 
 ────────────────────────────────────────────────────────────────
 File: arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStore.java
@@ -6709,6 +6888,16 @@ Action: UPDATE existing + ADD new tests
 - testLoadStateReconstructsAwaitingApproval() — persist an AWAITING_APPROVAL
   checkpoint with 3 steps. Call loadState(). Assert returns
   AgentState.AwaitingApproval with all 3 steps in history.
+
+- testFindStepsOrderedByStepIndex() — persist ReasoningStepEntity rows
+  for the same sessionId + agentRole with stepIndex values 2, 0, 1
+  (intentionally out of order). Call stepRepository.findSteps().
+  Assert the returned list order is [0, 1, 2].
+
+- testNoOneToManyOnAgentCheckpoint() — use reflection to assert
+  AgentCheckpoint has NO field annotated with @OneToMany.
+  Documents the explicit design decision against JPA FK relationships
+  and prevents regression.
 
 - testLoadStateReturnsEmptyForFinished() — persist FINISHED checkpoint.
   Call loadState(). Assert Optional.empty().
