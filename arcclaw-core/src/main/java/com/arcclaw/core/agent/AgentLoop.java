@@ -164,14 +164,16 @@ public class AgentLoop {
             result = runLoop(sessionId, goal, engine, maxIterations, resumedHistory, canonicalRole);
 
             // --- CHECKPOINT FINAL STATE ---
-            if (result.awaitingApproval()) {
+            if (result instanceof AgentResult.AwaitingApproval) {
                 log.debugf("Session %s paused, waiting for human approval.", sessionId);
-            } else {
+            } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
                 var cp = agentStore.save(sessionId, canonicalRole, result.steps());
-                if (result.success()) {
+                if (result instanceof AgentResult.Finished) {
                     agentStore.markCompleted(cp.getId());
-                } else {
-                    agentStore.markFailed(cp.getId(), result.terminationReason());
+                } else if (result instanceof AgentResult.Failed f) {
+                    agentStore.markFailed(cp.getId(), f.reason());
+                } else if (result instanceof AgentResult.LoopExceeded l) {
+                    agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
                 }
             }
 
@@ -181,7 +183,7 @@ public class AgentLoop {
             // No further LLM calls or tool executions permitted with a broken audit trail.
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",
                     sessionId, cve.getEventType());
-            result = AgentResult.error(List.of(), "COMPLIANCE_VIOLATION: " + cve.getMessage());
+            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + cve.getMessage(), AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
                     cp.setStatus(CheckpointStatus.COMPROMISED);
@@ -190,7 +192,7 @@ public class AgentLoop {
             } catch (Exception ignored) {}
             throw cve; // re-throw to physically halt the call stack
         } catch (Exception e) {
-            result = AgentResult.error(List.of(), "SYSTEM_ERROR: " + e.getMessage());
+            result = AgentResult.failed("SYSTEM_ERROR: " + e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
                     agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + e.getMessage())
@@ -298,7 +300,7 @@ public class AgentLoop {
         // Loop exhausted
         log.warnf("AgentLoop exceeded %d iterations — terminating", maxIterations);
         synchronized (history) {
-            return AgentResult.loopExceeded(List.copyOf(history), maxIterations);
+            return AgentResult.loopExceeded(maxIterations, List.copyOf(history));
         }
     }
 
@@ -387,8 +389,10 @@ public class AgentLoop {
                     log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
                             sessionId, pendingTool, e.getMessage());
                     synchronized (history) {
-                        return AgentResult.error(List.copyOf(history),
-                                "TOOL_EXECUTION_FAILED: " + e.getMessage());
+                        return AgentResult.failed(
+                                "TOOL_EXECUTION_FAILED: " + e.getMessage(),
+                                AgentResult.FailureCategory.SYSTEM_ERROR,
+                                List.copyOf(history));
                     }
                 }
             }
@@ -407,7 +411,7 @@ public class AgentLoop {
         }
 
         // --- SPRINT 2: SAVE COMPLETED AI ANSWER TO CHAT MEMORY STORE ---
-        if (sessionId != null && answer != null) {
+        if (sessionId != null && answer != null && !answer.isBlank()) {
             List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
             if (currentHistory == null) {
                 currentHistory = new ArrayList<>();
@@ -489,7 +493,7 @@ public class AgentLoop {
                     step = step.withObservation(observationMessage);
                     synchronized (history) {
                         history.add(step);
-                        return StepDecision.terminal(AgentResult.error(List.copyOf(history), "Budget Exceeded"));
+                        return StepDecision.terminal(AgentResult.failed("Budget Exceeded", AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
                     }
                 }
             }
@@ -505,7 +509,7 @@ public class AgentLoop {
                 if (llmSchemaErrorCount >= 2) {
                     log.errorf("[AGENT-LOOP] session %s exceeded schema self-correction limit", sessionId);
                     synchronized (history) {
-                        return StepDecision.terminal(AgentResult.error(List.copyOf(history), "SCHEMA_ERROR"));
+                        return StepDecision.terminal(AgentResult.failed("SCHEMA_ERROR", AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                     }
                 }
                 String nextTransientError = "System: Your previous tool call was rejected by the API because the " +
@@ -517,14 +521,14 @@ public class AgentLoop {
 
             log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
             synchronized (history) {
-                return StepDecision.terminal(AgentResult.error(List.copyOf(history), "ReasoningEngine error: " + e.getMessage()));
+                return StepDecision.terminal(AgentResult.failed("ReasoningEngine error: " + e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
             }
         }
 
         if (step == null) {
             log.warn("ReasoningEngine returned null step — terminating");
             synchronized (history) {
-                return StepDecision.terminal(AgentResult.error(List.copyOf(history), "ReasoningEngine returned null step"));
+                return StepDecision.terminal(AgentResult.failed("ReasoningEngine returned null step", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
             }
         }
 
@@ -621,8 +625,9 @@ public class AgentLoop {
             agentStore.save(cp);
             log.infof("[AgentLoop] Pausing session %s for human approval of tool '%s'", sessionId, e.getToolName());
             return StepDecision.terminal(AgentResult.awaitingApproval(
-                    "The agent wants to run the `" + e.getToolName() + "` tool. " +
-                    "Reply `approve` to allow this, or `deny` to cancel.",
+                    e.getToolName(),
+                    e.getToolParametersJson(),
+                    sessionId,
                     List.copyOf(history)));
         } catch (SecurityException e) {
             observation = "Security violation: " + e.getMessage() + ". The current autonomy level does not permit this operation.";

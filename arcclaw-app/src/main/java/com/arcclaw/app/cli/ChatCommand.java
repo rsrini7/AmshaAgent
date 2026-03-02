@@ -69,9 +69,16 @@ public class ChatCommand implements Runnable {
                     System.out.println("⚡ Thinking...");
                     AgentResult result = agentLoop.run(
                             sessionId, role, input, reasoningEngine, 5);
-                    System.out.println("\n▶ ArcClaw> " + result.finalAnswer());
+                            
+                    String output = switch (result) {
+                        case AgentResult.Finished f -> f.answer();
+                        case AgentResult.Failed f -> "Error: " + f.reason();
+                        case AgentResult.LoopExceeded l -> "Timed out after " + l.maxIterations() + " steps.";
+                        case AgentResult.AwaitingApproval a -> "Agent requires approval to run tool: " + a.toolName();
+                    };
+                    System.out.println("\n▶ ArcClaw> " + output);
 
-                    if (result.awaitingApproval()) {
+                    if (result instanceof AgentResult.AwaitingApproval) {
                         System.out.println(
                                 "\n⚠️  Type /approve or /deny to continue.");
                         // Handle approve/deny inline for CLI mode

@@ -75,10 +75,16 @@ public class ApproveReflex implements AgentReflex {
                         () -> agentLoop.run(sessionId, finalRole, "Resuming task after approval", reasoningEngine, 5)
                 );
 
-                if (result.success()) {
-                    return result.finalAnswer();
+                if (result instanceof AgentResult.Finished f) {
+                    return f.answer();
                 } else {
-                    String sanitizedReason = AgentErrorMessageUtil.sanitizeErrorMessage(result.terminationReason());
+                    String failReason = switch (result) {
+                        case AgentResult.Failed fail -> fail.reason();
+                        case AgentResult.LoopExceeded loop -> "Loop exceeded " + loop.maxIterations() + " iterations";
+                        case AgentResult.AwaitingApproval a -> "AWAITING_APPROVAL (Unexpected in resume)";
+                        default -> "Unknown error";
+                    };
+                    String sanitizedReason = AgentErrorMessageUtil.sanitizeErrorMessage(failReason);
                     return "❌ **Task Failed after approval**\n\nReason: " + sanitizedReason;
                 }
             });

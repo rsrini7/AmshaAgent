@@ -2021,4 +2021,58 @@ Tier 1 focuses on technical debt reduction and architectural modernization for a
 - ✅ `ApiKeyRegistryTest`: Verified Bucket4j burst and refill logic.
 - ✅ `mvn clean verify -pl arcclaw-app -am`: 248 tests green.
 
+---
+
+# Phase 47 — Message Pipeline & Sealed Interface Refactor (Tier 2A)
+
+Refactor the Telegram message processing into a modular, handler-based pipeline and modernize state/message models using Java 21+ sealed interfaces for compile-time safety.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Sealed Interfaces for Exhaustiveness**: `ChannelMessage`, `AgentResult`, and `AgentState` are now sealed interfaces. This forces exhaustive pattern matching in pipeline handlers and prevents unhandled message types.
+
+> [!NOTE]
+> **Definitive CDI Fix**: Moved all implementation beans (`IntentClassifierService`, `TelegramAllowlistGuard`, `ModelProducer`) from `arcclaw-app` to `arcclaw-core`. This eliminates cross-module bean discovery issues by co-locating beans with their injection points.
+
+> [!TIP]
+> **Modular Handlers**: Processing is split into 6 discrete handlers (`Allowlist`, `SessionResolution`, `Intent`, `Command`, `Reflex`, `AgentDispatch`), orchestrated by a `MessagePipeline`.
+
+## Proposed Changes
+
+### Channel API Module — Sealed Interfaces
+
+#### [MODIFY] [ChannelMessage.java](file:///h:/ws/ArcClaw/arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/ChannelMessage.java)
+- Converted to `sealed interface` with `TelegramMessage` implementation.
+- Refactored `ChannelUser` to Record in the same module.
+
+#### [NEW] [AgentResult.java](file:///h:/ws/ArcClaw/arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/AgentResult.java)
+- `sealed interface` replacing the legacy core record.
+- Implementations: `Success`, `AwaitingApproval`, `Failure`.
+
+### Core Module — Message Pipeline
+
+#### [NEW] [MessagePipeline.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessagePipeline.java)
+- Orchestrates the chain of `MessageHandler` beans.
+
+#### [NEW] [MessageHandler.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessageHandler.java)
+- Interface for pipeline stages.
+
+#### [NEW] [Handlers](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/)
+- `AllowlistHandler`, `SessionResolutionHandler`, `IntentClassificationHandler`, `CommandDispatchHandler`, `ReflexHandler`, `AgentDispatchHandler`.
+
+### Core Module — Service Movement
+
+#### [NEW] [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/routing/IntentClassifierService.java)
+- Moved from `arcclaw-app` to resolve CDI discovery issues.
+
+#### [NEW] [TelegramAllowlistGuard.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/TelegramAllowlistGuard.java)
+- Moved from `arcclaw-app` to resolve CDI discovery issues.
+
+## Verification
+
+- ✅ `mvnw clean package` succeeds across all modules.
+- ✅ Unit tests for all 6 handlers pass in `arcclaw-core`.
+- ✅ Telegram integration test `TelegramAgentHandlerTest` passes with the new pipeline.
+
 

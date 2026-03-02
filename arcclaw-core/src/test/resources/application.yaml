@@ -1,3 +1,5 @@
+GROQ_API_KEY: "dummy-test-key"
+
 arcclaw:
   vault:
     pepper: "test-pepper-value-not-used-in-tests"

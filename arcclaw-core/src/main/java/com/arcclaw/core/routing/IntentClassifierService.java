@@ -1,7 +1,9 @@
-package com.arcclaw.app.channel.telegram;
+package com.arcclaw.core.routing;
 
+import com.arcclaw.channel.api.IntentClassifier;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.smallrye.common.annotation.Identifier;
+import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -12,7 +14,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 @ApplicationScoped
-public class IntentClassifierService {
+@Unremovable
+public class IntentClassifierService implements IntentClassifier {
 
     @Inject
     @Identifier("intent-classifier")

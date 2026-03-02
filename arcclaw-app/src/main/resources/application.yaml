@@ -13,6 +13,9 @@ quarkus:
     arcclaw-core:
       group-id: com.arcclaw
       artifact-id: arcclaw-core
+    arcclaw-channel-api:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-api
 
   swagger-ui:
     path: /q/swagger-ui

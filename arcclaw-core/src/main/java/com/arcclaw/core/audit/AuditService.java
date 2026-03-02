@@ -72,7 +72,11 @@ public class AuditService {
         try {
             AuditOutcome outcome = resolveOutcome(result);
             SecurityEventType eventType = resolveLoopEventType(outcome);
-            String detail = result.terminationReason() != null ? "reason=" + result.terminationReason() : null;
+            String detail = switch(result) {
+                case AgentResult.Failed f -> "reason=" + f.reason();
+                case AgentResult.LoopExceeded l -> "reason=MAX_ITERATIONS";
+                default -> null;
+            };
 
             AuditEvent event = AuditEvent.of(sessionId, userId, agentRole, goalHash, outcome, eventType,
                                              inputTokens, outputTokens, usdCost, result.steps().size(), detail);
@@ -90,17 +94,15 @@ public class AuditService {
     }
 
     private AuditOutcome resolveOutcome(AgentResult result) {
-        if (result.success()) return AuditOutcome.FINISH;
-        if (result.awaitingApproval()) return AuditOutcome.AWAITING_APPROVAL;
-
-        String reason = result.terminationReason();
-        if (reason != null) {
-            if (reason.contains("BUDGET_EXCEEDED")) return AuditOutcome.BUDGET_EXCEEDED;
-            if (reason.contains("MAX_ITERATIONS")) return AuditOutcome.MAX_ITERATIONS;
-            if (reason.contains("APPROVAL_TIMEOUT")) return AuditOutcome.APPROVAL_TIMEOUT;
-            if (reason.contains("SYSTEM_ERROR")) return AuditOutcome.ERROR;
-        }
-        return AuditOutcome.ERROR;
+        return switch(result) {
+            case AgentResult.Finished f -> AuditOutcome.FINISH;
+            case AgentResult.AwaitingApproval a -> AuditOutcome.AWAITING_APPROVAL;
+            case AgentResult.LoopExceeded l -> AuditOutcome.MAX_ITERATIONS;
+            case AgentResult.Failed f -> {
+                if (f.category() == AgentResult.FailureCategory.BUDGET_EXCEEDED) yield AuditOutcome.BUDGET_EXCEEDED;
+                yield AuditOutcome.ERROR;
+            }
+        };
     }
 
     private SecurityEventType resolveLoopEventType(AuditOutcome outcome) {

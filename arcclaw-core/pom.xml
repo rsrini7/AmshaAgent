@@ -14,6 +14,11 @@
   <artifactId>arcclaw-core</artifactId>
 
   <dependencies>
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-channel-api</artifactId>
+    </dependency>
+
     <!-- Quarkus Arc CDI -->
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-arc</artifactId></dependency>
 

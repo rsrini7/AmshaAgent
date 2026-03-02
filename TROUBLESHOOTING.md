@@ -2744,7 +2744,7 @@ sudo systemctl enable --now arcclaw-secrets.mount
 
 ---
 
-## 20. Phase 44: Persistence Hardening & Role Normalization
+## 39. Phase 44: Persistence Hardening & Role Normalization
 
 ### 🔴 Failure: `SQLITE_BUSY_SNAPSHOT` and `Snapshot too old`
 * **Symptom**: Integration tests crash with `ArcUndeclaredThrowable` or `SQLITE_BUSY_SNAPSHOT`.
@@ -2783,7 +2783,7 @@ sudo systemctl enable --now arcclaw-secrets.mount
 
 ---
 
-## 20. Phase 45: Agent Memory RAG via SQLite FTS5
+## 40. Phase 45: Agent Memory RAG via SQLite FTS5
 
 ### 🐛 Hibernate 6 Startup Crash with SQLite FTS5 (`NoSuchElementException`)
 
@@ -2854,7 +2854,7 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 
 ---
 
-## 21. Phase 46: Proactive Autonomy via Agent-Writable Cron - ✅Test Suite Stability & SQLite Locking Hardening
+## 41. Phase 46: Proactive Autonomy via Agent-Writable Cron - ✅Test Suite Stability & SQLite Locking Hardening
 
 ### 🔴 Failure: `SQLITE_LOCKED_SHAREDCACHE` and `SQLITE_BUSY_SNAPSHOT` in Tests
 **Symptom**: Integration tests (especially `WorkspaceManagerTest` and `ContextCompactionServiceIntegrationTest`) fail intermittently with "database table is locked" or "Another database connection has already written".
@@ -2887,7 +2887,7 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 
 ---
 
-## 22. Phase 47: Unified Capabilities & Context Modernization (Tier 1)
+## 42. Phase 47: Unified Capabilities & Context Modernization (Tier 1)
 
 | Category | Symptom | Root Cause | Resolution |
 | --- | --- | --- | --- |
@@ -2895,6 +2895,33 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 | **Build** | `mvn verify` fails with stale code in `-core` | Native build `-pl arcclaw-app` doesn't recompile `-core` changes. | Use `-am` (also-make) flag: `mvn clean verify -pl arcclaw-app -am`. |
 | **Rate Limit** | `ApiKeyRegistry` tests fail on burst | Custom sliding window logic had race conditions on virtual threads. | Migrated to **Bucket4j** for atomic token-bucket operations. |
 | **Auth** | dead code warning in `ApiKeyAuthFilter` | Guard block `path.startsWith("/q/")` was redundant as Quarkus handles this first. | Deleted the guard block; auth-exempt paths are now strictly a Quarkus policy concern. |
+
+---
+
+## 43. Phase 47: Message Pipeline & Sealed Interface Refactor (Tier 2A)
+
+### 🔴 Failure: `jakarta.enterprise.inject.spi.DeploymentException: Unsatisfied dependency` for `ChannelAllowlist` / `IntentClassifier`
+**Symptom**: The application fails to start in JAR/Production mode with "Unsatisfied dependency" for interfaces defined in `arcclaw-channel-api` and implemented in `arcclaw-app`.
+**Root Cause**: 
+1. **Cross-Module Indexing**: Quarkus requires a Jandex index in all modules to resolve beans across boundaries.
+2. **Discovery Limitations**: Even with Jandex, some environments fail to link implementations in the leaf module (`arcclaw-app`) to injection points in a library module (`arcclaw-core`) during the augmentation phase.
+**Resolution**:
+- **Definitive Fix**: Moved the implementation beans (`IntentClassifierService`, `TelegramAllowlistGuard`, and `ModelProducer`) from `arcclaw-app` into `arcclaw-core`. This places the beans in the same bean archive as the handlers that inject them, ensuring 100% discovery reliability.
+- **Test Fix**: Added a dummy `GROQ_API_KEY` to `arcclaw-core/src/test/resources/application.yaml` to prevent CDI boot failures in core unit tests now that `ModelProducer` is part of the core bean archive.
+
+### 🔴 Failure: `java.lang.ClassCastException` or Mockito Type Mismatch with Sealed Interfaces
+**Symptom**: Tests fail when mocking `TelegramMessageMapper` or comparing `ChannelMessage` types.
+**Root Cause**: `ChannelMessage` and `AgentResult` were refactored into **Sealed Interfaces**. Mockito's `any()` or generic mocks might fail to satisfy the exhaustive switch requirements or specific subclass expectations of the pipeline handlers.
+**Resolution**: Ensure mocks explicitly return the specific sealed implementation (e.g., `ChannelMessage.TelegramMessage` rather than a generic mock of the interface) when involved in type-checked logic or exhaustive pattern matching.
+
+### 🔴 Failure: `Compilation Error: cannot find symbol .id()` or `.username()` on `ChannelUser`
+**Symptom**: Code in handlers or tests fails to compile after the Tier 2A refactor.
+**Root Cause**: `ChannelUser` was moved to a Record in `arcclaw-channel-api` and fields were renamed to be platform-agnostic: `id()` -> **`platformId()`** and `username()` -> **`displayName()`**.
+**Resolution**: Updated all references across the codebase (Handlers, Mappers, and Tests) to use the new platform-agnostic accessors.
+
+### 🟡 DX: Pipeline Exception Swallowing
+**Symptom**: A single handler crash (e.g., during Intent Classification) would kill the entire Telegram update loop, causing the bot to stop responding without logging a clear error.
+**Resolution**: Wrapped `pipeline.process(context)` in a `try-catch` block inside `TelegramAgentHandler.java`. This ensures that pipeline failures are logged and the adapter remains resilient to individual message processing errors.
 
 
 

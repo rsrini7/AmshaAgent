@@ -18,6 +18,9 @@ quarkus:
     arcclaw-core:
       group-id: com.arcclaw
       artifact-id: arcclaw-core
+    arcclaw-channel-api:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-api
   http:
     host: "localhost"
     port: 8081
