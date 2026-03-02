@@ -1,27 +1,32 @@
 package com.arcclaw.core.security;
 
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.arcclaw.core.scope.WorkspaceContext;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class WorkspaceGovernanceTest {
 
-    @Inject
-    WorkspaceContext context;
 
     private static final String TEST_SESSION_ID = "gov-test-session";
 
     @Test
-    void testWorkspaceContextInjection() {
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
-            assertNotNull(context);
-            assertEquals(TEST_SESSION_ID, context.getSessionId());
-            assertEquals(AutonomyLevel.READONLY, context.getAutonomyLevel());
+    void testSessionIdBoundCorrectly() {
+        WorkspaceContext.run(TEST_SESSION_ID, "gov-user", "gov-chat", AutonomyLevel.READONLY, "coordinator", () -> {
+            assertEquals(TEST_SESSION_ID, WorkspaceContext.requireSessionId());
+        });
+    }
+
+    @Test
+    void testAutonomyBoundCorrectly() {
+        WorkspaceContext.run(TEST_SESSION_ID, "gov-user", "gov-chat", AutonomyLevel.SUPERVISED, "coordinator", () -> {
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.autonomy());
         });
     }
 
@@ -41,14 +46,5 @@ public class WorkspaceGovernanceTest {
         assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.VAULT_ACCESS));
     }
 
-    @Test
-    void testContextStatePersistence() {
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
-            context.setAutonomyLevel(AutonomyLevel.FULL);
-            context.setAttribute("test-attr", "test-val");
 
-            assertEquals(AutonomyLevel.FULL, context.getAutonomyLevel());
-            assertEquals("test-val", context.getAttribute("test-attr"));
-        });
-    }
 }

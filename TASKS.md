@@ -578,3 +578,14 @@
 - [x] Enforce production Telegram allowlist check at startup <!-- id: 134 -->
 - [x] Verify: Full system regression (248/248 tests pass) <!-- id: 135 -->
 
+# Phase 47: Unified Capabilities & Context Modernization (Tier 1) ✅
+- [x] Implement `ToolCapability` enum & `RoleDefinition` record <!-- id: 136 -->
+- [x] Centralize permissions in `AgentRoleEnum` <!-- id: 137 -->
+- [x] Refactor `RoleRegistry` for delegated capability lookup <!-- id: 138 -->
+- [x] Implement `ArchitectAgent` role with GitHub+Memory Search tools <!-- id: 139 -->
+- [x] Migrate `WorkspaceContext` from CDI to `ScopedValue` <!-- id: 140 -->
+- [x] Update 6 production callers to `WorkspaceContext.run()` API <!-- id: 141 -->
+- [x] Implement Bucket4j rate limiting in `ApiKeyRegistry` <!-- id: 142 -->
+- [x] Remove dead path-guard code from `ApiKeyAuthFilter` <!-- id: 143 -->
+- [x] Verify: Tier 1 regression suite (all tests green) <!-- id: 144 -->
+

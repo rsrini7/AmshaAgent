@@ -1032,3 +1032,30 @@ ArcClaw has been upgraded from a reactive chatbot into a **proactive agent** cap
 | `AgentCronSchedulerTest` | ✅ 10/10 pass |
 | **Total Phase 46 Tests** | ✅ **27/27 pass** |
 | **Full System Regression** | ✅ **248/248 pass** |
+
+---
+
+## Phase 47: Unified Capabilities & Context Modernization (Tier 1) ✅
+
+Tier 1 focuses on technical debt reduction and architectural modernization for agent permissions and execution context.
+
+### Key Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **Matrix** | [AgentRoleEnum.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRoleEnum.java) | Centralized tool capability matrix using `RoleDefinition`. |
+| **Role** | [ArchitectAgent.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ArchitectAgent.java) | New `ARCHITECT` role with `github` and `memory_search` capabilities. |
+| **Context** | [WorkspaceContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceContext.java) | Migrated to JDK 25 `ScopedValue` for safe context propagation. |
+| **Security**| [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/ApiKeyRegistry.java) | Refactored rate limiting using Bucket4j for atomic token-bucket refills. |
+
+### Verification Results
+
+| Suite | Result |
+|-------|--------|
+| `RoleDefinitionTest` | ✅ 8/8 pass |
+| `WorkspaceContextTest` | ✅ 3/3 pass |
+| `ApiKeyRegistryTest` | ✅ 4/4 pass |
+| `ApiKeyAuthFilterTest` | ✅ 3/3 pass |
+| **Total Phase 47 Tier 1 Tests** | ✅ **18/18 pass** |
+| **Full System Regression** | ✅ **248/248 pass** |
+

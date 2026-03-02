@@ -1,23 +1,23 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.SecretVault;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.tools.ToolRegistry;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 
 @QuarkusTest
 public class AuditServiceIntegrationTest {
@@ -38,9 +38,6 @@ public class AuditServiceIntegrationTest {
     ToolRegistry toolRegistry;
 
     @Inject
-    WorkspaceContext workspaceContext;
-
-    @Inject
     EntityManager em;
 
     private String sessionId;
@@ -58,7 +55,7 @@ public class AuditServiceIntegrationTest {
     @Test
     public void testVaultStoreTriggersAudit() {
         WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
             secretVault.init(sessionId);
             
             secretVault.store("my-secret", "super-secret-value".getBytes());
@@ -73,13 +70,14 @@ public class AuditServiceIntegrationTest {
             AuditEvent event = events.get(0);
             assertEquals(SecurityEventType.VAULT_STORE, event.eventType);
             assertTrue(event.eventDetail.contains("keyName=my-secret"));
+            });
         });
     }
 
     @Test
     public void testVaultRetrieveMissTriggersAudit() {
         WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
             secretVault.init(sessionId);
             
             secretVault.get("non-existent-key");
@@ -94,13 +92,14 @@ public class AuditServiceIntegrationTest {
             AuditEvent event = events.get(0);
             assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS, event.eventType);
             assertTrue(event.eventDetail.contains("keyName=non-existent-key"));
+            });
         });
     }
 
     @Test
     public void testCheckpointCreatedTriggersAudit() {
         WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
             secretVault.init(sessionId); // statefulAgentStore might need vault
 
             statefulAgentStore.save(sessionId, "coordinator", List.of());
@@ -115,6 +114,7 @@ public class AuditServiceIntegrationTest {
             AuditEvent event = events.get(0);
             assertEquals(SecurityEventType.CHECKPOINT_CREATED, event.eventType);
             assertEquals("coordinator", event.agentRole);
+            });
         });
     }
 }

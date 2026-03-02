@@ -187,9 +187,9 @@ class LangChainReasoningEngineTest {
         reasoningEngine.nextStep("test-session", "debugger", "Find the NPE", List.of());
 
         ChatRequest sent = captor.getValue();
-        assertTrue(sent.toolSpecifications() == null 
-                || sent.toolSpecifications().isEmpty(),
-                "debugger must NOT receive tool schemas — schema jailbreak fix");
+        assertNotNull(sent.toolSpecifications());
+        assertEquals(1, sent.toolSpecifications().size());
+        assertEquals("github", sent.toolSpecifications().get(0).name(), "debugger should only receive github tool schema");
     }
 
     @Test

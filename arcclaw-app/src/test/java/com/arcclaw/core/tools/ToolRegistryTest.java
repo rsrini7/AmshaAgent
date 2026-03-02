@@ -1,19 +1,23 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.InjectMock;
-import jakarta.inject.Inject;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
+import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 
-import static org.junit.jupiter.api.Assertions.*;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 
 /**
  * Integration tests for the Tool Registry — CDI discovery and governance
@@ -33,8 +37,6 @@ class ToolRegistryTest {
     @InjectMock
     ProcessIsolationExecutor mockIsolationExecutor;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @BeforeEach
     void activate() {
@@ -81,9 +83,7 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceBlocksNetworkOutbound() {
-        WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.READONLY);
-
+        WorkspaceContext.run(TEST_SESSION, "", "", AutonomyLevel.READONLY, "", () -> {
             var ex = assertThrows(SecurityException.class,
                     () -> registry.invokeTool("github", Map.<String, Object>of("target", "test/repo")));
 
@@ -102,9 +102,7 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceAllowsFullAutonomy() {
-        WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-
+        WorkspaceContext.run(TEST_SESSION, "", "", AutonomyLevel.FULL, "", () -> {
             // This will *not* throw SecurityException (governance passes).
             // The tool itself may fail (no 'gh' binary) — that's fine; we're
             // testing governance, not the gh CLI.
@@ -129,8 +127,7 @@ class ToolRegistryTest {
      */
     @Test
     void testInvokeUnknownToolThrows() {
-        WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+        WorkspaceContext.run(TEST_SESSION, "", "", AutonomyLevel.FULL, "", () -> {
             assertThrows(IllegalArgumentException.class,
                     () -> registry.invokeTool("nonexistent-tool", java.util.Collections.emptyMap()));
         });

@@ -37,7 +37,7 @@ public class VishnuAgent implements Agent {
             - If a sub-task fails, you MUST report the failure honestly.
             - You coordinate — you do NOT directly execute code or research.
 
-            AVAILABLE TOOLS: All registered tools.
+            AVAILABLE TOOLS: github, scheduletask, manageschedule
             """;
 
     @Override
@@ -52,7 +52,6 @@ public class VishnuAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        // Coordinator has access to all tools — enforced by ToolRegistry governance
-        return List.of("github");
+        return List.copyOf(AgentRoleEnum.COORDINATOR.definition().toolNames());
     }
 }

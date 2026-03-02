@@ -70,8 +70,6 @@ public class TelegramAgentHandler {
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @ConfigProperty(name = "arcclaw.autonomy.default-level", defaultValue = "SUPERVISED")
     AutonomyLevel autonomyLevel;
@@ -179,12 +177,13 @@ public class TelegramAgentHandler {
                                             String cronSessionId = cp.getSessionId();
                                             String roleName = cp.getAgentRole();
 
-                                            AgentRoleEnum roleEnum;
+                                            AgentRoleEnum tempRoleEnum;
                                             try {
-                                                roleEnum = AgentRoleEnum.fromString(roleName);
+                                                tempRoleEnum = AgentRoleEnum.fromString(roleName);
                                             } catch (IllegalArgumentException e) {
-                                                roleEnum = AgentRoleEnum.COORDINATOR;
+                                                tempRoleEnum = AgentRoleEnum.COORDINATOR;
                                             }
+                                            final AgentRoleEnum roleEnum = tempRoleEnum;
 
                                             String resumeGoal = safeInput.toLowerCase().startsWith("/approve")
                                                     ? "Resuming task after approval"
@@ -193,13 +192,20 @@ public class TelegramAgentHandler {
                                             log.infof("[TelegramHandler] Resuming cron session %s (cronId=%s, role=%s) with goal='%s'",
                                                     cronSessionId, cronId, roleName, resumeGoal);
 
-                                            AgentResult resumeResult = agentLoop.run(
-                                                    cronSessionId,
-                                                    roleEnum.toScopedName(),
-                                                    resumeGoal,
-                                                    reasoningEngine,
-                                                    roleRegistry.defaultMaxIterations(roleEnum)
-                                            );
+                                            AgentResult resumeResult;
+                                            try {
+                                                resumeResult = WorkspaceContext.run(cronSessionId, userId, chatId, AutonomyLevel.FULL, roleName, () -> 
+                                                    agentLoop.run(
+                                                            cronSessionId,
+                                                            roleEnum.toScopedName(),
+                                                            resumeGoal,
+                                                            reasoningEngine,
+                                                            roleRegistry.defaultMaxIterations(roleEnum)
+                                                    )
+                                                );
+                                            } catch (Exception e) {
+                                                throw new RuntimeException(e);
+                                            }
 
                                             if (resumeResult.success()) {
                                                 reply(chatId, resumeResult.finalAnswer());
@@ -243,14 +249,15 @@ public class TelegramAgentHandler {
 
                         String classifiedRole = intentClassifier.classify(safeInput);
 
-                        AgentRoleEnum resolvedRole;
+                        AgentRoleEnum tempResolvedRole;
                         try {
-                            resolvedRole = AgentRoleEnum.fromString(classifiedRole);
+                            tempResolvedRole = AgentRoleEnum.fromString(classifiedRole);
                         } catch (IllegalArgumentException e) {
-                            resolvedRole = AgentRoleEnum.COORDINATOR;
+                            tempResolvedRole = AgentRoleEnum.COORDINATOR;
                             log.warnf("[TelegramHandler] Unknown role classification '%s', defaulting to COORDINATOR",
                                     classifiedRole);
                         }
+                        final AgentRoleEnum resolvedRole = tempResolvedRole;
 
                         final String activeRole = resolvedRole.toScopedName();
 
@@ -273,8 +280,6 @@ public class TelegramAgentHandler {
                             }
                         });
 
-                        workspaceContext.setAutonomyLevel(autonomyLevel);
-
                         if (!devSeeder.isUnsatisfied()) {
                             devSeeder.get().seedDevSecrets();
                         }
@@ -289,12 +294,15 @@ public class TelegramAgentHandler {
                                     baseId, e.getMessage());
                         }
 
-                        AgentResult result = agentLoop.run(
-                                baseId,
-                                activeRole,
-                                safeInput,
-                                reasoningEngine,
-                                roleRegistry.defaultMaxIterations(resolvedRole));
+                        AgentResult result = WorkspaceContext.run(baseId, userId, chatId, autonomyLevel, activeRole, () -> 
+                            agentLoop.run(
+                                    baseId,
+                                    activeRole,
+                                    safeInput,
+                                    reasoningEngine,
+                                    roleRegistry.defaultMaxIterations(resolvedRole)
+                            )
+                        );
 
                         if (result.awaitingApproval()) {
                             String approvalDetail = statefulAgentStore.load(baseId, activeRole)

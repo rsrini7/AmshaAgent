@@ -457,7 +457,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
 
         // 1. Determine which tools the current persona is allowed to see
-        List<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
+        java.util.Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
 
         // 2. Dynamically filter + build specs with parameter schema
         // Phase 46: Fork bomb structural exclusion — physically remove scheduling

@@ -73,8 +73,6 @@ public class AgentCronScheduler {
     @Inject
     AuditService auditService;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @Inject
     ProducerTemplate camelProducer;
@@ -170,17 +168,18 @@ public class AgentCronScheduler {
         
         try {
             MDC.put("userId", job.userId);
-            workspaceContext.setAutonomyLevel(AutonomyLevel.BACKGROUND);
 
             // so it is available when TelegramAgentHandler queries it during HITL
             cronRepository.setDeliveryId(job.id, executionId);
 
-            AgentResult result = agentLoop.run(
-                cronSessionId,
-                AgentRoleEnum.COORDINATOR.toScopedName(),
-                job.goal,
-                engine,
-                cronMaxIterations
+            AgentResult result = WorkspaceContext.run(cronSessionId, job.userId, job.chatId, AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(), () -> 
+                agentLoop.run(
+                    cronSessionId,
+                    AgentRoleEnum.COORDINATOR.toScopedName(),
+                    job.goal,
+                    engine,
+                    cronMaxIterations
+                )
             );
 
             boolean wasApprovalRequested = result.awaitingApproval();

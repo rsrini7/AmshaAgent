@@ -75,8 +75,6 @@ public class AgentLoop {
     @Inject
     Instance<AgentObserver> observers;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @Inject
     GovernanceLayer governanceLayer;
@@ -367,11 +365,10 @@ public class AgentLoop {
                 log.infof("[AgentLoop] Resuming session %s executing pending tool %s",
                         sessionId, pendingTool);
 
-                // Capture current autonomy level to RESTORE it after, not hardcode SUPERVISED
-                AutonomyLevel previousLevel = workspaceContext.getAutonomyLevel();
                 try {
-                    workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-                    ToolResponse resumeResponse = toolRegistry.invokeTool(pendingTool, pendingParams, sessionId);
+                    ToolResponse resumeResponse = WorkspaceContext.runWithFullAutonomy(
+                            sessionId, WorkspaceContext.userId(), WorkspaceContext.chatId(), agentRole,
+                            () -> toolRegistry.invokeTool(pendingTool, pendingParams, sessionId));
                     synchronized (history) {
                         history.add(new ReasoningStep(
                                 "Human Approved", pendingTool,
@@ -393,8 +390,6 @@ public class AgentLoop {
                         return AgentResult.error(List.copyOf(history),
                                 "TOOL_EXECUTION_FAILED: " + e.getMessage());
                     }
-                } finally {
-                    workspaceContext.setAutonomyLevel(previousLevel); // restore, NOT hardcode
                 }
             }
         }
@@ -598,7 +593,7 @@ public class AgentLoop {
 
             if (roleRegistry.requiresApprovalForTools(resolvedRole)
                     && !isSchedulingTool
-                    && !AutonomyLevel.FULL.equals(workspaceContext.getAutonomyLevel())) {
+                    && !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())) {
 
                 String paramsJson = objectMapper.writeValueAsString(params);
                 throw new RequiresApprovalException(toolName, paramsJson, sessionId);

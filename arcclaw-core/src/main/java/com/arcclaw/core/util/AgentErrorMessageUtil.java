@@ -38,7 +38,7 @@ public final class AgentErrorMessageUtil {
     }
 
     public static String sanitizeErrorMessage(String raw) {
-        if (raw == null) return "Unknown error.";
+        if (raw == null) return "❌ Task failed. Please try again.";
 
         // Per-minute / per-request rate limit (existing)
         if (raw.contains("rate_limit_exceeded") && raw.contains("Please try again in")) {
@@ -53,6 +53,14 @@ public final class AgentErrorMessageUtil {
         // Generic Groq error wrapper
         if (raw.contains("ReasoningEngine error") || raw.contains("\"error\"")) {
             return "⚠️ The AI service returned an error. Please try again shortly.";
+        }
+
+        if (raw.contains("SCHEMA_ERROR")) {
+            return "❌ tool execution error: The agent generated an invalid request.";
+        }
+        
+        if (raw.contains("Budget Exceeded")) {
+            return "❌ Your session budget limit has been reached.";
         }
 
         return raw;

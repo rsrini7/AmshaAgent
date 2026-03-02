@@ -38,7 +38,7 @@ public class BrahmaAgent implements Agent {
             - You MUST NOT fabricate code that you haven't verified.
             - If a task is outside your expertise, delegate back to the coordinator.
 
-            AVAILABLE TOOLS: github
+            AVAILABLE TOOLS: None
             """;
 
     @Override
@@ -53,6 +53,6 @@ public class BrahmaAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        return List.of("github");
+        return List.copyOf(AgentRoleEnum.CODER.definition().toolNames());
     }
 }

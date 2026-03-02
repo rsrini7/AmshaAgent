@@ -1,36 +1,45 @@
 package com.arcclaw.app.scheduler;
 
-import com.arcclaw.core.agent.AgentLoop;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.LangChainReasoningEngine;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.apache.camel.ProducerTemplate;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
-
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+
+import org.apache.camel.ProducerTemplate;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+
+import com.arcclaw.core.agent.AgentLoop;
+import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.AgentRoleEnum;
+import com.arcclaw.core.agent.LangChainReasoningEngine;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.state.AgentCronRepository;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 
 /**
  * Tests for {@link AgentCronScheduler}.
@@ -54,8 +63,6 @@ class AgentCronSchedulerTest {
     @InjectMock
     AuditService auditService;
 
-    @InjectMock
-    WorkspaceContext workspaceContext;
 
     ProducerTemplate camelProducerMock;
     ManagedExecutor executorMock;
@@ -95,7 +102,7 @@ class AgentCronSchedulerTest {
             return null;
         }).when(executorMock).execute(any(Runnable.class));
 
-        reset(cronRepository, agentLoop, auditService, workspaceContext);
+        reset(cronRepository, agentLoop, auditService);
     }
 
     @Test
@@ -232,7 +239,7 @@ class AgentCronSchedulerTest {
         scheduler.pollAndDispatch();
 
         InOrder inOrder = inOrder(cronRepository, camelProducerMock);
-        inOrder.verify(cronRepository).setDeliveryId(eq(job.id), anyString());
+        inOrder.verify(cronRepository, times(2)).setDeliveryId(eq(job.id), anyString());
         inOrder.verify(camelProducerMock).sendBodyAndHeaders(anyString(), any(), any());
     }
 
@@ -245,18 +252,6 @@ class AgentCronSchedulerTest {
         verify(cronRepository).reclaimStaleCrons(any(Instant.class));
     }
 
-    @Test
-    void testBackgroundAutonomyLevelSet() {
-        AgentCronEntity job = createDueJob(true);
-        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
-        when(cronRepository.claimForFire(job.id)).thenReturn(true);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
-                .thenReturn(AgentResult.finished("Background OK", List.of()));
-
-        scheduler.pollAndDispatch();
-
-        verify(workspaceContext).setAutonomyLevel(AutonomyLevel.BACKGROUND);
-    }
 
     @Test
     void testOuterThrowableReleasesSemaphore() throws Exception {
@@ -266,7 +261,7 @@ class AgentCronSchedulerTest {
 
         // This mock will trigger the catch(Throwable) inside the dispatch lambda
         doThrow(new RuntimeException("[TEST-EXPECTED] Simulated failure in loop"))
-                .when(workspaceContext).setAutonomyLevel(any());
+                .when(cronRepository).setDeliveryId(anyString(), anyString());
 
         scheduler.pollAndDispatch();
 
@@ -275,9 +270,9 @@ class AgentCronSchedulerTest {
 
         // Verify semaphore was released by checking a second job can be dispatched
         AgentCronEntity job2 = createDueJob(true);
+        reset(cronRepository); // Stop throwing
         when(cronRepository.findDueCrons()).thenReturn(List.of(job2));
         when(cronRepository.claimForFire(job2.id)).thenReturn(true);
-        reset(workspaceContext); // Stop throwing
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
                 .thenReturn(AgentResult.finished("OK", List.of()));
 

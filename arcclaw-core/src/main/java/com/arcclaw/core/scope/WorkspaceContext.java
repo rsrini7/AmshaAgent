@@ -1,44 +1,76 @@
 package com.arcclaw.core.scope;
 
 import com.arcclaw.core.security.AutonomyLevel;
-import jakarta.enterprise.inject.Vetoed;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.ScopedValue;
+import java.util.concurrent.Callable;
 
 /**
- * Represents the context of a workspace session.
- * Managed as a @WorkspaceScoped bean via producer.
+ * Pure static utility backed by ScopedValue constants to hold Workspace Context.
+ * Eliminates CDI singleton race conditions and secures context propagation.
  */
-@Vetoed // Managed via Producer to handle no-arg constraint and initialization
-public class WorkspaceContext {
+public final class WorkspaceContext {
 
-    private final String sessionId;
-    private AutonomyLevel autonomyLevel = AutonomyLevel.READONLY;
-    private final Map<String, Object> attributes = new HashMap<>();
+    public static final ScopedValue<String> SESSION_ID = ScopedValue.newInstance();
+    public static final ScopedValue<String> USER_ID = ScopedValue.newInstance();
+    public static final ScopedValue<String> CHAT_ID = ScopedValue.newInstance();
+    public static final ScopedValue<AutonomyLevel> AUTONOMY = ScopedValue.newInstance();
+    public static final ScopedValue<String> AGENT_ROLE = ScopedValue.newInstance();
 
-    public WorkspaceContext(String sessionId) {
-        this.sessionId = sessionId;
+    private WorkspaceContext() {
+        // utility class
     }
 
-    public String getSessionId() {
-        return sessionId;
+    public static <T> T run(String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, Callable<T> task) throws Exception {
+        return ScopedValue.where(SESSION_ID, sessionId)
+                .where(USER_ID, userId)
+                .where(CHAT_ID, chatId)
+                .where(AUTONOMY, autonomy)
+                .where(AGENT_ROLE, role)
+                .call(() -> task.call());
     }
 
-    public AutonomyLevel getAutonomyLevel() {
-        return autonomyLevel;
+    public static void run(String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, Runnable task) {
+        try {
+            run(sessionId, userId, chatId, autonomy, role, () -> {
+                task.run();
+                return null;
+            });
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public void setAutonomyLevel(AutonomyLevel autonomyLevel) {
-        this.autonomyLevel = autonomyLevel;
+    public static <T> T runWithFullAutonomy(String sessionId, String userId, String chatId, String role, Callable<T> task) throws Exception {
+        return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
+    }
+    
+    public static void runWithFullAutonomy(String sessionId, String userId, String chatId, String role, Runnable task) {
+        run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
-    public void setAttribute(String key, Object value) {
-        attributes.put(key, value);
+    public static String requireSessionId() {
+        if (!SESSION_ID.isBound() || SESSION_ID.get() == null || SESSION_ID.get().isBlank()) {
+            throw new IllegalStateException("WorkspaceContext SESSION_ID is unbound");
+        }
+        return SESSION_ID.get();
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> T getAttribute(String key) {
-        return (T) attributes.get(key);
+    public static AutonomyLevel autonomy() {
+        return AUTONOMY.isBound() && AUTONOMY.get() != null ? AUTONOMY.get() : AutonomyLevel.SUPERVISED;
+    }
+
+    public static String userId() {
+        return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "";
+    }
+
+    public static String chatId() {
+        return CHAT_ID.isBound() && CHAT_ID.get() != null ? CHAT_ID.get() : "";
+    }
+
+    public static String agentRole() {
+        return AGENT_ROLE.isBound() && AGENT_ROLE.get() != null ? AGENT_ROLE.get() : "";
     }
 }

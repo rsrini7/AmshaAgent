@@ -31,7 +31,7 @@ class AgentResourceTest {
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
 
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-                Mockito.when(apiKeyRegistry.isRateLimited(anyString())).thenReturn(false);
+                Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
         }
 
         @Test

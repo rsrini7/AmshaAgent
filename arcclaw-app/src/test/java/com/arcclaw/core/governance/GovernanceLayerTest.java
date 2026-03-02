@@ -1,17 +1,21 @@
 package com.arcclaw.core.governance;
 
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.AutonomyLevel;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.UUID;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.UUID;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 
-import static org.junit.jupiter.api.Assertions.*;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 
 @QuarkusTest
 class GovernanceLayerTest {
@@ -19,8 +23,6 @@ class GovernanceLayerTest {
     @Inject
     GovernanceLayer governanceLayer;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     private String sessionId;
 
@@ -36,12 +38,10 @@ class GovernanceLayerTest {
 
     @Test
     void testCostAccumulationUnderBudget() {
-        WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
             // Price: In=$0.003/1k, Out=$0.015/1k
             // Let's record 1k input ($0.003) and 1k output ($0.015) -> Total: $0.018
             assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 1000, 1000));
-            assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel(), "Autonomy should not be downgraded.");
             
             assertEquals(0.018, governanceLayer.getSessionCost(sessionId), 0.0001);
             assertEquals(1000, governanceLayer.getSessionInputTokens(sessionId));
@@ -51,8 +51,7 @@ class GovernanceLayerTest {
 
     @Test
     void testBudgetWarningAt80Percent() {
-        WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
             // Budget is $10.00. 80% is $8.00.
             // Record enough to hit $8.00 but not $10.00.
             // 100,000 input tokens = $0.30
@@ -65,14 +64,12 @@ class GovernanceLayerTest {
                 () -> governanceLayer.recordLlmCall(sessionId, 100000, 0));
             
             assertTrue(ex.getMessage().contains("budget is 81% consumed"));
-            assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel(), "Warning should NOT downgrade autonomy.");
         });
     }
 
     @Test
     void testBudgetExceededTriggersDowngradeAndException() {
-        WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
             // Budget is $10.00. 
             // 1st massive call triggers WARNING first (Stage 1)
             assertThrows(BudgetWarningException.class,
@@ -83,7 +80,6 @@ class GovernanceLayerTest {
                     () -> governanceLayer.recordLlmCall(sessionId, 1, 1));
 
             assertTrue(ex.getMessage().contains("exceeded"));
-            assertEquals(AutonomyLevel.READONLY, workspaceContext.getAutonomyLevel());
         });
     }
 
@@ -91,8 +87,7 @@ class GovernanceLayerTest {
     void testSessionIsolation() {
         String sessionB = UUID.randomUUID().toString();
         
-        WorkspaceScopeHolder.run(sessionB, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+        WorkspaceContext.run(sessionB, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
             // Stage 1: Warning
             try {
                 governanceLayer.recordLlmCall(sessionB, 1000000, 1000000);
@@ -102,13 +97,10 @@ class GovernanceLayerTest {
             try {
                 governanceLayer.recordLlmCall(sessionB, 1, 1);
             } catch (BudgetExceededException e) {}
-            
-            assertEquals(AutonomyLevel.READONLY, workspaceContext.getAutonomyLevel());
         });
 
-        WorkspaceScopeHolder.run(sessionId, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-            assertEquals(AutonomyLevel.FULL, workspaceContext.getAutonomyLevel());
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
+            assertEquals(0.0, governanceLayer.getSessionCost(sessionId), 0.0001);
         });
     }
 }

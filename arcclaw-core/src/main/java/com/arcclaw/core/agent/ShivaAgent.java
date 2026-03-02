@@ -52,6 +52,6 @@ public class ShivaAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        return List.of("github");
+        return List.copyOf(AgentRoleEnum.DEBUGGER.definition().toolNames());
     }
 }

@@ -49,8 +49,6 @@ public class AgentResource {
     @Inject
     Logger log;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @Inject
     WorkspaceManager workspaceManager;
@@ -93,24 +91,24 @@ public class AgentResource {
 
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
-                // Elevate Autonomy so tools trigger RequiresApprovalException instead of hard crashing
-                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
-
                 if (!devSeeder.isUnsatisfied()) {
                     devSeeder.get().seedDevSecrets();
                 }
 
-                AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine,
-                        maxIterations);
-                if (result.success()) {
-                    return Response.ok(result).build();
-                } else {
-                    log.errorf("Sync agent run completed with failure for session {}: {}", sessionId,
-                            result.terminationReason());
-                    return Response.serverError()
-                            .entity(result.terminationReason())
-                            .build();
-                }
+                return WorkspaceContext.run(
+                        sessionId, "rest:sync", null, AutonomyLevel.SUPERVISED, request.agentRole(),
+                        () -> {
+                            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
+                            if (result.success()) {
+                                return Response.ok(result).build();
+                            } else {
+                                log.errorf("Sync agent run completed with failure for session {}: {}", sessionId, result.terminationReason());
+                                return Response.serverError()
+                                        .entity(result.terminationReason())
+                                        .build();
+                            }
+                        }
+                );
             });
         } catch (Exception e) {
             log.errorf("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
@@ -142,8 +140,6 @@ public class AgentResource {
         // ----------------------------------------------
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
-                workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
-
                 boolean isApproval = "/approve".equalsIgnoreCase(request.goal());
                 boolean isDeny     = "/deny".equalsIgnoreCase(request.goal());
 
@@ -164,35 +160,35 @@ public class AgentResource {
                     return;
                 }
 
-                workspaceContext.setAutonomyLevel(
-                    isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED
-                );
-
                 if (!devSeeder.isUnsatisfied()) {
                    devSeeder.get().seedDevSecrets();
                 }
 
-                AgentResult result = agentLoop.run(sessionId, request.agentRole(),
-                        request.goal(), reasoningEngine, maxIterations);
+                AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
 
-                if (result.awaitingApproval()) {
-                    response.resume(Response.accepted()
-                            .entity(Map.of(
-                                "status",  "AWAITING_APPROVAL",
-                                "message", "Agent is pending tool approval. POST /approve or /deny as goal.",
-                                "session", sessionId
-                            ))
-                            .build());
-                } else if (result.success()) {
-                    response.resume(Response.accepted()
-                            .entity(Map.of("status", "COMPLETED", "answer", result.finalAnswer()))
-                            .build());
-                } else {
-                    log.errorf("Async agent run failed for session {}: {}", sessionId, result.terminationReason());
-                    response.resume(Response.serverError()
-                            .entity(Map.of("status", "FAILED", "reason", result.terminationReason()))
-                            .build());
-                }
+                WorkspaceContext.run(sessionId, "rest:async", null, runLevel, request.agentRole(), () -> {
+                    AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                            request.goal(), reasoningEngine, maxIterations);
+
+                    if (result.awaitingApproval()) {
+                        response.resume(Response.accepted()
+                                .entity(Map.of(
+                                    "status",  "AWAITING_APPROVAL",
+                                    "message", "Agent is pending tool approval. POST /approve or /deny as goal.",
+                                    "session", sessionId
+                                ))
+                                .build());
+                    } else if (result.success()) {
+                        response.resume(Response.accepted()
+                                .entity(Map.of("status", "COMPLETED", "answer", result.finalAnswer()))
+                                .build());
+                    } else {
+                        log.errorf("Async agent run failed for session {}: {}", sessionId, result.terminationReason());
+                        response.resume(Response.serverError()
+                                .entity(Map.of("status", "FAILED", "reason", result.terminationReason()))
+                                .build());
+                    }
+                });
 
             } catch (Exception e) {
                 log.errorf("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
@@ -200,13 +196,6 @@ public class AgentResource {
                         .entity(Map.of("status", "ERROR", "message",
                             e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
                         .build());
-            } finally {
-                 // Guard: only call setAutonomyLevel if scope is still active
-                try {
-                    workspaceContext.setAutonomyLevel(AutonomyLevel.SUPERVISED);
-                } catch (Exception ignored) {
-                    // Scope already cleared or was never activated — safe to ignore
-                }
             }
         }));
     }
@@ -251,8 +240,6 @@ public class AgentResource {
         log.infof("REST approve for session %s role %s", sessionId, agentRole);
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
-                workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
@@ -262,8 +249,10 @@ public class AgentResource {
                 }
 
                 MDC.put("userId", "rest:approve");
-                agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
-                return Response.ok(Map.of("status", "APPROVED", "session", sessionId)).build();
+                return WorkspaceContext.run(sessionId, "rest:approve", null, AutonomyLevel.FULL, canonicalRole, () -> {
+                    agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
+                    return Response.ok(Map.of("status", "APPROVED", "session", sessionId)).build();
+                });
             });
         } catch (Exception e) {
             log.errorf("Failed to approve session " + sessionId, e);
