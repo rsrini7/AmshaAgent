@@ -47,6 +47,10 @@ public class CommandDispatchHandler implements MessageHandler {
                 dispatch(context, "/status");
                 yield HandleResult.STOP;
             }
+            case ChannelCommand.History _ -> { 
+                dispatch(context, "/history"); 
+                yield HandleResult.STOP; 
+            }
             case ChannelCommand.Halt _ -> {
                 dispatch(context, "/halt");
                 yield HandleResult.STOP;

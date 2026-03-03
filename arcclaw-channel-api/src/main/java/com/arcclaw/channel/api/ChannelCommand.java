@@ -19,13 +19,14 @@ public sealed interface ChannelCommand
                 ChannelCommand.Status,
                 ChannelCommand.Halt,
                 ChannelCommand.Reset,
+                ChannelCommand.History,
                 ChannelCommand.ListTasks,
                 ChannelCommand.Unknown {
 
     // Single compiled Pattern — avoids repeated compilation per message.
     // The inner group (\\S+) matches the first non-whitespace token after the command.
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(approve|deny|status|halt|reset|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
+            "^/(approve|deny|status|halt|reset|history|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -66,6 +67,7 @@ public sealed interface ChannelCommand
             case "status"  -> new Status();
             case "halt"    -> new Halt();
             case "reset"   -> new Reset();
+            case "history" -> new History();
             case "list", "listtask", "listtasks" -> new ListTasks();
             default -> new Unknown(text);
         };
@@ -102,6 +104,9 @@ public sealed interface ChannelCommand
 
     /** Lists scheduled cron tasks for the current user. */
     record ListTasks() implements ChannelCommand {}
+
+    /** Shows conversation history for the current session. */
+    record History() implements ChannelCommand {}
 
     /**
      * Fallback for any text that does not match a known command.
