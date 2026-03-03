@@ -67,10 +67,10 @@ public class DenyReflex implements AgentReflex {
 
                 // 2. Session checkpoint — interactive approval
                 String activeRole = null;
-                for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
-                    Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role);
+                for (com.arcclaw.core.agent.AgentRoleEnum role : com.arcclaw.core.agent.AgentRoleEnum.values()) {
+                    Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role.toScopedName());
                     if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                        activeRole = role;
+                        activeRole = role.toScopedName();
                         break;
                     }
                 }

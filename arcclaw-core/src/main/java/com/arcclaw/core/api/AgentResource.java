@@ -306,6 +306,9 @@ public class AgentResource {
                     .entity(new ErrorResponse(f.reason(), "SCHEMA")).build();
             case SYSTEM_ERROR -> Response.serverError()
                     .entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
+            case RATE_LIMIT -> Response.serverError()
+                    .entity(new ErrorResponse(f.reason(), "RATE_LIMIT")).build();                    
+            
         };
     }
 }

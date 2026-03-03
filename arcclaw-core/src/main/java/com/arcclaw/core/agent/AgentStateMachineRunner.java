@@ -19,6 +19,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.data.message.AiMessage;
@@ -195,7 +196,8 @@ public class AgentStateMachineRunner {
     }
 
     private StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
-                                           List<ReasoningStep> history, String agentRole, String transientError, int llmSchemaErrorCount, int iteration) {
+                                           List<ReasoningStep> history, String agentRole, String transientError, 
+                                           int llmSchemaErrorCount, int iteration) {
         ReasoningStep step;
         try {
             String currentGoal = goal;
@@ -247,6 +249,17 @@ public class AgentStateMachineRunner {
                         ". Please review the tool schema and correct your arguments. " +
                         "Only 'view' and 'list' are valid commands for the github tool.";
                 return StepDecision.retryEngine(nextTransientError, llmSchemaErrorCount);
+            }
+
+            if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
+                String humanMessage = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+                log.warnf("[STATE-MACHINE] Rate limit hit for session %s: %s", sessionId, humanMessage);
+                synchronized (history) {
+                    return StepDecision.terminal(AgentResult.failed(
+                        humanMessage,  // already formatted — no re-sanitization needed downstream
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
+                }
             }
 
             log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);

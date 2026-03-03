@@ -1,5 +1,8 @@
 package com.arcclaw.core.util;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public final class AgentErrorMessageUtil {
 
     private AgentErrorMessageUtil() {}
@@ -9,11 +12,11 @@ public final class AgentErrorMessageUtil {
             return "a few moments";
         }
         try {
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            Pattern pattern = Pattern.compile(
                 "Please try again in (\\d+m)?(\\d+(?:\\.\\d+)?s)",
-                java.util.regex.Pattern.CASE_INSENSITIVE
+                Pattern.CASE_INSENSITIVE
             );
-            java.util.regex.Matcher matcher = pattern.matcher(errorJson);
+            Matcher matcher = pattern.matcher(errorJson);
             if (!matcher.find()) return "a few moments";
 
             String minutePart = matcher.group(1);
@@ -67,20 +70,19 @@ public final class AgentErrorMessageUtil {
     }
 
     private static String buildThrottleMessage(String raw) {
-        // Extract "Please try again in Xm Ys" from the message
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)")
-                .matcher(raw);
+        Matcher m = Pattern
+            .compile("Please try again in (\\d+m\\d+(?:\\.\\d+)?s|\\d+(?:\\.\\d+)?s|\\d+m)")
+            .matcher(raw);
         if (m.find()) {
             String wait = humanReadableWait(m.group(1));
-            return "⚠️ I'm temporarily throttled due to high demand. Please try again in " + wait + ".";
+            return "⚠️ I'm temporarily throttled. Please try again in " + wait + ".";
         }
         return "⚠️ I'm temporarily throttled. Please try again in a few minutes.";
     }
 
-    // NEW: handles TPD limit which includes "Xm Ys" format like "39m48.96s"
+    // handles TPD limit which includes "Xm Ys" format like "39m48.96s"
     private static String buildTpdThrottleMessage(String raw) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
+        Matcher m = Pattern
                 .compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)")
                 .matcher(raw);
         if (m.find()) {
@@ -98,7 +100,7 @@ public final class AgentErrorMessageUtil {
         String s = rawInterval.trim();
 
         // Match "<minutes>m<seconds>s" or "<minutes>m"
-        java.util.regex.Matcher m1 = java.util.regex.Pattern
+        Matcher m1 = Pattern
                 .compile("(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?")
                 .matcher(s);
         if (m1.matches()) {

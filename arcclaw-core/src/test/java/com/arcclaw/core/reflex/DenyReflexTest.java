@@ -3,6 +3,7 @@ package com.arcclaw.core.reflex;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -17,8 +18,10 @@ import org.junit.jupiter.api.Test;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 
 import io.quarkus.test.InjectMock;
@@ -92,5 +95,25 @@ class DenyReflexTest {
         assertTrue(resultText.contains("No active denial in this chat session"));
         assertTrue(resultText.contains("Backup databases"));
         assertTrue(resultText.contains("/deny cron-456"));
+    }
+
+    @Test
+    void testDenySessionCheckpointFindsArchitectRole() {
+        String userId = "user-1";
+        String sessionId = "session-1";
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+
+        // Architect role was not in the hardcoded list before
+        when(statefulAgentStore.load(eq(sessionId), eq("architect")))
+                .thenReturn(Optional.of(cp));
+
+        String resultText = denyReflex.execute(sessionId, userId, "chat-1", "/deny");
+
+        assertTrue(resultText.contains("Execution denied"));
+        verify(statefulAgentStore).save(argThat(checkpoint -> 
+            checkpoint.getStatus() == CheckpointStatus.FAILED &&
+            "Human denied the tool execution.".equals(checkpoint.getFailReason())
+        ));
     }
 }
