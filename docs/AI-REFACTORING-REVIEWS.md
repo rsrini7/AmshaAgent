@@ -6733,12 +6733,347 @@ return switch (result) {
 .\mvnw.cmd clean verify -pl arcclaw-app -am
 ```
 
-Provide impl plan first. All must be **GREEN** before proceeding to Tier 2B.
-```
 
 ***
 
-## PROMPT 4 — Tier 3: JDK Modernization Sweep (C15–C19)
+# Prompt 4 — Tier 3: AgentStateMachineRunner Implementation
+
+Tiers 1, 2A, 2B complete and GREEN. This implements the AgentStateMachineRunner 
+stub (currently returns SYSTEM_ERROR) and thins AgentLoop to a lifecycle shell.
+
+## Non-Negotiable Constraints
+
+1. Do NOT delete AgentLoop.java — AgentResource calls agentLoop.run() in 3 places.
+   AgentLoop becomes a thin lifecycle shell that delegates to StateMachineRunner.
+2. AgentState has NO LoopExceeded permit. Permits are exactly:
+   InProgress, AwaitingApproval, Completed, Failed, Compromised.
+   Loop timeout maps to AgentResult.loopExceeded() directly — not through AgentState.
+3. Keep the fast-path exit for scheduletask/manageschedule in invokeToolAndObserve()
+   verbatim — it is a confirmed working prod optimization, not a bug.
+4. AgentExecutionContext field is autonomyLevel() not autonomy() — use this everywhere.
+5. Move verbatim — do NOT rewrite logic in processEngineStep, validateTool,
+   invokeToolAndObserve, handleFinishAction, saveGoalToChatMemory.
+
+---
+
+## Component 15 — Implement AgentStateMachineRunner
+
+### [MODIFY] AgentStateMachineRunner.java
+(currently a stub returning SYSTEM_ERROR)
+
+Add injections:
+```java
+@Inject LangChainReasoningEngine engine;
+@Inject ToolRegistry toolRegistry;
+@Inject StatefulAgentStore agentStore;
+@Inject GovernanceLayer governanceLayer;
+@Inject ChatMemoryStore chatMemoryStore;
+@Inject Instance<AgentObserver> observers;
+@Inject RoleRegistry roleRegistry;
+@Inject ObjectMapper objectMapper;
+```
+
+Move these from AgentLoop VERBATIM — do not rewrite:
+- DecisionType enum
+- StepDecision record (all 5 static factory methods)
+- GITHUB_TRIGGER_PATTERN static field
+- processEngineStep() — signature unchanged
+- validateTool() — signature unchanged  
+- invokeToolAndObserve() — signature unchanged, keep fast-path exit
+- handleFinishAction() — signature unchanged
+- saveGoalToChatMemory() — signature unchanged
+
+Replace the stub run() with this signature and body:
+
+```java
+public AgentResult run(AgentExecutionContext context, List<ReasoningStep> resumedHistory) {
+    List<ReasoningStep> history = new ArrayList<>(resumedHistory);
+    int iteration = 0;
+    int llmSchemaErrorCount = 0;
+    int consecutiveFailures = 0;
+    String transientError = null;
+
+    log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
+        context.sessionId(), context.goal(), context.maxIterations());
+
+    saveGoalToChatMemory(context.sessionId(), context.goal());
+
+    while (iteration < context.maxIterations()) {
+        iteration++;
+        log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
+
+        StepDecision engineDecision = processEngineStep(
+            context.sessionId(), context.goal(), engine, history,
+            context.agentRole(), transientError, llmSchemaErrorCount, iteration);
+
+        if (engineDecision.type() == DecisionType.TERMINAL) return engineDecision.result();
+        if (engineDecision.type() == DecisionType.CONTINUE) {
+            transientError = engineDecision.transientError();
+            llmSchemaErrorCount = engineDecision.llmSchemaErrorCount();
+            continue;
+        }
+
+        ReasoningStep step = engineDecision.step();
+        transientError = null;
+
+        if (ReasoningStep.FINISH.equals(step.action()))
+            return handleFinishAction(context.sessionId(), context.agentRole(),
+                history, step, iteration);
+
+        StepDecision validationDecision = validateTool(
+            context.sessionId(), context.agentRole(), history,
+            step, context.goal(), consecutiveFailures);
+        if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
+        if (validationDecision.type() == DecisionType.CONTINUE) {
+            consecutiveFailures = validationDecision.consecutiveFailures();
+            continue;
+        }
+        step = validationDecision.step();
+
+        StepDecision invocationDecision = invokeToolAndObserve(
+            context.sessionId(), context.agentRole(), history, step, consecutiveFailures);
+        if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
+        consecutiveFailures = invocationDecision.consecutiveFailures();
+    }
+
+    log.warnf("StateMachine exceeded %d iterations for session=%s",
+        context.maxIterations(), context.sessionId());
+    synchronized (history) {
+        return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+    }
+}
+```
+
+IMPORTANT: In invokeToolAndObserve(), the autonomy check currently reads:
+  !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())
+Keep this unchanged — it reads from WorkspaceContext ScopedValue, NOT from context.autonomyLevel().
+The context.autonomyLevel() is only used when building AgentExecutionContext in AgentLoop.
+
+---
+
+## Component 16 — Thin AgentLoop
+
+### [MODIFY] AgentLoop.java
+
+Add injection:
+```java
+@Inject AgentStateMachineRunner stateMachineRunner;
+```
+
+In run(String sessionId, String agentRole, String goal, ReasoningEngine engine, int maxIterations),
+replace the runLoop() call with:
+```java
+AgentExecutionContext context = new AgentExecutionContext(
+    sessionId,
+    WorkspaceContext.userId(),
+    WorkspaceContext.chatId(),
+    canonicalRole,
+    goal,
+    WorkspaceContext.autonomy(),   // reads from ScopedValue set by WorkspaceContext.run()
+    maxIterations
+);
+result = stateMachineRunner.run(context, resumedHistory);
+```
+
+NOTE: WorkspaceContext.autonomy() here feeds into AgentExecutionContext.autonomyLevel().
+The runner's invokeToolAndObserve() still reads WorkspaceContext.autonomy() directly
+from the ScopedValue — so the field in context is available for future use but the
+guard in the runner does not change.
+
+Delete from AgentLoop:
+- runLoop() method
+- processEngineStep() method
+- validateTool() method
+- invokeToolAndObserve() method
+- handleFinishAction() method
+- saveGoalToChatMemory() method
+- DecisionType enum
+- StepDecision record
+- GITHUB_TRIGGER_PATTERN field
+
+KEEP untouched in AgentLoop:
+- Both run() public method signatures (one 2-param, one 5-param) — callers unchanged
+- run(String goal, ReasoningEngine engine, int maxIterations) — update to delegate:
+  ```java
+  public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
+      AgentExecutionContext context = new AgentExecutionContext(
+          WorkspaceScopeHolder.getRequired(), null, null, null,
+          goal, null, maxIterations);
+      return stateMachineRunner.run(context, List.of());
+  }
+  ```
+- MDC setup/teardown
+- OTel endSessionSpan()
+- Checkpoint load + resumedHistory build
+- Checkpoint final save (markCompleted/markFailed)
+- handleResumeHook() — lifecycle, not iteration
+- ComplianceViolationException FAIL-CLOSED catch block — must not be lost
+- observers.forEach(o -> o.onLoopComplete(...)) in finally block
+- The engine parameter in the 5-param signature — kept for source compatibility,
+  not passed to runner (runner injects LangChainReasoningEngine directly)
+
+---
+
+## Component 17 — Dead Code Cleanup
+
+### [MODIFY] AgentDispatchHandler.java
+No dead scaffold code present — no changes needed.
+
+### [MODIFY] LangChainReasoningEngine.java
+If getRoleBinding() method still exists (replaced by PromptTemplateEngine in C11):
+Delete it. Confirm it is unreferenced first.
+
+---
+
+## Tests
+
+### [NEW] AgentStateMachineRunnerTest.java
+Pure unit tests — no CDI, manual field injection via reflection or direct assignment.
+Mock LangChainReasoningEngine, ToolRegistry, GovernanceLayer, ChatMemoryStore,
+StatefulAgentStore, RoleRegistry, ObjectMapper, Instance<AgentObserver>.
+
+8 tests:
+
+1. testFinishOnFirstStep
+   - Mock engine returns FINISH step with answer "Done"
+   - Assert result instanceof AgentResult.Finished
+   - Assert result.answer() == "Done"
+
+2. testLoopExceededAfterMaxIterations
+   - Mock engine always returns a non-FINISH action step with unknown tool
+   - Set maxIterations=2
+   - Assert result instanceof AgentResult.LoopExceeded
+   - Assert result.maxIterations() == 2
+
+3. testHallucinatedToolIntercepted
+   - Mock engine returns step with toolName="nonexistent_tool"
+   - Mock toolRegistry.findTool("nonexistent_tool") returns empty
+   - Assert loop continues (error observation injected), does not throw
+
+4. testBudgetExceededAborts
+   - Mock governanceLayer.recordLlmCall() throws BudgetExceededException
+   - Assert result instanceof AgentResult.Failed
+   - Assert result.category() == BUDGET_EXCEEDED
+
+5. testAwaitingApprovalPausesLoop
+   - Mock roleRegistry.requiresApprovalForTools() returns true
+   - Wrap execution in ScopedValue.where(WorkspaceScopeHolder.AUTONOMY, AutonomyLevel.SUPERVISED).run(...)
+     so WorkspaceContext.autonomy() returns SUPERVISED inside invokeToolAndObserve()
+   - Without this wrapper, WorkspaceContext.autonomy() throws NoSuchElementException or returns
+     null — HITL gate silently fails and test passes for wrong reason
+   - Assert result instanceof AgentResult.AwaitingApproval
+
+6. testCircuitBreakerTripsAfter3Failures
+   - Mock toolRegistry.invokeTool() returns ToolResponse with success=false
+   - Set maxIterations=5 — must be high enough that circuit breaker (consecutiveFailures >= 2)
+     fires before loop exhaustion, otherwise test passes for wrong reason
+   - Assert result instanceof AgentResult.Finished with "❌ I encountered repeated errors"
+
+7. testSchemaErrorSelfHealsOnce
+   - Mock engine throws InvalidRequestException on first call, returns FINISH on second
+   - Assert result instanceof AgentResult.Finished (self-healed)
+
+8. testSchedulingToolFastPathExits
+   - Mock engine returns step with action="scheduletask"
+   - Mock toolRegistry.invokeTool("scheduletask",...) returns successful ToolResponse
+   - Assert result instanceof AgentResult.Finished immediately (no second engine call)
+   - Verify engine.nextStep() called exactly once (fast-path skips summary call)
+
+### [MODIFY] AgentLoopTest.java
+- Move testSelfHealingOnHttp400 to AgentStateMachineRunnerTest (mock engine on runner,
+  not on agentLoop — the loop no longer calls engine directly)
+- Move testSchemaErrorLimitExceeded to AgentStateMachineRunnerTest (same reason)
+- Add:
+  ```java
+  @Test
+  void testAgentLoopDelegatesToStateMachineRunner() {
+      assertFalse(
+          Arrays.stream(AgentLoop.class.getDeclaredMethods())
+              .anyMatch(m -> m.getName().equals("runLoop")),
+          "runLoop must be deleted — logic is in StateMachineRunner");
+      assertFalse(
+          Arrays.stream(AgentLoop.class.getDeclaredMethods())
+              .anyMatch(m -> m.getName().equals("processEngineStep")),
+          "processEngineStep must be deleted — logic is in StateMachineRunner");
+  }
+  ```
+
+---
+
+## Verification Order
+
+```powershell
+# 1. Runner unit tests (no CDI, fast)
+.\mvnw.cmd clean test -pl arcclaw-core -am `
+  "-Dtest=AgentStateMachineRunnerTest" `
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# 2. AgentLoop + AgentResource regression (signature unchanged, callers must compile)
+.\mvnw.cmd clean test -pl arcclaw-core -am `
+  "-Dtest=AgentLoopTest,AgentResourceTest" `
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# 3. Cron scheduler regression
+.\mvnw.cmd clean test -pl arcclaw-app -am `
+  "-Dtest=AgentCronSchedulerTest" `
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# 4. Full verify — all callers compile, all tests GREEN
+.\mvnw.cmd clean verify -pl arcclaw-app -am
+```
+
+---
+
+## Task Checklist
+
+### Pre-Flight
+- [ ] Confirm AgentState permits: InProgress, AwaitingApproval, Completed, Failed,
+      Compromised — NO LoopExceeded
+- [ ] Confirm AgentExecutionContext field is autonomyLevel() not autonomy()
+- [ ] Confirm AgentDispatchHandler has no dead execContext/initialState scaffold
+- [ ] Confirm getRoleBinding() presence/absence in LangChainReasoningEngine
+
+### C15 — AgentStateMachineRunner
+- [ ] Add 8 injections
+- [ ] Move DecisionType + StepDecision verbatim
+- [ ] Move GITHUB_TRIGGER_PATTERN verbatim
+- [ ] Move processEngineStep() verbatim
+- [ ] Move validateTool() verbatim
+- [ ] Move invokeToolAndObserve() verbatim (keep fast-path exit)
+- [ ] Move handleFinishAction() verbatim
+- [ ] Move saveGoalToChatMemory() verbatim
+- [ ] Implement run(AgentExecutionContext, List<ReasoningStep>) loop body
+- [ ] Create AgentStateMachineRunnerTest.java (8 unit tests)
+
+### C16 — Thin AgentLoop
+- [ ] Add @Inject AgentStateMachineRunner
+- [ ] Build AgentExecutionContext from sessionId + WorkspaceContext.* + canonicalRole +
+      goal + maxIterations
+- [ ] Replace runLoop() call with stateMachineRunner.run(context, resumedHistory)
+- [ ] Update run(goal, engine, maxIterations) to delegate to stateMachineRunner
+- [ ] Delete all moved methods + runLoop() itself
+- [ ] Keep handleResumeHook(), MDC, OTel, checkpoint load/save,
+      ComplianceViolationException catch, observers.onLoopComplete
+- [ ] Move testSelfHealingOnHttp400 to AgentStateMachineRunnerTest
+- [ ] Move testSchemaErrorLimitExceeded to AgentStateMachineRunnerTest
+- [ ] Add testAgentLoopDelegatesToStateMachineRunner to AgentLoopTest
+
+### C17 — Dead Code
+- [ ] AgentDispatchHandler — no changes needed (confirmed clean)
+- [ ] Delete getRoleBinding() from LangChainReasoningEngine if confirmed dead
+
+### Verification
+- [ ] AgentStateMachineRunnerTest GREEN (8 tests)
+- [ ] AgentLoopTest GREEN (no regressions)
+- [ ] AgentResourceTest GREEN (3 callers still compile)
+- [ ] AgentCronSchedulerTest GREEN
+- [ ] Full mvnw clean verify GREEN
+- [ ] Live Telegram: basic chat + GitHub approval + scheduling + destructive block
+
+
+***
+
+## PROMPT 5 — Tier 4: JDK Modernization Sweep (C18–C22)
 
 ```markdown
 You have previously acknowledged the ArcClaw Phase 47 architecture context.
@@ -6749,7 +7084,7 @@ After Tier 3, update the documentation files listed at the end.
 
 ---
 
-### Component 15 — Unnamed Variables Sweep (JDK 22 Final — JEP 456)
+### Component 18 — Unnamed Variables Sweep (JDK 22 Final — JEP 456)
 
 Apply _ unnamed variable where the variable is genuinely unused.
 Do NOT apply where the catch body references the variable's message or type.
@@ -6770,7 +7105,7 @@ only where e is not used inside the catch body.
 
 ---
 
-### Component 16 — SequencedCollection API Sweep (JDK 21 Final — JEP 431)
+### Component 19 — SequencedCollection API Sweep (JDK 21 Final — JEP 431)
 
 Replace ALL occurrences of:
   list.get(0)              → list.getFirst()
@@ -6786,7 +7121,7 @@ Do NOT change indexed access where the index is not 0 or size-1.
 
 ---
 
-### Component 17 — CliAgentObserver Static Volatile Fix (JDK 24 Final — JEP 487)
+### Component 20 — CliAgentObserver Static Volatile Fix (JDK 24 Final — JEP 487)
 
 WHY: public static volatile boolean enabled = false on an @ApplicationScoped
 CDI bean is global mutable state. Multiple test executions in the same JVM
@@ -6867,7 +7202,7 @@ Action: CREATE NEW
 
 ---
 
-### Component 18 — Normalize AgentCheckpoint.stateJson into ReasoningStepEntity
+### Component 21 — Normalize AgentCheckpoint.stateJson into ReasoningStepEntity
 
 WHY: AgentCheckpoint currently serializes the entire List<ReasoningStep>
 into a single stateJson TEXT blob. This makes individual step querying
@@ -7079,7 +7414,7 @@ Action: UPDATE existing + ADD new tests
 
 ---
 
-### Component 19 — Config Namespace Unification
+### Component 22 — Config Namespace Unification
 
 WHY: Telegram config is split between arcclaw.channel.telegram.* and
 arcclaw.telegram.* in TelegramAllowlistGuard and TelegramCamelRouteConfig.
@@ -7347,13 +7682,22 @@ flowchart TD
 - [x] C13: ChannelSenderRegistry created
 - [x] C14: AgentResource.run() uses exhaustive sealed interface switch
 
-### Tier 3 — JDK Modernization Sweep
-- [x] C15: Unnamed variable _ applied across all unused catch variables
-- [x] C16: getFirst() / getLast() replaces all get(0) / get(size-1)
-- [x] C17: CliAgentObserver static volatile replaced with ScopedValue
-- [x] C18: ReasoningStepEntity created — stateJson blob normalized
-- [x] C18: StatefulAgentStore.saveAndFinalize() — atomic single transaction
-- [x] C19: Config namespace unified under arcclaw.channel.telegram.*
+### Tier 3 — AgentStateMachineRunner Implementation
+- [x] C15: AgentStateMachineRunner created — 8 injections, verbatim methods
+- [x] C15: AgentLoop.run() delegates to stateMachineRunner
+- [x] C16: AgentLoopTest + AgentStateMachineRunnerTest GREEN
+- [x] C16: AgentResourceTest GREEN (3 callers compile)
+- [x] C16: AgentCronSchedulerTest GREEN
+- [x] C17: Full mvnw clean verify GREEN
+- [x] C17: Live Telegram: basic chat + GitHub approval + scheduling + destructive block
+
+### Tier 4 — JDK Modernization Sweep
+- [x] C18: Unnamed variable _ applied across all unused catch variables
+- [x] C19: getFirst() / getLast() replaces all get(0) / get(size-1)
+- [x] C20: CliAgentObserver static volatile replaced with ScopedValue
+- [x] C21: ReasoningStepEntity created — stateJson blob normalized
+- [x] C21: StatefulAgentStore.saveAndFinalize() — atomic single transaction
+- [x] C22: Config namespace unified under arcclaw.channel.telegram.*
 ```
 
 ---
