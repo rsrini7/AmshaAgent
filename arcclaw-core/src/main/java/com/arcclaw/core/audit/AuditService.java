@@ -74,7 +74,7 @@ public class AuditService {
             SecurityEventType eventType = resolveLoopEventType(outcome);
             String detail = switch(result) {
                 case AgentResult.Failed f -> "reason=" + f.reason();
-                case AgentResult.LoopExceeded l -> "reason=MAX_ITERATIONS";
+                case AgentResult.LoopExceeded _ -> "reason=MAX_ITERATIONS";
                 default -> null;
             };
 
@@ -95,9 +95,9 @@ public class AuditService {
 
     private AuditOutcome resolveOutcome(AgentResult result) {
         return switch(result) {
-            case AgentResult.Finished f -> AuditOutcome.FINISH;
-            case AgentResult.AwaitingApproval a -> AuditOutcome.AWAITING_APPROVAL;
-            case AgentResult.LoopExceeded l -> AuditOutcome.MAX_ITERATIONS;
+            case AgentResult.Finished _ -> AuditOutcome.FINISH;
+            case AgentResult.AwaitingApproval _ -> AuditOutcome.AWAITING_APPROVAL;
+            case AgentResult.LoopExceeded _ -> AuditOutcome.MAX_ITERATIONS;
             case AgentResult.Failed f -> {
                 if (f.category() == AgentResult.FailureCategory.BUDGET_EXCEEDED) yield AuditOutcome.BUDGET_EXCEEDED;
                 yield AuditOutcome.ERROR;

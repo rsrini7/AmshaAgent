@@ -176,7 +176,7 @@ public class AgentResource {
                     AgentResult result = agentLoop.run(sessionId, request.agentRole(),
                             request.goal(), reasoningEngine, maxIterations);
 
-                    if (result instanceof AgentResult.AwaitingApproval a) {
+                    if (result instanceof AgentResult.AwaitingApproval _) {
                         response.resume(Response.accepted()
                                 .entity(Map.of(
                                     "status",  "AWAITING_APPROVAL",
