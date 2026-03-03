@@ -318,16 +318,15 @@ public class AgentLoop {
             checkpoint.setPendingToolParametersJson(null);
             agentStore.save(checkpoint);
 
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+    
             log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
-                    sessionId, pendingTool, e.getMessage());
-
-            // Return the Failed variant with the specific Tier 2A category
+                    sessionId, pendingTool, errMsg);
+                    
             return AgentResult.failed(
-                    "TOOL_EXECUTION_FAILED: " + e.getMessage(),
+                    "TOOL_EXECUTION_FAILED: " + errMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(history));
         }
     }
-
-
 }

@@ -7,128 +7,86 @@ public final class AgentErrorMessageUtil {
 
     private AgentErrorMessageUtil() {}
 
-    public static String extractWaitTime(String errorJson) {
-        if (errorJson == null || errorJson.isBlank()) {
-            return "a few moments";
-        }
-        try {
-            Pattern pattern = Pattern.compile(
-                "Please try again in (\\d+m)?(\\d+(?:\\.\\d+)?s)",
-                Pattern.CASE_INSENSITIVE
-            );
-            Matcher matcher = pattern.matcher(errorJson);
-            if (!matcher.find()) return "a few moments";
-
-            String minutePart = matcher.group(1);
-            String secondPart = matcher.group(2);
-            int minutes = minutePart != null
-                ? Integer.parseInt(minutePart.replace("m", "").trim()) : 0;
-            int seconds = secondPart != null
-                ? (int) Double.parseDouble(secondPart.replace("s", "").trim()) : 0;
-
-            if (minutes > 0 && seconds > 0)
-                return minutes + " minute" + (minutes > 1 ? "s" : "") +
-                       " and " + seconds + " second" + (seconds != 1 ? "s" : "");
-            if (minutes > 0)
-                return minutes + " minute" + (minutes > 1 ? "s" : "");
-            if (seconds > 0)
-                return seconds + " second" + (seconds != 1 ? "s" : "");
-            return "a few moments";
-
-        } catch (Exception e) {
-            return "a few moments";
-        }
-    }
-
     public static String sanitizeErrorMessage(String raw) {
         if (raw == null) return "❌ Task failed. Please try again.";
 
-        // Strip prefix added by processEngineStep before re-checking
-        String stripped = raw.startsWith("ReasoningEngine error: ")
-            ? raw.substring("ReasoningEngine error: ".length())
-            : raw;
+        // Strip prefixes added by the internal engine
+        String stripped = raw.replace("ReasoningEngine error: ", "")
+                             .replace("java.lang.RuntimeException: ", "")
+                             .replace("TOOL_EXECUTION_FAILED: ", "")
+                             .trim();
 
-        // Already-formatted throttle message — pass through unchanged
-        if (stripped.contains("⚠️") &&
-            (stripped.contains("throttled") || stripped.contains("token limit"))) {
-            return stripped;
+        // 1. Rock-Solid JSON Extraction (Ignores Regex escaping issues)
+        int msgStart = stripped.indexOf("\"message\":\"");
+        int typeStart = stripped.indexOf("\",\"type\"");
+        
+        String apiMessage = stripped;
+        boolean isJson = false;
+
+        // If it's a standard OpenAI/Groq JSON error, extract just the message part
+        if (msgStart != -1 && typeStart != -1 && typeStart > msgStart) {
+            apiMessage = stripped.substring(msgStart + 11, typeStart)
+                                 .replace("\\\"", "\"")
+                                 .replace("\\n", "\n");
+            isJson = true;
         }
 
-        // Per-minute rate limit
-        if (stripped.contains("rate_limit_exceeded") && stripped.contains("Please try again in")) {
-            return buildThrottleMessage(stripped);
-        }
-
-        // Per-day token limit (TPD)
-        if (stripped.contains("rate_limit_exceeded") && stripped.contains("tokens per day")) {
-            return buildTpdThrottleMessage(stripped);
-        }
-
-        // Generic Groq error wrapper
-        if (raw.contains("ReasoningEngine error") || raw.contains("\"error\"")) {
-            return "⚠️ The AI service returned an error. Please try again shortly.";
-        }
-
-        if (raw.contains("SCHEMA_ERROR")) {
-            return "❌ tool execution error: The agent generated an invalid request.";
+        // 2. Route the clean message
+        if (apiMessage.contains("tokens per day") || apiMessage.contains("TPD")) {
+            return "⚠️ Daily token limit reached. Please try again in " + extractWaitTime(apiMessage) + ".";
         }
         
-        if (raw.contains("Budget Exceeded")) {
+        if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
+            return "⏳ I'm temporarily throttled. Please try again in " + extractWaitTime(apiMessage) + ".";
+        }
+        
+        if (apiMessage.contains("tool call validation failed") || apiMessage.contains("SCHEMA_ERROR")) {
+            return "❌ Tool execution error: The agent generated an invalid request.";
+        }
+        
+        if (apiMessage.contains("Budget Exceeded")) {
             return "❌ Your session budget limit has been reached.";
         }
 
-        return raw;
+        // 3. Ultimate Fallbacks
+        if (isJson) {
+            // We successfully pulled the string out of JSON, but it didn't match our known errors.
+            // It is safe to show to the user.
+            return "⚠️ API Error: " + apiMessage;
+        }
+
+        // If it IS a JSON string but our extraction failed (e.g., malformed), hide it so we don't dump JSON in chat
+        if (stripped.contains("{") && stripped.contains("\"error\"")) {
+            return "⚠️ The AI service returned an error. Please try again shortly.";
+        }
+
+        // Otherwise, it's just safe, plain text
+        return stripped;
     }
 
-    private static String buildThrottleMessage(String raw) {
-        Matcher m = Pattern
-            .compile("Please try again in (\\d+m\\d+(?:\\.\\d+)?s|\\d+(?:\\.\\d+)?s|\\d+m)")
-            .matcher(raw);
+    private static String extractWaitTime(String text) {
+        // Looks for "Please try again in 26m47.04s", "5m", or "120s"
+        Matcher m = Pattern.compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)", Pattern.CASE_INSENSITIVE).matcher(text);
         if (m.find()) {
-            String wait = humanReadableWait(m.group(1));
-            return "⚠️ I'm temporarily throttled. Please try again in " + wait + ".";
+            return humanReadableWait(m.group(1));
         }
-        return "⚠️ I'm temporarily throttled. Please try again in a few minutes.";
-    }
-
-    // handles TPD limit which includes "Xm Ys" format like "39m48.96s"
-    private static String buildTpdThrottleMessage(String raw) {
-        Matcher m = Pattern
-                .compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)")
-                .matcher(raw);
-        if (m.find()) {
-            String wait = humanReadableWait(m.group(1));
-            return "⚠️ Daily token limit reached. Please try again in " + wait + ".";
-        }
-        return "⚠️ Daily token limit reached. Please try again later today.";
+        return "a few moments";
     }
 
     private static String humanReadableWait(String rawInterval) {
-        // rawInterval examples: "39m48.96s", "120s", "5m"
         int minutes = 0;
         int seconds = 0;
-
         String s = rawInterval.trim();
 
-        // Match "<minutes>m<seconds>s" or "<minutes>m"
-        Matcher m1 = Pattern
-                .compile("(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?")
-                .matcher(s);
+        Matcher m1 = Pattern.compile("(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?").matcher(s);
         if (m1.matches()) {
-            if (m1.group(1) != null) {
-                minutes = Integer.parseInt(m1.group(1));
-            }
-            if (m1.group(2) != null) {
-                double sec = Double.parseDouble(m1.group(2));
-                seconds = (int) Math.round(sec);
-            }
+            if (m1.group(1) != null) minutes = Integer.parseInt(m1.group(1));
+            if (m1.group(2) != null) seconds = (int) Math.round(Double.parseDouble(m1.group(2)));
         } else if (s.endsWith("s")) {
-            // Fallback: "120s"
             String num = s.substring(0, s.length() - 1);
             seconds = (int) Math.round(Double.parseDouble(num));
         }
 
-        // Normalize >60s into minutes
         minutes += seconds / 60;
         seconds = seconds % 60;
 

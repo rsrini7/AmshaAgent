@@ -22,6 +22,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -32,6 +33,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
@@ -72,6 +74,9 @@ public class AgentCronScheduler {
 
     @Inject
     ManagedExecutor vThreads;
+
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
 
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
@@ -165,6 +170,11 @@ public class AgentCronScheduler {
 
             // so it is available when TelegramAgentHandler queries it during HITL
             cronRepository.setDeliveryId(job.id, executionId);
+
+            // Seed development secrets for this isolated background thread
+            if (!devSeeder.isUnsatisfied()) {
+                devSeeder.get().seedDevSecrets();
+            }
 
             AgentResult result = WorkspaceContext.run(cronSessionId, job.userId, job.chatId, AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(), () -> 
                 agentLoop.run(

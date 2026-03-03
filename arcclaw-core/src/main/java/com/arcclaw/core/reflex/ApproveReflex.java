@@ -17,6 +17,7 @@ import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -27,6 +28,7 @@ import com.arcclaw.core.util.CronScheduleUtil;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
@@ -50,6 +52,9 @@ public class ApproveReflex implements AgentReflex {
     @Inject
     Event<AgentJobCompleted> jobCompletedEvent;
 
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
+
     @Override
     public boolean matches(String input) {
         ChannelCommand cmd = ChannelCommand.parse(input);
@@ -63,6 +68,11 @@ public class ApproveReflex implements AgentReflex {
 
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
+                // Seed development secrets for the approval thread
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
+                }
+
                 // 1. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {
                     return handleCronApproval(cronId.get(), userId, chatId);
