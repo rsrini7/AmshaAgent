@@ -26,7 +26,7 @@ public sealed interface ChannelCommand
     // Single compiled Pattern — avoids repeated compilation per message.
     // The inner group (\\S+) matches the first non-whitespace token after the command.
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(approve|deny|status|halt|reset|history|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
+            "^/(approve|deny|status|halt|reset|history|cron|crons|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
             Pattern.CASE_INSENSITIVE
     );
 

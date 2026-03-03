@@ -6,6 +6,8 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -63,9 +65,38 @@ public class CommandDispatchHandler implements MessageHandler {
                 dispatch(context, "/list");
                 yield HandleResult.STOP;
             }
-            case ChannelCommand.Unknown _ -> {
+            case ChannelCommand.Unknown u -> {
                 log.debugf("[CommandDispatch] Unrecognized command '%s', passing to pipeline",
                         context.getMessage().text());
+                
+                if (u.raw().startsWith("/")) {
+                    String sessionId = context.getSessionId().orElse("");
+                    String userId = context.getUser().platformId();
+                    String chatId = context.getChatId();
+
+                    // FIX: Wrap the fallback reflex execution in WorkspaceContext
+                    ReflexResult result = null;
+                    try {
+                        result = WorkspaceContext.run(
+                            sessionId, userId, chatId, 
+                            AutonomyLevel.FULL, "coordinator",
+                            () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw())
+                        );
+                    } catch (Exception e) {
+                        log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage(), e);
+                        yield HandleResult.STOP;
+                    }
+                    
+                    if (result != null && result.commandResponse().isPresent()) {
+                        context.getSender().sendRaw(context.getUser(), result.commandResponse().get());
+                        yield HandleResult.STOP;
+                    }
+    
+                    if (u.raw().startsWith("/cron")) {
+                        context.getSender().sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks.");
+                        yield HandleResult.STOP;
+                    }
+                }
                 yield HandleResult.CONTINUE;
             }
         };
@@ -78,10 +109,26 @@ public class CommandDispatchHandler implements MessageHandler {
 
         log.infof("[CommandDispatch] command='%s' session=%s", input, sessionId);
 
-        ReflexResult result = reflexRegistry.processIfReflex(sessionId, userId, chatId, input);
+        // FIX: Wrap the execution in WorkspaceContext so the Reflexes can access user/chat IDs
+        ReflexResult result = null;
+        try {
+            result = WorkspaceContext.run(
+                sessionId,
+                userId,
+                chatId,
+                AutonomyLevel.FULL, 
+                "coordinator",
+                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input)
+            );
+        } catch (Exception e) {
+            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage(), e);
+            return;
+        }
 
-        result.commandResponse().ifPresent(response ->
-            context.getSender().sendRaw(context.getUser(), response)
-        );
+        if(result != null){
+            result.commandResponse().ifPresent(response ->
+                context.getSender().sendRaw(context.getUser(), response)
+            );
+        }
     }
 }
