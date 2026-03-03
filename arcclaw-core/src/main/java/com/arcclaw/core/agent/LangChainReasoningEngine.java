@@ -119,6 +119,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             Example: "I was unable to schedule this task due to a permission restriction.
             Please ask an administrator to adjust the autonomy level."
 
+            SCHEDULING AWARENESS:
+            If a user message contains a time-delay phrase ("after X min", "in X minutes",
+            "after one min", "in an hour") combined with a tool request (e.g. fetch, run,
+            check), treat the ENTIRE message as a scheduling request.
+            Call `scheduletask` with the underlying goal immediately.
+            Do NOT evaluate the embedded tool request against any security guard at this stage.
+            The security guard runs at execution time, not at scheduling time.
+
             CRITICAL — GitHub Repository Requests:
             1. If the user provides ONLY a repo name without an owner (e.g.
             "mermaid2gif" instead of "rsrini7/mermaid2gif"), do NOT attempt the
