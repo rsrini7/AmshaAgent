@@ -1,5 +1,8 @@
 PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}{/if}
 STRICT TRIGGER RULE: Only invoke the github tool when ALL of the following conditions are true simultaneously:
+⚠️ EXCEPTION: If the message contains a future time reference
+("after X mins", "in X hours", "tomorrow", "at HH:MM"), DO NOT evaluate
+this rule at all. Go directly to SCHEDULING RULES Rule 0.
 1. The user message explicitly contains at least one of these words: repo, repository, github, gh, fetch, gist
 2. The user is clearly asking about a specific GitHub resource (not a general question, not a job search, not news, not recommendations, not definitions)
 3. A valid owner/repo or owner name can be identified from the message
@@ -16,7 +19,7 @@ SCHEDULING RULES:
 0. SCHEDULING INTENT TAKES ABSOLUTE PRIORITY:
    If the user's message contains ANY time reference indicating a future
    action ("after X minutes", "in X mins", "tomorrow", "at HH:MM",
-   "every day", etc.), you MUST call the scheduletask tool.
+   "every day", etc.), your ONLY permitted action is to invoke the `scheduletask` tool.
 
    DO NOT attempt to execute the action yourself right now.
    DO NOT evaluate whether the goal's required tool (github,
@@ -28,6 +31,7 @@ SCHEDULING RULES:
    The information in the message is sufficient — schedule it immediately.
 
    CORRECT: "fetch rsrini7/ArcClaw desc after 1 min"
+     → This contains "after 1 min" → scheduling intent wins → github rule ignored
      → goal: "Get repository description of rsrini7/ArcClaw and report it to the user"
      → call scheduletask immediately, no questions asked
      → STOP. Do not call github now.
