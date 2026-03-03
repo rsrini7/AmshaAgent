@@ -69,24 +69,23 @@ public class ApproveReflex implements AgentReflex {
                 final String finalRole = activeRole;
                 AgentResult result = WorkspaceContext.runWithFullAutonomy(
                         sessionId,
-                        WorkspaceContext.userId(),
-                        WorkspaceContext.chatId(),
+                        userId,
+                        chatId,
                         finalRole,
                         () -> agentLoop.run(sessionId, finalRole, "Resuming task after approval", reasoningEngine, 5)
                 );
 
-                if (result instanceof AgentResult.Finished f) {
-                    return f.answer();
-                } else {
-                    String failReason = switch (result) {
-                        case AgentResult.Failed fail -> fail.reason();
-                        case AgentResult.LoopExceeded loop -> "Loop exceeded " + loop.maxIterations() + " iterations";
-                        case AgentResult.AwaitingApproval a -> "AWAITING_APPROVAL (Unexpected in resume)";
-                        default -> "Unknown error";
-                    };
-                    String sanitizedReason = AgentErrorMessageUtil.sanitizeErrorMessage(failReason);
-                    return "❌ **Task Failed after approval**\n\nReason: " + sanitizedReason;
-                }
+                return switch (result) {
+                    case AgentResult.Finished f ->
+                        f.answer();
+                    case AgentResult.Failed f ->
+                        "❌ **Task Failed after approval**\n\nReason: " +
+                        AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
+                    case AgentResult.LoopExceeded l ->
+                        "❌ Loop exceeded " + l.maxIterations() + " iterations";
+                    case AgentResult.AwaitingApproval a ->
+                        "⏸ Still awaiting approval for: " + a.toolName();
+                };
             });
         } catch (Exception e) {
             log.errorf("Failed to process approval for session %s: %s", sessionId, e.getMessage(), e);
