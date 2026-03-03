@@ -13,6 +13,7 @@ import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class CommandDispatchHandler implements MessageHandler {
+
     private static final Logger log = Logger.getLogger(CommandDispatchHandler.class);
 
     @Inject
@@ -26,24 +27,56 @@ public class CommandDispatchHandler implements MessageHandler {
     @Override
     public HandleResult handle(MessageContext context) {
         ChannelCommand cmd = ChannelCommand.parse(context.getMessage().text());
-        
+
         return switch (cmd) {
-            case ChannelCommand.Approve a -> { handleReflex(a.cronId().map(id -> "/approve " + id).orElse("/approve"), context); yield HandleResult.STOP; }
-            case ChannelCommand.Deny d    -> { handleReflex(d.cronId().map(id -> "/deny " + id).orElse("/deny"), context); yield HandleResult.STOP; }
-            case ChannelCommand.Status s  -> { handleReflex("/status", context); yield HandleResult.STOP; }
-            case ChannelCommand.Halt h    -> { handleReflex("/halt", context); yield HandleResult.STOP; }
-            case ChannelCommand.Reset r   -> { handleReflex("/reset", context); yield HandleResult.STOP; }
-            case ChannelCommand.ListTasks l->{ handleReflex("/list", context); yield HandleResult.STOP; }
-            case ChannelCommand.Unknown u -> HandleResult.CONTINUE;
+            case ChannelCommand.Approve a -> {
+                String input = a.cronId()
+                        .map(id -> "/approve " + id)
+                        .orElse("/approve");
+                dispatch(context, input);
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.Deny d -> {
+                String input = d.cronId()
+                        .map(id -> "/deny " + id)
+                        .orElse("/deny");
+                dispatch(context, input);
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.Status _ -> {
+                dispatch(context, "/status");
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.Halt _ -> {
+                dispatch(context, "/halt");
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.Reset _ -> {
+                dispatch(context, "/reset");
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.ListTasks _ -> {
+                dispatch(context, "/list");
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.Unknown _ -> {
+                log.debugf("[CommandDispatch] Unrecognized command '%s', passing to pipeline",
+                        context.getMessage().text());
+                yield HandleResult.CONTINUE;
+            }
         };
     }
 
-    private void handleReflex(String rawCommand, MessageContext context) {
-        log.infof("Dispatching command %s for chat %s", rawCommand, context.getChatId());
-        ReflexResult result = reflexRegistry.processIfReflex(context.getSessionId().orElse(""), context.getUser().platformId(), rawCommand);
-        
-        if (result.commandResponse().isPresent()) {
-            context.getSender().sendRaw(context.getUser(), result.commandResponse().get());
-        }
+    private void dispatch(MessageContext context, String input) {
+        String sessionId = context.getSessionId().orElse("");
+        String userId    = context.getUser().platformId();
+
+        log.infof("[CommandDispatch] command='%s' session=%s", input, sessionId);
+
+        ReflexResult result = reflexRegistry.processIfReflex(sessionId, userId, input);
+
+        result.commandResponse().ifPresent(response ->
+            context.getSender().sendRaw(context.getUser(), response)
+        );
     }
 }

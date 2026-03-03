@@ -2,9 +2,12 @@ package com.arcclaw.app.security;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
@@ -19,7 +22,10 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "arcclaw.api.rate-limit.requests-per-minute", defaultValue = "20")
     int requestsPerMinute;
 
-    private final ConcurrentHashMap<String, Bucket> rateLimiter = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> rateLimiter = Caffeine.newBuilder()
+                                                        .maximumSize(10_000)
+                                                        .expireAfterAccess(1, TimeUnit.HOURS)
+                                                        .build();
 
     public boolean isValidKey(String key) {
         if (key == null) return false;
@@ -38,7 +44,7 @@ public class ApiKeyRegistry {
 
     public boolean isAllowed(String key) {
         if (key == null) return false;
-        Bucket bucket = rateLimiter.computeIfAbsent(key, k -> Bucket.builder()
+        Bucket bucket = rateLimiter.get(key, k -> Bucket.builder()
                 .addLimit(Bandwidth.builder()
                         .capacity(requestsPerMinute)
                         .refillGreedy(requestsPerMinute, Duration.ofMinutes(1))

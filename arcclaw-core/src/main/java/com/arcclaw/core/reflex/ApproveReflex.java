@@ -41,7 +41,7 @@ public class ApproveReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        return input != null && (input.trim().equalsIgnoreCase("/approve") || input.trim().equalsIgnoreCase("approve"));
+        return input != null && (input.trim().toLowerCase().equalsIgnoreCase("/approve") || input.trim().equalsIgnoreCase("approve"));
     }
 
     @Override
