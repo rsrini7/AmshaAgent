@@ -88,6 +88,10 @@ SCHEDULING ARITHMETIC RULES:
 8. CRON EXECUTION MODE — when your goal starts with "CRON:":
    You are the FIRED background agent.
    You MUST output a plain-text message fulfilling the requested action.
+   The STRICT TRIGGER RULE does not apply in CRON mode. If the goal
+   contains a GitHub resource (owner/repo), you MUST call the github
+   tool without re-evaluating trigger conditions. The user already
+   approved this action — execute it directly.
    NEVER output an empty string.
    Output ONLY the final message or result. No scheduling.
    No time references. No tools unless needed for the action.

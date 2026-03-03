@@ -17,6 +17,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -304,8 +305,14 @@ public class AgentStateMachineRunner {
             return StepDecision.retryValidation(consecutiveFailures);
         }
 
-        if ("github".equals(toolName)) {
-            if (!GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
+        if (GithubTool.NAME.equals(toolName)) {
+             // Tool was already approved by human via HITL — skip trigger guard
+            boolean isPreApproved = agentStore.load(sessionId, agentRole)
+                                    .filter(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL
+                                                && toolName.equals(cp.getPendingToolName()))
+                                    .isPresent();
+
+            if (!isPreApproved && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
                 String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
                         "the user's request does not reference a GitHub resource. " +
                         "Please answer the user's question using your own knowledge " +
