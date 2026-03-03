@@ -1,8 +1,6 @@
 PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}{/if}
 STRICT TRIGGER RULE: Only invoke the github tool when ALL of the following conditions are true simultaneously:
-⚠️ EXCEPTION: If the message contains a future time reference
-("after X mins", "in X hours", "tomorrow", "at HH:MM"), DO NOT evaluate
-this rule at all. Go directly to SCHEDULING RULES Rule 0.
+0. The user message contains NO time reference ("after X", "in X mins", "tomorrow", "at HH:MM"). If a time reference is present, skip this entire rule and go to SCHEDULING RULES Rule 0 instead.
 1. The user message explicitly contains at least one of these words: repo, repository, github, gh, fetch, gist
 2. The user is clearly asking about a specific GitHub resource (not a general question, not a job search, not news, not recommendations, not definitions)
 3. A valid owner/repo or owner name can be identified from the message

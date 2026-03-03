@@ -43,14 +43,25 @@ public final class AgentErrorMessageUtil {
     public static String sanitizeErrorMessage(String raw) {
         if (raw == null) return "❌ Task failed. Please try again.";
 
-        // Per-minute / per-request rate limit (existing)
-        if (raw.contains("rate_limit_exceeded") && raw.contains("Please try again in")) {
-            return buildThrottleMessage(raw);
+        // Strip prefix added by processEngineStep before re-checking
+        String stripped = raw.startsWith("ReasoningEngine error: ")
+            ? raw.substring("ReasoningEngine error: ".length())
+            : raw;
+
+        // Already-formatted throttle message — pass through unchanged
+        if (stripped.contains("⚠️") &&
+            (stripped.contains("throttled") || stripped.contains("token limit"))) {
+            return stripped;
         }
 
-        // Per-day token limit (TPD) — different wording: "tokens per day"
-        if (raw.contains("rate_limit_exceeded") && raw.contains("tokens per day")) {
-            return buildTpdThrottleMessage(raw);
+        // Per-minute rate limit
+        if (stripped.contains("rate_limit_exceeded") && stripped.contains("Please try again in")) {
+            return buildThrottleMessage(stripped);
+        }
+
+        // Per-day token limit (TPD)
+        if (stripped.contains("rate_limit_exceeded") && stripped.contains("tokens per day")) {
+            return buildTpdThrottleMessage(stripped);
         }
 
         // Generic Groq error wrapper

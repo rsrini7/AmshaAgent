@@ -225,7 +225,8 @@ public class AgentStateMachineRunner {
                     step = step.withObservation(observationMessage);
                     synchronized (history) {
                         history.add(step);
-                        return StepDecision.terminal(AgentResult.failed("Budget Exceeded: " + be.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
+                        String failReason = AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage());
+                        return StepDecision.terminal(AgentResult.failed(failReason, AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
                     }
                 }
             }
