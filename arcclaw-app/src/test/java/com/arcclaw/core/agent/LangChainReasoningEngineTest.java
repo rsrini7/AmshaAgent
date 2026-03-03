@@ -141,13 +141,13 @@ class LangChainReasoningEngineTest {
             // Let's verify specifically that "Ignore me", "Human Approved", and "Resuming" were skipped
             boolean foundSystemStore = filtered.stream().anyMatch(m -> m instanceof SystemMessage && ((SystemMessage)m).text().equals("Ignore me"));
             boolean foundApproved = filtered.stream().anyMatch(m -> m.toString().contains("Human Approved"));
-            boolean foundResuming = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().contains("Resuming"));
+            boolean foundResuming = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).singleText().contains("Resuming"));
 
             assertFalse(foundSystemStore, "System message from store should be filtered out");
             assertFalse(foundApproved, "Approval marker should be filtered out");
             assertFalse(foundResuming, "Resuming marker should be filtered out");
             
-            boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).text().equals("Actual Goal"));
+            boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).singleText().equals("Actual Goal"));
             assertTrue(foundGoal, "Real goal should be preserved");
         });
     }

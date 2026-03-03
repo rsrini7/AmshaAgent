@@ -257,7 +257,7 @@ public class AgentLoop {
 
         saveGoalToChatMemory(sessionId, goal);
 
-        AgentResult resumeResult = handleResumeHook(sessionId, agentRole, history);
+        AgentResult resumeResult = handleResumeHook(sessionId, agentRole, goal, history);
         if (resumeResult != null) {
             return resumeResult;
         }
@@ -331,7 +331,11 @@ public class AgentLoop {
         }
     }
 
-    private AgentResult handleResumeHook(String sessionId, String agentRole, List<ReasoningStep> history) {
+    private AgentResult handleResumeHook(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
+        if (goal == null || !goal.toLowerCase().startsWith("resuming task")) {
+            return null;
+        }
+        
         var resumeOpt = agentStore.load(sessionId, agentRole);
         if (resumeOpt.isPresent()) {
             var checkpoint = resumeOpt.get();
@@ -345,8 +349,8 @@ public class AgentLoop {
                 List<ChatMessage> mem = chatMemoryStore.getMessages(sessionId);
                 boolean isDenial = !mem.isEmpty()
                         && mem.get(mem.size() - 1) instanceof UserMessage lastMsg
-                        && lastMsg.text() != null
-                        && lastMsg.text().toLowerCase().contains("denial");
+                        && lastMsg.singleText() != null
+                        && lastMsg.singleText().toLowerCase().contains("denial");
 
                 if (isDenial) {
                     log.infof("[AgentLoop] User denied tool execution for session %s, tool %s",
