@@ -7077,10 +7077,10 @@ StatefulAgentStore, RoleRegistry, ObjectMapper, Instance<AgentObserver>.
 
 ```markdown
 You have previously acknowledged the ArcClaw Phase 47 architecture context.
-Tiers 1, 2A, and 2B are complete and all tests are green.
+Tiers 1, 2A, 2B, and 3 are complete and all tests are green.
 
-Execute TIER 3 ONLY — Components 15 through 19.
-After Tier 3, update the documentation files listed at the end.
+Execute TIER 4 ONLY — Components 18 through 22.
+After Tier 4, update the documentation files listed at the end.
 
 ---
 
@@ -7474,7 +7474,7 @@ Action: UPDATE
 
 ---
 
-### Tier 3 Test Execution
+### Tier 4 Test Execution
 
 .\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=CliAgentObserverTest" "-Dsurefire.failIfNoSpecifiedTests=false"
 .\mvnw.cmd clean test -pl arcclaw-core -am "-Dtest=StatefulAgentStoreTest" "-Dsurefire.failIfNoSpecifiedTests=false"
