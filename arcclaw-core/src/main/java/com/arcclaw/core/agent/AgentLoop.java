@@ -156,9 +156,19 @@ public class AgentLoop {
             List<ReasoningStep> resumedHistory = List.of();
             var existingCheckpoint = agentStore.load(sessionId, canonicalRole);
             if (existingCheckpoint.isPresent()) {
-                resumedHistory = agentStore.deserializeSteps(existingCheckpoint.get());
-                log.infof("Resumed %d steps from checkpoint (session=%s, role=%s)",
-                        resumedHistory.size(), sessionId, canonicalRole);
+                var checkpoint = existingCheckpoint.get();
+                CheckpointStatus status = checkpoint.getStatus();
+
+                // Only resume history if the turn is actively pending or interrupted.
+                // If status is COMPLETED or FAILED (which happens after a /reset), 
+                // we MUST ignore old ReAct steps and start a fresh turn.
+                if (status == CheckpointStatus.IN_PROGRESS || status == CheckpointStatus.AWAITING_APPROVAL) {
+                    resumedHistory = agentStore.deserializeSteps(checkpoint);
+                    log.infof("Resumed %d steps from active checkpoint (status=%s)", resumedHistory.size(), status);
+                } else {
+                    // This log line will now appear after you /reset and then say "hi"
+                    log.debugf("Ignoring terminal checkpoint (status=%s). Starting fresh turn.", status);
+                }
             }
 
             result = runLoop(sessionId, goal, engine, maxIterations, resumedHistory, canonicalRole);
@@ -332,76 +342,95 @@ public class AgentLoop {
     }
 
     private AgentResult handleResumeHook(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
+        // 1. Only proceed if the goal explicitly signals a resumption attempt
         if (goal == null || !goal.toLowerCase().startsWith("resuming task")) {
             return null;
         }
         
         var resumeOpt = agentStore.load(sessionId, agentRole);
-        if (resumeOpt.isPresent()) {
-            var checkpoint = resumeOpt.get();
-            if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                String pendingTool = checkpoint.getPendingToolName();
-                String pendingParams = checkpoint.getPendingToolParametersJson();
-
-                // The goal passed in is the safeInput from TelegramAgentHandler:
-                // "Resuming task after denial" signals user sent /deny <cronId>
-                // We check the current goal via the session's latest UserMessage in ChatMemory
-                List<ChatMessage> mem = chatMemoryStore.getMessages(sessionId);
-                boolean isDenial = !mem.isEmpty()
-                        && mem.get(mem.size() - 1) instanceof UserMessage lastMsg
-                        && lastMsg.singleText() != null
-                        && lastMsg.singleText().toLowerCase().contains("denial");
-
-                if (isDenial) {
-                    log.infof("[AgentLoop] User denied tool execution for session %s, tool %s",
-                            sessionId, pendingTool);
-                    checkpoint.setStatus(CheckpointStatus.FAILED);
-                    checkpoint.setFailReason("User denied tool execution.");
-                    checkpoint.setPendingToolName(null);
-                    checkpoint.setPendingToolParametersJson(null);
-                    agentStore.save(checkpoint);
-                    synchronized (history) {
-                        return AgentResult.finished(
-                                "❌ Tool execution was denied and the scheduled task has been cancelled.",
-                                List.copyOf(history));
-                    }
-                }
-
-                // --- Normal approval path ---
-                log.infof("[AgentLoop] Resuming session %s executing pending tool %s",
-                        sessionId, pendingTool);
-
-                try {
-                    ToolResponse resumeResponse = WorkspaceContext.runWithFullAutonomy(
-                            sessionId, WorkspaceContext.userId(), WorkspaceContext.chatId(), agentRole,
-                            () -> toolRegistry.invokeTool(pendingTool, pendingParams, sessionId));
-                    synchronized (history) {
-                        history.add(new ReasoningStep(
-                                "Human Approved", pendingTool,
-                                Map.of("parameters", pendingParams),
-                                resumeResponse.output(), 0, 0));
-                    }
-                    checkpoint.setPendingToolName(null);
-                    checkpoint.setPendingToolParametersJson(null);
-                    checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-                    agentStore.save(checkpoint);
-                } catch (Exception e) {
-                    checkpoint.setStatus(CheckpointStatus.FAILED);
-                    checkpoint.setPendingToolName(null);
-                    checkpoint.setPendingToolParametersJson(null);
-                    agentStore.save(checkpoint);
-                    log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
-                            sessionId, pendingTool, e.getMessage());
-                    synchronized (history) {
-                        return AgentResult.failed(
-                                "TOOL_EXECUTION_FAILED: " + e.getMessage(),
-                                AgentResult.FailureCategory.SYSTEM_ERROR,
-                                List.copyOf(history));
-                    }
-                }
-            }
+        if (resumeOpt.isEmpty()) {
+            return null;
         }
-        return null;
+
+        var checkpoint = resumeOpt.get();
+        
+        // 2. State Guard: Only handle resumptions for checkpoints waiting for a human.
+        // This prevents the "Resuming task..." system goal from accidentally 
+        // re-triggering completed work.
+        if (checkpoint.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+            log.warnf("[AgentLoop] Attempted to resume session %s but status is %s. Aborting resume.", 
+                sessionId, checkpoint.getStatus());
+            return null; 
+        }
+
+        String pendingTool = checkpoint.getPendingToolName();
+        String pendingParams = checkpoint.getPendingToolParametersJson();
+
+        // 3. Logic-Based Denial Check
+        // We no longer scan chat history. We check if the "goal" passed from 
+        // CommandDispatchHandler contains the explicit signal "denial".
+        boolean isDenial = goal.toLowerCase().contains("denial");
+
+        if (isDenial) {
+            log.infof("[AgentLoop] User denied tool execution for session %s, tool %s", sessionId, pendingTool);
+            
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            checkpoint.setFailReason("User denied tool execution.");
+            checkpoint.setPendingToolName(null);
+            checkpoint.setPendingToolParametersJson(null);
+            agentStore.save(checkpoint);
+
+            // Return the Tier 2A Sealed Variant
+            return AgentResult.finished(
+                    "❌ Tool execution was denied and the task has been cancelled.",
+                    List.copyOf(history));
+        }
+
+        // 4. Normal Approval Path
+        log.infof("[AgentLoop] Resuming session %s executing pending tool %s", sessionId, pendingTool);
+
+        try {
+            // Use ScopedValue context to execute the tool with FULL autonomy
+            ToolResponse resumeResponse = WorkspaceContext.runWithFullAutonomy(
+                    sessionId, 
+                    WorkspaceContext.userId(), 
+                    WorkspaceContext.chatId(), 
+                    agentRole,
+                    () -> toolRegistry.invokeTool(pendingTool, pendingParams, sessionId));
+
+            synchronized (history) {
+                history.add(new ReasoningStep(
+                        "Human Approved", 
+                        pendingTool,
+                        Map.of("parameters", pendingParams != null ? pendingParams : "{}"),
+                        resumeResponse.output(), 
+                        0, 0));
+            }
+
+            // Transition back to IN_PROGRESS so the main loop iteration can proceed
+            checkpoint.setPendingToolName(null);
+            checkpoint.setPendingToolParametersJson(null);
+            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+            agentStore.save(checkpoint);
+            
+            // Return null to signal the main run() loop to continue to the next LLM call
+            return null;
+
+        } catch (Exception e) {
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            checkpoint.setPendingToolName(null);
+            checkpoint.setPendingToolParametersJson(null);
+            agentStore.save(checkpoint);
+
+            log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
+                    sessionId, pendingTool, e.getMessage());
+
+            // Return the Failed variant with the specific Tier 2A category
+            return AgentResult.failed(
+                    "TOOL_EXECUTION_FAILED: " + e.getMessage(),
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(history));
+        }
     }
 
 
