@@ -124,7 +124,10 @@ public class AgentLoop {
                 // If status is COMPLETED or FAILED (which happens after a /reset), 
                 // we MUST ignore old ReAct steps and start a fresh turn.
                 if (status == CheckpointStatus.IN_PROGRESS || status == CheckpointStatus.AWAITING_APPROVAL) {
-                    resumedHistory = agentStore.deserializeSteps(checkpoint);
+                    List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+                    if (loadedSteps != null) {
+                        resumedHistory.addAll(loadedSteps);
+                    }
                     log.infof("Resumed %d steps from active checkpoint (status=%s)", resumedHistory.size(), status);
                 } else {
                     // This log line will now appear after you /reset and then say "hi"

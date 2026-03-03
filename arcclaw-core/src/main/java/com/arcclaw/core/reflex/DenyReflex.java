@@ -10,6 +10,7 @@ import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -19,6 +20,7 @@ import com.arcclaw.core.util.CronResultFormatter;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
@@ -47,6 +49,9 @@ public class DenyReflex implements AgentReflex {
     @Inject
     Event<AgentJobCompleted> jobCompletedEvent;
 
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
+
     @Override
     public boolean matches(String input) {
         ChannelCommand cmd = ChannelCommand.parse(input);
@@ -60,6 +65,11 @@ public class DenyReflex implements AgentReflex {
 
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
+                // Seed secrets strictly INSIDE the isolated cron session
+                if (!devSeeder.isUnsatisfied()) {
+                    devSeeder.get().seedDevSecrets();
+                }
+
                 // 1. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {
                     return handleCronDenial(cronId.get(), userId, chatId);

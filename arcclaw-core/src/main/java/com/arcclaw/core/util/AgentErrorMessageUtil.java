@@ -16,14 +16,13 @@ public final class AgentErrorMessageUtil {
                              .replace("TOOL_EXECUTION_FAILED: ", "")
                              .trim();
 
-        // 1. Rock-Solid JSON Extraction (Ignores Regex escaping issues)
+        // 1. Rock-Solid JSON Extraction
         int msgStart = stripped.indexOf("\"message\":\"");
         int typeStart = stripped.indexOf("\",\"type\"");
         
         String apiMessage = stripped;
         boolean isJson = false;
 
-        // If it's a standard OpenAI/Groq JSON error, extract just the message part
         if (msgStart != -1 && typeStart != -1 && typeStart > msgStart) {
             apiMessage = stripped.substring(msgStart + 11, typeStart)
                                  .replace("\\\"", "\"")
@@ -33,7 +32,7 @@ public final class AgentErrorMessageUtil {
 
         // 2. Route the clean message
         if (apiMessage.contains("tokens per day") || apiMessage.contains("TPD")) {
-            return "⚠️ Daily token limit reached. Please try again in " + extractWaitTime(apiMessage) + ".";
+            return formatTpdMessage(apiMessage);
         }
         
         if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
@@ -50,54 +49,90 @@ public final class AgentErrorMessageUtil {
 
         // 3. Ultimate Fallbacks
         if (isJson) {
-            // We successfully pulled the string out of JSON, but it didn't match our known errors.
-            // It is safe to show to the user.
             return "⚠️ API Error: " + apiMessage;
         }
 
-        // If it IS a JSON string but our extraction failed (e.g., malformed), hide it so we don't dump JSON in chat
         if (stripped.contains("{") && stripped.contains("\"error\"")) {
             return "⚠️ The AI service returned an error. Please try again shortly.";
         }
 
-        // Otherwise, it's just safe, plain text
         return stripped;
     }
 
+    private static String formatTpdMessage(String apiMessage) {
+        String waitTime = extractWaitTime(apiMessage);
+        
+        // Extract Limits from Groq's payload: "Limit 100000, Used 99854, Requested 5526"
+        Matcher tokenMatcher = Pattern.compile("Limit (\\d+), Used (\\d+), Requested (\\d+)").matcher(apiMessage);
+        
+        if (tokenMatcher.find()) {
+            String limit = tokenMatcher.group(1);
+            String used = tokenMatcher.group(2);
+            String req = tokenMatcher.group(3);
+            
+            return String.format("⚠️ **Daily Token Limit Reached**\n" +
+                                 "• Limit: %s\n" +
+                                 "• Used: %s\n" +
+                                 "• Requested: %s\n\n" +
+                                 "⏳ Please try again in %s.", 
+                                 limit, used, req, waitTime);
+        }
+        
+        return "⚠️ Daily token limit reached. Please try again in " + waitTime + ".";
+    }
+
     private static String extractWaitTime(String text) {
-        // Looks for "Please try again in 26m47.04s", "5m", or "120s"
-        Matcher m = Pattern.compile("Please try again in ([\\d]+m[\\d.]+s|[\\d.]+s|[\\d]+m)", Pattern.CASE_INSENSITIVE).matcher(text);
+        // Matches "1h17m28.32s.", "26m47s", "120s" (sometimes includes the trailing period)
+        Matcher m = Pattern.compile("Please try again in ([\\dhms.]+)").matcher(text);
         if (m.find()) {
-            return humanReadableWait(m.group(1));
+            String timeStr = m.group(1);
+            // Strip the trailing period if the regex greedily grabbed the end of the sentence
+            if (timeStr.endsWith(".")) {
+                timeStr = timeStr.substring(0, timeStr.length() - 1);
+            }
+            return humanReadableWait(timeStr);
         }
         return "a few moments";
     }
 
     private static String humanReadableWait(String rawInterval) {
+        int hours = 0;
         int minutes = 0;
         int seconds = 0;
-        String s = rawInterval.trim();
+        String s = rawInterval.trim().toLowerCase();
 
-        Matcher m1 = Pattern.compile("(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?").matcher(s);
+        // Match "(Xh)?(Ym)?(Zs)?"
+        Matcher m1 = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?").matcher(s);
+        
         if (m1.matches()) {
-            if (m1.group(1) != null) minutes = Integer.parseInt(m1.group(1));
-            if (m1.group(2) != null) seconds = (int) Math.round(Double.parseDouble(m1.group(2)));
+            if (m1.group(1) != null) hours = Integer.parseInt(m1.group(1));
+            if (m1.group(2) != null) minutes = Integer.parseInt(m1.group(2));
+            if (m1.group(3) != null) seconds = (int) Math.round(Double.parseDouble(m1.group(3)));
         } else if (s.endsWith("s")) {
             String num = s.substring(0, s.length() - 1);
             seconds = (int) Math.round(Double.parseDouble(num));
         }
 
+        // Normalize (just in case API sends "90m" instead of "1h30m")
         minutes += seconds / 60;
         seconds = seconds % 60;
+        hours += minutes / 60;
+        minutes = minutes % 60;
 
-        if (minutes > 0 && seconds > 0) {
-            return minutes + " minutes and " + seconds + " seconds";
-        } else if (minutes > 0) {
-            return minutes + " minutes";
-        } else if (seconds > 0) {
-            return seconds + " seconds";
-        } else {
-            return "a few moments";
+        StringBuilder sb = new StringBuilder();
+        if (hours > 0) {
+            sb.append(hours).append(hours == 1 ? " hour" : " hours");
         }
+        if (minutes > 0) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(minutes).append(minutes == 1 ? " minute" : " minutes");
+        }
+        if (seconds > 0) {
+            if (sb.length() > 0) sb.append(" and ");
+            sb.append(seconds).append(seconds == 1 ? " second" : " seconds");
+        }
+
+        String result = sb.toString();
+        return result.isEmpty() ? "a few moments" : result;
     }
 }
