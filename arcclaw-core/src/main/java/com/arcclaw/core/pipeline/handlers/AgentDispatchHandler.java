@@ -75,8 +75,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 )
             );
         } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage(), e);
             throw new RuntimeException(e.getMessage(), e);
         }
 
