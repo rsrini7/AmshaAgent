@@ -70,10 +70,11 @@ public class CommandDispatchHandler implements MessageHandler {
     private void dispatch(MessageContext context, String input) {
         String sessionId = context.getSessionId().orElse("");
         String userId    = context.getUser().platformId();
+        String chatId    = context.getChatId();
 
         log.infof("[CommandDispatch] command='%s' session=%s", input, sessionId);
 
-        ReflexResult result = reflexRegistry.processIfReflex(sessionId, userId, input);
+        ReflexResult result = reflexRegistry.processIfReflex(sessionId, userId, chatId, input);
 
         result.commandResponse().ifPresent(response ->
             context.getSender().sendRaw(context.getUser(), response)

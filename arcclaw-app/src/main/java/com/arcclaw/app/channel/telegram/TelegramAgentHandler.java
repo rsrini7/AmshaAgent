@@ -59,6 +59,11 @@ public class TelegramAgentHandler {
             pipeline.process(context);
         } catch (Exception e) {
             log.errorf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId());
+            try {
+                context.getSender().sendRaw(context.getUser(), "⚠️ Sorry, an internal error occurred while processing your message.");
+            } catch (Exception sendEx) {
+                log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class TelegramAgentHandlerTest {
@@ -87,6 +87,9 @@ class TelegramAgentHandlerTest {
         doThrow(new RuntimeException("Pipeline crash")).when(pipeline).process(any());
 
         assertDoesNotThrow(() -> handler.receiveMessage(exchange));
+        
+        // Verify notification was sent
+        verify(sender).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
     }
 
     private Exchange createExchange(String chatId, String userId, String username, String text) {

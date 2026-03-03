@@ -37,7 +37,7 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", java.time.Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
-        when(reflexRegistry.processIfReflex(anyString(), eq("1"), eq("/approve cron123")))
+        when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve cron123")))
                 .thenReturn(new ReflexResult(Optional.of("Approving cron task..."), "/approve cron123"));
 
         assertEquals(HandleResult.STOP, handler.handle(ctx));
@@ -50,7 +50,7 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", java.time.Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
-        when(reflexRegistry.processIfReflex(anyString(), eq("1"), eq("/approve")))
+        when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve")))
                 .thenReturn(new ReflexResult(Optional.of("Approving session..."), "/approve"));
 
         assertEquals(HandleResult.STOP, handler.handle(ctx));
@@ -73,7 +73,7 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "sid", java.time.Instant.now());
         MessageContext ctx = createCtx(user, msg);
 
-        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString()))
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new ReflexResult(Optional.empty(), "/deny"));
 
         assertEquals(HandleResult.STOP, handler.handle(ctx));

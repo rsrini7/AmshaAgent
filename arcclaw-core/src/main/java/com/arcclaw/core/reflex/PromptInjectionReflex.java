@@ -82,7 +82,7 @@ public class PromptInjectionReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String input) {
+    public String execute(String sessionId, String userId, String chatId, String input) {
         String matchedCategory = "UNKNOWN";
         if (input != null && !input.isBlank()) {
             matchedCategory = RULES.stream()

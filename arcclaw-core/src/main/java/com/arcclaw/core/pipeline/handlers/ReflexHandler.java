@@ -31,7 +31,7 @@ public class ReflexHandler implements MessageHandler {
         if (cmd instanceof ChannelCommand.Deny deny) {
             log.infof("Handling /deny reflex for chat %s", context.getChatId());
             String input = deny.cronId().map(id -> "/deny " + id).orElse("/deny");
-            String response = denyReflex.execute(context.getChatId(), context.getUser().platformId(), input);
+            String response = denyReflex.execute(context.getSessionId().orElse(""), context.getUser().platformId(), context.getChatId(), input);
             context.getSender().sendRaw(context.getUser(), response);
             return HandleResult.STOP;
         }

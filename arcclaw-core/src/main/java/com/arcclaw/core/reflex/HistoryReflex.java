@@ -30,7 +30,7 @@ public class HistoryReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String input) {
+    public String execute(String sessionId, String userId, String chatId, String input) {
         StringBuilder sb = new StringBuilder();
 
         // Use findLatestBySessionId for consistency

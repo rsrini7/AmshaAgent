@@ -54,7 +54,7 @@ public class HistoryReflexTest {
         );
         when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
         
-        String result = historyReflex.execute(sessionId, "user1", "/history");
+        String result = historyReflex.execute(sessionId, "user1", "", "/history");
         
         Assertions.assertTrue(result.contains("Prior history summarized."));
         Assertions.assertTrue(result.contains("User prompt"));
@@ -68,7 +68,7 @@ public class HistoryReflexTest {
             .thenReturn(Optional.empty());
         when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
         
-        String result = historyReflex.execute("s1", "u1", "/history");
+        String result = historyReflex.execute("s1", "u1","", "/history");
         Assertions.assertEquals("📭 No conversation history found for this session.", result);
     }
 }
