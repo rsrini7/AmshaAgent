@@ -6162,30 +6162,12 @@ All must be GREEN before proceeding to Tier 2B.
 ## PROMPT 3 — Tier 2B: Decoupling + Rendering + REST (C10–C14)
 
 ```markdown
-You have previously acknowledged the ArcClaw Phase 47 architecture context.
-Tiers 1 and 2A are complete and all tests are green.
+Tire 2A are complete and GREEN. This plan covers Components 10–14.
 
-Execute TIER 2B ONLY — Components 10 through 14.
-Stop when Tier 2B is complete. Do not begin Tier 3.
-
----
-
-Pre-Flight: Fix All Debt Before Writing Any C10 Code
-[!CAUTION]
-All items below MUST be resolved and the build must be GREEN before beginning C10 (Component 10).
-
-**Confirm module boundaries**
-
-- `IntentClassifierService` is already in `com.arcclaw.app.routing` — no move needed.
-- `ModelProducer` is already in `com.arcclaw.app.routing` — no move needed.
-- `TelegramAllowlistGuard` stays in `com.arcclaw.app.security` — its config keys are Telegram-specific (`arcclaw.channel.telegram.allowed-user-ids`, `arcclaw.telegram.*`). Do NOT rename or move.
-- Verify `beans.xml` (`bean-discovery-mode=all`) is present at `arcclaw-app/src/main/resources/META-INF/beans.xml`.
-
-> [!IMPORTANT]
-> Do NOT move IntentClassifierService, ModelProducer, or TelegramAllowlistGuard to arcclaw-core.
-> These are adapter-layer beans with infrastructure dependencies (Groq, Telegram config).
-
-***
+### Pre-Flight (complete before ANY C10 code)
+- [ ] `IntentClassifierService` confirmed in `com.arcclaw.app.routing` — no move needed
+- [ ] `TelegramAllowlistGuard` confirmed in `com.arcclaw.app.security` — no move, no rename
+- [ ] `beans.xml` (`bean-discovery-mode=all`) present at `arcclaw-app/src/main/resources/META-INF/beans.xml`
 
 ## Component 10 — Decouple AgentCronScheduler via CDI Events
 
@@ -6282,7 +6264,7 @@ public class TelegramCronNotificationObserver {
             case AgentResult.AwaitingApproval a ->
                 "⏸ Approval Required for scheduled task.\n\n" +
                 "Cron ID: " + event.cronId() + "\n" +
-                "Tool: " + a.pendingTool() + "\n\n" +
+                "Tool: " + a.toolName() + "\n\n" +
                 "Reply `/approve " + event.cronId() + "` to run, or `/deny " + event.cronId() + "` to cancel.";
         };
 
@@ -6469,13 +6451,14 @@ public class DestructiveVocabularyFilter {
     public String applyOverride(String role, String userMessage) {
         try {
             AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(role);
+			// If the role has ANY tools, it is dangerous. Protect it.
             if (!resolvedRole.definition().capabilities().isEmpty() &&
                     DESTRUCTIVE_PATTERN.matcher(userMessage).find()) {
                 Log.warnf("Destructive vocabulary detected for role '%s' — overriding to coordinator", role);
                 return AgentRoleEnum.COORDINATOR.toScopedName();
             }
         } catch (IllegalArgumentException e) {
-            // Unrecognized role — let downstream pipeline handle it
+            // Unrecognized role, let the downstream pipeline handle it
         }
         return role;
     }
@@ -6750,7 +6733,7 @@ return switch (result) {
 .\mvnw.cmd clean verify -pl arcclaw-app -am
 ```
 
-Provide impl plan first. All must be **GREEN** before proceeding to Tier 3.
+Provide impl plan first. All must be **GREEN** before proceeding to Tier 2B.
 ```
 
 ***
