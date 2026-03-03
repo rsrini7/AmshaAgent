@@ -46,9 +46,11 @@ class AgentStateMachineRunnerTest {
     private StatefulAgentStore agentStore;
     private GovernanceLayer governanceLayer;
     private ChatMemoryStore chatMemoryStore;
-    private Instance<AgentObserver> observers;
     private RoleRegistry roleRegistry;
     private ObjectMapper objectMapper;
+
+    @SuppressWarnings("unchecked")
+    Instance<AgentObserver> observers = mock(Instance.class);
 
     @BeforeEach
     void setUp() {
@@ -58,7 +60,6 @@ class AgentStateMachineRunnerTest {
         agentStore = mock(StatefulAgentStore.class);
         governanceLayer = mock(GovernanceLayer.class);
         chatMemoryStore = mock(ChatMemoryStore.class);
-        observers = mock(Instance.class);
         roleRegistry = mock(RoleRegistry.class);
         objectMapper = new ObjectMapper();
 

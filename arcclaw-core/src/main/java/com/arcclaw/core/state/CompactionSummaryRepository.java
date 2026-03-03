@@ -80,7 +80,8 @@ public class CompactionSummaryRepository {
         
         // Use native query to leverage FTS5 MATCH operator on the isolated 'fts' schema
         // Join on sessionId since standalone table handles it
-        return em.createNativeQuery("""
+        @SuppressWarnings("unchecked")
+        List<CompactionSummaryEntity> results =  em.createNativeQuery("""
                 SELECT cs.* FROM compaction_summary cs
                 JOIN fts.compaction_summary_fts fts_v ON cs.sessionId = fts_v.sessionId
                 WHERE fts_v.summary MATCH ?1
@@ -92,5 +93,7 @@ public class CompactionSummaryRepository {
                 .setParameter(2, userId)
                 .setParameter(3, limit)
                 .getResultList();
+
+        return results;
     }
 }

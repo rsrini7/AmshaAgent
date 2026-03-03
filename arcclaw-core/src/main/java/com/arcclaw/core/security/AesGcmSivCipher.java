@@ -50,7 +50,7 @@ public class AesGcmSivCipher {
         secureRandom.nextBytes(nonce);
 
         // 2. Prepare Engine
-        GCMSIVBlockCipher cipher = new GCMSIVBlockCipher(new AESEngine());
+        GCMSIVBlockCipher cipher = new GCMSIVBlockCipher(AESEngine.newInstance());
         byte[] aadBytes = aad.getBytes(StandardCharsets.UTF_8);
 
         AEADParameters params = new AEADParameters(
@@ -87,7 +87,7 @@ public class AesGcmSivCipher {
      */
     public byte[] decrypt(byte[] ciphertext, byte[] nonce, VaultKey key, String aad) {
         // 1. Prepare Engine
-        GCMSIVBlockCipher cipher = new GCMSIVBlockCipher(new AESEngine());
+        GCMSIVBlockCipher cipher = new GCMSIVBlockCipher(AESEngine.newInstance());
         byte[] aadBytes = aad.getBytes(StandardCharsets.UTF_8);
 
         AEADParameters params = new AEADParameters(
