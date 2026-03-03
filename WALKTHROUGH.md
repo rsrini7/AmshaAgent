@@ -45,7 +45,13 @@
 | 41 | Resilience, Privacy & Observer Separation | 100% success | 19+ PII patterns |
 | 42 | ScopedValue Context Migration | 100% success | Bridge for MicroProfile |
 | 44 | Production Hardening | 100% success | JDBC `IMMEDIATE` + dynamic `RoleRegistry` refactor |
+| 45 | Agent Memory RAG via SQLite FTS5 | 100% success | Isolated FTS5 into separate schema to bypass Hibernate tokenizer |
+| 45.1 | FTS5 Hardening & Robustness | 100% success | Connection interceptor for schema attachment & explicit userId passing |
+| 46 | Proactive Autonomy via Agent-Writable Cron | 100% success | Virtual thread scheduler + cron tools for proactive tasks |
+| 47.0 | Unified Capabilities & Context (Tier 1) | 100% success | Role-based tool matrix + API Key refactor with Bucket4j |
 | 47.1 | Message Pipeline Refactor (Tier 2A) | 100% success | Moved implementations to core for definitive CDI fix |
+| 47.2 | Refined Routing & Templates (Tier 2B) | 100% success | Qute system prompts + exhaustive REST status mapping |
+| 47.3 | Agent State Machine Refactor (Tier 3/3A)| 100% success | Extracted loop from AgentLoop; fixed engine delegation & context |
 
 ---
 
@@ -1097,4 +1103,27 @@ Decoupled the cron scheduler, migrated to Qute templates for prompts, and harden
 - ✅ `PromptTemplateEngineTest` verifies secure capability-to-prompt injection.
 - ✅ `TelegramMarkdownV2RendererTest` verifies non-standard char escaping.
 - ✅ `AgentLoopTest` fixed (NPE unblocked).
+---
+
+## Phase 47 Tier 3 & 3A: Agent State Machine Refactor ✅
+
+Modernized the core reasoning logic by extracting it into a specialized runner and hardening it against execution regressions.
+
+### Component Breakdown
+
+| File | Purpose |
+|------|---------|
+| [AgentStateMachineRunner.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentStateMachineRunner.java) | Pure state machine for Thought-Plan-Act-Observe iterations. |
+| [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java) | Session lifecycle shell; manages MDC, OTel, and history reconstruction. |
+| [AgentExecutionContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentExecutionContext.java) | Immutable context for a single agent execution run. |
+
+### Hardened Fixes (Tier 3A)
+
+- **Mock Engine Restoration**: Fixed a regression where `AgentResilienceTest` failed because the runner was ignoring the mock engine provided in the test setup. The `run()` signature now explicitly accepts the `ReasoningEngine`.
+- **Infrastructure Context Continuity**: Ensured that the 3-parameter `AgentLoop.run()` (used by Cron and CLI) correctly captures the `userId` and `chatId` from the `WorkspaceContext` before entering the runner.
+
+**Verification**:
+- ✅ `AgentStateMachineRunnerTest` (8/8) — Core reasoning logic unit tests.
+- ✅ `AgentResilienceTest` (5/5) — Guardrail and resilience tests in `arcclaw-app`.
+- ✅ `mvnw clean verify` — Full build success with 269 tests across the entire project.
 

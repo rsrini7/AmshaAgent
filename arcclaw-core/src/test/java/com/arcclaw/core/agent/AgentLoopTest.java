@@ -1,38 +1,34 @@
 package com.arcclaw.core.agent;
 
-import com.arcclaw.core.governance.GovernanceLayer;
-import com.arcclaw.core.observability.AgentObserver;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.tools.ToolRegistry;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.exception.InvalidRequestException;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.enterprise.inject.Instance;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 class AgentLoopTest {
 
@@ -105,56 +101,20 @@ class AgentLoopTest {
     }
 
     @Test
-    void testSelfHealingOnHttp400() {
-        WorkspaceScopeHolder.run("test-session", () -> {
-            ReasoningEngine mockEngine = mock(ReasoningEngine.class);
-            AgentLoop loop = new AgentLoop();
-            Instance<AgentObserver> mockObservers = mock(Instance.class);
-            when(mockObservers.iterator()).thenReturn(Collections.emptyIterator());
-            doNothing().when(mockObservers).forEach(any());
-            loop.observers = mockObservers;
-            loop.chatMemoryStore = mock(ChatMemoryStore.class);
-            loop.agentStore = mock(StatefulAgentStore.class);
-            loop.toolRegistry = mock(ToolRegistry.class);
-            loop.governanceLayer = mock(GovernanceLayer.class);
-
-            // Throw InvalidRequestException on first call
-            InvalidRequestException ex = new InvalidRequestException("missing properties: action");
-            // Second call succeeds
-            ReasoningStep finishStep = ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "success"), 0,
-                    0);
-
-            when(mockEngine.nextStep(any(), any(), any(), any()))
-                    .thenThrow(ex)
-                    .thenReturn(finishStep);
-
-            AgentResult result = loop.run("test goal", mockEngine, 5);
-            assertInstanceOf(AgentResult.Finished.class, result, "Loop should complete successfully after self-healing");
-            assertEquals("success", ((AgentResult.Finished) result).answer());
-        });
-    }
-
-    @Test
-    void testSchemaErrorLimitExceeded() {
-        WorkspaceScopeHolder.run("test-session", () -> {
-            ReasoningEngine mockEngine = mock(ReasoningEngine.class);
-            AgentLoop loop = new AgentLoop();
-            Instance<AgentObserver> mockObservers = mock(Instance.class);
-            when(mockObservers.iterator()).thenReturn(Collections.emptyIterator());
-            doNothing().when(mockObservers).forEach(any());
-            loop.observers = mockObservers;
-            loop.chatMemoryStore = mock(ChatMemoryStore.class);
-            loop.agentStore = mock(StatefulAgentStore.class);
-            loop.toolRegistry = mock(ToolRegistry.class);
-            loop.governanceLayer = mock(GovernanceLayer.class);
-
-            InvalidRequestException ex = new InvalidRequestException("missing properties");
-            // Always throw
-            when(mockEngine.nextStep(any(), any(), any(), any())).thenThrow(ex);
-
-            AgentResult result = loop.run("test goal", mockEngine, 5);
-            assertInstanceOf(AgentResult.Failed.class, result, "Loop should fail since it exceeds schema retry limit");
-            assertTrue(((AgentResult.Failed) result).reason().contains("SCHEMA_ERROR"));
-        });
+    void testAgentLoopDelegatesToStateMachineRunner() {
+        // Reflection check to ensure methods moved to the runner are indeed gone from AgentLoop
+        Class<AgentLoop> clazz = AgentLoop.class;
+        String[] deletedMethods = {"runLoop", "processEngineStep", "validateTool", "invokeToolAndObserve", "handleFinishAction", "saveGoalToChatMemory"};
+        
+        for (String methodName : deletedMethods) {
+            boolean exists = java.util.Arrays.stream(clazz.getDeclaredMethods())
+                    .anyMatch(m -> m.getName().equals(methodName));
+            assertFalse(exists, "Method " + methodName + " should have been deleted from AgentLoop");
+        }
+        
+        // Also check if the injection is there
+        boolean hasRunner = java.util.Arrays.stream(clazz.getDeclaredFields())
+                .anyMatch(f -> f.getName().equals("stateMachineRunner"));
+        assertTrue(hasRunner, "AgentLoop should have stateMachineRunner injected");
     }
 }

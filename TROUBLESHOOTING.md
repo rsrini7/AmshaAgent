@@ -1099,6 +1099,36 @@ agentLoop.run(...);
 * **Symptom:** The `coder` or `debugger` agent attempts to use forbidden tools like `github` for tasks that should be text-only.
 * **Root Cause:** Large context windows and weak system prompt advisories allow the LLM to ignore role boundaries.
 * **Resolution:** Implemented a **STRICT TOOL BINDING CONTRACT**. The `LangChainReasoningEngine` now dynamically injects a hard contract into the system prompt based on the active persona. For `coder` and `debugger`, the contract explicitly states: `PERMITTED TOOLS: None`. Any attempt to violate this contract is a critical failure.
+---
+
+## Phase 47: Agent Reasoning Regressions
+
+### `AgentResilienceTest` Failures: Mock Engine Ignored
+
+**Symptom**:
+- `AgentResilienceTest` failures where `Finished` or `LoopExceeded` were expected, but `Failed` was received.
+- Tests attempted to call real LLM endpoints (via default `ReasoningEngine` injection) instead of using provided mocks.
+
+**Cause**:
+- `AgentStateMachineRunner` was injecting a `@Default` `ReasoningEngine` and using it internally.
+- Tests (which use `Mockito`) were providing a mock engine to `AgentLoop`, but `AgentLoop` had no way to pass it to the runner because the runner used its own internal instance.
+
+**Resolution**:
+- Refactored `AgentStateMachineRunner.run()` to accept `ReasoningEngine` as a method parameter.
+- Updated `AgentLoop.run()` to explicitly pass its engine instance to the runner.
+
+### `NullPointerException` in `AgentStateMachineRunner`: Missing UserID
+
+**Symptom**:
+- `AgentLoop.run()` (specifically the 3-parameter variant used by Cron/CLI) failing with NPE when accessing `context.userId()`.
+
+**Cause**:
+- The 3-parameter `run()` method was building an `AgentExecutionContext` with null values for `userId` and `chatId`.
+- The runner implementation expects these values to be populated for tool validation and audit logging.
+
+**Resolution**:
+- Updated `AgentLoop.run(goal, engine, maxIterations)` to fetch `userId` and `chatId` from `WorkspaceContext` before constructing the context.
+- Ensured `handleResumeHook` is called *before* context construction to maintain historical continuity.
 
 #### 15.2 Cross-Task History Bleed
 * **Symptom:** During testing, the agent recalls details from a previous, unrelated task (e.g., a "secret code" or specific instructions) because the session ID is reused.
