@@ -63,13 +63,29 @@ public class IntentClassifierServiceTest {
     @Test
     void testNoOverrideForCoder_BrahmaIsExempt() {
         // 'brahma' maps to 'coder' via sanitize()
-        // 'coder' is NOT in TOOL_CAPABLE_ROLES, so destructive override does not apply
+        // 'coder' has an empty capabilities Set, so destructive override does not apply.
+        // It is inherently safe as it cannot invoke tools.
         when(classifierModel.chat(anyString())).thenReturn("brahma");
         
         String role = service.classify("delete the old data files");
         
         Assertions.assertEquals("coder", role, 
-            "Coder (brahma) is exempt from destructive override — " +
-            "it has no tool access so override is not needed");
+            "Coder (brahma) is exempt from destructive override — its capabilities list is empty");
     }
+
+    @Test
+    void testArchitectRouting() {
+        when(classifierModel.chat(anyString())).thenReturn("architect");
+        String role = service.classify("design the new microservice architecture");
+        Assertions.assertEquals("architect", role);
+    }
+
+    @Test
+    void testDebuggerExemptFromDestructiveOverride() {
+        when(classifierModel.chat(anyString())).thenReturn("debugger");
+        String role = service.classify("why is the delete call deadlocking?");
+        Assertions.assertEquals("debugger", role,
+            "DEBUGGER must be exempt from destructive override");
+    }
+
 }

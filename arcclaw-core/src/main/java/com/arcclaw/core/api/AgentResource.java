@@ -45,6 +45,9 @@ import org.jboss.logging.Logger;
 public class AgentResource {
 
     public record ApprovalRequest(String agentRole) {}
+    public record AgentResponse(String answer, int totalInputTokens, int totalOutputTokens) {}
+    public record ApprovalRequiredResponse(String toolName, String paramsJson, String sessionId) {}
+    public record ErrorResponse(String reason, String code) {}
 
     @Inject
     Logger log;
@@ -99,20 +102,15 @@ public class AgentResource {
                         sessionId, "rest:sync", null, AutonomyLevel.SUPERVISED, request.agentRole(),
                         () -> {
                             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
-                            if (result instanceof AgentResult.Finished f) {
-                                return Response.ok(f).build();
-                            } else {
-                                String errorMsg = switch(result) {
-                                    case AgentResult.Failed f -> f.reason();
-                                    case AgentResult.LoopExceeded l -> "Loop exceeded " + l.maxIterations() + " iterations";
-                                    case AgentResult.AwaitingApproval a -> "Agent requires approval for tool " + a.toolName();
-                                    default -> "Unknown state";
-                                };
-                                log.errorf("Sync agent run completed with failure for session %s: %s", sessionId, errorMsg);
-                                return Response.serverError()
-                                        .entity(errorMsg)
-                                        .build();
-                            }
+                            return switch (result) {
+                                case AgentResult.Finished f -> Response.ok(new AgentResponse(
+                                        f.answer(), f.totalInputTokens(), f.totalOutputTokens())).build();
+                                case AgentResult.AwaitingApproval a -> Response.status(202).entity(
+                                        new ApprovalRequiredResponse(a.toolName(), a.paramsJson(), a.sessionId())).build();
+                                case AgentResult.LoopExceeded l -> Response.status(408).entity(
+                                        new ErrorResponse("Iteration limit " + l.maxIterations() + " reached", "LOOP_EXCEEDED")).build();
+                                case AgentResult.Failed f -> mapFailedResponse(f);
+                            };
                         }
                 );
             });
@@ -176,29 +174,16 @@ public class AgentResource {
                     AgentResult result = agentLoop.run(sessionId, request.agentRole(),
                             request.goal(), reasoningEngine, maxIterations);
 
-                    if (result instanceof AgentResult.AwaitingApproval _) {
-                        response.resume(Response.accepted()
-                                .entity(Map.of(
-                                    "status",  "AWAITING_APPROVAL",
-                                    "message", "Agent is pending tool approval. POST /approve or /deny as goal.",
-                                    "session", sessionId
-                                ))
-                                .build());
-                    } else if (result instanceof AgentResult.Finished f) {
-                        response.resume(Response.accepted()
-                                .entity(Map.of("status", "COMPLETED", "answer", f.answer()))
-                                .build());
-                    } else {
-                        String errorMsg = switch(result) {
-                            case AgentResult.Failed fail -> fail.reason();
-                            case AgentResult.LoopExceeded loop -> "Loop exceeded " + loop.maxIterations() + " iterations";
-                            default -> "Unknown state";
-                        };
-                        log.errorf("Async agent run failed for session %s: %s", sessionId, errorMsg);
-                        response.resume(Response.serverError()
-                                .entity(Map.of("status", "FAILED", "reason", errorMsg))
-                                .build());
-                    }
+                    Response res = switch (result) {
+                        case AgentResult.Finished f -> Response.accepted(new AgentResponse(
+                                f.answer(), f.totalInputTokens(), f.totalOutputTokens())).build();
+                        case AgentResult.AwaitingApproval a -> Response.status(202).entity(
+                                new ApprovalRequiredResponse(a.toolName(), a.paramsJson(), a.sessionId())).build();
+                        case AgentResult.LoopExceeded l -> Response.status(408).entity(
+                                new ErrorResponse("Iteration limit " + l.maxIterations() + " reached", "LOOP_EXCEEDED")).build();
+                        case AgentResult.Failed f -> mapFailedResponse(f);
+                    };
+                    response.resume(res);
                 });
 
             } catch (Exception e) {
@@ -261,8 +246,16 @@ public class AgentResource {
 
                 MDC.put("userId", "rest:approve");
                 return WorkspaceContext.run(sessionId, "rest:approve", null, AutonomyLevel.FULL, canonicalRole, () -> {
-                    agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
-                    return Response.ok(Map.of("status", "APPROVED", "session", sessionId)).build();
+                    AgentResult result = agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
+                    return switch (result) {
+                        case AgentResult.Finished f -> Response.ok(new AgentResponse(
+                                f.answer(), f.totalInputTokens(), f.totalOutputTokens())).build();
+                        case AgentResult.AwaitingApproval a -> Response.status(202).entity(
+                                new ApprovalRequiredResponse(a.toolName(), a.paramsJson(), a.sessionId())).build();
+                        case AgentResult.LoopExceeded l -> Response.status(408).entity(
+                                new ErrorResponse("Iteration limit " + l.maxIterations() + " reached", "LOOP_EXCEEDED")).build();
+                        case AgentResult.Failed f -> mapFailedResponse(f);
+                    };
                 });
             });
         } catch (Exception e) {
@@ -300,5 +293,19 @@ public class AgentResource {
         } finally {
             MDC.remove("userId");
         }
+    }
+    private Response mapFailedResponse(AgentResult.Failed f) {
+        return switch (f.category()) {
+            case COMPLIANCE_VIOLATION -> Response.status(451)
+                    .entity(new ErrorResponse(f.reason(), "COMPLIANCE")).build();
+            case BUDGET_EXCEEDED -> Response.status(429)
+                    .entity(new ErrorResponse(f.reason(), "BUDGET")).build();
+            case USER_DENIED -> Response.status(422)
+                    .entity(new ErrorResponse(f.reason(), "USER_DENIED")).build();
+            case SCHEMA_ERROR -> Response.status(422)
+                    .entity(new ErrorResponse(f.reason(), "SCHEMA")).build();
+            case SYSTEM_ERROR -> Response.serverError()
+                    .entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
+        };
     }
 }

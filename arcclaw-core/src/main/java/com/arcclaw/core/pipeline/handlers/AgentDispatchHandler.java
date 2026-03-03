@@ -1,9 +1,9 @@
 package com.arcclaw.core.pipeline.handlers;
 
-import com.arcclaw.core.agent.AgentExecutionContext;
+import org.jboss.logging.Logger;
+
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.AgentState;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -14,9 +14,6 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
-import java.util.List;
 
 /**
  * Dispatches the enriched request to the Agent State Machine.
@@ -43,18 +40,6 @@ public class AgentDispatchHandler implements MessageHandler {
         String role = context.getAgentRole()
                 .orElse("coordinator");
         String goal = context.getMessage() != null ? context.getMessage().text() : "";
-
-        AgentExecutionContext execContext = new AgentExecutionContext(
-                sessionId,
-                context.getUser().platformId(),
-                context.getChatId(),
-                role,
-                goal,
-                AutonomyLevel.SUPERVISED, // Channel users default to supervised for now
-                5 // Default max iterations
-        );
-
-        AgentState initialState = context.getInitialState().orElseGet(() -> new AgentState.InProgress(List.of()));
 
         log.infof("Dispatching message for session %s to agent %s", sessionId, role);
 

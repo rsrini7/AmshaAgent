@@ -22,6 +22,12 @@ class AgentResourceTest {
         ReasoningEngine reasoningEngine;
 
         @InjectMock
+        com.arcclaw.core.agent.AgentLoop agentLoop;
+
+        @InjectMock
+        com.arcclaw.core.state.StatefulAgentStore agentStore;
+
+        @InjectMock
         com.arcclaw.app.security.ApiKeyRegistry apiKeyRegistry;
 
         @BeforeEach
@@ -30,8 +36,21 @@ class AgentResourceTest {
                                 java.util.Map.of("response", "42"), null, 0, 0);
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
 
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Finished("42", java.util.List.of(), 10, 5));
+
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
                 Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+
+                // Mock store to return a valid (completed) checkpoint for status checks
+                com.arcclaw.core.state.AgentCheckpoint checkpoint = new com.arcclaw.core.state.AgentCheckpoint();
+                checkpoint.setSessionId("any-session");
+                checkpoint.setAgentRole("coordinator");
+                checkpoint.setStatus(com.arcclaw.core.state.CheckpointStatus.COMPLETED);
+                checkpoint.setStateJson("[{\"description\":\"Calculated final answer\"}]");
+                
+                Mockito.when(agentStore.load(anyString(), anyString())).thenReturn(java.util.Optional.of(checkpoint));
+                Mockito.when(agentStore.load(Mockito.eq("fake-id-123"), anyString())).thenReturn(java.util.Optional.empty());
         }
 
         @Test
@@ -135,13 +154,119 @@ class AgentResourceTest {
         }
 
         @Test
-        void testDenyEndpointReturns409ForNoCheckpoint() {
+        void testComplianceViolationReturns451() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
+                                                "Blocked by policy", com.arcclaw.core.agent.AgentResult.FailureCategory.COMPLIANCE_VIOLATION,
+                                                java.util.List.of(), 0, 0));
+
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .when().post("/api/v1/sessions/no-such-session/deny")
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .when().post("/api/v1/sessions/test-id/run")
                                 .then()
-                                .statusCode(409)
-                                .body("error", containsString("No pending approval"));
+                                .statusCode(451)
+                                .body("code", equalTo("COMPLIANCE"));
+        }
+
+        @Test
+        void testBudgetExceededReturns429() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
+                                                "Token limit", com.arcclaw.core.agent.AgentResult.FailureCategory.BUDGET_EXCEEDED,
+                                                java.util.List.of(), 0, 0));
+
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(429)
+                                .body("code", equalTo("BUDGET"));
+        }
+
+        @Test
+        void testUserDeniedReturns422() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
+                                                "User said no", com.arcclaw.core.agent.AgentResult.FailureCategory.USER_DENIED,
+                                                java.util.List.of(), 0, 0));
+
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(422)
+                                .body("code", equalTo("USER_DENIED"));
+        }
+
+        @Test
+        void testSchemaErrorReturns422() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
+                                                "Bad tool params", com.arcclaw.core.agent.AgentResult.FailureCategory.SCHEMA_ERROR,
+                                                java.util.List.of(), 0, 0));
+
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(422)
+                                .body("code", equalTo("SCHEMA"));
+        }
+
+        @Test
+        void testSystemErrorReturns500() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
+                                                "Internal crash", com.arcclaw.core.agent.AgentResult.FailureCategory.SYSTEM_ERROR,
+                                                java.util.List.of(), 0, 0));
+
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(500)
+                                .body("code", equalTo("SYSTEM"));
+        }
+
+        @Test
+        void testLoopExceededReturns408() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.LoopExceeded(5, java.util.List.of(), 0, 0));
+
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 5))
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(408)
+                                .body("code", equalTo("LOOP_EXCEEDED"));
+        }
+
+        @Test
+        void testApprovalRequiredReturns202WithShape() {
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                                .thenReturn(new com.arcclaw.core.agent.AgentResult.AwaitingApproval(
+                                                "gh-tool", "{}", "sess-123", java.util.List.of(), 0, 0));
+
+                given()
+                                .header("X-ArcClaw-API-Key", "test-key")
+                                .contentType(ContentType.JSON)
+                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .when().post("/api/v1/sessions/test-id/run")
+                                .then()
+                                .statusCode(202)
+                                .body("toolName", equalTo("gh-tool"))
+                                .body("sessionId", equalTo("sess-123"));
         }
 }
