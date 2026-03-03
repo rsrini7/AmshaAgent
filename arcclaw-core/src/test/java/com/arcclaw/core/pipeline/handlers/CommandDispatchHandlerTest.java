@@ -5,25 +5,30 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.reflex.ApproveReflex;
+import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class CommandDispatchHandlerTest {
 
     private CommandDispatchHandler handler;
-    private ApproveReflex approveReflex;
+    private ReflexRegistry reflexRegistry;
     private ChannelSender sender;
 
     @BeforeEach
     void setup() {
-        approveReflex = mock(ApproveReflex.class);
+        reflexRegistry = mock(ReflexRegistry.class);
         sender = mock(ChannelSender.class);
         handler = new CommandDispatchHandler();
-        handler.approveReflex = approveReflex;
+        handler.reflexRegistry = reflexRegistry;
     }
 
     @Test
@@ -32,7 +37,8 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", java.time.Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
-        when(approveReflex.execute("chat1", "1", "/approve cron123")).thenReturn("Approving cron task...");
+        when(reflexRegistry.processIfReflex(anyString(), eq("1"), eq("/approve cron123")))
+                .thenReturn(new ReflexResult(Optional.of("Approving cron task..."), "/approve cron123"));
 
         assertEquals(HandleResult.STOP, handler.handle(ctx));
         verify(sender).sendRaw(user, "Approving cron task...");
@@ -44,7 +50,8 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", java.time.Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
-        when(approveReflex.execute("chat1", "1", "/approve")).thenReturn("Approving session...");
+        when(reflexRegistry.processIfReflex(anyString(), eq("1"), eq("/approve")))
+                .thenReturn(new ReflexResult(Optional.of("Approving session..."), "/approve"));
 
         assertEquals(HandleResult.STOP, handler.handle(ctx));
         verify(sender).sendRaw(user, "Approving session...");
@@ -61,12 +68,15 @@ class CommandDispatchHandlerTest {
     }
 
     @Test
-    void testGenericCommandPassesThroughForNow() {
+    void testDenyStopsPipeline() {
         ChannelUser user = new ChannelUser("1", "user", com.arcclaw.channel.api.ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "sid", java.time.Instant.now());
         MessageContext ctx = createCtx(user, msg);
 
-        assertEquals(HandleResult.CONTINUE, handler.handle(ctx));
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString()))
+                .thenReturn(new ReflexResult(Optional.empty(), "/deny"));
+
+        assertEquals(HandleResult.STOP, handler.handle(ctx));
         verify(sender, never()).sendRaw(any(), any());
     }
 

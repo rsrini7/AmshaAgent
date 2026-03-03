@@ -6,8 +6,6 @@ import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
-import com.arcclaw.core.security.TelegramAllowlistGuard;
-
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

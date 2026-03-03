@@ -1,4 +1,4 @@
-package com.arcclaw.core.routing;
+package com.arcclaw.app.routing;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.quarkus.test.InjectMock;

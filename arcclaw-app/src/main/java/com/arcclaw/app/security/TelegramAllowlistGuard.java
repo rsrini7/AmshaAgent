@@ -1,4 +1,4 @@
-package com.arcclaw.core.security;
+package com.arcclaw.app.security;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import io.quarkus.arc.Unremovable;
