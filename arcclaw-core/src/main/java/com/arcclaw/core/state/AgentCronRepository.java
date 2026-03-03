@@ -52,6 +52,17 @@ public class AgentCronRepository {
         ).setParameter("userId", userId).getResultList();
     }
 
+    /**
+     * Finds all cron jobs awaiting user approval for a specific user.
+     */
+    @Transactional(TxType.SUPPORTS)
+    public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
+        return em.createQuery(
+                "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = 'AWAITING_APPROVAL'",
+                AgentCronEntity.class
+        ).setParameter("userId", userId).getResultList();
+    }
+
     // ──────────────────────────────────────────────────────────────
     // WRITE — atomic micro-short transactions
     // ──────────────────────────────────────────────────────────────
@@ -86,9 +97,10 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
         em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE', lastFireTime=:last, nextFireTime=:next WHERE id=:id"
+                "UPDATE agentcron SET status='ACTIVE', lastFireTime=:last, nextFireTime=:next, updatedAt=:now WHERE id=:id"
         ).setParameter("last", InstantToTextConverter.format(lastFireTime))
          .setParameter("next", InstantToTextConverter.format(nextFireTime))
+         .setParameter("now", InstantToTextConverter.format(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -99,8 +111,21 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markCompleted(String id, Instant lastFireTime) {
         em.createNativeQuery(
-                "UPDATE agentcron SET status='COMPLETED', lastFireTime=:last WHERE id=:id"
+                "UPDATE agentcron SET status='COMPLETED', lastFireTime=:last, updatedAt=:now WHERE id=:id"
         ).setParameter("last", InstantToTextConverter.format(lastFireTime))
+         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+         .setParameter("id", id)
+         .executeUpdate();
+    }
+
+    /**
+     * HITL pause: prevents re-fire loop by moving to a dedicated status.
+     */
+    @Transactional(TxType.REQUIRED)
+    public void markAwaitingApproval(String id) {
+        em.createNativeQuery(
+                "UPDATE agentcron SET status='AWAITING_APPROVAL', updatedAt=:now WHERE id=:id"
+        ).setParameter("now", InstantToTextConverter.format(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -124,8 +149,9 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markFailed(String id, String errorReason) {
         em.createNativeQuery(
-                "UPDATE agentcron SET status='FAILED', errorReason=:err WHERE id=:id"
+                "UPDATE agentcron SET status='FAILED', errorReason=:err, updatedAt=:now WHERE id=:id"
         ).setParameter("err", errorReason)
+         .setParameter("now", InstantToTextConverter.format(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -319,5 +320,29 @@ class AgentCronSchedulerTest {
 
         // Verify the CDI event was fired with the correct cronId and channel type
         verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
+    }
+
+    @Test
+    void testCronHitlTransitionsToAwaitingApprovalStatus() {
+        AgentCronEntity job = createDueJob(true);
+        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
+        when(cronRepository.claimForFire(job.id)).thenReturn(true);
+        
+        AgentResult approvalResult = AgentResult.awaitingApproval("github_tool", "{}", "session-1", List.of());
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
+                .thenReturn(approvalResult);
+
+        scheduler.pollAndDispatch();
+
+        // Verify status transition
+        verify(cronRepository).markAwaitingApproval(eq(job.id));
+        verify(cronRepository, never()).markCompleted(anyString(), any());
+        verify(cronRepository, never()).markFired(anyString(), any(), any());
+
+        // Verify event still fired with HITL message
+        verify(jobCompletedEventMock).fire(argThat(event -> 
+            event.renderedAnswer().contains("Approval Required") &&
+            event.renderedAnswer().contains("github_tool")
+        ));
     }
 }
