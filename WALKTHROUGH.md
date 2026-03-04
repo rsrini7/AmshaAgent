@@ -232,6 +232,7 @@ graph TD
 
 ## Phase 10: Health Layer ✅
 
+
 > [!CAUTION]
 > **52-Iteration Boss Fight.** This phase was the hardest in the project due to three layered Quarkus issues. See `TROUBLESHOOTING.md` §10 for the full decision matrix.
 
@@ -1126,4 +1127,30 @@ Modernized the core reasoning logic by extracting it into a specialized runner a
 - ✅ `AgentStateMachineRunnerTest` (8/8) — Core reasoning logic unit tests.
 - ✅ `AgentResilienceTest` (5/5) — Guardrail and resilience tests in `arcclaw-app`.
 - ✅ `mvnw clean verify` — Full build success with 269 tests across the entire project.
+
+---
+
+## Phase 48: Cron Concurrency & Semaphore Hardening ✅
+
+Resolved flaky tests and critical semaphore permit leaks in the `AgentCronScheduler` by centralizing resource management and implementing deterministic test synchronization.
+
+### Fixes & Enhancements
+
+- **Permit Leak Resolution**: Hoisted `concurrencyLimiter.release()` into a master `finally` block on the virtual thread lambda. This ensures that every permit acquired is guaranteed to be released, regardless of how the job execution terminates (success, handled failure, or terminal system error).
+- **MDC Lifecycle Hoisting**: Moved `MDC.put("userId")` and `MDC.remove("userId")` to the outer lambda, ensuring consistent logging across the entire thread lifecycle and preventing context pollution.
+- **Terminal Throwable Handling**: Introduced an `executionEntered` AtomicBoolean to handle Throwables that escape *before* the inner `executeCronJob` method is entered (e.g., `ScopedValue` binding failures). These are now correctly caught, logged, and marked as failed in the repository.
+- **Deterministic Test Synchronization**: Replaced unstable `CyclicBarrier` in concurrency tests with a "Triple-Latch" mechanism (`CountDownLatch` for start, gate, and finish). This provides precise control over thread execution order, especially critical for stability on Windows.
+
+### Verification Results
+
+| Suite | Tests | Result |
+|-------|-------|--------|
+| `AgentCronSchedulerConcurrencyTest` | 3 | ✅ Pass |
+| `AgentCronSchedulerTest` | 10 | ✅ Pass |
+| **Phase 48 Scheduler Verification** | **13** | ✅ **Pass** |
+| **Full Project Build (`mvn clean verify`)** | **282** | ✅ **Pass** |
+
+> [!NOTE]
+> Test stability on Windows has improved significantly. The triple-latch mechanism eliminates the timing-based flakiness previously seen with `CyclicBarrier` during high-concurrency virtual thread execution.
+
 

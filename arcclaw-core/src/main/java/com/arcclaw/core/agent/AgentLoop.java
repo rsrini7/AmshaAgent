@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -114,7 +115,7 @@ public class AgentLoop {
         AgentResult result = null;
         try {
             // --- CHECKPOINT RESUME ---
-            List<ReasoningStep> resumedHistory = List.of();
+            List<ReasoningStep> resumedHistory = new ArrayList<>();
             var existingCheckpoint = agentStore.load(sessionId, canonicalRole);
             if (existingCheckpoint.isPresent()) {
                 var checkpoint = existingCheckpoint.get();
