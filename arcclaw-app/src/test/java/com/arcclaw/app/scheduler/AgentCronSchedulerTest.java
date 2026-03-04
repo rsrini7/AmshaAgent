@@ -26,6 +26,8 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.arcclaw.app.channel.ChannelSenderRegistry;
+import com.arcclaw.app.channel.telegram.TelegramChannelSender;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
@@ -74,6 +76,12 @@ class AgentCronSchedulerTest {
 
     @Inject
     EventCollector collector;
+
+    @InjectMock
+    ChannelSenderRegistry channelSenderRegistry;  // suppress real Telegram delivery
+
+    @InjectMock
+    TelegramChannelSender telegramChannelSender;
 
     private AgentCronEntity createDueJob(boolean runOnce) {
         AgentCronEntity e = new AgentCronEntity();

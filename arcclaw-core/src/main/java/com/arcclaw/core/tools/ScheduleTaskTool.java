@@ -116,7 +116,7 @@ public class ScheduleTaskTool implements AgentTool {
                         .description("IANA timezone (default: UTC)")
                         .build())
                 .addProperty("runOnce", JsonBooleanSchema.builder()
-                        .description("If true, the task fires once then completes (default: false)")
+                        .description("'true' for one-time tasks, 'false' for recurring (default: false)")
                         .build())
                 .required("cronExpression", "goal")
                 .build();

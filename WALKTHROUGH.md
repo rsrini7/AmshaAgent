@@ -1161,11 +1161,17 @@ Resolved flaky tests and critical semaphore permit leaks in the `AgentCronSchedu
 - **Security Hardening**: Removed all hardcoded or concatenated Telegram tokens from Camel URIs.
 - **Component Configuration**: Centralized Telegram authentication using `camel.component.telegram.authorization-token` in `application.yaml`.
 - **Test Infrastructure**: Refactored `TelegramChannelRouteTest` to use `CamelQuarkusTestSupport` with manual component binding to ensure stable `AdviceWith` behavior in a Quarkus environment.
+- **Infrastructure Refactor**:
+    - Restructured `TelegramChannelSender` to use constructor injection for `ProducerTemplate` and `TelegramMarkdownV2Renderer`, facilitating clean unit testing without CDI proxy issues.
+    - Implemented `send(ChannelUser recipient, List<ReplyNode> nodes)` with robust null-safety and a plain-text fallback mechanism `(No response generated)`.
+- **Test Infrastructure**:
+    - Refactored `TelegramChannelRouteTest` to use `CamelQuarkusTestSupport` with manual component binding.
+    - Created `TelegramChannelSenderTest` with Mockito-based unit tests for all edge cases (null recipients, empty nodes, etc.).
 - **Regression Fix**: Restored the confirmation message in `ApproveReflex` which was accidentally disabled, fixing `ApproveReflexTest`.
 
 ### Verification Results
+- `TelegramChannelSenderTest`: **PASSED** (Full coverage of send() logic and DI).
 - `TelegramChannelRouteTest`: **PASSED** (Advised route with mock endpoints).
-- `TelegramChannelSenderTest`: **PASSED** (Verified producer template interactions).
 - `ApproveReflexTest`: **PASSED** (Confirmed synchronous response matches expectation).
 - `AgentCronSchedulerTest`: **PASSED** (Verified end-to-end cron job trigger and approval).
 

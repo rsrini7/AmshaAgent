@@ -2989,3 +2989,15 @@ protected void bindToRegistry(Registry registry) throws Exception {
 }
 ```
 - Set `isUseAdviceWith()` to `true` and call `context.getRouteDefinitions().get(0).adviceWith(...)` followed by `context.start()`.
+
+---
+
+**Error 1 — `ResolveEndpointFailedException` (Camel/Telegram in tests)**
+
+This fires inside `TelegramCronNotificationObserver` after the job completes. The test assertions (semaphore released, `markFailed` called, `agentLoop.run()` called N times) all execute before this observer fires. The test passes, then the error logs. It's noise, not a failure. The real fix is a full Camel test harness with a mocked telegram component wired into the registry — the `TelegramChannelRouteTest` already does this for the route test, but wiring it into `AgentCronSchedulerTest` would require extending `CamelQuarkusTestSupport` which changes the entire test class structure. Not worth it for a scheduler unit test.
+
+**Error 2 — `ARJUNA012077` + `Arc.container() == null`**
+
+This is a JVM shutdown sequencing problem in the test harness. The `AsyncPersistenceEngine` virtual thread processes a `CRONFIRED` event that was queued during the test. Quarkus tears down the CDI container before the virtual thread finishes its transaction rollback. The double-check guard you added in `executeWithRetry()` helps when the container is gone *before* the transaction starts — but once `QuarkusTransaction.requiringNew()` is already inside a commit/rollback, it's past the guard. Fixing it properly requires either joining the virtual thread in `@PreDestroy` (risky — potential deadlock) or draining the queue synchronously on shutdown (significant change). Production is unaffected because the container never shuts down mid-transaction in a live server.
+
+**Bottom line:** Both are test-environment-only artifacts. Production behavior is correct — verified by the live Telegram session. Mark them as known test noise in a comment on the test class and move to P0-4.

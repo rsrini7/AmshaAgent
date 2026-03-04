@@ -2252,8 +2252,8 @@ Hardening Telegram security by removing tokens from URIs and using component-bas
 ## Verification
 
 - ✅ `TelegramChannelRouteTest`: Passed (verified route advising).
-- ✅ `TelegramChannelSenderTest`: Passed (verified producer template).
+- ✅ `TelegramChannelSenderTest`: Passed (verified constructor injection and send() logic).
 - ✅ `AgentCronSchedulerTest`: Passed (verified end-to-end flow).
 - ✅ `ApproveReflexTest`: Passed (verified confirmation message).
-- ✅ Full build verification: `mvn clean verify` succeeds with 289/289 tests.
+- ✅ Full build verification: `mvn clean verify` succeeds with 294/294 tests.
 
