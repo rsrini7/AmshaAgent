@@ -134,7 +134,7 @@ class AgentCronSchedulerTest {
         verify(agentLoop).run(
                 startsWith("cron-" + job.id + "-"),
                 eq(AgentRoleEnum.COORDINATOR.toScopedName()),
-                eq(job.goal),
+                contains(job.goal),
                 any(),
                 anyInt()
         );

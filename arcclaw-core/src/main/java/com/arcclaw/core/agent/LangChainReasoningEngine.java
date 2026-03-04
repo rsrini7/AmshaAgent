@@ -349,6 +349,22 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         ChatResponse response;
         try {
             response = chatLanguageModel.chat(request);
+        } catch (dev.langchain4j.exception.InvalidRequestException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {
+                log.warnf("LLM called unavailable tool — injecting correction: %s", msg);
+                return ReasoningStep.pending(
+                    "Attempted to call a tool not available in this context",
+                    "OBSERVE",
+                    Map.of(),
+                    0, 0
+                ).withObservation(
+                    "That tool is not available in the current execution context. " +
+                    "Use only the tools listed in PERMITTED TOOLS. " +
+                    "If no tool is needed, output your answer directly and call FINISH."
+                );
+            }
+            throw e;
         } catch (Exception e) {
             // Collapse Groq JSON / HTTP errors into a friendly sentence
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());

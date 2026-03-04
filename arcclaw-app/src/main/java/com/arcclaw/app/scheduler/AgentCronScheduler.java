@@ -208,11 +208,14 @@ public class AgentCronScheduler {
                 devSeeder.get().seedDevSecrets();
             }
 
+            String effectiveGoal = job.goal + 
+                "\n[SYSTEM CONSTRAINT: Do NOT call scheduletask. Execute the goal directly.]";
+
             AgentResult result = WorkspaceContext.run(cronSessionId, job.userId, job.chatId, AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(), () -> 
                 agentLoop.run(
                     cronSessionId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
-                    job.goal,
+                    effectiveGoal,
                     engine,
                     cronMaxIterations
                 )
