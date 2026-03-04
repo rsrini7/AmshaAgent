@@ -1153,4 +1153,20 @@ Resolved flaky tests and critical semaphore permit leaks in the `AgentCronSchedu
 > [!NOTE]
 > Test stability on Windows has improved significantly. The triple-latch mechanism eliminates the timing-based flakiness previously seen with `CyclicBarrier` during high-concurrency virtual thread execution.
 
+---
+
+## Phase 48: Telegram Bot Refactor
+
+### Changes
+- **Security Hardening**: Removed all hardcoded or concatenated Telegram tokens from Camel URIs.
+- **Component Configuration**: Centralized Telegram authentication using `camel.component.telegram.authorization-token` in `application.yaml`.
+- **Test Infrastructure**: Refactored `TelegramChannelRouteTest` to use `CamelQuarkusTestSupport` with manual component binding to ensure stable `AdviceWith` behavior in a Quarkus environment.
+- **Regression Fix**: Restored the confirmation message in `ApproveReflex` which was accidentally disabled, fixing `ApproveReflexTest`.
+
+### Verification Results
+- `TelegramChannelRouteTest`: **PASSED** (Advised route with mock endpoints).
+- `TelegramChannelSenderTest`: **PASSED** (Verified producer template interactions).
+- `ApproveReflexTest`: **PASSED** (Confirmed synchronous response matches expectation).
+- `AgentCronSchedulerTest`: **PASSED** (Verified end-to-end cron job trigger and approval).
+
 
