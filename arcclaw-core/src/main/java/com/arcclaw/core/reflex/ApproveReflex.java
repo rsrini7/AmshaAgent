@@ -158,16 +158,6 @@ public class ApproveReflex implements AgentReflex {
             case AgentResult.LoopExceeded _ -> cronRepository.markFailed(cron.id, "Loop exceeded");
         }
 
-        // The cron correctly marks FAILED (governance threw, AgentResult.Failed returned, cronRepository.markFailed() called). But the reflex still says "✅ approved" regardless of the result. The return message is unconditional.
-        // Not sure may be need to revisit this logic.
-        // String userMessage = switch (result) {
-        //     case AgentResult.Finished _ -> "";   // delivery via event is enough
-        //     case AgentResult.AwaitingApproval _ -> "⏸ Task paused again, awaiting further approval.";
-        //     case AgentResult.Failed f -> "❌ Task resumed but failed: " + AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
-        //     case AgentResult.LoopExceeded _ -> "❌ Task resumed but exceeded iteration limit.";
-        // };
-        // return userMessage;
-
         ChannelType chType = ChannelType.valueOf(cron.channelType != null ? cron.channelType : "TELEGRAM");
         String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
 
@@ -176,8 +166,6 @@ public class ApproveReflex implements AgentReflex {
                 CronResultFormatter.format(result),
                 result instanceof AgentResult.Failed f ? f.category() : null));
 
-        // Double message on every /approve 
-        //return "✅ Cron task approved and resumed. Check for result shortly.";
         return "";
     }
 }
