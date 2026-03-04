@@ -161,14 +161,7 @@ quarkus:
     info-version: "1.0.0"
     info-description: "Autonomous multi-agent framework — Java 21 + Quarkus + LangChain4J"
 
-# ---------------------------------------------------------------------------
-# CAMEL
-# ---------------------------------------------------------------------------
-camel:
-  component:
-    telegram:
-      authorization-token: "${arcclaw.channel.telegram.bot-token}"
-      
+
   # ---------------------------------------------------------------------------
   # NATIVE IMAGE
   # ---------------------------------------------------------------------------
@@ -389,11 +382,6 @@ mp:
         "io.netty.handler.ssl":
           level: INFO
 
-  camel:
-    component:
-      telegram:
-        authorization-token: "${arcclaw.channel.telegram.bot-token}"
-
   arcclaw:
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
@@ -421,11 +409,6 @@ mp:
     langchain4j:
       groq:
         api-key: "mock-api-key"
-
-  camel:
-    component:
-      telegram:
-        authorization-token: "test-bot-token-placeholder"
 
   arcclaw:
     memory:
@@ -460,10 +443,7 @@ mp:
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
         chat-model:
           max-tokens: 768
-  camel:
-    component:
-      telegram:
-        authorization-token: "${arcclaw.channel.telegram.bot-token}"
+
   arcclaw:
     governance:
       budget-usd: 50.00
@@ -484,10 +464,6 @@ mp:
       openai:
         log-requests: ${ARCCLAW_DEBUG_LLM:false}
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
-  camel:
-    component:
-      telegram:
-        authorization-token: "${arcclaw.channel.telegram.bot-token}"
     log:
       level: INFO
       console:
