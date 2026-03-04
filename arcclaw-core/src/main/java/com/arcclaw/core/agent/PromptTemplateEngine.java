@@ -7,6 +7,8 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
 
@@ -66,11 +68,22 @@ public class PromptTemplateEngine {
                 .sorted(Comparator.comparing(ToolCapability::toolName))
                 .toList();
 
+            String timeString = "";
+            if (systemTimeUtc != null) {
+                ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
+                timeString = String.format(
+                    "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
+                    zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
+                    zdt.getHour(), zdt.getMinute(),
+                    zdt.getHour(), zdt.getMinute()
+                );
+            }
+
         return templateFor(role)
                 .data("roleDef", role.definition())
                 .data("sortedCapabilities", sortedCapabilities)
                 .data("compactionSummary", compactionSummary)
-                .data("systemTimeUtc", systemTimeUtc != null ? systemTimeUtc.toString() : "")
+                .data("systemTimeUtc", timeString)
                 .render();
     }
 
