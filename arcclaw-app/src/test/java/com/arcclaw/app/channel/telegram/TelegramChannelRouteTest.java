@@ -1,49 +1,65 @@
 package com.arcclaw.app.channel.telegram;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.util.Map;
+
+import org.apache.camel.builder.AdviceWith;
+import org.apache.camel.quarkus.test.CamelQuarkusTestSupport;
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
-import org.apache.camel.CamelContext;
-import org.apache.camel.Route;
-import org.junit.jupiter.api.Test;
-
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 @TestProfile(TelegramChannelRouteTest.TelegramEnabledProfile.class)
-public class TelegramChannelRouteTest {
+public class TelegramChannelRouteTest extends CamelQuarkusTestSupport {
 
-        @Inject
-        CamelContext camelContext;
+    @Inject
+    TelegramChannelRoute route;
 
-        @Inject
-        TelegramChannelRoute route;
+    @Override
+    protected void bindToRegistry(org.apache.camel.spi.Registry registry) throws Exception {
+        org.apache.camel.component.telegram.TelegramComponent telegram = new org.apache.camel.component.telegram.TelegramComponent();
+        telegram.setAuthorizationToken("mock-token-for-test");
+        registry.bind("telegram", telegram);
+    }
 
-        @Test
-        void testRouteExists() throws Exception {
-            if (camelContext.getRoutes().isEmpty()) {
-                camelContext.addRoutes(route);
-                camelContext.start();
-            }
-            boolean routeExists = camelContext.getRoutes().stream()
-                            .map(Route::getEndpoint)
-                            .map(Object::toString)
-                            .anyMatch(uri -> uri.contains("telegram"));
+    @Override
+    protected org.apache.camel.builder.RouteBuilder createRouteBuilder() {
+        return route;
+    }
 
-            assertTrue(routeExists, "Telegram route should be registered in CamelContext");
+    @Override
+    public boolean isUseAdviceWith() {
+        return true;
+    }
+
+    @Test
+    void testTelegramRoute() throws Exception {
+        // Mock the route's from endpoint to prevent real Telegram polling during tests
+        AdviceWith.adviceWith(context, "telegram-bot", a -> {
+            a.replaceFromWith("direct:simulate-telegram-in");
+            a.mockEndpointsAndSkip("telegram:*");
+        });
+
+        // Start context manually since we used isUseAdviceWith
+        context.start();
+
+        assertNotNull(context.getRoute("telegram-bot"), "Route 'telegram-bot' not found");
+    }
+
+    public static class TelegramEnabledProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                "arcclaw.channel.telegram.enabled", "true",
+                "camel.component.telegram.authorization-token", "mock-token"
+            );
         }
-
-        public static class TelegramEnabledProfile implements QuarkusTestProfile {
-            @Override
-            public Map<String, String> getConfigOverrides() {
-                return Map.of(
-                        "arcclaw.channel.telegram.enabled",
-                        "true",
-                        "quarkus.log.category.\"org.apache.camel.component.telegram\".level",
-                        "ERROR");
-            }
-        }
+    }
 }
+
+

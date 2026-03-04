@@ -1,28 +1,28 @@
 package com.arcclaw.app.channel.telegram;
 
+import java.util.List;
+
+import org.apache.camel.ProducerTemplate;
+import org.jboss.logging.Logger;
+
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.apache.camel.ProducerTemplate;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import java.util.List;
 
 @ApplicationScoped
 public class TelegramChannelSender implements ChannelSender {
 
-    @Inject
-    ProducerTemplate producerTemplate;
+    private final ProducerTemplate producerTemplate;
+    private final Logger log;
 
     @Inject
-    Logger log;
-
-    @ConfigProperty(name = "arcclaw.channel.telegram.bot-token", defaultValue = "test-token")
-    String botToken;
+    public TelegramChannelSender(ProducerTemplate producerTemplate, Logger log) {
+        this.producerTemplate = producerTemplate;
+        this.log = log;
+    }
 
     @Override
     public ChannelType supports() {
@@ -41,7 +41,7 @@ public class TelegramChannelSender implements ChannelSender {
             log.warn("Attempted to send empty message to " + recipient.platformId() + " — skipping");
             return;   // ← never call Camel with empty body
         }
-        String endpoint = "telegram:bots?authorizationToken=" + botToken;
+        String endpoint = "telegram:bots";
         producerTemplate.sendBodyAndHeader(endpoint, text, "CamelTelegramChatId", recipient.platformId());
     }
 }
