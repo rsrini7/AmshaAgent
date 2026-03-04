@@ -50,84 +50,91 @@ public class ChatCommand implements Runnable {
         System.out.println("   Commands: /exit to quit, /reset to start fresh");
         System.out.println("-------------------------------------------------");
 
-        // NOT try-with-resources — never close Scanner(System.in)
-        @SuppressWarnings("resource")
-        Scanner scanner = new Scanner(System.in);
-
         try {
             if (!devSeeder.isUnsatisfied()) {
                 devSeeder.get().seedDevSecrets();
             }
-
-            try {
-                WorkspaceContext.run(
-                    sessionId, "cli-user", "cli-chat",
-                    AutonomyLevel.FULL,
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
-                    () -> {
-                        while (true) {
-                            System.out.print("\nYou> ");
-                            if (!scanner.hasNextLine()) break;
-                            String input;
-                            try {
-                                input = scanner.nextLine().trim();
-                            } catch (NoSuchElementException e) {
-                                break;
-                            }
-
-                            if ("/exit".equalsIgnoreCase(input) 
-                                    || "/quit".equalsIgnoreCase(input)) {
-                                System.out.println("Goodbye.");
-                                break;
-                            }
-                            if (input.isBlank()) continue;
-
-                            // Route ALL input through reflex registry (handles /approve, /deny, 
-                            // /reset, /history, /status AND PII sanitization for normal messages)
-                            ReflexResult reflexResult = reflexRegistry.processIfReflex(
-                                sessionId, "cli-user", "cli-chat", input);
-
-                            if (reflexResult.commandResponse().isPresent()) {
-                                // Reflex handled it — print and loop
-                                String reflexResponse = reflexResult.commandResponse().get();
-                                if (!reflexResponse.isBlank()) {
-                                    System.out.println("\n▶ ArcClaw> " + reflexResponse);
-                                }
-                                continue;
-                            }
-
-                            // No reflex matched — use sanitized input for agent loop
-                            String sanitizedInput = reflexResult.sanitizedInput();
-
-                            try {
-                                System.out.println("⚡ Thinking...");
-                                AgentResult result = agentLoop.run(
-                                    sessionId, role, sanitizedInput, reasoningEngine, maxIterations);
-
-                                String output = switch (result) {
-                                    case AgentResult.Finished f   -> f.answer();
-                                    case AgentResult.Failed f     -> "❌ Error: " + f.reason();
-                                    case AgentResult.LoopExceeded l -> "⏱ Timed out after " 
-                                        + l.maxIterations() + " steps.";
-                                    case AgentResult.AwaitingApproval a ->
-                                        "⏸ Approval needed for tool: " + a.toolName() 
-                                        + "\n   Type /approve or /deny";
-                                };
-                                System.out.println("\n▶ ArcClaw> " + output);
-
-                            } catch (Exception e) {
-                                System.err.println("❌ Error: " + e.getMessage());
-                            }
-                        }
-                        return null;
-                    });
-            } catch (Exception e) {
-                log.error("Error in chat command", e);
-            }
+            ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, "CLI").run(
+                () -> runChatLoop(sessionId)
+            );
+        } catch (Exception e) {
+            log.errorf(e, "Fatal error in chat session %s", sessionId);
+            System.err.println("❌ Fatal: " + e.getMessage());
         } finally {
             workspaceManager.terminateSession(sessionId);
         }
 
         System.out.println("\n[Terminated]");
+    }
+
+    private void runChatLoop(String sessionId) {
+        try {
+            WorkspaceContext.run(
+                sessionId, "cli-user", "cli-chat",
+                AutonomyLevel.FULL,
+                AgentRoleEnum.COORDINATOR.toScopedName(),
+                () -> chatLoop(sessionId)
+            );
+        } catch (Exception e) {
+            log.errorf(e, "Error in WorkspaceContext for session %s", sessionId);
+            System.err.println("❌ Session error: " + e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("resource")
+    private void chatLoop(String sessionId) {
+        Scanner scanner = new Scanner(System.in);
+
+        while (true) {
+            System.out.print("\nYou> ");
+            if (!scanner.hasNextLine()) break;
+
+            String input;
+            try {
+                input = scanner.nextLine().trim();
+            } catch (NoSuchElementException e) {
+                break;
+            }
+
+            if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
+                System.out.println("Goodbye.");
+                break;
+            }
+            if (input.isBlank()) continue;
+
+            ReflexResult reflexResult = reflexRegistry.processIfReflex(
+                sessionId, "cli-user", "cli-chat", input);
+
+            if (reflexResult.commandResponse().isPresent()) {
+                String response = reflexResult.commandResponse().get();
+                if (!response.isBlank()) {
+                    System.out.println("\n▶ ArcClaw> " + response);
+                }
+                continue;
+            }
+
+            dispatchToAgent(sessionId, reflexResult.sanitizedInput());
+        }
+    }
+
+    private void dispatchToAgent(String sessionId, String input) {
+        try {
+            System.out.println("⚡ Thinking...");
+            AgentResult result = agentLoop.run(
+                sessionId, role, input, reasoningEngine, maxIterations);
+
+            String output = switch (result) {
+                case AgentResult.Finished f      -> f.answer();
+                case AgentResult.Failed f        -> "❌ Error: " + f.reason();
+                case AgentResult.LoopExceeded l  -> "⏱ Timed out after " + l.maxIterations() + " steps.";
+                case AgentResult.AwaitingApproval a -> 
+                    "⏸ Approval needed for tool: " + a.toolName() + "\n   Type /approve or /deny";
+            };
+            System.out.println("\n▶ ArcClaw> " + output);
+
+        } catch (Exception e) {
+            log.errorf(e, "Agent error in session %s", sessionId);
+            System.err.println("❌ Error: " + e.getMessage());
+        }
     }
 }

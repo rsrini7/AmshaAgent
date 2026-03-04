@@ -30,7 +30,8 @@ public class TelegramCronNotificationObserver {
                 ? event.channelType() : ChannelType.TELEGRAM;
 
         if (type != ChannelType.TELEGRAM) {
-            log.warnf("Unhandled channel type '%s' for cronId=%s — skipping delivery",
+            // Non-Telegram channels (e.g. CLI) are expected — debug only
+            log.debugf("CRON-NOTIFY skipped for non-Telegram channel=%s cronId=%s",
                     type, event.cronId());
             return;
         }

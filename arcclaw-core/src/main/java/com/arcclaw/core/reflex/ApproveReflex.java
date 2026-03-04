@@ -158,7 +158,8 @@ public class ApproveReflex implements AgentReflex {
             case AgentResult.LoopExceeded _ -> cronRepository.markFailed(cron.id, "Loop exceeded");
         }
 
-        ChannelType chType = ChannelType.valueOf(cron.channelType != null ? cron.channelType : "TELEGRAM");
+        ChannelType chType = ChannelType.fromString(cron.channelType);
+
         String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
 
         jobCompletedEvent.fire(new AgentJobCompleted(

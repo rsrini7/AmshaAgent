@@ -11,5 +11,19 @@ public enum ChannelType {
     SLACK,
     WEBSOCKET,
     REST_API,
-    CLI
+    CLI;
+
+    /**
+     * Safe parse from a DB-sourced string.
+     * Returns TELEGRAM if the value is null, blank, or unrecognized —
+     * prevents IllegalArgumentException on legacy rows.
+     */
+    public static ChannelType fromString(String value) {
+        if (value == null || value.isBlank()) return TELEGRAM;
+        try {
+            return ChannelType.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return TELEGRAM;
+        }
+    }
 }
