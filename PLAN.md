@@ -2397,3 +2397,61 @@ Harden the application startup by enforcing strict security validation for non-d
 - ✅ `StartupSecurityValidator*Test`: All 5 security test classes pass (8 basic + 6 scenario = 14 total).
 - ✅ `mvn clean verify`: Full suite (314 tests) passed.
 
+---
+
+# Phase 48 — MessageTag Compliance ✅
+
+Implement a robust, deterministic tagging system for AI compliance injection messages using a stable, UUID-derived prefix.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Deterministic Tagging**: Replaces fragile string-contains and regex-based filtering with a stable prefix `[ARCCLAW:2f4a9c]`. This ensures filtering remains reliable even if compliance copy changes.
+
+> [!TIP]
+> **Backward Compatibility**: `PersistentChatMemoryStore` implements a dual-filter strategy. It checks for both the new `MessageTag` and the legacy `isComplianceInjection` regex, ensuring existing persisted data is still filtered correctly during the transition.
+
+> [!NOTE]
+> **UserMessage Preservation**: User-originated messages are NOT tagged or filtered by this mechanism; it is strictly for AI-side compliance injections (e.g., approval markers).
+
+## Proposed Changes
+
+### Core Module — Agent Utility
+
+#### [NEW] [MessageTag.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/MessageTag.java)
+- Constants: `COMPLIANCE_PREFIX = "[ARCCLAW:2f4a9c]"`
+- Methods: `tag(content)`, `isTagged(content)` (null-safe)
+
+### Core Module — Reasoning Engine
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Refactored `history` injection block to use `MessageTag.isTagged(ai.text())`.
+- Removed legacy multi-pattern string checks for AI messages.
+
+### Core Module — State Store
+
+#### [MODIFY] [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java)
+- Dual-filter implementation in `updateMessages()`: `!MessageTag.isTagged(ai.text()) && !isComplianceInjection(msg)`.
+- Added Phase 49 TODOs for regex removal.
+
+### App Module — Tests
+
+#### [NEW] [MessageTagTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/agent/MessageTagTest.java)
+- Pure unit tests for tagging, checking, null-safety, and prefix stability.
+
+#### [MODIFY] [LangChainReasoningEngineTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/agent/LangChainReasoningEngineTest.java)
+- Updated `testApprovalMarkerMessagesAreFilteredFromHistory` with tagged seed data.
+- Added `testTaggedAiMessageIsFilteredFromHistory` for deterministic verification.
+
+## Verification Plan
+
+### Automated Tests
+```bash
+mvn test -pl arcclaw-core -Dtest=MessageTagTest
+mvn test -pl arcclaw-app -Dtest=LangChainReasoningEngineTest
+```
+- ✅ `MessageTag` utility logic (5/5)
+- ✅ `LangChainReasoningEngine` filtering (8/8)
+- ✅ Regression suite `AgentLoopTest` (2/2)
+
+
