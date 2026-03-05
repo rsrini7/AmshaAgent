@@ -42,7 +42,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
 
         String apiKey = requestContext.getHeaderString("X-ArcClaw-API-Key");
-        String safeKey = (apiKey != null && apiKey.length() > 8) ? apiKey.substring(0, 8) + "..." : (apiKey != null ? apiKey : "null");
+        String safeKey = apiKey != null
+            ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****"
+            : "null";
         String ip = request.remoteAddress() != null ? request.remoteAddress().host() : "unknown";
         String method = requestContext.getMethod();
 

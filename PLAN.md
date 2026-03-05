@@ -2304,3 +2304,96 @@ Harden the system against prompt injection, pathological token reporting, and in
 - ✅ `mvn clean verify`: All tests green.
 ---
 
+# Phase 48 — HMAC API Key Protection ✅
+
+Harden the API key registry against timing attacks and length oracles using HMAC-based constant-time comparison.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **HMAC-Based Comparison**: Instead of comparing raw keys (which leaks length info even with `MessageDigest.isEqual`), we compute an HMAC of the provided key and compare it against pre-computed HMACs of valid keys. This ensures the comparison is always between fixed-length digests (SHA-256).
+
+> [!IMPORTANT]
+> **Pre-computation**: To maintain low latency, HMACs of all configured keys are pre-computed during `@PostConstruct`. Input keys are HMACed once per request and compared against the pre-stored map.
+
+> [!TIP]
+> **Constant-Time Traversal**: Both `isValidKey()` and `getKeyName()` are implemented to iterate through the entire set of stored keys even after a match is found. This prevents leaking the position of the key in the configuration map.
+
+## Completed Changes
+
+### Security Module — API Auth
+
+#### [MODIFY] [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyRegistry.java)
+- HMAC-based validation logic using `HmacSHA256`.
+- Pre-computation of stored key digests in `@PostConstruct`.
+- Full-scan traversal for `isValidKey` and `getKeyName`.
+- Dependency on `arcclaw.audit.hmac-key` as the secret.
+
+#### [MODIFY] [ApiKeyAuthFilter.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java)
+- Strict truncation of API keys in logs to exactly 4 characters.
+
+### Test Infrastructure
+
+#### [NEW] [ApiKeyRegistryVaryingLengthKeyTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/ApiKeyRegistryVaryingLengthKeyTest.java)
+- Isolated test profile for varying length key validation.
+
+#### [MODIFY] [ApiKeyRegistryTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/ApiKeyRegistryTest.java)
+- Updated with HMAC-specific assertions and rate-limiting tests.
+
+## Verification
+
+- ✅ `ApiKeyRegistryTest`: Verified HMAC and constant-time scanning.
+- ✅ `ApiKeyRegistryVaryingLengthKeyTest`: Verified robustness against length oracle attacks.
+- ✅ `mvn clean verify`: All 300 tests passed.
+
+---
+
+# Phase 48 — Startup Security Hardening (Profile Guards) ✅
+
+Harden the application startup by enforcing strict security validation for non-development profiles and implementing a robust testing strategy for bootstrap-halting validators.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Inverted Profile Guard**: Validation now runs for ALL profiles by default. `dev` and `test` are explicitly exempted. This follows a "secure by default" posture.
+
+> [!IMPORTANT]
+> **Mandatory Check Order**: Checks are enforced in a strict sequence (Pepper -> HMAC -> Allowlist Presence -> String-only) to ensure consistent exception reporting and prevent masking of critical security failures.
+
+> [!TIP]
+> **Safe Boot + Proper Unwrap Testing**: To test validators that halt Quarkus during bootstrap, tests boot with a "safe" configuration using a `QuarkusTestProfile`. Within the test, `io.quarkus.arc.ClientProxy.unwrap(validator)` is used to bypass the CDI proxy and manually inject unsafe values into package-private fields before manually invoking `onStart()`.
+
+## Completed Changes
+
+### Security Module — Validator
+
+#### [MODIFY] [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java)
+- Inverted logic: validates if `!profile.equals("dev") && !profile.equals("test")`.
+- Enforced check order with specific exception types (`IllegalStateException` vs `DeploymentException`).
+- Added strict multi-line `DeploymentException` message for string-only allowlists (P1-3).
+- Fields made package-private to support test unwrapping.
+
+### Test Module — Security Tests
+
+#### [NEW] [StartupSecurityValidatorStringOnlyAllowlistTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorStringOnlyAllowlistTest.java)
+- Verifies that string-only allowlists trigger the mandatory security error message in `staging`.
+- Uses `ClientProxy.unwrap()` for field overrides.
+
+#### [NEW] [StartupSecurityValidatorProdUnsafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdUnsafeTest.java)
+- Verifies that unsafe secrets in `prod` profile trigger an `IllegalStateException`.
+- Uses `ClientProxy.unwrap()` for field overrides.
+
+#### [NEW] [StartupSecurityValidatorUnknownProfileTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorUnknownProfileTest.java)
+- Verifies that unknown/typoed profiles are treated as "non-safe" and trigger validation.
+
+#### [NEW] [StartupSecurityValidatorProdSafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdSafeTest.java)
+- Verifies that correct secrets in `prod` allow successful startup.
+
+#### [NEW] [StartupSecurityValidatorDevExemptTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorDevExemptTest.java)
+- Verifies that the `dev` profile bypasses security validation.
+
+## Verification
+
+- ✅ `StartupSecurityValidator*Test`: All 5 security test classes pass (8 basic + 6 scenario = 14 total).
+- ✅ `mvn clean verify`: Full suite (314 tests) passed.
+

@@ -28,29 +28,42 @@ public class StartupSecurityValidator {
     Optional<List<String>> allowedUsers;
 
     void onStart(@Observes StartupEvent ev) {
-        if ("prod".equals(profile) || "staging".equals(profile)) {
+        if (!"dev".equals(profile) && !"test".equals(profile)) {
+            // 1. pepper check -> throws IllegalStateException
             if (pepper.startsWith("dev-pepper")) {
                 throw new IllegalStateException(
                     "[SECURITY] arcclaw.vault.pepper is using the dev default. " +
                     "Set ARCCLAW_VAULT_PEPPER in your .env before running in prod.");
             }
+            // 2. HMAC key check -> throws IllegalStateException
             if (hmacKey.startsWith("dev-audit-hmac-key")) {
                 throw new IllegalStateException(
                     "[SECURITY] arcclaw.audit.hmac-key is using the dev default. " +
                     "Set ARCCLAW_AUDIT_HMAC_KEY in your .env before running in prod.");
             }
 
-            // Phase 46: Allowlist presence check — open access is forbidden in production
             boolean hasUserIds = allowedUserIds.isPresent()
                     && !allowedUserIds.get().isEmpty();
             boolean hasUsernames = allowedUsers.isPresent()
                     && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
+
+            // 3. allowlist presence -> throws IllegalStateException if both lists empty
             if (!hasUserIds && !hasUsernames) {
-                throw new jakarta.enterprise.inject.spi.DeploymentException(
+                throw new IllegalStateException(
                     "[SECURITY] Both arcclaw.channel.telegram.allowed-user-ids and " +
                     "arcclaw.channel.telegram.allowed-users are empty in " + profile + " profile. " +
-                    "Open access is strictly forbidden in production. " +
+                    "Open access is strictly forbidden. " +
                     "Configure at least one allowlist before deploying.");
+            }
+
+            // Phase 48: String-username-only allowlist is forbidden in non-dev/non-test
+            if (!hasUserIds && hasUsernames) {
+                throw new jakarta.enterprise.inject.spi.DeploymentException(
+                    "SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is " +
+                    "not configured, but arcclaw.channel.telegram.allowed-users " +
+                    "(string username list) is. String username allowlists are a " +
+                    "username-hijack vector and are forbidden in profile '" + profile +
+                    "'. Migrate to numeric Telegram user IDs before deploying.");
             }
         }
     }

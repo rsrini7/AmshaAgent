@@ -61,6 +61,8 @@
 | **Governance** | Token Count Bypass | Providers omitting token counts (returning `0,0`) bypass budget. | Inflate pathological `(0,0)` counts to `(1,1)` in `GovernanceLayer`. |
 | **Security** | Prompt Injection | User input masquerading as agent instructions. | Use `<<<USER_INPUT_START/END>>>` delimiters + user content sanitization in `IntentClassifierService`. |
 | **Channel** | Startup Failures | Telegram route crashing on missing/mock token. | Added token validity check to `TelegramChannelRoute` before starting the route. |
+| **Test** | `Failed to start quarkus` | Validator halts app via `@Observes StartupEvent` before test context initializes. | **Safe Boot + Proper Unwrap**: Boot with `test` profile (safe), then use `ClientProxy.unwrap()` to override fields before manual call. |
+| **CDI** | Test field overrides ignored | `@Inject` provides a Client Proxy; modifications to its fields have no effect on the bean. | Use `io.quarkus.arc.ClientProxy.unwrap(bean)` to access and modify the actual implementation instance. |
  
 ---
 
@@ -187,7 +189,16 @@
 ### 🔴 Failure: Integration Test Leakage across Suites
 **Symptom:** An integration test checking `activeSessionCount()` passes in isolation but throws `expected: <1> but was: <3>` on a full suite build `mvn clean verify -pl arcclaw-app -am`.
 **Root Cause:** Static/Application-scoped maps like `ConcurrentHashMap` in `WorkspaceManager` linger throughout the entire test classloader lifecycle unless strictly cleared explicitly.
-**Resolution:** Inject a hermetic teardown method `clearAll()` manually inside the test (`@BeforeEach` or `@AfterEach`).
+**Resolution:**- Inject a hermetic teardown method `clearAll()` manually inside the test (`@BeforeEach` or `@AfterEach`).
+
+### 4.8. Security Validation & Bootstrap Failures
+**Symptom:** `@QuarkusTest` crashes during initialization with `java.lang.RuntimeException: Failed to start quarkus` when testing unsafe configurations.
+**Root Cause:** The `StartupSecurityValidator` uses `@Observes StartupEvent` to halt the application for security reasons. Quarkus's test runner attempts to boot the full application context *before* executing any test methods. If validation fails, the shutdown occurs during the boot phase, preventing the test lifecycle from ever reaching the `assertThrows` block.
+**Resolution:**
+1. **Boot with Safe Profile:** Use a `@TestProfile` that provides a safe configuration (e.g., `quarkus.profile=test` or safe secret values) to allow the application to boot successfully.
+2. **Unwrap the Proxy:** `@Inject` the validator into the test. Because Quarkus uses proxies, use `ClientProxy.unwrap(validator)` to get the real bean instance.
+3. **Manual Override:** Manually set the package-private fields (`profile`, `pepper`, etc.) to the unsafe values you wish to test.
+4. **Manual Execution:** Trigger the validator manually using `validator.onStart(new StartupEvent())` and wrap it in `assertThrows(...)`.
 
 ---
 
@@ -432,6 +443,7 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 | OTel Tracer | `@InjectMock Tracer` | N/A |
 | Extension-managed beans | `@Alternative` + `@Priority` | 8081 |
 | Custom context (`WorkspaceScopeContext`) | `Arc.container()` lookup | N/A |
+| **Bootstrap-Halting Validators** | **Safe Boot + Proper Unwrap** + Manual Call | N/A |
 
 ### 12.6 Build Commands Cheat Sheet
 ```bash
@@ -3023,3 +3035,23 @@ This is a JVM shutdown sequencing problem in the test harness. The `AsyncPersist
 **Symptom:** Startup logs full of HTTP 404/401 errors from Telegram Component.
 **Root Cause:** Camel Telegram tries to poll even if the token is the default "mock-token" placeholder.
 **Resolution:** `TelegramChannelRoute` now checks `if (botToken == null || "mock-token".equals(botToken))` and refuses to call `from(...)` if invalid.
+
+---
+
+## 20. HMAC API Key Protection (Phase 48)
+
+### 🔴 Failure: Duplicate API Key Values in Config
+**Symptom:** API authentication works, but `getKeyName()` returns the last name mapped to the duplicate value, or a user with the "wrong" name is logged.
+**Root Cause:** The `ApiKeyRegistry` scans all entries for constant-time safety. If two people have the same key value, the one later in the iteration order will be returned as the "name".
+**Resolution:** Duplicate API key values are a configuration error. Ensure all values in `arcclaw.api.keys` are unique. The code is designed to scan all entries to prevent timing leaks, so "first match" logic is intentionally avoided.
+
+### 🔴 Failure: NoSuchAlgorithmException for HmacSHA256
+**Symptom:** `ApiKeyRegistry` fails to initialize or crashes with a security exception.
+**Root Cause:** The underlying JVM or security provider does not support `HmacSHA256`.
+**Resolution:** This should not happen on standard JVMs (standard algorithm). If it occurs, verify the cryptographic providers available in the runtime environment.
+
+### 🔴 Failure: API Key Logs truncated too early
+**Symptom:** Logs show `null****` or less than 4 characters for long keys.
+**Root Cause:** Truncation logic assumes a minimum length that might not exist, or safe-substring offsets are miscalculated.
+**Resolution:** `ApiKeyAuthFilter` now uses `Math.min(4, key.length())` to safely extract up to 4 characters, ensuring it never throws `StringIndexOutOfBoundsException` and always provides the maximum safe prefix.
+

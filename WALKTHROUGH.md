@@ -54,6 +54,7 @@
 | 47.3 | Agent State Machine Refactor (Tier 3/3A)| 100% success | Extracted loop from AgentLoop; fixed engine delegation & context |
 | 48 | Telegram Bot Refactor | 100% success | Removed tokens from URIs, component configuration |
 | 49 | Intent & Governance Hardening | 100% success | Prompt injection delimiters + Pathological zero-token guard |
+| 50 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
 
 ---
 
@@ -1200,4 +1201,44 @@ Resolved flaky tests and critical semaphore permit leaks in the `AgentCronSchedu
 - ✅ `IntentClassifierServiceTest`: Verified delimiter presence and sanitization logic.
 - ✅ `mvn clean verify`: 296/296 tests passed.
 
+---
 
+## Phase 48: API Key Security Hardening (HMAC & Constant-Time)
+
+### Changes
+- **HMAC-Based Comparison**: Replaced `MessageDigest.isEqual()` on raw keys with `HmacSHA256` comparison using the existing `arcclaw.audit.hmac-key` as the secret. This eliminates both the short-circuit timing leak and the length oracle.
+- **Pre-computed Digests**: Pre-compute HMAC digests for all stored API keys at `@PostConstruct` for performance.
+- **Constant-Time Traversal**: `isValidKey()` and `getKeyName()` now scan ALL entries regardless of match position, preventing leak of key position in configuration.
+- **Strict Truncation**: API key log truncation now caps at exactly 4 characters followed by `****`, regardless of actual key length.
+- **Test Infrastructure Hardening**:
+    - Split `ApiKeyRegistryTest` into two classes (`ApiKeyRegistryTest` and `ApiKeyRegistryVaryingLengthKeyTest`) to avoid `@TestProfile` collision and ensure stable testing of multiple configurations.
+    - Added specific test cases to verify HMAC correctness with varying key lengths and ensure no crashes occur.
+
+### Verification Results
+- ✅ `ApiKeyRegistryTest`: **PASSED** (Verified HMAC validation, constant-time logic, and rate-limiting).
+- ✅ `ApiKeyRegistryVaryingLengthKeyTest`: **PASSED** (Verified robustness against varying key lengths).
+- ✅ `mvn clean verify`: 300/300 tests passed (Total tests increased due to split and new cases).
+
+---
+
+## Phase 48: Startup Security Hardening (Profile Guards) ✅
+
+Implemented a "secure by default" startup validation layer that prevents the application from booting with unsafe secrets in sensitive environments.
+
+| File | Purpose |
+|------|---------|
+| [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java) | Inverted profile guard and enforced mandatory check order. |
+| [StartupSecurityValidatorProdUnsafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdUnsafeTest.java) | Test for unsafe secrets in a non-dev profile. |
+| [StartupSecurityValidatorProdSafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdSafeTest.java) | Test for successful boot with safe secrets. |
+
+**Testing Strategy: Safe Boot + Proper Unwrap**
+To overcome the challenge of `@QuarkusTest` failing when the validator intentionally halts the CDI context:
+1.  **Safe Boot**: The test boots Quarkus using a "safe" configuration (provided by a `QuarkusTestProfile`).
+2.  **Unwrap**: In the test method, `ClientProxy.unwrap(validator)` is used to retrieve the underlying bean instance from its CDI proxy.
+3.  **Override**: The test manually overrides the bean's package-private fields to the target "unsafe" state.
+4.  **Manual Invoke**: `validator.onStart(new StartupEvent())` is called manually, and the resulting exception is asserted.
+
+**Verification**:
+- ✅ All five scenario-based test classes (ProdUnsafe, UnknownProfile, ProdSafe, DevExempt, StringOnlyAllowlist) passed.
+- ✅ Verified that string-only allowlists in `staging` trigger the mandatory P1-3 error message.
+- ✅ Full build verification: `mvn clean verify` succeeds with 314 tests.
