@@ -224,6 +224,7 @@ quarkus:
 # ARCCLAW APPLICATION CONFIG
 # =============================================================================
 arcclaw:
+  data-dir: "${ARCCLAW_DATA_DIR:./data}"
   security:
     prompt-injection:
       enabled: true
@@ -400,6 +401,7 @@ mp:
           level: INFO
 
   arcclaw:
+    data-dir: "${ARCCLAW_DATA_DIR:./data}"
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
@@ -505,6 +507,7 @@ mp:
       console:
         color: false
   arcclaw:
+    data-dir: "${ARCCLAW_DATA_DIR:./data}"
     workspace:
       root-dir: /var/arcclaw/workspaces
     sandbox:
