@@ -2595,142 +2595,183 @@ TEST 2: Add to existing LangChainReasoningEngineTest.java:
 
 ---
 
-## Documentation Update Instructions (All Phases Combined)
+```
+## Follow-up Prompt: P2-1 — CLI Approval Flow Completion
+
+## CONTEXT
+
+ChatCommand routes `/approve` and `/deny` through ReflexRegistry correctly.
+However, `dispatchToAgent()` returns `AgentResult.AwaitingApproval` with a
+prompt but does NOT persist the approval state to StatefulAgentStore or call
+WorkspaceManager.recordHeartbeat(). When the user types `/approve`, the
+ApproveReflex fires but finds no AWAITING_APPROVAL checkpoint in the store —
+it silently fails or routes to the LLM as raw text.
+
+The REST path (`AgentResource.approveSession()`) works because it loads the
+checkpoint from StatefulAgentStore and resumes via AgentLoop. The CLI path
+must do the same.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Wire approval persistence in ChatCommand
+File: arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java
+
+In dispatchToAgent(), when result is AgentResult.AwaitingApproval:
+- Call workspaceManager.recordHeartbeat(sessionId) so the session is not
+  GC'd while waiting for user input.
+- The checkpoint persistence is already handled inside AgentLoop when it
+  returns AwaitingApproval — no extra store.save() needed here.
+- Print the approval prompt clearly:
+
+  case AgentResult.AwaitingApproval a ->
+      "⏸ Approval needed for tool: " + a.toolName() +
+      "\nParams: " + a.paramsJson() +
+      "\nReply /approve or /deny";
+
+Inject WorkspaceManager into ChatCommand:
+  @Inject WorkspaceManager workspaceManager;
+
+Component 2 — Verify ApproveReflex and DenyReflex work in CLI context
+
+ApproveReflex and DenyReflex read WorkspaceScopeHolder.USER_ID and
+WorkspaceScopeHolder.CHAT_ID to load the checkpoint. In CLI context these
+are set to "cli-user" and "cli-chat" respectively.
+
+Verify in ApproveReflex that agentStore.load() is called with the correct
+sessionId and role. If it cannot find the checkpoint it must print a clear
+error:
+  "No pending approval found for this session. Nothing to approve."
+
+Do NOT silently return empty. The user needs to know the state.
+
+Component 3 — Display pending tool params on AwaitingApproval
+Currently the CLI only shows the tool name. Show params truncated to 200 chars
+so the user knows what they're approving:
+
+  String truncatedParams = a.paramsJson() != null
+      && a.paramsJson().length() > 200
+      ? a.paramsJson().substring(0, 200) + "... [truncated]"
+      : a.paramsJson();
+
+TEST
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/cli/ChatCommandApprovalTest.java (NEW)
+
+Use @QuarkusTest. Mock AgentLoop to return AgentResult.AwaitingApproval.
+Verify:
+- workspaceManager.recordHeartbeat() is called when AwaitingApproval is returned
+- Output contains tool name and truncated params
+- /approve routes through ReflexRegistry (not dispatched to AgentLoop directly)
+```
+
+---
 
 ```
-## Once all P0 and P1 components pass their tests, update the following files:
+## Follow-up Prompt: P2-2 — Session Heartbeat TTL on CLI Exit
 
-TROUBLESHOOTING.md — Add a "Phase 48 Challenges" section:
+## CONTEXT
 
-- Semaphore permit leak: The outer catch must use AtomicBoolean executionEntered
-  (set as the first statement inside executeCronJob()) to distinguish
-  pre-execution failures from post-execution escapes. Never use a database
-  read (cronRepository.getStatus()) in an exception handler — it adds latency,
-  risks a broken-thread DB call, and conflicts with the P2-4 CronStatus
-  migration in Phase 49.
+ChatCommand calls workspaceManager.terminateSession(sessionId) in the finally
+block — correct. However if the JVM is killed (Ctrl+C, kill -9) the finally
+block does not run and the session heartbeat record stays in the DB forever.
+WorkspaceManager.gc() uses gc-interval (5 min default) to expire sessions
+whose heartbeat is older than heartbeat-interval (60s default). This means
+a crashed CLI session expires naturally within ~65 seconds — acceptable.
 
-- Camel component config key is kebab-case (authorization-token), not camelCase.
-  Verify against the camel-quarkus-telegram version in arcclaw-parent/pom.xml.
-  A misconfigured key produces no startup error — it silently uses no token
-  and fails with authentication errors at runtime. Confirm the property is
-  applied by checking the application log at startup for the Camel component
-  configuration entry.
+However WorkspaceManager.recordHeartbeat() is only called at session creation
+in REST mode (AgentResource.createSession()). CLI mode never calls it, so
+the GC never sees the CLI session at all — it has no heartbeat to expire.
 
-- WorkspaceContext.run() accepts Callable<T>, not Runnable. Wrap with
-  () -> { ...; return null; }.
+## IMPLEMENTATION REQUIREMENTS
 
-- WorkspaceContext.requireSessionId() does NOT exist. Verify scope activation
-  through observable side effects — e.g., that agentLoop.run() was reached and
-  the session ID starts with the expected prefix.
+Component 1 — Record initial heartbeat for CLI sessions
+File: arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java
 
-- System.setIn restoration in tests: always capture the original InputStream
-  BEFORE calling System.setIn(). Restore with System.setIn(original), never
-  System.setIn(System.in) after replacement — that restores the mock to itself.
+In runChatLoop(), before entering WorkspaceContext.run(), add:
+  workspaceManager.recordHeartbeat(sessionId);
 
-- MessageDigest.isEqual() length oracle: only constant-time for equal-length
-  arrays. HMAC-SHA256 normalizes all inputs to 32 bytes, eliminating the
-  length leak. Pre-compute stored key HMACs at @PostConstruct to keep
-  Mac.getInstance()/mac.init() off the per-request hot path.
+This registers the session with the GC. The terminateSession() in the
+finally block removes it cleanly on normal exit. On crash, GC expires it.
 
-- GovernanceLayer + log-requests coupling: disabling LLM logging may suppress
-  token counts from the provider. The zero-token floor guard (both input AND
-  output = 0) is required. A partial zero (3 input, 0 output) is a valid API
-  response and must NOT trigger the floor.
+Component 2 — Refresh heartbeat on each user input
+In chatLoop(), after reading user input and before dispatching, add:
+  workspaceManager.recordHeartbeat(sessionId);
 
-- @Nested @TestProfile in Quarkus: does NOT work. Each profile scenario requires
-  its own top-level test class. @Nested annotations on @QuarkusTest are silently
-  ignored or cause initialization errors.
+This prevents long idle CLI sessions from being GC'd mid-conversation.
+The 60s heartbeat-interval means the user has 60 seconds of idle time
+before the GC considers the session stale — reasonable for interactive use.
 
-- @InjectMocks on @ApplicationScoped CDI beans: bypasses CDI and violates
-  Global Rule 10. Restructure to constructor injection or use @QuarkusTest
-  with @InjectMock.
+Component 3 — No changes to WorkspaceManager
+WorkspaceManager GC already handles expired sessions correctly. No changes
+needed there.
 
-- DeploymentException import: use jakarta.enterprise.inject.spi.DeploymentException
-  — not jakarta.enterprise.inject.DeploymentException or any other variant.
+TEST — Verify heartbeat is recorded at session start:
+Add to existing ChatCommandTest or create new test. Mock WorkspaceManager.
+Verify recordHeartbeat(sessionId) is called before the chat loop starts.
+```
 
-- Delimiter bypass in IntentClassifierService: a user can send the delimiter
-  string (<<<USER_INPUT_END>>>) to close the delimiter early. Always sanitize
-  the user message with .replace(DELIM_OPEN, "").replace(DELIM_CLOSE, "")
-  before wrapping.
+---
 
-- String.formatted() in classifier prompt: if any role description in the
-  @PostConstruct-built template contains a literal % character, String.formatted()
-  throws MissingFormatArgumentException. Use string concatenation for the
-  template-building step in @PostConstruct.
+```
+## Follow-up Prompt: P2-3 — MemorySearchTool FTS Null Safety + Empty Result Handling
 
-- MessageTag backward compatibility: pre-Phase-48 AI messages in SQLite do not
-  carry the [ARCCLAW:2f4a9c] prefix. They pass through the filter unstripped —
-  this is correct and intentional. Old compliance injections may persist in
-  long-running sessions until history is compacted or the session is reset.
+## CONTEXT
 
-- executeCronJob() signature change: before adding the AtomicBoolean parameter,
-  confirm the method is private with exactly one call site. Any additional callers
-  (test helpers, secondary cron paths) must be updated simultaneously or they
-  will fail to compile.
+MemorySearchTool queries the FTS5 index via FtsConnectionInterceptor. Two
+known failure modes:
 
-- CyclicBarrier in cron tests: always use a timed await() —
-  barrier.await(5, TimeUnit.SECONDS) — not the no-timeout variant. If a job
-  throws before reaching barrier.await() (e.g. a null dereference inside
-  executeCronJob), the barrier never collects both parties and the test hangs
-  indefinitely with no failure message.
+1. FTS database not attached (first connection on cold start before
+   FtsConnectionInterceptor fires) — throws "no such table: fts.compaction_summary_fts"
+   which propagates as a tool failure to the LLM.
 
-- TelegramChannelSender constructor injection: remove @Inject from the
-  ProducerTemplate and TelegramMarkdownV2Renderer fields when adding the
-  @Inject constructor. Keeping both field-level @Inject AND constructor-level
-  @Inject causes CDI ambiguity.
+2. Empty result set — the tool returns an empty string or null, the LLM
+   receives an empty tool result and hallucinates a response.
 
-- devSeeder in ChatCommand must be Instance<DevSecretSeeder>: a direct
-  @Inject DevSecretSeeder fails in prod builds because the bean is
-  @IfBuildProfile("dev") and absent. The Instance<> wrapper with
-  isUnsatisfied() guard is the only safe pattern.
+## IMPLEMENTATION REQUIREMENTS
 
-- openai missing from %dev LLM logging override: the root-level config sets
-  openai log-requests/responses to false. The %dev block must also include
-  openai so the arcclaw.debug.llm flag applies symmetrically to all providers.
+Component 1 — Null/empty result guard in MemorySearchTool
+File: arcclaw-core/src/main/java/com/arcclaw/core/tools/MemorySearchTool.java
 
-- % characters in AgentRoleEnum descriptions: when building the classifier
-  prompt template in @PostConstruct, call .replace("%", "%%") on each role
-  description before appending it. A bare % in the template causes
-  String.formatted() to throw MissingFormatArgumentException in classify().
+In execute(), wrap the FTS query in try-catch:
+  try {
+      String result = ftsRepository.search(query, sessionId);
+      if (result == null || result.isBlank()) {
+          return ToolResponse.success(
+              "No relevant memory found for query: " + query +
+              ". Proceed with current context only.");
+      }
+      return ToolResponse.success(result);
+  } catch (Exception e) {
+      String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+      if (msg.contains("no such table") || msg.contains("fts")) {
+          log.warnf("FTS index unavailable for session %s: %s", sessionId, msg);
+          return ToolResponse.success(
+              "Memory index temporarily unavailable. Proceed with current context.");
+      }
+      log.errorf(e, "MemorySearchTool failed for session %s", sessionId);
+      return ToolResponse.failure(500, "Memory search failed: " + msg);
+  }
 
-- @PostConstruct collision in ApiKeyRegistry: CDI allows only one @PostConstruct
-  per bean. If one already exists (e.g. for rate limiter init), merge the HMAC
-  pre-computation into it — do not add a second @PostConstruct annotation.
+The "no such table" path returns success (not failure) deliberately —
+the LLM should gracefully continue without memory rather than halting.
 
-- onStart() check order in StartupSecurityValidator: pepper → HMAC key →
-  allowlist presence → string-only allowlist. Placing the P1-3 DeploymentException
-  check before the pepper/HMAC checks causes tests that expect IllegalStateException
-  to receive DeploymentException instead, producing a misleading failure.
+Component 2 — No changes to FtsConnectionInterceptor
+The interceptor already handles re-attach on connection acquire. The
+MemorySearchTool guard is a belt-and-suspenders defense for the race
+between first connection and first tool call.
 
-- allowed-user-ids empty string in TestProfile: omit the config key entirely
-  rather than setting it to "". An empty string may be parsed by the Quarkus
-  Long-list converter as List.of(0L), making hasNumericIds=true and silently
-  preventing the P1-3 check from firing.
+TEST
 
-- nextStep() signature in LangChainReasoningEngineTest: do not infer the
-  parameter list from the prompt. Copy the exact call from an existing passing
-  test in LangChainReasoningEngineTest to guarantee a compiling invocation.
+File: arcclaw-core/src/test/java/com/arcclaw/core/tools/MemorySearchToolTest.java
 
-PLAN.md — Update Phase 48 entry:
-- Status: IN PROGRESS
-- Components: P0-1 through P1-4 (list all component files changed)
-- Deferred to Phase 49: P2-1 through P2-8
-- NOTE: Rule 12 in the Master Context (CronStatus enum) documents the P2-4
-  design for Phase 49. P2-4 is NOT implemented in Phase 48. Any Phase 48 code
-  that reads job status does so via raw String comparison and will be
-  migrated to CronStatus in Phase 49.
-
-TASKS.md — Tick off:
-- [ ] → [x] P0-1: Semaphore leak fixed (AtomicBoolean pattern)
-- [ ] → [x] P0-2: Bot token removed from Camel URI
-- [ ] → [x] P0-3: TelegramChannelSender.send() implemented (constructor injection)
-- [ ] → [x] P0-4: ChatCommand scope activation + lifecycle (terminateSession)
-- [ ] → [x] P0-5: LLM logging config + governance zero-token floor
-- [ ] → [x] P0-6: Classifier prompt injection hardening + sync refactor
-- [ ] → [x] P1-1: ApiKeyRegistry HMAC comparison + @PostConstruct pre-compute
-- [ ] → [x] P1-2: StartupSecurityValidator profile guard inverted
-- [ ] → [x] P1-3: String-only allowlist blocked at startup (DeploymentException)
-- [ ] → [x] P1-4: MessageTag filtering replaces toString() pattern matching
-- [ ] P2-1 through P2-8: Deferred to Phase 49
+Add:
+- testEmptyFtsResultReturnsGracefulMessage — mock ftsRepository.search()
+  to return empty string, verify ToolResponse.success() with
+  "No relevant memory found" message.
+- testFtsUnavailableReturnsGracefulMessage — mock ftsRepository.search()
+  to throw RuntimeException("no such table: fts.compaction_summary_fts"),
+  verify ToolResponse.success() with "temporarily unavailable" message.
+- testFtsGenericExceptionReturnsFailure — mock to throw
+  RuntimeException("connection reset"), verify ToolResponse.failure(500, ...).
 ```
 
