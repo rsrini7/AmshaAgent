@@ -40,10 +40,6 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         long startTime = System.currentTimeMillis();
         String path = uriInfo.getPath();
 
-        // Bypass Quarkus internal endpoints
-        if (path.startsWith("/q/health") || path.startsWith("/q/metrics") || path.startsWith("/q/openapi") || path.startsWith("/q/swagger-ui")) {
-            return;
-        }
 
         String apiKey = requestContext.getHeaderString("X-ArcClaw-API-Key");
         String safeKey = (apiKey != null && apiKey.length() > 8) ? apiKey.substring(0, 8) + "..." : (apiKey != null ? apiKey : "null");
@@ -68,7 +64,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        if (apiKeyRegistry.isRateLimited(apiKey)) {
+        if (!apiKeyRegistry.isAllowed(apiKey)) {
             logAudit(safeKey, path, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
             requestContext.abortWith(Response.status(429)
                     .header("Retry-After", "60")
@@ -78,8 +74,6 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        apiKeyRegistry.recordRequest(apiKey);
-        
         // Push user identifier to MDC for Audit logs to pick up
         String userId = apiKeyRegistry.getKeyName(apiKey);
         if (userId != null) {

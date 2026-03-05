@@ -37,7 +37,7 @@ public class SaraswatiAgent implements Agent {
             - If you cannot find the requested information, say so honestly.
             - Always cite the source of your findings.
 
-            AVAILABLE TOOLS: github
+            AVAILABLE TOOLS: github, memorysearch
             """;
 
     @Override
@@ -52,6 +52,6 @@ public class SaraswatiAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        return List.of("github");
+        return List.copyOf(AgentRoleEnum.RESEARCHER.definition().toolNames());
     }
 }

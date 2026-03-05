@@ -2885,4 +2885,16 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 **Root Cause**: A typo in the test case was looking for `memorysearch` while the system-wide tool name is `memory_search`.
 **Resolution**: Standardized the tool name to `memory_search` in `LangChainReasoningEngineTest.java` to match the `RoleRegistry` and `ToolRegistry` definitions.
 
+---
+
+## 22. Phase 47: Unified Capabilities & Context Modernization (Tier 1)
+
+| Category | Symptom | Root Cause | Resolution |
+| --- | --- | --- | --- |
+| **CDI** | `UnsatisfiedResolutionException` for `WorkspaceContext` | Replaced CDI with `ScopedValue`. Classes still using `@Inject WorkspaceContext` will fail at boot. | Remove `@Inject WorkspaceContext` and use `WorkspaceContext.AUTONOMY.get()` instead. |
+| **Build** | `mvn verify` fails with stale code in `-core` | Native build `-pl arcclaw-app` doesn't recompile `-core` changes. | Use `-am` (also-make) flag: `mvn clean verify -pl arcclaw-app -am`. |
+| **Rate Limit** | `ApiKeyRegistry` tests fail on burst | Custom sliding window logic had race conditions on virtual threads. | Migrated to **Bucket4j** for atomic token-bucket operations. |
+| **Auth** | dead code warning in `ApiKeyAuthFilter` | Guard block `path.startsWith("/q/")` was redundant as Quarkus handles this first. | Deleted the guard block; auth-exempt paths are now strictly a Quarkus policy concern. |
+
+
 

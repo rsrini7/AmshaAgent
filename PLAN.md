@@ -1969,3 +1969,56 @@ Transitioned ArcClaw from a reactive chatbot into a proactive agent capable of s
 - ✅ **`AgentCronSchedulerTest`**: Verified poll-fire logic, crash recovery, and virtual thread dispatch.
 - ✅ **Regression**: 147/147 core tests and 101/101 app tests pass (248/248 total).
 
+---
+
+# Phase 47: Unified Capabilities & Context Modernization (Tier 1) ✅
+
+Tier 1 focuses on technical debt reduction and architectural modernization for agent permissions and execution context.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **ScopedValue (JEP 487)**: Replaced CDI `@WorkspaceScoped` for the `WorkspaceContext` bean. CDI injection of request/session-scoped state is prone to leakage in virtual thread environments. `ScopedValue` provides a formal, immutable, and thread-safe binding that is inherited by child threads (e.g., in `AgentLoop`).
+
+> [!TIP]
+> **Unified Capability Matrix**: Merged tool permissions into `AgentRoleEnum` via `RoleDefinition`. This eliminates the "split brain" where agents, the registry, and prompts previously disagreed on tool access.
+
+> [!NOTE]
+> **Bucket4j**: Replaced custom sliding-window rate limiting with `Bucket4j`. This provides atomic token-bucket refills and is better suited for the high-concurrency virtual thread model.
+
+## Completed Changes
+
+### Core Module — Capability Matrix
+
+#### [NEW] [ToolCapability.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ToolCapability.java)
+- Enum mapping internal tool IDs to LLM-facing tool names.
+
+#### [NEW] [RoleDefinition.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/RoleDefinition.java)
+- Immutable record defining name, description, and permitted tools.
+
+#### [MODIFY] [AgentRoleEnum.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRoleEnum.java)
+- Embedded `RoleDefinition` into each enum constant. Added `ARCHITECT` role.
+
+### Core Module — Context Modernization
+
+#### [MODIFY] [WorkspaceContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceContext.java)
+- Removed CDI `@WorkspaceScoped` and `@Inject`.
+- Replaced with static `ScopedValue` constants for `AUTONOMY` and `USER_ID`.
+- Added `run(AutonomyLevel, Runnable)` and `runWithFullAutonomy(Runnable)` utilities.
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- Updated to use `WorkspaceContext.run()` to propagate autonomy to the reasoning engine and tool executions.
+
+### Core Module — Rate Limiting (Bucket4j)
+
+#### [MODIFY] [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/ApiKeyRegistry.java)
+- Replaced custom `AtomicReference` window with `Bucket4j` buckets stored in a `Caffeine` cache.
+
+### Verification
+
+- ✅ `RoleDefinitionTest`: Verified tool-role mapping consistency.
+- ✅ `WorkspaceContextTest`: Verified `ScopedValue` propagation and nesting.
+- ✅ `ApiKeyRegistryTest`: Verified Bucket4j burst and refill logic.
+- ✅ `mvn clean verify -pl arcclaw-app -am`: 248 tests green.
+
+

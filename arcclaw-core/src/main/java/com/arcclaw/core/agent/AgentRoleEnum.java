@@ -5,16 +5,57 @@ package com.arcclaw.core.agent;
  * Prevents magic-string routing errors and typo-driven persona switching.
  */
 public enum AgentRoleEnum {
-    ARCHITECT("architect"),
-    COORDINATOR("coordinator"),
-    RESEARCHER("researcher"),
-    CODER("coder"),
-    DEBUGGER("debugger");
+    ARCHITECT("architect", new RoleDefinition(
+            "architect",
+            "Architect (System Designer)",
+            "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
+            2,
+            true,
+            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+    )),
+
+    COORDINATOR("coordinator", new RoleDefinition(
+            "coordinator",
+            "Vishnu (Coordinator)",
+            "Orchestrates sub-agents, manages session state, and schedules background tasks.",
+            5,
+            false,
+            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE)
+    )),
+
+    RESEARCHER("researcher", new RoleDefinition(
+            "researcher",
+            "Saraswati (Researcher)",
+            "Perform information retrieval, web searches, and documentation lookups.",
+            3,
+            false,
+            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+    )),
+
+    CODER("coder", new RoleDefinition(
+            "coder",
+            "Brahma (Creator)",
+            "Writes new architectural code, features from scratch, and logic implementations.",
+            3,
+            false,
+            java.util.Set.of() // SANDBOX_EXEC deferred to Phase 48
+    )),
+
+    DEBUGGER("debugger", new RoleDefinition(
+            "debugger",
+            "Shiva (Destroyer/Debugger)",
+            "Analyzes stack traces, finds bugs, and fixes broken code.",
+            3,
+            false,
+            java.util.Set.of(ToolCapability.GITHUB)
+    ));
 
     private final String canonicalName;
+    private final RoleDefinition definition;
 
-    AgentRoleEnum(String canonicalName) {
+    AgentRoleEnum(String canonicalName, RoleDefinition definition) {
         this.canonicalName = canonicalName;
+        this.definition = definition;
     }
 
     /**
@@ -22,6 +63,13 @@ public enum AgentRoleEnum {
      */
     public String toScopedName() {
         return canonicalName;
+    }
+
+    /**
+     * @return the definitive capability and operational constraints for this role
+     */
+    public RoleDefinition definition() {
+        return definition;
     }
 
     /**
@@ -40,7 +88,7 @@ public enum AgentRoleEnum {
         String normalized = roleStr.trim().toLowerCase();
 
         return switch (normalized) {
-            case "architect" -> ARCHITECT;
+            case "architect", "brahaspati" -> ARCHITECT;
             case "coordinator", "vishnu" -> COORDINATOR;
             case "researcher", "saraswati" -> RESEARCHER;
             case "coder", "brahma" -> CODER;

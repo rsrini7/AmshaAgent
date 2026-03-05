@@ -1,16 +1,20 @@
 package com.arcclaw.core.agent;
 
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.scope.WorkspaceContext;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 
 /**
  * Resilience tests for the Agent reasoning loop.
@@ -26,13 +30,11 @@ class AgentResilienceTest {
     @Inject
     AgentLoop agentLoop;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @Test
     void testHallucinatedToolHandledGracefully() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             var callCount = new AtomicInteger(0);
 
             ReasoningEngine engine = (sessionId, role, goal, history) -> {
@@ -64,6 +66,7 @@ class AgentResilienceTest {
                     "Observation should explain the tool doesn't exist");
             assertTrue(firstStep.observation().contains("Available tools"),
                     "Observation should list available tools");
+            });
         });
     }
 
@@ -74,7 +77,7 @@ class AgentResilienceTest {
     @Test
     void testMaxIterationsTerminatesRunawayLoop() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             // Engine that always requests the same tool (never finishes)
             ReasoningEngine engine = (sessionId, role, goal, history) -> ReasoningStep.pending(
                     "I'll keep trying the github tool.",
@@ -88,6 +91,7 @@ class AgentResilienceTest {
             assertEquals(maxIterations, result.steps().size(), "Should have exactly maxIterations steps");
             assertTrue(result.finalAnswer().contains("exceeded 3 iterations"),
                     "Final answer should mention iteration limit");
+            });
         });
     }
 
@@ -97,7 +101,7 @@ class AgentResilienceTest {
     @Test
     void testFinishActionReturnsCorrectResult() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             ReasoningEngine engine = (sessionId, role, goal, history) -> ReasoningStep.pending(
                     "I'm done.",
                     ReasoningStep.FINISH,
@@ -107,6 +111,7 @@ class AgentResilienceTest {
 
             assertTrue(result.success());
             assertEquals("Task complete.", result.finalAnswer());
+            });
         });
     }
 
@@ -116,13 +121,14 @@ class AgentResilienceTest {
     @Test
     void testNullStepTerminatesGracefully() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             ReasoningEngine engine = (sessionId, role, goal, history) -> null;
 
             AgentResult result = agentLoop.run("null step test", engine);
 
             assertFalse(result.success());
             assertTrue(result.terminationReason().contains("null step"));
+            });
         });
     }
 
@@ -132,7 +138,7 @@ class AgentResilienceTest {
     @Test
     void testEngineExceptionHandled() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
-            workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
+            WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             ReasoningEngine engine = (sessionId, role, goal, history) -> {
                 throw new RuntimeException("LLM API Timeout");
             };
@@ -142,6 +148,7 @@ class AgentResilienceTest {
             assertFalse(result.success());
             assertTrue(result.terminationReason().contains("ReasoningEngine error"));
             assertTrue(result.terminationReason().contains("LLM API Timeout"));
+            });
         });
     }
 }

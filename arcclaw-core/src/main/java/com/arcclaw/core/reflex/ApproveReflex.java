@@ -1,12 +1,15 @@
 package com.arcclaw.core.reflex;
 
+import java.util.Optional;
+
+import org.jboss.logging.Logger;
+
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -16,9 +19,6 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
-import java.util.Optional;
 
 @ApplicationScoped
 public class ApproveReflex implements AgentReflex {
@@ -29,8 +29,6 @@ public class ApproveReflex implements AgentReflex {
     @Inject
     StatefulAgentStore statefulAgentStore;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @Inject
     Instance<DevSecretSeeder> devSeeder;
@@ -64,16 +62,17 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
-                workspaceContext.setAutonomyLevel(AutonomyLevel.FULL);
-
                 if (!devSeeder.isUnsatisfied()) {
                     devSeeder.get().seedDevSecrets();
                 }
 
-                AgentResult result = agentLoop.run(
-                        sessionId, activeRole,
-                        "Resuming task after approval",
-                        reasoningEngine, 5
+                final String finalRole = activeRole;
+                AgentResult result = WorkspaceContext.runWithFullAutonomy(
+                        sessionId,
+                        WorkspaceContext.userId(),
+                        WorkspaceContext.chatId(),
+                        finalRole,
+                        () -> agentLoop.run(sessionId, finalRole, "Resuming task after approval", reasoningEngine, 5)
                 );
 
                 if (result.success()) {

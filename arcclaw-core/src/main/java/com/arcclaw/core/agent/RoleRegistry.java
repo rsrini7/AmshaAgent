@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import java.util.List;
 
 @ApplicationScoped
 public class RoleRegistry {
@@ -14,24 +13,16 @@ public class RoleRegistry {
         if (role == null) {
             return 5;
         }
-        return switch (role) {
-            case ARCHITECT, COORDINATOR -> 10;
-            case RESEARCHER -> 15;
-            case CODER, DEBUGGER -> 5;
-        };
+        return role.definition().maxIterations();
     }
 
     /**
      * @param role the agent role
-     * @return the list of permitted tools for the given role
+     * @return the set of permitted tools for the given role
      */
-    public List<String> permittedTools(AgentRoleEnum role) {
-        if (role == null) return List.of();
-        return switch (role) {
-            case COORDINATOR -> List.of("github", "memory_search", "scheduletask", "manageschedule");
-            case RESEARCHER -> List.of("github", "memory_search");
-            case ARCHITECT, CODER, DEBUGGER -> List.of();
-        };
+    public java.util.Set<String> permittedTools(AgentRoleEnum role) {
+        if (role == null) return java.util.Set.of();
+        return role.definition().toolNames();
     }
 
     /**
@@ -42,10 +33,6 @@ public class RoleRegistry {
      */
     public boolean requiresApprovalForTools(AgentRoleEnum role) {
         if (role == null) return true;
-
-        return switch (role) {
-            case COORDINATOR, RESEARCHER -> true; // By default these use 'github'
-            case ARCHITECT, CODER, DEBUGGER -> false; // No tools anyway, but strict if they gain them
-        };
+        return role.definition().requiresApproval();
     }
 }

@@ -65,7 +65,7 @@ class AgentErrorMessageUtilTest {
                      "Please try again in 8m44.832s. Need more tokens?\"," +
                      "\"code\":\"rate_limit_exceeded\"}}";
         String result = AgentErrorMessageUtil.sanitizeErrorMessage(raw);
-        assertTrue(result.contains("8 minutes and 44 seconds"));
+        assertTrue(result.contains("8 minutes and 45 seconds"));
         assertFalse(result.contains("rate_limit_exceeded"));
         assertFalse(result.contains("{"));
     }

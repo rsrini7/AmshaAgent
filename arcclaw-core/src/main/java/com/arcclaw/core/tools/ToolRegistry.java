@@ -46,8 +46,6 @@ public class ToolRegistry {
     @Inject
     Instance<AgentTool> discoveredTools;
 
-    @Inject
-    WorkspaceContext workspaceContext;
 
     @Inject
     ObjectMapper objectMapper;
@@ -113,7 +111,7 @@ public class ToolRegistry {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
         // Governance check
-        var level = workspaceContext.getAutonomyLevel();
+        var level = WorkspaceContext.autonomy();
         var requiredOp = tool.requiredOperation();
 
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
@@ -125,7 +123,7 @@ public class ToolRegistry {
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
                 try {
                     String paramsJson = objectMapper.writeValueAsString(params);
-                    throw new RequiresApprovalException(toolName, paramsJson, workspaceContext.getSessionId());
+                    throw new RequiresApprovalException(toolName, paramsJson, WorkspaceContext.requireSessionId());
                 } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                     throw new RuntimeException("Failed to serialize tool parameters", e);
                 }
@@ -136,7 +134,7 @@ public class ToolRegistry {
             
             String userId = (String) MDC.get("userId");
             String agentRole = (String) MDC.get("agentRole");
-            auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+            auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
                 SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
 
             throw new SecurityException(
@@ -148,7 +146,7 @@ public class ToolRegistry {
         if (tool.requiresSandbox()) {
             var requiredSecrets = extractRequiredSecrets(tool.getClass(), "sandboxCommand");
             var command = tool.sandboxCommand(params);
-            var workspaceRoot = Path.of(workspaceRootDir, workspaceContext.getSessionId());
+            var workspaceRoot = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
 
             try {
                 if (!Files.exists(workspaceRoot)) {
@@ -156,11 +154,11 @@ public class ToolRegistry {
                 }
 
                 String output = isolationExecutor.executeSandboxed(
-                        workspaceContext.getSessionId(), workspaceRoot, command, requiredSecrets);
+                        WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
                 
                 String userId = (String) MDC.get("userId");
                 String agentRole = (String) MDC.get("agentRole");
-                auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
                     
                 return ToolResponse.success(output);
@@ -172,7 +170,7 @@ public class ToolRegistry {
                 
                 String userId = (String) MDC.get("userId");
                 String agentRole = (String) MDC.get("agentRole");
-                auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
                     
                 return ToolResponse.failure(1, e.getMessage());
@@ -184,7 +182,7 @@ public class ToolRegistry {
         
         String userId = (String) MDC.get("userId");
         String agentRole = (String) MDC.get("agentRole");
-        auditService.record(workspaceContext.getSessionId(), userId, agentRole, 
+        auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
             SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
             
         return response;
