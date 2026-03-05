@@ -38,7 +38,7 @@ public class PersistentChatMemoryStoreTest {
         List<ChatMessage> retrieved = chatMemoryStore.getMessages(sessionId);
         Assertions.assertEquals(2, retrieved.size());
         Assertions.assertTrue(retrieved.get(0) instanceof UserMessage);
-        Assertions.assertEquals("Hello", ((UserMessage) retrieved.get(0)).text());
+        Assertions.assertEquals("Hello", ((UserMessage) retrieved.get(0)).singleText());
         Assertions.assertTrue(retrieved.get(1) instanceof AiMessage);
         Assertions.assertEquals("Hi there!", ((AiMessage) retrieved.get(1)).text());
 
@@ -81,8 +81,8 @@ public class PersistentChatMemoryStoreTest {
         Assertions.assertTrue(retrieved.get(0) instanceof SystemMessage);
         
         // Last 20 messages should be "Message 5" through "Message 24"
-        Assertions.assertEquals("Message 5", ((UserMessage) retrieved.get(1)).text());
-        Assertions.assertEquals("Message 24", ((UserMessage) retrieved.get(20)).text());
+        Assertions.assertEquals("Message 5", ((UserMessage) retrieved.get(1)).singleText());
+        Assertions.assertEquals("Message 24", ((UserMessage) retrieved.get(20)).singleText());
     }
 
     @Test
@@ -132,7 +132,7 @@ public class PersistentChatMemoryStoreTest {
         
         List<ChatMessage> retrieved = chatMemoryStore.getMessages(sessionId);
         Assertions.assertEquals(2, retrieved.size());
-        Assertions.assertEquals("Prompt 1", ((UserMessage) retrieved.get(0)).text());
+        Assertions.assertEquals("Prompt 1", ((UserMessage) retrieved.get(0)).singleText());
         Assertions.assertEquals("Here is your data.", ((AiMessage) retrieved.get(1)).text());
     }
 }

@@ -22,11 +22,11 @@ public class DenyReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        return input != null && (input.trim().equalsIgnoreCase("/deny") || input.trim().equalsIgnoreCase("deny"));
+        return input != null && (input.trim().toLowerCase().equalsIgnoreCase("/deny") || input.trim().equalsIgnoreCase("deny"));
     }
 
     @Override
-    public String execute(String sessionId, String userId, String input) {
+    public String execute(String sessionId, String userId, String chatId, String input) {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 String activeRole = null;

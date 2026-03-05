@@ -29,7 +29,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -124,8 +124,8 @@ class AgentLoopTest {
                     .thenReturn(finishStep);
 
             AgentResult result = loop.run("test goal", mockEngine, 5);
-            assertTrue(result.success(), "Loop should complete successfully after self-healing");
-            assertEquals("success", result.finalAnswer());
+            assertInstanceOf(AgentResult.Finished.class, result, "Loop should complete successfully after self-healing");
+            assertEquals("success", ((AgentResult.Finished) result).answer());
         });
     }
 
@@ -148,8 +148,8 @@ class AgentLoopTest {
             when(mockEngine.nextStep(any(), any(), any(), any())).thenThrow(ex);
 
             AgentResult result = loop.run("test goal", mockEngine, 5);
-            assertFalse(result.success(), "Loop should fail since it exceeds schema retry limit");
-            assertTrue(result.terminationReason().contains("SCHEMA_ERROR"));
+            assertInstanceOf(AgentResult.Failed.class, result, "Loop should fail since it exceeds schema retry limit");
+            assertTrue(((AgentResult.Failed) result).reason().contains("SCHEMA_ERROR"));
         });
     }
 }

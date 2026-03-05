@@ -57,8 +57,7 @@ class AgentResourceTest {
                                 .then()
                                 .log().ifValidationFails()
                                 .statusCode(200)
-                                .body("success", is(true))
-                                .body("finalAnswer", notNullValue());
+                                .body("answer", notNullValue());
 
                 // 3. Check Status
                 given()

@@ -8,7 +8,7 @@ import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
+// import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -29,7 +29,7 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
-import java.lang.ScopedValue;
+// import java.lang.ScopedValue;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -72,7 +72,6 @@ public class AgentCronScheduler {
 
     @Inject
     AuditService auditService;
-
 
     @Inject
     ProducerTemplate camelProducer;
@@ -137,13 +136,14 @@ public class AgentCronScheduler {
             // Dispatch to managed virtual thread
             vThreads.execute(() -> {
                 try {
-                    ScopedValue.where(WorkspaceScopeHolder.USER_ID, job.userId)
-                            .where(WorkspaceScopeHolder.CHAT_ID, job.chatId)
-                            .run(() -> WorkspaceScopeHolder.run(
-                                    job.sessionId, () -> {
-                                        executeCronJob(job);
-                                    }
-                            ));
+                    // ScopedValue.where(WorkspaceScopeHolder.USER_ID, job.userId)
+                    //         .where(WorkspaceScopeHolder.CHAT_ID, job.chatId)
+                    //         .run(() -> WorkspaceScopeHolder.run(
+                    //                 job.sessionId, () -> {
+                    //                     executeCronJob(job);
+                    //                 }
+                    //         ));
+                    executeCronJob(job);
                 } catch (Throwable t) {
                     // Outer Throwable catches OOME before scope binding
                     concurrencyLimiter.release();
@@ -182,18 +182,17 @@ public class AgentCronScheduler {
                 )
             );
 
-            boolean wasApprovalRequested = result.awaitingApproval();
-            String rawAnswer;
-
-            if (wasApprovalRequested) {
-                rawAnswer = "⚠️ Approval Required for scheduled task.\n\n" +
+            boolean wasApprovalRequested = result instanceof AgentResult.AwaitingApproval;
+            String rawAnswer = switch (result) {
+                case AgentResult.Finished f -> f.answer();
+                case AgentResult.AwaitingApproval a -> "⚠️ Approval Required for scheduled task.\n\n" +
                     "Cron ID: " + job.id + "\n" +
-                    "Tool: github\n" +
+                    "Tool: " + a.toolName() + "\n" +
                     "Goal: " + job.goal + "\n\n" +
                     "Reply `/approve " + job.id + "` to run it once now, or `/deny " + job.id + "` to cancel.";
-            } else {
-                rawAnswer = result.finalAnswer() != null ? result.finalAnswer() : "";
-            }
+                case AgentResult.Failed f -> "❌ Failed: " + f.reason();
+                case AgentResult.LoopExceeded l -> "❌ Timed out after " + l.maxIterations() + " steps.";
+            };
             
             // Defensive Guard against empty LLM outputs crashing Telegram
             String finalAnswer = rawAnswer.trim().isEmpty() 

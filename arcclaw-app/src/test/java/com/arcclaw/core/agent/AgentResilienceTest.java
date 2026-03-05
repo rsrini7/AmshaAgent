@@ -1,9 +1,9 @@
 package com.arcclaw.core.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,7 +55,7 @@ class AgentResilienceTest {
 
             AgentResult result = agentLoop.run("test hallucination", engine);
 
-            assertTrue(result.success(), "Loop should succeed after self-correction");
+            assertInstanceOf(AgentResult.Finished.class, result, "Loop should succeed after self-correction");
             assertEquals(2, result.steps().size(), "Should have 2 steps (hallucination + finish)");
 
             // First step should have the error observation
@@ -87,10 +87,9 @@ class AgentResilienceTest {
             int maxIterations = 3;
             AgentResult result = agentLoop.run("infinite loop test", engine, maxIterations);
 
-            assertFalse(result.success(), "Loop should NOT succeed");
+            assertInstanceOf(AgentResult.LoopExceeded.class, result, "Loop should NOT succeed");
             assertEquals(maxIterations, result.steps().size(), "Should have exactly maxIterations steps");
-            assertTrue(result.finalAnswer().contains("exceeded 3 iterations"),
-                    "Final answer should mention iteration limit");
+            assertEquals(maxIterations, ((AgentResult.LoopExceeded) result).maxIterations());
             });
         });
     }
@@ -109,8 +108,8 @@ class AgentResilienceTest {
 
             AgentResult result = agentLoop.run("finish test", engine);
 
-            assertTrue(result.success());
-            assertEquals("Task complete.", result.finalAnswer());
+            assertInstanceOf(AgentResult.Finished.class, result);
+            assertEquals("Task complete.", ((AgentResult.Finished) result).answer());
             });
         });
     }
@@ -126,8 +125,8 @@ class AgentResilienceTest {
 
             AgentResult result = agentLoop.run("null step test", engine);
 
-            assertFalse(result.success());
-            assertTrue(result.terminationReason().contains("null step"));
+            assertInstanceOf(AgentResult.Failed.class, result);
+            assertTrue(((AgentResult.Failed) result).reason().contains("null step"));
             });
         });
     }
@@ -145,9 +144,9 @@ class AgentResilienceTest {
 
             AgentResult result = agentLoop.run("exception test", engine);
 
-            assertFalse(result.success());
-            assertTrue(result.terminationReason().contains("ReasoningEngine error"));
-            assertTrue(result.terminationReason().contains("LLM API Timeout"));
+            assertInstanceOf(AgentResult.Failed.class, result);
+            assertTrue(((AgentResult.Failed) result).reason().contains("ReasoningEngine error"));
+            assertTrue(((AgentResult.Failed) result).reason().contains("LLM API Timeout"));
             });
         });
     }

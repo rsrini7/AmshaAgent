@@ -37,7 +37,7 @@ public class VishnuAgent implements Agent {
             - If a sub-task fails, you MUST report the failure honestly.
             - You coordinate — you do NOT directly execute code or research.
 
-            AVAILABLE TOOLS: github, scheduletask, manageschedule
+            AVAILABLE TOOLS: github, scheduletask, manageschedule, memory_search
             """;
 
     @Override

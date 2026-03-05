@@ -589,3 +589,14 @@
 - [x] Remove dead path-guard code from `ApiKeyAuthFilter` <!-- id: 143 -->
 - [x] Verify: Tier 1 regression suite (all tests green) <!-- id: 144 -->
 
+# Phase 47: Message Pipeline & Sealed Interface Refactor (Tier 2A) ✅
+- [x] Refactor `ChannelMessage` as a sealed interface <!-- id: 145 -->
+- [x] Create `MessagePipeline` and `MessageHandler` architecture <!-- id: 146 -->
+- [x] Implement `AllowlistHandler` and `SessionResolutionHandler` <!-- id: 147 -->
+- [x] Implement `IntentClassificationHandler` and `CommandDispatchHandler` <!-- id: 148 -->
+- [x] Implement `ReflexHandler` and `AgentDispatchHandler` <!-- id: 149 -->
+- [x] Implement definitive CDI fix: move implementations to `arcclaw-core` <!-- id: 150 -->
+- [x] Fix `arcclaw-core` test boot failures (dummy `GROQ_API_KEY`) <!-- id: 151 -->
+- [x] Verify: Telegram integration via `TelegramAgentHandlerTest` <!-- id: 152 -->
+- [x] Verify: Full project clean build `mvnw clean package` (all tests green) <!-- id: 153 -->
+

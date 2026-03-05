@@ -28,7 +28,7 @@ public class DeleteCronReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String input) {
+    public String execute(String sessionId, String userId, String chatId, String input) {
         if (!WorkspaceScopeHolder.USER_ID.isBound()) {
             return "Cannot delete schedule — user context not available.";
         }

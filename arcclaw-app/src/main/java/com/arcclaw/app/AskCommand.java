@@ -65,7 +65,14 @@ public class AskCommand implements Runnable {
 
                 AgentResult result = agentLoop.run(sessionId, role, goal,
                         reasoningEngine, 5);
-                System.out.println("\n✅ Final Answer:\n" + result.finalAnswer());
+                
+                String output = switch (result) {
+                    case AgentResult.Finished f -> f.answer();
+                    case AgentResult.Failed f -> "Error: " + f.reason();
+                    case AgentResult.LoopExceeded l -> "Timed out after " + l.maxIterations() + " steps.";
+                    case AgentResult.AwaitingApproval a -> "Agent requires approval to run tool: " + a.toolName();
+                };
+                System.out.println("\n✅ Final Answer:\n" + output);
             });
         } finally {
             CliAgentObserver.enabled = false;

@@ -27,6 +27,8 @@ public final class WorkspaceContext {
                 .where(CHAT_ID, chatId)
                 .where(AUTONOMY, autonomy)
                 .where(AGENT_ROLE, role)
+                .where(WorkspaceScopeHolder.USER_ID, userId)
+                .where(WorkspaceScopeHolder.CHAT_ID, chatId)
                 .call(() -> task.call());
     }
 

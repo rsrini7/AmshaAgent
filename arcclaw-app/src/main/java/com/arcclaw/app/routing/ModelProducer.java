@@ -1,4 +1,4 @@
-package com.arcclaw.app.channel.telegram;
+package com.arcclaw.app.routing;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;

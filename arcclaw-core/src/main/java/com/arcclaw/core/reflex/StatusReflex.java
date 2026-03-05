@@ -27,7 +27,7 @@ public class StatusReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String input) {
+    public String execute(String sessionId, String userId, String chatId, String input) {
         List<AgentCheckpoint> checkpoints = new ArrayList<>();
         
         for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {

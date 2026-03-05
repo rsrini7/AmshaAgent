@@ -11,6 +11,7 @@
   <packaging>pom</packaging>
 
   <modules>
+    <module>arcclaw-channel-api</module>
     <module>arcclaw-core</module>
     <module>arcclaw-deployment</module>
     <module>arcclaw-app</module>
@@ -48,6 +49,11 @@
         <version>${quarkus.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.arcclaw</groupId>
+        <artifactId>arcclaw-channel-api</artifactId>
+        <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>com.arcclaw</groupId>

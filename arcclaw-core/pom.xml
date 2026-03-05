@@ -14,11 +14,23 @@
   <artifactId>arcclaw-core</artifactId>
 
   <dependencies>
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-channel-api</artifactId>
+    </dependency>
+
     <!-- Quarkus Arc CDI -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-arc</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
 
     <!-- REST -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest</artifactId>
+    </dependency>
+
     <!-- REST Data Binding & Validation -->
     <dependency>
         <groupId>io.quarkus</groupId>
@@ -30,16 +42,33 @@
     </dependency>
 
     <!-- WebSocket -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-websockets-next</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-websockets-next</artifactId>
+    </dependency>
 
     <!-- Vert.x async -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-vertx</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-vertx</artifactId>
+    </dependency>
 
     <!-- Scheduler (@Scheduled for WorkspaceManager GC) -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-scheduler</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-scheduler</artifactId>
+    </dependency>
 
     <!-- Config -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-config-yaml</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-config-yaml</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-qute</artifactId>
+    </dependency>
 
     <!-- SQLite (pure-Java, native-image safe) -->
     <dependency>
@@ -49,9 +78,18 @@
     </dependency>
 
     <!-- Hibernate ORM + Panache -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-hibernate-orm-panache</artifactId></dependency>
-    <dependency><groupId>org.hibernate.orm</groupId><artifactId>hibernate-community-dialects</artifactId></dependency>
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-narayana-jta</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-hibernate-orm-panache</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.hibernate.orm</groupId>
+      <artifactId>hibernate-community-dialects</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-narayana-jta</artifactId>
+    </dependency>
 
     <!-- LangChain4J (Quarkiverse extensions — they manage langchain4j core transitively) -->
     <dependency>
@@ -89,17 +127,32 @@
     </dependency>
 
     <!-- Observability -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-micrometer-registry-prometheus</artifactId></dependency>
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-opentelemetry</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry</artifactId>
+    </dependency>
 
     <!-- Context propagation (CDI across ManagedExecutor threads) -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-context-propagation</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-context-propagation</artifactId>
+    </dependency>
 
     <!-- Health -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-health</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-health</artifactId>
+    </dependency>
 
     <!-- OpenAPI -->
-    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-openapi</artifactId></dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-openapi</artifactId>
+    </dependency>
 
     <!-- CDI API (for Extension SPI) -->
     <dependency>

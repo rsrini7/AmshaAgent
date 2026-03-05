@@ -41,11 +41,11 @@ public class ApproveReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        return input != null && (input.trim().equalsIgnoreCase("/approve") || input.trim().equalsIgnoreCase("approve"));
+        return input != null && (input.trim().toLowerCase().equalsIgnoreCase("/approve") || input.trim().equalsIgnoreCase("approve"));
     }
 
     @Override
-    public String execute(String sessionId, String userId, String input) {
+    public String execute(String sessionId, String userId, String chatId, String input) {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 String activeRole = null;
@@ -69,18 +69,23 @@ public class ApproveReflex implements AgentReflex {
                 final String finalRole = activeRole;
                 AgentResult result = WorkspaceContext.runWithFullAutonomy(
                         sessionId,
-                        WorkspaceContext.userId(),
-                        WorkspaceContext.chatId(),
+                        userId,
+                        chatId,
                         finalRole,
                         () -> agentLoop.run(sessionId, finalRole, "Resuming task after approval", reasoningEngine, 5)
                 );
 
-                if (result.success()) {
-                    return result.finalAnswer();
-                } else {
-                    String sanitizedReason = AgentErrorMessageUtil.sanitizeErrorMessage(result.terminationReason());
-                    return "❌ **Task Failed after approval**\n\nReason: " + sanitizedReason;
-                }
+                return switch (result) {
+                    case AgentResult.Finished f ->
+                        f.answer();
+                    case AgentResult.Failed f ->
+                        "❌ **Task Failed after approval**\n\nReason: " +
+                        AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
+                    case AgentResult.LoopExceeded l ->
+                        "❌ Loop exceeded " + l.maxIterations() + " iterations";
+                    case AgentResult.AwaitingApproval a ->
+                        "⏸ Still awaiting approval for: " + a.toolName();
+                };
             });
         } catch (Exception e) {
             log.errorf("Failed to process approval for session %s: %s", sessionId, e.getMessage(), e);

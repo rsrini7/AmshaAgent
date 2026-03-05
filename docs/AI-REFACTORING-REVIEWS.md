@@ -6170,149 +6170,218 @@ Stop when Tier 2B is complete. Do not begin Tier 3.
 
 ---
 
-### Component 10 — Decouple AgentCronScheduler via CDI Events
+Pre-Flight: Fix All Debt Before Writing Any C10 Code
+[!CAUTION]
+All items below MUST be resolved and the build must be GREEN before beginning C10 (Component 10).
 
-WHY: AgentCronScheduler directly injects ProducerTemplate and hardcodes
-"telegram:bots?authorizationToken=..." as the notification endpoint.
-Adding Discord notifications requires modifying the scheduler core.
+**Confirm module boundaries**
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-core/src/main/java/com/arcclaw/core/cron/AgentJobCompleted.java
-Action: CREATE NEW
-────────────────────────────────────────────────────────────────
+- `IntentClassifierService` is already in `com.arcclaw.app.routing` — no move needed.
+- `ModelProducer` is already in `com.arcclaw.app.routing` — no move needed.
+- `TelegramAllowlistGuard` stays in `com.arcclaw.app.security` — its config keys are Telegram-specific (`arcclaw.channel.telegram.allowed-user-ids`, `arcclaw.telegram.*`). Do NOT rename or move.
+- Verify `beans.xml` (`bean-discovery-mode=all`) is present at `arcclaw-app/src/main/resources/META-INF/beans.xml`.
+
+> [!IMPORTANT]
+> Do NOT move IntentClassifierService, ModelProducer, or TelegramAllowlistGuard to arcclaw-core.
+> These are adapter-layer beans with infrastructure dependencies (Groq, Telegram config).
+
+***
+
+## Component 10 — Decouple AgentCronScheduler via CDI Events
+
+WHY: `AgentCronScheduler` directly injects `ProducerTemplate` and hardcodes the Telegram Camel endpoint. After this component, the scheduler knows nothing about Telegram, Markdown, or Camel.
+
+#### [NEW] `arcclaw-core/src/main/java/com/arcclaw/core/cron/AgentJobCompleted.java`
+
+```java
 public record AgentJobCompleted(
     String cronId,
     String userId,
     ChannelType channelType,
-    String channelPlatformId,  // channel-specific recipient ID
+    String channelPlatformId,
     String correlationId,
     AgentResult result
 ) {}
+```
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-core/src/main/java/com/arcclaw/core/cron/AgentCronEntity.java
-Action: UPDATE @Entity — add two new fields (fresh DB, no migration needed)
-────────────────────────────────────────────────────────────────
-Add fields:
-  @Column(nullable = false)
-  String channelType;         // ChannelType enum name — defaults "TELEGRAM"
+#### [MODIFY] `arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronEntity.java`
 
-  String channelPlatformId;   // channel-specific recipient ID
+Add two fields. Fresh DB — no migration needed. `chatId` is retained for backward compatibility.
 
-Retain existing chatId field for backward compatibility — new code reads
-channelPlatformId. On fresh DB, channelPlatformId is populated by the
-scheduler when creating cron entities.
+> [!IMPORTANT]
+> Both new fields must be `nullable = true`. Existing rows have `chatId` populated but
+> `channelPlatformId` and `channelType` null. `nullable = false` will break startup
+> schema validation against existing data.
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-core/src/main/java/com/arcclaw/core/cron/AgentCronScheduler.java
-Action: REMOVE all Camel ProducerTemplate injection and telegramEndpoint
-────────────────────────────────────────────────────────────────
-Replace:
-  camelProducer.sendBody(telegramEndpoint, replyText)
-With:
-  @Inject Event<AgentJobCompleted> jobCompletedEvent;
-  jobCompletedEvent.fire(new AgentJobCompleted(
-      entity.getCronId(), entity.getUserId(),
-      ChannelType.valueOf(entity.getChannelType()),
-      entity.getChannelPlatformId(),
-      entity.getCronId(),
-      result
-  ));
+```java
+@Column(nullable = true)
+String channelType;        // ChannelType enum name — e.g. "TELEGRAM". Null = legacy row.
 
-Scheduler knows NOTHING about Telegram, Markdown, or Camel after this change.
+@Column(nullable = true)
+String channelPlatformId;  // Channel-specific recipient ID. Null = fall back to chatId.
+```
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-app/.../TelegramCronNotificationObserver.java
-Action: CREATE NEW
-────────────────────────────────────────────────────────────────
+#### [MODIFY] `arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java`
+
+Remove `ProducerTemplate` injection, `botToken` config property, `telegramEndpoint` field, and all `camelProducer.sendBodyAndHeaders(...)` calls (both in success path and catch block).
+
+Add CDI event:
+
+```java
+@Inject Event<AgentJobCompleted> jobCompletedEvent;
+```
+
+Replace both `camelProducer.sendBodyAndHeaders(...)` callsites with:
+
+```java
+// Success path — use executionId as correlationId for idempotency
+jobCompletedEvent.fire(new AgentJobCompleted(
+    job.id,
+    job.userId,
+    ChannelType.valueOf(job.channelType != null ? job.channelType : "TELEGRAM"),
+    job.channelPlatformId != null ? job.channelPlatformId : job.chatId,
+    executionId,   // ← per-fire UUID already hoisted above the try block
+    result
+));
+
+// Catch block — fire a Failed result event instead of direct Camel call
+jobCompletedEvent.fire(new AgentJobCompleted(
+    job.id,
+    job.userId,
+    ChannelType.valueOf(job.channelType != null ? job.channelType : "TELEGRAM"),
+    job.channelPlatformId != null ? job.channelPlatformId : job.chatId,
+    executionId,
+    AgentResult.failed(
+        AgentErrorMessageUtil.sanitizeErrorMessage(t.getMessage()),
+        AgentResult.FailureCategory.SYSTEM_ERROR,
+        List.of()
+    )
+));
+```
+
+Remove `@PostConstruct init()` method entirely if its only purpose was building `telegramEndpoint`. Keep `concurrencyLimiter` init if it is still there.
+
+#### [NEW] `arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramCronNotificationObserver.java`
+
+```java
 @ApplicationScoped
 public class TelegramCronNotificationObserver {
+
     @Inject ChannelSenderRegistry senders;
 
     void onJobCompleted(@Observes AgentJobCompleted event) {
         if (event.channelType() != ChannelType.TELEGRAM) return;
+
         ChannelUser recipient = new ChannelUser(
             event.channelPlatformId(), event.userId(), ChannelType.TELEGRAM);
+
         String text = switch (event.result()) {
-            case AgentResult.Finished f       → "⏰ Task complete:\n\n" + f.answer();
-            case AgentResult.Failed f         → "⚠️ Task failed: " + f.reason();
-            case AgentResult.LoopExceeded l   → "⏱ Task hit iteration limit.";
-            case AgentResult.AwaitingApproval a → "⏸ Task needs approval: " + a.pendingTool();
+            case AgentResult.Finished f         -> "⏰ Task complete:\n\n" + f.answer();
+            case AgentResult.Failed f           -> "⚠️ Task failed: " + f.reason();
+            case AgentResult.LoopExceeded l     -> "⏱ Task hit iteration limit.";
+            case AgentResult.AwaitingApproval a ->
+                "⏸ Approval Required for scheduled task.\n\n" +
+                "Cron ID: " + event.cronId() + "\n" +
+                "Tool: " + a.pendingTool() + "\n\n" +
+                "Reply `/approve " + event.cronId() + "` to run, or `/deny " + event.cronId() + "` to cancel.";
         };
+
         senders.sendRaw(recipient, event.correlationId(), text);
     }
 }
+```
 
-────────────────────────────────────────────────────────────────
-TEST: arcclaw-core/src/test/.../AgentCronSchedulerTest.java
-Action: UPDATE
-────────────────────────────────────────────────────────────────
-- testSchedulerFiresJobCompletedEvent() — mock AgentStateMachineRunner,
-  verify Event<AgentJobCompleted>.fire() called with channelType=TELEGRAM.
-- testSchedulerHasNoProducerTemplateField() — assert via reflection that
-  ProducerTemplate is not a field on AgentCronScheduler.
+> [!IMPORTANT]
+> Use `a.pendingTool()` — that is the accessor on `AgentResult.AwaitingApproval`.
+> If your record uses `toolName()` instead, use that. Verify against your C7
+> `AgentResult.java` before committing.
 
----
+#### [MODIFY] `AgentCronSchedulerTest.java` — 2 new tests
 
-### Component 11 — Qute Prompt Templates
+```java
+@Test
+void testSchedulerFiresJobCompletedEvent() {
+    // @InjectMock AgentLoop agentLoop  ← mock the loop, not StateMachineRunner
+    // stub agentLoop.run(...) → AgentResult.finished("done", List.of())
+    // trigger pollAndDispatch()
+    // verify jobCompletedEvent.fire() called once with channelType == TELEGRAM
+}
 
-WHY: LangChainReasoningEngine.getRoleBinding() contains ~800+ chars of
-hardcoded switch string literals per role. Cannot be changed without
-recompile. Cannot be A/B tested. Breaks if role descriptions drift.
+@Test
+void testSchedulerHasNoProducerTemplateField() {
+    boolean hasField = Arrays.stream(AgentCronScheduler.class.getDeclaredFields())
+        .anyMatch(f -> f.getType().equals(ProducerTemplate.class));
+    assertFalse(hasField, "AgentCronScheduler must not inject ProducerTemplate");
+}
+```
 
-────────────────────────────────────────────────────────────────
-Action: CREATE prompt template files
-Directory: arcclaw-core/src/main/resources/templates/prompts/
-────────────────────────────────────────────────────────────────
-Files:
-  base-system.txt          — shared preamble injected into all role templates
-  role-coordinator.txt
-  role-researcher.txt
-  role-coder.txt
-  role-debugger.txt
-  role-architect.txt
-  compaction-summary.txt
+***
 
-Example role-coordinator.txt (preserve ALL existing scheduling rules content,
-just move them here):
-  {#include prompts/base-system.txt /}
+## Component 11 — Qute Prompt Templates
 
-  You are {roleDef.displayName}.
+WHY: `LangChainReasoningEngine.getRoleBinding()` contains ~800+ chars of hardcoded switch string literals per role. Cannot be A/B tested, cannot change without recompile, drifts silently from `RoleDefinition` data.
 
-  MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
+#### [NEW] Template files in `arcclaw-core/src/main/resources/templates/prompts/`
 
-  YOUR AUTHORIZED TOOLS:
-  {#if roleDef.capabilities.isEmpty}
-  None. Answer from your knowledge only. Do not call any tools.
-  {#else}
-  {#each roleDef.capabilities}
-  - {it.toolName}: {it.description}
-  {/each}
-  {/if}
+Files: `base-system.txt`, `role-coordinator.txt`, `role-researcher.txt`, `role-coder.txt`, `role-debugger.txt`, `role-architect.txt`, `compaction-summary.txt`
 
-  [... SCHEDULING RULES — paste existing content from getRoleBinding() COORDINATOR case ...]
-  [... FORK BOMB PREVENTION — paste existing content ...]
-  [... GITHUB TRIGGER RULES — paste existing content ...]
+Preserve ALL existing role content from `getRoleBinding()` — relocate only, do not rewrite prose.
 
-  {#if compactionSummary}
-  PRIOR SESSION CONTEXT:
-  {compactionSummary}
-  {/if}
+Template structure for each role file:
 
-NOTE: Qute uses .isEmpty() for Set emptiness — NOT .empty (which would
-cause a TemplateException at Quarkus build time).
+```
+{#include prompts/base-system.txt /}
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-core/src/main/java/com/arcclaw/core/agent/PromptTemplateEngine.java
-Action: CREATE NEW
-────────────────────────────────────────────────────────────────
+You are {roleDef.displayName}.
+
+MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
+
+YOUR AUTHORIZED TOOLS:
+{#if roleDef.capabilities.isEmpty()}
+None. Answer from your knowledge only. Do not call any tools.
+{#else}
+{#each roleDef.capabilities}
+- {it.toolName}: {it.description}
+{/each}
+{/if}
+
+[... existing role-specific rules migrated verbatim from getRoleBinding() ...]
+
+{#if compactionSummary}
+[CONTEXT FROM PRIOR SESSION - FOR REFERENCE ONLY]
+{compactionSummary}
+{/if}
+```
+
+> [!IMPORTANT]
+> Qute uses `.isEmpty()` (with parentheses) for collection emptiness checks — NOT `.empty`.
+> `.empty` causes `TemplateException` at Quarkus build time.
+
+#### [NEW] `arcclaw-core/src/main/java/com/arcclaw/core/agent/PromptTemplateEngine.java`
+
+```java
 @ApplicationScoped
 public class PromptTemplateEngine {
-    @Location("prompts/role-coordinator") Template coordinatorTemplate;
-    @Location("prompts/role-researcher")  Template researcherTemplate;
-    @Location("prompts/role-coder")       Template coderTemplate;
-    @Location("prompts/role-debugger")    Template debuggerTemplate;
-    @Location("prompts/role-architect")   Template architectTemplate;
+
+    @Inject
+    @Location("prompts/role-coordinator")
+    Template coordinatorTemplate;
+
+    @Inject
+    @Location("prompts/role-researcher")
+    Template researcherTemplate;
+
+    @Inject
+    @Location("prompts/role-coder")
+    Template coderTemplate;
+
+    @Inject
+    @Location("prompts/role-debugger")
+    Template debuggerTemplate;
+
+    @Inject
+    @Location("prompts/role-architect")
+    Template architectTemplate;
 
     public String buildSystemPrompt(AgentRoleEnum role, String compactionSummary) {
         return templateFor(role)
@@ -6323,132 +6392,159 @@ public class PromptTemplateEngine {
 
     private Template templateFor(AgentRoleEnum role) {
         return switch (role) {
-            case COORDINATOR → coordinatorTemplate;
-            case RESEARCHER  → researcherTemplate;
-            case CODER       → coderTemplate;
-            case DEBUGGER    → debuggerTemplate;
-            case ARCHITECT   → architectTemplate;
+            case COORDINATOR -> coordinatorTemplate;
+            case RESEARCHER  -> researcherTemplate;
+            case CODER       -> coderTemplate;
+            case DEBUGGER    -> debuggerTemplate;
+            case ARCHITECT   -> architectTemplate;
         };
     }
 }
+```
 
-────────────────────────────────────────────────────────────────
-File: LangChainReasoningEngine.java
-Action: UPDATE
-────────────────────────────────────────────────────────────────
-- Delete getRoleBinding(String role) method entirely.
-- @Inject PromptTemplateEngine promptTemplateEngine
-- Call promptTemplateEngine.buildSystemPrompt(resolvedRole, compactionSummary)
-  wherever the old getRoleBinding() was called.
+> [!IMPORTANT]
+> `@Inject` is required on every `@Location` field. Without it, Quarkus does not
+> populate the field and `templateFor()` returns null → NullPointerException at runtime.
 
-────────────────────────────────────────────────────────────────
-TEST: arcclaw-core/src/test/.../PromptTemplateEngineTest.java
-Action: CREATE NEW
-────────────────────────────────────────────────────────────────
-- testCoordinatorPromptContainsGithubToolName()
-- testCoderPromptContainsNoTools() — rendered output contains "None"
-- testResearcherPromptContainsMemorySearch()
-- testCompactionSummaryAppearsWhenProvided()
-- testCompactionSummaryAbsentWhenNull()
-- testAllRolesRenderWithoutException() — iterate all AgentRoleEnum values
+#### [MODIFY] `LangChainReasoningEngine.java`
 
----
+Delete `getRoleBinding(String role)` entirely. Add `@Inject PromptTemplateEngine promptTemplateEngine`. Replace every `getRoleBinding(...)` callsite with:
 
-### Component 12 — Dynamic IntentClassifierService Prompt
+```java
+promptTemplateEngine.buildSystemPrompt(resolvedRole, compactionSummary)
+```
 
-WHY: CLASSIFIER_PROMPT hardcodes role names as static strings. Adding
-a new agent role to RoleRegistry will never be routed to because the
-LLM prompt doesn't know it exists.
+#### [NEW] `PromptTemplateEngineTest.java` (6 tests)
 
-────────────────────────────────────────────────────────────────
-File: IntentClassifierService.java
-Action: REFACTOR — move from com.arcclaw.app.channel.telegram
-        to com.arcclaw.core.routing (zero Telegram-specific code)
-────────────────────────────────────────────────────────────────
-- Replace static final String CLASSIFIER_PROMPT with instance field
-  String classifierPrompt built in @PostConstruct.
-- @PostConstruct buildClassifierPrompt():
+```java
+testCoordinatorPromptContainsGithubToolName()
+testResearcherPromptContainsMemorySearch()
+testCoderPromptContainsNoToolsSection()        // rendered output contains "None"
+testCompactionSummaryAppearsWhenProvided()
+testCompactionSummaryAbsentWhenNull()
+testAllRolesRenderWithoutException()           // iterate AgentRoleEnum.values()
+```
+
+***
+
+## Component 12 — Dynamic IntentClassifierService Prompt
+
+WHY: `CLASSIFIER_PROMPT` hardcodes role names as static strings. A new `AgentRoleEnum` value will never be routed to because the LLM prompt won't know it exists.
+
+#### [MODIFY] `arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java`
+
+> [!IMPORTANT]
+> IntentClassifierService stays in `com.arcclaw.app.routing`. Do NOT move it to arcclaw-core.
+> It depends on ChatLanguageModel (LangChain4J infrastructure) which belongs in arcclaw-app.
+
+Replace `static final String CLASSIFIER_PROMPT` with an instance field built at startup:
+
+```java
+private String classifierPrompt;
+
+@PostConstruct
+void buildClassifierPrompt() {
     String roleSection = Arrays.stream(AgentRoleEnum.values())
-        .map(r -> "- %s: %s".formatted(r.toScopedName(),
-                                        r.definition().intentDescription()))
+        .map(r -> "- %s: %s".formatted(
+            r.toScopedName(), r.definition().intentDescription()))
         .collect(Collectors.joining("\n"));
     this.classifierPrompt = BASE_CLASSIFIER_TEMPLATE.formatted(roleSection);
+}
+```
 
-  BASE_CLASSIFIER_TEMPLATE: preserve existing prompt structure, replace
-  hardcoded role list section with %s placeholder.
+`BASE_CLASSIFIER_TEMPLATE` = existing `CLASSIFIER_PROMPT` string with the hardcoded role list section replaced by `%s`. Preserve all routing rules, guardrails, and scheduling rules verbatim.
 
-- REMOVE DESTRUCTIVE_PATTERN from IntentClassifierService.
-  Move it to PromptInjectionReflex or a new SecurityVocabularyFilter.
-  Classification and security filtering are separate responsibilities.
+Extract `DESTRUCTIVE_PATTERN` and `applyDestructiveSafetyOverride()` into a new dedicated class:
 
-  - UPDATE TelegramAgentHandler.java import:
-    REMOVE: import com.arcclaw.app.channel.telegram.IntentClassifierService;
-    ADD:    import com.arcclaw.core.routing.IntentClassifierService;
+#### [NEW] `arcclaw-app/src/main/java/com/arcclaw/app/security/DestructiveVocabularyFilter.java`
 
-    NOTE: After C9, TelegramAgentHandler is already stripped to ≤25 lines
-    and no longer calls IntentClassifierService directly (IntentClassification
-    moved into IntentClassificationHandler at Priority 50 inside the pipeline).
-    However, if the IDE session processes C12 before C9 is fully applied,
-    this import update must be present to avoid a compilation error on
-    the @Inject field that still exists in the pre-C9 handler.
-    Make both the import fix and the C9 handler strip in the same commit
-    if possible.
+```java
+@ApplicationScoped
+public class DestructiveVocabularyFilter {
 
-────────────────────────────────────────────────────────────────
-TEST: IntentClassifierServiceTest.java — UPDATE
-────────────────────────────────────────────────────────────────
-- testClassifierPromptContainsAllRoleNames() — after @PostConstruct,
-  assert classifierPrompt contains every AgentRoleEnum.toScopedName().
-- testDestructivePatternNotInClassifier() — assert DESTRUCTIVE_PATTERN
-  field no longer exists on IntentClassifierService.
-- Preserve all existing routing and override tests.
+    private static final Pattern DESTRUCTIVE_PATTERN = Pattern.compile(
+        "(?i)\\b(delete|purge|drop|rm\\s*-rf|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+    );
 
----
+    public String applyOverride(String role, String userMessage) {
+        try {
+            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(role);
+            if (!resolvedRole.definition().capabilities().isEmpty() &&
+                    DESTRUCTIVE_PATTERN.matcher(userMessage).find()) {
+                Log.warnf("Destructive vocabulary detected for role '%s' — overriding to coordinator", role);
+                return AgentRoleEnum.COORDINATOR.toScopedName();
+            }
+        } catch (IllegalArgumentException e) {
+            // Unrecognized role — let downstream pipeline handle it
+        }
+        return role;
+    }
+}
+```
 
-### Component 13 — TelegramMarkdownV2Renderer + ChannelSenderRegistry
+Inject `DestructiveVocabularyFilter` into `IntentClassifierService` and call `filter.applyOverride(sanitizedRole, userMessage)` where `applyDestructiveSafetyOverride()` was called. Delete `DESTRUCTIVE_PATTERN`, `TOOL_CAPABLE_ROLES`, and `applyDestructiveSafetyOverride()` from `IntentClassifierService`.
 
-WHY: Agent currently outputs raw Markdown strings. Telegram MarkdownV2
-requires escaping . - ( ) ! or the API throws "Bad Request: can't parse
-entities". Discord uses CommonMark. Slack uses mrkdwn. The agent output
-must be channel-neutral AST rendered per-channel.
+> [!IMPORTANT]
+> Do NOT move DESTRUCTIVE_PATTERN to PromptInjectionReflex. Prompt injection detection
+> and destructive vocabulary filtering are distinct security concerns. PromptInjectionReflex
+> detects adversarial instruction injection. DestructiveVocabularyFilter prevents tool-capable
+> roles from executing destructive operations.
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-app/.../TelegramMarkdownV2Renderer.java
-Action: CREATE NEW — implements ReplyRenderer
-────────────────────────────────────────────────────────────────
+#### [MODIFY] `IntentClassifierServiceTest.java`
+
+Add 2 new tests, preserve all existing routing and override tests unchanged:
+
+```java
+testClassifierPromptContainsAllRoleNames()
+    // after @PostConstruct, assert classifierPrompt contains every AgentRoleEnum.toScopedName()
+
+testDestructivePatternNotInClassifier()
+    // assert via reflection that DESTRUCTIVE_PATTERN field no longer exists on IntentClassifierService
+```
+
+***
+
+## Component 13 — TelegramMarkdownV2Renderer + ChannelSenderRegistry
+
+WHY: Agent outputs raw strings. Telegram MarkdownV2 requires escaping `. - ( ) ! { } =` etc. or the API returns `400 Bad Request: can't parse entities`.
+
+#### [NEW] `arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramMarkdownV2Renderer.java`
+
+```java
 @ApplicationScoped
 public class TelegramMarkdownV2Renderer implements ReplyRenderer {
-    // Telegram MarkdownV2 reserved chars per official docs:
+
     private static final Pattern SPECIAL =
         Pattern.compile("[.\\-_*\\[\\]()~`>#+=|{}!]");
 
+    @Override
     public ChannelType supports() { return ChannelType.TELEGRAM; }
 
+    @Override
     public String render(List<ReplyNode> nodes) {
         return nodes.stream().map(this::renderNode).collect(Collectors.joining("\n"));
     }
 
     private String renderNode(ReplyNode node) {
         return switch (node) {
-            case ReplyNode.Text t       → esc(t.content());
-            case ReplyNode.Bold b       → "*" + esc(b.content()) + "*";
-            case ReplyNode.Italic i     → "_" + esc(i.content()) + "_";
-            case ReplyNode.InlineCode c → "`" + c.content() + "`";
-            case ReplyNode.CodeBlock c  →
-                "```%s\n%s\n```".formatted(c.language(), c.content());
-            case ReplyNode.BulletList l →
-                l.items().stream().map(item → "• " + esc(item))
+            case ReplyNode.Text t        -> esc(t.content());
+            case ReplyNode.Heading h     -> "*" + esc(h.text()) + "*";
+            case ReplyNode.CodeBlock c   -> "```%s\n%s\n```".formatted(c.language(), c.code());
+            case ReplyNode.InlineCode c  -> "`" + c.code() + "`";
+            case ReplyNode.BulletList l  ->
+                l.items().stream().map(i -> "• " + esc(i))
                  .collect(Collectors.joining("\n"));
-            case ReplyNode.NumberedList l →
+            case ReplyNode.NumberedList l ->
                 IntStream.range(0, l.items().size())
-                         .mapToObj(i → (i+1) + "\\. " + esc(l.items().get(i)))
-                         .collect(Collectors.joining("\n"));
-            case ReplyNode.Link lk      →
-                "[%s](%s)".formatted(esc(lk.text()), lk.url());
-            case ReplyNode.ToolResult r →
-                "%s *%s*\n```\n%s\n```".formatted(
-                    r.success() ? "🔧" : "❌", esc(r.toolName()), r.output());
-            case ReplyNode.Paragraph p  → render(p.children());
+                    .mapToObj(i -> (i + 1) + "\\. " + esc(l.items().get(i)))
+                    .collect(Collectors.joining("\n"));
+            case ReplyNode.KeyValue kv   -> "*" + esc(kv.key()) + "*: " + esc(kv.value());
+            case ReplyNode.Separator s   -> "———";
+            case ReplyNode.ApprovalPrompt a ->
+                "⏸ *Approval required*\nTool: `" + a.toolName()
+                + "`\nSession: `" + a.sessionId() + "`";
+            case ReplyNode.ErrorMessage e ->
+                "❌ *" + esc(e.category()) + "*: " + esc(e.reason());
         };
     }
 
@@ -6456,116 +6552,205 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
         return SPECIAL.matcher(s).replaceAll("\\\\$0");
     }
 }
+```
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-core/.../ChannelSenderRegistry.java
-Action: CREATE NEW
-────────────────────────────────────────────────────────────────
+> [!IMPORTANT]
+> Switch must be exhaustive over exactly the 10 `ReplyNode` permits defined in C6.
+> No `default`. `CodeBlock` and `InlineCode` content intentionally bypasses `esc()`.
+
+#### [NEW] `arcclaw-app/src/main/java/com/arcclaw/app/channel/ChannelSenderRegistry.java`
+
+> [!IMPORTANT]
+> ChannelSenderRegistry MUST be in arcclaw-app — NOT arcclaw-core.
+> It injects Instance<ChannelSender> and Instance<ReplyRenderer> whose implementations
+> (TelegramChannelSender, TelegramMarkdownV2Renderer) live in arcclaw-app.
+> Placing it in core causes the same cross-module CDI unsatisfied-dependency failure
+> that polluted arcclaw-core in Tier 2A.
+
+```java
 @ApplicationScoped
 public class ChannelSenderRegistry {
-    @Inject Instance<ChannelSender>   senders;
-    @Inject Instance<ReplyRenderer>   renderers;
+
+    @Inject Instance<ChannelSender>  senders;
+    @Inject Instance<ReplyRenderer>  renderers;
 
     public void send(ChannelUser user, String correlationId, List<ReplyNode> nodes) {
         String rendered = rendererFor(user.channel()).render(nodes);
-        senderFor(user.channel()).sendRaw(user, correlationId, rendered);
+        senderFor(user.channel()).sendRaw(user, rendered);
     }
 
     public void sendRaw(ChannelUser user, String correlationId, String plainText) {
-        senderFor(user.channel()).sendRaw(user, correlationId, plainText);
+        // correlationId retained for logging/idempotency — not passed to ChannelSender
+        // (ChannelSender.sendRaw interface is 2-arg: recipient + text)
+        log.debugf("Sending correlationId=%s to platformId=%s", correlationId, user.platformId());
+        senderFor(user.channel()).sendRaw(user, plainText);
     }
 
     private ChannelSender senderFor(ChannelType type) {
         return senders.stream()
-                      .filter(s → s.supports() == type)
-                      .findFirst()
-                      .orElseThrow(() → new UnsupportedOperationException(
-                          "No ChannelSender for: " + type));
+            .filter(s -> s.supports() == type)
+            .findFirst()
+            .orElseThrow(() -> new UnsupportedOperationException(
+                "No ChannelSender for: " + type));
     }
 
     private ReplyRenderer rendererFor(ChannelType type) {
         return renderers.stream()
-                        .filter(r → r.supports() == type)
-                        .findFirst()
-                        .orElseThrow(() → new UnsupportedOperationException(
-                            "No ReplyRenderer for: " + type));
+            .filter(r -> r.supports() == type)
+            .findFirst()
+            .orElseThrow(() -> new UnsupportedOperationException(
+                "No ReplyRenderer for: " + type));
     }
 }
+```
 
-────────────────────────────────────────────────────────────────
-TEST: TelegramMarkdownV2RendererTest.java — CREATE NEW
-────────────────────────────────────────────────────────────────
-- testBoldEscapesSpecialChars()   → Bold("hello.world") → *hello\.world*
-- testCodeBlockContentNotEscaped() → code content passes through raw
-- testBulletListFormatting()
-- testToolResultSuccessIcon()     → success=true → 🔧
-- testToolResultFailureIcon()     → success=false → ❌
-- testDotEscaped()                → Text("v1.0") → v1\.0
-- testDashEscaped()               → Text("step-1") → step\-1
-- testParenthesesEscaped()        → Text("(note)") → \(note\)
-- testNormalWordNotMutated()      → Text("delete the old files") →
-                                    delete the old files (no escaping of the word)
-- testLinkFormat()                → Link("click", "https://example.com") →
-                                    [click](https://example.com) with text escaped
+#### [NEW] `TelegramMarkdownV2RendererTest.java` (10 pure unit tests — no CDI, no mocks)
 
----
+```java
+testDotEscaped()             // Text("v1.0")        → "v1\.0"
+testDashEscaped()            // Text("step-1")       → "step\-1"
+testParenthesesEscaped()     // Text("(note)")       → "\(note\)"
+testNormalWordNotMutated()   // Text("hello world")  → "hello world"
+testCodeBlockNotEscaped()    // CodeBlock content passes through raw
+testBulletListFormatting()   // 3-item list → 3 lines with "• " prefix
+testNumberedListEscapesDots()// item prefix is "1\." not "1."
+testApprovalPromptFormat()   // output contains toolName and sessionId
+testErrorMessageFormat()     // output contains "❌", category, reason
+testSeparatorOutput()        // Separator() → "———"
+```
 
-### Component 14 — REST Adapter Exhaustive Pattern Matching
+***
 
-────────────────────────────────────────────────────────────────
-File: arcclaw-app/.../AgentResource.java
-Action: UPDATE — replace all boolean checks with sealed interface switch
-────────────────────────────────────────────────────────────────
-@POST
-@Path("/run")
-public Response run(AgentRequest req) {
-    AgentResult result = runner.run(AgentExecutionContext.from(req));
+## Component 14 — REST Adapter Exhaustive Pattern Matching
 
-    return switch (result) {
-        case AgentResult.Finished f →
-            Response.ok(new AgentResponse(f.answer(), f.totalInputTokens(),
-                                           f.totalOutputTokens())).build();
+WHY: `AgentResource` uses `result.success()` / `result.awaitingApproval()` boolean checks that don't exist on the C7 sealed interface. Each `FailureCategory` maps to a distinct HTTP status.
 
-        case AgentResult.AwaitingApproval a →
-            Response.status(202)
-                    .entity(new ApprovalRequiredResponse(
-                        a.pendingTool(), a.pendingParamsJson(), a.sessionId()))
-                    .build();
+#### [MODIFY] `AgentResource.java`
 
-        case AgentResult.LoopExceeded l →
-            Response.status(408)
-                    .entity(new ErrorResponse(
-                        "Iteration limit " + l.maxIterations() + " reached",
-                        "LOOP_EXCEEDED"))
-                    .build();
+Apply exhaustive sealed switch to `runAgentSync`, `runAgentAsync`, and status/approval endpoints:
 
-        case AgentResult.Failed(var reason, var category, _, _, _) →
-            switch (category) {
-                case COMPLIANCE_VIOLATION →
-                    Response.status(451).entity(new ErrorResponse(reason, "COMPLIANCE")).build();
-                case BUDGET_EXCEEDED →
-                    Response.status(429).entity(new ErrorResponse(reason, "BUDGET")).build();
-                case USER_DENIED →
-                    Response.ok(new ErrorResponse(reason, "USER_DENIED")).build();
-                case SCHEMA_ERROR →
-                    Response.status(422).entity(new ErrorResponse(reason, "SCHEMA")).build();
-                case SYSTEM_ERROR →
-                    Response.serverError().entity(new ErrorResponse(reason, "SYSTEM")).build();
-            };
-    };
-}
+```java
+return switch (result) {
+    case AgentResult.Finished f ->
+        Response.ok(new AgentResponse(
+            f.answer(), f.totalInputTokens(), f.totalOutputTokens())).build();
 
----
+    case AgentResult.AwaitingApproval a ->
+        Response.status(202)
+            .entity(new ApprovalRequiredResponse(
+                a.pendingTool(), a.pendingParamsJson(), a.sessionId()))
+            .build();
 
-### Tier 2B Test Execution
+    case AgentResult.LoopExceeded l ->
+        Response.status(408)
+            .entity(new ErrorResponse(
+                "Iteration limit " + l.maxIterations() + " reached",
+                "LOOP_EXCEEDED"))
+            .build();
 
-.\mvnw.cmd clean test -pl arcclaw-core -am "-Dtest=AgentCronSchedulerTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+    case AgentResult.Failed f ->
+        switch (f.category()) {
+            case COMPLIANCE_VIOLATION ->
+                Response.status(451).entity(new ErrorResponse(f.reason(), "COMPLIANCE")).build();
+            case BUDGET_EXCEEDED ->
+                Response.status(429).entity(new ErrorResponse(f.reason(), "BUDGET")).build();
+            case USER_DENIED ->
+                Response.ok(new ErrorResponse(f.reason(), "USER_DENIED")).build();
+            case SCHEMA_ERROR ->
+                Response.status(422).entity(new ErrorResponse(f.reason(), "SCHEMA")).build();
+            case SYSTEM_ERROR ->
+                Response.serverError().entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
+        };
+};
+```
+
+> [!IMPORTANT]
+> Both switches must be exhaustive with no `default`. A future `FailureCategory` value
+> or new `AgentResult` permit will produce compile errors at both levels — that is intentional.
+> Note: Use `f.category()` accessor on the `Failed` record — do NOT use record deconstruction
+> pattern `case AgentResult.Failed(var reason, var category, _, _, _)` as it is less readable
+> and more fragile under field reordering.
+
+***
+
+## Checklist
+
+### Pre-Flight (complete before ANY C10 code)
+- [ ] `COORDINATOR.requiresApproval` → `true`
+- [ ] `RESEARCHER.requiresApproval` → `true`
+- [ ] `COORDINATOR` capabilities → add `ToolCapability.MEMORY_SEARCH`
+- [ ] `maxIterations`: ARCHITECT=10, COORDINATOR=10, RESEARCHER=15, CODER=5, DEBUGGER=5
+- [ ] `VishnuAgent` system prompt `AVAILABLE TOOLS` — add `memory_search`
+- [ ] `ApiKeyRegistry` — `ConcurrentHashMap` → Caffeine `Cache` (maxSize=10k, expireAfterAccess=1h)
+- [ ] `CommandDispatchHandler` — exhaustive switch over all 7 `ChannelCommand` permits using `ReflexRegistry`
+- [ ] `IntentClassifierService` confirmed in `com.arcclaw.app.routing` — no move needed
+- [ ] `TelegramAllowlistGuard` confirmed in `com.arcclaw.app.security` — no move, no rename
+- [ ] `beans.xml` (`bean-discovery-mode=all`) present at `arcclaw-app/src/main/resources/META-INF/beans.xml`
+
+### Component 10
+- [ ] Create `AgentJobCompleted.java` in `arcclaw-core/com/arcclaw/core/cron/`
+- [ ] Add `channelType` + `channelPlatformId` (`nullable=true`) to `AgentCronEntity`
+- [ ] Remove `ProducerTemplate`, `botToken`, `telegramEndpoint` from `AgentCronScheduler`
+- [ ] Replace both `camelProducer` callsites with `jobCompletedEvent.fire(...)` using `executionId` as `correlationId`
+- [ ] Create `TelegramCronNotificationObserver.java` in `arcclaw-app`
+- [ ] Add 2 new tests to `AgentCronSchedulerTest.java` (mock `AgentLoop`, not `AgentStateMachineRunner`)
+
+### Component 11
+- [ ] Create `base-system.txt`
+- [ ] Create `role-coordinator.txt` — migrate from `getRoleBinding()` COORDINATOR case verbatim
+- [ ] Create `role-researcher.txt`
+- [ ] Create `role-coder.txt`
+- [ ] Create `role-debugger.txt`
+- [ ] Create `role-architect.txt`
+- [ ] Create `compaction-summary.txt`
+- [ ] Create `PromptTemplateEngine.java` — `@Inject` on every `@Location` field
+- [ ] Delete `getRoleBinding()` from `LangChainReasoningEngine`, inject `PromptTemplateEngine`
+- [ ] Create `PromptTemplateEngineTest.java` (6 tests)
+
+### Component 12
+- [ ] Replace static `CLASSIFIER_PROMPT` with `@PostConstruct`-built `classifierPrompt` instance field
+- [ ] DestructiveVocabularyFilter uses AgentRoleEnum.fromString(role).definition()
+      .capabilities().isEmpty() — NOT a hardcoded Set<String> of role names
+- [ ] Remove `DESTRUCTIVE_PATTERN` + `applyDestructiveSafetyOverride()` from `IntentClassifierService`
+- [ ] Inject `DestructiveVocabularyFilter` into `IntentClassifierService`
+- [ ] Add 2 new tests to `IntentClassifierServiceTest.java` — preserve all existing tests
+
+### Component 13
+- [ ] Create `TelegramMarkdownV2Renderer.java` in `arcclaw-app` — exhaustive over all 10 `ReplyNode` permits
+- [ ] Create `ChannelSenderRegistry.java` in `arcclaw-app` (com.arcclaw.app.channel) — NOT arcclaw-core
+- [ ] Create `TelegramMarkdownV2RendererTest.java` (10 pure unit tests)
+
+### Component 14
+- [ ] Migrate `AgentResource.runAgentSync` — exhaustive sealed switch, no `default`
+- [ ] Migrate `AgentResource.runAgentAsync` — exhaustive sealed switch, no `default`
+- [ ] Migrate status/approval endpoints — exhaustive sealed switch, no `default`
+- [ ] Inner `FailureCategory` switch uses `f.category()` accessor — exhaustive, no `default`
+
+***
+
+## Verification
+
+```powershell
+# Pre-flight regression check
+.\mvnw.cmd clean test -pl arcclaw-core -am "-Dtest=RoleDefinitionTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# C10
+.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=AgentCronSchedulerTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# C11
 .\mvnw.cmd clean test -pl arcclaw-core -am "-Dtest=PromptTemplateEngineTest" "-Dsurefire.failIfNoSpecifiedTests=false"
-.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=IntentClassifierServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false"
-.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=TelegramMarkdownV2RendererTest" "-Dsurefire.failIfNoSpecifiedTests=false"
-.\mvnw.cmd clean verify -pl arcclaw-app -am
 
-All must be GREEN before proceeding to Tier 3.
+# C12
+.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=IntentClassifierServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# C13
+.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=TelegramMarkdownV2RendererTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# Full verify — must be GREEN before Tier 3
+.\mvnw.cmd clean verify -pl arcclaw-app -am
+```
+
+Provide impl plan first. All must be **GREEN** before proceeding to Tier 3.
 ```
 
 ***

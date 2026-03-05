@@ -1,5 +1,7 @@
 package com.arcclaw.app.security;
 
+import com.arcclaw.channel.api.ChannelAllowlist;
+import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -8,7 +10,8 @@ import java.util.List;
 import java.util.Optional;
 
 @ApplicationScoped
-public class TelegramAllowlistGuard {
+@Unremovable
+public class TelegramAllowlistGuard implements ChannelAllowlist {
 
     private static final Logger log = Logger.getLogger(TelegramAllowlistGuard.class);
 
@@ -24,11 +27,19 @@ public class TelegramAllowlistGuard {
     @ConfigProperty(name = "arcclaw.telegram.silent-block", defaultValue = "false")
     boolean silentBlock;
 
-    public boolean isAllowed(Long userId, String username) {
+    @Override
+    public boolean isAllowed(String userIdStr, String username) {
         // 1. Check strict numeric IDs first (Phase 46)
         if (allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty()) {
-            if (userId != null && allowedUserIds.get().contains(userId)) {
-                return true;
+            if (userIdStr != null) {
+                try {
+                    long userId = Long.parseLong(userIdStr);
+                    if (allowedUserIds.get().contains(userId)) {
+                        return true;
+                    }
+                } catch (NumberFormatException e) {
+                    // Ignore parsing error, will fall back or return false
+                }
             }
             // If numeric IDs are configured, we strictly deny anything that doesn't match
             // (Ignoring the deprecated string list entirely for security)
@@ -57,10 +68,12 @@ public class TelegramAllowlistGuard {
         return false;
     }
 
+    @Override
     public String getBlockResponse() {
         return blockResponse;
     }
 
+    @Override
     public boolean isSilentBlock() {
         return silentBlock;
     }

@@ -45,6 +45,25 @@
 | 41 | Resilience, Privacy & Observer Separation | 100% success | 19+ PII patterns |
 | 42 | ScopedValue Context Migration | 100% success | Bridge for MicroProfile |
 | 44 | Production Hardening | 100% success | JDBC `IMMEDIATE` + dynamic `RoleRegistry` refactor |
+| 47.1 | Message Pipeline Refactor (Tier 2A) | 100% success | Moved implementations to core for definitive CDI fix |
+
+---
+
+## Phase 47 Tier 2A: Message Pipeline & Sealed Interface Refactor ✅
+
+Modernized the messaging infrastructure and moved implementations to `arcclaw-core` for definitive CDI stability.
+
+| File | Purpose |
+|------|---------|
+| [ChannelMessage.java](file:///h:/ws/ArcClaw/arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/ChannelMessage.java) | Sealed interface forexhaustive message handling. |
+| [MessagePipeline.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessagePipeline.java) | Central orchestrator for the modular message processing chain. |
+| [MessageHandler.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessageHandler.java) | Interface defining the contract for pipeline stages. |
+| [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/routing/IntentClassifierService.java) | Moved to core; handles LLM-based intent classification. |
+
+**Verification**:
+- ✅ `mvnw clean package -pl arcclaw-app -am` succeeds.
+- ✅ All core and app tests (including new pipeline integration tests) are green.
+- ✅ CDI `UnsatisfiedDependency` issues verified as resolved in multiple environments.
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
