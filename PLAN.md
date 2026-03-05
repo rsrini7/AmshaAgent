@@ -2370,9 +2370,14 @@ Harden the application startup by enforcing strict security validation for non-d
 #### [MODIFY] [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java)
 - Inverted logic: validates if `!profile.equals("dev") && !profile.equals("test")`.
 - Enforced check order with specific exception types (`IllegalStateException` vs `DeploymentException`).
+- Added strict multi-line `DeploymentException` message for string-only allowlists (P1-3).
 - Fields made package-private to support test unwrapping.
 
 ### Test Module — Security Tests
+
+#### [NEW] [StartupSecurityValidatorStringOnlyAllowlistTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorStringOnlyAllowlistTest.java)
+- Verifies that string-only allowlists trigger the mandatory security error message in `staging`.
+- Uses `ClientProxy.unwrap()` for field overrides.
 
 #### [NEW] [StartupSecurityValidatorProdUnsafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdUnsafeTest.java)
 - Verifies that unsafe secrets in `prod` profile trigger an `IllegalStateException`.
@@ -2389,6 +2394,6 @@ Harden the application startup by enforcing strict security validation for non-d
 
 ## Verification
 
-- ✅ `StartupSecurityValidator*Test`: All 4 new test classes pass (8 existing + 4 new = 12 total).
-- ✅ `mvn clean verify`: Full suite (312 tests) passed.
+- ✅ `StartupSecurityValidator*Test`: All 5 security test classes pass (8 basic + 6 scenario = 14 total).
+- ✅ `mvn clean verify`: Full suite (314 tests) passed.
 

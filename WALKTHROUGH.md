@@ -1239,6 +1239,6 @@ To overcome the challenge of `@QuarkusTest` failing when the validator intention
 4.  **Manual Invoke**: `validator.onStart(new StartupEvent())` is called manually, and the resulting exception is asserted.
 
 **Verification**:
-- ✅ All four new test scenarios (ProdUnsafe, UnknownProfile, ProdSafe, DevExempt) passed.
-- ✅ Verified that unknown profiles default to strict validation.
-- ✅ Full build verification: `mvn clean verify` succeeds with 312 tests.
+- ✅ All five scenario-based test classes (ProdUnsafe, UnknownProfile, ProdSafe, DevExempt, StringOnlyAllowlist) passed.
+- ✅ Verified that string-only allowlists in `staging` trigger the mandatory P1-3 error message.
+- ✅ Full build verification: `mvn clean verify` succeeds with 314 tests.

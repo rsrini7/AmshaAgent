@@ -655,5 +655,5 @@
   - [x] Invert profile guard in `StartupSecurityValidator.java` (`dev`/`test` exempt) <!-- id: 194 -->
   - [x] Enforce mandatory check order and exception types <!-- id: 195 -->
   - [x] Implement "Safe Boot + Proper Unwrap" JUnit strategy <!-- id: 196 -->
-  - [x] Create exhaustive test suite: `ProdUnsafe`, `UnknownProfile`, `ProdSafe`, `DevExempt` <!-- id: 197 -->
-  - [x] Verify: All 312 tests pass <!-- id: 198 -->
+  - [x] Create exhaustive test suite: `ProdUnsafe`, `UnknownProfile`, `ProdSafe`, `DevExempt`, `StringOnlyAllowlist` <!-- id: 197 -->
+  - [x] Verify: All 314 tests pass <!-- id: 198 -->

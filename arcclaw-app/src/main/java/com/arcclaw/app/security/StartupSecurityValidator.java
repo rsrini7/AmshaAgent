@@ -56,11 +56,14 @@ public class StartupSecurityValidator {
                     "Configure at least one allowlist before deploying.");
             }
 
-            // 4. string-only allowlist -> throws DeploymentException (P1-3)
+            // Phase 48: String-username-only allowlist is forbidden in non-dev/non-test
             if (!hasUserIds && hasUsernames) {
                 throw new jakarta.enterprise.inject.spi.DeploymentException(
-                    "[SECURITY] String-only allowlist detected in " + profile + " profile. " +
-                    "Use arcclaw.channel.telegram.allowed-user-ids for better security.");
+                    "SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is " +
+                    "not configured, but arcclaw.channel.telegram.allowed-users " +
+                    "(string username list) is. String username allowlists are a " +
+                    "username-hijack vector and are forbidden in profile '" + profile +
+                    "'. Migrate to numeric Telegram user IDs before deploying.");
             }
         }
     }
