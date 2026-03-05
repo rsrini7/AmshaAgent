@@ -199,6 +199,14 @@ public class AsyncPersistenceEngine {
      * because the Hibernate SQLite dialect may wrap the error several layers deep.
      */
     private void executeWithRetry(PersistenceEvent event) {
+        // Second-check: container may have gone since processEvent() passed its guard
+        if (!running || io.quarkus.arc.Arc.container() == null) {
+            log.debugf("[AsyncPersistenceEngine] Skipping write (shutdown): %s session=%s",
+                    event.getEventType(), event.getSessionId());
+            if (event.getFuture() != null) event.getFuture().complete(null);
+            return;
+        }
+        
         int attempt = 0;
         Exception lastException = null;
 
@@ -225,7 +233,16 @@ public class AsyncPersistenceEngine {
                             attempt, MAX_RETRIES, event.getSessionId(), backoff, e.getMessage());
                     sleepQuietly(backoff);
                 } else {
-                    // Non-BUSY error — fail immediately without retrying
+                    // Non-BUSY error — check if it's a shutdown race before logging as ERROR
+                    if (!running || io.quarkus.arc.Arc.container() == null) {
+                        log.debugf("[AsyncPersistenceEngine] Shutdown race: discarding event %s for session=%s",
+                                event.getEventType(), event.getSessionId());
+                        if (event.getFuture() != null) {
+                            event.getFuture().complete(null); // unblock any waiting callers cleanly
+                        }
+                        return;  // do NOT call handleExhausted — this is expected during teardown
+                    }
+                    // Genuine non-retryable error during normal operation
                     log.errorf(e, "[AsyncPersistenceEngine] Non-retryable error for session=%s eventType=%s. Class: %s",
                             event.getSessionId(), event.getEventType(), e.getClass().getName());
                     break;

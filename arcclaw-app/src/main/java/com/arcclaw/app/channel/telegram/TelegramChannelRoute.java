@@ -27,7 +27,7 @@ public class TelegramChannelRoute extends RouteBuilder {
             return;
         }
 
-        // Wire token directly onto the component — version-agnostic, never in URI
+        // Wire token directly onto the component version-agnostic, never in URI
         TelegramComponent telegram = new TelegramComponent();
         telegram.setAuthorizationToken(botToken);
         getContext().addComponent("telegram", telegram);

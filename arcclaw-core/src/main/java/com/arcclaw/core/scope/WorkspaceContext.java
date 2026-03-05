@@ -16,6 +16,7 @@ public final class WorkspaceContext {
     public static final ScopedValue<String> CHAT_ID = ScopedValue.newInstance();
     public static final ScopedValue<AutonomyLevel> AUTONOMY = ScopedValue.newInstance();
     public static final ScopedValue<String> AGENT_ROLE = ScopedValue.newInstance();
+    public static final ScopedValue<String> CHANNEL_TYPE = ScopedValue.newInstance();
 
     private WorkspaceContext() {
         // utility class
@@ -74,5 +75,12 @@ public final class WorkspaceContext {
 
     public static String agentRole() {
         return AGENT_ROLE.isBound() && AGENT_ROLE.get() != null ? AGENT_ROLE.get() : "";
+    }
+
+    // Accessor with safe default — TELEGRAM is correct for all existing callers
+    public static String channelType() {
+        return CHANNEL_TYPE.isBound() && CHANNEL_TYPE.get() != null 
+            ? CHANNEL_TYPE.get() 
+            : "TELEGRAM";
     }
 }

@@ -26,6 +26,8 @@ import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.util.CronScheduleUtil;
 
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
@@ -193,9 +195,8 @@ public class AgentCronScheduler {
         // Isolated session per FIRE — prevents history buildup across recurring jobs!
         String cronSessionId = "cron-" + job.id + "-" + executionId;
 
-        // Null-safe channel routing — legacy rows have null channelType/channelPlatformId
-        ChannelType chType = ChannelType.valueOf(
-                job.channelType != null ? job.channelType : "TELEGRAM");
+        ChannelType chType = ChannelType.fromString(job.channelType);
+
         String platformId = job.channelPlatformId != null ? job.channelPlatformId : job.chatId;
         
         try {
@@ -208,11 +209,14 @@ public class AgentCronScheduler {
                 devSeeder.get().seedDevSecrets();
             }
 
+            String effectiveGoal = job.goal + 
+                "\n[SYSTEM CONSTRAINT: Do NOT call scheduletask. Execute the goal directly.]";
+
             AgentResult result = WorkspaceContext.run(cronSessionId, job.userId, job.chatId, AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(), () -> 
                 agentLoop.run(
                     cronSessionId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
-                    job.goal,
+                    effectiveGoal,
                     engine,
                     cronMaxIterations
                 )
@@ -220,18 +224,13 @@ public class AgentCronScheduler {
 
             boolean wasApprovalRequested = result instanceof AgentResult.AwaitingApproval;
             String rawAnswer = wasApprovalRequested
-                ? com.arcclaw.core.util.CronResultFormatter.formatCronHitl(job.id, job.goal, ((AgentResult.AwaitingApproval) result).toolName())
-                : com.arcclaw.core.util.CronResultFormatter.format(result);
+                ? CronResultFormatter.formatCronHitl(job.id, job.goal, ((AgentResult.AwaitingApproval) result).toolName())
+                : CronResultFormatter.format(result);
             
             // Defensive guard against empty LLM outputs
             String finalAnswer = rawAnswer.trim().isEmpty() 
                     ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.goal 
                     : rawAnswer;
-
-            // Fire CDI event — delivery is the observer's responsibility
-            jobCompletedEvent.fire(new AgentJobCompleted(
-                    job.id, job.userId, chType, platformId, executionId,
-                    finalAnswer, null));  // null failureCategory = success
 
             // Only mark successful completions if it wasn't paused for approval
             if (!wasApprovalRequested) {
@@ -243,7 +242,7 @@ public class AgentCronScheduler {
                             "cronId=" + job.id + " runOnce=true status=COMPLETED");
                     log.infof("CRON-COMPLETED one-shot cronId=%s", job.id);
                 } else {
-                    Instant next = com.arcclaw.core.util.CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                    Instant next = CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
                     cronRepository.markFired(job.id, Instant.now(), next);
                     auditService.record(cronSessionId, job.userId,
                             AgentRoleEnum.COORDINATOR.toScopedName(),
@@ -257,6 +256,11 @@ public class AgentCronScheduler {
                 log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
                         job.id, ((AgentResult.AwaitingApproval) result).toolName());
             }
+
+            // Fire CDI event — delivery is the observer's responsibility
+            jobCompletedEvent.fire(new AgentJobCompleted(
+                job.id, job.userId, chType, platformId, executionId,
+                finalAnswer, null));  // null failureCategory = success
 
         } catch (Throwable t) {
             // Inner Throwable catches OOME during AgentLoop execution

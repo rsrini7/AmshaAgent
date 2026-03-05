@@ -4,6 +4,7 @@ package com.arcclaw.core.tools;
 import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
@@ -116,7 +117,7 @@ public class ScheduleTaskTool implements AgentTool {
                         .description("IANA timezone (default: UTC)")
                         .build())
                 .addProperty("runOnce", JsonBooleanSchema.builder()
-                        .description("If true, the task fires once then completes (default: false)")
+                        .description("'true' for one-time tasks, 'false' for recurring (default: false)")
                         .build())
                 .required("cronExpression", "goal")
                 .build();
@@ -203,6 +204,7 @@ public class ScheduleTaskTool implements AgentTool {
         entity.sessionId      = sessionId;
         entity.userId         = userId;
         entity.chatId         = chatId;
+        entity.channelType = WorkspaceContext.channelType(); // "CLI" from ChatCommand, "TELEGRAM" everywhere else
         entity.cronExpression = cronExpression;
         entity.timezone       = timezone;
         entity.runOnce        = runOnce;

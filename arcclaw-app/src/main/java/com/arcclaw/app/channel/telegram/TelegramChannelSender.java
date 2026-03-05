@@ -12,15 +12,22 @@ import com.arcclaw.channel.api.ReplyNode;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+/**
+ * Telegram implementation of ChannelSender.
+ */
 @ApplicationScoped
 public class TelegramChannelSender implements ChannelSender {
 
     private final ProducerTemplate producerTemplate;
+    private final TelegramMarkdownV2Renderer renderer;
     private final Logger log;
 
     @Inject
-    public TelegramChannelSender(ProducerTemplate producerTemplate, Logger log) {
+    public TelegramChannelSender(ProducerTemplate producerTemplate,
+                                 TelegramMarkdownV2Renderer renderer,
+                                 Logger log) {
         this.producerTemplate = producerTemplate;
+        this.renderer = renderer;
         this.log = log;
     }
 
@@ -31,17 +38,38 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
-        // Real implementation in Tier 2B. For now, just send text if possible.
-        // Needs ReplyRenderer.
+        if (recipient == null || recipient.platformId() == null) {
+            log.warn("TELEGRAM-SEND: recipient or platformId is null — dropping");
+            return;
+        }
+        String chatId = recipient.platformId();
+        if (nodes == null || nodes.isEmpty()) {
+            sendRaw(chatId, "(No response generated)");
+            return;
+        }
+        String rendered = renderer.render(nodes);
+        if (rendered == null || rendered.isBlank()) {
+            sendRaw(chatId, "(No response generated)");
+            return;
+        }
+        sendRaw(chatId, rendered);
     }
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
+        if (recipient == null || recipient.platformId() == null) {
+            log.warn("TELEGRAM-SENDRAW: recipient or platformId is null — dropping");
+            return;
+        }
+        sendRaw(recipient.platformId(), text);
+    }
+
+    private void sendRaw(String chatId, String text) {
         if (text == null || text.isBlank()) {
-            log.warn("Attempted to send empty message to " + recipient.platformId() + " — skipping");
-            return;   // ← never call Camel with empty body
+            log.warn("Attempted to send empty message to " + chatId + " — skipping");
+            return;
         }
         String endpoint = "telegram:bots";
-        producerTemplate.sendBodyAndHeader(endpoint, text, "CamelTelegramChatId", recipient.platformId());
+        producerTemplate.sendBodyAndHeader(endpoint, text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
     }
 }
