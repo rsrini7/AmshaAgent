@@ -66,6 +66,8 @@ java \
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED  --add-opens=java.base/java.lang=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
+$env:OTEL_SDK_DISABLED = "true"
+
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
 .\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"

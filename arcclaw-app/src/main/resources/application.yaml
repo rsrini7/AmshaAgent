@@ -112,6 +112,8 @@ quarkus:
 
   otel:
     enabled: true
+    sdk:
+      disabled: "${OTEL_SDK_DISABLED:true}"  # default off — enable when collector present
     exporter:
       otlp:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
@@ -363,6 +365,8 @@ mp:
 "%dev":
   quarkus:
     console:
+      enabled: false
+    live-reload:
       enabled: false
     otel:
       sdk:
