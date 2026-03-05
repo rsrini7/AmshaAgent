@@ -686,3 +686,11 @@
   - [x] Fix `ReflexResult` constructor parameter ordering <!-- id: 222 -->
 - [x] Verify: `ChatCommandApprovalTest` passes (mocked heartbeats and UI) <!-- id: 223 -->
 - [x] Verify: `terminateSession()` is correctly called in `finally` block <!-- id: 224 -->
+
+# Phase 50 P2-3 — MemorySearchTool FTS Null Safety + Empty Result Handling ✅
+- [x] Update `MemorySearchTool` to gracefully handle null/empty results from `searchMemory`
+- [x] Catch FTS "no such table" exceptions and return a successful tool response to continue without memory
+- [x] Catch generic exceptions and return a 500 failure code
+- [x] Verify: `testEmptyFtsResultReturnsGracefulMessage`
+- [x] Verify: `testFtsUnavailableReturnsGracefulMessage`
+- [x] Verify: `testFtsGenericExceptionReturnsFailure`

@@ -101,4 +101,47 @@ class MemorySearchToolTest {
                 eq(SecurityEventType.TOOL_INVOKED),
                 contains("memory_search"));
     }
+
+    @Test
+    void testEmptyFtsResultReturnsGracefulMessage() throws Exception {
+        MemorySearchTool tool = createTool();
+
+        when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
+                .thenReturn(List.of());
+
+        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
+                tool.execute(Map.of("query", "unknown topic")));
+
+        assertTrue(result.success());
+        assertEquals("No relevant memory found for query: unknown topic. Proceed with current context only.", result.output());
+    }
+
+    @Test
+    void testFtsUnavailableReturnsGracefulMessage() throws Exception {
+        MemorySearchTool tool = createTool();
+
+        when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
+                .thenThrow(new RuntimeException("no such table: fts.compaction_summary_fts"));
+
+        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
+                tool.execute(Map.of("query", "blockchain")));
+
+        assertTrue(result.success());
+        assertEquals("Memory index temporarily unavailable. Proceed with current context.", result.output());
+    }
+
+    @Test
+    void testFtsGenericExceptionReturnsFailure() throws Exception {
+        MemorySearchTool tool = createTool();
+
+        when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
+                .thenThrow(new RuntimeException("connection reset"));
+
+        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
+                tool.execute(Map.of("query", "blockchain")));
+
+        assertFalse(result.success());
+        assertEquals(500, result.exitCode());
+        assertEquals("Memory search failed: connection reset", result.output());
+    }
 }
