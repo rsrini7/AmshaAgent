@@ -1,12 +1,15 @@
 package com.arcclaw.app.routing;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 import com.arcclaw.app.security.DestructiveVocabularyFilter;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.AgentRoleEnum;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.quarkus.arc.Unremovable;
@@ -23,7 +26,7 @@ public class IntentClassifierService implements IntentClassifier {
     ChatLanguageModel classifierModel;
 
     @Inject
-    org.eclipse.microprofile.context.ManagedExecutor managedExecutor;
+    ManagedExecutor managedExecutor;
 
     @Inject
     DestructiveVocabularyFilter destructiveFilter;
@@ -44,15 +47,15 @@ public class IntentClassifierService implements IntentClassifier {
 
         // Maintain original semantic ordering (brahma/coder first)
         // and include newer roles (architect).
-        java.util.List<com.arcclaw.core.agent.AgentRoleEnum> roles = java.util.List.of(
-                com.arcclaw.core.agent.AgentRoleEnum.CODER,
-                com.arcclaw.core.agent.AgentRoleEnum.DEBUGGER,
-                com.arcclaw.core.agent.AgentRoleEnum.RESEARCHER,
-                com.arcclaw.core.agent.AgentRoleEnum.COORDINATOR,
-                com.arcclaw.core.agent.AgentRoleEnum.ARCHITECT
+        List<AgentRoleEnum> roles = List.of(
+                AgentRoleEnum.CODER,
+                AgentRoleEnum.DEBUGGER,
+                AgentRoleEnum.RESEARCHER,
+                AgentRoleEnum.COORDINATOR,
+                AgentRoleEnum.ARCHITECT
         );
 
-        for (com.arcclaw.core.agent.AgentRoleEnum role : roles) {
+        for (AgentRoleEnum role : roles) {
             sb.append("- ").append(role.toScopedName()).append(": ")
               .append(role.definition().intentDescription()).append("\n");
         }

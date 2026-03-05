@@ -103,4 +103,42 @@ class GovernanceLayerTest {
             assertEquals(0.0, governanceLayer.getSessionCost(sessionId), 0.0001);
         });
     }
+    @Test
+    void testZeroZeroTokenCountUsesFloor() {
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
+            // (0,0) should use floor (10, 10)
+            // Cost = (10/1000 * 0.003) + (10/1000 * 0.015) = 0.00003 + 0.00015 = 0.00018
+            assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 0, 0));
+            
+            assertEquals(0.00018, governanceLayer.getSessionCost(sessionId), 0.000001);
+            assertTrue(governanceLayer.getSessionCost(sessionId) > 0.0);
+            assertEquals(10, governanceLayer.getSessionInputTokens(sessionId));
+            assertEquals(10, governanceLayer.getSessionOutputTokens(sessionId));
+        });
+    }
+
+    @Test
+    void testPartialZeroTokenCountIsNotInflated() {
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
+            // (3,0) is valid, should NOT use floor.
+            // Cost = (3/1000 * 0.003) + (0/1000 * 0.015) = 0.000009
+            assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 3, 0));
+            
+            assertEquals(0.000009, governanceLayer.getSessionCost(sessionId), 0.0000001);
+            assertEquals(3, governanceLayer.getSessionInputTokens(sessionId));
+            assertEquals(0, governanceLayer.getSessionOutputTokens(sessionId));
+        });
+    }
+
+    @Test
+    void testNormalTokenCountNotOverridden() {
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
+            // (500, 200) -> Cost = (500/1000 * 0.003) + (200/1000 * 0.015) = 0.0015 + 0.003 = 0.0045
+            assertDoesNotThrow(() -> governanceLayer.recordLlmCall(sessionId, 500, 200));
+            
+            assertEquals(0.0045, governanceLayer.getSessionCost(sessionId), 0.0001);
+            assertEquals(500, governanceLayer.getSessionInputTokens(sessionId));
+            assertEquals(200, governanceLayer.getSessionOutputTokens(sessionId));
+        });
+    }
 }

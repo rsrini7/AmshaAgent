@@ -27,6 +27,9 @@ public class GovernanceLayer {
     @ConfigProperty(name = "arcclaw.governance.price-per-1k-output", defaultValue = "0.015")
     double pricePer1kOutput;
 
+    @ConfigProperty(name = "arcclaw.governance.min-tokens-per-call", defaultValue = "10")
+    int minTokensFloor;
+
     @ConfigProperty(name = "arcclaw.governance.budget-usd", defaultValue = "10.00")
     double budgetUsd;
 
@@ -37,11 +40,21 @@ public class GovernanceLayer {
             return;
         }
 
-        double cost = (inputTokens / 1000.0) * pricePer1kInput + (outputTokens / 1000.0) * pricePer1kOutput;
+        boolean zeroReport = (inputTokens == 0 && outputTokens == 0);
+        long effectiveInput  = zeroReport ? minTokensFloor : inputTokens;
+        long effectiveOutput = zeroReport ? minTokensFloor : outputTokens;
+
+        if (zeroReport) {
+            log.warnf("GOVERNANCE zero token report for session %s — applying " +
+                "floor %d. Verify log-requests config or provider token reporting.",
+                sessionId, minTokensFloor);
+        }
+
+        double cost = (effectiveInput / 1000.0) * pricePer1kInput + (effectiveOutput / 1000.0) * pricePer1kOutput;
 
         SessionBudget budget = budgets.computeIfAbsent(sessionId, k -> new SessionBudget());
-        budget.input.addAndGet(inputTokens);
-        budget.output.addAndGet(outputTokens);
+        budget.input.addAndGet((int) effectiveInput);
+        budget.output.addAndGet((int) effectiveOutput);
         budget.addCost(cost);
 
         double currentCost = budget.getTotalCost();

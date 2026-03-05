@@ -68,15 +68,19 @@ quarkus:
     chat-model:
       provider: openai
     ollama:
+      log-requests: false
+      log-responses: false
       chat-model:
         enabled: false
     groq:
       api-key: "${GROQ_API_KEY}"
-      log-requests: true
-      log-responses: true
+      log-requests: false
+      log-responses: false
       chat-model:
         max-tokens: 768
     openai:
+      log-requests: false
+      log-responses: false
       # Ollama provides native OpenAI compatibility on /v1
       # base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
       # api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
@@ -85,8 +89,6 @@ quarkus:
       # Groq is OpenAI API-compatible
       base-url: "https://api.groq.com/openai/v1"
       api-key: "${GROQ_API_KEY}"
-      log-requests: true
-      log-responses: true
       timeout: 120s
       max-retries: 3
       devservices:
@@ -96,8 +98,6 @@ quarkus:
         #model-name: "llama-3.3-70b-versatile"
         model-name: "meta-llama/llama-4-scout-17b-16e-instruct"
         temperature: 0.1
-        log-requests: true
-        log-responses: true
         max-tokens: 768
 
   # ---------------------------------------------------------------------------
@@ -279,6 +279,13 @@ arcclaw:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 
   governance:
+    # Floor applied ONLY when LLM provider returns 0 input AND 0 output tokens.
+    # This indicates the provider omitted token counts entirely (a known side
+    # effect of certain log-requests=false configurations), not a valid zero-output
+    # response. Set to 1 to disable the floor effect while keeping the warning.
+    # A partial zero (e.g., 3 input, 0 output) is a valid API response and is
+    # NOT subject to this floor.
+    min-tokens-per-call: 10
     token-limit: 100000
     budget-usd: "${ARCCLAW_SESSION_BUDGET_USD:10.00}"
     action-on-exceed: READONLY
@@ -361,15 +368,20 @@ mp:
       sdk:
         disabled: true
     langchain4j:
+      groq:
+        api-key: "${GROQ_API_KEY}"
+        log-requests: "${arcclaw.debug.llm:false}"
+        log-responses: "${arcclaw.debug.llm:false}"
+        chat-model:
+          max-tokens: 768
+      ollama:
+        log-requests: "${arcclaw.debug.llm:false}"
+        log-responses: "${arcclaw.debug.llm:false}"
       openai:
         devservices:
           enabled: false
-    groq:
-      api-key: "${GROQ_API_KEY}"
-      log-requests: true
-      log-responses: true
-      chat-model:
-        max-tokens: 768
+        log-requests: "${arcclaw.debug.llm:false}"
+        log-responses: "${arcclaw.debug.llm:false}"
     hibernate-orm:
       log:
         sql: false
@@ -397,6 +409,8 @@ mp:
       approval-timeout-minutes: 60
     vault:
       pepper: "dev-pepper-not-for-production-0000000000000000000000000000"
+    debug:
+      llm: true
 
 "%test":
   quarkus:
@@ -410,6 +424,14 @@ mp:
     langchain4j:
       groq:
         api-key: "mock-api-key"
+        log-requests: false
+        log-responses: false
+      ollama:
+        log-requests: false
+        log-responses: false
+      openai:
+        log-requests: false
+        log-responses: false
 
   arcclaw:
     memory:
@@ -440,10 +462,16 @@ mp:
     langchain4j:
       groq:
         api-key: "${GROQ_API_KEY}"
-        log-requests: ${ARCCLAW_DEBUG_LLM:false}
-        log-responses: ${ARCCLAW_DEBUG_LLM:false}
+        log-requests: false
+        log-responses: false
         chat-model:
           max-tokens: 768
+      ollama:
+        log-requests: false
+        log-responses: false
+      openai:
+        log-requests: false
+        log-responses: false
 
   arcclaw:
     governance:
@@ -458,13 +486,16 @@ mp:
     langchain4j:
       groq:
         api-key: "${GROQ_API_KEY}"
-        log-requests: ${ARCCLAW_DEBUG_LLM:false}
-        log-responses: ${ARCCLAW_DEBUG_LLM:false}
+        log-requests: false
+        log-responses: false
         chat-model:
           max-tokens: 768
+      ollama:
+        log-requests: false
+        log-responses: false
       openai:
-        log-requests: ${ARCCLAW_DEBUG_LLM:false}
-        log-responses: ${ARCCLAW_DEBUG_LLM:false}
+        log-requests: false
+        log-responses: false
     log:
       level: INFO
       console:
