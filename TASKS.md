@@ -599,4 +599,12 @@
 - [x] Fix `arcclaw-core` test boot failures (dummy `GROQ_API_KEY`) <!-- id: 151 -->
 - [x] Verify: Telegram integration via `TelegramAgentHandlerTest` <!-- id: 152 -->
 - [x] Verify: Full project clean build `mvnw clean package` (all tests green) <!-- id: 153 -->
+# Phase 47: Refined Routing & Templates (Tier 2B) ✅
+- [x] Component 10: Decouple AgentCronScheduler via CDI Events <!-- id: 154 -->
+- [x] Component 11: Migrate to Qute Prompt Templates <!-- id: 155 -->
+- [x] Component 12: Dynamic IntentClassifierService Prompt <!-- id: 156 -->
+- [x] Component 13: TelegramMarkdownV2Renderer & Replier Refactor <!-- id: 157 -->
+- [x] Component 14: REST Adapter Exhaustive Pattern Matching & DTOs <!-- id: 158 -->
+- [x] Verify: AgentResource exhaustive status mapping <!-- id: 159 -->
+- [x] Verify: Full project clean build `mvnw clean package` (256/256 tests green) <!-- id: 160 -->
 

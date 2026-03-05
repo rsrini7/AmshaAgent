@@ -1,0 +1,4 @@
+{#if compactionSummary}
+[CONTEXT FROM PRIOR SESSION - FOR REFERENCE ONLY]
+{compactionSummary}
+{/if}

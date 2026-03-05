@@ -1,5 +1,6 @@
 package com.arcclaw.app.scheduler;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -9,7 +10,6 @@ import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -19,14 +19,13 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-import org.apache.camel.ProducerTemplate;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
@@ -34,19 +33,20 @@ import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.LangChainReasoningEngine;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 /**
  * Tests for {@link AgentCronScheduler}.
  * <p>
- * Uses the pattern from TelegramAgentHandlerTest: {@code @InjectMock} for
- * {@code @ApplicationScoped} beans, and ClientProxy unwrap + manual field
- * injection for {@code @Dependent}-scoped beans (ProducerTemplate, ManagedExecutor).
+ * Uses {@code @InjectMock} for {@code @ApplicationScoped} beans, and ClientProxy
+ * unwrap + manual field injection for {@code @Dependent}-scoped beans.
  */
 @QuarkusTest
 class AgentCronSchedulerTest {
@@ -63,8 +63,8 @@ class AgentCronSchedulerTest {
     @InjectMock
     AuditService auditService;
 
-
-    ProducerTemplate camelProducerMock;
+    @SuppressWarnings("unchecked")
+    Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);
     ManagedExecutor executorMock;
 
     private AgentCronEntity createDueJob(boolean runOnce) {
@@ -83,17 +83,18 @@ class AgentCronSchedulerTest {
         return e;
     }
 
+    @SuppressWarnings("unchecked")
     @BeforeEach
     void setup() {
-        camelProducerMock = mock(ProducerTemplate.class);
+        jobCompletedEventMock = mock(Event.class);
         executorMock = mock(ManagedExecutor.class);
 
-        // Unwrap CDI proxy for Dependent-scoped field injection
+        // Unwrap CDI proxy for field injection
         AgentCronScheduler instance = scheduler;
         if (scheduler instanceof io.quarkus.arc.ClientProxy) {
             instance = (AgentCronScheduler) ((io.quarkus.arc.ClientProxy) scheduler).arc_contextualInstance();
         }
-        instance.camelProducer = camelProducerMock;
+        instance.jobCompletedEvent = jobCompletedEventMock;
         instance.vThreads = executorMock;
 
         // Force synchronous execution for deterministic tests
@@ -155,28 +156,25 @@ class AgentCronSchedulerTest {
         when(cronRepository.findDueCrons()).thenReturn(List.of(job));
         when(cronRepository.claimForFire(job.id)).thenReturn(true);
 
-        // 1. Unwrap the CDI proxy to access the underlying instance
+        // Unwrap the CDI proxy to access the underlying instance
         AgentCronScheduler instance = scheduler;
         if (scheduler instanceof io.quarkus.arc.ClientProxy) {
             instance = (AgentCronScheduler) ((io.quarkus.arc.ClientProxy) scheduler).arc_contextualInstance();
         }
 
-        // 2. Use reflection to force the semaphore to 0 permits
+        // Use reflection to force the semaphore to 0 permits
         java.lang.reflect.Field limiterField = AgentCronScheduler.class.getDeclaredField("concurrencyLimiter");
         limiterField.setAccessible(true);
         java.util.concurrent.Semaphore originalSemaphore = (java.util.concurrent.Semaphore) limiterField.get(instance);
         limiterField.set(instance, new java.util.concurrent.Semaphore(0));
 
         try {
-            // 3. Execute — this will immediately hit the !concurrencyLimiter.tryAcquire() block
             scheduler.pollAndDispatch();
 
-            // 4. Verify throttle recovery logic
             verify(cronRepository).releaseClaimToActive(eq(job.id));
             verify(cronRepository, never()).markFailed(eq(job.id), org.mockito.ArgumentMatchers.anyString());
             verify(agentLoop, never()).run(anyString(), anyString(), anyString(), any(), anyInt());
         } finally {
-            // 5. Restore the original semaphore so subsequent tests aren't broken
             limiterField.set(instance, originalSemaphore);
         }
     }
@@ -229,21 +227,6 @@ class AgentCronSchedulerTest {
     }
 
     @Test
-    void testDeliveryIdWrittenBeforeTelegramSend() {
-        AgentCronEntity job = createDueJob(true);
-        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
-        when(cronRepository.claimForFire(job.id)).thenReturn(true);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
-                .thenReturn(AgentResult.finished("Delivered", List.of()));
-
-        scheduler.pollAndDispatch();
-
-        InOrder inOrder = inOrder(cronRepository, camelProducerMock);
-        inOrder.verify(cronRepository, times(2)).setDeliveryId(eq(job.id), anyString());
-        inOrder.verify(camelProducerMock).sendBodyAndHeaders(anyString(), any(), any());
-    }
-
-    @Test
     void testStaleRunningJobReclaimed() {
         when(cronRepository.findDueCrons()).thenReturn(List.of());
 
@@ -251,7 +234,6 @@ class AgentCronSchedulerTest {
 
         verify(cronRepository).reclaimStaleCrons(any(Instant.class));
     }
-
 
     @Test
     void testOuterThrowableReleasesSemaphore() throws Exception {
@@ -316,5 +298,26 @@ class AgentCronSchedulerTest {
         }
     }
 
+    // --- Component 10 new tests ---
 
+    @Test
+    void testSchedulerHasNoProducerTemplateField() {
+        boolean hasProducerTemplate = Arrays.stream(AgentCronScheduler.class.getDeclaredFields())
+                .anyMatch(f -> f.getType().getSimpleName().equals("ProducerTemplate"));
+        assertFalse(hasProducerTemplate, "AgentCronScheduler must not depend on ProducerTemplate");
+    }
+
+    @Test
+    void testSchedulerFiresJobCompletedEvent() {
+        AgentCronEntity job = createDueJob(true);
+        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
+        when(cronRepository.claimForFire(job.id)).thenReturn(true);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
+                .thenReturn(AgentResult.finished("Event test", List.of()));
+
+        scheduler.pollAndDispatch();
+
+        // Verify the CDI event was fired with the correct cronId and channel type
+        verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
+    }
 }

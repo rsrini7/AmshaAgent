@@ -2075,4 +2075,61 @@ Refactor the Telegram message processing into a modular, handler-based pipeline 
 - ✅ Unit tests for all 6 handlers pass in `arcclaw-core`.
 - ✅ Telegram integration test `TelegramAgentHandlerTest` passes with the new pipeline.
 
+# Phase 47 — Refined Routing & Templates (Tier 2B) ✅
+
+Tier 2B focuses on decoupling the scheduler from Camel, migrating to Qute templates for prompts, and hardening the REST API with exhaustive status mapping and typed DTOs.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **CDI Events for Decoupling**: Migrated `AgentCronScheduler` to use CDI events (`AgentJobCompleted`) instead of direct Camel dependencies. This improves module isolation and testability.
+
+> [!TIP]
+> **Qute Prompt Templates**: Centralized prompt management in `PromptTemplateEngine` using Quarkus Qute. This allows for cleaner injection of system time, tool capabilities, and role-specific instructions.
+
+> [!NOTE]
+> **Exhaustive REST Mapping**: Refactored `AgentResource` to use exhaustive sealed-interface switches for `AgentResult` and its failure categories. This ensures that every possible outcome is mapped to a specific HTTP status and typed DTO.
+
+## Completed Changes
+
+### Core Module — Templating & Routing
+
+#### [NEW] [PromptTemplateEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/PromptTemplateEngine.java)
+- Manages Qute templates for system prompts.
+- Dynamically injects tool capabilities based on `AgentRoleEnum`.
+- Handles `systemTimeUtc` and role-specific instructions.
+
+#### [NEW] [DestructiveVocabularyFilter.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/routing/DestructiveVocabularyFilter.java)
+- Safety filter for identifying destructive intents in LLM-sourced classifications.
+
+#### [NEW] [TelegramMarkdownV2Renderer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/render/TelegramMarkdownV2Renderer.java)
+- Specialized renderer for Telegram's MarkdownV2 format.
+- Handles character escaping and exhaustive `ReplyNode` tree traversal.
+
+### App Module — API & Scheduler
+
+#### [NEW] [AgentResponse.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/core/api/dto/AgentResponse.java)
+- Sealed interface for REST API responses.
+- Implementations: `AgentSuccessResponse`, `ApprovalRequiredResponse`, `ErrorResponse`.
+
+#### [MODIFY] [AgentResource.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/core/api/AgentResource.java)
+- Refactored to use exhaustive sealed switches on `AgentResult`.
+- Maps failure categories (e.g., `QUOTA_EXCEEDED` -> 429, `GOVERNANCE_VIOLATION` -> 403).
+
+#### [MODIFY] [AgentCronScheduler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java)
+- Fires `AgentJobCompleted` CDI events.
+- Made `channelType` and `channelPlatformId` optional to support internal/background tasks.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ **`PromptTemplateEngineTest`**: Verified template injection and tool sorting.
+- ✅ **`TelegramMarkdownV2RendererTest`**: Verified escaping and node rendering.
+- ✅ **`AgentResourceTest`**: Verified exhaustive status mapping (403, 429, 500, etc.).
+- ✅ **`AgentCronSchedulerTest`**: Verified CDI event firing.
+- ✅ **`AgentLoopTest`**: Fixed NPE related to missing template engine injection.
+
+### Regression
+- ✅ `mvnw clean package`: 256/256 tests green across all modules.
+
 

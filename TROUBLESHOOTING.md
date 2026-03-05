@@ -2923,5 +2923,12 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 **Symptom**: A single handler crash (e.g., during Intent Classification) would kill the entire Telegram update loop, causing the bot to stop responding without logging a clear error.
 **Resolution**: Wrapped `pipeline.process(context)` in a `try-catch` block inside `TelegramAgentHandler.java`. This ensures that pipeline failures are logged and the adapter remains resilient to individual message processing errors.
 
+### 🔴 Failure: `NullPointerException` in `AgentLoopTest` (Tier 2B Migration)
+**Symptom**: `AgentLoopTest.testResumedHistoryHasFlatToolArguments` fails with NPE in `LangChainReasoningEngine.buildSystemPrompt`.
+**Root Cause**: `LangChainReasoningEngine` was updated to depend on `PromptTemplateEngine`, but existing unit tests for `AgentLoop` (which use a mock engine) were not injecting the new dependency into the engine instance used by the test.
+**Resolution**: Mocked `PromptTemplateEngine` in `AgentLoopTest.setUp()` and injected it into the engine instance.
 
-
+### 🔴 Failure: `HTTP 404 Not Found` in `AgentResourceTest.testFullAgentLifecycle`
+**Symptom**: Integration test fails with 404 during session status check.
+**Root Cause**: `StatefulAgentStore` mock was too generic in its stubbing, returning an empty `Optional` for the session being tested because the session ID in the request didn't match the one in the generic mock logic.
+**Resolution**: Refined the `StatefulAgentStore.load()` mock to return a valid checkpoint specifically for the session ID used in the test, and `Optional.empty()` for other IDs.

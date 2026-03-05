@@ -1078,3 +1078,23 @@ Tier 1 focuses on technical debt reduction and architectural modernization for a
 | **Total Phase 47 Tier 1 Tests** | ✅ **18/18 pass** |
 | **Full System Regression** | ✅ **248/248 pass** |
 
+---
+
+## Phase 47 Tier 2B: Refined Routing & Templates ✅
+
+Decoupled the cron scheduler, migrated to Qute templates for prompts, and hardened the REST API with exhaustive status mapping and typed DTOs.
+
+| File | Purpose |
+|------|---------|
+| [PromptTemplateEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/PromptTemplateEngine.java) | Centralized Qute-based system prompt management. |
+| [TelegramMarkdownV2Renderer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/render/TelegramMarkdownV2Renderer.java) | Exhaustive MarkdownV2 escaping and node rendering. |
+| [AgentResource.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/core/api/AgentResource.java) | Exhaustive status mapping for REST API outcomes. |
+| [AgentResponse.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/core/api/dto/AgentResponse.java) | Sealed interface for typed JAX-RS responses. |
+
+**Verification**:
+- ✅ `mvnw clean package` succeeds with 256/256 tests green.
+- ✅ `AgentResourceTest` verifies 11 distinct HTTP status mappings for agent results.
+- ✅ `PromptTemplateEngineTest` verifies secure capability-to-prompt injection.
+- ✅ `TelegramMarkdownV2RendererTest` verifies non-standard char escaping.
+- ✅ `AgentLoopTest` fixed (NPE unblocked).
+

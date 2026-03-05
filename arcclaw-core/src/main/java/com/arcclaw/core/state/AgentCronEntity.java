@@ -27,6 +27,14 @@ public class AgentCronEntity {
 
     public String chatId;
 
+    /** ChannelType enum name. Null = legacy row → TELEGRAM. */
+    @Column(nullable = true)
+    public String channelType;
+
+    /** Channel-specific recipient ID. Null → fall back to chatId. */
+    @Column(nullable = true)
+    public String channelPlatformId;
+
     public String cronExpression;
 
     @Column(nullable = false, columnDefinition = "TEXT")

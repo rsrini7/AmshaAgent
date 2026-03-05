@@ -1,5 +1,6 @@
 package com.arcclaw.app.scheduler;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
@@ -7,8 +8,8 @@ import com.arcclaw.core.agent.LangChainReasoningEngine;
 import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.scope.WorkspaceContext;
-// import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -22,21 +23,18 @@ import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
-import org.apache.camel.ProducerTemplate;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
-// import java.lang.ScopedValue;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
@@ -74,13 +72,10 @@ public class AgentCronScheduler {
     AuditService auditService;
 
     @Inject
-    ProducerTemplate camelProducer;
+    Event<AgentJobCompleted> jobCompletedEvent;
 
     @Inject
     ManagedExecutor vThreads;
-
-    @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
-    String botToken;
 
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
@@ -88,15 +83,13 @@ public class AgentCronScheduler {
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "2")
     int cronMaxIterations;
 
-    private String telegramEndpoint;
     private Semaphore concurrencyLimiter;
 
     /**
-     * Build endpoint URI and semaphore ONCE at startup — not per message.
+     * Build semaphore ONCE at startup — not per message.
      */
     @PostConstruct
     void init() {
-        this.telegramEndpoint = "telegram:bots?authorizationToken=" + botToken;
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
     }
 
@@ -157,14 +150,19 @@ public class AgentCronScheduler {
 
     /**
      * Executes a single cron job: set BACKGROUND autonomy → run AgentLoop
-     * with isolated session → deliver via Telegram → update DB state.
+     * with isolated session → fire CDI event → update DB state.
      */
     private void executeCronJob(AgentCronEntity job) {
         
-        // FIXED: Hoist these outside the try block so the catch block can access the exact execution ID
+        // Hoist these outside the try block so the catch block can access them
         String executionId = UUID.randomUUID().toString();
         // Isolated session per FIRE — prevents history buildup across recurring jobs!
         String cronSessionId = "cron-" + job.id + "-" + executionId;
+
+        // Null-safe channel routing — legacy rows have null channelType/channelPlatformId
+        ChannelType chType = ChannelType.valueOf(
+                job.channelType != null ? job.channelType : "TELEGRAM");
+        String platformId = job.channelPlatformId != null ? job.channelPlatformId : job.chatId;
         
         try {
             MDC.put("userId", job.userId);
@@ -194,19 +192,15 @@ public class AgentCronScheduler {
                 case AgentResult.LoopExceeded l -> "❌ Timed out after " + l.maxIterations() + " steps.";
             };
             
-            // Defensive Guard against empty LLM outputs crashing Telegram
+            // Defensive guard against empty LLM outputs
             String finalAnswer = rawAnswer.trim().isEmpty() 
                     ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.goal 
                     : rawAnswer;
 
-            // DELIVERY ORDER: idempotency key → Telegram → DB update
-            // We can safely reuse the executionId as our delivery idempotency key
-            cronRepository.setDeliveryId(job.id, executionId);
-
-            camelProducer.sendBodyAndHeaders(
-                    telegramEndpoint, finalAnswer,
-                    new HashMap<>(Map.of("CamelTelegramChatId", job.chatId))
-            );
+            // Fire CDI event — delivery is the observer's responsibility
+            jobCompletedEvent.fire(new AgentJobCompleted(
+                    job.id, job.userId, chType, platformId, executionId,
+                    finalAnswer, null));  // null failureCategory = success
 
             // Only mark successful completions if it wasn't paused for approval
             if (!wasApprovalRequested) {
@@ -236,10 +230,9 @@ public class AgentCronScheduler {
             }
 
         } catch (Throwable t) {
-            // Inner Throwable catches OOME during AgentLoop/Telegram
+            // Inner Throwable catches OOME during AgentLoop execution
             cronRepository.markFailed(job.id, t.getMessage());
             
-            // FIXED: Use the hoisted cronSessionId containing the execution UUID.
             auditService.record(cronSessionId, job.userId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     SecurityEventType.CRONFAILED,
@@ -252,15 +245,15 @@ public class AgentCronScheduler {
                 log.warnf(t, "CRON-FAIL cronId=%s", job.id);
             }
             
+            // Fire failure event — observer handles delivery isolation
             try {
-                camelProducer.sendBodyAndHeaders(
-                        telegramEndpoint,
+                jobCompletedEvent.fire(new AgentJobCompleted(
+                        job.id, job.userId, chType, platformId, executionId,
                         "❌ Scheduled task failed.\n\nReason: "
                             + AgentErrorMessageUtil.sanitizeErrorMessage(t.getMessage()),
-                        new HashMap<>(Map.of("CamelTelegramChatId", job.chatId))
-                );
+                        AgentResult.FailureCategory.SYSTEM_ERROR));
             } catch (Exception notifyEx) {
-                log.warnf(notifyEx, "CRON-NOTIFY-FAIL cronId=%s", job.id);
+                log.warnf(notifyEx, "CRON-EVENT-FIRE-FAIL cronId=%s", job.id);
             }
         } finally {
             concurrencyLimiter.release();
