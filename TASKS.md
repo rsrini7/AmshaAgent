@@ -607,4 +607,15 @@
 - [x] Component 14: REST Adapter Exhaustive Pattern Matching & DTOs <!-- id: 158 -->
 - [x] Verify: AgentResource exhaustive status mapping <!-- id: 159 -->
 - [x] Verify: Full project clean build `mvnw clean package` (256/256 tests green) <!-- id: 160 -->
+# Phase 47: Agent State Machine Refactor (Tier 3) ✅
+- [x] Create `AgentStateMachineRunner.java` to encapsulate thought-loop logic <!-- id: 161 -->
+- [x] Refactor `AgentLoop.java` to delegate to `AgentStateMachineRunner` <!-- id: 162 -->
+- [x] Extract circuit breaker, budget guard, and HITL logic into the runner <!-- id: 163 -->
+- [x] Verify: `AgentStateMachineRunnerTest` green <!-- id: 164 -->
 
+# Phase 47: Agent Resilience & Engine Fixes (Tier 3A) ✅
+- [x] Fix Engine Delegation: Accept `ReasoningEngine` in `AgentStateMachineRunner.run()` <!-- id: 165 -->
+- [x] Fix Context Population: Populate `AgentExecutionContext` in all `AgentLoop.run()` methods <!-- id: 166 -->
+- [x] Fix `AgentStateMachineRunnerTest` compilation failures <!-- id: 167 -->
+- [x] Verify: `AgentResilienceTest` (arcclaw-app) GREEN <!-- id: 168 -->
+- [x] Verify: Full project `mvnw clean verify` GREEN (269/269 tests) <!-- id: 169 -->

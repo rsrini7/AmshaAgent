@@ -2133,3 +2133,40 @@ Tier 2B focuses on decoupling the scheduler from Camel, migrating to Qute templa
 - ✅ `mvnw clean package`: 256/256 tests green across all modules.
 
 
+---
+
+# Phase 47 — Tier 3: Agent State Machine Refactor ✅
+
+Extract core reasoning loop logic from `AgentLoop` into a dedicated `AgentStateMachineRunner` to separate lifecycle/infrastructure concerns from the Thought-Plan-Act-Observe state machine.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Separation of Concerns**: 
+> - `AgentLoop`: Responsible for session lifecycle (MDC, OTel spans), history reconstruction, checkpoint saving, and audit logging.
+> - `AgentStateMachineRunner`: Responsible for the iterative reasoning loop, including tool validation, execution, circuit breakers (consecutive failures), and LLM schema self-healing.
+
+> [!NOTE]
+> **Engine Delegation Fix (Tier 3A)**: 
+> The `run()` method in the state machine runner was refactored to accept the `ReasoningEngine` as a parameter. This fixes a critical test regression where mock engines were being ignored in favor of the default injected engine.
+
+## Completed Changes
+
+### Agent State Machine
+
+#### [NEW] [AgentStateMachineRunner.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentStateMachineRunner.java)
+- Encapsulates the core reasoning loop.
+- Implements `consecutiveFailures` circuit breaker (trips at 3).
+- Implements `llmSchemaErrorCount` retry logic (currently 1 retry).
+- Handles Tool Intent Guard checks and fast-path exits for scheduling tools.
+
+#### [MODIFY] [AgentLoop.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentLoop.java)
+- Thinned to focus on session management.
+- Delegates loop execution to `stateMachineRunner.run()`.
+- Correctly populates `AgentExecutionContext` with `userId`, `chatId`, and `agentRole` from `WorkspaceContext`.
+
+## Verification
+
+- ✅ `AgentStateMachineRunnerTest`: 8 scenarios (circuit breaker, budget, HITL, etc.)
+- ✅ `AgentResilienceTest`: 5 guardrail tests passing with mock engines
+- ✅ `mvnw clean verify`: 269/269 tests green project-wide

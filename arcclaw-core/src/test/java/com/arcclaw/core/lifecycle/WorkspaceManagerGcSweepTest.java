@@ -13,10 +13,13 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -93,6 +96,7 @@ class WorkspaceManagerGcSweepTest {
     /**
      * Helper to stub EntityManager.createQuery for both the bulk query and the cleanup queries.
      */
+    @SuppressWarnings("unchecked")
     private void stubEntityManagerForGcSweep(String awaitingId, boolean isAwaiting) {
         // Mock for the session IDs bulk query
         TypedQuery<String> bulkQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(org.hibernate.query.Query.class));
@@ -123,8 +127,9 @@ class WorkspaceManagerGcSweepTest {
             WorkspaceManager actualManager = ClientProxy.unwrap(workspaceManager);
             Field field = WorkspaceManager.class.getDeclaredField("heartbeats");
             field.setAccessible(true);
-            java.util.concurrent.ConcurrentHashMap<String, Instant> heartbeats = 
-                (java.util.concurrent.ConcurrentHashMap<String, Instant>) field.get(actualManager);
+            @SuppressWarnings("unchecked")
+            ConcurrentHashMap<String, Instant> heartbeats = 
+                (ConcurrentHashMap<String, Instant>) field.get(actualManager);
             
             Instant expired = Instant.now().minus(java.time.Duration.ofMinutes(60));
             heartbeats.put(sessionId, expired);
