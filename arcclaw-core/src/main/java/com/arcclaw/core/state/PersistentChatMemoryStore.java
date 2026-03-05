@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import com.arcclaw.core.agent.MessageTag;
+
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageDeserializer;
 import dev.langchain4j.data.message.ChatMessageSerializer;
@@ -29,6 +31,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     private static final Logger log = Logger.getLogger(PersistentChatMemoryStore.class);
 
+    // TODO Phase 49: remove once all write-sites use MessageTag.tag()
     private static final java.util.regex.Pattern COMPLIANCE_INJECTION_PATTERN =
         java.util.regex.Pattern.compile(
             "(?i)(as per our agreement|" +
@@ -40,6 +43,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             "going forward i will only)"
         );
 
+    // TODO Phase 49: remove once all write-sites use MessageTag.tag()
     private boolean isComplianceInjection(ChatMessage msg) {
         if (!(msg instanceof dev.langchain4j.data.message.AiMessage)) return false;
         return COMPLIANCE_INJECTION_PATTERN.matcher(msg.toString()).find();
@@ -100,7 +104,13 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String sessionId = String.valueOf(memoryId);
         List<ChatMessage> sanitized = messages.stream()
-            .filter(msg -> !isComplianceInjection(msg))
+            .filter(msg -> {
+                if (!(msg instanceof dev.langchain4j.data.message.AiMessage ai)) return true;
+                // MessageTag check: Phase 48+ tagged messages
+                // isComplianceInjection: Pre-Phase-48 backward compatibility
+                // TODO Phase 49: remove isComplianceInjection once all write-sites use MessageTag.tag()
+                return !MessageTag.isTagged(ai.text()) && !isComplianceInjection(msg);
+            })
             .collect(java.util.stream.Collectors.toList());
 
         if (sanitized.size() < messages.size()) {

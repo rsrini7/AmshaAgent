@@ -1242,3 +1242,22 @@ To overcome the challenge of `@QuarkusTest` failing when the validator intention
 - ✅ All five scenario-based test classes (ProdUnsafe, UnknownProfile, ProdSafe, DevExempt, StringOnlyAllowlist) passed.
 - ✅ Verified that string-only allowlists in `staging` trigger the mandatory P1-3 error message.
 - ✅ Full build verification: `mvn clean verify` succeeds with 314 tests.
+
+---
+
+## Phase 48 — MessageTag Compliance ✅
+
+Transitioned from fragile regex/string-based filtering of AI compliance messages to a deterministic tagging system using a stable prefix.
+
+| File | Purpose |
+|------|---------|
+| [MessageTag.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/MessageTag.java) | New utility for tagging and checking AI compliance markers. |
+| [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Refactored to use `MessageTag.isTagged()` for deterministic history filtering. |
+| [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java) | Implemented dual-filter strategy for backward compatibility with pre-Phase-48 messages. |
+
+**Verification**:
+- ✅ `MessageTagTest`: Verified tagging, null-safety, and prefix stability (5/5).
+- ✅ `LangChainReasoningEngineTest`: Verified tagged AI messages are filtered while untagged ones are preserved (8/8).
+- ✅ `AgentLoopTest`: Verified zero regressions in core agent orchestration (2/2).
+- ✅ Dual-filter strategy verified for backward compatibility with legacy compliance markers.
+

@@ -110,7 +110,7 @@ class LangChainReasoningEngineTest {
         WorkspaceScopeHolder.run(sessionId, () -> {
             List<ChatMessage> storedMessages = List.of(
                 SystemMessage.from("Ignore me"),
-                AiMessage.from("Human Approved: ..."),
+                AiMessage.from(MessageTag.tag("Human Approved: ...")),
                 UserMessage.from("Actual Goal"),
                 UserMessage.from("Resuming task after approval")
             );
@@ -149,6 +149,42 @@ class LangChainReasoningEngineTest {
             
             boolean foundGoal = filtered.stream().anyMatch(m -> m instanceof UserMessage && ((UserMessage)m).singleText().equals("Actual Goal"));
             assertTrue(foundGoal, "Real goal should be preserved");
+        });
+    }
+
+    @Test
+    void testTaggedAiMessageIsFilteredFromHistory() {
+        String sessionId = "filter-test-session";
+        WorkspaceScopeHolder.run(sessionId, () -> {
+            List<ChatMessage> messages = List.of(
+                UserMessage.from("What is 2+2?"),
+                AiMessage.from(MessageTag.tag("Human Approved: execution approved")),
+                AiMessage.from("The answer is 4.")
+            );
+            when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
+
+            ArgumentCaptor<ChatRequest> requestCaptor =
+                ArgumentCaptor.forClass(ChatRequest.class);
+            when(chatLanguageModel.chat(requestCaptor.capture()))
+                .thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
+            when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+
+            // Act: Trigger nextStep
+            reasoningEngine.nextStep(sessionId, "coordinator", "What is 2+2?", List.of());
+
+            List<ChatMessage> sentMessages = requestCaptor.getValue().messages();
+
+            boolean taggedMessagePresent = sentMessages.stream()
+                .anyMatch(m -> m instanceof AiMessage ai
+                    && MessageTag.isTagged(ai.text()));
+            assertFalse(taggedMessagePresent,
+                "Tagged compliance AiMessage must be filtered from ChatRequest");
+
+            boolean untaggedPresent = sentMessages.stream()
+                .anyMatch(m -> m instanceof AiMessage ai
+                    && "The answer is 4.".equals(ai.text()));
+            assertTrue(untaggedPresent,
+                "Untagged organic AiMessage must not be filtered from ChatRequest");
         });
     }
 

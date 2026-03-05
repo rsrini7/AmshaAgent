@@ -620,7 +620,7 @@
 - [x] Verify: `AgentResilienceTest` (arcclaw-app) GREEN <!-- id: 168 -->
 - [x] Verify: Full project `mvnw clean verify` GREEN (269/269 tests) <!-- id: 169 -->
 
-# Phase 48: Cron Concurrency, Semaphore Hardening, Telegram Bot Refactor & Intent & Governance Hardening ✅
+# Phase 48: Cron Concurrency, Semaphore Hardening, Telegram Bot Refactor & Intent, Governance Hardening, Implement HMAC-based constant-time API key verfication & MessageTag Compliance ✅
 - [x] Fix Semaphore Permit Leak: Hoist `concurrencyLimiter.release()` to a master `finally` block on the virtual thread lambda. <!-- id: 170 -->
 - [x] Fix MDC Pollution: Move `MDC.put/remove` outside `executeCronJob` to the outer dispatcher lambda. <!-- id: 171 -->
 - [x] Harden Exception Handling: Implement `executionEntered` AtomicBoolean to handle Throwables that escape before job entry. <!-- id: 172 -->
@@ -657,3 +657,11 @@
   - [x] Implement "Safe Boot + Proper Unwrap" JUnit strategy <!-- id: 196 -->
   - [x] Create exhaustive test suite: `ProdUnsafe`, `UnknownProfile`, `ProdSafe`, `DevExempt`, `StringOnlyAllowlist` <!-- id: 197 -->
   - [x] Verify: All 314 tests pass <!-- id: 198 -->
+- [x] Create `MessageTag` utility with stable prefix `[ARCCLAW:2f4a9c]` and null-safe `isTagged()` check <!-- id: 199 -->
+- [x] Refactor `LangChainReasoningEngine` to use `MessageTag.isTagged()` for AiMessage filtering <!-- id: 200 -->
+- [x] Implement dual-filter in `PersistentChatMemoryStore` for backward compatibility <!-- id: 201 -->
+- [x] Add Phase 49 TODOs for legacy `isComplianceInjection` regex removal <!-- id: 202 -->
+- [x] Update `testApprovalMarkerMessagesAreFilteredFromHistory` with tagged seed data <!-- id: 203 -->
+- [x] Add `testTaggedAiMessageIsFilteredFromHistory` to specifically verify deterministic filtering <!-- id: 204 -->
+- [x] Create `MessageTagTest` pure unit test suite <!-- id: 205 -->
+- [x] Verify: All Phase 51 tests (15/15) and regression suite pass <!-- id: 206 -->
