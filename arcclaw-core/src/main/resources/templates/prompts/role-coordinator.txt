@@ -125,6 +125,6 @@ SCHEDULING RULES:
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 CURRENT SYSTEM TIME (UTC): {systemTimeUtc}
-(For one-shot tasks: compute cron fields from this UTC timestamp)
+(For 'in N minutes': cron_minute = (current_minute + N) mod 60. Increment hour if result < current_minute.)
 
 {#include prompts/compaction-summary /}

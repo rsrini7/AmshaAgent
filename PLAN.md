@@ -198,11 +198,13 @@ Implement isolated tool execution per the consolidated spec §5.2. Three strateg
 
 #### [NEW] [ProcessIsolationExecutor.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java)
 - `@ApplicationScoped` executor with three strategies: PODMAN, NAMESPACE, NONE
+
 - Circuit breaker: 3 consecutive Podman failures → auto-fallback to NAMESPACE
 - Resource caps: `--memory`, `--cpus`, `--pids-limit=64`, `--ulimit=nofile=256:256`
 - Named containers (`zc-<session>-<nonce>`) tracked in `ConcurrentHashMap.newKeySet()`
 - `@PreDestroy` graceful shutdown with 10s grace period
 - OTel child spans via `AgentOtelContext.childSpan()`
+
 
 #### [NEW] [AgentOtelContext.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
 - Phase 9 stub: static `childSpan()` returning `Span.getInvalid()`
@@ -2170,3 +2172,44 @@ Extract core reasoning loop logic from `AgentLoop` into a dedicated `AgentStateM
 - ✅ `AgentStateMachineRunnerTest`: 8 scenarios (circuit breaker, budget, HITL, etc.)
 - ✅ `AgentResilienceTest`: 5 guardrail tests passing with mock engines
 - ✅ `mvnw clean verify`: 269/269 tests green project-wide
+
+---
+
+# Phase 48: Cron Concurrency & Semaphore Hardening ✅
+
+Address flaky tests and semaphore permit leaks in the `AgentCronScheduler` by centralizing resource management and hardening test synchronization.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Permit Release Centralization**: `concurrencyLimiter.release()` must occur in the outer virtual thread lambda's `finally` block. This ensures permits are released even if `executeCronJob` fails to enter or catches a terminal `Throwable`.
+
+> [!NOTE]
+> **MDC Lifecycle Hoisting**: Moved `MDC.put("userId")` and `MDC.remove("userId")` to the outer lambda. This keeps the execution logs consistent across the entire thread lifecycle.
+
+> [!TIP]
+> **Triple-Latch Synchronization**: Replaced `CyclicBarrier` in tests with a combination of three `CountDownLatch` objects (`start`, `gate`, `finish`). This provides deterministic control over thread execution order, especially on Windows where thread scheduling is less granular.
+
+## Proposed Changes
+
+### [MODIFY] [AgentCronScheduler.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java)
+- Restructured `pollAndDispatch` lambda to manage semaphore release and MDC in a `finally` block.
+- Added `executionEntered` AtomicBoolean to handle errors escaping before inner execution.
+- Added `resetConcurrencyLimit(int permits)` and `getAvailablePermits()` for test synchronization.
+
+### [MODIFY] [AgentCronSchedulerConcurrencyTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/scheduler/AgentCronSchedulerConcurrencyTest.java)
+- Refactored to use `CountDownLatch` synchronization.
+- Added behavior-based tests for throttling and permit recovery.
+- Cleaned up debugging logs.
+
+## Verification Plan
+
+### Automated Tests
+```bash
+mvnw clean test -pl arcclaw-app -am "-Dtest=AgentCronScheduler*Test"
+```
+- ✅ `testThrottledJobIsSkippedNotMarkedFailed`: Verifies jobs are skipped but not failed when at capacity.
+- ✅ `testSemaphoreReleasedAfterSuccessfulCompletion`: Verifies permit recovery on success.
+- ✅ `testSemaphoreReleasedAfterInnerException`: Verifies permit recovery on failure.
+- ✅ Full build verification: `mvn clean verify` succeeds with 282/282 tests.
+

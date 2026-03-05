@@ -84,7 +84,7 @@ public class AgentCronScheduler {
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "2")
     int cronMaxIterations;
 
-    private Semaphore concurrencyLimiter;
+    Semaphore concurrencyLimiter;
 
     /**
      * Build semaphore ONCE at startup — not per message.
@@ -92,6 +92,20 @@ public class AgentCronScheduler {
     @PostConstruct
     void init() {
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
+    }
+
+    /**
+     * Resets the concurrency limit to a specific number of permits.
+     * Used exclusively for test synchronization to ensure a clean slate.
+     */
+    void resetConcurrencyLimit(int permits) {
+        log.warnf("CRON-RESET-LIMIT permits=%d", permits);
+        this.concurrencyLimiter.drainPermits();
+        this.concurrencyLimiter.release(permits);
+    }
+
+    int getAvailablePermits() {
+        return this.concurrencyLimiter.availablePermits();
     }
 
     /**
@@ -129,21 +143,39 @@ public class AgentCronScheduler {
 
             // Dispatch to managed virtual thread
             vThreads.execute(() -> {
+                MDC.put("userId", job.userId);
+                java.util.concurrent.atomic.AtomicBoolean executionEntered = new java.util.concurrent.atomic.AtomicBoolean(false);
                 try {
-                    // ScopedValue.where(WorkspaceScopeHolder.USER_ID, job.userId)
-                    //         .where(WorkspaceScopeHolder.CHAT_ID, job.chatId)
-                    //         .run(() -> WorkspaceScopeHolder.run(
-                    //                 job.sessionId, () -> {
-                    //                     executeCronJob(job);
-                    //                 }
-                    //         ));
-                    executeCronJob(job);
+                    java.lang.ScopedValue.where(com.arcclaw.core.scope.WorkspaceScopeHolder.USER_ID, job.userId)
+                        .where(com.arcclaw.core.scope.WorkspaceScopeHolder.CHAT_ID, job.chatId)
+                        .run(() -> executeCronJob(job, executionEntered));
                 } catch (Throwable t) {
-                    // Outer Throwable catches OOME before scope binding
+                    // This outer catch fires ONLY for:
+                    //   1. ScopedValue binding failures (before executeCronJob enters)
+                    //   2. OOME / StackOverflowError escaping executeCronJob's own catch
+                    if (!executionEntered.get()) {
+                        String fallbackExecutionId = UUID.randomUUID().toString();
+                        cronRepository.markFailed(job.id,
+                            "Unhandled escape before execution: " + t.getMessage());
+                        log.errorf(t, "CRON-UNHANDLED cronId=%s", job.id);
+                        try {
+                            jobCompletedEvent.fire(new AgentJobCompleted(
+                                job.id, job.userId,
+                                ChannelType.valueOf(job.channelType != null ? job.channelType : "TELEGRAM"),
+                                job.channelPlatformId != null ? job.channelPlatformId : job.chatId,
+                                fallbackExecutionId,
+                                "Scheduled task failed unexpectedly.",
+                                AgentResult.FailureCategory.SYSTEM_ERROR));
+                        } catch (Exception notifyEx) {
+                            log.warnf(notifyEx, "CRON-EVENT-FIRE-FAIL cronId=%s", job.id);
+                        }
+                    } else {
+                        log.warnf(t, "CRON-OUTER-CATCH after inner handling cronId=%s",
+                            job.id);
+                    }
+                } finally {
                     concurrencyLimiter.release();
-                    cronRepository.markFailed(job.id,
-                            "Failed to bind scope: " + t.getMessage());
-                    log.errorf(t, "CRON-SCOPE-FAIL cronId=%s", job.id);
+                    MDC.remove("userId");
                 }
             });
         }
@@ -153,7 +185,8 @@ public class AgentCronScheduler {
      * Executes a single cron job: set BACKGROUND autonomy → run AgentLoop
      * with isolated session → fire CDI event → update DB state.
      */
-    private void executeCronJob(AgentCronEntity job) {
+    private void executeCronJob(AgentCronEntity job, java.util.concurrent.atomic.AtomicBoolean executionEntered) {
+        executionEntered.set(true);
         
         // Hoist these outside the try block so the catch block can access them
         String executionId = UUID.randomUUID().toString();
@@ -166,7 +199,6 @@ public class AgentCronScheduler {
         String platformId = job.channelPlatformId != null ? job.channelPlatformId : job.chatId;
         
         try {
-            MDC.put("userId", job.userId);
 
             // so it is available when TelegramAgentHandler queries it during HITL
             cronRepository.setDeliveryId(job.id, executionId);
@@ -252,9 +284,6 @@ public class AgentCronScheduler {
             } catch (Exception notifyEx) {
                 log.warnf(notifyEx, "CRON-EVENT-FIRE-FAIL cronId=%s", job.id);
             }
-        } finally {
-            concurrencyLimiter.release();
-            MDC.remove("userId");
         }
     }
 }

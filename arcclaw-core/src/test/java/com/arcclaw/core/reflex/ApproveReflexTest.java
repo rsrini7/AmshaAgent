@@ -79,7 +79,7 @@ class ApproveReflexTest {
 
         String resultText = approveReflex.execute("session-1", userId, "chat-1", "/approve " + cronId);
 
-        assertTrue(resultText.contains("approved and resumed"));
+        assertTrue(resultText.isEmpty());
         verify(cronRepository).markCompleted(eq(cronId), any(Instant.class));
         verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
     }

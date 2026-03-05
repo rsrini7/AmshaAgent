@@ -161,6 +161,7 @@ quarkus:
     info-version: "1.0.0"
     info-description: "Autonomous multi-agent framework — Java 21 + Quarkus + LangChain4J"
 
+
   # ---------------------------------------------------------------------------
   # NATIVE IMAGE
   # ---------------------------------------------------------------------------
@@ -380,6 +381,7 @@ mp:
           level: INFO
         "io.netty.handler.ssl":
           level: INFO
+
   arcclaw:
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
@@ -407,6 +409,7 @@ mp:
     langchain4j:
       groq:
         api-key: "mock-api-key"
+
   arcclaw:
     memory:
       compaction:
@@ -440,6 +443,7 @@ mp:
         log-responses: ${ARCCLAW_DEBUG_LLM:false}
         chat-model:
           max-tokens: 768
+
   arcclaw:
     governance:
       budget-usd: 50.00

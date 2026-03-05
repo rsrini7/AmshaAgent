@@ -619,3 +619,13 @@
 - [x] Fix `AgentStateMachineRunnerTest` compilation failures <!-- id: 167 -->
 - [x] Verify: `AgentResilienceTest` (arcclaw-app) GREEN <!-- id: 168 -->
 - [x] Verify: Full project `mvnw clean verify` GREEN (269/269 tests) <!-- id: 169 -->
+
+# Phase 48: Cron Concurrency & Semaphore Hardening ✅
+- [x] Fix Semaphore Permit Leak: Hoist `concurrencyLimiter.release()` to a master `finally` block on the virtual thread lambda. <!-- id: 170 -->
+- [x] Fix MDC Pollution: Move `MDC.put/remove` outside `executeCronJob` to the outer dispatcher lambda. <!-- id: 171 -->
+- [x] Harden Exception Handling: Implement `executionEntered` AtomicBoolean to handle Throwables that escape before job entry. <!-- id: 172 -->
+- [x] Refactor Concurrency Tests: Replace unstable `CyclicBarrier` with triple-latch (`CountDownLatch`) synchronization for Windows stability. <!-- id: 173 -->
+- [x] Add Test Hooks: Implement `resetConcurrencyLimit` and `getAvailablePermits` for deterministic test verification. <!-- id: 174 -->
+- [x] Verify: `AgentCronSchedulerConcurrencyTest` and `AgentCronSchedulerTest` GREEN (13 tests). <!-- id: 175 -->
+- [x] Verify: Full system regression (282/282 tests pass). <!-- id: 176 -->
+
