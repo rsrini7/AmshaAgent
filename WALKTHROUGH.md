@@ -1280,3 +1280,17 @@ Completed the transition to deterministic AI compliance filtering by removing le
 - ✅ Grep Audit: Confirmed 0 results for legacy pattern or method names.
 - ✅ Message Pipeline Integrity: Core reasoning and persistence remains fully functional with deterministic tagging.
 
+### Phase 49 Addendum — Restore Compliance Override Detection ✅
+
+Restored protection against user-forced capability overrides (organic LLM output) by implementing deterministic filtering in the reasoning engine layer.
+
+| File | Purpose |
+|------|---------|
+| [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Added `COMPLIANCE_OVERRIDE_PATTERN` and updated history filtering. |
+| [LangChainReasoningEngineTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/agent/LangChainReasoningEngineTest.java) | Added `testComplianceOverrideAiMessageIsFilteredFromHistory`. |
+
+**Verification**:
+- ✅ `mvnw clean verify`: Success.
+- ✅ Grep Audit: Confirmed `COMPLIANCE_OVERRIDE_PATTERN` resides only in `LangChainReasoningEngine.java`.
+- ✅ Security: Confirmed protection against capability override persistence.
+
