@@ -1,16 +1,17 @@
 package com.arcclaw.app;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
+
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
 import jakarta.inject.Inject;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * ArcClaw Dual-Mode Entry Point.
@@ -42,18 +43,18 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
         // Load .env manually — Quarkus config system hasn't started yet
         // so System.getenv() cannot see .env entries at this point.
-        loadDotEnv();
+        // Utils.loadDotEnv(); // May need when we load .env file path to create dir in diff location.
 
          try {
             String dataDir = System.getProperty("ARCCLAW_DATA_DIR",
                     System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
             Path dirPath = Path.of(dataDir);
-            System.out.printf("[ArcClaw] Data dir: %s exists=%s%n",
-                    dirPath.toAbsolutePath(), Files.exists(dirPath));
+            // System.out.printf("[ArcClaw] Data dir: %s exists=%s%n",
+            //         dirPath.toAbsolutePath(), Files.exists(dirPath));
             Files.createDirectories(dirPath);
             Files.createDirectories(dirPath.resolve("workspaces"));
-            System.out.printf("[ArcClaw] Data dir provisioned: %s%n",
-                    dirPath.toAbsolutePath());
+            // System.out.printf("[ArcClaw] Data dir provisioned: %s%n",
+            //         dirPath.toAbsolutePath());
         } catch (Exception e) {
             System.err.println("[ArcClaw] FAILED to create data directory: " + e.getMessage());
             e.printStackTrace();  // see the real error
@@ -80,26 +81,4 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         new CommandLine(this, factory).usage(System.out);
     }
 
-    private static void loadDotEnv() {
-        Path envFile = Path.of(".env");
-        if (!Files.exists(envFile)) return;
-        try {
-            Files.readAllLines(envFile).stream()
-                .map(String::trim)
-                .filter(line -> !line.isBlank() && !line.startsWith("#"))
-                .forEach(line -> {
-                    int eq = line.indexOf('=');
-                    if (eq > 0) {
-                        String key = line.substring(0, eq).trim();
-                        String value = line.substring(eq + 1).trim()
-                            // Normalize Windows backslashes to forward slashes
-                            .replace("\\", "/");
-                        System.setProperty(key, value);
-                    }
-                });
-            System.out.println("[ArcClaw] Loaded .env from: " + envFile.toAbsolutePath());
-        } catch (Exception e) {
-            System.err.println("[ArcClaw] Could not read .env: " + e.getMessage());
-        }
-    }
 }
