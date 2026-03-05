@@ -2257,3 +2257,50 @@ Hardening Telegram security by removing tokens from URIs and using component-bas
 - ✅ `ApproveReflexTest`: Passed (verified confirmation message).
 - ✅ Full build verification: `mvn clean verify` succeeds with 294/294 tests.
 
+---
+
+# Phase 48 — Intent & Governance Hardening ✅
+
+Harden the system against prompt injection, pathological token reporting, and invalid channel configurations.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Prompt Injection Defense**: Using `<<<USER_INPUT_START>>>` and `<<<USER_INPUT_END>>>` as secondary delimiters. Primary defense is the system instruction to treat delimited content as DATA only. Sanitization strips these delimiters from user input before wrapping to prevent early closure attacks.
+
+> [!IMPORTANT]
+> **Zero-Token Pathological Guard**: Some providers omit token counts when `log-requests=false`, returning `(0, 0)`. We inflate this specific case to `(1, 1)` to ensure governance monitors active usage. Legitimate calls returning zero output tokens (e.g., classifiers) are NOT inflated.
+
+> [!TIP]
+> **Fail-Fast Configuration**: The Telegram route now checks for `TELEGRAM_BOT_TOKEN` availability and "mock-token" presence. If invalid, the route is not started, preventing HTTP 404 noise and startup warnings in dev/test environments.
+
+## Completed Changes
+
+### Core Module — Intent & Governance
+
+#### [MODIFY] [IntentClassifierService.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/routing/IntentClassifierService.java)
+- Delimiter-based prompt injection defense.
+- Synchronous execution with soft 3s SLA logging.
+- Sanitization of user message before delimiter wrapping.
+
+#### [MODIFY] [GovernanceLayer.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java)
+- Pathological `(0,0)` token guard implemented.
+- Validated that partial-zero counts are preserved.
+
+### App Module — Channel & Setup
+
+#### [MODIFY] [TelegramChannelRoute.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelRoute.java)
+- Conditional route startup based on token validity.
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- `OTEL_SDK_DISABLED=true` by default.
+- `ARCCLAW_DATA_DIR` defined.
+- Console/Reload disabled in native.
+
+## Verification
+
+- ✅ `GovernanceLayerTest`: Verified pathological vs legitimate zero tokens.
+- ✅ `IntentClassifierServiceTest`: Verified injection defense and sanitization.
+- ✅ `mvn clean verify`: All tests green.
+---
+
