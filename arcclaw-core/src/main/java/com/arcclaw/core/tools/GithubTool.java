@@ -24,9 +24,11 @@ public class GithubTool implements AgentTool {
     private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
+    public static final String NAME = "github";
+
     @Override
     public String name() {
-        return "github";
+        return NAME;
     }
 
     @Override

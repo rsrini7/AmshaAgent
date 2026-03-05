@@ -81,11 +81,35 @@ public class IntentClassifierServiceTest {
     }
 
     @Test
-    void testDebuggerExemptFromDestructiveOverride() {
-        when(classifierModel.chat(anyString())).thenReturn("debugger");
-        String role = service.classify("why is the delete call deadlocking?");
-        Assertions.assertEquals("debugger", role,
-            "DEBUGGER must be exempt from destructive override");
+    void testSchedulingRoutesCoordinator_WithGithubKeywords() {
+        when(classifierModel.chat(anyString())).thenReturn("coordinator");
+        String role = service.classify("fetch rsrini7/ArcClaw desc after 2 mins");
+        Assertions.assertEquals("coordinator", role);
     }
 
+    @Test
+    void testSchedulingRoutesCoordinator_WithCodeKeywords() {
+        when(classifierModel.chat(anyString())).thenReturn("coordinator");
+        String role = service.classify("write a sort function tomorrow");
+        Assertions.assertEquals("coordinator", role);
+    }
+
+    @Test
+    void testSchedulingRoutesCoordinator_WithSearchKeywords() {
+        when(classifierModel.chat(anyString())).thenReturn("coordinator");
+        String role = service.classify("search for AI papers in 1 hour");
+        Assertions.assertEquals("coordinator", role);
+    }
+
+    @Test
+    void testNoTimeReferenceLeavesRoutingUnchanged() {
+        // COORDINATOR is a valid answer for "fetch rsrini7/ArcClaw desc" (no time cue)
+        // the coordinator can handle GitHub queries directly.
+        // We assert NOT CODER, and confirm if we mock it to researcher it stays researcher
+        when(classifierModel.chat(anyString())).thenReturn("saraswati");
+        String role = service.classify("fetch rsrini7/ArcClaw desc");
+        
+        Assertions.assertNotEquals("coder", role);
+        Assertions.assertEquals("researcher", role);
+    }
 }

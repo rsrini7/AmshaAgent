@@ -10,7 +10,6 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -65,25 +64,9 @@ public class AgentDispatchHandler implements MessageHandler {
         }
 
         // Render result back to user (placeholder until ReplyRenderer is fully integrated)
-        String output = formatResult(result);
+        String output = com.arcclaw.core.util.CronResultFormatter.format(result);
         context.getSender().sendRaw(context.getUser(), output);
 
         return HandleResult.STOP;
-    }
-
-    private String formatResult(AgentResult result) {
-        String reply = switch (result) {
-            case AgentResult.Finished f       -> f.answer();
-            case AgentResult.AwaitingApproval a -> "⏸ Approval needed for tool: " + a.toolName() 
-                                                + "\nReply /approve or /deny";
-            case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
-            case AgentResult.Failed f         -> "❌ " + AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
-        };
-
-        // Guard: never send empty/null to Telegram
-        if (reply == null || reply.isBlank()) {
-            reply = "✅ Done.";
-        }
-        return reply;
     }
 }

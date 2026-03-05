@@ -20,7 +20,8 @@ public sealed interface AgentResult
         SYSTEM_ERROR,
         BUDGET_EXCEEDED,
         SCHEMA_ERROR,
-        USER_DENIED
+        USER_DENIED,
+        RATE_LIMIT
     }
 
     record Finished(

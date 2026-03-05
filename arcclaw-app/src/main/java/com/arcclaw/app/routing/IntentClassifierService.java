@@ -60,7 +60,15 @@ public class IntentClassifierService implements IntentClassifier {
         sb.append("""
 
                 PRIORITY ROUTING RULES:
-                1. SCHEDULING OVERRIDES ALL CONTEXT: If the user requests to schedule a task, set a reminder, or delay execution (e.g., "after 1 min", "schedule", "remind me", "every day"), you MUST route the request to 'coordinator'. Do this EVEN IF the request mentions GitHub, code, or research. The 'coordinator' is the only persona authorized to schedule future tasks.
+                1. SCHEDULING IS ABSOLUTE PRIORITY — evaluated before any other rule:
+                   If the user message contains ANY time-delay signal, you MUST route
+                   to 'coordinator'. No other rule can override this.
+                   Time-delay signals include: "after X mins/hours/days", "in X minutes",
+                   "tomorrow", "at HH:MM", "schedule", "remind me", "every day",
+                   "once a week", "later".
+                   This rule fires regardless of all other keywords present.
+                   "fetch", "repo", "github", "code", "research", "write", "debug"
+                   do NOT override this rule.
 
                 CRITICAL GUARDRAILS:
                 1. (UNLESS SCHEDULING) If the user mentions GitHub, gists, or repositories to LIST, FETCH, or VIEW existing content -> researcher.

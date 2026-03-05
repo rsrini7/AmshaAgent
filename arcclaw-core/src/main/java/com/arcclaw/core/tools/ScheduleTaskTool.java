@@ -1,5 +1,6 @@
 package com.arcclaw.core.tools;
 
+
 import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -19,12 +20,14 @@ import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+
 
 /**
  * Agent tool for scheduling autonomous future tasks via cron expressions.
@@ -40,6 +43,10 @@ import java.util.regex.Pattern;
 @ApplicationScoped
 public class ScheduleTaskTool implements AgentTool {
 
+
+    public static final String NAME = "scheduletask";
+
+
     /**
      * Rejects vague goals with unresolved references (zero LLM cost — pure regex).
      * The LLM self-corrects via the existing TOOL REJECTION HANDLING prompt rule.
@@ -49,16 +56,20 @@ public class ScheduleTaskTool implements AgentTool {
             Pattern.CASE_INSENSITIVE
     );
 
+
     @Inject
     AgentCronRepository cronRepository;
+
 
     @Inject
     AuditService auditService;
 
+
     @Override
     public String name() {
-        return "scheduletask";
+        return NAME;
     }
+
 
     @Override
     public String description() {
@@ -71,24 +82,32 @@ public class ScheduleTaskTool implements AgentTool {
                         "Do NOT include time references or re-scheduling instructions in the goal. " +
                 "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
                 "4. 'runOnce' - true for one-time tasks, false for recurring. " +
+                "SCHEDULING RULE: To compute the cron minute for 'after N minutes', " +
+                "take current UTC minute + N (mod 60). Adjust hour if minute wraps past 59. " +
+                "English words (one=1, two=2, five=5, ten=10) are equivalent to their digits. " +
+                "Always use '* *' for dom and month fields when runOnce=true — never pin the date. " +
                 "Returns the scheduled task ID immediately. Does NOT execute the goal now.";
     }
+
 
     @Override
     public ToolOperation requiredOperation() {
         return ToolOperation.SCHEDULE_AUTONOMOUS;
     }
 
+
     @Override
     public boolean requiresSandbox() {
         return false;
     }
 
+
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addProperty("cronExpression", JsonStringSchema.builder()
-                        .description("Standard 5-field UNIX cron expression (minute hour dom month dow)")
+                        .description("Standard 5-field UNIX cron expression (minute hour dom month dow). " +
+                                "For runOnce=true tasks always use '* *' for dom and month — e.g. '26 15 * * *'.")
                         .build())
                 .addProperty("goal", JsonStringSchema.builder()
                         .description("Fully self-contained action description for the future agent")
@@ -103,6 +122,7 @@ public class ScheduleTaskTool implements AgentTool {
                 .build();
     }
 
+
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         // Step 1 — Extract and validate tenant context
@@ -112,17 +132,20 @@ public class ScheduleTaskTool implements AgentTool {
                 ? WorkspaceScopeHolder.CHAT_ID.get() : null;
         String sessionId = WorkspaceScopeHolder.getIfActive();
 
+
         if (userId == null || chatId == null) {
             return ToolResponse.failure(403,
                     "Security violation: tenant context not bound. Operation rejected.");
         }
 
+
         String cronExpression = (String) params.get("cronExpression");
-        String goal = (String) params.get("goal");
-        String timezone = params.containsKey("timezone")
+        String goal           = (String) params.get("goal");
+        String timezone       = params.containsKey("timezone")
                 ? (String) params.get("timezone") : "UTC";
-        boolean runOnce = params.containsKey("runOnce")
+        boolean runOnce       = params.containsKey("runOnce")
                 && Boolean.parseBoolean(String.valueOf(params.get("runOnce")));
+
 
         if (cronExpression == null || cronExpression.isBlank()) {
             return ToolResponse.failure(400, "cronExpression is required.");
@@ -131,7 +154,8 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "goal is required.");
         }
 
-        // Step 2 — Naked pronoun guard (Section 4.7)
+
+        // Step 2 — Naked pronoun guard
         if (NAKED_PRONOUN.matcher(goal).find()) {
             return ToolResponse.failure(422,
                     "Goal contains unresolved references (e.g., 'it', 'the code'). " +
@@ -140,7 +164,20 @@ public class ScheduleTaskTool implements AgentTool {
                     "to production via gh workflow run deploy.yml'.");
         }
 
-        // Step 3 — Validate and compute nextFireTime via cron-utils
+
+        // Step 3 — RunOnce normalization: strip dom/month pinning.
+        // LLM sometimes generates "54 15 3 3 *" for one-shot tasks.
+        // runOnce=true already guarantees single-fire — dom/month are always redundant
+        // and dangerous (task silently never fires if the cron tick crosses midnight).
+        if (runOnce) {
+            String[] fields = cronExpression.trim().split("\\s+");
+            if (fields.length == 5) {
+                cronExpression = fields[0] + " " + fields[1] + " * * *";
+            }
+        }
+
+
+        // Step 4 — Validate and compute nextFireTime via cron-utils
         Instant nextFireTime;
         try {
             CronParser parser = new CronParser(
@@ -155,36 +192,40 @@ public class ScheduleTaskTool implements AgentTool {
                     .toInstant();
         } catch (RuntimeException e) {
             return ToolResponse.failure(400,
-                    "Invalid cron expression: " + e.getMessage() +
+                    "Invalid cron expression '" + cronExpression + "': " + e.getMessage() +
                     ". Use 5-field UNIX format: minute hour dom month dow");
         }
 
-        // Step 4 — Build and persist entity
+
+        // Step 5 — Build and persist entity
         AgentCronEntity entity = new AgentCronEntity();
-        entity.id = UUID.randomUUID().toString();
-        entity.sessionId = sessionId;
-        entity.userId = userId;
-        entity.chatId = chatId;
+        entity.id             = UUID.randomUUID().toString();
+        entity.sessionId      = sessionId;
+        entity.userId         = userId;
+        entity.chatId         = chatId;
         entity.cronExpression = cronExpression;
-        entity.timezone = timezone;
-        entity.runOnce = runOnce;
-        entity.goal = "CRON: " + goal;  // Prefix to prevent fork bomb
-        entity.nextFireTime = nextFireTime;
-        entity.status = "ACTIVE";
-        entity.createdAt = Instant.now();
+        entity.timezone       = timezone;
+        entity.runOnce        = runOnce;
+        entity.goal           = "CRON: " + goal;   // Prefix to prevent fork bomb
+        entity.nextFireTime   = nextFireTime;
+        entity.status         = "ACTIVE";
+        entity.createdAt      = Instant.now();
+
 
         cronRepository.persist(entity);
 
-        // Step 5 — Audit
+
+        // Step 6 — Audit
         auditService.record(sessionId, userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.CRONCREATED,
                 "cronId=" + entity.id + " expression=" + cronExpression
                 + " tz=" + entity.timezone + " runOnce=" + runOnce);
 
+
         return ToolResponse.success("Task scheduled successfully. " +
                 "ID: " + entity.id + " | Next fire: " +
-                InstantToTextConverter.format(nextFireTime) + 
+                InstantToTextConverter.format(nextFireTime) +
                 "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
                 "You MUST NOT execute the goal yourself right now. " +
                 "Reply to the user with a plain text confirmation of the schedule and FINISH immediately.");

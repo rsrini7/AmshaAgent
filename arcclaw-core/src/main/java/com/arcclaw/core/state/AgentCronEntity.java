@@ -71,6 +71,9 @@ public class AgentCronEntity {
     @Convert(converter = InstantToTextConverter.class)
     public Instant createdAt;
 
+    @Convert(converter = InstantToTextConverter.class)
+    public Instant updatedAt;
+
     /**
      * Canonical display string used by reflexes and tools.
      */

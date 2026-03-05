@@ -1,5 +1,16 @@
 package com.arcclaw.app.scheduler;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Semaphore;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
+
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
@@ -11,32 +22,19 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.cronutils.model.CronType;
-import com.cronutils.model.definition.CronDefinitionBuilder;
-import com.cronutils.model.time.ExecutionTime;
-import com.cronutils.parser.CronParser;
+
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.Semaphore;
 
 /**
  * Polls {@code agentcron} table and dispatches due cron jobs to the AgentLoop.
@@ -76,6 +74,9 @@ public class AgentCronScheduler {
 
     @Inject
     ManagedExecutor vThreads;
+
+    @Inject
+    Instance<DevSecretSeeder> devSeeder;
 
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
@@ -170,6 +171,11 @@ public class AgentCronScheduler {
             // so it is available when TelegramAgentHandler queries it during HITL
             cronRepository.setDeliveryId(job.id, executionId);
 
+            // Seed development secrets for this isolated background thread
+            if (!devSeeder.isUnsatisfied()) {
+                devSeeder.get().seedDevSecrets();
+            }
+
             AgentResult result = WorkspaceContext.run(cronSessionId, job.userId, job.chatId, AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(), () -> 
                 agentLoop.run(
                     cronSessionId,
@@ -181,16 +187,9 @@ public class AgentCronScheduler {
             );
 
             boolean wasApprovalRequested = result instanceof AgentResult.AwaitingApproval;
-            String rawAnswer = switch (result) {
-                case AgentResult.Finished f -> f.answer();
-                case AgentResult.AwaitingApproval a -> "⚠️ Approval Required for scheduled task.\n\n" +
-                    "Cron ID: " + job.id + "\n" +
-                    "Tool: " + a.toolName() + "\n" +
-                    "Goal: " + job.goal + "\n\n" +
-                    "Reply `/approve " + job.id + "` to run it once now, or `/deny " + job.id + "` to cancel.";
-                case AgentResult.Failed f -> "❌ Failed: " + f.reason();
-                case AgentResult.LoopExceeded l -> "❌ Timed out after " + l.maxIterations() + " steps.";
-            };
+            String rawAnswer = wasApprovalRequested
+                ? com.arcclaw.core.util.CronResultFormatter.formatCronHitl(job.id, job.goal, ((AgentResult.AwaitingApproval) result).toolName())
+                : com.arcclaw.core.util.CronResultFormatter.format(result);
             
             // Defensive guard against empty LLM outputs
             String finalAnswer = rawAnswer.trim().isEmpty() 
@@ -212,21 +211,19 @@ public class AgentCronScheduler {
                             "cronId=" + job.id + " runOnce=true status=COMPLETED");
                     log.infof("CRON-COMPLETED one-shot cronId=%s", job.id);
                 } else {
-                    ZonedDateTime next = ExecutionTime
-                            .forCron(new CronParser(
-                                    CronDefinitionBuilder.instanceDefinitionFor(
-                                            CronType.UNIX))
-                                    .parse(job.cronExpression))
-                            .nextExecution(ZonedDateTime.now(ZoneId.of(job.timezone)))
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "No next execution for: " + job.cronExpression));
-                    cronRepository.markFired(job.id, Instant.now(), next.toInstant());
+                    Instant next = com.arcclaw.core.util.CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                    cronRepository.markFired(job.id, Instant.now(), next);
                     auditService.record(cronSessionId, job.userId,
                             AgentRoleEnum.COORDINATOR.toScopedName(),
                             SecurityEventType.CRONFIRED,
                             "cronId=" + job.id + " runOnce=false nextFire=" + next);
                     log.infof("CRON-FIRED cronId=%s nextFire=%s", job.id, next);
                 }
+            } else {
+                // Explicit HITL pause — prevents reclaimStaleCrons infinite re-fire loop
+                cronRepository.markAwaitingApproval(job.id);
+                log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
+                        job.id, ((AgentResult.AwaitingApproval) result).toolName());
             }
 
         } catch (Throwable t) {

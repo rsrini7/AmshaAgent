@@ -124,7 +124,10 @@ public class AgentLoop {
                 // If status is COMPLETED or FAILED (which happens after a /reset), 
                 // we MUST ignore old ReAct steps and start a fresh turn.
                 if (status == CheckpointStatus.IN_PROGRESS || status == CheckpointStatus.AWAITING_APPROVAL) {
-                    resumedHistory = agentStore.deserializeSteps(checkpoint);
+                    List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+                    if (loadedSteps != null) {
+                        resumedHistory.addAll(loadedSteps);
+                    }
                     log.infof("Resumed %d steps from active checkpoint (status=%s)", resumedHistory.size(), status);
                 } else {
                     // This log line will now appear after you /reset and then say "hi"
@@ -318,16 +321,15 @@ public class AgentLoop {
             checkpoint.setPendingToolParametersJson(null);
             agentStore.save(checkpoint);
 
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+    
             log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
-                    sessionId, pendingTool, e.getMessage());
-
-            // Return the Failed variant with the specific Tier 2A category
+                    sessionId, pendingTool, errMsg);
+                    
             return AgentResult.failed(
-                    "TOOL_EXECUTION_FAILED: " + e.getMessage(),
+                    "TOOL_EXECUTION_FAILED: " + errMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(history));
         }
     }
-
-
 }

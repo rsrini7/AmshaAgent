@@ -17,8 +17,10 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.data.message.AiMessage;
@@ -195,7 +197,8 @@ public class AgentStateMachineRunner {
     }
 
     private StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
-                                           List<ReasoningStep> history, String agentRole, String transientError, int llmSchemaErrorCount, int iteration) {
+                                           List<ReasoningStep> history, String agentRole, String transientError, 
+                                           int llmSchemaErrorCount, int iteration) {
         ReasoningStep step;
         try {
             String currentGoal = goal;
@@ -223,7 +226,8 @@ public class AgentStateMachineRunner {
                     step = step.withObservation(observationMessage);
                     synchronized (history) {
                         history.add(step);
-                        return StepDecision.terminal(AgentResult.failed("Budget Exceeded: " + be.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
+                        String failReason = AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage());
+                        return StepDecision.terminal(AgentResult.failed(failReason, AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
                     }
                 }
             }
@@ -247,6 +251,17 @@ public class AgentStateMachineRunner {
                         ". Please review the tool schema and correct your arguments. " +
                         "Only 'view' and 'list' are valid commands for the github tool.";
                 return StepDecision.retryEngine(nextTransientError, llmSchemaErrorCount);
+            }
+
+            if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
+                String humanMessage = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+                log.warnf("[STATE-MACHINE] Rate limit hit for session %s: %s", sessionId, humanMessage);
+                synchronized (history) {
+                    return StepDecision.terminal(AgentResult.failed(
+                        humanMessage,  // already formatted — no re-sanitization needed downstream
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
+                }
             }
 
             log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
@@ -290,8 +305,14 @@ public class AgentStateMachineRunner {
             return StepDecision.retryValidation(consecutiveFailures);
         }
 
-        if ("github".equals(toolName)) {
-            if (!GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
+        if (GithubTool.NAME.equals(toolName)) {
+             // Tool was already approved by human via HITL — skip trigger guard
+            boolean isPreApproved = agentStore.load(sessionId, agentRole)
+                                    .filter(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL
+                                                && toolName.equals(cp.getPendingToolName()))
+                                    .isPresent();
+
+            if (!isPreApproved && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
                 String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
                         "the user's request does not reference a GitHub resource. " +
                         "Please answer the user's question using your own knowledge " +
