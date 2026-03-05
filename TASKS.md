@@ -651,3 +651,9 @@
 - [x] Update safe API key truncation in `ApiKeyAuthFilter.java` to exactly 4 chars <!-- id: 190 -->
 - [x] Split test classes into `ApiKeyRegistryTest` and `ApiKeyRegistryVaryingLengthKeyTest` <!-- id: 191 -->
 - [x] Verify: All HMAC-specific and regression tests pass <!-- id: 192 -->
+- [x] **Startup Security Hardening (Profile Guards)** <!-- id: 193 -->
+  - [x] Invert profile guard in `StartupSecurityValidator.java` (`dev`/`test` exempt) <!-- id: 194 -->
+  - [x] Enforce mandatory check order and exception types <!-- id: 195 -->
+  - [x] Implement "Safe Boot + Proper Unwrap" JUnit strategy <!-- id: 196 -->
+  - [x] Create exhaustive test suite: `ProdUnsafe`, `UnknownProfile`, `ProdSafe`, `DevExempt` <!-- id: 197 -->
+  - [x] Verify: All 312 tests pass <!-- id: 198 -->

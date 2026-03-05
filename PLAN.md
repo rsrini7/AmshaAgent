@@ -2345,5 +2345,50 @@ Harden the API key registry against timing attacks and length oracles using HMAC
 - ✅ `ApiKeyRegistryTest`: Verified HMAC and constant-time scanning.
 - ✅ `ApiKeyRegistryVaryingLengthKeyTest`: Verified robustness against length oracle attacks.
 - ✅ `mvn clean verify`: All 300 tests passed.
+
 ---
+
+# Phase 48 — Startup Security Hardening (Profile Guards) ✅
+
+Harden the application startup by enforcing strict security validation for non-development profiles and implementing a robust testing strategy for bootstrap-halting validators.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Inverted Profile Guard**: Validation now runs for ALL profiles by default. `dev` and `test` are explicitly exempted. This follows a "secure by default" posture.
+
+> [!IMPORTANT]
+> **Mandatory Check Order**: Checks are enforced in a strict sequence (Pepper -> HMAC -> Allowlist Presence -> String-only) to ensure consistent exception reporting and prevent masking of critical security failures.
+
+> [!TIP]
+> **Safe Boot + Proper Unwrap Testing**: To test validators that halt Quarkus during bootstrap, tests boot with a "safe" configuration using a `QuarkusTestProfile`. Within the test, `io.quarkus.arc.ClientProxy.unwrap(validator)` is used to bypass the CDI proxy and manually inject unsafe values into package-private fields before manually invoking `onStart()`.
+
+## Completed Changes
+
+### Security Module — Validator
+
+#### [MODIFY] [StartupSecurityValidator.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/StartupSecurityValidator.java)
+- Inverted logic: validates if `!profile.equals("dev") && !profile.equals("test")`.
+- Enforced check order with specific exception types (`IllegalStateException` vs `DeploymentException`).
+- Fields made package-private to support test unwrapping.
+
+### Test Module — Security Tests
+
+#### [NEW] [StartupSecurityValidatorProdUnsafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdUnsafeTest.java)
+- Verifies that unsafe secrets in `prod` profile trigger an `IllegalStateException`.
+- Uses `ClientProxy.unwrap()` for field overrides.
+
+#### [NEW] [StartupSecurityValidatorUnknownProfileTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorUnknownProfileTest.java)
+- Verifies that unknown/typoed profiles are treated as "non-safe" and trigger validation.
+
+#### [NEW] [StartupSecurityValidatorProdSafeTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorProdSafeTest.java)
+- Verifies that correct secrets in `prod` allow successful startup.
+
+#### [NEW] [StartupSecurityValidatorDevExemptTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorDevExemptTest.java)
+- Verifies that the `dev` profile bypasses security validation.
+
+## Verification
+
+- ✅ `StartupSecurityValidator*Test`: All 4 new test classes pass (8 existing + 4 new = 12 total).
+- ✅ `mvn clean verify`: Full suite (312 tests) passed.
 
