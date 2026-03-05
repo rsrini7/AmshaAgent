@@ -241,7 +241,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     } else if (msg instanceof AiMessage ai) {
                         skip = MessageTag.isTagged(ai.text());
                         // ai.text() may be null for tool-use messages — isTagged() handles null safely
-                        // Pre-Phase-48 patterns are handled by PersistentChatMemoryStore.isComplianceInjection()
+                        // Pre-Phase-48 patterns are now obsolete; only MessageTag is used.
                     } else if (msg instanceof UserMessage && msgString.contains("The tool execution has been approved and completed")) {
                         skip = true;
                     } else if (msg instanceof UserMessage && msgString.contains("Resuming task after approval")) {

@@ -55,6 +55,8 @@
 | 48 | Telegram Bot Refactor | 100% success | Removed tokens from URIs, component configuration |
 | 49 | Intent & Governance Hardening | 100% success | Prompt injection delimiters + Pathological zero-token guard |
 | 50 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
+| 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
+| 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
 
 ---
 
@@ -1260,4 +1262,21 @@ Transitioned from fragile regex/string-based filtering of AI compliance messages
 - ✅ `LangChainReasoningEngineTest`: Verified tagged AI messages are filtered while untagged ones are preserved (8/8).
 - ✅ `AgentLoopTest`: Verified zero regressions in core agent orchestration (2/2).
 - ✅ Dual-filter strategy verified for backward compatibility with legacy compliance markers.
+
+---
+
+## Phase 49 — MessageTag Regex Cleanup ✅
+
+Completed the transition to deterministic AI compliance filtering by removing legacy regex patterns and providing a clean implementation in `PersistentChatMemoryStore`.
+
+| File | Purpose |
+|------|---------|
+| [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java) | Removed `isComplianceInjection()` regex and simplified the AI message filter. |
+| [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Comment cleanup. |
+| [PersistentChatMemoryStoreTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/state/PersistentChatMemoryStoreTest.java) | Removed obsolete tests. |
+
+**Verification**:
+- ✅ `mvnw clean verify`: Success across core and app modules.
+- ✅ Grep Audit: Confirmed 0 results for legacy pattern or method names.
+- ✅ Message Pipeline Integrity: Core reasoning and persistence remains fully functional with deterministic tagging.
 
