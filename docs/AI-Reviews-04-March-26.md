@@ -1075,6 +1075,22 @@ Do not write any code yet.
 Reply with ACKNOWLEDGED and wait for me to send P0-1 Prompt.
 ```
 
+**What P2-8 needs to fix:**
+The base system prompt should be assembled dynamically per role. The Trimurti architecture description belongs only in the Coordinator prompt. Non-coordinator roles should get only their own persona — Shiva gets the debugger identity, Saraswati gets the researcher identity, etc.
+
+The Agent CDI beans (`ShivaAgent`, `SaraswatiAgent`, etc.) already define `systemPrompt()` and `allowedTools()` correctly — they're just never called by `LangChainReasoningEngine`. P2-8 is wiring those beans into the engine so they actually drive behaviour instead of being dead code.
+
+backlog:
+
+```
+P2-8: Dynamic system prompt assembly per role
+- LangChainReasoningEngine must inject role via AgentRoleEnum
+- Coordinator gets full Trimurti base prompt
+- Other roles get only their own persona from Agent CDI bean
+- Remove hardcoded "You are the Coordinator" from base prompt
+- Wire Agent.systemPrompt() and Agent.allowedTools() into engine
+```
+
 ---
 
 ## Follow-up Prompt: P0-1 (All Deltas Applied)
