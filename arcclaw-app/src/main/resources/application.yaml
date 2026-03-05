@@ -227,8 +227,8 @@ arcclaw:
   memory:
     compaction:
       enabled: true
-      threshold: 10
-      keep-recent: 6
+      threshold: 5
+      keep-recent: 5
       model: "llama-3.1-8b-instant"
   chat-memory:
     max-messages: 20

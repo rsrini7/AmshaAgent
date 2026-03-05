@@ -2213,3 +2213,47 @@ mvnw clean test -pl arcclaw-app -am "-Dtest=AgentCronScheduler*Test"
 - ✅ `testSemaphoreReleasedAfterInnerException`: Verifies permit recovery on failure.
 - ✅ Full build verification: `mvn clean verify` succeeds with 282/282 tests.
 
+---
+
+# Phase 48 — Telegram Bot Refactor (Component-Level Token)
+
+Hardening Telegram security by removing tokens from URIs and using component-based configuration.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Component-Level Token**: Instead of embedding the token in URIs, configure it via `camel.component.telegram.authorization-token` in `application.yaml`. This prevents token leakage in logs and trace data.
+
+> [!TIP]
+> **Testing with CamelQuarkusTestSupport**: For stable `AdviceWith` testing in a Quarkus context, inject the `RouteBuilder` bean and override `createRouteBuilder()`. Manually bind the component in `bindToRegistry` if property binding fails in the test execution environment.
+
+## Proposed Changes
+
+### Configuration
+
+#### [MODIFY] [application.yaml](file:///h:/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Added `camel.component.telegram.authorization-token: ${TELEGRAM_BOT_TOKEN}`.
+- Removed token placeholder from `arcclaw.channel.telegram.bot-token`.
+
+### Bot Logic
+
+#### [MODIFY] [TelegramChannelRoute.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelRoute.java)
+- Cleaned URIs to remove sensitive token inclusion.
+
+#### [MODIFY] [ApproveReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/ApproveReflex.java)
+- Restored confirmation message to satisfy tests and UX.
+
+### Tests
+
+#### [MODIFY] [TelegramChannelRouteTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/channel/telegram/TelegramChannelRouteTest.java)
+- Refactored to use `CamelQuarkusTestSupport`.
+- Implemented manual component binding and route injection for stable mocking.
+
+## Verification
+
+- ✅ `TelegramChannelRouteTest`: Passed (verified route advising).
+- ✅ `TelegramChannelSenderTest`: Passed (verified producer template).
+- ✅ `AgentCronSchedulerTest`: Passed (verified end-to-end flow).
+- ✅ `ApproveReflexTest`: Passed (verified confirmation message).
+- ✅ Full build verification: `mvn clean verify` succeeds with 289/289 tests.
+

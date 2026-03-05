@@ -2965,3 +2965,27 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 **Symptom**: Integration test fails with 404 during session status check.
 **Root Cause**: `StatefulAgentStore` mock was too generic in its stubbing, returning an empty `Optional` for the session being tested because the session ID in the request didn't match the one in the generic mock logic.
 **Resolution**: Refined the `StatefulAgentStore.load()` mock to return a valid checkpoint specifically for the session ID used in the test, and `Optional.empty()` for other IDs.
+
+## 17. Telegram Bot Component & Testing
+
+### 17.1 Token Configuration
+**Issue**: Telegram URIs failing with authentication errors despite token presence in URI.
+**Solution**: Move the token to component-level configuration in `application.yaml` using the Quarkus-specific key:
+`camel.component.telegram.authorization-token: ${TELEGRAM_BOT_TOKEN}`
+Ensure URIs in `from()` and `to()` calls do **not** contain the token or the `@` symbol (e.g., use `telegram:bots` instead of `telegram:bots/TOKEN`).
+
+### 17.2 Testing with `CamelQuarkusTestSupport`
+**Issue**: `AdviceWith` failing with "Cannot advice route as there are no routes" or properties not binding.
+**Solution**: 
+- Inject the `RouteBuilder` bean in the test.
+- Override `createRouteBuilder()` to return the injected bean.
+- If properties fail to bind to the component in test context, manually bind a configured `TelegramComponent` in `bindToRegistry`:
+```java
+@Override
+protected void bindToRegistry(Registry registry) throws Exception {
+    TelegramComponent telegram = new TelegramComponent();
+    telegram.setAuthorizationToken("mock-token");
+    registry.bind("telegram", telegram);
+}
+```
+- Set `isUseAdviceWith()` to `true` and call `context.getRouteDefinitions().get(0).adviceWith(...)` followed by `context.start()`.

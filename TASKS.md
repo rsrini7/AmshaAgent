@@ -628,4 +628,9 @@
 - [x] Add Test Hooks: Implement `resetConcurrencyLimit` and `getAvailablePermits` for deterministic test verification. <!-- id: 174 -->
 - [x] Verify: `AgentCronSchedulerConcurrencyTest` and `AgentCronSchedulerTest` GREEN (13 tests). <!-- id: 175 -->
 - [x] Verify: Full system regression (282/282 tests pass). <!-- id: 176 -->
-
+- [x] Telegram Bot Refactor (Component-Level Token)
+  - [x] Refactor `TelegramChannelRoute` to use component-level authorizationToken
+  - [x] Update `application.yaml` with `camel.component.telegram.authorization-token`
+  - [x] Verify all Telegram URIs are token-free
+  - [x] Update/Fix `TelegramChannelRouteTest` with proper mocking/component binding
+  - [x] Restore `ApproveReflex` confirmation message (fixed `ApproveReflexTest`)

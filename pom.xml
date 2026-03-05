@@ -25,6 +25,8 @@
     <quarkus.version>3.23.0</quarkus.version>
     <langchain4j.quarkus.version>0.26.1</langchain4j.quarkus.version>
     <bouncycastle.version>1.83</bouncycastle.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
   </properties>
 
   <dependencyManagement>

@@ -1,6 +1,7 @@
 package com.arcclaw.app.channel.telegram;
 
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.telegram.TelegramComponent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -17,7 +18,7 @@ public class TelegramChannelRoute extends RouteBuilder {
     @ConfigProperty(name = "arcclaw.channel.telegram.enabled", defaultValue = "true")
     boolean enabled;
 
-    @ConfigProperty(name = "arcclaw.channel.telegram.bot-token", defaultValue = "mock-token")
+    @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
 
     @Override
@@ -26,16 +27,14 @@ public class TelegramChannelRoute extends RouteBuilder {
             return;
         }
 
-        if ("mock-token".equals(botToken)) {
-            log.warn("Telegram Bot Token is set to 'mock-token'. The bot will not function correctly. Please set TELEGRAM_BOT_TOKEN in .env file.");
-        }
-        
-        String displayToken = (botToken != null && botToken.length() > 10) 
-            ? botToken.substring(0, 5) + "..." 
-            : botToken;
-        log.info("Telegram Route initializing with token: " + displayToken);
+        // Wire token directly onto the component — version-agnostic, never in URI
+        TelegramComponent telegram = new TelegramComponent();
+        telegram.setAuthorizationToken(botToken);
+        getContext().addComponent("telegram", telegram);
 
-        from("telegram:bots?authorizationToken=" + botToken)
+        log.info("Telegram Route initializing");
+
+        from("telegram:bots")
                 .routeId("telegram-bot")
                 .bean(telegramAgentHandler, "receiveMessage");
     }
