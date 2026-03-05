@@ -5,38 +5,46 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 
+import java.util.Map;
+
 @QuarkusTest
+@TestProfile(ApiKeyRegistryTest.TwoKeyProfile.class)
 class ApiKeyRegistryTest {
 
     @Inject
     ApiKeyRegistry registry;
 
-
-    @BeforeEach
-    void setup() {
-        // Assume default keys from application.yaml test profile or inject manually if needed.
+    public static class TwoKeyProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                "arcclaw.api.keys.user-a", "aaaa-bbbb-cccc-dddd",
+                "arcclaw.api.keys.user-b", "eeee-ffff-gggg-hhhh",
+                "arcclaw.audit.hmac-key",  "test-hmac-key-for-registry-tests"
+            );
+        }
     }
 
     @Test
-    void testValidKeys() {
-        assertTrue(registry.isValidKey("key-internal-changeme"));
-        assertTrue(registry.isValidKey("key-ci-changeme"));
-        assertFalse(registry.isValidKey("invalid-key"));
+    void testIsValidKeyConstantTimeWithHmac() {
+        assertTrue(registry.isValidKey("aaaa-bbbb-cccc-dddd"));
+        assertFalse(registry.isValidKey("zzzz-0000-1111-2222"));
         assertFalse(registry.isValidKey(null));
+        assertFalse(registry.isValidKey(""));
     }
 
     @Test
-    void testGetKeyName() {
-        assertEquals("internal", registry.getKeyName("key-internal-changeme"));
-        assertEquals("ci-pipeline", registry.getKeyName("key-ci-changeme"));
-        assertNull(registry.getKeyName("invalid"));
-        assertNull(registry.getKeyName(null));
+    void testGetKeyNameReturnsCorrectName() {
+        assertEquals("user-a", registry.getKeyName("aaaa-bbbb-cccc-dddd"));
+        assertEquals("user-b", registry.getKeyName("eeee-ffff-gggg-hhhh"));
+        assertNull(registry.getKeyName("not-in-map"));
     }
 
     @Test

@@ -647,3 +647,7 @@
   - [x] Disable Quarkus console/reload in native profile <!-- id: 186 -->
   - [x] Update `MAC_SETUP_GUIDE.md` with OTel and CLI hardening args <!-- id: 187 -->
   - [x] Verify: All new hardening tests (zero-token, delimiters, sanitization) pass <!-- id: 188 -->
+- [x] Implement HMAC-based constant-time API key comparison in `ApiKeyRegistry.java` <!-- id: 189 -->
+- [x] Update safe API key truncation in `ApiKeyAuthFilter.java` to exactly 4 chars <!-- id: 190 -->
+- [x] Split test classes into `ApiKeyRegistryTest` and `ApiKeyRegistryVaryingLengthKeyTest` <!-- id: 191 -->
+- [x] Verify: All HMAC-specific and regression tests pass <!-- id: 192 -->

@@ -1200,4 +1200,22 @@ Resolved flaky tests and critical semaphore permit leaks in the `AgentCronSchedu
 - ✅ `IntentClassifierServiceTest`: Verified delimiter presence and sanitization logic.
 - ✅ `mvn clean verify`: 296/296 tests passed.
 
+---
+
+## Phase 48: API Key Security Hardening (HMAC & Constant-Time)
+
+### Changes
+- **HMAC-Based Comparison**: Replaced `MessageDigest.isEqual()` on raw keys with `HmacSHA256` comparison using the existing `arcclaw.audit.hmac-key` as the secret. This eliminates both the short-circuit timing leak and the length oracle.
+- **Pre-computed Digests**: Pre-compute HMAC digests for all stored API keys at `@PostConstruct` for performance.
+- **Constant-Time Traversal**: `isValidKey()` and `getKeyName()` now scan ALL entries regardless of match position, preventing leak of key position in configuration.
+- **Strict Truncation**: API key log truncation now caps at exactly 4 characters followed by `****`, regardless of actual key length.
+- **Test Infrastructure Hardening**:
+    - Split `ApiKeyRegistryTest` into two classes (`ApiKeyRegistryTest` and `ApiKeyRegistryVaryingLengthKeyTest`) to avoid `@TestProfile` collision and ensure stable testing of multiple configurations.
+    - Added specific test cases to verify HMAC correctness with varying key lengths and ensure no crashes occur.
+
+### Verification Results
+- ✅ `ApiKeyRegistryTest`: **PASSED** (Verified HMAC validation, constant-time logic, and rate-limiting).
+- ✅ `ApiKeyRegistryVaryingLengthKeyTest`: **PASSED** (Verified robustness against varying key lengths).
+- ✅ `mvn clean verify`: 300/300 tests passed (Total tests increased due to split and new cases).
+
 

@@ -3023,3 +3023,23 @@ This is a JVM shutdown sequencing problem in the test harness. The `AsyncPersist
 **Symptom:** Startup logs full of HTTP 404/401 errors from Telegram Component.
 **Root Cause:** Camel Telegram tries to poll even if the token is the default "mock-token" placeholder.
 **Resolution:** `TelegramChannelRoute` now checks `if (botToken == null || "mock-token".equals(botToken))` and refuses to call `from(...)` if invalid.
+
+---
+
+## 20. HMAC API Key Protection (Phase 48)
+
+### 🔴 Failure: Duplicate API Key Values in Config
+**Symptom:** API authentication works, but `getKeyName()` returns the last name mapped to the duplicate value, or a user with the "wrong" name is logged.
+**Root Cause:** The `ApiKeyRegistry` scans all entries for constant-time safety. If two people have the same key value, the one later in the iteration order will be returned as the "name".
+**Resolution:** Duplicate API key values are a configuration error. Ensure all values in `arcclaw.api.keys` are unique. The code is designed to scan all entries to prevent timing leaks, so "first match" logic is intentionally avoided.
+
+### 🔴 Failure: NoSuchAlgorithmException for HmacSHA256
+**Symptom:** `ApiKeyRegistry` fails to initialize or crashes with a security exception.
+**Root Cause:** The underlying JVM or security provider does not support `HmacSHA256`.
+**Resolution:** This should not happen on standard JVMs (standard algorithm). If it occurs, verify the cryptographic providers available in the runtime environment.
+
+### 🔴 Failure: API Key Logs truncated too early
+**Symptom:** Logs show `null****` or less than 4 characters for long keys.
+**Root Cause:** Truncation logic assumes a minimum length that might not exist, or safe-substring offsets are miscalculated.
+**Resolution:** `ApiKeyAuthFilter` now uses `Math.min(4, key.length())` to safely extract up to 4 characters, ensuring it never throws `StringIndexOutOfBoundsException` and always provides the maximum safe prefix.
+

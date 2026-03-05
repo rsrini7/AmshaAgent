@@ -2304,3 +2304,46 @@ Harden the system against prompt injection, pathological token reporting, and in
 - ✅ `mvn clean verify`: All tests green.
 ---
 
+# Phase 48 — HMAC API Key Protection ✅
+
+Harden the API key registry against timing attacks and length oracles using HMAC-based constant-time comparison.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **HMAC-Based Comparison**: Instead of comparing raw keys (which leaks length info even with `MessageDigest.isEqual`), we compute an HMAC of the provided key and compare it against pre-computed HMACs of valid keys. This ensures the comparison is always between fixed-length digests (SHA-256).
+
+> [!IMPORTANT]
+> **Pre-computation**: To maintain low latency, HMACs of all configured keys are pre-computed during `@PostConstruct`. Input keys are HMACed once per request and compared against the pre-stored map.
+
+> [!TIP]
+> **Constant-Time Traversal**: Both `isValidKey()` and `getKeyName()` are implemented to iterate through the entire set of stored keys even after a match is found. This prevents leaking the position of the key in the configuration map.
+
+## Completed Changes
+
+### Security Module — API Auth
+
+#### [MODIFY] [ApiKeyRegistry.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyRegistry.java)
+- HMAC-based validation logic using `HmacSHA256`.
+- Pre-computation of stored key digests in `@PostConstruct`.
+- Full-scan traversal for `isValidKey` and `getKeyName`.
+- Dependency on `arcclaw.audit.hmac-key` as the secret.
+
+#### [MODIFY] [ApiKeyAuthFilter.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java)
+- Strict truncation of API keys in logs to exactly 4 characters.
+
+### Test Infrastructure
+
+#### [NEW] [ApiKeyRegistryVaryingLengthKeyTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/ApiKeyRegistryVaryingLengthKeyTest.java)
+- Isolated test profile for varying length key validation.
+
+#### [MODIFY] [ApiKeyRegistryTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/security/ApiKeyRegistryTest.java)
+- Updated with HMAC-specific assertions and rate-limiting tests.
+
+## Verification
+
+- ✅ `ApiKeyRegistryTest`: Verified HMAC and constant-time scanning.
+- ✅ `ApiKeyRegistryVaryingLengthKeyTest`: Verified robustness against length oracle attacks.
+- ✅ `mvn clean verify`: All 300 tests passed.
+---
+
