@@ -31,24 +31,6 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     private static final Logger log = Logger.getLogger(PersistentChatMemoryStore.class);
 
-    // TODO Phase 49: remove once all write-sites use MessageTag.tag()
-    private static final java.util.regex.Pattern COMPLIANCE_INJECTION_PATTERN =
-        java.util.regex.Pattern.compile(
-            "(?i)(as per our agreement|" +
-            "as per your request[,]? i will provide|" +
-            "i'?ll provide .{0,30} instead of|" +
-            "i'?ll give .{0,30} equivalent|" +
-            "i cannot provide information on|" +
-            "i will not (answer|write|discuss|provide).{0,40}questions|" +
-            "going forward i will only)"
-        );
-
-    // TODO Phase 49: remove once all write-sites use MessageTag.tag()
-    private boolean isComplianceInjection(ChatMessage msg) {
-        if (!(msg instanceof dev.langchain4j.data.message.AiMessage)) return false;
-        return COMPLIANCE_INJECTION_PATTERN.matcher(msg.toString()).find();
-    }
-
     @Inject
     EntityManager em;
 
@@ -106,10 +88,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         List<ChatMessage> sanitized = messages.stream()
             .filter(msg -> {
                 if (!(msg instanceof dev.langchain4j.data.message.AiMessage ai)) return true;
-                // MessageTag check: Phase 48+ tagged messages
-                // isComplianceInjection: Pre-Phase-48 backward compatibility
-                // TODO Phase 49: remove isComplianceInjection once all write-sites use MessageTag.tag()
-                return !MessageTag.isTagged(ai.text()) && !isComplianceInjection(msg);
+                return !MessageTag.isTagged(ai.text());
             })
             .collect(java.util.stream.Collectors.toList());
 

@@ -665,3 +665,10 @@
 - [x] Add `testTaggedAiMessageIsFilteredFromHistory` to specifically verify deterministic filtering <!-- id: 204 -->
 - [x] Create `MessageTagTest` pure unit test suite <!-- id: 205 -->
 - [x] Verify: All Phase 51 tests (15/15) and regression suite pass <!-- id: 206 -->
+
+# Phase 49 — MessageTag Regex Cleanup ✅
+- [x] Delete `COMPLIANCE_INJECTION_PATTERN` and legacy `isComplianceInjection()` from `PersistentChatMemoryStore.java` <!-- id: 207 -->
+- [x] Simplify `updateMessages()` filter to use `MessageTag.isTagged()` only <!-- id: 208 -->
+- [x] Remove obsolete `testComplianceInjectionFiltering()` from `PersistentChatMemoryStoreTest.java` <!-- id: 209 -->
+- [x] Audit source for remaining legacy filter references (Grep cleanup) <!-- id: 210 -->
+- [x] Verify: All tests pass with 0 compilation errors or regressions <!-- id: 211 -->

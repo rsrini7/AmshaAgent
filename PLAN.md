@@ -2454,4 +2454,41 @@ mvn test -pl arcclaw-app -Dtest=LangChainReasoningEngineTest
 - ✅ `LangChainReasoningEngine` filtering (8/8)
 - ✅ Regression suite `AgentLoopTest` (2/2)
 
+---
+
+# Phase 49 — MessageTag Regex Cleanup ✅
+
+Complete the transition to deterministic AI compliance filtering by removing legacy regex patterns and providing a clean implementation in `PersistentChatMemoryStore`.
+
+## Proposed Changes
+
+### Core Module — State Store
+
+#### [MODIFY] [PersistentChatMemoryStore.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java)
+- [DELETE] `COMPLIANCE_INJECTION_PATTERN` regex.
+- [DELETE] `isComplianceInjection()` method.
+- [MODIFY] Simplified `updateMessages()` filter: `!MessageTag.isTagged(ai.text())`.
+- [DELETE] Unused `java.util.regex.Pattern` import.
+
+### Core Module — Reasoning Engine
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- [MODIFY] Replaced obsolete comment referencing the deleted regex filter.
+
+### App Module — Tests
+
+#### [MODIFY] [PersistentChatMemoryStoreTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/core/state/PersistentChatMemoryStoreTest.java)
+- [DELETE] `testComplianceInjectionFiltering()` (asserted behavior of deleted regex).
+
+## Verification Plan
+
+### Automated Tests
+```bash
+mvnw clean verify -pl arcclaw-core,arcclaw-app -am
+```
+- ✅ Clean compilation (0 errors)
+- ✅ `PersistentChatMemoryStoreTest`: Persistence and rolling window verified.
+- ✅ `LangChainReasoningEngineTest`: Deterministic filtering verified.
+- ✅ Grep audit: 0 occurrences of `isComplianceInjection` or `COMPLIANCE_INJECTION_PATTERN`.
+
 

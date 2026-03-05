@@ -33,6 +33,30 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
 
+    /**
+     * Detects LLM compliance override responses — organic LLM output where the
+     * model was manipulated into agreeing to a capability restriction.
+     * These are filtered from history reconstruction to prevent the override
+     * from persisting across turns.
+     *
+     * This is DISTINCT from MessageTag which handles system-injected AiMessages.
+     * MessageTag = programmatic injections written by ArcClaw code.
+     * COMPLIANCE_OVERRIDE_PATTERN = organic LLM output from successful attacks.
+     *
+     * Phase 49: moved here from PersistentChatMemoryStore. The store is neutral
+     * storage — filtering belongs in the reasoning engine.
+     */
+    private static final java.util.regex.Pattern COMPLIANCE_OVERRIDE_PATTERN =
+        java.util.regex.Pattern.compile(
+            "(?i)(as per our agreement|" +
+            "as per your request[,]? i will provide|" +
+            "i'?ll provide .{0,30} instead of|" +
+            "i'?ll give .{0,30} equivalent|" +
+            "i cannot provide information on|" +
+            "i will not (answer|write|discuss|provide).{0,40}questions|" +
+            "going forward i will only)"
+        );
+
     @Inject
     ChatLanguageModel chatLanguageModel;
 
@@ -239,9 +263,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     if (msg instanceof SystemMessage) {
                         skip = true;
                     } else if (msg instanceof AiMessage ai) {
-                        skip = MessageTag.isTagged(ai.text());
-                        // ai.text() may be null for tool-use messages — isTagged() handles null safely
-                        // Pre-Phase-48 patterns are handled by PersistentChatMemoryStore.isComplianceInjection()
+                        String aiText = ai.text();
+                        // System-injected compliance markers (Phase 48+)
+                        if (MessageTag.isTagged(aiText)) {
+                            skip = true;
+                        // Organic LLM compliance override responses — user forced capability restriction
+                        } else if (aiText != null && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
+                            skip = true;
+                        }
+                        // aiText may be null for tool-use messages — both checks are null-safe
                     } else if (msg instanceof UserMessage && msgString.contains("The tool execution has been approved and completed")) {
                         skip = true;
                     } else if (msg instanceof UserMessage && msgString.contains("Resuming task after approval")) {
