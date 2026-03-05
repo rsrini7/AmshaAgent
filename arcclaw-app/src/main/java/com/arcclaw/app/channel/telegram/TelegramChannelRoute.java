@@ -24,6 +24,16 @@ public class TelegramChannelRoute extends RouteBuilder {
     @Override
     public void configure() throws Exception {
         if (!enabled) {
+            log.info("Telegram channel disabled — skipping route");
+            return;
+        }
+
+        // Fail fast if token is clearly a placeholder — don't let Camel hang
+        if (botToken == null || botToken.isBlank() 
+                || botToken.startsWith("mock") 
+                || botToken.equals("mock-telegram-token")) {
+            log.warn("Telegram bot token is a placeholder — skipping route registration. " +
+                    "Set TELEGRAM_BOT_TOKEN to activate.");
             return;
         }
 
