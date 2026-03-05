@@ -620,7 +620,7 @@
 - [x] Verify: `AgentResilienceTest` (arcclaw-app) GREEN <!-- id: 168 -->
 - [x] Verify: Full project `mvnw clean verify` GREEN (269/269 tests) <!-- id: 169 -->
 
-# Phase 48: Cron Concurrency & Semaphore Hardening ✅
+# Phase 48: Cron Concurrency, Semaphore Hardening, Telegram Bot Refactor & Intent & Governance Hardening ✅
 - [x] Fix Semaphore Permit Leak: Hoist `concurrencyLimiter.release()` to a master `finally` block on the virtual thread lambda. <!-- id: 170 -->
 - [x] Fix MDC Pollution: Move `MDC.put/remove` outside `executeCronJob` to the outer dispatcher lambda. <!-- id: 171 -->
 - [x] Harden Exception Handling: Implement `executionEntered` AtomicBoolean to handle Throwables that escape before job entry. <!-- id: 172 -->
@@ -634,3 +634,16 @@
   - [x] Verify all Telegram URIs are token-free
   - [x] Update/Fix `TelegramChannelRouteTest` with proper mocking/component binding
   - [x] Restore `ApproveReflex` confirmation message (fixed `ApproveReflexTest`)
+- [x] Intent & Governance Hardening ✅
+  - [x] Implement prompt injection defense with `<<<USER_INPUT_START/END>>>` delimiters in `IntentClassifierService` <!-- id: 177 -->
+  - [x] Implement input sanitization to strip injection delimiters <!-- id: 178 -->
+  - [x] Switch `IntentClassifierService` to synchronous execution with 3s SLA logging <!-- id: 179 -->
+  - [x] Fix `ARCHITECT` role name sanitization in classifier <!-- id: 180 -->
+  - [x] Implement pathological zero-token guard (0,0 -> 1,1) in `GovernanceLayer` <!-- id: 181 -->
+  - [x] Ensure legitimate (N, 0) token counts are NOT inflated in `GovernanceLayer` <!-- id: 182 -->
+  - [x] Disable Telegram route if bot token is missing or placeholder (`mock-token`) <!-- id: 183 -->
+  - [x] Set `OTEL_SDK_DISABLED=true` by default in `application.yaml` <!-- id: 184 -->
+  - [x] Add `ARCCLAW_DATA_DIR` to default configuration <!-- id: 185 -->
+  - [x] Disable Quarkus console/reload in native profile <!-- id: 186 -->
+  - [x] Update `MAC_SETUP_GUIDE.md` with OTel and CLI hardening args <!-- id: 187 -->
+  - [x] Verify: All new hardening tests (zero-token, delimiters, sanitization) pass <!-- id: 188 -->

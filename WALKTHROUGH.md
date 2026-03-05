@@ -52,6 +52,8 @@
 | 47.1 | Message Pipeline Refactor (Tier 2A) | 100% success | Moved implementations to core for definitive CDI fix |
 | 47.2 | Refined Routing & Templates (Tier 2B) | 100% success | Qute system prompts + exhaustive REST status mapping |
 | 47.3 | Agent State Machine Refactor (Tier 3/3A)| 100% success | Extracted loop from AgentLoop; fixed engine delegation & context |
+| 48 | Telegram Bot Refactor | 100% success | Removed tokens from URIs, component configuration |
+| 49 | Intent & Governance Hardening | 100% success | Prompt injection delimiters + Pathological zero-token guard |
 
 ---
 
@@ -1174,5 +1176,28 @@ Resolved flaky tests and critical semaphore permit leaks in the `AgentCronSchedu
 - `TelegramChannelRouteTest`: **PASSED** (Advised route with mock endpoints).
 - `ApproveReflexTest`: **PASSED** (Confirmed synchronous response matches expectation).
 - `AgentCronSchedulerTest`: **PASSED** (Verified end-to-end cron job trigger and approval).
+
+---
+
+## Phase 48: Intent & Governance Hardening
+
+### Intent Classifier Security
+- **Prompt Injection Defense**: Implemented `<<<USER_INPUT_START>>>` and `<<<USER_INPUT_END>>>` delimiters to wrap user messages, making them distinct from instructions.
+- **Sanitization**: Added logic to strip these specific delimiter strings from the user's message before wrapping, preventing "early closure" injection attacks.
+- **Synchronous Execution**: Refactored `IntentClassifierService` to run synchronously, eliminating complex async handling while adding a 3s soft SLA log warning for monitoring performance.
+- **Role Sanitization**: Fixed a regression where the `ARCHITECT` role name was inconsistently mapped.
+
+### Governance Robustness
+- **Pathological Zero-Token Guard**: Implemented a defense against LLM providers that omit token counts (reporting `0,0`). These are now inflated to `1,1` to ensure governance budget tracking remains active.
+- **Legitimate Zero-Output Preservation**: Ensured that genuine zero-output responses (e.g., from classifiers that only return input counts) are NOT inflated, preserving billing accuracy.
+
+### Fail-Fast Configuration
+- **Telegram Validation**: The `TelegramChannelRoute` now checks for a valid bot token (non-null and not "mock-token") before starting. This prevents startup failures in environments where Telegram is not configured.
+- **Default Hardening**: `OTEL_SDK_DISABLED=true` is now the default in `application.yaml`, reducing noise and resource usage when observability is not explicitly required.
+
+### Verification Results
+- ✅ `GovernanceLayerTest`: Verified pathological `(0,0)` to `(1,1)` inflation.
+- ✅ `IntentClassifierServiceTest`: Verified delimiter presence and sanitization logic.
+- ✅ `mvn clean verify`: 296/296 tests passed.
 
 

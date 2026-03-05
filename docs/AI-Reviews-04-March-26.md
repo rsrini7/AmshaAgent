@@ -2366,30 +2366,47 @@ class StartupSecurityValidatorStringOnlyAllowlistTest {
 
 ## Follow-up Prompt: P1-4 (All Deltas Applied)
 
-```
 ## IMPLEMENTATION REQUIREMENTS:
 
 Common Requirements:
 1. MessageTag replaces ONLY AI compliance injection message filtering.
-   UserMessage filters (e.g., "Resuming task after approval") are NOT
-   replaced — they are user-originated messages with different semantics.
-2. AiMessage.text() can return null for tool-use messages (those with
-   toolExecutionRequests but no text). MessageTag.isTagged() must preserve
-   its null-check — do not remove it.
-3. ALL code that WRITES compliance AiMessages into the chat history must
-   use MessageTag.tag() at write time. ALL code that READS/FILTERS must
-   use MessageTag.isTagged() at read time.
+   UserMessage filters are NOT replaced — they are user-originated messages
+   with different semantics.
+2. AiMessage.text() can return null for tool-use messages. MessageTag.isTagged()
+   must preserve its null-check — do not remove it.
+3. WRITE-SITE AUDIT RESULT (from grep output dated 2026-03-05):
+   Four AiMessage.from() call sites exist in production code:
+
+   LangChainReasoningEngine — TWO sites, both LLM replay — do NOT tag:
+     Site 1: AiMessage.from(step.thought() != null ? step.thought() : "",
+              Collections.singletonList(request))
+              — reconstructs LLM tool call into message list for next API call.
+     Site 2: AiMessage.from(step.thought())
+              — reconstructs LLM thought (non-tool step) into message list.
+
+   AgentStateMachineRunner — TWO sites, both LLM final answers — do NOT tag:
+     Site 1: currentHistory.add(AiMessage.from(answer))
+              — stores LLM final answer to chat history.
+     Site 2: currentHistory.add(AiMessage.from(finalFastPathAnswer))
+              — stores LLM fast-path answer to chat history.
+
+   ApproveReflex/DenyReflex/HaltReflex/AgentLoop: No AiMessage.from()
+   write-sites found in either source tree. The "Human Approved" AiMessage
+   being filtered is the LLM echoing back approval confirmation text —
+   not a system injection.
+
+   CONCLUSION: No existing write-sites require MessageTag.tag() in Phase 48.
+   Tag application is reserved for future write-sites in Phase 49+.
+
 4. The COMPLIANCE_PREFIX must be a UUID-derived constant, not natural language,
    to avoid false positives from legitimate LLM output.
 5. BACKWARD COMPATIBILITY: The COMPLIANCE_PREFIX "[ARCCLAW:2f4a9c]" is new in
-   Phase 48. Existing chat history in SQLite (written before this phase) does
-   not contain this prefix. At filter time, pre-Phase-48 AI messages will have
-   isTagged() return false and will pass through the filter — this is correct
-   and intentional. They will not be retroactively filtered. Sessions that
-   predate Phase 48 may still contain old-style compliance injections in their
-   history for the remainder of those sessions. This is acceptable: the fix
-   applies to all new writes going forward. Existing sessions are unaffected
-   until their history is compacted or reset. Document this in TROUBLESHOOTING.md.
+   Phase 48. Existing chat history in SQLite does not contain this prefix.
+   Pre-Phase-48 AI messages will have isTagged() return false and will pass
+   through the filter — this is correct and intentional.
+   Keep the existing regex-based isComplianceInjection() filter running
+   ALONGSIDE MessageTag during Phase 48 for backward compatibility.
+   Remove the regex filter in Phase 49 once all write-sites adopt the tag.
 
 Component 1 — MessageTag Constant
 File: arcclaw-core/src/main/java/com/arcclaw/core/agent/MessageTag.java (NEW FILE)
@@ -2398,23 +2415,20 @@ File: arcclaw-core/src/main/java/com/arcclaw/core/agent/MessageTag.java (NEW FIL
 
   /**
    * Marker prefix for AI compliance/approval injection messages written
-   * into ChatMemoryStore. Used by LangChainReasoningEngine to filter these
-   * entries during context reconstruction.
+   * into ChatMemoryStore. Used by LangChainReasoningEngine and
+   * PersistentChatMemoryStore to filter these entries during context
+   * reconstruction.
    *
-   * <p>The UUID-derived prefix guarantees this string never appears in
-   * organic LLM output. Messages tagged at write-time are stripped at
-   * read-time, preventing compliance injections from re-entering the
-   * reasoning context.
+   * STABILITY: This constant is persisted in SQLite. It must NEVER be
+   * changed once any data has been written with it. Changing it causes
+   * all previously tagged messages to pass through the filter unstripped.
    *
-   * <p>STABILITY: This constant is persisted in SQLite. It must NEVER be
-   * changed once any data has been written with it. Changing it causes all
-   * previously tagged messages to pass through the filter unstripped.
+   * BACKWARD COMPATIBILITY: Messages written before Phase 48 do not carry
+   * this prefix. They pass through the filter (isTagged returns false) —
+   * this is correct. The regex-based filter in PersistentChatMemoryStore
+   * continues to handle pre-Phase-48 patterns during the transition period.
    *
-   * <p>BACKWARD COMPATIBILITY: Messages written before Phase 48 do not carry
-   * this prefix. They pass through the filter (isTagged returns false) — this
-   * is correct. Only messages written after Phase 48 deployment are tagged.
-   *
-   * <p>IMPORTANT: AiMessage.text() can return null for tool-use messages.
+   * IMPORTANT: AiMessage.text() can return null for tool-use messages.
    * isTagged() must always null-check before calling startsWith().
    */
   public final class MessageTag {
@@ -2438,143 +2452,145 @@ File: arcclaw-core/src/main/java/com/arcclaw/core/agent/MessageTag.java (NEW FIL
       }
   }
 
-Component 2 — Fix AI Message History Filtering
+Component 2 — Fix AI Message History Filtering in LangChainReasoningEngine
 File: arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java
 
-Current Problem:
-History filtering uses AiMessage.toString() pattern matching against natural
-language strings. AiMessage.toString() format is not part of LangChain4j's
-public API. Any upgrade can break these silently.
+STEP A — In the chat history injection block that iterates chatHistory and
+sets skip=true, locate this existing multi-pattern AiMessage block:
 
-Required Changes:
-STEP A — Replace AI compliance message filters:
-All blocks of the form:
-  if (msg instanceof AiMessage && msgString.contains("...")) { skip = true; }
-Replace with ONE check:
-  if (msg instanceof AiMessage ai) {
+  } else if (msg instanceof AiMessage && msgString.contains("Human Approved")) {
+      skip = true;
+  } else if (msg instanceof AiMessage) {
+      String lower = msgString.toLowerCase();
+      if (lower.contains("as per our agreement") ||
+          lower.contains("as per your request, i will provide") ||
+          lower.contains("i'll provide python code instead of rust") ||
+          lower.contains("i'll provide the equivalent python") ||
+          lower.contains("i cannot provide information on rust")) {
+          skip = true;
+      }
+  }
+
+Replace the entire block above with ONE check:
+
+  } else if (msg instanceof AiMessage ai) {
       skip = MessageTag.isTagged(ai.text());
       // ai.text() may be null for tool-use messages — isTagged() handles null safely
+      // Pre-Phase-48 patterns are handled by PersistentChatMemoryStore.isComplianceInjection()
   }
-This single check replaces ALL AI compliance pattern matches. Any AI message
-written with MessageTag.tag() is filtered; all others pass through.
 
-STEP B — Keep UserMessage filters AS-IS.
-Do NOT apply MessageTag to UserMessage filters. The following filters operate
-on user-originated approval-flow control messages and have different semantics:
+STEP B — Keep ALL UserMessage filters AS-IS. Do not modify:
   if (msg instanceof UserMessage um && um.singleText().contains("Resuming task"))
   if (msg instanceof UserMessage um && um.singleText().contains("approved"))
-Leave them unchanged. A MessageTag-based approach for UserMessages is out of
-scope for P1-4.
 
-STEP C — Write-site audit (COMPLETE LIST).
-Search for AiMessage.from(...) calls across arcclaw-core/src and arcclaw-app/src.
-Apply MessageTag.tag() to every call where the content is system-generated
-(not copied from an LLM response). Known write-sites to audit — verify each:
-  - ApproveReflex: AiMessage injected on approval confirmation
-  - DenyReflex: AiMessage injected on denial
-  - HaltReflex: AiMessage injected on halt
-  - AgentLoop: AiMessage injected when resuming after AWAITING_APPROVAL
-  - LangChainReasoningEngine: AiMessage injected for schema correction /
-    tool binding contract
-  - Any other handler that injects a synthetic AiMessage into chat history
-    (search for: AiMessage.from( in both source trees)
+STEP C — Do NOT apply MessageTag.tag() to any existing AiMessage.from() call
+sites. No production write-sites currently inject system-generated AiMessages.
+All four grep results are LLM output replay — leave them unchanged.
 
-Grep command to find all write-sites:
-  grep -rn "AiMessage.from(" arcclaw-core/src arcclaw-app/src
+Component 3 — Update PersistentChatMemoryStore Filter
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/PersistentChatMemoryStore.java
 
-For each result, determine: is this content from the LLM (pass through
-unchanged) or system-generated (wrap with MessageTag.tag())? Apply accordingly.
+TRANSITION STRATEGY: Keep isComplianceInjection() regex running alongside
+MessageTag for backward compatibility. Remove regex in Phase 49.
 
-Component 3 — Register MessageTag for GraalVM Native Image
+In updateMessages(), locate:
+  .filter(msg -> !isComplianceInjection(msg))
+
+Replace with:
+  .filter(msg -> {
+      if (!(msg instanceof dev.langchain4j.data.message.AiMessage ai)) return true;
+      // MessageTag check: Phase 48+ tagged messages
+      // isComplianceInjection: Pre-Phase-48 backward compatibility
+      // TODO Phase 49: remove isComplianceInjection once all write-sites use MessageTag.tag()
+      return !MessageTag.isTagged(ai.text()) && !isComplianceInjection(msg);
+  })
+
+Mark COMPLIANCE_INJECTION_PATTERN and isComplianceInjection() with:
+  // TODO Phase 49: remove once all write-sites use MessageTag.tag()
+
+Do NOT delete them yet.
+
+Component 4 — GraalVM Native Image
 File: arcclaw-core/src/main/resources/META-INF/native-image/com.arcclaw/native-image.properties
 
 MessageTag uses only static final fields and static methods with no CDI —
-it should be auto-detected by GraalVM. Verify during native build. Add to
-reflection registration only if a missing reflection error appears for this
-class. No preemptive registration is needed.
+it should be auto-detected by GraalVM. No preemptive registration needed.
+Add reflection registration only if a missing reflection error appears during
+native build.
 
 TEST 1: arcclaw-core/src/test/java/com/arcclaw/core/agent/MessageTagTest.java (NEW FILE)
 
-class MessageTagTest {
+No @QuarkusTest needed — pure unit test, no CDI.
 
-  @Test
-  void testTagAddsPrefix() {
-      String tagged = MessageTag.tag("some content");
-      assertTrue(tagged.startsWith(MessageTag.COMPLIANCE_PREFIX));
-      assertTrue(tagged.contains("some content"));
-  }
+  class MessageTagTest {
 
-  @Test
-  void testIsTaggedReturnsTrueForTaggedContent() {
-      assertTrue(MessageTag.isTagged(MessageTag.tag("approval message")));
-  }
+    @Test
+    void testTagAddsPrefix() {
+        String tagged = MessageTag.tag("some content");
+        assertTrue(tagged.startsWith(MessageTag.COMPLIANCE_PREFIX));
+        assertTrue(tagged.contains("some content"));
+    }
 
-  @Test
-  void testIsTaggedReturnsFalseForUntaggedContent() {
-      assertFalse(MessageTag.isTagged("Human Approved: something"));
-      assertFalse(MessageTag.isTagged("as per our agreement"));
-      assertFalse(MessageTag.isTagged("Tool binding contract"));
-  }
+    @Test
+    void testIsTaggedReturnsTrueForTaggedContent() {
+        assertTrue(MessageTag.isTagged(MessageTag.tag("approval message")));
+    }
 
-  @Test
-  void testIsTaggedNullSafe() {
-      assertFalse(MessageTag.isTagged(null));
-      assertFalse(MessageTag.isTagged(""));
-      assertFalse(MessageTag.isTagged("   "));
-  }
+    @Test
+    void testIsTaggedReturnsFalseForUntaggedContent() {
+        assertFalse(MessageTag.isTagged("Human Approved: something"));
+        assertFalse(MessageTag.isTagged("as per our agreement"));
+        assertFalse(MessageTag.isTagged("Tool binding contract"));
+    }
 
-  @Test
-  void testPrefixIsStable() {
-      // Verifies the constant hasn't been accidentally changed.
-      // This constant is persisted in SQLite — changing it is a data corruption.
-      assertEquals("[ARCCLAW:2f4a9c]", MessageTag.COMPLIANCE_PREFIX);
+    @Test
+    void testIsTaggedNullSafe() {
+        assertFalse(MessageTag.isTagged(null));
+        assertFalse(MessageTag.isTagged(""));
+        assertFalse(MessageTag.isTagged("   "));
+    }
+
+    @Test
+    void testPrefixIsStable() {
+        assertEquals("[ARCCLAW:2f4a9c]", MessageTag.COMPLIANCE_PREFIX);
+    }
   }
-}
 
 TEST 2: Add to existing LangChainReasoningEngineTest.java:
 
-@Test
-void testTaggedAiMessageIsFilteredFromHistory() {
-    // Arrange: seed chat history with one tagged and one untagged AI message
-    String sessionId = "filter-test-session";
-    List<ChatMessage> messages = List.of(
-        UserMessage.from("What is 2+2?"),
-        AiMessage.from(MessageTag.tag("Human Approved: execution approved")),
-        AiMessage.from("The answer is 4.")
-    );
-    chatMemoryStore.updateMessages(sessionId, messages);
+  @Test
+  void testTaggedAiMessageIsFilteredFromHistory() {
+      String sessionId = "filter-test-session";
+      List<ChatMessage> messages = List.of(
+          UserMessage.from("What is 2+2?"),
+          AiMessage.from(MessageTag.tag("Human Approved: execution approved")),
+          AiMessage.from("The answer is 4.")
+      );
+      chatMemoryStore.updateMessages(sessionId, messages);
 
-    // Arrange: capture the ChatRequest sent to the language model
-    ArgumentCaptor<ChatRequest> requestCaptor =
-        ArgumentCaptor.forClass(ChatRequest.class);
-    when(chatLanguageModel.chat(requestCaptor.capture()))
-        .thenReturn(new AiMessage("some response"));
+      ArgumentCaptor<ChatRequest> requestCaptor =
+          ArgumentCaptor.forClass(ChatRequest.class);
+      when(chatLanguageModel.chat(requestCaptor.capture()))
+          .thenReturn(new AiMessage("some response"));
 
-    // Act: invoke the reasoning engine for this session.
-    // DO NOT guess the nextStep() or run() signature — use the exact call
-    // pattern from an existing passing test in LangChainReasoningEngineTest
-    // (copy the setup verbatim). The signature has multiple parameters
-    // (sessionId, user message, role, chat memory key, governance context, etc.)
-    // and must match the actual method declaration in LangChainReasoningEngine.
-    // Copying from an existing test guarantees a compiling call without
-    // requiring the implementer to infer parameter types from the prompt.
-    engine./* copy exact call from existing LangChainReasoningEngineTest */;
+      // Copy exact nextStep() call pattern from an existing passing test
+      // in LangChainReasoningEngineTest to guarantee correct signature.
+      engine./* copy exact call from existing LangChainReasoningEngineTest */;
 
-    // Assert: tagged AiMessage must NOT appear in the ChatRequest messages
-    List<ChatMessage> sentMessages = requestCaptor.getValue().messages();
-    boolean taggedMessagePresent = sentMessages.stream()
-        .anyMatch(m -> m instanceof AiMessage ai
-            && MessageTag.isTagged(ai.text()));
-    assertFalse(taggedMessagePresent,
-        "Tagged compliance AiMessage must be filtered from ChatRequest");
+      List<ChatMessage> sentMessages = requestCaptor.getValue().messages();
 
-    // Assert: untagged AiMessage ("The answer is 4.") must still be present
-    boolean untaggedPresent = sentMessages.stream()
-        .anyMatch(m -> m instanceof AiMessage ai
-            && "The answer is 4.".equals(ai.text()));
-    assertTrue(untaggedPresent,
-        "Untagged organic AiMessage must not be filtered from ChatRequest");
-}
+      boolean taggedMessagePresent = sentMessages.stream()
+          .anyMatch(m -> m instanceof AiMessage ai
+              && MessageTag.isTagged(ai.text()));
+      assertFalse(taggedMessagePresent,
+          "Tagged compliance AiMessage must be filtered from ChatRequest");
+
+      boolean untaggedPresent = sentMessages.stream()
+          .anyMatch(m -> m instanceof AiMessage ai
+              && "The answer is 4.".equals(ai.text()));
+      assertTrue(untaggedPresent,
+          "Untagged organic AiMessage must not be filtered from ChatRequest");
+  }
 ```
 
 ---

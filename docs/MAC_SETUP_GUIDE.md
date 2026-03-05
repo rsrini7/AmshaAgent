@@ -66,6 +66,14 @@ java \
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED  --add-opens=java.base/java.lang=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
+$env:OTEL_SDK_DISABLED = "true"
+
+java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
+
+.\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"
+
+http://localhost:8080/q/dev
+
 ----
 
 podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
@@ -95,3 +103,4 @@ ForEach-Object {
 
 
 Please go through my entire project end to end as a Senior Java Architect, Security Reviewer, Refactoring Expert & Senior Java Developer. My plan is the share your reviews with Claude/Gemini and its review with you to debate and solve. Make sure to deep dive and not just high level and not only positive side. Not looking for any Constructive Feedback and Roadmap. Looking for Solid review be honest and you can give even strong feedback to make this project awesome. We are executing Phase X....
+
