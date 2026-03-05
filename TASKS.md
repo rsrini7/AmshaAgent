@@ -672,3 +672,17 @@
 - [x] Remove obsolete `testComplianceInjectionFiltering()` from `PersistentChatMemoryStoreTest.java` <!-- id: 209 -->
 - [x] Audit source for remaining legacy filter references (Grep cleanup) <!-- id: 210 -->
 - [x] Verify: All tests pass with 0 compilation errors or regressions <!-- id: 211 -->
+# Phase 50 P2-1 — CLI Approval Flow Completion ✅
+- [x] Wire approval persistence and heartbeats in `ChatCommand.java` <!-- id: 212 -->
+  - [x] Record heartbeat at session start <!-- id: 213 -->
+  - [x] Record heartbeat after each user input <!-- id: 214 -->
+  - [x] Record heartbeat when `AwaitingApproval` is returned <!-- id: 215 -->
+- [x] Implement AwaitingApproval UI in CLI <!-- id: 216 -->
+  - [x] Display tool name and truncated parameters (200 chars) <!-- id: 217 -->
+  - [x] Provide clear instructions for `/approve` or `/deny` <!-- id: 218 -->
+- [x] Transition CLI Chat to `AutonomyLevel.SUPERVISED` <!-- id: 219 -->
+- [x] Fix cross-module build stability items <!-- id: 220 -->
+  - [x] Resolve `MessageTag` symbol absence in `arcclaw-app` tests <!-- id: 221 -->
+  - [x] Fix `ReflexResult` constructor parameter ordering <!-- id: 222 -->
+- [x] Verify: `ChatCommandApprovalTest` passes (mocked heartbeats and UI) <!-- id: 223 -->
+- [x] Verify: `terminateSession()` is correctly called in `finally` block <!-- id: 224 -->

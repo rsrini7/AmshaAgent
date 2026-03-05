@@ -19,6 +19,7 @@ class StartupSecurityValidatorProdSafeTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
+                "arcclaw.auto-seed-secrets", "false",
                 "quarkus.profile",                           "test",
                 "arcclaw.vault.pepper",                      "safe-pepper-for-boot-000000000000",
                 "arcclaw.audit.hmac-key",                    "safe-hmac-key-for-boot-000000000",

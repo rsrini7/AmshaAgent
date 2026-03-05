@@ -19,7 +19,6 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 
 import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import picocli.CommandLine;
 
@@ -27,14 +26,14 @@ import picocli.CommandLine;
 public class ChatCommand implements Runnable {
 
     @CommandLine.Option(names = {"-r", "--role"}, defaultValue = "coordinator")
-    String role;
+    String role = "coordinator";
 
     @Inject Logger log;
     @Inject AgentLoop agentLoop;
     @Inject ReasoningEngine reasoningEngine;
     @Inject WorkspaceManager workspaceManager;
     @Inject ReflexRegistry reflexRegistry;
-    @Inject Instance<DevSecretSeeder> devSeeder;
+    @Inject DevSecretSeeder devSeeder;
 
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
@@ -51,9 +50,6 @@ public class ChatCommand implements Runnable {
         System.out.println("-------------------------------------------------");
 
         try {
-            if (!devSeeder.isUnsatisfied()) {
-                devSeeder.get().seedDevSecrets();
-            }
             ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, "CLI").run(
                 () -> runChatLoop(sessionId)
             );
@@ -69,11 +65,19 @@ public class ChatCommand implements Runnable {
 
     private void runChatLoop(String sessionId) {
         try {
+            workspaceManager.recordHeartbeat(sessionId);
             WorkspaceContext.run(
                 sessionId, "cli-user", "cli-chat",
-                AutonomyLevel.FULL,
+                AutonomyLevel.SUPERVISED,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> chatLoop(sessionId)
+                () -> {
+                    
+                    // Seed dev secrets so vault has GITHUB_TOKEN for this session
+                    devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
+
+                    chatLoop(sessionId);
+                    return null;
+                }
             );
         } catch (Exception e) {
             log.errorf(e, "Error in WorkspaceContext for session %s", sessionId);
@@ -102,6 +106,8 @@ public class ChatCommand implements Runnable {
             }
             if (input.isBlank()) continue;
 
+            workspaceManager.recordHeartbeat(sessionId);
+
             ReflexResult reflexResult = reflexRegistry.processIfReflex(
                 sessionId, "cli-user", "cli-chat", input);
 
@@ -127,8 +133,17 @@ public class ChatCommand implements Runnable {
                 case AgentResult.Finished f      -> f.answer();
                 case AgentResult.Failed f        -> "❌ Error: " + f.reason();
                 case AgentResult.LoopExceeded l  -> "⏱ Timed out after " + l.maxIterations() + " steps.";
-                case AgentResult.AwaitingApproval a -> 
-                    "⏸ Approval needed for tool: " + a.toolName() + "\n   Type /approve or /deny";
+                case AgentResult.AwaitingApproval a -> {
+                    workspaceManager.recordHeartbeat(sessionId);
+                    String truncatedParams = a.paramsJson() != null
+                            && a.paramsJson().length() > 200
+                            ? a.paramsJson().substring(0, 200) + "... [truncated]"
+                            : a.paramsJson();
+
+                    yield "⏸ Approval needed for tool: " + a.toolName() +
+                            "\n   Params: " + truncatedParams +
+                            "\n   Type /approve or /deny";
+                }
             };
             System.out.println("\n▶ ArcClaw> " + output);
 

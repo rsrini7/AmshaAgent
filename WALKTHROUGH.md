@@ -57,6 +57,7 @@
 | 50 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
 | 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
 | 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
+| 50 | CLI Approval Flow (P2-1) | 100% success | Heartbeats, truncated params, SUPERVISED mode |
 
 ---
 
@@ -1294,3 +1295,19 @@ Restored protection against user-forced capability overrides (organic LLM output
 - ✅ Grep Audit: Confirmed `COMPLIANCE_OVERRIDE_PATTERN` resides only in `LangChainReasoningEngine.java`.
 - ✅ Security: Confirmed protection against capability override persistence.
 
+## Phase 50 P2-1 — CLI Approval Flow Completion ✅
+
+Secured the CLI developer experience by implementing interactive heartbeats and a human-in-the-loop approval UI.
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| [ChatCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java) | Persistent heartbeats and truncated parameter display for HITL. |
+| [ChatCommandApprovalTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/cli/ChatCommandApprovalTest.java) | Mocked verification of the terminal approval UI. |
+| **Autonomy Level** | Switched CLI default to `SUPERVISED` to prevent accidental tool execution. |
+
+**Verification**:
+- ✅ `ChatCommandApprovalTest` captures and asserts the `⏸ Approval needed...` output.
+- ✅ Heartbeats verified at session start, on input, and during approval states.
+- ✅ `LangChainReasoningEngineTest` fixed to resolve `MessageTag` symbol errors.

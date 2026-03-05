@@ -2492,3 +2492,43 @@ mvnw clean verify -pl arcclaw-core,arcclaw-app -am
 - ✅ Grep audit: 0 occurrences of `isComplianceInjection` or `COMPLIANCE_INJECTION_PATTERN`.
 
 
+---
+
+# Phase 50 P2-1 — CLI Approval Flow Completion ✅
+
+Bridges the functional gap between REST and CLI by ensuring CLI sessions persist approval state and maintain heartbeats during interactive waits.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Supervised by Default**: Switched CLI chat from `FULL` to `SUPERVISED` autonomy. This aligns with the "security first" principle, ensuring sensitive tool executions via the terminal require explicit confirmation.
+
+> [!NOTE]
+> **Heartbeat Proliferation**: Heartbeats are now recorded at three critical points: entry (session creation), user prompt (after input), and approval pause. This prevents the `WorkspaceManager` GC from reaping active CLI sessions during long pauses.
+
+## Proposed Changes
+
+### App Module — CLI
+
+#### [MODIFY] [ChatCommand.java](file:///h:/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java)
+- Explicitly set `role = "coordinator"` for stable non-Picocli injection.
+- Added `recordHeartbeat()` at session start, input, and approval.
+- Implemented `AwaitingApproval` case in thought loop with 200-char parameter truncation.
+- Switched `AutonomyLevel` to `SUPERVISED`.
+- Moved `devSeeder.seedDevSecrets()` inside the `WorkspaceContext` operational block.
+
+### App Module — Tests
+
+#### [NEW] [ChatCommandApprovalTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/cli/ChatCommandApprovalTest.java)
+- Verifies heartbeat recording logic.
+- Verifies UI rendering of truncated tool parameters.
+- Verifies `/approve` reflex routing through `ReflexRegistry`.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `mvn test -pl arcclaw-app -Dtest=ChatCommandApprovalTest`
+- ✅ `mvn test -pl arcclaw-app -Dtest=LangChainReasoningEngineTest` (fixed import)
+
+### Manual Verification
+- ✅ Verified `terminateSession()` position in `finally` block via source audit.

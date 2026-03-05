@@ -225,6 +225,7 @@ quarkus:
 # =============================================================================
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
+  auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
   security:
     prompt-injection:
       enabled: true

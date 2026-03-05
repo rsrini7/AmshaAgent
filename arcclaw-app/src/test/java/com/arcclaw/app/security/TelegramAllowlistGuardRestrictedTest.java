@@ -18,7 +18,14 @@ class TelegramAllowlistGuardRestrictedTest {
     public static class RestrictedProfile implements QuarkusTestProfile {
         @Override
         public Map<String, String> getConfigOverrides() {
-            return Map.of("arcclaw.telegram.allowed-users", "Alice,@Bob,charlie");
+            return Map.of(
+                "arcclaw.auto-seed-secrets",                     "false",
+                "quarkus.profile",                               "test",
+                "arcclaw.vault.pepper",                          "safe-pepper-for-boot-000000000000",
+                "arcclaw.audit.hmac-key",                        "safe-hmac-key-for-boot-000000000",
+                "arcclaw.telegram.allowed-users", "Alice,@Bob,charlie",
+                "arcclaw.channel.telegram.allowed-user-ids",     ""
+            );
         }
     }
 

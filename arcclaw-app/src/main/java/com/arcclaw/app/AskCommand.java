@@ -1,5 +1,7 @@
 package com.arcclaw.app;
 
+import java.util.UUID;
+
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
@@ -7,14 +9,11 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.DevSecretSeeder;
 
-import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
-
-import java.util.UUID;
 
 /**
  * CLI one-shot mode — runs the agent reasoning loop for a single goal
@@ -48,7 +47,7 @@ public class AskCommand implements Runnable {
     ReasoningEngine reasoningEngine;
 
     @Inject
-    Instance<DevSecretSeeder> devSeeder;
+    DevSecretSeeder devSeeder;
 
     @Override
     @ActivateRequestContext
@@ -59,9 +58,7 @@ public class AskCommand implements Runnable {
                 CliAgentObserver.enabled = true;
 
                 // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
-                if (!devSeeder.isUnsatisfied()) {
-                    devSeeder.get().seedDevSecrets();
-                }
+                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
                 AgentResult result = agentLoop.run(sessionId, role, goal,
                         reasoningEngine, 5);

@@ -1,5 +1,13 @@
 package com.arcclaw.core.api;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
+
 import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
@@ -17,25 +25,25 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.quarkus.virtual.threads.VirtualThreads;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.jboss.logging.MDC;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Path("/sessions")
@@ -73,7 +81,7 @@ public class AgentResource {
     java.util.concurrent.ExecutorService vThreads;
 
     @Inject
-    Instance<DevSecretSeeder> devSeeder;
+    DevSecretSeeder devSeeder;
 
     @POST
     public Response createSession() {
@@ -94,9 +102,8 @@ public class AgentResource {
 
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
-                if (!devSeeder.isUnsatisfied()) {
-                    devSeeder.get().seedDevSecrets();
-                }
+
+                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
                 return WorkspaceContext.run(
                         sessionId, "rest:sync", null, AutonomyLevel.SUPERVISED, request.agentRole(),
@@ -164,9 +171,7 @@ public class AgentResource {
                     return;
                 }
 
-                if (!devSeeder.isUnsatisfied()) {
-                   devSeeder.get().seedDevSecrets();
-                }
+                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
                 AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
 

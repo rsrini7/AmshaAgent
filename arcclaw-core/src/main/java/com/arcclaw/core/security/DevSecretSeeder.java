@@ -3,24 +3,26 @@ package com.arcclaw.core.security;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
-import io.quarkus.arc.profile.IfBuildProfile;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * Dev-only service that seeds host OS environment variables into the
- * SecretVault when a workspace session becomes active.
+ * Seeds host OS environment variables into the SecretVault when a workspace
+ * session becomes active.
  * <p>
- * Stripped entirely from the production JAR and Native Image by
- * {@code @IfBuildProfile("dev")} — this code cannot execute in production.
+ * Controlled by {@code arcclaw.auto-seed-secrets} (default: {@code false}).
+ * Set {@code ARCCLAW_AUTO_SEED_SECRETS=true} in your {@code .env} to enable.
  * <p>
  * Seeding is idempotent: if the vault already contains the key for the
  * current session, the host environment is not read again.
+ * <p>
+ * Safe in production: when {@code arcclaw.auto-seed-secrets=false} (the default),
+ * {@code seedDevSecrets()} is a no-op regardless of environment variables present.
  */
 @ApplicationScoped
-@IfBuildProfile("dev")
 public class DevSecretSeeder {
 
     @Inject
@@ -29,57 +31,63 @@ public class DevSecretSeeder {
     @Inject
     SecretVault secretVault;
 
+    @ConfigProperty(name = "arcclaw.auto-seed-secrets", defaultValue = "false")
+    boolean autoSeedEnabled;
+
     /**
-     * Call this AFTER {@code WorkspaceScopeHolder.set(sessionId)} is active.
-     * Seeds known developer tool tokens from the host environment into the
+     * Call this AFTER {@code WorkspaceContext.run()} is active.
+     * Seeds known tool tokens from the host environment into the
      * encrypted vault for the current session.
+     * <p>
+     * No-op if {@code arcclaw.auto-seed-secrets=false}.
      */
     public void seedDevSecrets() {
+        if (!autoSeedEnabled) {
+            log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). Skipping.");
+            return;
+        }
         seedFromHostEnv("GITHUB_TOKEN");
-        // Add other dev tool env vars here as needed
+        // Add other tool env vars here as needed
     }
 
-    @SuppressWarnings("unused")
     private void seedFromHostEnv(String vaultKeyName) {
         // Idempotency check — avoid re-deriving Argon2id key on every message
         try {
             var optionalKey = secretVault.get(vaultKeyName);
             if (optionalKey.isPresent()) {
                 // CRITICAL SECURITY PATTERN: Heap Privacy
-                // We must close the VaultKey to zero-out the decrypted byte array!
-                // The variable 'key' is intentionally unused; the try-with-resources 
-                // block forces the JVM to immediately call key.close() and scrub RAM
-                // to prevent plaintext exposure during a memory dump.
-                try (VaultKey key = optionalKey.get()) {
-                    log.debugf("Dev DX: %s already in vault for this session, skipping seed.", vaultKeyName);
+                // Close VaultKey immediately to zero-out the decrypted byte array
+                // and prevent plaintext exposure during a memory dump.
+                try (VaultKey _ = optionalKey.get()) {
+                    log.debugf("Secret seeder: %s already in vault for this session, skipping.", vaultKeyName);
                 }
                 return;
             }
         } catch (Exception e) {
-            log.debugf("Dev DX: vault check for %s failed (%s), proceeding to seed.",
+            log.debugf("Secret seeder: vault check for %s failed (%s), proceeding to seed.",
                     vaultKeyName, e.getMessage());
         }
 
-        // Use Quarkus ConfigProvider instead of System.getenv(). 
-        // This natively parses the .env file and OS environment variables safely.
+        // Use Quarkus ConfigProvider — reads from .env (via DotenvConfigSourceProvider),
+        // system properties, and OS environment variables in priority order.
         String hostValue = ConfigProvider.getConfig()
                 .getOptionalValue(vaultKeyName, String.class)
                 .orElse(null);
 
         if (hostValue == null || hostValue.isBlank()) {
-            log.warnf("Dev DX: %s not found in Config Provider or .env file. " +
-                      "Provide it manually via Telegram /store command.", vaultKeyName);
+            log.warnf("Secret seeder: %s not found in config or .env. " +
+                      "Provide it manually via the vault tool.", vaultKeyName);
             return;
         }
 
         byte[] secretBytes = hostValue.getBytes(StandardCharsets.UTF_8);
         try {
             secretVault.store(vaultKeyName, secretBytes);
-            log.infof("Dev DX: Seeded %s into SecretVault from local config.", vaultKeyName);
+            log.infof("Secret seeder: %s seeded into SecretVault from config.", vaultKeyName);
         } catch (Exception e) {
-            log.warnf("Dev DX: Failed to seed %s into vault: %s", vaultKeyName, e.getMessage());
+            log.warnf("Secret seeder: failed to seed %s into vault: %s", vaultKeyName, e.getMessage());
         } finally {
-            // Instantly zero the raw bytes before garbage collection
+            // Zero the raw bytes before garbage collection
             Arrays.fill(secretBytes, (byte) 0);
         }
     }
