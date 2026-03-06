@@ -19,8 +19,15 @@ public class DestructiveVocabularyFilter {
 
     private static final Logger Log = Logger.getLogger(DestructiveVocabularyFilter.class);
 
-    private static final Pattern DESTRUCTIVE_PATTERN = Pattern.compile(
-            "(?i)\\b(delete|purge|drop|rm\\s*-rf|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+    // Single-word destructive tokens — word boundary anchoring is reliable here
+    private static final Pattern DESTRUCTIVE_WORDS = Pattern.compile(
+            "(?i)\\b(delete|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+    );
+
+    // rm -rf variants — word boundary unreliable for multi-word tokens
+    // Match: rm-rf, rm -rf, rm  -rf, rm\t-rf, rmrf (no separator)
+    private static final Pattern RM_RF_PATTERN = Pattern.compile(
+            "(?i)\\brm\\s*-?\\s*rf\\b"
     );
 
     private static final Set<AgentRoleEnum> EXEMPT_ROLES = Set.of(AgentRoleEnum.DEBUGGER);
@@ -44,7 +51,8 @@ public class DestructiveVocabularyFilter {
         // Rule: if the role has ANY tool capabilities, it must pass the destructive check.
         if (!EXEMPT_ROLES.contains(resolvedRole)
             && !resolvedRole.definition().capabilities().isEmpty() &&
-                DESTRUCTIVE_PATTERN.matcher(userMessage).find()) {
+                (DESTRUCTIVE_WORDS.matcher(userMessage).find()
+                        || RM_RF_PATTERN.matcher(userMessage).find())) {
             Log.warnf("Destructive vocabulary detected in message routed to '%s' (%s). " +
                     "Overriding to 'coordinator' with no-tool mode.",
                     role, resolvedRole.toScopedName());

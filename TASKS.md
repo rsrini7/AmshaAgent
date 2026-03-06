@@ -724,3 +724,24 @@
 - [x] Verify: CLI identity check for all roles (Shiva, Vishnu, Saraswati, Brahma) <!-- id: 244 -->
 
 
+
+# Phase 51 P3-13 — ArcClawCli Fail Fast ✅
+- [x] Uncomment data directory path logging <!-- id: 245 -->
+- [x] Catch directory creation exceptions and fail fast via System.exit(1) <!-- id: 246 -->
+- [x] Print FATAL error message with path, cause, and fix <!-- id: 247 -->
+- [x] Verify: Manual test with permission failure confirms exit code 1 <!-- id: 248 -->
+
+# Phase 51 P3-4 — Compaction maxTokens Fix ✅
+- [x] Implement configurable `arcclaw.memory.compaction.max-tokens` property in `CompactionModelProducer.java` <!-- id: 249 -->
+- [x] Increase default `maxTokens` to 1024 <!-- id: 250 -->
+- [x] Add property to `application.yaml` <!-- id: 251 -->
+- [x] Verify: Grep check confirms hardcoded 256 is removed <!-- id: 252 -->
+
+# Phase 51 P3-3 — DestructiveVocabularyFilter Regex & Typo Fix ✅
+- [x] Split destructive regex into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN` <!-- id: 253 -->
+- [x] Update `DestructiveVocabularyFilter.filter()` to check both patterns <!-- id: 254 -->
+- [x] Correct "Brihaspati" typo in `IntentClassifierService.sanitize()` (with fallback) <!-- id: 255 -->
+- [x] Correct "Brihaspati" typo in `AgentRoleEnum.fromString()` (with fallback) <!-- id: 256 -->
+- [x] Create `DestructiveVocabularyFilterTest` (8 tests) <!-- id: 257 -->
+- [x] Add `brihaspati` mapping tests to `IntentClassifierServiceTest` <!-- id: 258 -->
+- [x] Verify: All 12 new/updated security and routing tests pass <!-- id: 259 -->

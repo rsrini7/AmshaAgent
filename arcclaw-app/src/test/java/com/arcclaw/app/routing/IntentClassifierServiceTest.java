@@ -179,4 +179,18 @@ public class IntentClassifierServiceTest {
         org.mockito.Mockito.verify(classifierModel, org.mockito.Mockito.times(1)).chat(anyString());
         Assertions.assertEquals("researcher", role);
     }
+
+    @Test
+    void testBrihaspatiSpellingMapsToArchitect() {
+        when(classifierModel.chat(anyString())).thenReturn("brihaspati");
+        String role = service.classify("design the new cloud architecture");
+        Assertions.assertEquals("architect", role);
+    }
+
+    @Test
+    void testBrahaspatiSpellingStillMapsToArchitect() {
+        when(classifierModel.chat(anyString())).thenReturn("brahaspati");
+        String role = service.classify("plan the database schema");
+        Assertions.assertEquals("architect", role);
+    }
 }

@@ -65,6 +65,7 @@
 | **Test** | `Failed to start quarkus` | Validator halts app via `@Observes StartupEvent` before test context initializes. | **Safe Boot + Proper Unwrap**: Boot with `test` profile (safe), then use `ClientProxy.unwrap()` to override fields before manual call. |
 | **CDI** | Test field overrides ignored | `@Inject` provides a Client Proxy; modifications to its fields have no effect on the bean. | Use `io.quarkus.arc.ClientProxy.unwrap(bean)` to access and modify the actual implementation instance. |
 | **Build** | `cannot find symbol` (Core) | `-pl arcclaw-app` used without `-am` after core changes. | Add `-am` (also-make) flag to rebuild dependency modules. |
+| **Security** | Regex Boundary Failure | `\b` fails on `rm -rf` due to space/dash. | Split pattern into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN` (`(?i)rm\s*-rf`). |
  
 ---
 
@@ -303,7 +304,12 @@ given().port(9001).when().get("/q/health/live").then().statusCode(200);
 ### 🔴 Failure: Ephemeral Env-File Not Deleted
 **Symptom:** `.env` files accumulate in `java.io.tmpdir`.
 **Root Cause:** JVM crash or force-kill before `finally` block executes.
-**Resolution:** Monitor `/tmp/zc-*.env` files. They contain no secrets after process exit (overwritten by `clearSecretsFromMemory()`). Clean up manually if needed.
+**Resolution:**- Monitor `/tmp/zc-*.env` files. They contain no secrets after process exit (overwritten by `clearSecretsFromMemory()`). Clean up manually if needed.
+
+### 🔴 Failure: Regex Word Boundary Failure (`rm -rf`)
+**Symptom:** Destructive command `rm -rf` or `rm-rf` is not detected by the `DestructiveVocabularyFilter` despite being in the pattern.
+**Root Cause:** The `\b` word boundary anchor in Java regex maps to the transition between `\w` (word) and `\W` (non-word). In `rm -rf`, the space and dash are non-word characters, causing `\b` to anchor at "rm" and "rf" separately rather than the full token.
+**Resolution:** Split the destructive pattern. Use `\b(word|word)\b` for single-word tokens and a dedicated un-anchored or custom-anchored pattern like `(?i)rm\s*-rf` for multi-word tokens.
 
 ### 🔴 Failure: `TestEngine failed to discover tests` (Quarkus Augmentation)
 **Symptom:** `WorkspaceScopeContext cannot be resolved to a type` during `@QuarkusTest` discovery.
@@ -3117,5 +3123,38 @@ The retry failure is the real bug — AsyncPersistenceEngine exhausted retries o
 // ❌ WRONG (will only find beans with @Default)
 @Inject Instance<Agent> agents;
 ```
+
+---
+
+## 20. File System & Memory Capacity Troubleshooting (Phase 51)
+
+### 🔴 Failure: Application Startup Fails with "FATAL: Failed to create data directory"
+
+**Symptoms:** The application exits immediately with a red `❌ FATAL` error message: `[ArcClaw] ❌ FATAL: Failed to create data directory.`
+
+**Cause:** The application lacks permission to create the required data directory or the path is invalid. This typically happens when running in a restricted environment or if the `ARCCLAW_DATA_DIR` environment variable points to a non-existent or read-only path.
+
+**Fix:**
+1.  Ensure the user running the application has write permissions to the parent directory.
+2.  If the default path is restricted, specify a writable directory via the `ARCCLAW_DATA_DIR` environment variable:
+    ```powershell
+    $env:ARCCLAW_DATA_DIR = "C:\writable\path"
+    .\arcclaw-cli.ps1 serve
+    ```
+
+### 🔴 Failure: Compaction Summaries are Truncated or Incomplete
+
+**Symptoms:** Long conversation histories are summarized poorly, or the summary feels abruptly cut off.
+
+**Cause:** The `maxTokens` limit for the compaction model is too low. The default was increased to 1024 in Phase 51, but extremely long histories might still exceed this limit.
+
+**Fix:** Increase the `arcclaw.memory.compaction.max-tokens` property in `application.yaml` or via an environment variable:
+```yaml
+arcclaw:
+  memory:
+    compaction:
+      max-tokens: 2048
+```
+
 
 

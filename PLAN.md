@@ -2731,3 +2731,81 @@ Resolved the "Identity Crisis" where all agents identified as the Coordinator. R
 
 
 
+
+---
+
+# Phase 51 P3-13 — ArcClawCli Fail Fast ✅
+
+Implement fail-fast logic for data directory creation to prevent confusing downstream errors when the application lacks filesystem permissions.
+
+## Proposed Changes
+
+### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [MODIFY] [ArcClawCli.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java)
+- Uncommented data directory path logging for transparency.
+- Updated `main()` to catch directory creation failures, print a fatal error message with a suggested fix, and call `System.exit(1)`.
+
+## Verification
+- ✅ Manual verification results in immediate exit with clear error message when directory creation is blocked by permissions.
+
+---
+
+# Phase 51 P3-4 — Compaction Model maxTokens Fix ✅
+
+Increase the default token limit for the compaction model and make it configurable to ensure conversation summaries are not truncated.
+
+## Proposed Changes
+
+### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [MODIFY] [CompactionModelProducer.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java)
+- Added `arcclaw.memory.compaction.max-tokens` config property (default 1024).
+- Replaced hardcoded `.maxTokens(256)` with the new property.
+
+#### [MODIFY] [application.yaml](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+- Added `arcclaw.memory.compaction.max-tokens: 1024` under the compaction section.
+
+---
+
+# Phase 51 P3-3 — DestructiveVocabularyFilter Regex & Typo Fix ✅
+
+Fix defects in the destructive command filter and correct the "Brihaspati" deity misspelling to ensure accurate role routing.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Regex Boundary Strategy**: Conventional `\b` word boundaries fail on multi-word tokens like `rm -rf` when they contain spaces/punctuation. Splitting the pattern into single-word tokens (`\b(delete|...)\b`) and a dedicated `rm -rf` pattern (`(?i)rm\s*-rf`) ensures reliable detection.
+
+> [!TIP]
+> **Backward Compatibility**: To avoid breaking existing LLM completions and prompts while correcting the "Brihaspati" typo, we maintain the misspelled "brahaspati" as a fallback in both the `IntentClassifierService` and `AgentRoleEnum`.
+
+## Proposed Changes
+
+### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [MODIFY] [DestructiveVocabularyFilter.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/DestructiveVocabularyFilter.java)
+- Split `DESTRUCTIVE_PATTERN` into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN`.
+- Updated `filter()` to perform a logical OR between both patterns.
+
+#### [MODIFY] [IntentClassifierService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Updated `sanitize()` to include `brihaspati` mapping to `architect`.
+
+### [arcclaw-core](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core)
+
+#### [MODIFY] [AgentRoleEnum.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRoleEnum.java)
+- Updated `fromString()` to include `brihaspati` in the `ARCHITECT` case.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ **New** `DestructiveVocabularyFilterTest`: 8 tests covering `rm -rf` variants and role exemptions.
+- ✅ `RoleDefinitionTest`: Added assertion for `brihaspati`.
+- ✅ `IntentClassifierServiceTest`: Added `testBrihaspatiSpellingMapsToArchitect`.
+
+```bash
+.\mvnw.cmd test -pl arcclaw-app -am -Dtest=com.arcclaw.app.security.DestructiveVocabularyFilterTest
+```
+
+## Verification
+- ✅ `grep` verification confirms original hardcoded value is removed and replaced with the configuration property.

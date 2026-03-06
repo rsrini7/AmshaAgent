@@ -88,7 +88,7 @@ public enum AgentRoleEnum {
         String normalized = roleStr.trim().toLowerCase();
 
         return switch (normalized) {
-            case "architect", "brahaspati" -> ARCHITECT;
+            case "architect", "brihaspati", "brahaspati" -> ARCHITECT;
             case "coordinator", "vishnu" -> COORDINATOR;
             case "researcher", "saraswati" -> RESEARCHER;
             case "coder", "brahma" -> CODER;

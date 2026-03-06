@@ -54,12 +54,14 @@
 | 47.3 | Agent State Machine Refactor (Tier 3/3A)| 100% success | Extracted loop from AgentLoop; fixed engine delegation & context |
 | 48 | Telegram Bot Refactor | 100% success | Removed tokens from URIs, component configuration |
 | 49 | Intent & Governance Hardening | 100% success | Prompt injection delimiters + Pathological zero-token guard |
-| 51 | Telegram Route Self-Registration| 100% success | `@Observes StartupEvent` in RouteBuilder |
-| 52 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
-| 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
-| 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
 | 50 | CLI Approval Flow (P2-1) | 100% success | Heartbeats, truncated params, SUPERVISED mode |
 | 50 | CronStatus Enum (P2-4) | 100% success | Type-safe enum for agent cron status |
+| 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
+| 51 | Fail Fast & Compaction Fix | Manual | Exit code 1 on permission failure |
+| 51 | Telegram Route Self-Registration| 100% success | `@Observes StartupEvent` in RouteBuilder |
+| 51 | Destructive Regex & Typo Fix (P3-3) | 100% success | Split regex for `rm -rf` + corrected "Brihaspati" |
+| 52 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
+| 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
 
 ---
 
@@ -1316,6 +1318,29 @@ Secured the CLI developer experience by implementing interactive heartbeats and 
 
 ---
 
+## Phase 51 P3-3: DestructiveVocabularyFilter Regex & Typo Fix ✅
+
+Corrected regex word boundary issues and fixed the "Brihaspati" deity misspelling.
+
+### Component 1: DestructiveVocabularyFilter Regex Split
+The original regex `\b(delete|...|rm\s*-rf|...)\b` failed on variants like `rm -rf` because the space/dash tokens didn't satisfy word boundaries in all cases.
+
+- **Solution**: Split into `DESTRUCTIVE_WORDS` for single tokens and `RM_RF_PATTERN` for `rm -rf` variants.
+- **Result**: `rm -rf`, `rm-rf`, and `RM -RF` are now reliably caught.
+
+### Component 2: Brihaspati Typo Correction
+Corrected the spelling of the "Architect" deity from "brahaspati" to "brihaspati" while maintaining the old spelling as a fallback for LLM compatibility.
+
+- **Files Modified**: `IntentClassifierService.java`, `AgentRoleEnum.java`, `RoleDefinitionTest.java`, `IntentClassifierServiceTest.java`.
+
+### Tests Verified
+- ✅ **DestructiveVocabularyFilterTest**: Covered `rm -rf` (space), `rm-rf` (dash), `RM -RF` (case), and `debugger` (exemption).
+- ✅ **IntentClassifierServiceTest**: Verified `brihaspati` -> `architect` mapping and `brahaspati` -> `architect` fallback.
+on input, and during approval states.
+- ✅ `LangChainReasoningEngineTest` fixed to resolve `MessageTag` symbol errors.
+
+---
+
 ## Phase 50 P2-3 — MemorySearchTool FTS Null Safety + Empty Result Handling ✅
 
 Addressed edge cases in the memory retrieval system where FTS unavailability (especially on cold start before the connection interceptor attaches the schema) would crash the agent loop instead of failing gracefully.
@@ -1417,3 +1442,59 @@ Fixed the issue where agents incorrectly identified as the Coordinator. The syst
 
 
 
+
+---
+
+## Phase 51 P3-13 — ArcClawCli Fail Fast ✅
+
+### Changes Made
+
+#### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [ArcClawCli.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java)
+
+- Updated `main()` to print the target data directory path on startup.
+- Implemented a `catch` block that triggers on data directory creation failure.
+- The `catch` block now prints a clear `❌ FATAL` message with the path, cause, and a suggested fix, then calls `System.exit(1)` to prevent Quarkus from booting in an invalid state.
+
+### Verification Results
+
+#### Manual Verification
+1. Created a directory `C:\no-permissions-dir` and denied write access using `icacls`.
+2. Set `ARCCLAW_DATA_DIR` to `C:\no-permissions-dir\data`.
+3. Ran `.\arcclaw-cli.ps1 serve`.
+4. **Result:** The application printed the following error and exited immediately with exit code 1:
+```text
+[ArcClaw] Data dir: C:\no-permissions-dir\data
+[ArcClaw] ❌ FATAL: Failed to create data directory.
+[ArcClaw]    Path: C:\no-permissions-dir\data
+[ArcClaw]    Cause: C:\no-permissions-dir\data
+[ArcClaw]    Fix: ensure the directory is writable or set ARCCLAW_DATA_DIR.
+```
+
+---
+
+## Phase 51 P3-4 — Compaction maxTokens Fix ✅
+
+### Changes Made
+
+#### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [CompactionModelProducer.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java)
+
+- Increased the default `maxTokens` for the compaction model from 256 to 1024.
+- Added `@ConfigProperty(name = "arcclaw.memory.compaction.max-tokens", defaultValue = "1024") int compactionMaxTokens`.
+- Replaced the hardcoded `.maxTokens(256)` with `.maxTokens(compactionMaxTokens)`.
+
+#### [application.yaml](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/resources/application.yaml)
+
+- Added the new configuration property under the `arcclaw.memory.compaction` section with a default value of `1024`.
+
+### Verification Results
+
+#### Manual Verification
+1.  **Grep Check:**
+    - `grep -n "maxTokens(256)" arcclaw-app/src/main/java` → **0 results**
+    - `grep -n "maxTokens(compactionMaxTokens)" arcclaw-app/src/main/java` → **Verified in `CompactionModelProducer.java`**
+2.  **Config Check:**
+    - Verified that `application.yaml` correctly reflects the 1024 token limit for compaction.
