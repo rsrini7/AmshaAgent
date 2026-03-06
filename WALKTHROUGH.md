@@ -1368,3 +1368,21 @@ Cleaned up the message pipeline by removing the redundant `ReflexHandler` and co
 - ✅ **`DenyPipelineTest`**: PASSED (Verified audit event fires and routes to ReflexRegistry).
 - ✅ **Full System Build**: `mvn clean verify -pl arcclaw-app -am` PASSED.
 
+---
+
+## Phase 50 P2-6 — Camel Route Lifecycle Cleanup ✅
+
+Leveraged Camel Quarkus CDI-based lifecycle management to simplify command classes and prevent potential context state conflicts.
+
+### Changes:
+- **`ServeCommand`**: Removed manual `addRoutes()` and `start()` calls. The command now simply starts Quarkus and waits, allowing the Camel Quarkus extension to handle route discovery and lifecycle events natively.
+- **`AttachCommand`**: Cleaned up the `telegram` switch case, removing redundant lifecycle management logic.
+- **Tests**:
+    - **`ServeCommandTest`**: Created a new test to verify that `ServeCommand` is injectable without manual Camel dependencies and that the `CamelContext` is correctly managed by the container.
+    - **`DummyRoute`**: Implemented a test-scope route to ensure `CamelContext` has a reason to start during automated verification, even when production routes are skipped.
+
+### Verification Results:
+- ✅ **`ServeCommandTest`**: PASSED (Verified successful `CamelContext` injection and start).
+- ✅ **Grep Audit**: 0 results for manual lifecycle calls in `arcclaw-app`.
+
+

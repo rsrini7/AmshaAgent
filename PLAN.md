@@ -2648,3 +2648,40 @@ Remove `ReflexHandler` (priority 20) and consolidate all `/deny` logic in `Comma
 - ✅ `DenyPipelineTest` passes.
 - ✅ `mvn clean verify -pl arcclaw-app -am` succeeds.
 
+---
+
+# Phase 50 P2-6 — Camel Route Lifecycle Cleanup ✅
+
+Remove manual `camelContext.start()` and `camelContext.addRoutes()` calls to leverage Camel Quarkus's native CDI-based lifecycle management and auto-discovery.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Container Managed Lifecycle**: Camel Quarkus auto-discovers all `@ApplicationScoped RouteBuilder` beans and manages their attachment and the `CamelContext` start/stop cycle via Quarkus lifecycle events. Manual management is redundant and risks double-registration.
+
+## Completed Changes
+
+### App Module — CLI Commands
+
+#### [MODIFY] [ServeCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ServeCommand.java)
+- Removed `CamelContext` and `TelegramChannelRoute` injection.
+- Removed manual `addRoutes()` and `start()` logic.
+
+#### [MODIFY] [AttachCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java)
+- Removed manual Camel lifecycle management from the `telegram` switch case.
+
+### App Module — Tests
+
+#### [NEW] [ServeCommandTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/ServeCommandTest.java)
+- Verifies `ServeCommand` is injectable without Camel dependencies.
+- Verifies `CamelContext` is functional and manageable via Quarkus CDI.
+
+#### [NEW] [DummyRoute.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/DummyRoute.java)
+- Added to `src/test/java` to ensure `CamelContext` has a route to start during tests (when `TelegramChannelRoute` is skipped).
+
+## Verification
+
+- ✅ `ServeCommandTest` passes.
+- ✅ Grep audit: 0 results for `camelContext.start()` and `camelContext.addRoutes()` in production code.
+
+

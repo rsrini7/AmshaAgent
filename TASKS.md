@@ -708,3 +708,9 @@
 - [x] Integrate `/deny` audit trail via `ReflexRegistry` exclusively <!-- id: 232 -->
 - [x] Verify: `DenyPipelineTest` passes (handled CLI allowlist and dynamic session IDs) <!-- id: 233 -->
 
+# Phase 50 P2-6 — Camel Route Lifecycle Cleanup ✅
+- [x] Remove manual `camelContext.start()` and `addRoutes()` from `ServeCommand` <!-- id: 234 -->
+- [x] Remove manual `camelContext.start()` and `addRoutes()` from `AttachCommand` <!-- id: 235 -->
+- [x] Verify: `ServeCommandTest` passes (Camel Quarkus auto-discovery confirmed) <!-- id: 236 -->
+- [x] Grep audit: 0 results for manual Camel lifecycle calls in production code <!-- id: 237 -->
+
