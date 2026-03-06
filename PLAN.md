@@ -2532,3 +2532,39 @@ Bridges the functional gap between REST and CLI by ensuring CLI sessions persist
 
 ### Manual Verification
 - ✅ Verified `terminateSession()` position in `finally` block via source audit.
+
+---
+
+# Phase 50 P2-3 — MemorySearchTool FTS Null Safety + Empty Result Handling ✅
+
+Gracefully handle FTS index unavailability on cold start and empty result sets so the LLM continues effectively rather than halting.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Graceful Degradation**: If the FTS table is not yet attached during a cold start ("no such table: fts.compaction_summary_fts"), the `MemorySearchTool` catches the exception and returns a success response to the LLM indicating memory is temporarily unavailable. 
+
+> [!NOTE]
+> **Defensive Programming**: An empty result set now explicitly returns a descriptive message instructing the LLM to proceed with the current context, preventing hallucinations from empty strings.
+
+## Proposed Changes
+
+### Core Module — Tools
+
+#### [MODIFY] [MemorySearchTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/MemorySearchTool.java)
+- Wrapped FTS search in `try-catch` to isolate exceptions.
+- Added null/blank check on result set returning "No relevant memory found".
+- Mapped "no such table" or "fts" exceptions to `ToolResponse.success` indicating temporary unavailability.
+- Mapped generic exceptions to `ToolResponse.failure`.
+
+### Tests
+
+#### [MODIFY] [MemorySearchToolTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/tools/MemorySearchToolTest.java)
+- Added `testEmptyFtsResultReturnsGracefulMessage`
+- Added `testFtsUnavailableReturnsGracefulMessage`
+- Added `testFtsGenericExceptionReturnsFailure`
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `mvnw test -pl arcclaw-core -Dtest=MemorySearchToolTest` tests pass successfully.

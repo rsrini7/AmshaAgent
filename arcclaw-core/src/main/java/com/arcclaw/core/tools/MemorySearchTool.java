@@ -89,7 +89,19 @@ public class MemorySearchTool implements AgentTool {
             }
 
             // 4. Search
-            List<CompactionSummaryEntity> results = repository.searchMemory(userId, query, 5);
+            List<CompactionSummaryEntity> results;
+            try {
+                results = repository.searchMemory(userId, query, 5);
+            } catch (Exception e) {
+                String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                if (msg.contains("no such table") || msg.contains("fts")) {
+                    log.warnf("FTS index unavailable for session %s: %s", sessionId, msg);
+                    return ToolResponse.success(
+                        "Memory index temporarily unavailable. Proceed with current context.");
+                }
+                log.errorf(e, "MemorySearchTool failed for session %s", sessionId);
+                return ToolResponse.failure(500, "Memory search failed: " + msg);
+            }
 
             // 5. Audit
             auditService.record(sessionId, userId, "tool",
@@ -97,8 +109,9 @@ public class MemorySearchTool implements AgentTool {
                     "tool=memory_search query_length=" + query.length());
 
             // 6. Format results
-            if (results.isEmpty()) {
-                return ToolResponse.success("No relevant past sessions found for: " + query);
+            if (results == null || results.isEmpty()) {
+                return ToolResponse.success("No relevant memory found for query: " + query + 
+                                            ". Proceed with current context only.");
             }
 
             String formatted = results.stream()
@@ -106,14 +119,15 @@ public class MemorySearchTool implements AgentTool {
                             r.sessionId, r.createdAt, r.summary))
                     .collect(Collectors.joining("\n---\n"));
 
+            if (formatted.isBlank()) {
+                return ToolResponse.success("No relevant memory found for query: " + query + 
+                                            ". Proceed with current context only.");
+            }
+
             return ToolResponse.success(formatted);
 
         } catch (SecurityException e) {
             throw e; // re-throw security exceptions — must not be swallowed
-        } catch (Exception e) {
-            String sessionId = WorkspaceScopeHolder.getIfActive();
-            log.warnf(e, "[MemorySearchTool] Search failed for session=%s", sessionId);
-            return ToolResponse.success("Memory search failed: " + e.getMessage());
         }
     }
 }

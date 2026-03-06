@@ -1311,3 +1311,21 @@ Secured the CLI developer experience by implementing interactive heartbeats and 
 - ✅ `ChatCommandApprovalTest` captures and asserts the `⏸ Approval needed...` output.
 - ✅ Heartbeats verified at session start, on input, and during approval states.
 - ✅ `LangChainReasoningEngineTest` fixed to resolve `MessageTag` symbol errors.
+
+---
+
+## Phase 50 P2-3 — MemorySearchTool FTS Null Safety + Empty Result Handling ✅
+
+Addressed edge cases in the memory retrieval system where FTS unavailability (especially on cold start before the connection interceptor attaches the schema) would crash the agent loop instead of failing gracefully.
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| [MemorySearchTool.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/tools/MemorySearchTool.java) | Implements null safety and `try-catch` guards for FTS exceptions. |
+| [MemorySearchToolTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/tools/MemorySearchToolTest.java) | Added assertions for graceful success responses on FTS failure. |
+
+**Verification**:
+- ✅ `testEmptyFtsResultReturnsGracefulMessage` prevents LLM hallucinations on empty context.
+- ✅ `testFtsUnavailableReturnsGracefulMessage` allows the agent to safely proceed when the FTS schema is detached.
+- ✅ `testFtsGenericExceptionReturnsFailure` ensures true hardware/SQL faults still fail the tool execution.
