@@ -9,6 +9,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.InstantToTextConverter;
 import com.cronutils.model.Cron;
 import com.cronutils.model.CronType;
@@ -210,7 +211,7 @@ public class ScheduleTaskTool implements AgentTool {
         entity.runOnce        = runOnce;
         entity.goal           = "CRON: " + goal;   // Prefix to prevent fork bomb
         entity.nextFireTime   = nextFireTime;
-        entity.status         = "ACTIVE";
+        entity.status         = CronStatus.ACTIVE;
         entity.createdAt      = Instant.now();
 
 

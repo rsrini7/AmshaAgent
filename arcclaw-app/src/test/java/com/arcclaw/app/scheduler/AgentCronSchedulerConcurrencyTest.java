@@ -26,6 +26,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CronStatus;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -85,7 +86,7 @@ class AgentCronSchedulerConcurrencyTest {
         e.runOnce = runOnce;
         e.goal = "CRON: Test goal";
         e.nextFireTime = Instant.now();
-        e.status = "ACTIVE";
+        e.status = CronStatus.ACTIVE;
         return e;
     }
 

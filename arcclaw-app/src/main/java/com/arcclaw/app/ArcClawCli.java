@@ -5,7 +5,6 @@ import java.nio.file.Path;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
-import com.arcclaw.app.util.CliUtils;
 
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -43,10 +42,8 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
     public static void main(String... args) {
 
         // Load .env manually — Quarkus config system hasn't started yet
-        // so System.getenv() cannot see .env entries at this point.
-        // CliUtils.loadDotEnv(); // May need when we load .env file path to create dir in diff location.
-
-        CliUtils.validateRequiredEnvVars(); 
+        // CliUtils.loadDotEnv();
+        // CliUtils.validateRequiredEnvVars(); 
 
          try {
             String dataDir = System.getProperty("ARCCLAW_DATA_DIR",
