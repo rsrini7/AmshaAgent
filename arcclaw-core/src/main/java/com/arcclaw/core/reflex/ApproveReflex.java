@@ -139,19 +139,17 @@ public class ApproveReflex implements AgentReflex {
             return "❌ This task is not awaiting approval (status=" + cron.status + ").";
         }
 
-        // // FIX: look up the actual checkpoint to get the real cronSessionId
-        // // instead of reconstructing it from cron.lastDeliveryId which may be stale
-        // var pendingCheckpoint = statefulAgentStore
-        //         .findLatestAwaitingApprovalForCron(cronId)
-        //         .orElse(null);
+        // Look up the actual checkpoint to get the real cronSessionId
+        // instead of reconstructing it from cron.lastDeliveryId which may be stale
+        var pendingCheckpoint = statefulAgentStore
+                .findLatestAwaitingApprovalForCron(cronId)
+                .orElse(null);
 
-        // if (pendingCheckpoint == null) {
-        //     return "❌ No pending checkpoint found for this task. It may have already been processed.";
-        // }
+        if (pendingCheckpoint == null) {
+            return "❌ No pending checkpoint found for this task. It may have already been processed.";
+        }
 
-        // String cronSessionId = pendingCheckpoint.getSessionId(); // ← actual sessionId
-
-        String cronSessionId = "cron-" + cron.id + "-" + cron.lastDeliveryId;
+        String cronSessionId = pendingCheckpoint.getSessionId(); // ← actual sessionId
 
         AgentResult result = WorkspaceContext.run(
                 cronSessionId, cron.userId, cron.chatId,

@@ -299,7 +299,7 @@ public class AgentCronScheduler {
             boolean isAwaitingApproval = cronRepository
                     .findByUserId(uid)
                     .stream()
-                    .filter(c -> c.id.equals(cronSessionId))
+                    .filter(c -> c.id.equals(job.id))
                     .findFirst()
                     .map(c -> CronStatus.AWAITING_APPROVAL.equals(c.status))
                     .orElse(false);
