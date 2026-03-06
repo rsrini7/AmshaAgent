@@ -25,7 +25,7 @@ class TelegramAgentHandlerTest {
     private TelegramChannelSender sender;
 
     @BeforeEach
-    void setup() {
+    void setup() throws Exception {
         pipeline = mock(MessagePipeline.class);
         executor = mock(ManagedExecutor.class);
         mapper = mock(TelegramMessageMapper.class);
@@ -37,11 +37,21 @@ class TelegramAgentHandlerTest {
         handler.messageMapper = mapper;
         handler.sender = sender;
 
-        // Stub the executor to run immediately in the same thread
+        // Stub a mock executor to run immediately in the same thread
+        java.util.concurrent.ExecutorService syncExecutor = mock(java.util.concurrent.ExecutorService.class);
         doAnswer(invocation -> {
             ((Runnable) invocation.getArgument(0)).run();
             return null;
-        }).when(executor).submit(any(Runnable.class));
+        }).when(syncExecutor).submit(any(Runnable.class));
+
+        // Inject the sync executor into the chatQueues cache via reflection
+        java.lang.reflect.Field queuesField = TelegramAgentHandler.class.getDeclaredField("chatQueues");
+        queuesField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        com.github.benmanes.caffeine.cache.Cache<String, java.util.concurrent.ExecutorService> mockCache = 
+            mock(com.github.benmanes.caffeine.cache.Cache.class);
+        when(mockCache.get(anyString(), any())).thenReturn(syncExecutor);
+        queuesField.set(handler, mockCache);
     }
 
     @Test
@@ -64,18 +74,39 @@ class TelegramAgentHandlerTest {
     }
 
     @Test
-    void testNullTextMessageIsDropped() {
-        Exchange exchange = mock(Exchange.class);
-        Message in = mock(Message.class);
-        when(exchange.getIn()).thenReturn(in);
-        IncomingMessage msg = new IncomingMessage();
-        msg.setText(null);
-        when(in.getBody(IncomingMessage.class)).thenReturn(msg);
-
+    void testNonTextMessageNotifiesUser() {
+        Exchange exchange = createExchange("chat123", "456", "alice", null);
+        
         handler.receiveMessage(exchange);
 
         verify(pipeline, never()).process(any());
-        verify(executor, never()).submit(any(Runnable.class));
+        verify(sender).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("not supported"));
+    }
+
+    @Test
+    void testNullMessageBodyIsHandledGracefully() {
+        Exchange exchange = mock(Exchange.class);
+        org.apache.camel.Message in = mock(org.apache.camel.Message.class);
+        when(exchange.getIn()).thenReturn(in);
+        when(in.getBody(IncomingMessage.class)).thenReturn(null);
+
+        assertDoesNotThrow(() -> handler.receiveMessage(exchange));
+
+        verify(pipeline, never()).process(any());
+        verify(sender, never()).sendRaw(any(), any());
+    }
+
+    @Test
+    void testTextMessageProcessedNormally() {
+        Exchange exchange = createExchange("chat123", "456", "alice", "valid text");
+        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
+                new com.arcclaw.channel.api.ChannelUser("456", "alice", com.arcclaw.channel.api.ChannelType.TELEGRAM), "valid text", "chat123", java.time.Instant.now());
+        when(mapper.map(eq("valid text"), any(), eq("chat123"))).thenReturn(msg);
+
+        handler.receiveMessage(exchange);
+
+        verify(pipeline).process(any());
+        verify(sender, never()).sendRaw(any(), contains("not supported"));
     }
 
     @Test

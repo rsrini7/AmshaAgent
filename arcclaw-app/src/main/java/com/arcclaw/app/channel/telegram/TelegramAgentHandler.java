@@ -1,16 +1,24 @@
 package com.arcclaw.app.channel.telegram;
 
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.pipeline.MessagePipeline;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.inject.Inject;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.pipeline.MessagePipeline;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class TelegramAgentHandler {
@@ -29,15 +37,49 @@ public class TelegramAgentHandler {
     @Inject
     TelegramChannelSender sender;
 
+    private final Cache<String, ExecutorService> chatQueues = Caffeine.newBuilder()
+                    .maximumSize(10_000)
+                    .expireAfterAccess(30, TimeUnit.MINUTES)
+                    .<String, ExecutorService>removalListener((chatId, executor, cause) -> {
+                        if (executor != null) executor.shutdown();
+                    })
+                    .build();
+
+    private ExecutorService queueForChat(String chatId) {
+        return chatQueues.get(chatId, id ->
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "chat-queue-" + id);
+                t.setDaemon(true);
+                return t;
+            }));
+    }
+
     public void receiveMessage(Exchange exchange) {
         IncomingMessage msg = exchange.getIn().getBody(IncomingMessage.class);
+        String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
 
-        if (msg == null || msg.getText() == null) {
-            log.warn("Received message without text");
+        if (msg == null) {
+            log.warn("Received null message body from Telegram");
+            return; // no chatId to reply to
+        }
+
+        if (msg.getText() == null) {
+            log.warnf("Received non-text message from chat %s — notifying user", chatId);
+            if (chatId != null) {
+                // Build a minimal ChannelUser to send the reply
+                String fallbackUserId = msg.getFrom() != null
+                    ? String.valueOf(msg.getFrom().getId()) : "unknown";
+                ChannelUser fallbackUser = new ChannelUser(
+                    fallbackUserId, null, com.arcclaw.channel.api.ChannelType.TELEGRAM);
+
+                queueForChat(chatId).submit(() ->
+                    sender.sendRaw(fallbackUser,
+                        "⚠️ I can only process text messages. "
+                        + "Images, documents, stickers, and voice notes are not supported yet."));
+            }
             return;
         }
 
-        String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
         String userId = String.valueOf(msg.getFrom().getId());
         String username = msg.getFrom().getUsername();
         String text = msg.getText();
@@ -50,7 +92,7 @@ public class TelegramAgentHandler {
         }
 
         MessageContext context = new MessageContext(chatId, user, channelMessage, sender);
-        executor.submit(() -> processPipeline(context));
+        queueForChat(chatId).submit(() -> processPipeline(context));
     }
 
     @ActivateRequestContext

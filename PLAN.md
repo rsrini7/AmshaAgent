@@ -2837,3 +2837,65 @@ Replace the silent-stop exception handling in `MessagePipeline.process()` with u
 ## Verification
 - ✅ 10/10 tests passed successfully.
 - ✅ Startup logs confirm priority ordering: e.g. `Pipeline handler order: SessionResolutionHandler(10) → AllowlistHandler(20)`.
+
+---
+
+# Phase 51 — StatefulAgentStore & Telegram Resilience ✅
+
+Address SQLite contention, endpoint feedback, and message sequencing in the core state store and Telegram adapter.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Exponential Backoff**: Jitter is added to the exponential delay to prevent synchronized retries that could lead to persistent lock contention.
+> **Sequential Sequencing**: Using a `ConcurrentHashMap` of single-thread executors ensures that messages from the same user are processed in order, preventing race conditions on session state.
+
+## Proposed Changes
+
+### [arcclaw-core](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core)
+
+#### [MODIFY] [StatefulAgentStoreImpl.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java)
+- Implemented `(BACKOFF_BASE_MS * (1L << attempt)) + JITTER.nextInt(50)` for retries.
+- Updated `isSqliteBusy()` to use canonical class names for `LockAcquisitionException` and `OptimisticLockException`.
+- Added `ORDER BY updatedAt DESC LIMIT 1` to `findBySessionAndRole()`.
+
+### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Added `ConcurrentHashMap<String, ExecutorService>` for per-chat sequential processing.
+- Added non-text payload feedback: users are now notified asynchronously if they send unsupported message types.
+- Fixed `receiveMessage()` to reconstruct `chatId` before null checks.
+
+## Verification
+
+- ✅ `StatefulAgentStoreRetryTest`: Verified exponential backoff and canonical exception detection.
+- ✅ `TelegramAgentHandlerTest`: Verified non-text feedback and async submission.
+- ✅ Full clean build and regression suite passed.
+
+---
+
+# Hardening (Bot, Security) ✅
+
+Finalize Telegram resilience by replacing unbounded data structures and implementing proper crash recovery notifications.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Caffeine Eviction**: To prevent memory leaks in production from an unbounded number of chat-specific executors, we use a Caffeine cache with `expireAfterAccess(30, MINUTES)`. This automatically shuts down and removes executors for idle chats.
+> **Double Exception Protection**: The crash notification block in `processPipeline()` is wrapped in its own try-catch to ensure that if the notification itself fails (e.g. Telegram API down), it doesn't cause a secondary unhandled fault in the executor thread.
+
+## Proposed Changes
+
+### [arcclaw-app](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app)
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Replaced `ConcurrentHashMap` with `Caffeine.newBuilder().maximumSize(10_000).expireAfterAccess(30, MINUTES).build()`.
+- Added a `removalListener` to call `executor.shutdown()` when a chat queue is evicted.
+- Updated `processPipeline()` to catch all `Exception` types and notify the user via `sendRaw()`.
+- Added refined logging for expected test exceptions vs. real pipeline crashes.
+
+## Verification
+
+- ✅ Verified executor shutdown on cache eviction.
+- ✅ Verified user notification on simulated pipeline crash.
+- ✅ Total 320/320 tests passing.
