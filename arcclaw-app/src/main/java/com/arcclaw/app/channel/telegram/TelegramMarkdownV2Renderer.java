@@ -42,7 +42,9 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
                 yield esc(hashes + " " + h.text());
             }
             case ReplyNode.CodeBlock cb -> {
-                String lang = cb.language() != null ? esc(cb.language()) : "";
+                // Language identifier is NOT MarkdownV2 content — do NOT escape it.
+                // Telegram uses it as a literal syntax hint: ```java, ```c++, etc.
+                String lang = cb.language() != null ? cb.language().trim() : "";
                 yield "```" + lang + "\n" + cb.code() + "\n```";
             }
             case ReplyNode.InlineCode ic -> "`" + ic.code() + "`";

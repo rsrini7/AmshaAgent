@@ -49,15 +49,16 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
             String dataDir = System.getProperty("ARCCLAW_DATA_DIR",
                     System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
             Path dirPath = Path.of(dataDir);
-            // System.out.printf("[ArcClaw] Data dir: %s exists=%s%n",
-            //         dirPath.toAbsolutePath(), Files.exists(dirPath));
+            System.out.printf("[ArcClaw] Data dir: %s%n", dirPath.toAbsolutePath());
             Files.createDirectories(dirPath);
             Files.createDirectories(dirPath.resolve("workspaces"));
-            // System.out.printf("[ArcClaw] Data dir provisioned: %s%n",
-            //         dirPath.toAbsolutePath());
         } catch (Exception e) {
-            System.err.println("[ArcClaw] FAILED to create data directory: " + e.getMessage());
-            e.printStackTrace();  // see the real error
+            System.err.println("[ArcClaw] ❌ FATAL: Failed to create data directory.");
+            System.err.println("[ArcClaw]    Path: " + System.getProperty("ARCCLAW_DATA_DIR",
+                    System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data")));
+            System.err.println("[ArcClaw]    Cause: " + e.getMessage());
+            System.err.println("[ArcClaw]    Fix: ensure the directory is writable or set ARCCLAW_DATA_DIR.");
+            System.exit(1);
         }
         Quarkus.run(ArcClawCli.class, args);
     }

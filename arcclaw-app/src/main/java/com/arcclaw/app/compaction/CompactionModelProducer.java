@@ -20,6 +20,9 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.memory.compaction.model", defaultValue = "llama-3.1-8b-instant")
     String modelId;
 
+    @ConfigProperty(name = "arcclaw.memory.compaction.max-tokens", defaultValue = "1024")
+    int compactionMaxTokens;
+
     @Produces
     @Identifier("compaction")
     @ApplicationScoped
@@ -28,7 +31,7 @@ public class CompactionModelProducer {
             .baseUrl(groqBaseUrl)
             .apiKey(apiKey)
             .modelName(modelId)
-            .maxTokens(256)
+            .maxTokens(compactionMaxTokens)
             .timeout(Duration.ofSeconds(10))
             .logRequests(false)
             .logResponses(false)

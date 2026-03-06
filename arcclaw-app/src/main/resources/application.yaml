@@ -234,6 +234,7 @@ arcclaw:
       enabled: true
       threshold: 5
       keep-recent: 5
+      max-tokens: 1024
       model: "llama-3.1-8b-instant"
   chat-memory:
     max-messages: 20
