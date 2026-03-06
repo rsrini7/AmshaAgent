@@ -1370,19 +1370,18 @@ Cleaned up the message pipeline by removing the redundant `ReflexHandler` and co
 
 ---
 
-## Phase 50 P2-6 — Camel Route Lifecycle Cleanup ✅
+## Phase 50 P2-6 (REVISED) — Explicit Route Startup ✅
 
-Leveraged Camel Quarkus CDI-based lifecycle management to simplify command classes and prevent potential context state conflicts.
+Corrected an issue where routes added to an already-running `CamelContext` remained in a `Stopped` state. While `camelContext.start()` was removed to favor Quarkus management, `camelContext.getRouteController().startRoute("telegram-bot")` was added to explicitly activate the Telegram route upon registration.
 
-### Changes:
-- **`ServeCommand`**: Removed manual `addRoutes()` and `start()` calls. The command now simply starts Quarkus and waits, allowing the Camel Quarkus extension to handle route discovery and lifecycle events natively.
-- **`AttachCommand`**: Cleaned up the `telegram` switch case, removing redundant lifecycle management logic.
-- **Tests**:
-    - **`ServeCommandTest`**: Created a new test to verify that `ServeCommand` is injectable without manual Camel dependencies and that the `CamelContext` is correctly managed by the container.
-    - **`DummyRoute`**: Implemented a test-scope route to ensure `CamelContext` has a reason to start during automated verification, even when production routes are skipped.
+### Changes Made:
+- **`ServeCommand`**: Added explicit route startup using `startRoute("telegram-bot")` after `addRoutes()`.
+- **`AttachCommand`**: Added explicit route startup using `startRoute("telegram-bot")` after `addRoutes()` in the `telegram` case.
+- **`ServeCommandTest`**: Updated to verify that the startup logic handles skipped routes (mock tokens) safely without errors.
+- **Safety Guards**: Implemented a second null check (`getRoute("telegram-bot") != null`) before calling `startRoute()` to ensure no errors occur if registration was skipped.
 
 ### Verification Results:
-- ✅ **`ServeCommandTest`**: PASSED (Verified successful `CamelContext` injection and start).
-- ✅ **Grep Audit**: 0 results for manual lifecycle calls in `arcclaw-app`.
+- ✅ **`ServeCommandTest`**: PASSED (all revised assertions verified).
+- ✅ **Grep Audit**: 0 results for `camelContext.start()` and 2 for `getRouteController().startRoute()` in production code.
 
 

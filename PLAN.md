@@ -2650,38 +2650,41 @@ Remove `ReflexHandler` (priority 20) and consolidate all `/deny` logic in `Comma
 
 ---
 
-# Phase 50 P2-6 — Camel Route Lifecycle Cleanup ✅
+# Phase 50 P2-6 (REVISED) — Camel Route Lifecycle Explicit Startup ✅
 
-Remove manual `camelContext.start()` and `camelContext.addRoutes()` calls to leverage Camel Quarkus's native CDI-based lifecycle management and auto-discovery.
+Corrects an issue where routes added to an already-running `CamelContext` are registered but not started. While `camelContext.start()` is still managed by Quarkus, we must explicitly start the new route after `addRoutes()`.
 
 ## Design Decisions
 
 > [!IMPORTANT]
-> **Container Managed Lifecycle**: Camel Quarkus auto-discovers all `@ApplicationScoped RouteBuilder` beans and manages their attachment and the `CamelContext` start/stop cycle via Quarkus lifecycle events. Manual management is redundant and risks double-registration.
+> **Explicit Route Startup**: When `addRoutes()` is called on an already-started `CamelContext`, the new routes remain in a `Stopped` state by default. We must use `camelContext.getRouteController().startRoute("telegram-bot")` to activate them without affecting the global context lifecycle.
 
-## Completed Changes
+> [!NOTE]
+> **Manual Route Registration**: We continue to keep `addRoutes()` because `TelegramChannelRoute` performs programmatic component registration that is lost during Camel Quarkus build-time auto-discovery.
+
+## Proposed Changes
 
 ### App Module — CLI Commands
 
 #### [MODIFY] [ServeCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ServeCommand.java)
-- Removed `CamelContext` and `TelegramChannelRoute` injection.
-- Removed manual `addRoutes()` and `start()` logic.
+- Use `camelContext.getRouteController().startRoute("telegram-bot")` after `addRoutes()`.
 
 #### [MODIFY] [AttachCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java)
-- Removed manual Camel lifecycle management from the `telegram` switch case.
+- Use `camelContext.getRouteController().startRoute("telegram-bot")` after `addRoutes()` in the `telegram` case.
 
 ### App Module — Tests
 
-#### [NEW] [ServeCommandTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/ServeCommandTest.java)
-- Verifies `ServeCommand` is injectable without Camel dependencies.
-- Verifies `CamelContext` is functional and manageable via Quarkus CDI.
+#### [MODIFY] [ServeCommandTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/ServeCommandTest.java)
+- Verify that `startRoute()` logic is handled safely (via `testTelegramRouteMissingForMockToken`).
 
-#### [NEW] [DummyRoute.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/DummyRoute.java)
-- Added to `src/test/java` to ensure `CamelContext` has a route to start during tests (when `TelegramChannelRoute` is skipped).
+## Verification Plan
 
-## Verification
-
+### Automated Tests
+```bash
+.\mvnw.cmd test -pl arcclaw-app -am -Dtest=ServeCommandTest
+```
 - ✅ `ServeCommandTest` passes.
-- ✅ Grep audit: 0 results for `camelContext.start()` and `camelContext.addRoutes()` in production code.
+- ✅ Grep audit: 0 results for `camelContext.start()` in `arcclaw-app/src/main/java`.
+- ✅ Grep audit: 2 results for `getRouteController().startRoute` in `arcclaw-app/src/main/java`.
 
 
