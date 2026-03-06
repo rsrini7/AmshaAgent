@@ -762,9 +762,17 @@
 - [x] Create `StatefulAgentStoreRetryTest.java` and internal `TelegramAgentHandlerTest` coverage <!-- id: 270 -->
 - [x] Verify: All Phase 51 resilience tests pass (320/320 system tests total) <!-- id: 271 -->
 
-# Hardening (Bot, Security) ✅
+## Hardening (Bot, Security) ✅
 - [x] P3-12: Replace unbounded `ConcurrentHashMap` with Caffeine cache in `TelegramAgentHandler` <!-- id: 272 -->
 - [x] Add `removalListener` to Caffeine cache for graceful executor shutdown <!-- id: 273 -->
 - [x] Implement error notification in `TelegramAgentHandler.processPipeline()` catch block <!-- id: 274 -->
 - [x] Verify: No `ContextNotActiveException` in logs during async execution <!-- id: 275 -->
 - [x] Verify: All Telegram resilience tests pass after Phase 52 updates <!-- id: 276 -->
+
+# Vault Key Caching (Argon2id on Hot Path) ✅
+- [x] Create `VaultKeyCache.java` — `@WorkspaceScoped` bean with double-checked locking, `@PreDestroy` wipe, and safety fallback <!-- id: 277 -->
+- [x] Update `AgentCronScheduler.java` — add `finally` block to terminate session scope and prevent key leaks <!-- id: 278 -->
+- [x] Update `SecretVaultImpl.java` — inject `VaultKeyCache`, replace `keyDerivation.deriveSessionKey()` calls with `keyCache.getOrDerive()`, remove try-with-resources on the key <!-- id: 279 -->
+- [x] Create `VaultKeyCacheTest.java` — plain JUnit5 unit tests with Mockito <!-- id: 280 -->
+- [x] Verify no remaining direct `deriveSessionKey` calls in `SecretVaultImpl` via grep <!-- id: 281 -->
+- [x] Run and confirm `VaultKeyCacheTest` pass <!-- id: 282 -->

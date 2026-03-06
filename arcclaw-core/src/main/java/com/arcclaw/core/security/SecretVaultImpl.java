@@ -18,6 +18,9 @@ public class SecretVaultImpl implements SecretVault {
     Argon2idKeyDerivation keyDerivation;
 
     @Inject
+    VaultKeyCache keyCache;
+
+    @Inject
     AesGcmSivCipher cipher;
 
     @Inject
@@ -41,7 +44,8 @@ public class SecretVaultImpl implements SecretVault {
         String sessionId = WorkspaceScopeHolder.getRequired();
 
         // 1. Derive Key
-        try (VaultKey sessionKey = keyDerivation.deriveSessionKey(sessionId)) {
+        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
+        try {
             // 2. Encrypt (AAD = keyName)
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
 
@@ -60,7 +64,10 @@ public class SecretVaultImpl implements SecretVault {
             String userId = (String) MDC.get("userId");
             auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
             
-        } // sessionKey auto-closed (wiped) here
+        } catch (Exception e) {
+            throw e;
+        }
+        // sessionKey NOT auto-closed here — lifecycle managed by VaultKeyCache
     }
 
     @Override
@@ -77,7 +84,8 @@ public class SecretVaultImpl implements SecretVault {
         }
 
         // 2. Derive Key
-        try (VaultKey sessionKey = keyDerivation.deriveSessionKey(sessionId)) {
+        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
+        try {
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
             auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
@@ -86,7 +94,7 @@ public class SecretVaultImpl implements SecretVault {
             // Log security event?
             throw e;
         }
-        // sessionKey auto-closed
+        // sessionKey NOT auto-closed here
     }
 
     @Override
