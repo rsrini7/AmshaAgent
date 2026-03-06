@@ -2899,3 +2899,46 @@ Finalize Telegram resilience by replacing unbounded data structures and implemen
 - ✅ Verified executor shutdown on cache eviction.
 - ✅ Verified user notification on simulated pipeline crash.
 - ✅ Total 320/320 tests passing.
+
+---
+
+# Vault Key Caching (Argon2id on Hot Path) ✅
+
+Eliminate redundant Argon2id key derivations by caching the derived `VaultKey` once per `@WorkspaceScoped` session. Currently, every `store()` and `get()` call on `SecretVaultImpl` triggers a fresh Argon2id derivation (64MB / 3 iterations), causing GC pressure and latency spikes under concurrent Telegram use.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Double-Checked Locking**: The `VaultKeyCache` ensures that key derivation happens at most once per session context, preventing race conditions while minimizing synchronization overhead.
+
+> [!CAUTION]
+> **Scope Termination Mandatory**: Since the key is cached in a `@WorkspaceScoped` bean, it is CRITICAL that the session is explicitly terminated. Failure to call `workspaceManager.terminateSession()` results in the key material lingering in the heap.
+
+## Completed Changes
+
+### Security Layer
+
+#### [NEW] [VaultKeyCache.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/VaultKeyCache.java)
+- `@WorkspaceScoped` cache holder for session-derived `VaultKey`.
+- Implements `getOrDerive(sessionId, derivation)` with thread-safe locking.
+- **Safety Fallback**: Re-derives the key if `cachedKey.isDestroyed()` returns true.
+- **Auto-Wipe**: Uses `@PreDestroy` to zero-out key material when the scope is destroyed.
+
+#### [MODIFY] [SecretVaultImpl.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
+- Injected `VaultKeyCache`.
+- Replaced direct `keyDerivation.deriveSessionKey()` with `keyCache.getOrDerive()`.
+- Removed `try-with-resources` blocks to hand over key lifecycle management to the cache.
+
+### Lifecycle Layer
+
+#### [MODIFY] [AgentCronScheduler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java)
+- Added a `finally` block to `executeCronJob` to ensure `workspaceManager.terminateSession(cronSessionId)` is called, guaranteeing scope cleanup for scheduled tasks.
+
+## Verification
+
+### Automated Tests
+- ✅ `VaultKeyCacheTest`: Verified derivation count, wipe behavior, and safety fallback.
+- ✅ Full suite regression: All 324 tests passing.
+
+### Static Analysis
+- ✅ `grep` search confirms no remaining calls to `keyDerivation.deriveSessionKey()` in `SecretVaultImpl.java`.

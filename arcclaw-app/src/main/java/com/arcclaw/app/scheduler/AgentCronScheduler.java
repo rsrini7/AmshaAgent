@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.RoleRegistry;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
@@ -78,6 +79,9 @@ public class AgentCronScheduler {
 
     @Inject
     DevSecretSeeder devSeeder;
+
+    @Inject
+    WorkspaceManager workspaceManager;
 
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
@@ -285,6 +289,8 @@ public class AgentCronScheduler {
             } catch (Exception notifyEx) {
                 log.warnf(notifyEx, "CRON-EVENT-FIRE-FAIL cronId=%s", job.id);
             }
+        } finally {
+            workspaceManager.terminateSession(cronSessionId);
         }
     }
 }
