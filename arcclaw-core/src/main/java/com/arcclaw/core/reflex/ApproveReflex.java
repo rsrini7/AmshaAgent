@@ -28,7 +28,6 @@ import com.arcclaw.core.util.CronScheduleUtil;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
@@ -53,7 +52,7 @@ public class ApproveReflex implements AgentReflex {
     Event<AgentJobCompleted> jobCompletedEvent;
 
     @Inject
-    Instance<DevSecretSeeder> devSeeder;
+    DevSecretSeeder devSeeder;
 
     @Override
     public boolean matches(String input) {
@@ -69,9 +68,7 @@ public class ApproveReflex implements AgentReflex {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 // Seed development secrets for the approval thread
-                if (!devSeeder.isUnsatisfied()) {
-                    devSeeder.get().seedDevSecrets();
-                }
+                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
                 // 1. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {

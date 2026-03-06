@@ -1,4 +1,5 @@
 arcclaw:
+  auto-seed-secrets: false
   api:
     keys:
       internal: "key-internal-changeme"

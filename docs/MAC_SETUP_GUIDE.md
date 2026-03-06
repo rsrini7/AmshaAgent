@@ -70,6 +70,11 @@ $env:OTEL_SDK_DISABLED = "true"
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
+java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" "-Dsun.stdout.encoding=UTF-8" "-Dsun.stderr.encoding=UTF-8" "-Dquarkus.profile=%cli" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar chat
+
+
+
+
 .\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"
 
 http://localhost:8080/q/dev

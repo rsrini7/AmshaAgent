@@ -22,6 +22,7 @@ class StartupSecurityValidatorProdUnsafeTest {
         public Map<String, String> getConfigOverrides() {
             // Boot safely — validator passes during Quarkus startup
             return Map.of(
+                "arcclaw.auto-seed-secrets", "false",
                 "quarkus.profile",                           "test",
                 "arcclaw.vault.pepper",                      "safe-pepper-for-boot-000000000000",
                 "arcclaw.audit.hmac-key",                    "safe-hmac-key-for-boot-000000000",

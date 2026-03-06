@@ -35,7 +35,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Event;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
@@ -78,7 +77,7 @@ public class AgentCronScheduler {
     ManagedExecutor vThreads;
 
     @Inject
-    Instance<DevSecretSeeder> devSeeder;
+    DevSecretSeeder devSeeder;
 
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
@@ -205,9 +204,7 @@ public class AgentCronScheduler {
             cronRepository.setDeliveryId(job.id, executionId);
 
             // Seed development secrets for this isolated background thread
-            if (!devSeeder.isUnsatisfied()) {
-                devSeeder.get().seedDevSecrets();
-            }
+            devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
             String effectiveGoal = job.goal + 
                 "\n[SYSTEM CONSTRAINT: Do NOT call scheduletask. Execute the goal directly.]";

@@ -34,6 +34,7 @@ public class AgentCronRepository {
     @Transactional(TxType.NOT_SUPPORTED)
     @SuppressWarnings("unchecked")
     public List<AgentCronEntity> findDueCrons() {
+        em.clear(); // Evict stale L1 cache — background threads may have updated rows
         String now = InstantToTextConverter.format(Instant.now());
         return em.createNativeQuery(
                 "SELECT * FROM agentcron WHERE status='ACTIVE' AND nextFireTime <= :now",
@@ -46,6 +47,7 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.SUPPORTS)
     public List<AgentCronEntity> findByUserId(String userId) {
+        em.clear(); // Evict stale L1 cache — background threads may have updated rows
         return em.createQuery(
                 "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId",
                 AgentCronEntity.class
@@ -57,6 +59,7 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.SUPPORTS)
     public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
+        em.clear(); // Evict stale L1 cache — background threads may have updated rows
         return em.createQuery(
                 "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = 'AWAITING_APPROVAL'",
                 AgentCronEntity.class
