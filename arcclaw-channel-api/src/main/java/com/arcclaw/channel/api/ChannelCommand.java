@@ -53,6 +53,14 @@ public sealed interface ChannelCommand
         if (text == null || text.isBlank()) {
             return new Unknown(text == null ? "" : text);
         }
+        
+        // Strip surrounding backticks — Telegram MarkdownV2 inline code formatting
+        // causes copy-pasted commands to arrive as `/approve <id>` with backticks
+        String trimmed = text.trim();
+        if (trimmed.startsWith("`") && trimmed.endsWith("`") && trimmed.length() > 2) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+        }
+
         var matcher = CMD_PATTERN.matcher(text.trim());
         if (!matcher.matches()) {
             return new Unknown(text);

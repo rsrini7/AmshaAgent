@@ -18,11 +18,18 @@ class AgentPersonaRegistryTest {
         List<Agent> agents = Arrays.asList(
                 new ArchitectAgent(),
                 new BrahmaAgent(),
+                new DattatreyaAgent(),
                 new SaraswatiAgent(),
                 new ShivaAgent(),
                 new VishnuAgent()
         );
         registry = new AgentPersonaRegistry(agents);
+    }
+
+    @Test
+    void testSynthesizerPersonaContainsDattatreya() {
+        String prompt = registry.getPersonaPrompt(AgentRoleEnum.DATTATREYA);
+        assertTrue(prompt.contains("Dattatreya"), "Synthesizer prompt should contain Dattatreya");
     }
 
     @Test

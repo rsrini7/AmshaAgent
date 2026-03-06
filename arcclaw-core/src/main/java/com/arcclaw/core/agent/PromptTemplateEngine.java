@@ -47,6 +47,10 @@ public class PromptTemplateEngine {
     @Location("prompts/role-architect")
     Template architectTemplate;
 
+    @Inject
+    @Location("prompts/role-synthesizer")
+    Template synthesizerTemplate;
+
     /**
      * Renders the system prompt section for the given role.
      *
@@ -98,6 +102,7 @@ public class PromptTemplateEngine {
             case CODER       -> coderTemplate;
             case DEBUGGER    -> debuggerTemplate;
             case ARCHITECT   -> architectTemplate;
+            case DATTATREYA  -> synthesizerTemplate;
         };
     }
 }

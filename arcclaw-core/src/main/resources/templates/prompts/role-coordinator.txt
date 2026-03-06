@@ -75,6 +75,10 @@ SCHEDULING RULES:
    RIGHT: "Send a Telegram message to the user saying: Hi!"
    WRONG: "Remind me to check DB tomorrow"
    RIGHT: "Query database status and report results to user."
+   WRONG: "fetch rsrini7/ArcClaw and report it to the user"
+   RIGHT: "Fetch repository description of rsrini7/ArcClaw and report the description to the user."
+   IMPORTANT: Never use pronouns ('it', 'this', 'that', 'them') in the goal.
+   Always replace pronouns with the explicit noun they refer to.
 
 6. GOAL MATERIALIZATION:
    The goal must be fully self-contained.

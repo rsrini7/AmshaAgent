@@ -156,10 +156,15 @@ class AgentStateMachineRunnerTest {
 
     @Test
     void testCircuitBreakerTripsAfter2Failures() {
-        ReasoningStep toolStep = ReasoningStep.pending("thought", "broken-tool", Map.of(), 0, 0);
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
+        ReasoningStep toolStep1 = ReasoningStep.pending("thought1", "broken-tool", Map.of("arg", 1), 0, 0);
+        ReasoningStep toolStep2 = ReasoningStep.pending("thought2", "broken-tool", Map.of("arg", 2), 0, 0);
+        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(toolStep1)
+                .thenReturn(toolStep2);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenReturn(new ToolResponse(1, "error", false));
+        when(toolRegistry.invokeTool(anyString(), anyMap()))
+                .thenReturn(new ToolResponse(1, "error", false));
+        when(roleRegistry.requiresApprovalForTools(any())).thenReturn(false);
 
         AgentResult result = runner.run(createCtx(), engine, List.of());
 
@@ -197,4 +202,61 @@ class AgentStateMachineRunnerTest {
         assertTrue(((AgentResult.Finished) result).answer().contains("Scheduled cleaning"));
         verify(engine, times(1)).nextStep(any(), any(), any(), any()); // Fast-path: no 2nd call to engine
     }
+
+    @Test
+    void testDuplicateToolCallReturnsCachedObservation() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+            "session-1", "user-1", "chat-1", "coordinator",
+            "fetch rsrini7/ArcClaw repo description",  // ← contains github keywords
+            AutonomyLevel.FULL, 5);
+
+        ReasoningStep toolStep = ReasoningStep.pending("thought", "github",
+                Map.of("action", "repo", "command", "view", "target", "rsrini7/ArcClaw"), 0, 0);
+        ReasoningStep finishStep = ReasoningStep.pending("done", ReasoningStep.FINISH,
+                Map.of("answer", "done"), 0, 0);
+
+        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(toolStep)
+                .thenReturn(toolStep)   // duplicate call
+                .thenReturn(finishStep);
+        when(toolRegistry.findTool("github")).thenReturn(Optional.of(mock(AgentTool.class)));
+        when(toolRegistry.invokeTool(anyString(), anyMap()))
+                .thenReturn(new ToolResponse(0, "repo description here", true));
+        // github isPreApproved check
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+
+        AgentResult result = runner.run(ctx, engine, List.of());
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        verify(toolRegistry, times(1)).invokeTool(any(), any()); // cached on 2nd call
+    }
+
+    @Test
+    void testFailedToolObservationIsNotCached() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+            "session-1", "user-1", "chat-1", "coordinator",
+            "fetch rsrini7/ArcClaw repo",  // ← github keyword
+            AutonomyLevel.FULL, 5);
+
+        ReasoningStep toolStep1 = ReasoningStep.pending("thought1", "github",
+                Map.of("action", "repo", "command", "view", "target", "rsrini7/ArcClaw", "attempt", 1), 0, 0);
+        ReasoningStep toolStep2 = ReasoningStep.pending("thought2", "github",
+                Map.of("action", "repo", "command", "view", "target", "rsrini7/ArcClaw", "attempt", 2), 0, 0);
+
+        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(toolStep1)
+                .thenReturn(toolStep2);
+
+        when(toolRegistry.findTool("github")).thenReturn(Optional.of(mock(AgentTool.class)));
+        when(toolRegistry.invokeTool(anyString(), anyMap()))
+                .thenReturn(new ToolResponse(1, "error output", false));
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+
+        AgentResult result = runner.run(ctx, engine, List.of());
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
+        verify(toolRegistry, times(2)).invokeTool(any(), any()); // no dedup — both calls real because of different params
+    }
+
 }

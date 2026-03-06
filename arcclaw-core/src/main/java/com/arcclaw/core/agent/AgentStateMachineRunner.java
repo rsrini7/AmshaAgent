@@ -334,6 +334,46 @@ public class AgentStateMachineRunner {
     private StepDecision invokeToolAndObserve(String sessionId, String agentRole, List<ReasoningStep> history, ReasoningStep step, int consecutiveFailures) {
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
+
+        // DEDUPLICATION GUARD: if the same tool+args already has a result in this
+        // session's history, return the cached observation instead of re-invoking.
+        // Prevents redundant Podman cold starts for identical tool calls.
+        synchronized (history) {
+            for (ReasoningStep past : history) {
+                if (toolName.equals(past.action())
+                        && past.observation() != null
+                        && !past.observation().isBlank()) {
+
+                    // Primary check: Map equality (fast)
+                    boolean argsMatch = java.util.Objects.equals(params, past.actionInput());
+
+                    // Fallback check: JSON string equality (handles LinkedHashMap ordering differences)
+                    if (!argsMatch) {
+                        try {
+                            String currentArgs = objectMapper.writeValueAsString(params);
+                            String pastArgs = objectMapper.writeValueAsString(past.actionInput());
+                            argsMatch = currentArgs.equals(pastArgs);
+                        } catch (Exception e) {
+                            // JSON serialization failed — skip dedup, let tool execute normally
+                            log.debugf("DEDUP-GUARD: JSON comparison failed for tool '%s': %s",
+                                    toolName, e.getMessage());
+                        }
+                    }
+
+                    if (argsMatch) {
+                        log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — " +
+                                "returning cached observation, skipping execution.", toolName, sessionId);
+                        final ReasoningStep dedupStep = step.withObservation(
+                                past.observation() + "\n\n[NOTE: This result was retrieved from " +
+                                "the current session cache. The tool was not re-executed.]");
+                        history.add(dedupStep);
+                        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
+                        return StepDecision.proceedWithFailures(dedupStep, consecutiveFailures);
+                    }
+                }
+            }
+        }
+        
         String observation;
         boolean stepFailed = false;
 

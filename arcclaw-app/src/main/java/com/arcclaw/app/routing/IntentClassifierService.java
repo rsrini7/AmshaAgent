@@ -48,7 +48,8 @@ public class IntentClassifierService implements IntentClassifier {
                 AgentRoleEnum.DEBUGGER,
                 AgentRoleEnum.RESEARCHER,
                 AgentRoleEnum.COORDINATOR,
-                AgentRoleEnum.ARCHITECT
+                AgentRoleEnum.ARCHITECT,
+                AgentRoleEnum.DATTATREYA
         );
 
         for (AgentRoleEnum role : roles) {
@@ -136,6 +137,8 @@ public class IntentClassifierService implements IntentClassifier {
         if (lowerRaw.contains("saraswati") || lowerRaw.contains("researcher")) return "researcher";
         if (lowerRaw.contains("architect") || lowerRaw.contains("brihaspati")
                 || lowerRaw.contains("brahaspati")) return "architect"; // keep old spelling as fallback
+        if (lowerRaw.contains("synthesizer") || lowerRaw.contains("dattatreya")
+                || lowerRaw.contains("datta")) return "synthesizer";
         return "coordinator";
     }
 }
