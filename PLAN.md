@@ -2687,4 +2687,47 @@ Corrects an issue where routes added to an already-running `CamelContext` are re
 - ✅ Grep audit: 0 results for `camelContext.start()` in `arcclaw-app/src/main/java`.
 - ✅ Grep audit: 2 results for `getRouteController().startRoute` in `arcclaw-app/src/main/java`.
 
+---
+
+# Phase 50 P2-8 — Dynamic System Prompt Per Role ✅
+
+Resolved the "Identity Crisis" where all agents identified as the Coordinator. Replaced the hardcoded persona in `LangChainReasoningEngine` with a dynamic lookup via `AgentPersonaRegistry` and extracted static security guardrails into a centralized constant.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Dynamic Persona Resolution**: Instead of hardcoding the identity in the engine, we use an `AgentPersonaRegistry` that discovers all `Agent` beans via CDI. The active role's persona is then dynamically fetched by key.
+
+> [!NOTE]
+> **CDI Discovery Qualifier**: Discovered that injected `Instance<Agent>` skips beans with custom qualifiers (like `@AgentRole`) unless the `@Any` qualifier is explicitly used. Added `@Any` to the injection site in `AgentPersonaRegistry`.
+
+## Completed Changes
+
+### Core Module — Agent Infrastructure
+
+#### [NEW] [AgentPersonaRegistry.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentPersonaRegistry.java)
+- Central registry to resolve agent personas by role key.
+- Injects all agents using `@Inject @Any Instance<Agent>`.
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Extracted `SECURITY_RULES_PROMPT` to a constant.
+- Injected `AgentPersonaRegistry` to dynamically fetch the active persona.
+
+#### [MODIFY] [ShivaAgent.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/ShivaAgent.java)
+- Corrected identity to "Shiva, the Debugger and Code Analyst".
+
+### Core Module — Tests
+
+#### [NEW] [AgentPersonaRegistryTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/agent/AgentPersonaRegistryTest.java)
+- Verified lookup and default behavior.
+
+#### [NEW] [LangChainReasoningEnginePersonaTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/agent/LangChainReasoningEnginePersonaTest.java)
+- Verified the final system prompt changes based on the role.
+
+## Verification Plan
+
+- ✅ Verified all personas (Shiva, Vishnu, Saraswati, Brahma) via `arcclaw-cli.ps1 ask "who are you" -r <role>`.
+- ✅ `mvn clean test -pl arcclaw-core` succeeds.
+
+
 

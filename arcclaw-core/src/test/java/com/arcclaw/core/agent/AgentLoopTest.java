@@ -39,6 +39,7 @@ class AgentLoopTest {
     private CompactionSummaryRepository compactionSummaryRepository;
     private RoleRegistry roleRegistry;
     private PromptTemplateEngine promptTemplateEngine;
+    private AgentPersonaRegistry agentPersonaRegistry;
     private LangChainReasoningEngine engine;
 
     @BeforeEach
@@ -50,10 +51,14 @@ class AgentLoopTest {
         compactionSummaryRepository = mock(CompactionSummaryRepository.class);
         roleRegistry = mock(RoleRegistry.class);
         promptTemplateEngine = mock(PromptTemplateEngine.class);
+        agentPersonaRegistry = mock(AgentPersonaRegistry.class);
+        
         when(compactionSummaryRepository.findLatestBySessionId(anyString()))
                 .thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any()))
                 .thenReturn("MOCK SYSTEM PROMPT");
+        when(agentPersonaRegistry.getPersonaPrompt(any()))
+                .thenReturn("MOCK PERSONA PROMPT");
 
         engine = new LangChainReasoningEngine();
         engine.chatLanguageModel = model;
@@ -63,6 +68,7 @@ class AgentLoopTest {
         engine.compactionSummaryRepository = compactionSummaryRepository;
         engine.roleRegistry = roleRegistry;
         engine.promptTemplateEngine = promptTemplateEngine;
+        engine.agentPersonaRegistry = agentPersonaRegistry;
     }
 
     @Test
