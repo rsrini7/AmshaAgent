@@ -63,6 +63,8 @@
 | 52 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
 | 51 | MessagePipeline Exception Handling (P3-6) | 100% success | User notification on crash + priority logging |
 | 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
+| 51 | Stateful & Telegram Resilience | 100% success | Exp. backoff, canonical exceptions, async feedback, sequential queues |
+| 52 | Telegram Hardening (P3-12) | 100% success | Caffeine cache for chat queues + crash notifications |
 
 
 ---
@@ -1525,3 +1527,64 @@ Fixed the issue where agents incorrectly identified as the Coordinator. The syst
 ```
 
 **Result:** All 10 tests passed (3 new, 7 existing).
+
+---
+
+## Phase 51 — StatefulAgentStore & Telegram Resilience ✅
+
+Address SQLite contention, endpoint feedback, and message sequencing.
+
+### Changes Made:
+
+#### StatefulAgentStore Hardening
+- **Exponential Backoff**: Implemented `(BACKOFF_BASE_MS * (1L << attempt)) + JITTER.nextInt(50)` to mitigate thundering herd effects during lock contention.
+- **Canonical Detection**: Switched to rigid class-name checks for reliability across driver versions.
+- **Determinism**: Added native `ORDER BY` and `LIMIT` to checkpoint queries.
+
+#### Telegram Handler Hardening
+- **Async Feedback**: Users now receive a "⚠️ Only text messages are supported" reply if they send photos/stickers, preventing silent drops.
+- **Message Sequencing**: Implemented per-chat single-thread executors to guarantee in-order processing of rapid user messages.
+
+### Verification Results:
+
+| Test Class | Core Feature | Status |
+|------------|--------------|--------|
+| `StatefulAgentStoreRetryTest` | Exponential Backoff | ✅ PASS |
+| `StatefulAgentStoreRetryTest` | Exception Detection | ✅ PASS |
+| `TelegramAgentHandlerTest` | Non-Text Feedback | ✅ PASS |
+| `TelegramAgentHandlerTest` | Sequential Submission | ✅ PASS |
+
+**Key Evidence**:
+- `StatefulAgentStoreRetryTest` confirmed increasing wait intervals (e.g. 147ms -> 207ms).
+- `TelegramAgentHandlerTest` confirmed async notification is triggered when `msg.getText() == null`.
+- Clean `mvnw clean verify` on all 320 tests.
+
+---
+
+## Telegram Hardening (P3-12) ✅
+
+Finalized Telegram resilience by introducing automatic resource cleanup and user-facing error feedback for pipeline crashes.
+
+### Changes Made:
+
+#### Automatic Resource Cleanup
+- **Caffeine Cache**: Replaced the unbounded `ConcurrentHashMap` with a Caffeine cache for `chatQueues`.
+- **Automatic Eviction**: Configured `expireAfterAccess(30, MINUTES)` to automatically prune dormant chat executors.
+- **Graceful Shutdown**: Implemented a `removalListener` that calls `executor.shutdown()` on eviction, preventing thread leaks.
+
+#### Crash Recovery Feedback
+- **Feedback Loop**: Updated the asynchronous `processPipeline` wrapper to catch all uncaught exceptions from the pipeline.
+- **User Notification**: When a crash occurs, the user now receives a ⚠️ notification instead of the bot simply hanging or stopping silently.
+
+### Verification Results:
+
+| Test Class | Core Feature | Status |
+|------------|--------------|--------|
+| `TelegramAgentHandlerTest` | Cache Eviction Shutdown | ✅ PASS |
+| `TelegramAgentHandlerTest` | Crash Feedback Delivery | ✅ PASS |
+| `TelegramAgentHandlerTest` | Async Context Safety | ✅ PASS |
+
+**Key Evidence**:
+- Log verification confirms: `Received non-text message from chat... notifying user`.
+- Log verification confirms: `⚠️ Sorry, an internal error occurred...` sent upon simulated pipeline failure.
+- Zero `ContextNotActiveException` observed, confirming `@ActivateRequestContext` is correctly intercepted.

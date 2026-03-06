@@ -752,3 +752,19 @@
 - [x] Create `MessagePipelineErrorTest.java` (3 tests) <!-- id: 262 -->
 - [x] Update `testPipelineSwallowsExceptionAndStops` in `MessagePipelineTest` <!-- id: 263 -->
 - [x] Verify: All 10 pipeline-related tests pass <!-- id: 264 -->
+
+# Phase 51 — StatefulAgentStore & Telegram Resilience ✅
+- [x] P2-12/13: Implement exponential backoff with jitter in `StatefulAgentStoreImpl.withRetry()` <!-- id: 265 -->
+- [x] P3-2: Switch to canonical class names for `isSqliteBusy()` detection <!-- id: 266 -->
+- [x] P3-2: Add `ORDER BY updatedAt DESC LIMIT 1` to `findBySessionAndRole()` for determinism <!-- id: 267 -->
+- [x] P3-8: Implement async non-text payload feedback in `TelegramAgentHandler` <!-- id: 268 -->
+- [x] P3-12: Implement per-chat sequential execution queues via `ConcurrentHashMap` <!-- id: 269 -->
+- [x] Create `StatefulAgentStoreRetryTest.java` and internal `TelegramAgentHandlerTest` coverage <!-- id: 270 -->
+- [x] Verify: All Phase 51 resilience tests pass (320/320 system tests total) <!-- id: 271 -->
+
+# Hardening (Bot, Security) ✅
+- [x] P3-12: Replace unbounded `ConcurrentHashMap` with Caffeine cache in `TelegramAgentHandler` <!-- id: 272 -->
+- [x] Add `removalListener` to Caffeine cache for graceful executor shutdown <!-- id: 273 -->
+- [x] Implement error notification in `TelegramAgentHandler.processPipeline()` catch block <!-- id: 274 -->
+- [x] Verify: No `ContextNotActiveException` in logs during async execution <!-- id: 275 -->
+- [x] Verify: All Telegram resilience tests pass after Phase 52 updates <!-- id: 276 -->
