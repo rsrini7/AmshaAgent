@@ -26,6 +26,10 @@ public class MessagePipeline {
         log.infof("Initialized MessagePipeline with %d handlers: %s", 
                 handlers.size(), 
                 handlers.stream().map(h -> h.getClass().getSimpleName()).collect(Collectors.joining(" -> ")));
+        log.infof("Pipeline handler order: %s",
+            handlers.stream()
+                .map(h -> h.getClass().getSimpleName() + "(" + h.priority() + ")")
+                .collect(Collectors.joining(" → ")));
     }
 
     /**
@@ -41,8 +45,15 @@ public class MessagePipeline {
                     return;
                 }
             } catch (Exception e) {
-                log.errorf(e, "Error in message handler: %s", handler.getClass().getSimpleName());
-                // We typically stop the pipeline on unexpected handler exceptions
+                log.errorf(e, "Pipeline handler %s failed for chat %s",
+                        handler.getClass().getSimpleName(), context.getChatId());
+                try {
+                    context.getSender().sendRaw(context.getUser(),
+                        "⚠️ An internal error occurred. Please try again.");
+                } catch (Exception notifyEx) {
+                    log.warnf(notifyEx, "Failed to send pipeline error notification to chat %s",
+                            context.getChatId());
+                }
                 return;
             }
         }

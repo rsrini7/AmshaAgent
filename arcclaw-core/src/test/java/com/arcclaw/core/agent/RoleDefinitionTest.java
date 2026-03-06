@@ -63,6 +63,7 @@ public class RoleDefinitionTest {
     @Test
     void testDeityAliases() {
         assertEquals(AgentRoleEnum.ARCHITECT, AgentRoleEnum.fromString("brahaspati"));
+        assertEquals(AgentRoleEnum.ARCHITECT, AgentRoleEnum.fromString("brihaspati"));
         assertEquals(AgentRoleEnum.COORDINATOR, AgentRoleEnum.fromString("vishnu"));
         assertEquals(AgentRoleEnum.RESEARCHER, AgentRoleEnum.fromString("saraswati"));
         assertEquals(AgentRoleEnum.CODER, AgentRoleEnum.fromString("brahma"));

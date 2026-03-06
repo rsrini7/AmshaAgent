@@ -134,7 +134,8 @@ public class IntentClassifierService implements IntentClassifier {
         if (lowerRaw.contains("shiva") || lowerRaw.contains("debugger")) return "debugger";
         if (lowerRaw.contains("brahma") || lowerRaw.contains("coder")) return "coder";
         if (lowerRaw.contains("saraswati") || lowerRaw.contains("researcher")) return "researcher";
-        if (lowerRaw.contains("architect") || lowerRaw.contains("brahaspati")) return "architect";
+        if (lowerRaw.contains("architect") || lowerRaw.contains("brihaspati")
+                || lowerRaw.contains("brahaspati")) return "architect"; // keep old spelling as fallback
         return "coordinator";
     }
 }
