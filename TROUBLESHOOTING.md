@@ -61,6 +61,7 @@
 | **Governance** | Token Count Bypass | Providers omitting token counts (returning `0,0`) bypass budget. | Inflate pathological `(0,0)` counts to `(1,1)` in `GovernanceLayer`. |
 | **Security** | Prompt Injection | User input masquerading as agent instructions. | Use `<<<USER_INPUT_START/END>>>` delimiters + user content sanitization in `IntentClassifierService`. |
 | **Channel** | Startup Failures | Telegram route crashing on missing/mock token. | Added token validity check to `TelegramChannelRoute` before starting the route. |
+| **Channel** | Route Not Started | `addRoutes()` on a running context adds but doesn't start routes. | Use `camelContext.getRouteController().startRoute("id")` or `@Observes StartupEvent` to self-register and start. |
 | **Test** | `Failed to start quarkus` | Validator halts app via `@Observes StartupEvent` before test context initializes. | **Safe Boot + Proper Unwrap**: Boot with `test` profile (safe), then use `ClientProxy.unwrap()` to override fields before manual call. |
 | **CDI** | Test field overrides ignored | `@Inject` provides a Client Proxy; modifications to its fields have no effect on the bean. | Use `io.quarkus.arc.ClientProxy.unwrap(bean)` to access and modify the actual implementation instance. |
 | **Build** | `cannot find symbol` (Core) | `-pl arcclaw-app` used without `-am` after core changes. | Add `-am` (also-make) flag to rebuild dependency modules. |

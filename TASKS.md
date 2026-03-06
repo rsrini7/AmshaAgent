@@ -708,9 +708,10 @@
 - [x] Integrate `/deny` audit trail via `ReflexRegistry` exclusively <!-- id: 232 -->
 - [x] Verify: `DenyPipelineTest` passes (handled CLI allowlist and dynamic session IDs) <!-- id: 233 -->
 
-# Phase 50 P2-6 (REVISED) — Explicit Route Startup ✅
-- [x] Remove manual `camelContext.start()` from `ServeCommand` and `AttachCommand` <!-- id: 234 -->
+# Phase 51 — TelegramChannelRoute Self-Registration (P2-6) ✅
+- [x] Implement `@Observes StartupEvent` in `TelegramChannelRoute.java` <!-- id: 234 -->
 - [x] Use `camelContext.getRouteController().startRoute("telegram-bot")` for explicit activation <!-- id: 235 -->
-- [x] Verify: `ServeCommandTest` passes with @BeforeEach workaround and mock token safety <!-- id: 236 -->
-- [x] Grep audit: 0 results for `camelContext.start()` and 2 for `startRoute()` in production code <!-- id: 237 -->
+- [x] Remove manual lifecycle management from `ServeCommand` and `AttachCommand` <!-- id: 236 -->
+- [x] Verify: `TelegramChannelRouteStartupTest` passes <!-- id: 237 -->
+- [x] Verify: `ServeCommandTest` passes (redundant injections removed) <!-- id: 238 -->
 

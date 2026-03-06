@@ -54,7 +54,8 @@
 | 47.3 | Agent State Machine Refactor (Tier 3/3A)| 100% success | Extracted loop from AgentLoop; fixed engine delegation & context |
 | 48 | Telegram Bot Refactor | 100% success | Removed tokens from URIs, component configuration |
 | 49 | Intent & Governance Hardening | 100% success | Prompt injection delimiters + Pathological zero-token guard |
-| 50 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
+| 51 | Telegram Route Self-Registration| 100% success | `@Observes StartupEvent` in RouteBuilder |
+| 52 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
 | 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
 | 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
 | 50 | CLI Approval Flow (P2-1) | 100% success | Heartbeats, truncated params, SUPERVISED mode |
