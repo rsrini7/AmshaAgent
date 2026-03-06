@@ -1348,3 +1348,23 @@ Migrated `AgentCronEntity.status` from a raw `String` to a type-safe `CronStatus
 - ✅ `CronStatusTest` confirms round-trip conversion and case-insensitivity.
 - ✅ `AgentCronSchedulerTest` and `AgentCronSchedulerConcurrencyTest` verified with the new enum.
 - ✅ Full reactor build with `-am` flag ensured correct compilation across modules.
+
+---
+
+## Phase 50 P2-5 — Remove Dual /deny Processing ✅
+
+Cleaned up the message pipeline by removing the redundant `ReflexHandler` and consolidating all `/deny` logic within the `CommandDispatchHandler` and `ReflexRegistry` pipeline.
+
+### Changes:
+- **Architecture**: Deleted `ReflexHandler.java`. This was "dead code" (because it was shadowed by `CommandDispatchHandler`'s priority) or bypassed the audit trail (if run first).
+- **Consolidation**: The `/deny` reflex is now exclusively processed by `CommandDispatchHandler` which routes through `ReflexRegistry`, ensuring every denial is recorded in the `AuditEvent` trail.
+- **Testing**:
+    - Created `DenyPipelineTest.java` to verify the end-to-end flow from message receipt to audit event recording.
+    - Resolved environmental test challenges:
+        - **Allowlist Injection**: Mocked `ChannelAllowlist` to prevent `AllowlistHandler` from blocking CLI-type test messages.
+        - **Dynamic Session Scoping**: Updated assertions to use `anyString()` for session IDs, accounting for the dynamic resolution performed by `SessionResolutionHandler`.
+
+### Verification Results:
+- ✅ **`DenyPipelineTest`**: PASSED (Verified audit event fires and routes to ReflexRegistry).
+- ✅ **Full System Build**: `mvn clean verify -pl arcclaw-app -am` PASSED.
+

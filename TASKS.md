@@ -702,3 +702,9 @@
 - [x] Update `DenyReflex` to use enum comparison instead of string equals <!-- id: 228 -->
 - [x] Create `CronStatusTest` in `arcclaw-core` <!-- id: 229 -->
 - [x] Verify: `mvnw clean test -pl arcclaw-app -am` (13 scheduler/repository tests green) <!-- id: 230 -->
+
+# Phase 50 P2-5 — Remove Dual /deny Processing (ReflexHandler Dead Code) ✅
+- [x] Delete `ReflexHandler.java` (Dead code, redundant with `CommandDispatchHandler`) <!-- id: 231 -->
+- [x] Integrate `/deny` audit trail via `ReflexRegistry` exclusively <!-- id: 232 -->
+- [x] Verify: `DenyPipelineTest` passes (handled CLI allowlist and dynamic session IDs) <!-- id: 233 -->
+
