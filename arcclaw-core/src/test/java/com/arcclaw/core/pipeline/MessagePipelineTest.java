@@ -62,6 +62,7 @@ class MessagePipelineTest {
         
         assertDoesNotThrow(() -> pipeline.process(context));
         verify(h2, never()).handle(context);
+        verify(context.getSender()).sendRaw(eq(context.getUser()), contains("error"));
     }
     
     @Test

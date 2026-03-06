@@ -737,7 +737,7 @@
 - [x] Add property to `application.yaml` <!-- id: 251 -->
 - [x] Verify: Grep check confirms hardcoded 256 is removed <!-- id: 252 -->
 
-# Phase 51 P3-3 — DestructiveVocabularyFilter Regex & Typo Fix ✅
+# Phase 51 P3-3 — Destructive Vocabulary Filter Regex & Typo Fix ✅
 - [x] Split destructive regex into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN` <!-- id: 253 -->
 - [x] Update `DestructiveVocabularyFilter.filter()` to check both patterns <!-- id: 254 -->
 - [x] Correct "Brihaspati" typo in `IntentClassifierService.sanitize()` (with fallback) <!-- id: 255 -->
@@ -745,3 +745,10 @@
 - [x] Create `DestructiveVocabularyFilterTest` (8 tests) <!-- id: 257 -->
 - [x] Add `brihaspati` mapping tests to `IntentClassifierServiceTest` <!-- id: 258 -->
 - [x] Verify: All 12 new/updated security and routing tests pass <!-- id: 259 -->
+
+# Phase 51 P3-6 — MessagePipeline Exception Handling Strategy ✅
+- [x] Implement error notification on handler crash in `MessagePipeline.process()` <!-- id: 260 -->
+- [x] Add handler priority logging at initialization in `MessagePipeline` <!-- id: 261 -->
+- [x] Create `MessagePipelineErrorTest.java` (3 tests) <!-- id: 262 -->
+- [x] Update `testPipelineSwallowsExceptionAndStops` in `MessagePipelineTest` <!-- id: 263 -->
+- [x] Verify: All 10 pipeline-related tests pass <!-- id: 264 -->

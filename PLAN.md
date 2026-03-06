@@ -2808,4 +2808,32 @@ Fix defects in the destructive command filter and correct the "Brihaspati" deity
 ```
 
 ## Verification
-- ✅ `grep` verification confirms original hardcoded value is removed and replaced with the configuration property.
+- [x] `grep` verification confirms original hardcoded value is removed and replaced with the configuration property.
+
+---
+
+# Phase 51 P3-6 — MessagePipeline Exception Handling Strategy ✅
+
+Replace the silent-stop exception handling in `MessagePipeline.process()` with user notification on handler crash, and add handler priority logging at startup to improve diagnostic visibility.
+
+## Proposed Changes
+
+### [arcclaw-core](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core)
+
+#### [MODIFY] [MessagePipeline.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessagePipeline.java)
+- Updated `process()` catch block to log the failing handler, chat ID, and attempt to notify the user via `context.getSender().sendRaw()`.
+- Added handler priority logging in the constructor to visualize execution order.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `MessagePipelineErrorTest`: Verifies user notification on crash, no re-throw, and grace on notification failure.
+- ✅ `MessagePipelineTest`: Updated existing test to verify notification.
+
+```bash
+.\mvnw.cmd test -pl arcclaw-core -Dtest=MessagePipelineTest,MessagePipelineErrorTest
+```
+
+## Verification
+- ✅ 10/10 tests passed successfully.
+- ✅ Startup logs confirm priority ordering: e.g. `Pipeline handler order: SessionResolutionHandler(10) → AllowlistHandler(20)`.

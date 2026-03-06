@@ -61,7 +61,9 @@
 | 51 | Telegram Route Self-Registration| 100% success | `@Observes StartupEvent` in RouteBuilder |
 | 51 | Destructive Regex & Typo Fix (P3-3) | 100% success | Split regex for `rm -rf` + corrected "Brihaspati" |
 | 52 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
+| 51 | MessagePipeline Exception Handling (P3-6) | 100% success | User notification on crash + priority logging |
 | 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
+
 
 ---
 
@@ -1498,3 +1500,28 @@ Fixed the issue where agents incorrectly identified as the Coordinator. The syst
     - `grep -n "maxTokens(compactionMaxTokens)" arcclaw-app/src/main/java` → **Verified in `CompactionModelProducer.java`**
 2.  **Config Check:**
     - Verified that `application.yaml` correctly reflects the 1024 token limit for compaction.
+
+---
+
+## Phase 51 P3-6 — MessagePipeline Exception Handling Strategy ✅
+
+### Changes Made
+
+#### [arcclaw-core](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core)
+
+#### [MessagePipeline.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessagePipeline.java)
+
+- **Error Notification**: Enhanced the `process()` catch block to notify the user when a pipeline handler fails. Instead of a silent stop, it now logs the handler name and chat ID, then sends a "⚠️ An internal error occurred. Please try again." message using `context.getSender().sendRaw()`.
+- **Priority Logging**: Added initialization logging to show the exact handler execution order with their priorities (e.g., `Pipeline handler order: Handler1(10) → Handler2(20)`). This is critical for verifying security handler sequencing.
+
+### Verification Results
+
+#### Automated Tests
+- ✅ **New** `MessagePipelineErrorTest`: Verified notification delivery on crash, non-propagation of crashes to the caller, and handled potential notification failures (double-exception protection).
+- ✅ **Updated** `MessagePipelineTest`: Ensured existing "swallow and stop" tests now also verify that a notification was attempted.
+
+```bash
+.\mvnw.cmd test -pl arcclaw-core -Dtest=MessagePipelineTest,MessagePipelineErrorTest
+```
+
+**Result:** All 10 tests passed (3 new, 7 existing).
