@@ -801,6 +801,55 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 
 ---
 
+# Phase 50 P2-4 — CronStatus Enum ✅
+
+Replace raw string status comparisons in `AgentCronEntity` with a type-safe enum for better validation and maintenance.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **JPA AttributeConverter**: Used `CronStatusConverter` to map the enum to/from String in SQLite. This separates the application's type-safe enum from the database's storage format.
+
+> [!TIP]
+> **Case-Insensitive Parsing**: The `fromStorageValue` method uses `valueOf().toUpperCase()` to handle various database formats or manual SQL edits safely.
+
+> [!NOTE]
+> **SQL Literals in Repository**: Native SQL/JPQL in `AgentCronRepository` remains as string literals (e.g., `"ACTIVE"`) for SQLite compatibility and simplicity in native queries.
+
+## Proposed Changes
+
+### Core Module — State & Entity
+
+#### [NEW] [CronStatus.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CronStatus.java)
+- Enum: `ACTIVE`, `RUNNING`, `COMPLETED`, `FAILED`, `AWAITING_APPROVAL`.
+- Stable storage mapping via `toStorageValue()`.
+
+#### [NEW] [CronStatusConverter.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CronStatusConverter.java)
+- JPA `AttributeConverter<CronStatus, String>`.
+
+#### [MODIFY] [AgentCronEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronEntity.java)
+- Status changed: `String` -> `CronStatus`.
+- Added `@Convert(converter = CronStatusConverter.class)`.
+
+#### [MODIFY] [DenyReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/DenyReflex.java)
+- Updated status check to use enum comparison.
+
+### Core Module — Tests
+
+#### [NEW] [CronStatusTest.java](file:///h:/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/state/CronStatusTest.java)
+- Round-trip, case-sensitivity, and error handling for the enum.
+
+## Verification Plan
+
+### Automated Tests
+```bash
+.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=AgentCronSchedulerTest, AgentCronSchedulerConcurrencyTest, AgentCronRepositoryTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+```
+- ✅ Verified 13 scheduler and repository tests across `arcclaw-core` and `arcclaw-app`.
+- ✅ Verified type safety prevents typos in status checks.
+
+---
+
 # Phase 17 — Groq Cloud Migration
 
 Repoint the default LLM provider from local Ollama to Groq Cloud for production workloads while maintaining dev-mode flexibility and hardening the autonomy governance framework.

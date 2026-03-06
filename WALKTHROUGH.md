@@ -58,6 +58,7 @@
 | 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
 | 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
 | 50 | CLI Approval Flow (P2-1) | 100% success | Heartbeats, truncated params, SUPERVISED mode |
+| 50 | CronStatus Enum (P2-4) | 100% success | Type-safe enum for agent cron status |
 
 ---
 
@@ -1329,3 +1330,21 @@ Addressed edge cases in the memory retrieval system where FTS unavailability (es
 - ✅ `testEmptyFtsResultReturnsGracefulMessage` prevents LLM hallucinations on empty context.
 - ✅ `testFtsUnavailableReturnsGracefulMessage` allows the agent to safely proceed when the FTS schema is detached.
 - ✅ `testFtsGenericExceptionReturnsFailure` ensures true hardware/SQL faults still fail the tool execution.
+
+---
+
+## Phase 50 P2-4: CronStatus Enum Migration ✅
+
+Migrated `AgentCronEntity.status` from a raw `String` to a type-safe `CronStatus` enum, eliminating potential typos and improving maintainability.
+
+| File | Purpose |
+|------|---------|
+| [CronStatus.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CronStatus.java) | Enum defining ACTIVE, RUNNING, COMPLETED, FAILED, AWAITING_APPROVAL. |
+| [CronStatusConverter.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/CronStatusConverter.java) | JPA AttributeConverter for seamless DB mapping. |
+| [AgentCronEntity.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronEntity.java) | Updated field type to `CronStatus`. |
+| [DenyReflex.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/reflex/DenyReflex.java) | Updated to use enum-based status checks. |
+
+**Verification**:
+- ✅ `CronStatusTest` confirms round-trip conversion and case-insensitivity.
+- ✅ `AgentCronSchedulerTest` and `AgentCronSchedulerConcurrencyTest` verified with the new enum.
+- ✅ Full reactor build with `-am` flag ensured correct compilation across modules.

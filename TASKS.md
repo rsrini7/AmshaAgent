@@ -694,3 +694,11 @@
 - [x] Verify: `testEmptyFtsResultReturnsGracefulMessage`
 - [x] Verify: `testFtsUnavailableReturnsGracefulMessage`
 - [x] Verify: `testFtsGenericExceptionReturnsFailure`
+
+# Phase 50 P2-4 — CronStatus Enum (Replace Raw String Status) ✅
+- [x] Create `CronStatus` enum with ACTIVE, RUNNING, COMPLETED, FAILED, AWAITING_APPROVAL <!-- id: 225 -->
+- [x] Implement `CronStatusConverter` JPA `AttributeConverter` <!-- id: 226 -->
+- [x] Update `AgentCronEntity` to use `CronStatus` and `@Convert` <!-- id: 227 -->
+- [x] Update `DenyReflex` to use enum comparison instead of string equals <!-- id: 228 -->
+- [x] Create `CronStatusTest` in `arcclaw-core` <!-- id: 229 -->
+- [x] Verify: `mvnw clean test -pl arcclaw-app -am` (13 scheduler/repository tests green) <!-- id: 230 -->
