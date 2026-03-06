@@ -3098,3 +3098,24 @@ REFLEX-FAILURE reflex=ResetReflex error=Action failed after 5 retries for save-e
 ResetReflex is failing to persist to SQLite after 5 retries — likely a WAL lock contention because two threads are processing simultaneously (see executor-thread-1 and executor-thread-2 both active at 15:44:54). The "Hi" message was queued twice — once from 15:44 PM and once from 03:07 PM (old undelivered message). The double response is Telegram delivering both queued messages when the bot came back online.
 The retry failure is the real bug — AsyncPersistenceEngine exhausted retries on save-entity. Check if ResetReflex is doing a synchronous DB write that conflicts with the async persistence consumer. This is a pre-existing issue unrelated to P2-6.
 
+---
+
+## 43. Phase 50 P2-8 — Dynamic Persona Discovery
+
+### 🔴 Failure: `AgentPersonaRegistry` returns "I am an ArcClaw Agent" for all roles (CDI lookup empty)
+
+**Symptom:** In tests or at runtime, the registry fails to find any specialized `Agent` beans (Vishnu, Shiva, etc.), falling back to the generic default persona.
+
+**Root Cause:** CDI `@Inject Instance<T>` behavior with qualifiers. If the target beans have a custom qualifier (like our `@AgentRole`), a standard `@Inject Instance<Agent>` injection will NOT discover them because it defaults to the `@Default` qualifier. 
+
+**Resolution:** Explicitly use the **`@Any`** qualifier at the injection site. This instructs CDI to include all beans of type `Agent` regardless of their specific qualifiers.
+
+```java
+// ✅ CORRECT
+@Inject @Any Instance<Agent> agents;
+
+// ❌ WRONG (will only find beans with @Default)
+@Inject Instance<Agent> agents;
+```
+
+

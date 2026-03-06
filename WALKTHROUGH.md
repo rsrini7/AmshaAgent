@@ -1385,4 +1385,35 @@ Corrected an issue where routes added to an already-running `CamelContext` remai
 - ✅ **`ServeCommandTest`**: PASSED (all revised assertions verified).
 - ✅ **Grep Audit**: 0 results for `camelContext.start()` and 2 for `getRouteController().startRoute()` in production code.
 
+---
+
+## Phase 50 P2-8 — Dynamic System Prompt Per Role (Persona Fix) ✅
+
+Fixed the issue where agents incorrectly identified as the Coordinator. The system now dynamically generates the persona prompt based on the active agent role.
+
+### Changes Summary:
+- **`AgentPersonaRegistry`**: New CDI bean that discovers all specialized agents and provides their persona strings.
+- **Prompt Isolation**: Extracted security and internal architecture rules from the persona definition, ensuring clear separation of concerns.
+- **Shiva Fix**: Corrected the Debugger role to identify as Shiva instead of Brahma.
+
+### Verification Results:
+- ✅ **Debugger**: Correctly identifies as "Shiva, the Debugger and Code Analyst".
+- ✅ **Coordinator**: Correctly identifies as "Vishnu, the Preserver and Captain/Coordinator".
+- ✅ **Researcher**: Correctly identifies as "Saraswati, the Research & Knowledge agent".
+- ✅ **Coder**: Correctly identifies as "Brahma, the Math/Code Creator".
+
+**Identity Check Proof (CLI):**
+````carousel
+```text
+🤖 [debugger] Action: FINISH
+✅ Final Answer: I am Shiva, the Debugger and Code Analyst...
+```
+<!-- slide -->
+```text
+🤖 [coder] Action: FINISH
+✅ Final Answer: I am Brahma, the Math/Code Creator...
+```
+````
+
+
 

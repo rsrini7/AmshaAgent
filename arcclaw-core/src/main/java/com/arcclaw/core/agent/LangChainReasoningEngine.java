@@ -78,33 +78,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject
     PromptTemplateEngine promptTemplateEngine;
 
+    @Inject
+    AgentPersonaRegistry agentPersonaRegistry;
 
-    @Override
-    public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
-        List<ChatMessage> messages = new ArrayList<>();
-
-        // 1. Add the Base System Prompt
-        String baseSystemPrompt = """
-            You are ArcClaw, an advanced, enterprise-grade AI Agent ecosystem built
-            in Java and Quarkus. You operate within a Dual-Mode CLI and Daemon architecture.
-
-            YOUR INTERNAL ARCHITECTURE (THE TRIMURTI & TRIDEVI):
-            You act as 'Vishnu' (The Coordinator / Preserver). You are the main
-            orchestrator, maintaining the state of the conversation and delegating
-            tasks to your specialized sub-agents:
-            - 'Brahma' (The Creator): Writes new code, builds features from scratch,
-            and designs software architecture.
-            - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and
-            fixes bugs, and tears down bad code.
-            - 'Saraswati' (The Goddess of Knowledge): Handles information retrieval,
-            RAG, documentation, and web searches.
-
-            YOUR PERSONA:
-            Be helpful, highly technical, and concise. Never introduce yourself as a
-            generic "AI language model". Always identify as ArcClaw, specifically
-            acting as the Coordinator. After the first message in a session, skip
-            the "I'll have [agent] perform..." preamble and respond directly.
-
+    private static final String SECURITY_RULES_PROMPT = """
             RESPONSE LENGTH RULE:
             Default to concise answers (2-3 sentences or 5 bullet points max).
             Only provide detailed long-form responses when the user explicitly uses
@@ -227,6 +204,33 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             but I cannot execute it. Please run it in your own environment."
             """;
 
+
+    @Override
+    public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
+        List<ChatMessage> messages = new ArrayList<>();
+
+        AgentRoleEnum roleEnum = AgentRoleEnum.fromString(agentRole);
+        String personaPrompt = agentPersonaRegistry.getPersonaPrompt(roleEnum);
+
+        // 1. Add the Base System Prompt
+        String baseSystemPrompt = "You are ArcClaw. Your active persona is described below.\n\n" +
+                personaPrompt +
+                "\n\n" +
+                (roleEnum == AgentRoleEnum.COORDINATOR
+                    ? """
+                      YOUR INTERNAL ARCHITECTURE (THE TRIMURTI & TRIDEVI):
+                      You act as 'Vishnu' (The Coordinator / Preserver). You are the main
+                      orchestrator, maintaining the state of the conversation and delegating
+                      tasks to your specialized sub-agents:
+                      - 'Brahma' (The Creator): Writes new code, builds features from scratch.
+                      - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs.
+                      - 'Saraswati' (The Goddess of Knowledge): Information retrieval, documentation.
+                      After the first message in a session, skip the "I'll have [agent] perform..."
+                      preamble and respond directly.
+                      """
+                    : "") +
+                "\n\n" +
+                SECURITY_RULES_PROMPT;
 
         // Build compaction summary for template injection (same guard as history injection below)
         String compactionSummary = null;

@@ -715,3 +715,12 @@
 - [x] Verify: `TelegramChannelRouteStartupTest` passes <!-- id: 237 -->
 - [x] Verify: `ServeCommandTest` passes (redundant injections removed) <!-- id: 238 -->
 
+# Phase 50 P2-8 — Dynamic System Prompt Per Role (Persona Fix) ✅
+- [x] Create `AgentPersonaRegistry.java` <!-- id: 239 -->
+- [x] Implement `AgentPersonaRegistryTest.java` <!-- id: 240 -->
+- [x] Modify `LangChainReasoningEngine.java` to inject registry and extract rules <!-- id: 241 -->
+- [x] Implement `LangChainReasoningEnginePersonaTest.java` <!-- id: 242 -->
+- [x] Correct `ShivaAgent` persona definition <!-- id: 243 -->
+- [x] Verify: CLI identity check for all roles (Shiva, Vishnu, Saraswati, Brahma) <!-- id: 244 -->
+
+

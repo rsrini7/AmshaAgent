@@ -72,9 +72,6 @@ java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.intern
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" "-Dsun.stdout.encoding=UTF-8" "-Dsun.stderr.encoding=UTF-8" "-Dquarkus.profile=%cli" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar chat
 
-
-
-
 .\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"
 
 http://localhost:8080/q/dev
@@ -106,6 +103,23 @@ ForEach-Object {
 
 ---
 
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 8081).OwningProcess -Force; Start-Sleep 3
+
+Get-Process -Id (Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue).OwningProcess | Stop-Process -Force; Start-Sleep 2; cmd.exe /c ".\mvnw.cmd quarkus:dev -pl arcclaw-app -Dquarkus.http.port=8081 > quarkus_boot_3.log 2>&1"
+
+Invoke-RestMethod -Uri "http://localhost:8081/debug-agents" | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8081/api/v1/debug-agents" -Headers @{"X-ArcClaw-API-Key"="key-internal-changeme"} | ConvertTo-Json
+
+ Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 2; Start-Process java -ArgumentList "-jar","arcclaw-app\target\quarkus-app\quarkus-run.jar" -PassThru | Select-Object Id; Start-Sleep 8
+ 
+ Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }; Start-Sleep 2
+
+---
+
 
 Please go through my entire project end to end as a Senior Java Architect, Security Reviewer, Refactoring Expert & Senior Java Developer. My plan is the share your reviews with Claude/Gemini and its review with you to debate and solve. Make sure to deep dive and not just high level and not only positive side. Not looking for any Constructive Feedback and Roadmap. Looking for Solid review be honest and you can give even strong feedback to make this project awesome. We are executing Phase X....
 
+
+
+---
