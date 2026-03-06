@@ -45,6 +45,34 @@ class TelegramMarkdownV2RendererTest {
     }
 
     @Test
+    void testCodeBlockLanguageNotEscaped() {
+        String code = "int x = 1;";
+        String output = renderer.render(List.of(new ReplyNode.CodeBlock(code, "c++")));
+        assertTrue(output.startsWith("```c++"), "C++ language hint must NOT be escaped to c\\+\\+");
+    }
+
+    @Test
+    void testCodeBlockLanguageJavaUnchanged() {
+        String code = "public class A {}";
+        String output = renderer.render(List.of(new ReplyNode.CodeBlock(code, "java")));
+        assertTrue(output.startsWith("```java"), "Java language hint must remain unchanged");
+    }
+
+    @Test
+    void testCodeBlockNullLanguage() {
+        String code = "plain text";
+        String output = renderer.render(List.of(new ReplyNode.CodeBlock(code, null)));
+        assertTrue(output.startsWith("```\n"), "Null language should render as empty code block header");
+    }
+
+    @Test
+    void testPlainTextSpecialCharactersEscaped() {
+        String output = renderer.render(List.of(new ReplyNode.Text("Hello! This is a test.")));
+        assertTrue(output.contains("Hello\\!"), "Exclamation mark should be escaped");
+        assertTrue(output.contains("test\\."), "Period should be escaped");
+    }
+
+    @Test
     void testBulletListFormatting() {
         String output = renderer.render(List.of(new ReplyNode.BulletList(List.of("one", "two"))));
         assertEquals("• one\n• two", output);
