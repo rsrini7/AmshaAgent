@@ -14,6 +14,7 @@ import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -54,6 +55,9 @@ public class ApproveReflex implements AgentReflex {
 
     @Inject
     DevSecretSeeder devSeeder;
+
+    @Inject
+    WorkspaceManager workspaceManager;
 
     @Override
     public boolean matches(String input) {
@@ -135,6 +139,18 @@ public class ApproveReflex implements AgentReflex {
             return "❌ This task is not awaiting approval (status=" + cron.status + ").";
         }
 
+        // // FIX: look up the actual checkpoint to get the real cronSessionId
+        // // instead of reconstructing it from cron.lastDeliveryId which may be stale
+        // var pendingCheckpoint = statefulAgentStore
+        //         .findLatestAwaitingApprovalForCron(cronId)
+        //         .orElse(null);
+
+        // if (pendingCheckpoint == null) {
+        //     return "❌ No pending checkpoint found for this task. It may have already been processed.";
+        // }
+
+        // String cronSessionId = pendingCheckpoint.getSessionId(); // ← actual sessionId
+
         String cronSessionId = "cron-" + cron.id + "-" + cron.lastDeliveryId;
 
         AgentResult result = WorkspaceContext.run(
@@ -164,6 +180,13 @@ public class ApproveReflex implements AgentReflex {
                 cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
                 CronResultFormatter.format(result),
                 result instanceof AgentResult.Failed f ? f.category() : null));
+
+        try {
+            workspaceManager.terminateSession(cronSessionId);
+        } catch (Exception e) {
+            log.warnf("Failed to terminate cron session %s after approval: %s",
+                    cronSessionId, e.getMessage());
+        }                
 
         return "";
     }

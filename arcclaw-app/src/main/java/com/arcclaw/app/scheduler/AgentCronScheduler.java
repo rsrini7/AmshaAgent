@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -22,10 +23,12 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.CronResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -190,7 +193,7 @@ public class AgentCronScheduler {
      * Executes a single cron job: set BACKGROUND autonomy → run AgentLoop
      * with isolated session → fire CDI event → update DB state.
      */
-    private void executeCronJob(AgentCronEntity job, java.util.concurrent.atomic.AtomicBoolean executionEntered) {
+    private void executeCronJob(AgentCronEntity job, AtomicBoolean executionEntered) {
         executionEntered.set(true);
         
         // Hoist these outside the try block so the catch block can access them
@@ -290,7 +293,23 @@ public class AgentCronScheduler {
                 log.warnf(notifyEx, "CRON-EVENT-FIRE-FAIL cronId=%s", job.id);
             }
         } finally {
-            workspaceManager.terminateSession(cronSessionId);
+            // Check current cron status — skip termination if AWAITING_APPROVAL
+            // so ApproveReflex can find the checkpoint when user approves.
+            String uid = WorkspaceScopeHolder.USER_ID.get();
+            boolean isAwaitingApproval = cronRepository
+                    .findByUserId(uid)
+                    .stream()
+                    .filter(c -> c.id.equals(cronSessionId))
+                    .findFirst()
+                    .map(c -> CronStatus.AWAITING_APPROVAL.equals(c.status))
+                    .orElse(false);
+
+            if (isAwaitingApproval) {
+                log.infof("[CronScheduler] Skipping session termination for cron=%s — " +
+                        "AWAITING_APPROVAL, session kept alive for user approval.", cronSessionId);
+            } else {
+                workspaceManager.terminateSession(cronSessionId);
+            }
         }
     }
 }
