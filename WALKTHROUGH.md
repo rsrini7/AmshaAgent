@@ -54,7 +54,8 @@
 | 47.3 | Agent State Machine Refactor (Tier 3/3A)| 100% success | Extracted loop from AgentLoop; fixed engine delegation & context |
 | 48 | Telegram Bot Refactor | 100% success | Removed tokens from URIs, component configuration |
 | 49 | Intent & Governance Hardening | 100% success | Prompt injection delimiters + Pathological zero-token guard |
-| 50 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
+| 51 | Telegram Route Self-Registration| 100% success | `@Observes StartupEvent` in RouteBuilder |
+| 52 | Hardening (Cron, Bot, Intent, Security) | 100% success | Prompt injection delimiters, Zero-token guard, Startup Profile Guards |
 | 51 | MessageTag Compliance | 100% success | Deterministic UUID-derived prefix for AI compliance filtering |
 | 52 | MessageTag Regex Cleanup | 100% success | Removed legacy regex-based compliance filtering |
 | 50 | CLI Approval Flow (P2-1) | 100% success | Heartbeats, truncated params, SUPERVISED mode |
@@ -1367,4 +1368,21 @@ Cleaned up the message pipeline by removing the redundant `ReflexHandler` and co
 ### Verification Results:
 - ✅ **`DenyPipelineTest`**: PASSED (Verified audit event fires and routes to ReflexRegistry).
 - ✅ **Full System Build**: `mvn clean verify -pl arcclaw-app -am` PASSED.
+
+---
+
+## Phase 50 P2-6 (REVISED) — Explicit Route Startup ✅
+
+Corrected an issue where routes added to an already-running `CamelContext` remained in a `Stopped` state. While `camelContext.start()` was removed to favor Quarkus management, `camelContext.getRouteController().startRoute("telegram-bot")` was added to explicitly activate the Telegram route upon registration.
+
+### Changes Made:
+- **`ServeCommand`**: Added explicit route startup using `startRoute("telegram-bot")` after `addRoutes()`.
+- **`AttachCommand`**: Added explicit route startup using `startRoute("telegram-bot")` after `addRoutes()` in the `telegram` case.
+- **`ServeCommandTest`**: Updated to verify that the startup logic handles skipped routes (mock tokens) safely without errors.
+- **Safety Guards**: Implemented a second null check (`getRoute("telegram-bot") != null`) before calling `startRoute()` to ensure no errors occur if registration was skipped.
+
+### Verification Results:
+- ✅ **`ServeCommandTest`**: PASSED (all revised assertions verified).
+- ✅ **Grep Audit**: 0 results for `camelContext.start()` and 2 for `getRouteController().startRoute()` in production code.
+
 

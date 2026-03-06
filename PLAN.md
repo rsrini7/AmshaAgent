@@ -2648,3 +2648,43 @@ Remove `ReflexHandler` (priority 20) and consolidate all `/deny` logic in `Comma
 - ✅ `DenyPipelineTest` passes.
 - ✅ `mvn clean verify -pl arcclaw-app -am` succeeds.
 
+---
+
+# Phase 50 P2-6 (REVISED) — Camel Route Lifecycle Explicit Startup ✅
+
+Corrects an issue where routes added to an already-running `CamelContext` are registered but not started. While `camelContext.start()` is still managed by Quarkus, we must explicitly start the new route after `addRoutes()`.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Explicit Route Startup**: When `addRoutes()` is called on an already-started `CamelContext`, the new routes remain in a `Stopped` state by default. We must use `camelContext.getRouteController().startRoute("telegram-bot")` to activate them without affecting the global context lifecycle.
+
+> [!NOTE]
+> **Manual Route Registration**: We continue to keep `addRoutes()` because `TelegramChannelRoute` performs programmatic component registration that is lost during Camel Quarkus build-time auto-discovery.
+
+## Proposed Changes
+
+### App Module — CLI Commands
+
+#### [MODIFY] [ServeCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/ServeCommand.java)
+- Use `camelContext.getRouteController().startRoute("telegram-bot")` after `addRoutes()`.
+
+#### [MODIFY] [AttachCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java)
+- Use `camelContext.getRouteController().startRoute("telegram-bot")` after `addRoutes()` in the `telegram` case.
+
+### App Module — Tests
+
+#### [MODIFY] [ServeCommandTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/ServeCommandTest.java)
+- Verify that `startRoute()` logic is handled safely (via `testTelegramRouteMissingForMockToken`).
+
+## Verification Plan
+
+### Automated Tests
+```bash
+.\mvnw.cmd test -pl arcclaw-app -am -Dtest=ServeCommandTest
+```
+- ✅ `ServeCommandTest` passes.
+- ✅ Grep audit: 0 results for `camelContext.start()` in `arcclaw-app/src/main/java`.
+- ✅ Grep audit: 2 results for `getRouteController().startRoute` in `arcclaw-app/src/main/java`.
+
+

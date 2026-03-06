@@ -3025,109 +3025,228 @@ mvnw clean verify → all tests pass
 ---
 
 ```
-## P2-6 — Camel Route Lifecycle (Remove Manual camelContext.start())
+## P2-6 — TelegramChannelRoute Self-Registration via StartupEvent
 
 ## CONTEXT
 
-Two command classes manually manage the Camel lifecycle:
+TelegramChannelRoute is @ApplicationScoped and extends RouteBuilder.
+Currently ServeCommand and AttachCommand manually call:
+  camelContext.addRoutes(telegramChannelRoute)
+  camelContext.start()
 
-ServeCommand.run():
-  if (camelContext.getRoute("telegram-bot") == null) {
-      camelContext.addRoutes(telegramChannelRoute);
-  }
-  if (camelContext.isStopped()) {
-      camelContext.start();
-  }
+This works only because camelContext.start() triggers a full context
+restart that re-initialises the RouteBuilder state. Without it,
+addRoutes() on a running context produces nothing — the @ApplicationScoped
+singleton's configure() was already called by Camel Quarkus during startup
+and its internal state is exhausted.
 
-AttachCommand.run():
-  if (camelContext.getRoute("telegram-bot") == null) {
-      camelContext.addRoutes(telegramChannelRoute);
-  }
-  if (camelContext.isStopped()) {
-      camelContext.start();
-  }
+The correct fix: TelegramChannelRoute self-registers by observing the
+Quarkus StartupEvent. At that point the CamelContext is fully started and
+addRoutes() + startRoute() work correctly. ServeCommand and AttachCommand
+are then reduced to simple wait-for-exit commands with no Camel knowledge.
 
-Problems:
-1. TelegramChannelRoute is @ApplicationScoped and extends RouteBuilder.
-   Camel Quarkus auto-discovers all @ApplicationScoped RouteBuilder beans
-   and registers them during container startup via its CDI extension.
-   The manual addRoutes() call is redundant and risks double-registration.
-2. camelContext.start() bypasses the Quarkus container lifecycle.
-   Camel Quarkus manages start/stop via its own Quarkus lifecycle events.
-   Calling start() manually can cause context state conflicts.
-3. The null check for "telegram-bot" is unreliable — the route may be
-   absent not because Camel hasn't started but because the bot token was
-   a placeholder and the route was intentionally skipped in configure().
+## ROOT CAUSE ANALYSIS
+
+Camel Quarkus CDI auto-discovery calls configure() on all @ApplicationScoped
+RouteBuilder beans during context BUILD — not during context START. At build
+time getContext().addComponent() has no effect on the runtime context.
+By the time ServeCommand.run() calls addRoutes(), the RouteBuilder instance
+has already been consumed once and produces Routes: [] on the second call.
+
+camelContext.start() happened to fix this by forcing a full restart which
+re-ran configure() in a fresh context — a side effect, not a design.
 
 ## IMPLEMENTATION REQUIREMENTS
 
-Component 1 — Remove manual route management from ServeCommand
+Component 1 — Add StartupEvent observer to TelegramChannelRoute
+File: arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelRoute.java
+
+Add import:
+  import io.quarkus.runtime.StartupEvent;
+  import jakarta.enterprise.event.Observes;
+
+Add CamelContext injection (needed for self-registration):
+  @Inject
+  CamelContext camelContext;
+
+Add observer method AFTER configure():
+  void onStart(@Observes StartupEvent ev) {
+      if (!enabled) {
+          log.info("Telegram channel disabled — skipping self-registration.");
+          return;
+      }
+      if (botToken == null || botToken.isBlank()
+              || botToken.startsWith("mock")
+              || botToken.equals("mock-telegram-token")) {
+          log.warn("Telegram bot token is a placeholder — skipping self-registration.");
+          return;
+      }
+      try {
+          if (camelContext.getRoute("telegram-bot") == null) {
+              camelContext.addRoutes(this);
+              camelContext.getRouteController().startRoute("telegram-bot");
+              log.info("Telegram route self-registered and started via StartupEvent.");
+          } else {
+              log.info("Telegram route already registered — skipping.");
+          }
+      } catch (Exception e) {
+          log.errorf("Telegram route self-registration failed: %s", e.getMessage());
+      }
+  }
+
+IMPORTANT: configure() must remain unchanged. It still sets up the
+TelegramComponent and defines the from("telegram:bots") route.
+The observer calls addRoutes(this) which re-triggers configure()
+on the live runtime context where addComponent() takes effect.
+
+Component 2 — Simplify ServeCommand
 File: arcclaw-app/src/main/java/com/arcclaw/app/ServeCommand.java
 
 Remove:
   @Inject CamelContext camelContext;
   @Inject TelegramChannelRoute telegramChannelRoute;
+  entire try-catch addRoutes/start block
+  unused imports: CamelContext, TelegramChannelRoute
 
-Replace the Camel block in run() with a simple log statement:
-  log.infof("ArcClaw daemon mode starting on port %d...", httpPort);
-  log.info("Telegram route lifecycle managed by Camel Quarkus CDI extension.");
-  Quarkus.waitForExit();
+Final run():
+  @Override
+  public void run() {
+      log.infof("ArcClaw daemon mode starting on port %d...", httpPort);
+      log.info("Telegram route lifecycle managed by TelegramChannelRoute.onStart().");
+      Quarkus.waitForExit();
+  }
 
-Do NOT inject CamelContext or TelegramChannelRoute in ServeCommand.
-Do NOT call camelContext.addRoutes() or camelContext.start().
-
-Component 2 — Remove manual route management from AttachCommand
+Component 3 — Simplify AttachCommand
 File: arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java
 
 Remove:
   @Inject CamelContext camelContext;
   @Inject TelegramChannelRoute telegramChannelRoute;
+  entire try-catch addRoutes/start block in "telegram" case
+  unused imports: CamelContext, TelegramChannelRoute
 
-Replace the Camel management block in the "telegram" switch case:
-  // Before:
-  try {
-      if (camelContext.getRoute("telegram-bot") == null) {
-          camelContext.addRoutes(telegramChannelRoute);
-      }
-      if (camelContext.isStopped()) {
-          camelContext.start();
-      }
-  } catch (Exception e) {
-      System.err.println("❌ Failed to start Telegram route: " + e.getMessage());
+Final "telegram" case:
+  case "telegram" -> {
+      System.out.println("🔗 ArcClaw daemon running for Telegram.");
+      System.out.println("   Telegram route managed by TelegramChannelRoute.onStart().");
+      System.out.println("   Press Ctrl+C to shutdown.");
+      Quarkus.waitForExit();
   }
 
-  // After: (remove entirely — Camel Quarkus manages lifecycle)
-  System.out.println("🔗 Telegram route managed by Camel Quarkus. " +
-      "If TELEGRAM_BOT_TOKEN is set, the route is already active.");
+Component 4 — Verify configure() is not called twice
+TelegramChannelRoute.configure() calls getContext().addComponent("telegram", telegram).
+When addRoutes(this) is called in onStart(), configure() runs again.
+The addComponent() call is idempotent in Camel — adding a component that
+already exists under the same name is a no-op. No double-registration risk.
 
-Component 3 — Verify TelegramChannelRoute auto-registration
-TelegramChannelRoute is @ApplicationScoped + extends RouteBuilder.
-Camel Quarkus auto-discovers this via its CDI RouteBuilder extension.
-No @Startup or @Observes annotation needed.
-
-Verify: after removing the manual start() calls, run:
-  ./arcclaw-cli.ps1 serve
-Check logs for:
-  INFO  [org.apa.cam.imp.eng.AbstractCamelContext] Apache Camel started
-  INFO  Route: telegram-bot started
-
-If the route is absent (placeholder token), the log shows:
-  WARN  Telegram bot token is a placeholder — skipping route registration.
-This is correct — the route was intentionally skipped in configure().
+Verify: startup log must show exactly ONE occurrence of:
+  "Telegram Route initializing"
 
 TESTS
 
 File: arcclaw-app/src/test/java/com/arcclaw/app/ServeCommandTest.java
-Add: testServeCommandDoesNotCallCamelStart
-  - @QuarkusTest with test profile
-  - Inject CamelContext
-  - Verify camelContext.getStatus() is not STOPPED (managed by Quarkus)
-  - Verify "telegram-bot" route absent (placeholder token in test) — no
-    NullPointerException from accessing a non-existent route
+
+@QuarkusTest
+@TestProfile(ServeCommandTest.Profile.class)
+class ServeCommandTest {
+
+    public static class Profile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                "arcclaw.channel.telegram.enabled", "true",
+                "arcclaw.channel.telegram.bot-token", "mock-token-test"
+            );
+        }
+    }
+
+    @Inject ServeCommand serveCommand;
+    @Inject CamelContext camelContext;
+
+    @Test
+    void testServeCommandIsInjectable() {
+        assertNotNull(serveCommand);
+    }
+
+    @Test
+    void testServeCommandHasNoCamelInjection() throws Exception {
+        // Verify ServeCommand no longer injects CamelContext or TelegramChannelRoute
+        long camelFields = java.util.Arrays.stream(ServeCommand.class.getDeclaredFields())
+            .filter(f -> f.getType().equals(CamelContext.class) ||
+                         f.getType().getName().contains("TelegramChannelRoute"))
+            .count();
+        assertEquals(0, camelFields,
+            "ServeCommand must not inject CamelContext or TelegramChannelRoute");
+    }
+
+    @Test
+    void testCamelContextStartedByQuarkus() {
+        assertFalse(camelContext.getStatus().isStopped(),
+            "CamelContext must be started by Quarkus, not manually");
+    }
+
+    @Test
+    void testTelegramRouteAbsentForMockToken() {
+        // mock-token-test triggers placeholder guard — route not registered
+        assertNull(camelContext.getRoute("telegram-bot"),
+            "telegram-bot route must be absent for placeholder token");
+    }
+}
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/channel/telegram/TelegramChannelRouteStartupTest.java (NEW)
+
+@QuarkusTest
+@TestProfile(TelegramChannelRouteStartupTest.RealTokenProfile.class)
+class TelegramChannelRouteStartupTest {
+
+    public static class RealTokenProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                "arcclaw.channel.telegram.enabled", "true",
+                "arcclaw.channel.telegram.bot-token", "real-looking-token-123:ABC"
+            );
+        }
+    }
+
+    @Inject CamelContext camelContext;
+
+    @Test
+    void testTelegramRouteSelfRegisteredOnStartup() {
+        // A non-placeholder token causes onStart() to register the route
+        assertNotNull(camelContext.getRoute("telegram-bot"),
+            "telegram-bot route must be registered by TelegramChannelRoute.onStart()");
+    }
+
+    @Test
+    void testTelegramRouteStartedNotJustAdded() {
+        org.apache.camel.Route route = camelContext.getRoute("telegram-bot");
+        assertNotNull(route);
+        assertNotNull(route.getUptime(),
+            "Route must be started — uptime must be non-null");
+    }
+}
 
 VERIFICATION
+
 grep -rn "camelContext.start()\|camelContext.addRoutes" \
-  arcclaw-app/src/main/java → 0 results
+  arcclaw-app/src/main/java
+→ 0 results (both removed from command classes)
+
+grep -rn "onStart\|StartupEvent" \
+  arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelRoute.java
+→ exactly 1 result
+
+Startup log when TELEGRAM_BOT_TOKEN is set:
+  INFO  Telegram Route initializing              ← configure() called once
+  INFO  Telegram route self-registered and started via StartupEvent.
+
+Startup log when TELEGRAM_BOT_TOKEN is placeholder:
+  WARN  Telegram bot token is a placeholder — skipping self-registration.
+  (no route registered — correct)
+
+.\arcclaw-cli.ps1 serve  → Telegram responds immediately on startup
+.\arcclaw-cli.ps1 attach telegram → Telegram responds immediately on startup
 ```
 
 ---
