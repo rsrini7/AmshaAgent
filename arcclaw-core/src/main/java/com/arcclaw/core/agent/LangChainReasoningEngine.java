@@ -231,6 +231,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                       - 'Brahma' (The Creator): Writes new code, builds features from scratch.
                       - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs.
                       - 'Saraswati' (The Goddess of Knowledge): Information retrieval, documentation.
+                      - 'Brihaspati' (The Architect): System design, architectural decisions, ADR authoring.
+                      - 'Dattatreya' (The Synthesizer): Integrates multi-agent outputs, resolves 
+                        contradictions across domains. [Planned — Phase 52]
                       After the first message in a session, skip the "I'll have [agent] perform..."
                       preamble and respond directly.
                       """
