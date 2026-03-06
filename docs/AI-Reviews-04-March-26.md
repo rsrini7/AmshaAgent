@@ -3532,3 +3532,776 @@ VERIFICATION
 ./arcclaw-cli.ps1 ask "who are you" -r coder
 → Response must contain "Brahma"
 ```
+
+
+**First observation before generating:** P2-10 is already fixed in the current `IntentClassifierService.java` — it calls `classifierModel.chat(safePrompt)` directly and synchronously. No `CompletableFuture.get()` present. Skip P2-10.
+
+Also noting: `sanitize()` still has the "brahaspati" typo — bundling that into the relevant prompt.
+
+---
+
+```
+# Phase 51
+## P2-12 + P2-13 + P3-2 — StatefulAgentStoreImpl: Exponential Backoff,
+   Fragile Exception Detection, and Non-Deterministic findBySessionAndRole
+
+## CONTEXT
+
+Three related defects in StatefulAgentStoreImpl.java:
+
+DEFECT 1 — Linear backoff causes thundering herd (P2-12 + P2-13)
+withRetry() uses: Thread.sleep(backoffMs * attempt)
+→ 50ms, 100ms, 150ms, 200ms, 250ms
+Under SQLite contention with 10 concurrent threads, all threads retry
+at the same interval, collide again, and the lock contention persists.
+Standard fix: exponential backoff with jitter.
+
+DEFECT 2 — isSqliteBusy() detects exceptions by getSimpleName() (P3-2)
+className.equals("LockAcquisitionException")
+className.equals("SQLiteException")
+getSimpleName() matches any class with that name regardless of package.
+If the SQLite JDBC driver changes exception hierarchy or you swap drivers,
+this silently stops retrying. Use instanceof checks or canonical names.
+
+DEFECT 3 — findBySessionAndRole has no ORDER BY and no LIMIT
+The JPQL query returns all rows for sessionId + agentRole. Under concurrent
+saves with retry logic, there can be multiple rows. results.get(0) returns
+an arbitrary checkpoint. Must use ORDER BY updatedAt DESC + LIMIT 1.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Fix withRetry() exponential backoff with jitter
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java
+
+Replace:
+  private static final long BACKOFF_BASE_MS = 50;
+
+  for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+          return task.call();
+      } catch (Exception e) {
+          lastEx = e;
+          if (isSqliteBusy(e)) {
+              log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
+                      operation, attempt, maxRetries, backoffMs * attempt);
+              try { Thread.sleep(backoffMs * attempt); }
+              ...
+
+With:
+  private static final long BACKOFF_BASE_MS = 50;
+  private static final java.util.Random JITTER = new java.util.Random();
+
+  for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+          return task.call();
+      } catch (Exception e) {
+          lastEx = e;
+          if (isSqliteBusy(e)) {
+              // Exponential backoff with jitter prevents thundering herd:
+              // base * 2^attempt + random(0..50ms)
+              long delay = (BACKOFF_BASE_MS * (1L << attempt))
+                           + JITTER.nextInt(50);
+              log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
+                      operation, attempt, maxRetries, delay);
+              try { Thread.sleep(delay); }
+              catch (InterruptedException ie) {
+                  Thread.currentThread().interrupt();
+                  throw new RuntimeException(ie);
+              }
+          } else {
+              throw (e instanceof RuntimeException re) ? re : new RuntimeException(e);
+          }
+      }
+  }
+
+Component 2 — Fix isSqliteBusy() to use canonical class names
+Replace the className check block:
+
+  // Before:
+  String className = t.getClass().getSimpleName();
+  if (className.equals("LockAcquisitionException") ||
+      className.equals("OptimisticLockException") ||
+      className.equals("SQLiteException")) {
+      return true;
+  }
+
+  // After:
+  String canonicalName = t.getClass().getName();
+  if (canonicalName.equals("org.hibernate.exception.LockAcquisitionException") ||
+      canonicalName.equals("jakarta.persistence.OptimisticLockException") ||
+      canonicalName.contains("SQLiteException")) {  // sqlite4java and xerial use different packages
+      return true;
+  }
+
+Keep the message-based checks unchanged — they are robust and correct:
+  if (lower.contains("busy") || lower.contains("database is locked") ...)
+
+Component 3 — Fix findBySessionAndRole ORDER BY and LIMIT
+Replace:
+  var results = em.createQuery(
+          "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role",
+          AgentCheckpoint.class)
+          .setParameter("sid", sessionId)
+          .setParameter("role", agentRole)
+          .getResultList();
+  return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+
+With:
+  var results = em.createQuery(
+          "SELECT c FROM AgentCheckpoint c " +
+          "WHERE c.sessionId = :sid AND c.agentRole = :role " +
+          "ORDER BY c.updatedAt DESC",
+          AgentCheckpoint.class)
+          .setParameter("sid", sessionId)
+          .setParameter("role", agentRole)
+          .setMaxResults(1)
+          .getResultList();
+  return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+
+TESTS
+
+File: arcclaw-core/src/test/java/com/arcclaw/core/state/StatefulAgentStoreRetryTest.java (NEW)
+Plain JUnit5 + Mockito — no CDI:
+
+- testExponentialBackoffDelayIncreases:
+  Use reflection to call withRetry() with a task that throws
+  LockAcquisitionException on the first 2 attempts, succeeds on 3rd.
+  Capture System.currentTimeMillis() before/after.
+  Verify total elapsed >= BACKOFF_BASE_MS * 2 (at least one backoff fired).
+
+- testJitterProducesVariableDelays:
+  Run withRetry() 5 times with same failing/succeeding pattern.
+  Record 5 elapsed times. Verify not all identical (jitter is active).
+
+- testIsSqliteBusyDetectsLockAcquisitionException:
+  Create a mock Exception wrapping
+  new org.hibernate.exception.LockAcquisitionException("busy", null, null).
+  Verify isSqliteBusy returns true.
+
+- testIsSqliteBusyIgnoresUnrelatedExceptions:
+  Pass new RuntimeException("connection reset").
+  Verify isSqliteBusy returns false.
+
+VERIFICATION
+grep -n "backoffMs \* attempt\|getSimpleName" \
+  arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java
+→ 0 results
+```
+
+---
+
+```
+## P3-1 — Vault Key Caching (Argon2id on Hot Path)
+
+## CONTEXT
+
+SecretVaultImpl.store() and SecretVaultImpl.get() each call:
+  keyDerivation.deriveSessionKey(sessionId)
+
+Argon2id with 64MB memory and 3 iterations is intentionally expensive.
+Every user message that touches the vault (DevSecretSeeder.seedDevSecrets()
+calls vault.get() then vault.store() on cache miss) triggers at minimum
+2 Argon2id derivations on the critical message handling path.
+
+Under concurrent Telegram use, 10 simultaneous messages = 20 Argon2id
+calls = 1.28GB RAM demand purely for key derivation. This causes GC
+pressure and latency spikes.
+
+Fix: derive the session key once per WorkspaceScoped session and cache it
+in a @WorkspaceScoped holder. Wipe the cached key when the scope ends.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Create VaultKeyCache
+File: arcclaw-core/src/main/java/com/arcclaw/core/security/VaultKeyCache.java (NEW)
+
+import com.arcclaw.core.scope.WorkspaceScoped;
+import jakarta.annotation.PreDestroy;
+
+@WorkspaceScoped
+public class VaultKeyCache {
+
+    private volatile VaultKey cachedKey;
+
+    /**
+     * Returns the cached key for this session, deriving it on first access.
+     * Thread-safe via double-checked locking — WorkspaceScoped beans are
+     * per-session, so contention only exists within one session's threads.
+     */
+    public VaultKey getOrDerive(String sessionId, Argon2idKeyDerivation derivation) {
+        if (cachedKey != null) return cachedKey;
+        synchronized (this) {
+            if (cachedKey == null) {
+                cachedKey = derivation.deriveSessionKey(sessionId);
+            }
+        }
+        return cachedKey;
+    }
+
+    @PreDestroy
+    void wipe() {
+        if (cachedKey != null) {
+            cachedKey.close(); // VaultKey implements AutoCloseable — zeroes key bytes
+            cachedKey = null;
+        }
+    }
+}
+
+Component 2 — Update SecretVaultImpl to use VaultKeyCache
+File: arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java
+
+Add injection:
+  @Inject
+  VaultKeyCache keyCache;
+
+In store(): replace
+  try (VaultKey sessionKey = keyDerivation.deriveSessionKey(sessionId)) {
+
+With:
+  VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
+  try {
+
+NOTE: Do NOT use try-with-resources here — the cached key must not be
+closed after store(). The @PreDestroy on VaultKeyCache closes it when
+the WorkspaceScoped session ends.
+
+In get(): same replacement — use keyCache.getOrDerive() instead of
+keyDerivation.deriveSessionKey(). Do NOT close the key after get().
+
+Remove the try-with-resources wrappers in both methods. The key lifecycle
+is now managed by VaultKeyCache.@PreDestroy.
+
+Component 3 — Verify WorkspaceScoped annotation exists and is correct
+VaultKeyCache must be @WorkspaceScoped (your custom CDI scope), NOT
+@ApplicationScoped or @RequestScoped.
+@WorkspaceScoped beans are created per WorkspaceContext.run() invocation
+and destroyed when the run() completes or terminateSession() is called.
+This guarantees the key is wiped when the session ends.
+
+If @WorkspaceScoped is not available for this bean type (e.g., it requires
+@ActivateRequestContext), fall back to storing the cache in
+WorkspaceScopeHolder as a Map<String, VaultKey> keyed by sessionId,
+with explicit cleanup in WorkspaceContext.run()'s finally block.
+
+TESTS
+
+File: arcclaw-core/src/test/java/com/arcclaw/core/security/VaultKeyCacheTest.java (NEW)
+Plain JUnit5 — no CDI:
+
+- testDeriveCalledOnceForMultipleAccesses:
+  Mock Argon2idKeyDerivation. Call getOrDerive() 3 times with same sessionId.
+  Verify deriveSessionKey() called exactly once (Mockito verify times(1)).
+
+- testWipeZeroesKey:
+  Call getOrDerive() once to populate cache.
+  Call wipe().
+  Verify cachedKey is null after wipe.
+
+- testGetOrDeriveAfterWipeRederives:
+  Call getOrDerive(), then wipe(), then getOrDerive() again.
+  Verify deriveSessionKey() called exactly twice.
+
+VERIFICATION
+grep -n "keyDerivation.deriveSessionKey" \
+  arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java
+→ 0 results (all replaced with keyCache.getOrDerive())
+```
+
+---
+
+```
+## P3-3 — DestructiveVocabularyFilter Regex Fix
+
+## CONTEXT
+
+Current pattern:
+  "(?i)\\b(delete|purge|drop|rm\\s*-rf|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+
+Two defects:
+
+DEFECT 1 — rm\s*-rf won't match correctly with \b
+`\b` is a word boundary between \w and \W. The space in "rm -rf"
+means \b anchors at "rm" and "rf" separately. "rm -rf" as a full
+token won't reliably match. Test: Pattern.matches on "rm -rf" fails.
+
+DEFECT 2 — \b at start of alternation only anchors the first token
+The closing \b anchors the last token in the alternation. Multi-word
+tokens like "rm -rf" and "rm-rf" are not properly bounded.
+
+The filter is a routing safety measure, not a hard security boundary.
+The system prompt in LangChainReasoningEngine enforces the actual
+destructive operation prevention. This filter is defence-in-depth for
+routing — it should catch obvious cases without false positives.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Split the pattern into two: single-word tokens and rm-rf
+File: arcclaw-app/src/main/java/com/arcclaw/app/security/DestructiveVocabularyFilter.java
+
+Replace:
+  private static final Pattern DESTRUCTIVE_PATTERN = Pattern.compile(
+      "(?i)\\b(delete|purge|drop|rm\\s*-rf|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+  );
+
+With:
+  // Single-word destructive tokens — word boundary anchoring is reliable here
+  private static final Pattern DESTRUCTIVE_WORDS = Pattern.compile(
+      "(?i)\\b(delete|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+  );
+
+  // rm -rf variants — word boundary unreliable for multi-word tokens
+  // Match: rm-rf, rm -rf, rm  -rf, rm\t-rf, rmrf (no separator)
+  private static final Pattern RM_RF_PATTERN = Pattern.compile(
+      "(?i)\\brm\\s*-?\\s*rf\\b"
+  );
+
+Update filter() to check both:
+  if (!EXEMPT_ROLES.contains(resolvedRole)
+      && !resolvedRole.definition().capabilities().isEmpty()
+      && (DESTRUCTIVE_WORDS.matcher(userMessage).find()
+          || RM_RF_PATTERN.matcher(userMessage).find())) {
+      Log.warnf(...);
+      return "coordinator";
+  }
+
+Component 2 — Fix "brahaspati" typo in IntentClassifierService.sanitize()
+File: arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java
+
+In sanitize():
+  // Before:
+  if (lowerRaw.contains("architect") || lowerRaw.contains("brahaspati")) return "architect";
+
+  // After:
+  if (lowerRaw.contains("architect") || lowerRaw.contains("brihaspati")
+      || lowerRaw.contains("brahaspati")) return "architect"; // keep old spelling as fallback
+
+Keep "brahaspati" as a secondary fallback — don't remove it, as the LLM
+may have been trained on the misspelling. Add the correct "brihaspati".
+
+TESTS
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/security/DestructiveVocabularyFilterTest.java (NEW or ADD TO EXISTING)
+Plain JUnit5 — no CDI. Construct DestructiveVocabularyFilter directly.
+
+- testDeleteDetected: filter("coder", "delete the repo") → "coordinator"
+- testRmRfWithSpaceDetected: filter("coder", "rm -rf /data") → "coordinator"
+- testRmRfNoSpaceDetected: filter("coder", "rm-rf everything") → "coordinator"
+- testRmRfCamelCaseDetected: filter("coder", "Run RM -RF on it") → "coordinator"
+- testCoordinatorRolePassesThrough:
+    filter("coordinator", "delete the repo") → "coordinator" (no tool caps)
+- testDebuggerExemptFromFilter:
+    filter("debugger", "delete the broken class") → "debugger"
+- testNonDestructiveMessagePassesThrough:
+    filter("coder", "write a function to list files") → "coder"
+- testBrihaspatiSpellingMapsToArchitect:
+    Verify sanitize("brihaspati") → "architect"
+- testBrahaspatiSpellingStillMapsToArchitect (regression):
+    Verify sanitize("brahaspati") → "architect"
+```
+
+---
+
+```
+## P3-4 — CompactionModelProducer maxTokens Fix
+
+## CONTEXT
+
+CompactionModelProducer.compactionModel() sets:
+  .maxTokens(256)
+
+The compaction model summarizes full conversation histories (up to 50+
+messages). 256 tokens produces severely truncated summaries. A complete
+summary of a typical session requires 512-1024 tokens minimum.
+
+Silent truncation: if the LLM hits the token limit mid-sentence, the
+summary is cut off with no error. LangChain4j does not throw — it returns
+whatever the model produced up to the limit. The reasoning engine then
+operates with an incomplete context window reconstruction.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Increase maxTokens and add config property
+File: arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java
+
+Add config property:
+  @ConfigProperty(name = "arcclaw.memory.compaction.max-tokens", defaultValue = "1024")
+  int compactionMaxTokens;
+
+Replace:
+  .maxTokens(256)
+
+With:
+  .maxTokens(compactionMaxTokens)
+
+Component 2 — Add to application.yaml
+File: arcclaw-app/src/main/resources/application.yaml
+
+Under arcclaw.memory section:
+  arcclaw:
+    memory:
+      compaction:
+        max-tokens: 1024
+        model: llama-3.1-8b-instant
+
+TESTS
+No new test class needed. Verify via existing CompactionServiceTest or add:
+
+- testCompactionModelMaxTokensIsConfigurable:
+  @QuarkusTest with TestProfile overriding arcclaw.memory.compaction.max-tokens=512
+  Inject the @Identifier("compaction") ChatLanguageModel.
+  Via reflection verify the maxTokens field is 512 not 256.
+
+VERIFICATION
+grep -n "maxTokens(256)" arcclaw-app/src/main/java → 0 results
+```
+
+---
+
+```
+## P3-6 — MessagePipeline Exception Handling Strategy
+
+## CONTEXT
+
+Current MessagePipeline.process():
+  } catch (Exception e) {
+      log.errorf(e, "Error in message handler: %s", handler.getClass().getSimpleName());
+      return; // silent stop — user gets no feedback
+  }
+
+Problems:
+1. User receives no error message when a handler crashes.
+2. Pre-security handler crash and post-security handler crash are treated
+   identically — in both cases the pipeline silently stops.
+3. Allowlist handler at priority 10 crashing means the message is dropped
+   silently — indistinguishable from an authorized rejection.
+
+Fix: distinguish between pre-dispatch crash (send error to user) and
+post-dispatch crash (agent has already run, log only). Since MessagePipeline
+doesn't know which handler is "pre-dispatch", the simplest fix is to always
+attempt a user notification on crash, using the context's sender.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Notify user on pipeline handler crash
+File: arcclaw-core/src/main/java/com/arcclaw/core/pipeline/MessagePipeline.java
+
+Replace:
+  } catch (Exception e) {
+      log.errorf(e, "Error in message handler: %s", handler.getClass().getSimpleName());
+      return;
+  }
+
+With:
+  } catch (Exception e) {
+      log.errorf(e, "Pipeline handler %s failed for chat %s",
+              handler.getClass().getSimpleName(), context.getChatId());
+      try {
+          context.getSender().sendRaw(context.getUser(),
+              "⚠️ An internal error occurred. Please try again.");
+      } catch (Exception notifyEx) {
+          log.warnf(notifyEx, "Failed to send pipeline error notification to chat %s",
+              context.getChatId());
+      }
+      return;
+  }
+
+Component 2 — Add handler priority logging for diagnosis
+After the handler list is built in the constructor, add:
+  log.infof("Pipeline handler order: %s",
+      handlers.stream()
+          .map(h -> h.getClass().getSimpleName() + "(" + h.priority() + ")")
+          .collect(Collectors.joining(" → ")));
+
+This makes priority ordering visible in startup logs — critical for
+diagnosing security handler sequencing issues.
+
+TESTS
+File: arcclaw-core/src/test/java/com/arcclaw/core/pipeline/MessagePipelineErrorTest.java (NEW)
+@QuarkusTest:
+
+- testHandlerCrashNotifiesUser:
+  Register a handler that throws RuntimeException.
+  Mock ChannelSender. Process a message.
+  Verify sender.sendRaw() called with message containing "error".
+
+- testPipelineContinuesNotificationAfterHandlerCrash:
+  Verify pipeline does not re-throw — returns cleanly after notification.
+```
+
+---
+
+```
+## P3-7 — TelegramMarkdownV2Renderer Language Identifier Escaping Fix
+
+## CONTEXT
+
+In TelegramMarkdownV2Renderer.renderNode() for CodeBlock:
+  String lang = cb.language() != null ? esc(cb.language()) : "";
+  yield "```" + lang + "\n" + cb.code() + "\n```";
+
+The esc() call on the language identifier is incorrect. Telegram's
+MarkdownV2 code block format is:
+  ```language
+  code
+  ```
+
+The language tag is NOT parsed as MarkdownV2 — it is a literal string
+identifier for syntax highlighting. Applying esc() to "c++" produces
+"c\\+\\+" which Telegram does not recognize as a language and will
+either fail highlighting or return a 400 error.
+
+Telegram's pre entity does not MarkdownV2-escape the language tag.
+The language tag must be passed verbatim, with only the characters that
+are actually invalid in that position stripped (none are, for standard
+language identifiers like java, python, c++, c#, javascript).
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Remove esc() from language identifier
+File: arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramMarkdownV2Renderer.java
+
+Replace:
+  case ReplyNode.CodeBlock cb -> {
+      String lang = cb.language() != null ? esc(cb.language()) : "";
+      yield "```" + lang + "\n" + cb.code() + "\n```";
+  }
+
+With:
+  case ReplyNode.CodeBlock cb -> {
+      // Language identifier is NOT MarkdownV2 content — do NOT escape it.
+      // Telegram uses it as a literal syntax hint: ```java, ```c++, etc.
+      String lang = cb.language() != null ? cb.language().trim() : "";
+      yield "```" + lang + "\n" + cb.code() + "\n```";
+  }
+
+TESTS
+File: arcclaw-app/src/test/java/com/arcclaw/app/channel/telegram/TelegramMarkdownV2RendererTest.java
+(NEW or ADD TO EXISTING):
+
+- testCodeBlockLanguageNotEscaped:
+  Render CodeBlock(language="c++", code="int x = 1;")
+  Assert result starts with "```c++" (NOT "```c\\+\\+")
+
+- testCodeBlockLanguageJavaUnchanged:
+  Render CodeBlock(language="java", code="...")
+  Assert result starts with "```java"
+
+- testCodeBlockNullLanguage:
+  Render CodeBlock(language=null, code="...")
+  Assert result starts with "```\n"
+
+- testPlainTextSpecialCharactersEscaped:
+  Render Text("Hello! This is a test.")
+  Assert contains "Hello\\!" and "test\\."
+  (Verify esc() still works correctly on text nodes)
+```
+
+---
+
+```
+## P3-8 + P3-12 — TelegramAgentHandler: Non-Text Payload Feedback
+   and Per-User Message Sequencing
+
+## CONTEXT
+
+DEFECT 1 — Silent drop on non-text payloads (P3-8)
+  if (msg == null || msg.getText() == null) {
+      log.warn("Received message without text");
+      return;
+  }
+
+When a user sends a photo, document, sticker, or voice note,
+getText() returns null. The handler logs a warning and returns.
+The user receives no Telegram reply and has no idea their message
+was unsupported. This is observed immediately in testing.
+
+DEFECT 2 — No backpressure on rapid messages (P3-12)
+executor.submit(() -> processPipeline(context)) fires a new pipeline
+execution for every message immediately. If a user sends 10 messages
+rapidly, 10 concurrent agent loops run for the same session, each
+writing to the same AgentCheckpoint. The retry logic handles the
+SQLite collision but the user receives 10 unordered responses.
+
+Fix for P3-12: per-chatId sequential execution queue. Messages for
+the same chatId are processed in order; messages for different chatIds
+are still concurrent.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Notify user on non-text payload (P3-8)
+File: arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java
+
+The current code lacks chatId and user when getText() is null.
+Reconstruct them before the null check:
+
+Replace:
+  if (msg == null || msg.getText() == null) {
+      log.warn("Received message without text");
+      return;
+  }
+
+  String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
+  String userId = String.valueOf(msg.getFrom().getId());
+
+With:
+  String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
+
+  if (msg == null) {
+      log.warn("Received null message body from Telegram");
+      return; // no chatId to reply to
+  }
+
+  if (msg.getText() == null) {
+      log.warnf("Received non-text message from chat %s — notifying user", chatId);
+      if (chatId != null) {
+          // Build a minimal ChannelUser to send the reply
+          String fallbackUserId = msg.getFrom() != null
+              ? String.valueOf(msg.getFrom().getId()) : "unknown";
+          ChannelUser fallbackUser = new ChannelUser(
+              fallbackUserId, null, com.arcclaw.channel.api.ChannelType.TELEGRAM);
+          sender.sendRaw(fallbackUser,
+              "⚠️ I can only process text messages. "
+              + "Images, documents, stickers, and voice notes are not supported yet.");
+      }
+      return;
+  }
+
+  String userId = String.valueOf(msg.getFrom().getId());
+
+Component 2 — Per-chatId sequential execution queue (P3-12)
+Add a ConcurrentHashMap of per-chatId single-thread executors:
+
+Add field:
+  private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ExecutorService>
+      chatQueues = new java.util.concurrent.ConcurrentHashMap<>();
+
+Add helper method:
+  private java.util.concurrent.ExecutorService queueForChat(String chatId) {
+      return chatQueues.computeIfAbsent(chatId,
+          id -> java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+              Thread t = new Thread(r, "chat-queue-" + id);
+              t.setDaemon(true);
+              return t;
+          }));
+  }
+
+Replace:
+  executor.submit(() -> processPipeline(context));
+
+With:
+  queueForChat(chatId).submit(() -> processPipeline(context));
+
+NOTE: Single-thread executors per chatId ensure messages are processed
+in order for the same user while allowing full concurrency across users.
+The executors are daemon threads so they don't block JVM shutdown.
+The ConcurrentHashMap grows one entry per unique chatId — for a personal
+bot with few users this is negligible. For a public bot, add eviction
+with Caffeine with expireAfterAccess(10, MINUTES).
+
+Do NOT remove the @Inject ManagedExecutor executor — keep it for any
+future use cases that need CDI context propagation outside of per-chat
+sequencing. The chat queues use plain Thread for simplicity since
+processPipeline() already has @ActivateRequestContext.
+
+TESTS
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/channel/telegram/TelegramAgentHandlerTest.java
+(ADD TO EXISTING or CREATE):
+
+- testNonTextMessageNotifiesUser:
+  Create Exchange with IncomingMessage where getText() returns null.
+  Mock TelegramChannelSender.
+  Call receiveMessage().
+  Verify sender.sendRaw() called with message containing "not supported".
+
+- testNullMessageBodyIsHandledGracefully:
+  Create Exchange with null body (msg == null).
+  Verify no exception thrown, no sendRaw call.
+
+- testTextMessageProcessedNormally:
+  Create Exchange with valid text message.
+  Mock pipeline.process().
+  Verify processPipeline called (not sendRaw with error).
+```
+
+---
+
+```
+## P3-13 — ArcClawCli.main() Fail Fast on Data Directory Creation Failure
+
+## CONTEXT
+
+Current ArcClawCli.main():
+  } catch (Exception e) {
+      System.err.println("[ArcClaw] FAILED to create data directory: " + e.getMessage());
+      e.printStackTrace();
+  }
+  Quarkus.run(ArcClawCli.class, args); // continues regardless
+
+If data directory creation fails (no permissions, disk full, path invalid),
+Quarkus boots, Hibernate attempts to create/open SQLite at the missing path,
+and produces a confusing cascade:
+  - Hibernate DDL errors
+  - SQLite "unable to open database file"
+  - NullPointerException in repository calls
+  - No clear message about root cause
+
+Fix: System.exit(1) after the error print. Do not let Quarkus boot with
+a missing data directory.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Fail fast on data directory creation failure
+File: arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java
+
+Replace:
+  } catch (Exception e) {
+      System.err.println("[ArcClaw] FAILED to create data directory: " + e.getMessage());
+      e.printStackTrace();  // see the real error
+  }
+  Quarkus.run(ArcClawCli.class, args);
+
+With:
+  } catch (Exception e) {
+      System.err.println("[ArcClaw] ❌ FATAL: Failed to create data directory.");
+      System.err.println("[ArcClaw]    Path: " + System.getProperty("ARCCLAW_DATA_DIR",
+              System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data")));
+      System.err.println("[ArcClaw]    Cause: " + e.getMessage());
+      System.err.println("[ArcClaw]    Fix: ensure the directory is writable or set ARCCLAW_DATA_DIR.");
+      System.exit(1);
+  }
+  Quarkus.run(ArcClawCli.class, args);
+
+Also uncomment the path logging that was commented out:
+  System.out.printf("[ArcClaw] Data dir: %s%n", dirPath.toAbsolutePath());
+
+This gives the user a clear startup message showing which path is being used,
+making permission issues immediately obvious.
+
+TESTS
+No unit test needed — System.exit() is untestable without a security manager.
+Manual verification:
+  mkdir C:\no-permissions-dir
+  icacls C:\no-permissions-dir /deny Everyone:W
+  set ARCCLAW_DATA_DIR=C:\no-permissions-dir\data
+  .\arcclaw-cli.ps1 serve
+  → Must print FATAL message and exit with code 1
+  → Must NOT print Quarkus startup banner
+```
+
+---
+
+**Summary of remaining P4 testing gap prompts** — these are lower priority than the above. Generate them in Phase 51 after the P3 fixes are validated. The P4 items are:
+
+| Item | What's needed | Depends on |
+|---|---|---|
+| P4-1 | AuditVerifier tamper detection test | `AuditVerifier.java`, `AuditEventRepository.java` |
+| P4-2 | Semaphore leak regression test | Fixed by P2-12+P2-13 above — add test after |
+| P4-3 | AllowlistHandler blocking integration test | `AllowlistHandler.java` |
+| P4-4 | Test DB in-memory SQLite switch | test `application.yaml` |
+| P4-5 | `StartupSecurityValidatorTest` via `@TestProfile` | `StartupSecurityValidatorTest.java` |
+| P4-6 | Negative bypass tests for `DestructiveVocabularyFilter` | Partially covered above in P3-3 |
+| P4-7 | E2E Telegram → Pipeline → AgentLoop → Reply | All of the above fixed first |
+| P4-8 | Replace CDI proxy unwrap in cron tests | `AgentCronSchedulerTest.java` |
+
+Request those files when you're ready for P4.
