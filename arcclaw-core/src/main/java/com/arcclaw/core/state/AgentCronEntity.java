@@ -56,8 +56,8 @@ public class AgentCronEntity {
     @Convert(converter = InstantToTextConverter.class)
     public Instant lastFireTime;
 
-    /** ACTIVE | RUNNING | COMPLETED | FAILED */
-    public String status = "ACTIVE";
+    @Convert(converter = CronStatusConverter.class)
+    public CronStatus status = CronStatus.ACTIVE;
 
     public String errorReason;
 

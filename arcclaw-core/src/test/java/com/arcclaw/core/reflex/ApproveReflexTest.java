@@ -25,6 +25,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 
 import io.quarkus.test.InjectMock;
@@ -68,7 +69,7 @@ class ApproveReflexTest {
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = cronId;
         cron.userId = userId;
-        cron.status = "AWAITING_APPROVAL";
+        cron.status = CronStatus.AWAITING_APPROVAL;
         cron.runOnce = true;
         cron.lastDeliveryId = "dlv-1";
         cron.chatId = "chat-1";
@@ -90,7 +91,7 @@ class ApproveReflexTest {
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = "cron-456";
         cron.goal = "Backup databases";
-        cron.status = "AWAITING_APPROVAL";
+        cron.status = CronStatus.AWAITING_APPROVAL;
 
         when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
@@ -110,7 +111,7 @@ class ApproveReflexTest {
 
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = "cron-789";
-        cron.status = "AWAITING_APPROVAL";
+        cron.status = CronStatus.AWAITING_APPROVAL;
 
         // Session CP exists
         when(statefulAgentStore.load(anyString(), eq(AgentRoleEnum.COORDINATOR.toScopedName())))
@@ -131,12 +132,12 @@ class ApproveReflexTest {
         AgentCronEntity c1 = new AgentCronEntity();
         c1.id = "cron-1";
         c1.goal = "Goal 1";
-        c1.status = "AWAITING_APPROVAL";
+        c1.status = CronStatus.AWAITING_APPROVAL;
 
         AgentCronEntity c2 = new AgentCronEntity();
         c2.id = "cron-2";
         c2.goal = "Goal 2";
-        c2.status = "AWAITING_APPROVAL";
+        c2.status = CronStatus.AWAITING_APPROVAL;
 
         when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(c1, c2));

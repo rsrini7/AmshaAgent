@@ -22,6 +22,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 
 import io.quarkus.test.InjectMock;
@@ -64,7 +65,7 @@ class DenyReflexTest {
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = cronId;
         cron.userId = userId;
-        cron.status = "AWAITING_APPROVAL";
+        cron.status = CronStatus.AWAITING_APPROVAL;
         cron.lastDeliveryId = "dlv-1";
         cron.chatId = "chat-1";
 
@@ -85,7 +86,7 @@ class DenyReflexTest {
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = "cron-456";
         cron.goal = "Backup databases";
-        cron.status = "AWAITING_APPROVAL";
+        cron.status = CronStatus.AWAITING_APPROVAL;
 
         when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));

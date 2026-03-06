@@ -22,6 +22,7 @@ import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.CronResultFormatter;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -126,8 +127,8 @@ public class DenyReflex implements AgentReflex {
             return "❌ Cron task not found or not yours.";
         }
 
-        if (!"AWAITING_APPROVAL".equals(cron.status)) {
-            return "❌ This task is not awaiting approval (status=" + cron.status + ").";
+        if (cron.status != CronStatus.AWAITING_APPROVAL) {
+            return "❌ This task is not awaiting approval (status=" + cron.status.name() + ").";
         }
 
         String cronSessionId = "cron-" + cron.id + "-" + cron.lastDeliveryId;

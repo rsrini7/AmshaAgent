@@ -2791,3 +2791,625 @@ Add:
   RuntimeException("connection reset"), verify ToolResponse.failure(500, ...).
 ```
 
+---
+
+
+```
+# Phase 50
+
+## P2-4 — CronStatus Enum (Replace Raw String Status in AgentCronEntity)
+
+## CONTEXT
+
+AgentCronEntity.status is declared as:
+  public String status = "ACTIVE";
+
+Raw string comparisons exist in:
+- AgentCronRepository: native SQL WHERE clauses ("ACTIVE", "RUNNING", etc.)
+- DenyReflex.handleCronDenial(): !"AWAITING_APPROVAL".equals(cron.status)
+- AgentCronEntity.toDisplayString(): status printed directly
+
+Valid states are: ACTIVE, RUNNING, COMPLETED, FAILED, AWAITING_APPROVAL.
+A typo in any call site produces a silent DB mismatch — no compile-time error.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Create CronStatus enum
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/CronStatus.java (NEW)
+
+public enum CronStatus {
+    ACTIVE,
+    RUNNING,
+    COMPLETED,
+    FAILED,
+    AWAITING_APPROVAL;
+
+    /** SQLite text representation — stable across renames */
+    public String toStorageValue() {
+        return this.name();
+    }
+
+    public static CronStatus fromStorageValue(String value) {
+        if (value == null || value.isBlank()) return ACTIVE;
+        return switch (value.trim().toUpperCase()) {
+            case "ACTIVE"             -> ACTIVE;
+            case "RUNNING"            -> RUNNING;
+            case "COMPLETED"          -> COMPLETED;
+            case "FAILED"             -> FAILED;
+            case "AWAITING_APPROVAL"  -> AWAITING_APPROVAL;
+            default -> throw new IllegalArgumentException(
+                "Unknown CronStatus: " + value);
+        };
+    }
+}
+
+Component 2 — Create JPA AttributeConverter
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/CronStatusConverter.java (NEW)
+
+@Converter(autoApply = false)
+public class CronStatusConverter
+        implements AttributeConverter<CronStatus, String> {
+
+    @Override
+    public String convertToDatabaseColumn(CronStatus attribute) {
+        return attribute != null ? attribute.toStorageValue() : null;
+    }
+
+    @Override
+    public CronStatus convertToEntityAttribute(String dbData) {
+        return CronStatus.fromStorageValue(dbData);
+    }
+}
+
+Component 3 — Update AgentCronEntity
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronEntity.java
+
+Change the status field:
+  // Before:
+  /** ACTIVE | RUNNING | COMPLETED | FAILED */
+  public String status = "ACTIVE";
+
+  // After:
+  @Convert(converter = CronStatusConverter.class)
+  public CronStatus status = CronStatus.ACTIVE;
+
+Update toDisplayString() — no change needed, CronStatus.name() produces
+same output as the old string.
+
+Component 4 — Update AgentCronRepository native SQL
+File: arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronRepository.java
+
+Native SQL queries use string literals — keep them as string literals but
+replace all hardcoded strings with CronStatus references via .toStorageValue():
+
+findDueCrons():
+  WHERE status='ACTIVE' → no change needed (native SQL cannot use enum)
+  Leave native SQL string literals UNCHANGED.
+  The converter handles the Java↔DB mapping automatically.
+
+All WHERE clauses in native SQL remain as string literals:
+  'ACTIVE', 'RUNNING', 'COMPLETED', 'AWAITING_APPROVAL'
+These are correct — the converter only applies to entity field reads.
+
+findAwaitingApprovalByUserId() JPQL — update to use string literal since
+JPQL with AttributeConverter and enum comparison can be fragile on SQLite:
+  WHERE c.status = 'AWAITING_APPROVAL' (native)
+  or keep as JPQL with string: WHERE c.status = 'AWAITING_APPROVAL'
+  NOTE: Do NOT use = :status with a CronStatus enum value in JPQL — this
+  requires Hibernate to know the converter for JPQL parameters, which is
+  unreliable with SQLite dialect. Use string literals in both native and JPQL.
+
+Component 5 — Update DenyReflex
+File: arcclaw-core/src/main/java/com/arcclaw/core/reflex/DenyReflex.java
+
+Line in handleCronDenial():
+  // Before:
+  if (!"AWAITING_APPROVAL".equals(cron.status)) {
+      return "❌ This task is not awaiting approval (status=" + cron.status + ").";
+  }
+
+  // After:
+  if (cron.status != CronStatus.AWAITING_APPROVAL) {
+      return "❌ This task is not awaiting approval (status=" + cron.status.name() + ").";
+  }
+
+Component 6 — Update AgentCronScheduler
+File: arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java
+
+No direct cron.status string comparisons exist in the scheduler —
+it uses repository methods and AgentResult instance checks.
+No changes needed in AgentCronScheduler.
+
+TESTS
+
+File: arcclaw-core/src/test/java/com/arcclaw/core/state/CronStatusTest.java (NEW)
+
+Plain JUnit5 — no CDI:
+- testFromStorageValueRoundTrip: all 5 values survive toStorageValue() → fromStorageValue()
+- testFromStorageValueCaseInsensitive: "active", "ACTIVE", "Active" all → ACTIVE
+- testFromStorageValueNullReturnsActive: null → ACTIVE
+- testFromStorageValueUnknownThrows: "UNKNOWN" → IllegalArgumentException
+
+VERIFICATION
+grep -rn '"ACTIVE"\|"RUNNING"\|"COMPLETED"\|"FAILED"\|"AWAITING_APPROVAL"' \
+  arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronEntity.java \
+  arcclaw-core/src/main/java/com/arcclaw/core/reflex/DenyReflex.java
+→ 0 results (all replaced with enum references)
+
+grep -rn '"ACTIVE"\|"RUNNING"\|"COMPLETED"\|"FAILED"\|"AWAITING_APPROVAL"' \
+  arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronRepository.java
+→ only in native SQL string literals — acceptable
+```
+
+---
+
+```
+## P2-5 — Remove Dual /deny Processing (ReflexHandler Dead Code)
+
+## CONTEXT
+
+Two pipeline handlers both intercept /deny:
+
+ReflexHandler (priority 20):
+  - Matches ChannelCommand.Deny
+  - Calls denyReflex.execute() directly
+  - Returns HandleResult.STOP
+
+CommandDispatchHandler (priority 30):
+  - Matches ChannelCommand.Deny in its switch
+  - Routes to reflexRegistry.processIfReflex() → DenyReflex.execute()
+  - Returns HandleResult.STOP
+
+The pipeline processes handlers ordered by priority. If higher number =
+higher priority (runs first), CommandDispatchHandler (30) fires first,
+processes /deny via ReflexRegistry, returns STOP, and ReflexHandler (20)
+never fires. In that case ReflexHandler is dead code.
+
+If lower number = higher priority (runs first), ReflexHandler (20) fires
+first, calls DenyReflex directly (bypassing audit in ReflexRegistry),
+returns STOP, and CommandDispatchHandler (30) never fires. In that case
+/deny skips the ReflexRegistry audit trail.
+
+Either way, one of them is wrong. The correct path is via ReflexRegistry
+because it provides the audit record (APPROVAL_DENIED event). Direct
+denyReflex.execute() in ReflexHandler bypasses this audit.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Delete ReflexHandler
+File: arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/ReflexHandler.java
+
+DELETE this file entirely.
+
+Rationale: CommandDispatchHandler already routes /deny through
+ReflexRegistry which calls DenyReflex.execute() AND records the
+APPROVAL_DENIED audit event. ReflexHandler bypasses the audit and
+is therefore strictly worse than the CommandDispatchHandler path.
+
+Component 2 — Verify CommandDispatchHandler /deny path is complete
+File: arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/CommandDispatchHandler.java
+
+The existing Deny case:
+  case ChannelCommand.Deny d -> {
+      String input = d.cronId()
+              .map(id -> "/deny " + id)
+              .orElse("/deny");
+      dispatch(context, input);
+      yield HandleResult.STOP;
+  }
+
+This is correct — no changes needed.
+
+Component 3 — Verify no other injection sites reference ReflexHandler
+Run:
+  grep -rn "ReflexHandler" arcclaw-core/src arcclaw-app/src
+→ 0 results after deletion (class is discovered via CDI, not explicitly
+  wired anywhere)
+
+TESTS
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/pipeline/DenyPipelineTest.java (NEW)
+Use @QuarkusTest.
+- testDenyRoutesToReflexRegistryNotDirectly:
+  Mock ReflexRegistry. Send a /deny message through the pipeline.
+  Verify reflexRegistry.processIfReflex() is called exactly once.
+  Verify DenyReflex is NOT called directly (i.e. not twice total).
+- testDenyAuditEventFires:
+  Verify APPROVAL_DENIED audit event is recorded when /deny is processed.
+
+VERIFICATION
+grep -rn "ReflexHandler" arcclaw-core/src arcclaw-app/src → 0 results
+mvnw clean verify → all tests pass
+```
+
+---
+
+```
+## P2-6 — Camel Route Lifecycle (Remove Manual camelContext.start())
+
+## CONTEXT
+
+Two command classes manually manage the Camel lifecycle:
+
+ServeCommand.run():
+  if (camelContext.getRoute("telegram-bot") == null) {
+      camelContext.addRoutes(telegramChannelRoute);
+  }
+  if (camelContext.isStopped()) {
+      camelContext.start();
+  }
+
+AttachCommand.run():
+  if (camelContext.getRoute("telegram-bot") == null) {
+      camelContext.addRoutes(telegramChannelRoute);
+  }
+  if (camelContext.isStopped()) {
+      camelContext.start();
+  }
+
+Problems:
+1. TelegramChannelRoute is @ApplicationScoped and extends RouteBuilder.
+   Camel Quarkus auto-discovers all @ApplicationScoped RouteBuilder beans
+   and registers them during container startup via its CDI extension.
+   The manual addRoutes() call is redundant and risks double-registration.
+2. camelContext.start() bypasses the Quarkus container lifecycle.
+   Camel Quarkus manages start/stop via its own Quarkus lifecycle events.
+   Calling start() manually can cause context state conflicts.
+3. The null check for "telegram-bot" is unreliable — the route may be
+   absent not because Camel hasn't started but because the bot token was
+   a placeholder and the route was intentionally skipped in configure().
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Remove manual route management from ServeCommand
+File: arcclaw-app/src/main/java/com/arcclaw/app/ServeCommand.java
+
+Remove:
+  @Inject CamelContext camelContext;
+  @Inject TelegramChannelRoute telegramChannelRoute;
+
+Replace the Camel block in run() with a simple log statement:
+  log.infof("ArcClaw daemon mode starting on port %d...", httpPort);
+  log.info("Telegram route lifecycle managed by Camel Quarkus CDI extension.");
+  Quarkus.waitForExit();
+
+Do NOT inject CamelContext or TelegramChannelRoute in ServeCommand.
+Do NOT call camelContext.addRoutes() or camelContext.start().
+
+Component 2 — Remove manual route management from AttachCommand
+File: arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java
+
+Remove:
+  @Inject CamelContext camelContext;
+  @Inject TelegramChannelRoute telegramChannelRoute;
+
+Replace the Camel management block in the "telegram" switch case:
+  // Before:
+  try {
+      if (camelContext.getRoute("telegram-bot") == null) {
+          camelContext.addRoutes(telegramChannelRoute);
+      }
+      if (camelContext.isStopped()) {
+          camelContext.start();
+      }
+  } catch (Exception e) {
+      System.err.println("❌ Failed to start Telegram route: " + e.getMessage());
+  }
+
+  // After: (remove entirely — Camel Quarkus manages lifecycle)
+  System.out.println("🔗 Telegram route managed by Camel Quarkus. " +
+      "If TELEGRAM_BOT_TOKEN is set, the route is already active.");
+
+Component 3 — Verify TelegramChannelRoute auto-registration
+TelegramChannelRoute is @ApplicationScoped + extends RouteBuilder.
+Camel Quarkus auto-discovers this via its CDI RouteBuilder extension.
+No @Startup or @Observes annotation needed.
+
+Verify: after removing the manual start() calls, run:
+  ./arcclaw-cli.ps1 serve
+Check logs for:
+  INFO  [org.apa.cam.imp.eng.AbstractCamelContext] Apache Camel started
+  INFO  Route: telegram-bot started
+
+If the route is absent (placeholder token), the log shows:
+  WARN  Telegram bot token is a placeholder — skipping route registration.
+This is correct — the route was intentionally skipped in configure().
+
+TESTS
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/ServeCommandTest.java
+Add: testServeCommandDoesNotCallCamelStart
+  - @QuarkusTest with test profile
+  - Inject CamelContext
+  - Verify camelContext.getStatus() is not STOPPED (managed by Quarkus)
+  - Verify "telegram-bot" route absent (placeholder token in test) — no
+    NullPointerException from accessing a non-existent route
+
+VERIFICATION
+grep -rn "camelContext.start()\|camelContext.addRoutes" \
+  arcclaw-app/src/main/java → 0 results
+```
+
+---
+
+```
+## P2-7 — BrahmaAgent System Prompt / Tool Definition Sync
+
+## CONTEXT
+
+BrahmaAgent has two contradictions:
+
+Contradiction 1 — Tool claim vs tool reality:
+  SYSTEM_PROMPT says: "You ONLY use the 'github' tool."
+  AgentRoleEnum.CODER has: java.util.Set.of()  ← no tools at all
+  allowedTools() returns: List.copyOf(AgentRoleEnum.CODER.definition().toolNames())
+    → empty list
+  role-coder.txt template: "PERMITTED TOOLS: None. You are a pure code generation engine."
+
+  The system prompt claims a tool that the role cannot access. When the LLM
+  tries to call github based on the system prompt instruction, the tool is
+  not in the permitted list and the call fails with a schema error.
+
+Contradiction 2 — Responsibility claim vs persona:
+  BrahmaAgent Javadoc: "Math/Code Creator and Logic Expert"
+  SYSTEM_PROMPT: "Analyze code structure, identify bugs..."
+    → This is Shiva/debugger territory, not Brahma/creator
+  The coder role should be focused on code GENERATION, not bug analysis.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Fix BrahmaAgent SYSTEM_PROMPT
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/BrahmaAgent.java
+
+Replace SYSTEM_PROMPT with:
+
+  private static final String SYSTEM_PROMPT = """
+      You are Brahma, the Math/Code Creator and Logic Expert of the ArcClaw team.
+
+      YOUR RESPONSIBILITIES:
+      - Generate code from scratch based on specifications.
+      - Implement features, algorithms, and data structures.
+      - Perform logical reasoning and mathematical computations.
+      - Write unit tests and implementation code.
+
+      STRICT RULES:
+      - You are a PURE code generation engine. You do NOT use any tools.
+      - You MUST NOT perform research, fetch repositories, or access external systems.
+      - You MUST validate all code suggestions for correctness before presenting them.
+      - You MUST NOT fabricate APIs or methods that do not exist.
+      - If a task requires external data (e.g. a GitHub repository), respond:
+        "I need the source code pasted directly — I cannot fetch external repositories."
+      - If a task is outside your expertise, delegate back to the coordinator.
+
+      AVAILABLE TOOLS: None. You are a pure code generation engine.
+      """;
+
+Key changes:
+- Removed "You ONLY use the 'github' tool" (false — CODER has no tools)
+- Removed "Review pull requests" (that's researcher/github territory)
+- Removed "Analyze code structure, identify bugs" (that's debugger territory)
+- Added "You do NOT use any tools" to align with AgentRoleEnum.CODER = Set.of()
+- AVAILABLE TOOLS: None — now consistent with role-coder.txt template
+
+Component 2 — No changes to AgentRoleEnum.CODER
+The empty tool set is intentional — coder is a pure text generation engine.
+The SANDBOX_EXEC tool is deferred per the comment in AgentRoleEnum.
+Do NOT add github to CODER's tool set.
+
+Component 3 — Verify ShivaAgent persona alignment
+ShivaAgent.SYSTEM_PROMPT describes "Creative, Transformer and Balance Expert"
+but AgentRoleEnum.DEBUGGER says "Analyzes stack traces, finds bugs, fixes broken code"
+and role-debugger.txt is a debugging template.
+
+This is the P2-8 identity conflict — do NOT change ShivaAgent here.
+Document it as part of P2-8 scope. P2-7 only fixes BrahmaAgent.
+
+TESTS
+
+File: arcclaw-core/src/test/java/com/arcclaw/core/agent/BrahmaAgentTest.java (NEW)
+Plain JUnit5 — no CDI:
+- testAllowedToolsIsEmpty:
+    BrahmaAgent agent = new BrahmaAgent();
+    assertTrue(agent.allowedTools().isEmpty(),
+        "Coder role must have no tools — SANDBOX_EXEC deferred");
+- testSystemPromptDoesNotClaimGithubTool:
+    assertFalse(agent.systemPrompt().contains("'github' tool"),
+        "BrahmaAgent must not claim github tool it cannot access");
+- testSystemPromptMentionsNoTools:
+    assertTrue(agent.systemPrompt().contains("AVAILABLE TOOLS: None"),
+        "BrahmaAgent must declare no available tools");
+
+VERIFICATION
+grep -n "github" arcclaw-core/src/main/java/com/arcclaw/core/agent/BrahmaAgent.java
+→ 0 results
+```
+
+---
+
+```
+## P2-8 — Dynamic System Prompt Per Role (Persona Fix)
+
+## CONTEXT
+
+LangChainReasoningEngine.nextStep() builds a baseSystemPrompt that
+unconditionally contains:
+
+  "You act as 'Vishnu' (The Coordinator / Preserver). You are the main
+   orchestrator... Always identify as ArcClaw, specifically acting as
+   the Coordinator."
+
+This is prepended to EVERY request regardless of the agentRole parameter.
+The role-specific prompt is appended via strictBinding at the bottom:
+  "ACTIVE PERSONA: " + agentRole + "\n" + promptTemplateEngine.buildSystemPrompt(...)
+
+When role=debugger, the LLM receives:
+  [TOP] "You are the Coordinator. Always identify as the Coordinator."
+  [BOTTOM] "ACTIVE PERSONA: debugger ..."
+
+The top-of-prompt Coordinator identity overrides the bottom injection.
+The LLM introduces itself as Coordinator regardless of role.
+
+Agent CDI beans (VishnuAgent, BrahmaAgent, ShivaAgent, SaraswatiAgent)
+each have systemPrompt() and allowedTools() methods that are never called.
+They are structural dead code.
+
+ShivaAgent.SYSTEM_PROMPT correctly describes the debugger persona.
+VishnuAgent.SYSTEM_PROMPT correctly describes the coordinator persona.
+These should drive the identity section of the base prompt.
+
+## IMPLEMENTATION REQUIREMENTS
+
+Component 1 — Create AgentPersonaRegistry
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentPersonaRegistry.java (NEW)
+
+@ApplicationScoped
+public class AgentPersonaRegistry {
+
+    @Inject
+    Instance<Agent> agents;
+
+    /**
+     * Returns the system prompt for the given role from the Agent CDI bean.
+     * Falls back to the coordinator prompt if no matching bean found.
+     */
+    public String getPersonaPrompt(AgentRoleEnum role) {
+        return agents.stream()
+            .filter(a -> a.role().equals(role.toScopedName()))
+            .findFirst()
+            .map(Agent::systemPrompt)
+            .orElseGet(() -> {
+                // Fallback: coordinator prompt if role not found
+                // This should never happen if all roles have CDI beans
+                return agents.stream()
+                    .filter(a -> a.role().equals("coordinator"))
+                    .findFirst()
+                    .map(Agent::systemPrompt)
+                    .orElse("You are ArcClaw, an AI agent. Be helpful and concise.");
+            });
+    }
+}
+
+Component 2 — Extract security rules from baseSystemPrompt into a constant
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java
+
+Extract the security/behavioral rules from baseSystemPrompt into a
+private static final String SECURITY_RULES_PROMPT. This includes:
+- RESPONSE LENGTH RULE
+- MEMORY STATE AWARENESS
+- CRITICAL INSTRUCTIONS FOR TOOL USAGE (7 points)
+- SCHEDULING AWARENESS
+- CRITICAL — GitHub Repository Requests
+- SECURITY — JAILBREAK DEFLECTION
+- SECURITY — DESTRUCTIVE OPERATIONS
+- SECURITY — HITL BYPASS PREVENTION
+- INSTRUCTION IMMUTABILITY
+- RETROACTIVE REVERT
+- EXECUTION BOUNDARY
+
+These rules apply to ALL roles and must not be removed.
+
+Component 3 — Replace hardcoded identity in baseSystemPrompt
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java
+
+Inject AgentPersonaRegistry:
+  @Inject AgentPersonaRegistry agentPersonaRegistry;
+
+In nextStep(), replace the baseSystemPrompt construction:
+
+  // Before:
+  String baseSystemPrompt = """
+      You are ArcClaw... You act as 'Vishnu' (The Coordinator)...
+      Always identify as ArcClaw, specifically acting as the Coordinator.
+      ...
+      [security rules]
+      """;
+
+  // After:
+  AgentRoleEnum roleEnum = AgentRoleEnum.fromString(agentRole);
+  String personaPrompt = agentPersonaRegistry.getPersonaPrompt(roleEnum);
+
+  String baseSystemPrompt =
+      // Dynamic identity from Agent CDI bean
+      "You are ArcClaw. Your active persona is described below.\n\n" +
+      personaPrompt +
+      "\n\n" +
+      // Architecture awareness — only inject Trimurti context for coordinator
+      (roleEnum == AgentRoleEnum.COORDINATOR
+          ? """
+            YOUR INTERNAL ARCHITECTURE (THE TRIMURTI & TRIDEVI):
+            You act as 'Vishnu' (The Coordinator / Preserver). You are the main
+            orchestrator, maintaining the state of the conversation and delegating
+            tasks to your specialized sub-agents:
+            - 'Brahma' (The Creator): Writes new code, builds features from scratch.
+            - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs.
+            - 'Saraswati' (The Goddess of Knowledge): Information retrieval, documentation.
+            After the first message in a session, skip the "I'll have [agent] perform..."
+            preamble and respond directly.
+            """
+          : "") +
+      "\n\n" +
+      SECURITY_RULES_PROMPT;  // security rules apply to all roles unchanged
+
+The strictBinding block that follows (ACTIVE PERSONA + promptTemplateEngine)
+remains UNCHANGED — it still appends role-specific tool rules.
+
+Component 4 — Fix ShivaAgent persona alignment
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/ShivaAgent.java
+
+ShivaAgent currently describes "Creative, Transformer and Balance Expert"
+but is annotated @AgentRole("debugger") and the role template (role-debugger.txt)
+is a debugging prompt. Align the persona:
+
+  private static final String SYSTEM_PROMPT = """
+      You are Shiva, the Debugger and Code Analyst of the ArcClaw team.
+
+      YOUR RESPONSIBILITIES:
+      - Analyze stack traces, error logs, and exception chains.
+      - Identify root causes of bugs and regressions.
+      - Propose targeted fixes with minimal side effects.
+      - Review code for correctness, security issues, and edge cases.
+
+      STRICT RULES:
+      - You MUST NOT generate new features or write code from scratch —
+        that is Brahma's role.
+      - You MUST NOT perform factual research — that is Saraswati's role.
+      - You may use the github tool to fetch code context for analysis.
+      - If a task is outside your expertise, delegate back to the coordinator.
+
+      AVAILABLE TOOLS: github (for code context only)
+      """;
+
+TESTS
+
+File: arcclaw-core/src/test/java/com/arcclaw/core/agent/AgentPersonaRegistryTest.java (NEW)
+Use @QuarkusTest:
+- testCoordinatorPersonaContainsVishnu:
+    Verify getPersonaPrompt(COORDINATOR) contains "Vishnu"
+- testDebuggerPersonaContainsShiva:
+    Verify getPersonaPrompt(DEBUGGER) contains "Shiva"
+- testCoderPersonaContainsNoneTools:
+    Verify getPersonaPrompt(CODER) contains "AVAILABLE TOOLS: None"
+- testAllRolesHavePersonaBean:
+    For each AgentRoleEnum value, verify getPersonaPrompt() is non-blank
+    and does not fall back to the coordinator default
+
+File: arcclaw-core/src/test/java/com/arcclaw/core/agent/LangChainReasoningEnginePersonaTest.java (NEW)
+Use @QuarkusTest:
+- testDebuggerRoleDoesNotSayCoordinator:
+    Call nextStep() with agentRole="debugger"
+    Capture the SystemMessage injected into the chat request
+    assertFalse(systemPromptText.contains("Always identify as ArcClaw, specifically acting as the Coordinator"))
+- testCoordinatorRoleContainsTrimurtiContext:
+    Call nextStep() with agentRole="coordinator"
+    assertTrue(systemPromptText.contains("THE TRIMURTI"))
+
+VERIFICATION
+./arcclaw-cli.ps1 ask "who are you" -r debugger
+→ Response must contain "Shiva" and NOT contain "Coordinator"
+./arcclaw-cli.ps1 ask "who are you" -r coordinator
+→ Response must contain "Vishnu" or "Coordinator"
+./arcclaw-cli.ps1 ask "who are you" -r researcher
+→ Response must contain "Saraswati"
+./arcclaw-cli.ps1 ask "who are you" -r coder
+→ Response must contain "Brahma"
+```

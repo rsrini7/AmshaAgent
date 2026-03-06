@@ -30,7 +30,7 @@ class AgentCronRepositoryTest {
     @Inject
     EntityManager em;
 
-    private AgentCronEntity createEntity(String userId, String status, Instant nextFireTime) {
+    private AgentCronEntity createEntity(String userId, CronStatus status, Instant nextFireTime) {
         AgentCronEntity e = new AgentCronEntity();
         e.id = UUID.randomUUID().toString();
         e.sessionId = "session-" + e.id;
@@ -53,7 +53,7 @@ class AgentCronRepositoryTest {
 
     @Test
     void testFindDueCronsReturnsDueRows() {
-        AgentCronEntity e = createEntity("user-due-1", "ACTIVE",
+        AgentCronEntity e = createEntity("user-due-1", CronStatus.ACTIVE,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         repository.persist(e);
 
@@ -64,7 +64,7 @@ class AgentCronRepositoryTest {
 
     @Test
     void testFindDueCronsExcludesFutureRows() {
-        AgentCronEntity e = createEntity("user-due-2", "ACTIVE",
+        AgentCronEntity e = createEntity("user-due-2", CronStatus.ACTIVE,
                 Instant.now().plus(1, ChronoUnit.HOURS));
         repository.persist(e);
 
@@ -75,7 +75,7 @@ class AgentCronRepositoryTest {
 
     @Test
     void testFindDueCronsExcludesNonActiveRows() {
-        AgentCronEntity e = createEntity("user-due-3", "COMPLETED",
+        AgentCronEntity e = createEntity("user-due-3", CronStatus.COMPLETED,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         repository.persist(e);
 
@@ -86,7 +86,7 @@ class AgentCronRepositoryTest {
 
     @Test
     void testMarkCompletedSetsTerminalState() {
-        AgentCronEntity e = createEntity("user-complete-1", "RUNNING",
+        AgentCronEntity e = createEntity("user-complete-1", CronStatus.RUNNING,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         repository.persist(e);
 
@@ -104,7 +104,7 @@ class AgentCronRepositoryTest {
     @Test
     @Transactional
     void testClaimForFireIsIdempotent() {
-        AgentCronEntity e = createEntity("user-claim-1", "ACTIVE",
+        AgentCronEntity e = createEntity("user-claim-1", CronStatus.ACTIVE,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         em.persist(e);
         em.flush();
@@ -120,7 +120,7 @@ class AgentCronRepositoryTest {
     @Test
     @Transactional
     void testMarkFiredUpdatesNextFireTime() {
-        AgentCronEntity e = createEntity("user-fire-1", "RUNNING",
+        AgentCronEntity e = createEntity("user-fire-1", CronStatus.RUNNING,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         em.persist(e);
         em.flush();
@@ -132,7 +132,7 @@ class AgentCronRepositoryTest {
         em.clear();
 
         AgentCronEntity updated = em.find(AgentCronEntity.class, e.id);
-        assertEquals("ACTIVE", updated.status);
+        assertEquals(CronStatus.ACTIVE, updated.status);
         assertNotNull(updated.lastFireTime);
         assertNotNull(updated.nextFireTime);
     }
@@ -140,7 +140,7 @@ class AgentCronRepositoryTest {
     @Test
     @Transactional
     void testMarkFailedRecordsReason() {
-        AgentCronEntity e = createEntity("user-fail-1", "RUNNING",
+        AgentCronEntity e = createEntity("user-fail-1", CronStatus.RUNNING,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         em.persist(e);
         em.flush();
@@ -151,18 +151,18 @@ class AgentCronRepositoryTest {
         em.clear();
 
         AgentCronEntity updated = em.find(AgentCronEntity.class, e.id);
-        assertEquals("FAILED", updated.status);
+        assertEquals(CronStatus.FAILED, updated.status);
         assertEquals("Test failure reason", updated.errorReason);
     }
 
     @Test
     @Transactional
     void testReleaseClaimToActiveResetsRunningOnly() {
-        AgentCronEntity running = createEntity("user-release-1", "RUNNING",
+        AgentCronEntity running = createEntity("user-release-1", CronStatus.RUNNING,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         em.persist(running);
 
-        AgentCronEntity failed = createEntity("user-release-1", "FAILED",
+        AgentCronEntity failed = createEntity("user-release-1", CronStatus.FAILED,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         em.persist(failed);
         em.flush();
@@ -174,16 +174,16 @@ class AgentCronRepositoryTest {
         em.clear();
 
         AgentCronEntity updatedRunning = em.find(AgentCronEntity.class, running.id);
-        assertEquals("ACTIVE", updatedRunning.status, "RUNNING should become ACTIVE");
+        assertEquals(CronStatus.ACTIVE, updatedRunning.status, "RUNNING should become ACTIVE");
 
         AgentCronEntity updatedFailed = em.find(AgentCronEntity.class, failed.id);
-        assertEquals("FAILED", updatedFailed.status, "FAILED should remain unchanged");
+        assertEquals(CronStatus.FAILED, updatedFailed.status, "FAILED should remain unchanged");
     }
 
     @Test
     @Transactional
     void testReclaimStaleCronsResetsRunning() {
-        AgentCronEntity stale = createEntity("user-stale-1", "RUNNING",
+        AgentCronEntity stale = createEntity("user-stale-1", CronStatus.RUNNING,
                 Instant.now().minus(10, ChronoUnit.MINUTES));
         stale.lastFireTime = Instant.now().minus(10, ChronoUnit.MINUTES);
         em.persist(stale);
@@ -195,13 +195,13 @@ class AgentCronRepositoryTest {
         em.clear();
 
         AgentCronEntity updated = em.find(AgentCronEntity.class, stale.id);
-        assertEquals("ACTIVE", updated.status, "Stale RUNNING job should be reclaimed to ACTIVE");
+        assertEquals(CronStatus.ACTIVE, updated.status, "Stale RUNNING job should be reclaimed to ACTIVE");
     }
 
     @Test
     @Transactional
     void testSetDeliveryIdPersists() {
-        AgentCronEntity e = createEntity("user-delivery-1", "RUNNING",
+        AgentCronEntity e = createEntity("user-delivery-1", CronStatus.RUNNING,
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         em.persist(e);
         em.flush();
@@ -219,7 +219,7 @@ class AgentCronRepositoryTest {
     @Test
     @Transactional
     void testDeleteByIdAndUserIdEnforcesTenantIsolation() {
-        AgentCronEntity e = createEntity("user-tenant-A", "ACTIVE",
+        AgentCronEntity e = createEntity("user-tenant-A", CronStatus.ACTIVE,
                 Instant.now().plus(1, ChronoUnit.HOURS));
         em.persist(e);
         em.flush();
@@ -245,7 +245,7 @@ class AgentCronRepositoryTest {
     @Test
     @Transactional
     void testReclaimStaleCronsHandlesNullLastFireTime() {
-        AgentCronEntity stale = createEntity("user-stale-null", "RUNNING", 
+        AgentCronEntity stale = createEntity("user-stale-null", CronStatus.RUNNING, 
                 Instant.now().plus(1, ChronoUnit.HOURS));
         stale.lastFireTime = null; // Claimed but JVM crashed before AgentLoop started
         stale.createdAt = Instant.now().minus(10, ChronoUnit.MINUTES);
@@ -258,7 +258,7 @@ class AgentCronRepositoryTest {
         em.clear();
 
         AgentCronEntity updated = em.find(AgentCronEntity.class, stale.id);
-        assertEquals("ACTIVE", updated.status, 
+        assertEquals(CronStatus.ACTIVE, updated.status, 
                 "RUNNING job with null lastFireTime should be reclaimed based on createdAt");
     }
 
@@ -269,9 +269,9 @@ class AgentCronRepositoryTest {
         String targetUserId = "user-delete-target";
         String otherUserId = "user-delete-other";
 
-        AgentCronEntity job1 = createEntity(targetUserId, "ACTIVE", Instant.now().plusSeconds(3600));
-        AgentCronEntity job2 = createEntity(targetUserId, "COMPLETED", Instant.now().minusSeconds(3600));
-        AgentCronEntity job3 = createEntity(otherUserId, "ACTIVE", Instant.now().plusSeconds(3600));
+        AgentCronEntity job1 = createEntity(targetUserId, CronStatus.ACTIVE, Instant.now().plusSeconds(3600));
+        AgentCronEntity job2 = createEntity(targetUserId, CronStatus.COMPLETED, Instant.now().minusSeconds(3600));
+        AgentCronEntity job3 = createEntity(otherUserId, CronStatus.ACTIVE, Instant.now().plusSeconds(3600));
 
         em.persist(job1);
         em.persist(job2);
@@ -312,7 +312,7 @@ class AgentCronRepositoryTest {
         stuckRunning.goal           = "CRON: test";
         stuckRunning.cronExpression = "0 9 * * *";
         stuckRunning.timezone       = "UTC";
-        stuckRunning.status         = "RUNNING";
+        stuckRunning.status         = CronStatus.RUNNING;
         stuckRunning.lastFireTime   = null;
         stuckRunning.createdAt      = oldTime;
         stuckRunning.nextFireTime   = oldTime;
@@ -327,7 +327,7 @@ class AgentCronRepositoryTest {
         failedRow.goal           = "CRON: test";
         failedRow.cronExpression = "0 9 * * *";
         failedRow.timezone       = "UTC";
-        failedRow.status         = "FAILED";
+        failedRow.status         = CronStatus.FAILED;
         failedRow.lastFireTime   = null;
         failedRow.createdAt      = oldTime;
         failedRow.nextFireTime   = oldTime;
@@ -342,7 +342,7 @@ class AgentCronRepositoryTest {
         completedRow.goal           = "CRON: test";
         completedRow.cronExpression = "0 9 * * *";
         completedRow.timezone       = "UTC";
-        completedRow.status         = "COMPLETED";
+        completedRow.status         = CronStatus.COMPLETED;
         completedRow.lastFireTime   = null;
         completedRow.createdAt      = oldTime;
         completedRow.nextFireTime   = oldTime;
@@ -357,7 +357,7 @@ class AgentCronRepositoryTest {
         stuckRunning2.goal           = "CRON: test";
         stuckRunning2.cronExpression = "0 9 * * *";
         stuckRunning2.timezone       = "UTC";
-        stuckRunning2.status         = "RUNNING";
+        stuckRunning2.status         = CronStatus.RUNNING;
         stuckRunning2.lastFireTime   = oldTime; // stale non-null
         stuckRunning2.createdAt      = oldTime;
         stuckRunning2.nextFireTime   = oldTime;
@@ -372,14 +372,10 @@ class AgentCronRepositoryTest {
         activeRunning.goal           = "CRON: test";
         activeRunning.cronExpression = "0 9 * * *";
         activeRunning.timezone       = "UTC";
-        activeRunning.status         = "RUNNING";
+        activeRunning.status         = CronStatus.RUNNING;
         activeRunning.lastFireTime   = Instant.now().minus(1, ChronoUnit.MINUTES); // recent
         activeRunning.createdAt      = oldTime;
         activeRunning.nextFireTime   = oldTime;
-        repository.persist(stuckRunning);
-        repository.persist(failedRow);
-        repository.persist(completedRow);
-        repository.persist(stuckRunning2);
         repository.persist(activeRunning);
 
         em.flush();
@@ -399,23 +395,23 @@ class AgentCronRepositoryTest {
         AgentCronEntity r5 = findById(activeRunning.id);
 
         // Row 1: RUNNING + null createdAt old → must be ACTIVE now
-        assertEquals("ACTIVE", r1.status,
+        assertEquals(CronStatus.ACTIVE, r1.status,
                 "RUNNING row with null lastFireTime older than threshold must be reclaimed to ACTIVE");
 
         // Row 2: FAILED must stay FAILED — the SQL bug would flip this to ACTIVE
-        assertEquals("FAILED", r2.status,
+        assertEquals(CronStatus.FAILED, r2.status,
                 "FAILED row must NOT be reclaimed — SQL operator precedence bug if this fails");
 
         // Row 3: COMPLETED must stay COMPLETED
-        assertEquals("COMPLETED", r3.status,
+        assertEquals(CronStatus.COMPLETED, r3.status,
                 "COMPLETED row must NOT be reclaimed — SQL operator precedence bug if this fails");
 
         // Row 4: RUNNING + stale non-null lastFireTime → must be ACTIVE
-        assertEquals("ACTIVE", r4.status,
+        assertEquals(CronStatus.ACTIVE, r4.status,
                 "RUNNING row with stale lastFireTime must be reclaimed to ACTIVE");
 
         // Row 5: RUNNING + recent lastFireTime → must stay RUNNING
-        assertEquals("RUNNING", r5.status,
+        assertEquals(CronStatus.RUNNING, r5.status,
                 "RUNNING row with recent lastFireTime must NOT be reclaimed — still executing");
         }
 

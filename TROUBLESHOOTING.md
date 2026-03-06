@@ -63,6 +63,7 @@
 | **Channel** | Startup Failures | Telegram route crashing on missing/mock token. | Added token validity check to `TelegramChannelRoute` before starting the route. |
 | **Test** | `Failed to start quarkus` | Validator halts app via `@Observes StartupEvent` before test context initializes. | **Safe Boot + Proper Unwrap**: Boot with `test` profile (safe), then use `ClientProxy.unwrap()` to override fields before manual call. |
 | **CDI** | Test field overrides ignored | `@Inject` provides a Client Proxy; modifications to its fields have no effect on the bean. | Use `io.quarkus.arc.ClientProxy.unwrap(bean)` to access and modify the actual implementation instance. |
+| **Build** | `cannot find symbol` (Core) | `-pl arcclaw-app` used without `-am` after core changes. | Add `-am` (also-make) flag to rebuild dependency modules. |
  
 ---
 
@@ -137,6 +138,14 @@
 **Symptom:** Force-closing the stream or hitting `Ctrl+C` throws a massive stack trace from `scanner.nextLine()`.
 **Root Cause:** The `Scanner` object throws this when the input stream is terminally closed while waiting for input.
 **Resolution:** Added a defensive `try-catch` around `scanner.nextLine()` specifically for `NoSuchElementException` to break the loop silently.
+
+### 🔴 Failure: "cannot find symbol: class CronStatus" during `arcclaw-app` tests
+**Symptom:** `mvn clean test -pl arcclaw-app` fails with compilation errors about a missing class that was recently added to `arcclaw-core`.
+**Root Cause:** Using `-pl <module>` only builds the specified module. If a dependency module (like `arcclaw-core`) has changed, the compiler will use the old JAR from the local repository unless instructed to rebuild it.
+**Resolution:** Add the `-am` (also-make) flag to the Maven command:
+```bash
+.\mvnw.cmd clean test -pl arcclaw-app -am -Dtest=...
+```
 
 ---
 

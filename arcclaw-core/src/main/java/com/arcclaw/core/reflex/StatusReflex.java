@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -48,9 +49,9 @@ public class StatusReflex implements AgentReflex {
 
             // 2. Override: If ANY role is currently running or waiting, that is the session's true status
             for (AgentCheckpoint cp : checkpoints) {
-                String cpStatus = cp.getStatus().name();
-                if (cpStatus.equals("AWAITING_APPROVAL") || cpStatus.equals("IN_PROGRESS")) {
-                    status = cpStatus;
+                CheckpointStatus cpStatus = cp.getStatus();
+                if (cpStatus == CheckpointStatus.AWAITING_APPROVAL || cpStatus == CheckpointStatus.IN_PROGRESS) {
+                    status = cpStatus.name();
                     break;
                 }
             }

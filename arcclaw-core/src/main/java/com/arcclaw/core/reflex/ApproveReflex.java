@@ -22,6 +22,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.CronResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -130,7 +131,7 @@ public class ApproveReflex implements AgentReflex {
             return "❌ Cron task not found or not yours.";
         }
 
-        if (!"AWAITING_APPROVAL".equals(cron.status)) {
+        if (!CronStatus.AWAITING_APPROVAL.equals(cron.status)) {
             return "❌ This task is not awaiting approval (status=" + cron.status + ").";
         }
 
