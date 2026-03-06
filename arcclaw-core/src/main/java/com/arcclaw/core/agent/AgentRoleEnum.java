@@ -48,6 +48,18 @@ public enum AgentRoleEnum {
             3,
             false,
             java.util.Set.of(ToolCapability.GITHUB)
+    )),
+
+    DATTATREYA("synthesizer", new RoleDefinition(
+            "synthesizer",
+            "Dattatreya (Synthesizer)",
+            "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
+            "simultaneously. Activated when a single task spans multiple specialist domains " +
+            "and their outputs need integration or conflict resolution.",
+            10,
+            true,
+            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
+                             ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE)
     ));
 
     private final String canonicalName;
@@ -93,6 +105,7 @@ public enum AgentRoleEnum {
             case "researcher", "saraswati" -> RESEARCHER;
             case "coder", "brahma" -> CODER;
             case "debugger", "shiva" -> DEBUGGER;
+            case "synthesizer", "dattatreya", "datta" -> DATTATREYA;
             default -> throw new IllegalArgumentException("Unknown AgentRole: " + roleStr);
         };
     }

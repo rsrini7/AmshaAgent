@@ -2942,3 +2942,49 @@ Eliminate redundant Argon2id key derivations by caching the derived `VaultKey` o
 
 ### Static Analysis
 - ✅ `grep` search confirms no remaining calls to `keyDerivation.deriveSessionKey()` in `SecretVaultImpl.java`.
+
+---
+
+# Phase 52 — DattatreyaAgent: The Synthesizer Role ✅
+
+Implement the Dattatreya (Synthesizer) role — a meta-agent designed to integrate outputs from multiple specialist agents and resolve contradictions across domains.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Avadhuta Architecture**: Dattatreya represents the synthesis of the Trimurti (Brahma, Vishnu, Shiva) and Tridevi (Saraswati). It is the only agent allowed to hold the 'full picture' and resolve cross-domain conflicts.
+
+> [!NOTE]
+> **Tool Constraints**: Dattatreya is explicitly forbidden from generating code from scratch or performing pure research. It must delegate these specialists rather than replace them, focusing strictly on integration and synthesis.
+
+> [!TIP]
+> **Dynamic Routing**: The intent classifier was hardened to prioritize synthesis tasks when multi-domain keywords (e.g., 'code' + 'debug' + 'research') appear simultaneously.
+
+## Proposed Changes
+
+### Core Module — Agent & Prompt Architecture
+
+#### [MODIFY] [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRoleEnum.java)
+- Added DATTATREYA with maxIterations=10 and equiresApproval=true.
+- Added deity and canonical string mappings.
+
+#### [NEW] [DattatreyaAgent.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/DattatreyaAgent.java)
+- @AgentRole('synthesizer') implementation with grounding rules and synthesis-first persona.
+
+#### [NEW] [role-synthesizer.txt](file:///arcclaw-core/src/main/resources/templates/prompts/role-synthesizer.txt)
+- Qute template for the synthesizer persona prompt.
+
+### Routing & Integration
+
+#### [MODIFY] [IntentClassifierService.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Integrated synthesizer into the LLM-based intent routing logic.
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Updated internal architecture block to formally include Dattatreya (Avadhuta).
+
+## Verification Plan
+
+### Automated Tests
+- ✅ DattatreyaAgentTest: Comprehensive behavioral and persona verification.
+- ✅ AgentPersonaRegistryTest: Registry discovery and rendering verification.
+- ✅ Full suite regression: All tests passing.
