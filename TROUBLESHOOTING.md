@@ -3064,3 +3064,20 @@ This is a JVM shutdown sequencing problem in the test harness. The `AsyncPersist
 **Root Cause:** Truncation logic assumes a minimum length that might not exist, or safe-substring offsets are miscalculated.
 **Resolution:** `ApiKeyAuthFilter` now uses `Math.min(4, key.length())` to safely extract up to 4 characters, ensuring it never throws `StringIndexOutOfBoundsException` and always provides the maximum safe prefix.
 
+---
+
+## 41. Phase 50 P2-5 — Pipeline & Testing Hardening
+
+### 🔴 Failure: `DenyPipelineTest` fails with "zero interactions" on mocked services
+
+**Symptom:** When running `DenyPipelineTest`, assertions for `reflexRegistry.processIfReflex` and `auditService.record` fail because the mocks were never invoked.
+**Root Cause:** The `AllowlistHandler` (priority 10) was intercepting the pipeline before it reached the `CommandDispatchHandler` (priority 30). Since the test was using `ChannelType.CLI` and no allowlist was configured for CLI in the test context, the handler returned `HandleResult.STOP`.
+**Resolution:** Mocked `ChannelAllowlist` in the test and set `isAllowed()` to return `true` for the test user. This ensures the pipeline proceeds through the `AllowlistHandler`.
+
+### 🔴 Failure: `DenyPipelineTest` fails with session ID mismatch
+
+**Symptom:** `Wanted but not invoked: reflexRegistry.processIfReflex(..., "session-456", ...)` but the actual call used a UUID like `288ca227-1dde-3581-ac6e-41aceada4134`.
+**Root Cause:** The `SessionResolutionHandler` (priority 10) dynamically resolves or generates a session ID, overwriting any static session ID manually set in the `ChannelMessage` during test setup.
+**Resolution:** Updated test assertions to use `anyString()` for the session ID argument in `verify()` calls, as the exact generated UUID is not deterministic for the assertion.
+
+

@@ -2617,3 +2617,34 @@ Gracefully handle FTS index unavailability on cold start and empty result sets s
 
 ### Automated Tests
 - ✅ `mvnw test -pl arcclaw-core -Dtest=MemorySearchToolTest` tests pass successfully.
+
+---
+
+# Phase 50 P2-5 — Remove Dual /deny Processing ✅
+
+Remove `ReflexHandler` (priority 20) and consolidate all `/deny` logic in `CommandDispatchHandler` (priority 30) via `ReflexRegistry` to ensure a consistent audit trail and remove dead code.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Consolidated Audit Trail**: CommandDispatchHandler already invokes `ReflexRegistry.processIfReflex()`, which handles auditing. ReflexHandler bypassed this by calling `denyReflex.execute()` directly. Consolidating into CommandDispatchHandler ensures all `/deny` commands are audited.
+
+## Completed Changes
+
+### Core Module — Pipeline Handlers
+
+#### [DELETE] [ReflexHandler.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/ReflexHandler.java)
+- Removed redundant handler to eliminate dual processing of `/deny`.
+
+### App Module — Tests
+
+#### [NEW] [DenyPipelineTest.java](file:///h:/ws/ArcClaw/arcclaw-app/src/test/java/com/arcclaw/app/pipeline/DenyPipelineTest.java)
+- Integrated pipeline test specifically for `/deny` command routing.
+- Mocked `ChannelAllowlist` to prevent `AllowlistHandler` from blocking `ChannelType.CLI` users.
+- Updated assertions to use `anyString()` for session IDs to accommodate dynamic resolution by `SessionResolutionHandler`.
+
+## Verification
+
+- ✅ `DenyPipelineTest` passes.
+- ✅ `mvn clean verify -pl arcclaw-app -am` succeeds.
+
