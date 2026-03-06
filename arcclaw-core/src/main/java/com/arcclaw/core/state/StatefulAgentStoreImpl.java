@@ -45,6 +45,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Inject
     AuditService auditService;
 
+    private static final long BACKOFF_BASE_MS = 50;
+    private static final java.util.Random JITTER = new java.util.Random();
+
     @Override
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
         return withRetry(() -> {
@@ -184,7 +187,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private <T> T withRetry(java.util.concurrent.Callable<T> task, String operation) {
         int maxRetries = 5;
-        long backoffMs = 50;
         Exception lastEx = null;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -193,9 +195,18 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             } catch (Exception e) {
                 lastEx = e;
                 if (isSqliteBusy(e)) {
+                    // Exponential backoff with jitter prevents thundering herd:
+                    // base * 2^attempt + random(0..50ms)
+                    long delay = (BACKOFF_BASE_MS * (1L << attempt))
+                            + JITTER.nextInt(50);
                     log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
-                            operation, attempt, maxRetries, backoffMs * attempt);
-                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new RuntimeException(ie); }
+                            operation, attempt, maxRetries, delay);
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException(ie);
+                    }
                 } else {
                     throw (e instanceof RuntimeException re) ? re : new RuntimeException(e);
                 }
@@ -206,10 +217,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private boolean isSqliteBusy(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
-            String className = t.getClass().getSimpleName();
-            if (className.equals("LockAcquisitionException") || 
-                className.equals("OptimisticLockException") ||
-                className.equals("SQLiteException")) {
+            String canonicalName = t.getClass().getName();
+            if (canonicalName.equals("org.hibernate.exception.LockAcquisitionException") ||
+                canonicalName.equals("jakarta.persistence.OptimisticLockException") ||
+                canonicalName.contains("SQLiteException")) {
                 return true;
             }
 
@@ -229,10 +240,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
         var results = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role",
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.agentRole = :role " +
+                "ORDER BY c.updatedAt DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
+                .setMaxResults(1)
                 .getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
