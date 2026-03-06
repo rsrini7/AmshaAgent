@@ -3093,5 +3093,8 @@ Camel Quarkus may not automatically start the `CamelContext` if all discovered r
 **Resolution:** 
 Updated `ServeCommandTest` with a `@BeforeEach` method that manually invokes `camelContext.start()` if it is `Stopped`. This ensures the behavioral assertions about the context being functional can pass. Furthermore, both `ServeCommand` and `AttachCommand` now include a safety check (`if (camelContext.getRoute("telegram-bot") != null)`) before calling `startRoute()` to ensure no errors occur even if registration is skipped.
 
-
+### 🔴 Failure — /reset reflex failure + duplicate "Hi" response
+REFLEX-FAILURE reflex=ResetReflex error=Action failed after 5 retries for save-entity
+ResetReflex is failing to persist to SQLite after 5 retries — likely a WAL lock contention because two threads are processing simultaneously (see executor-thread-1 and executor-thread-2 both active at 15:44:54). The "Hi" message was queued twice — once from 15:44 PM and once from 03:07 PM (old undelivered message). The double response is Telegram delivering both queued messages when the bot came back online.
+The retry failure is the real bug — AsyncPersistenceEngine exhausted retries on save-entity. Check if ResetReflex is doing a synchronous DB write that conflicts with the async persistence consumer. This is a pre-existing issue unrelated to P2-6.
 
