@@ -7,6 +7,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import com.arcclaw.core.config.SystemMetadataRegistry;
+
 import java.math.BigDecimal;
 
 @ApplicationScoped
@@ -16,17 +18,21 @@ public class TelemetryAuditService {
 
     private final AuditEventRepository auditEventRepository;
     private final AsyncPersistenceEngine persistenceEngine;
+    private final SystemMetadataRegistry registry;
 
     protected TelemetryAuditService() {
         this.auditEventRepository = null;
         this.persistenceEngine = null;
+        this.registry = null;
     }
 
     @Inject
     public TelemetryAuditService(AuditEventRepository auditEventRepository,
-                                 AsyncPersistenceEngine persistenceEngine) {
+                                 AsyncPersistenceEngine persistenceEngine,
+                                 SystemMetadataRegistry registry) {
         this.auditEventRepository = auditEventRepository;
         this.persistenceEngine = persistenceEngine;
+        this.registry = registry;
     }
 
     /**
@@ -38,6 +44,7 @@ public class TelemetryAuditService {
         log.infof("[AUDIT-PROBE] type=%s session=%s", type, sessionId);
         try {
             AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
+            event.appVersion = registry.getAppVersion();
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, type, em -> {
                 auditEventRepository.record(event);
             });
@@ -69,6 +76,7 @@ public class TelemetryAuditService {
 
             AuditEvent event = AuditEvent.of(sessionId, userId, agentRole, goalHash, outcome, eventType,
                                              inputTokens, outputTokens, usdCost, result.steps().size(), detail);
+            event.appVersion = registry.getAppVersion();
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, eventType, em -> {
                 auditEventRepository.record(event);
             });

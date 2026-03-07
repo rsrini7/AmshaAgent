@@ -3205,3 +3205,22 @@ arcclaw:
 *   **Symptom**: `IntentClassificationHandlerTest` fails with `NoSuchMethodError` or `ClassCastException` during mock setup or execution.
 *   **Root Cause**: The `ChannelMessage` sealed interface requires specific record implementations (e.g., `TelegramMessage`) and an `Instant` timestamp. Older tests using anonymous implementations or incomplete mocks failed.
 *   **Resolution**: Use `new ChannelMessage.TelegramMessage(sender, text, chatId, Instant.now())` for deterministic test message creation.
+
+---
+
+### 24. Phase 58: System Metadata Registry
+
+#### 24.1. `SystemInfoResourceTest` 404 Not Found in arcclaw-core
+*   **Symptom**: GET `/info` returns 404 during `arcclaw-core` unit tests.
+*   **Root Cause**: The test `application.yaml` in `arcclaw-core` defaulted to root path, while the production configuration in `arcclaw-app` used `/api/v1`.
+*   **Resolution**: Set `quarkus.rest.path: /api/v1` in `arcclaw-core/src/test/resources/application.yaml`.
+
+#### 24.2. Mismatched `version` or `name` in Metadata Tests
+*   **Symptom**: Expected "arcclaw" but got "arcclaw-core" (module name) or "unspecified".
+*   **Root Cause**: Quarkus defaults to the artifact ID when `quarkus.application.name` is missing from the test classpath.
+*   **Resolution**: Explicitly defined `quarkus.application.name: arcclaw` and `quarkus.application.version: 1.0.0` in the test configuration.
+
+#### 24.3. `TelemetryAuditServiceTest` Compilation Errors
+*   **Symptom**: `cannot find symbol: method getPersistenceAction()` or missing `SystemMetadataRegistry` mock.
+*   **Root Cause**: Incomplete test refactoring after the `AuditService` split into `TelemetryAuditService`.
+*   **Resolution**: Updated test to use `getDbAction()` and injected the required `SystemMetadataRegistry` mock.

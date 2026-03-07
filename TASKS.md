@@ -938,3 +938,15 @@
 - [x] Fix 2: `IntentClassificationHandler` rate limit detection and user notification <!-- id: 350 -->
 - [x] Create `IntentClassificationHandlerTest` to verify 429 handling and defaults <!-- id: 351 -->
 - [x] Verify: All tests pass (including specific rate limit scenarios) <!-- id: 352 -->
+
+---
+
+## Phase 58 — System Metadata Registry
+- [x] Create `SystemMetadataRegistry` (@ApplicationScoped, resolve environment) <!-- id: 310 -->
+- [x] Create `SystemMetadataHealthCheck` (@Readiness) <!-- id: 311 -->
+- [x] Create `SystemInfoResource` (`/info` endpoint) <!-- id: 312 -->
+- [x] Update `ApiKeyAuthFilter` to exclude `/info` from authentication <!-- id: 313 -->
+- [x] Add `appVersion` field to `AuditEvent` entity <!-- id: 314 -->
+- [x] Update `TelemetryAuditService` to populate `appVersion` <!-- id: 315 -->
+- [x] Update `ReflectionConfig` for `SystemInfo` native serialization <!-- id: 316 -->
+- [x] Verify: All Phase 58 unit and integration tests pass (122/122 total) <!-- id: 317 -->

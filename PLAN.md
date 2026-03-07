@@ -3484,3 +3484,49 @@ Harden the system against LLM rate limits by providing immediate user feedback a
 
 - ✅ `IntentClassificationHandlerTest` passes with 100% coverage of the new logic.
 - ✅ Manual verification of Telegram "⏳" acknowledgment.
+
+---
+
+# Phase 58 — System Metadata Registry ✅
+
+Implement a central registry for application metadata (version, build info, environment) and expose it via health checks, a public `/info` endpoint, and audit logs.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Environment Resolution**: `LaunchMode.current()` is used statically to determine the environment (`dev`, `test`, `prod`) to avoid injection cycles and ensure early availability.
+
+> [!NOTE]
+> **Public Endpoint**: The `/info` endpoint specifically bypasses API key authentication in `ApiKeyAuthFilter` to provide public visibility into the running version and environment, mirroring the accessibility of health checks.
+
+## Proposed Changes
+
+### Core Module — Configuration & Health
+
+#### [NEW] [SystemMetadataRegistry.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/config/SystemMetadataRegistry.java)
+- `@ApplicationScoped` registry for name, version, environment, and startup time.
+- Uses `@ConfigProperty` for `quarkus.application.name` and `version`.
+
+#### [NEW] [SystemMetadataHealthCheck.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/SystemMetadataHealthCheck.java)
+- `@Readiness` check surfacing system info in `/q/health`.
+
+#### [NEW] [SystemInfoResource.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/SystemInfoResource.java)
+- JAX-RS resource at `/info` (effective `/api/v1/info`) returning `SystemInfo`.
+
+### Audit & Security
+
+#### [MODIFY] [AuditEvent.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEvent.java)
+- Added `app_version` column to capture the application version at the time of the event.
+
+#### [MODIFY] [TelemetryAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/TelemetryAuditService.java)
+- Automatically populates `appVersion` from the registry.
+
+#### [MODIFY] [ApiKeyAuthFilter.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java)
+- Added explicit exclusions for `/info` and `/api/v1/info` paths.
+
+## Verification
+
+- ✅ `SystemMetadataRegistryTest`: Verified environment mapping and data population.
+- ✅ `SystemInfoResourceTest`: Verified 200 OK and JSON shape of `/info`.
+- ✅ `ApiKeyAuthFilterTest`: Verified public access to `/info`.
+- ✅ `TelemetryAuditServiceTest`: Verified `appVersion` persistence in audit logs.

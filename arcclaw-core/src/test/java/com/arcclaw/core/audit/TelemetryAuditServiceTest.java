@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
+import com.arcclaw.core.config.SystemMetadataRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class TelemetryAuditServiceTest {
@@ -26,22 +28,32 @@ class TelemetryAuditServiceTest {
     @Mock
     AsyncPersistenceEngine persistenceEngine;
 
+    @Mock
+    SystemMetadataRegistry registry;
+
     TelemetryAuditService telemetryAuditService;
 
     @BeforeEach
     void setUp() {
-        telemetryAuditService = new TelemetryAuditService(auditEventRepository, persistenceEngine);
+        telemetryAuditService = new TelemetryAuditService(auditEventRepository, persistenceEngine, registry);
     }
 
     @Test
     void testRecordIsTelemetryTier() {
         doNothing().when(persistenceEngine).submitTelemetry(any());
+        when(registry.getAppVersion()).thenReturn("1.0.0");
 
         telemetryAuditService.record("ses-4", "u1", "researcher", SecurityEventType.REFLEX_COMMAND, "halt");
 
         ArgumentCaptor<PersistenceEvent> captor = ArgumentCaptor.forClass(PersistenceEvent.class);
         verify(persistenceEngine).submitTelemetry(captor.capture());
         assertEquals(PersistenceEvent.Tier.TELEMETRY, captor.getValue().getTier());
+
+        // Capture the event created inside the callback
+        ArgumentCaptor<AuditEvent> eventCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        captor.getValue().getDbAction().accept(null); // Execute the lambda
+        verify(auditEventRepository).record(eventCaptor.capture());
+        assertEquals("1.0.0", eventCaptor.getValue().appVersion);
     }
 
     @Test
