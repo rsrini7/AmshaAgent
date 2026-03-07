@@ -682,3 +682,189 @@ DEFINITION OF DONE
 - Full suite passes: .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
 - Test fixture strings (session IDs, goal text) left unchanged
 
+
+---
+
+Phase 57 — Rate Limit User Notification
+
+Two bugs observed in production:
+1. Intent classifier rate limit (llama-3.1-8b-instant) causes silent
+   ~4-8s delay — user gets no signal while RetryUtils retries internally
+2. AgentStateMachineRunner 429 handler formats message with ⏳ but
+   CronResultFormatter wraps it with ❌ — contradictory output
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUND TRUTH — READ BEFORE IMPLEMENTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Rate limit retries happen INSIDE RetryUtils within
+   IntentClassifierService.classify(). By the time the exception
+   reaches IntentClassificationHandler, retries are already exhausted.
+   The handler currently catches ALL exceptions silently and defaults
+   to "coordinator" — rate limit cause is completely swallowed.
+
+2. AgentStateMachineRunner catches HttpException 429 and returns:
+   AgentResult.failed(humanMessage, SYSTEM_ERROR, ...)
+   AgentErrorMessageUtil.sanitizeErrorMessage() already formats this
+   as "⏳ I'm temporarily throttled. Please try again in X."
+   But CronResultFormatter.format() prefixes ALL Failed results with
+   "❌ " — so the user sees "❌ ⏳ I'm temporarily throttled" which
+   is contradictory. Fix the formatter, not the sanitizer.
+
+3. TelegramAgentHandler.receiveMessage() submits to a per-chat queue
+   and returns immediately — no acknowledgment is sent to the user.
+   For any message that takes >2s to process (rate limit retries,
+   heavy agent work), the user sees complete silence.
+
+4. context.getSender().sendRaw(context.getUser(), message) is the
+   correct way to send a notification from any pipeline handler.
+   This is already used in AllowlistHandler and MessagePipeline error
+   handling.
+
+5. AgentResult.FailureCategory.RATE_LIMIT already exists but is
+   NOT used by AgentStateMachineRunner — it returns SYSTEM_ERROR for
+   429. Fix this to use RATE_LIMIT so callers can distinguish it.
+
+6. DO NOT change AgentErrorMessageUtil.sanitizeErrorMessage() —
+   it already produces correct human-readable rate limit messages.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIX 1 — Immediate acknowledgment in TelegramAgentHandler
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: arcclaw-app/.../channel/telegram/TelegramAgentHandler.java
+
+In receiveMessage(), after extracting chatId and validating msg,
+send a typing acknowledgment before submitting to the queue:
+
+  // Only for non-command free-text messages that go to the agent
+  // (commands like /status, /cron are fast — skip acknowledgment)
+  if (msg.getText() != null && !msg.getText().trim().startsWith("/")) {
+      ChannelUser user = /* build from msg.getFrom() */;
+      sender.sendRaw(user, "⏳");
+  }
+
+Then submit the queue task as normal.
+
+The ⏳ alone is sufficient — no text. It signals the bot received
+the message and is working. No changes to command handling paths.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIX 2 — Rate limit notification in IntentClassificationHandler
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: arcclaw-core/.../pipeline/handlers/IntentClassificationHandler.java
+
+Replace the single catch (Exception e) block with two catches:
+
+Before implementing, verify dev.langchain4j.exception.RateLimitException
+exists in the current langchain4j dependency (check pom.xml version
+and the exception class in the jar or source).
+If RateLimitException exists → catch it specifically as shown.
+If it does NOT exist → use this instead:
+  } catch (dev.langchain4j.exception.HttpException e) {
+      if (e.statusCode() == 429 || (e.getMessage() != null
+              && e.getMessage().contains("rate limit"))) {
+          // rate limit path — notify and default
+      } else {
+          throw e; // re-throw non-rate-limit HTTP errors
+      }
+  }
+
+  } catch (dev.langchain4j.exception.RateLimitException e) {
+      log.warnf("Intent classifier rate limited for chat %s — "
+          + "defaulting to coordinator: %s",
+          context.getChatId(), e.getMessage());
+      context.getSender().sendRaw(context.getUser(),
+          "⏳ Rate limited on classification — defaulting to coordinator.");
+      context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+  } catch (Exception e) {
+      log.warnf("Intent classification failed, defaulting to coordinator: %s",
+          e.getMessage());
+      context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+  }
+
+This only fires when RetryUtils has exhausted all attempts. The
+user is notified of the fallback and processing continues normally.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIX 3 — Use RATE_LIMIT category in AgentStateMachineRunner
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: arcclaw-core/.../agent/loop/AgentStateMachineRunner.java
+
+The synchronized(history) wrapper was removed in Phase 55.1.
+Find the current 429 handler by searching for `statusCode() == 429`
+in AgentStateMachineRunner — the structure may differ from what is
+shown above. Change ONLY `AgentResult.FailureCategory.SYSTEM_ERROR`
+→ `AgentResult.FailureCategory.RATE_LIMIT`. Preserve everything else
+in that block exactly as-is.
+
+Change SYSTEM_ERROR to RATE_LIMIT:
+  AgentResult.FailureCategory.RATE_LIMIT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIX 4 — Fix CronResultFormatter contradictory prefix
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: arcclaw-core/.../util/CronResultFormatter.java
+
+Current switch for Failed:
+  case AgentResult.Failed f -> "❌ " + AgentErrorMessageUtil.sanitizeErrorMessage(f.reason())
+
+Replace with:
+  case AgentResult.Failed f -> {
+      String msg = AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
+      // Rate limit messages already contain ⏳ — don't double-prefix
+      yield (f.category() == AgentResult.FailureCategory.RATE_LIMIT
+          || msg.startsWith("⏳"))
+          ? msg
+          : "❌ " + msg;
+  }
+
+Same fix applies to AgentDispatchHandler if it formats Failed results
+directly — check and apply same pattern.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIX 5 — AgentSessionService mapFailedResponse (REST path)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: arcclaw-core/.../api/AgentResponseMapper.java
+
+The RATE_LIMIT case currently returns 500 SYSTEM error:
+  case RATE_LIMIT -> Response.serverError()
+      .entity(new ErrorResponse(f.reason(), "RATE_LIMIT")).build();
+
+Change to 429:
+  case RATE_LIMIT -> Response.status(429)
+      .entity(new ErrorResponse(f.reason(), "RATE_LIMIT")).build();
+
+This aligns REST response code with the actual error type.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXECUTION ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Fix 3 (AgentStateMachineRunner RATE_LIMIT category)
+2. Fix 4 (CronResultFormatter prefix fix)
+3. Fix 5 (AgentResponseMapper 429 status)
+4. Fix 2 (IntentClassificationHandler split catch)
+5. Fix 1 (TelegramAgentHandler ⏳ acknowledgment)
+
+Run after each fix:
+  .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEFINITION OF DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- AgentStateMachineRunner uses RATE_LIMIT (not SYSTEM_ERROR) for 429
+- CronResultFormatter never prefixes ⏳ messages with ❌
+- AgentResponseMapper returns HTTP 429 for RATE_LIMIT failures
+- IntentClassificationHandler notifies user when rate limit exhausts
+  retries, then falls back to coordinator
+- TelegramAgentHandler sends ⏳ for non-command messages before
+  queuing — commands (/status, /cron etc.) get no acknowledgment
+- No changes to AgentErrorMessageUtil.sanitizeErrorMessage()
+- AgentResponseMapperTest.testMapResult_failed_rateLimit_returns429()
+  updated: assert HTTP 429, not 500
+- AgentStateMachineRunnerTest: new test case verifying that an
+  HttpException with statusCode 429 produces AgentResult.Failed
+  with category == RATE_LIMIT
+- CronResultFormatterTest (if exists): verify Failed result with
+  ⏳-prefixed message is NOT further prefixed with ❌
+- Full test suite passes:
+  .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+  

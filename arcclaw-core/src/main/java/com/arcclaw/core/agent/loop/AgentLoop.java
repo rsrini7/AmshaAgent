@@ -6,8 +6,6 @@ import java.util.Map;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
-import com.arcclaw.core.util.MdcKeys;
-import com.arcclaw.core.agent.AgentSentinels;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -22,6 +20,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.MdcKeys;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
