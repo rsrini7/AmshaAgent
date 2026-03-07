@@ -1186,3 +1186,234 @@ Definition of done
   DirectExecutor — this is intentional (each class is independently configurable)
 - All existing tests pass unchanged
 - No circular CDI injection
+
+---
+
+Phase 53.9 - Split AgentResource.java into three classes. Current file is attached.
+Package for all classes: com.arcclaw.core.api
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUND TRUTH — READ BEFORE IMPLEMENTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. AgentResourceTest is a @QuarkusTest that hits REST endpoints via RestAssured.
+   It @InjectMock AgentLoop and StatefulAgentStore directly — it does NOT inject
+   AgentSessionService. REST endpoint paths and HTTP status codes must be preserved
+   exactly or all 11 tests break.
+
+2. The four record types (ApprovalRequest, AgentResponse, ApprovalRequiredResponse,
+   ErrorResponse) are used by AgentResourceTest assertions — they must move to
+   AgentResponseMapper as public top-level records, NOT inner records of AgentResource.
+   AgentResource imports them from AgentResponseMapper.
+
+3. runAgentAsync() contains an inline deny-path (isDeny check) that duplicates logic
+   from the dedicated denySession() endpoint. This is intentional for the async flow —
+   do NOT collapse them. Move the entire runAgentAsync() body unchanged to
+   AgentSessionService.runAsync().
+
+4. WorkspaceScopeHolder, WorkspaceContext, AutonomyLevel scoping must remain in
+   AgentSessionService — these are business concerns, not REST concerns.
+
+5. AgentResource currently injects SessionHeartbeatTracker (via workspaceManager
+   which calls recordHeartbeat). After Phase 53.1, heartbeat recording moved to
+   SessionHeartbeatTracker — verify current source and inject accordingly.
+
+6. runAsync() deny-path calls cp.setFailedAt(Instant.now()) — ensure
+   java.time.Instant is imported in AgentSessionService. Move the full
+   vThreads.execute() lambda verbatim — do not reconstruct it.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. AgentResponseMapper.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.api
+@ApplicationScoped
+
+Move the four record types as public top-level records in this file:
+  public record ApprovalRequest(String agentRole) {}
+  public record AgentResponse(String answer, int totalInputTokens, int totalOutputTokens) {}
+  public record ApprovalRequiredResponse(String toolName, String paramsJson, String sessionId) {}
+  public record ErrorResponse(String reason, String code) {}
+
+Method:
+  public Response mapResult(AgentResult result, boolean isAsync)
+    — consolidates the switch(result) blocks that are duplicated across
+      runAgentSync(), runAgentAsync(), and approveSession().
+    — isAsync=true → use Response.accepted() for Finished; isAsync=false → Response.ok()
+    — switch cases:
+        Finished f   → (isAsync ? Response.accepted(...) : Response.ok(...))
+                        .entity(new AgentResponse(f.answer(), f.totalInputTokens(), f.totalOutputTokens()))
+        AwaitingApproval a → Response.status(202).entity(
+                        new ApprovalRequiredResponse(a.toolName(), a.paramsJson(), a.sessionId()))
+        LoopExceeded l → Response.status(408).entity(
+                        new ErrorResponse("Iteration limit " + l.maxIterations() + " reached", "LOOP_EXCEEDED"))
+        Failed f     → mapFailedResponse(f)
+
+  private Response mapFailedResponse(AgentResult.Failed f)
+    — move verbatim from AgentResource:
+        COMPLIANCE_VIOLATION → 451, "COMPLIANCE"
+        BUDGET_EXCEEDED      → 429, "BUDGET"
+        USER_DENIED          → 422, "USER_DENIED"
+        SCHEMA_ERROR         → 422, "SCHEMA"
+        SYSTEM_ERROR         → 500, "SYSTEM"
+        RATE_LIMIT           → 500, "RATE_LIMIT"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. AgentSessionService.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.api
+@ApplicationScoped
+Inject: AgentLoop, ReasoningEngine, StatefulAgentStore, WorkspaceManager,
+        SessionHeartbeatTracker heartbeatTracker, DevSecretSeeder, AgentResponseMapper,
+        @VirtualThreads ExecutorService vThreads
+
+Methods:
+
+  public String createSession()
+    — UUID.randomUUID().toString()
+    — heartbeatTracker.recordHeartbeat(sessionId)
+    — return sessionId
+
+  public Response runSync(String sessionId, RunAgentRequest request)
+    — int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5
+    — WorkspaceScopeHolder.call(sessionId, () -> {
+          devSeeder.seedDevSecrets();
+          return WorkspaceContext.run(sessionId, "rest:sync", null,
+              AutonomyLevel.SUPERVISED, request.agentRole(), () -> {
+                AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                    request.goal(), reasoningEngine, maxIterations);
+                return responseMapper.mapResult(result, false);
+              });
+      })
+    — catch Exception → Response.serverError().entity(e.getMessage()).build()
+
+  public void runAsync(String sessionId, RunAgentRequest request,
+                       AsyncResponse asyncResponse)
+    — Move the full vThreads.execute() lambda verbatim including:
+        isDeny check → agentStore update → asyncResponse.resume(denied Response)
+        devSeeder.seedDevSecrets()
+        AutonomyLevel runLevel = isApproval ? FULL : SUPERVISED
+        WorkspaceContext.run(...) → agentLoop.run() → responseMapper.mapResult(result, true)
+        catch Exception → asyncResponse.resume(serverError)
+
+  public Response approve(String sessionId, String agentRole)
+    — WorkspaceScopeHolder.call(sessionId, () -> {
+          canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName()
+          checkpoint = agentStore.load(sessionId, canonicalRole)
+          if empty or not AWAITING_APPROVAL → 409 CONFLICT
+          MDC.put("userId", "rest:approve")
+          WorkspaceContext.run(sessionId, "rest:approve", null, FULL, canonicalRole, () -> {
+              AgentResult result = agentLoop.run(sessionId, agentRole, "approve",
+                  reasoningEngine, 1);
+              return responseMapper.mapResult(result, false);
+          })
+      })
+    — catch Exception → serverError
+    — finally MDC.remove("userId")
+
+  public Response deny(String sessionId, String agentRole)
+    — WorkspaceScopeHolder.call(sessionId, () -> {
+          canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName()
+          checkpoint = agentStore.load(sessionId, canonicalRole)
+          if empty or not AWAITING_APPROVAL → 409 CONFLICT
+          MDC.put("userId", "rest:deny")
+          agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST")
+          heartbeatTracker.removeHeartbeat(sessionId)
+          return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build()
+      })
+    — catch Exception → serverError
+    — finally MDC.remove("userId")
+
+  public Response getStatus(String sessionId, String role)
+    — canonicalRole = AgentRoleEnum.fromString(role).toScopedName()
+    — agentStore.load(sessionId, canonicalRole)
+        .map(cp -> parse stateJson → SessionStatusResponse → Response.ok())
+        .orElseGet(() -> 404)
+    — JSON parse exception → serverError
+
+  public Response terminateSession(String sessionId)
+    — workspaceManager.terminateSession(sessionId)
+    — Response.noContent().build()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. AgentResource.java (slimmed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Keep: @Path, @Consumes, @Produces, @RunOnVirtualThread, all JAX-RS annotations
+Inject: AgentSessionService only — remove all other injections
+Remove: all business logic, all record type definitions, mapFailedResponse()
+
+Endpoints after split (~5 lines each):
+
+  @POST
+  createSession() → return Response.status(201)
+      .entity(new CreateSessionResponse(sessionService.createSession())).build()
+
+  @POST @Path("/{id}/run")
+  runAgentSync(sessionId, request) → return sessionService.runSync(sessionId, request)
+
+  @POST @Path("/{id}/run-async")
+  runAgentAsync(sessionId, request, asyncResponse)
+      → sessionService.runAsync(sessionId, request, asyncResponse)
+
+  @GET @Path("/{id}/status/{role}")
+  getSessionStatus(sessionId, role) → return sessionService.getStatus(sessionId, role)
+
+  @DELETE @Path("/{id}")
+  terminateSession(sessionId) → return sessionService.terminateSession(sessionId)
+
+  @POST @Path("/{id}/approve")
+  approveSession(sessionId, agentRole) → return sessionService.approve(sessionId, agentRole)
+
+  @POST @Path("/{id}/deny")
+  denySession(sessionId, agentRole) → return sessionService.deny(sessionId, agentRole)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Test updates
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AgentResourceTest.java — NO CHANGES NEEDED.
+  The test mocks AgentLoop and StatefulAgentStore via @InjectMock.
+  All REST paths and HTTP status codes are unchanged.
+  CDI wires AgentSessionService and AgentResponseMapper transparently.
+
+AgentSessionServiceTest.java (NEW — plain Mockito):
+  Mock: AgentLoop, ReasoningEngine, StatefulAgentStore, WorkspaceManager,
+        DevSecretSeeder, AgentResponseMapper
+  testCreateSession_recordsHeartbeatAndReturnsId()
+  testRunSync_finished_returns200()
+  testRunSync_complianceViolation_returns451()
+  testApprove_noCheckpoint_returns409()
+  testApprove_notAwaiting_returns409()
+  testDeny_success_returns200WithDeniedStatus()
+  testDeny_noCheckpoint_returns409()
+  testGetStatus_notFound_returns404()
+  testTerminateSession_callsWorkspaceManager()
+
+AgentResponseMapperTest.java (NEW — plain Mockito, no CDI):
+  testMapResult_finished_sync_returns200()
+  testMapResult_finished_async_returns202()
+  testMapResult_awaitingApproval_returns202WithShape()
+  testMapResult_loopExceeded_returns408()
+  testMapResult_failed_compliance_returns451()
+  testMapResult_failed_budget_returns429()
+  testMapResult_failed_userDenied_returns422()
+  testMapResult_failed_schemaError_returns422()
+  testMapResult_failed_systemError_returns500()
+  testMapResult_failed_rateLimit_returns500()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Execution order
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Create AgentResponseMapper (record types + mapResult + mapFailedResponse)
+2. Create AgentSessionService (all business logic, inject mapper)
+3. Slim AgentResource (delegate only, inject sessionService)
+4. Update tests
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Definition of done
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- All 11 existing AgentResourceTest tests pass unchanged
+- Record types (ApprovalRequest, AgentResponse, ApprovalRequiredResponse, ErrorResponse)
+  are public top-level records in AgentResponseMapper — not inner records of AgentResource
+- AgentResource injects AgentSessionService only — no other injections
+- mapFailedResponse() exists only in AgentResponseMapper
+- runAgentAsync() inline deny-path preserved unchanged in AgentSessionService.runAsync()
+- WorkspaceScopeHolder/WorkspaceContext/AutonomyLevel in AgentSessionService only
+- No circular CDI injection

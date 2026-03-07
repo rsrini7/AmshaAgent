@@ -3222,3 +3222,25 @@ Extracted `CheckpointResumeHandler` out of `AgentLoop` to reduce LOC and improve
 - ✅ Verified `AgentLoopTest` integration.
 - ✅ Verified new tiered audit tests (`TelemetryAuditServiceTest`, `ComplianceAuditServiceTest`).
 - ✅ Verified full project build and tests pass.
+
+---
+
+# Phase 53.9 - AgentResource Split
+## Goal Description
+Split `com.arcclaw.core.api.AgentResource` into `AgentResponseMapper`, `AgentSessionService`, and a slimmed `AgentResource`.
+
+## Proposed Changes
+
+#### [NEW] [AgentResponseMapper.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResponseMapper.java)
+- Consolidates result-to-response mapping. Defines public response records.
+
+#### [NEW] [AgentSessionService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentSessionService.java)
+- Houses all session management logic and agent execution business logic.
+
+#### [MODIFY] [AgentResource.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResource.java)
+- Reduced to a thin controller delegating to `AgentSessionService`.
+
+## Verification Plan
+- [x] Unit test: `AgentResponseMapperTest` (Covers all response mapping logic).
+- [x] Unit test: `AgentSessionServiceTest` (Covers business logic and workspace scoping).
+- [x] Integration test: `AgentResourceTest` (Verified REST endpoints via RestAssured pass unchanged).

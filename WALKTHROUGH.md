@@ -1901,3 +1901,23 @@ Extracted the resume checkpoint logic out of `AgentLoop` and split the `AuditSer
 - ✅ `TelemetryAuditServiceTest` & `ComplianceAuditServiceTest`: 100% pass (Verified exception management).
 - ✅ `AuditServiceTest`: Verified delegation logic and mock coordination.
 - ✅ Full `arcclaw-core` regression: All tests pass (266/266).
+
+---
+
+# Phase 53.9 - AgentResource Split
+
+I have successfully refactored `AgentResource` to decouple REST concerns from business logic.
+
+### Architectural Improvements
+
+1.  **Response Mapping Segregation**: `AgentResponseMapper` now handles the conversion of `AgentResult` into JAX-RS `Response` objects, including status code mapping for sync/async flows and failure categories.
+2.  **Service-Layer Extraction**: Moved all session lifecycle (creation, heartbeat registration) and execution logic into `AgentSessionService`.
+3.  **Thin Controllers**: `AgentResource` is now a pure routing layer, making it significantly easier to test and maintain.
+4.  **Public DTOs**: Moved previously inner records into `AgentResponseMapper` as top-level public records to improve visibility for tests.
+
+### Verification Results
+
+- ✅ `AgentResponseMapperTest`: 10/10 tests passed (Unit).
+- ✅ `AgentSessionServiceTest`: 9/9 tests passed (Unit).
+- ✅ `AgentResourceTest`: 11/11 tests passed (Integration).
+- ✅ Full Project Regression: All existing features preserved.
