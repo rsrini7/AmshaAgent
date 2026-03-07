@@ -2,6 +2,8 @@ package com.arcclaw.core.agent.persona;
 
 import java.util.List;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
@@ -45,7 +47,7 @@ public class BrahmaAgent implements Agent {
 
     @Override
     public String role() {
-        return "coder";
+        return AgentRoleEnum.CODER.toScopedName();
     }
 
     @Override

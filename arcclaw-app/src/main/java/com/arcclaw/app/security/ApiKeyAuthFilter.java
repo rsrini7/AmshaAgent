@@ -1,5 +1,7 @@
 package com.arcclaw.app.security;
 
+import com.arcclaw.core.util.HttpConstants;
+import com.arcclaw.core.util.MdcKeys;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
@@ -41,7 +43,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         String path = uriInfo.getPath();
 
 
-        String apiKey = requestContext.getHeaderString("X-ArcClaw-API-Key");
+        String apiKey = requestContext.getHeaderString(HttpConstants.X_ARCCLAW_API_KEY);
         String safeKey = apiKey != null
             ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****"
             : "null";
@@ -79,7 +81,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // Push user identifier to MDC for Audit logs to pick up
         String userId = apiKeyRegistry.getKeyName(apiKey);
         if (userId != null) {
-            MDC.put("userId", userId);
+            MDC.put(MdcKeys.USER_ID, userId);
         }
         
         logAudit(safeKey, path, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);

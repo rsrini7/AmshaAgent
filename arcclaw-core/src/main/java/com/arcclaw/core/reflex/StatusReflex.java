@@ -1,5 +1,6 @@
 package com.arcclaw.core.reflex;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -32,7 +33,11 @@ public class StatusReflex implements AgentReflex {
     public String execute(String sessionId, String userId, String chatId, String input) {
         List<AgentCheckpoint> checkpoints = new ArrayList<>();
         
-        for (String role : List.of("coordinator", "coder", "researcher", "debugger")) {
+        for (String role : List.of(
+                AgentRoleEnum.COORDINATOR.toScopedName(),
+                AgentRoleEnum.CODER.toScopedName(),
+                AgentRoleEnum.RESEARCHER.toScopedName(),
+                AgentRoleEnum.DEBUGGER.toScopedName())) {
             statefulAgentStore.load(sessionId, role).ifPresent(checkpoints::add);
         }
 

@@ -11,6 +11,7 @@ import org.jboss.logging.Logger;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -64,7 +65,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         boolean isCronFired = sessionId != null && sessionId.startsWith("cron-");
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .filter(allowedTools::contains)
-                .filter(name -> !isCronFired || (!name.equals("scheduletask") && !name.equals("manageschedule")))
+                .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName()) && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
                 .map(tool -> ToolSpecification.builder()
                         .name(tool.name())

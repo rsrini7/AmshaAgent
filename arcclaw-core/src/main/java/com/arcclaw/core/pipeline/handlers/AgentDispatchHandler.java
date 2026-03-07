@@ -4,6 +4,7 @@ import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -38,7 +39,7 @@ public class AgentDispatchHandler implements MessageHandler {
         String sessionId = context.getSessionId()
                 .orElseThrow(() -> new IllegalStateException("Session ID is required for agent dispatch"));
         String role = context.getAgentRole()
-                .orElse("coordinator");
+                .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
         String goal = context.getMessage() != null ? context.getMessage().text() : "";
 
         log.infof("Dispatching message for session %s to agent %s", sessionId, role);

@@ -24,6 +24,7 @@ import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.persistence.SqliteErrorStrings;
 
 /**
  * Lifecycle orchestrator for workspace session termination and disk management.
@@ -184,14 +185,14 @@ public class WorkspaceManager {
             String msg = t.getMessage();
             if (msg != null) {
                 String lower = msg.toLowerCase();
-                if (lower.contains("busy") || 
-                    lower.contains("database is locked") || 
-                    lower.contains("sqlite_busy") ||
-                    lower.contains("snapshot")) {
+                if (lower.contains(SqliteErrorStrings.BUSY) || 
+                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
+                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
+                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
                     return true;
                 }
             }
-            if (t.getClass().getSimpleName().equals("SQLiteException")) {
+            if (t.getClass().getSimpleName().equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
                 try {
                     var method = t.getClass().getMethod("getResultCode");
                     Object code = method.invoke(t);

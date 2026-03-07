@@ -291,17 +291,17 @@ public class AsyncPersistenceEngine {
             String className = current.getClass().getSimpleName();
             if (className.equals("LockAcquisitionException") || 
                 className.equals("OptimisticLockException") ||
-                className.equals("SQLiteException")) {
+                className.equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
                 return true;
             }
 
             String msg = current.getMessage();
             if (msg != null) {
                 String lower = msg.toLowerCase();
-                if (lower.contains("busy") || 
-                    lower.contains("database is locked") || 
-                    lower.contains("sqlite_busy") ||
-                    lower.contains("snapshot")) {
+                if (lower.contains(SqliteErrorStrings.BUSY) || 
+                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
+                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
+                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
                     return true;
                 }
             }

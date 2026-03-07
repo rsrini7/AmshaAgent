@@ -44,7 +44,7 @@ public class SaraswatiAgent implements Agent {
 
     @Override
     public String role() {
-        return "researcher";
+        return AgentRoleEnum.RESEARCHER.toScopedName();
     }
 
     @Override

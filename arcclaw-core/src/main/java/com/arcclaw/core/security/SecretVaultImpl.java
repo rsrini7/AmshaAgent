@@ -5,6 +5,7 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.MDC;
 
 import jakarta.transaction.Transactional;
@@ -61,7 +62,7 @@ public class SecretVaultImpl implements SecretVault {
 
             repository.persist(entity);
             
-            String userId = (String) MDC.get("userId");
+            String userId = (String) MDC.get(MdcKeys.USER_ID);
             auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
             
         } catch (Exception e) {
@@ -76,7 +77,7 @@ public class SecretVaultImpl implements SecretVault {
 
         // 1. Fetch
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);
-        String userId = (String) MDC.get("userId");
+        String userId = (String) MDC.get(MdcKeys.USER_ID);
         
         if (entity == null) {
             auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE_MISS, "keyName=" + keyName);

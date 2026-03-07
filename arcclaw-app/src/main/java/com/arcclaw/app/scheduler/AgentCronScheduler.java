@@ -16,6 +16,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
 import jakarta.annotation.PostConstruct;
+import com.arcclaw.core.util.MdcKeys;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -102,12 +103,12 @@ public class AgentCronScheduler {
 
             // Dispatch to managed virtual thread
             vThreads.execute(() -> {
-                MDC.put("userId", job.userId);
+                MDC.put(MdcKeys.USER_ID, job.userId);
                 try {
                     jobRunner.execute(job);
                 } finally {
                     concurrencyLimiter.release();
-                    MDC.remove("userId");
+                    MDC.remove(MdcKeys.USER_ID);
                 }
             });
         }

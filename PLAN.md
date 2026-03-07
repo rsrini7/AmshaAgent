@@ -3421,6 +3421,35 @@ Normalize the agent checkpoint storage by moving reasoning steps from a monolith
 
 - ✅ `StatefulAgentStoreTest.testSaveAndFinalizeAndLoadSteps` passes.
 - ✅ `AgentResourceTest.testFullAgentLifecycle` passes with updated mocks.
-- ✅ Total: 471 tests green.
+---
+
+# Phase 56 — Hardcoded String Constant Sweep ✅
+
+Codebase sweep to centralize hardcoded string literals into dedicated constant classes and enums, ensuring compliance with Rule 6 (No magic string tool names).
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Centralized Constants**:
+> - `SqliteErrorStrings`: Centralized SQLite retry/error detection.
+> - `CryptoConstants`: Centralized algorithm names (HmacSHA256).
+> - `HttpConstants`: Centralized custom HTTP headers.
+> - `MdcKeys`: Centralized structured logging keys.
+> - `AgentSentinels`: Centralized approval and resumption markers.
+
+> [!NOTE]
+> **Rule 6 Compliance**: Tool names are now strictly referenced via `ToolCapability.toolName()` and roles via `AgentRoleEnum.toScopedName()`.
+
+## Proposed Changes
+
+#### [NEW] [SqliteErrorStrings.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/SqliteErrorStrings.java)
+#### [NEW] [CryptoConstants.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/CryptoConstants.java)
+#### [NEW] [HttpConstants.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/util/HttpConstants.java)
+#### [NEW] [MdcKeys.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/util/MdcKeys.java)
+#### [NEW] [AgentSentinels.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentSentinels.java)
+
+## Verification Plan
+
+- ✅ `mvn clean test -pl arcclaw-core,arcclaw-app -am`: 121 tests green (100% success).
 
 

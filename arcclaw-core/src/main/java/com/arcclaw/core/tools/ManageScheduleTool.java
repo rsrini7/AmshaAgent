@@ -6,6 +6,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.state.AgentCronRepository;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
@@ -33,7 +34,7 @@ public class ManageScheduleTool implements AgentTool {
 
     @Override
     public String name() {
-        return "manageschedule";
+        return ToolCapability.MANAGE_SCHEDULE.toolName();
     }
 
     @Override

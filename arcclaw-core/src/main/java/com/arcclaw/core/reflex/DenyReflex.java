@@ -25,6 +25,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.CronResultFormatter;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -88,7 +89,7 @@ public class DenyReflex implements AgentReflex {
                     log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
                     AgentCheckpoint cp = statefulAgentStore.load(sessionId, activeRole).orElseThrow();
                     cp.setStatus(CheckpointStatus.FAILED);
-                    cp.setFailReason("Human denied the tool execution.");
+                    cp.setFailReason(AgentSentinels.DENY_SENTINEL);
                     statefulAgentStore.save(cp);
                     return "🚫 Execution denied. The agent's task has been terminated.";
                 }

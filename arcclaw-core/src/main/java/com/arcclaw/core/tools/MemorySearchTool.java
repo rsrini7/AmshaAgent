@@ -6,6 +6,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.agent.role.ToolCapability;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
@@ -38,7 +39,7 @@ public class MemorySearchTool implements AgentTool {
 
     @Override
     public String name() {
-        return "memory_search";
+        return ToolCapability.MEMORY_SEARCH.toolName();
     }
 
     @Override

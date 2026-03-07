@@ -1,6 +1,7 @@
 package com.arcclaw.core.pipeline.handlers;
 
 import com.arcclaw.channel.api.ChannelCommand;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
@@ -79,7 +80,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     try {
                         result = WorkspaceContext.run(
                             sessionId, userId, chatId, 
-                            AutonomyLevel.FULL, "coordinator",
+                            AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
                             () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw())
                         );
                     } catch (Exception e) {
@@ -117,7 +118,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 userId,
                 chatId,
                 AutonomyLevel.FULL, 
-                "coordinator",
+                AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input)
             );
         } catch (Exception e) {

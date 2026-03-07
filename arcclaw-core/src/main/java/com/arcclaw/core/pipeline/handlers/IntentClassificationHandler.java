@@ -2,6 +2,7 @@ package com.arcclaw.core.pipeline.handlers;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
@@ -38,11 +39,11 @@ public class IntentClassificationHandler implements MessageHandler {
                 log.infof("Classified message as role '%s' for chat %s", role, context.getChatId());
             } catch (Exception e) {
                 log.warnf("Intent classification failed, defaulting to 'coordinator': %s", e.getMessage());
-                context.setAgentRole("coordinator");
+                context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
             }
         } else {
             // Default for non-text messages if needed, though they usually shouldn't reach here without a role
-            context.setAgentRole("coordinator");
+            context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
         }
 
         return HandleResult.CONTINUE;

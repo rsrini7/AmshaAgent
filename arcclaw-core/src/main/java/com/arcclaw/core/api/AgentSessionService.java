@@ -26,6 +26,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 
 import io.quarkus.virtual.threads.VirtualThreads;
+import com.arcclaw.core.util.MdcKeys;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.container.AsyncResponse;
@@ -166,7 +167,7 @@ public class AgentSessionService {
                             .build();
                 }
 
-                MDC.put("userId", "rest:approve");
+                MDC.put(MdcKeys.USER_ID, "rest:approve");
                 return WorkspaceContext.run(sessionId, "rest:approve", null, AutonomyLevel.FULL, canonicalRole, () -> {
                     AgentResult result = agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
                     return responseMapper.mapResult(result, false);
@@ -176,7 +177,7 @@ public class AgentSessionService {
             log.errorf("Failed to approve session " + sessionId, e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
-            MDC.remove("userId");
+            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
@@ -192,7 +193,7 @@ public class AgentSessionService {
                             .build();
                 }
 
-                MDC.put("userId", "rest:deny");
+                MDC.put(MdcKeys.USER_ID, "rest:deny");
                 agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
                 heartbeatTracker.removeHeartbeat(sessionId);
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
@@ -201,7 +202,7 @@ public class AgentSessionService {
             log.error("Failed to deny session " + sessionId, e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
-            MDC.remove("userId");
+            MDC.remove(MdcKeys.USER_ID);
         }
     }
 

@@ -18,6 +18,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
+import com.arcclaw.core.security.CryptoConstants;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -51,9 +52,9 @@ public class ApiKeyRegistry {
 
     private byte[] hmac(String value) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
+            Mac mac = Mac.getInstance(CryptoConstants.HMAC_SHA256);
             mac.init(new SecretKeySpec(
-                hmacSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                hmacSecret.getBytes(StandardCharsets.UTF_8), CryptoConstants.HMAC_SHA256));
             return mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             throw new IllegalStateException("HMAC init failed", e);

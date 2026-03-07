@@ -44,7 +44,7 @@ public class ShivaAgent implements Agent {
 
     @Override
     public String role() {
-        return "debugger";
+        return AgentRoleEnum.DEBUGGER.toScopedName();
     }
 
     @Override

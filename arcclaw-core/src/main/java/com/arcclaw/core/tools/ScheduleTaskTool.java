@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import com.arcclaw.core.agent.role.ToolCapability;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
@@ -46,7 +47,7 @@ import com.cronutils.parser.CronParser;
 public class ScheduleTaskTool implements AgentTool {
 
 
-    public static final String NAME = "scheduletask";
+    public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();
 
 
     /**

@@ -3,6 +3,7 @@ package com.arcclaw.core.scope;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
+import com.arcclaw.core.util.MdcKeys;
 import java.lang.ScopedValue;
 import java.util.concurrent.Callable;
 
@@ -77,8 +78,8 @@ public final class WorkspaceScopeHolder {
         LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
                 sessionId, userId, chatId, Thread.currentThread());
         
-        MDC.put("sessionId", sessionId);
-        if (userId != null) MDC.put("userId", userId);
+        MDC.put(MdcKeys.SESSION_ID, sessionId);
+        if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
@@ -90,8 +91,8 @@ public final class WorkspaceScopeHolder {
             }
             scope.run(runnable);
         } finally {
-            MDC.remove("sessionId");
-            MDC.remove("userId");
+            MDC.remove(MdcKeys.SESSION_ID);
+            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
@@ -104,8 +105,8 @@ public final class WorkspaceScopeHolder {
         LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
                 sessionId, userId, chatId, Thread.currentThread());
         
-        MDC.put("sessionId", sessionId);
-        if (userId != null) MDC.put("userId", userId);
+        MDC.put(MdcKeys.SESSION_ID, sessionId);
+        if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
@@ -120,8 +121,8 @@ public final class WorkspaceScopeHolder {
                 }
             });
         } finally {
-            MDC.remove("sessionId");
-            MDC.remove("userId");
+            MDC.remove(MdcKeys.SESSION_ID);
+            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
