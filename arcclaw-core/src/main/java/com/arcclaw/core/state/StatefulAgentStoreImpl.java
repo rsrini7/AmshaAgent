@@ -20,8 +20,10 @@ import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.persistence.SqliteErrorStrings;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -78,7 +80,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
                     em.persist(checkpoint);
                     
-                    String userId = (String) MDC.get("userId");
+                    String userId = (String) MDC.get(MdcKeys.USER_ID);
                     auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
                     
                     log.infof("Created checkpoint for session=%s, role=%s", sessionId, agentRole);
@@ -169,7 +171,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         checkpoint.setFailReason(reason);
         em.merge(checkpoint);
         
-        String userId = (String) MDC.get("userId");
+        String userId = (String) MDC.get(MdcKeys.USER_ID);
         auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
         
         log.warnf("Checkpoint session=%s role=%s marked FAILED: %s", checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
@@ -185,7 +187,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     checkpoint.setCompletedAt(Instant.now());
                     em.merge(checkpoint);
                     
-                    String userId = (String) MDC.get("userId");
+                    String userId = (String) MDC.get(MdcKeys.USER_ID);
                     auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_COMPLETED, null);
                     
                     log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
@@ -215,7 +217,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     checkpoint.setStatus(finalStatus); // Fix: Set status before persist
                     em.persist(checkpoint);
                     
-                    String userId = (String) MDC.get("userId");
+                    String userId = (String) MDC.get(MdcKeys.USER_ID);
                     auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
                     log.infof("Created new checkpoint for finalization: session=%s, role=%s", sessionId, agentRole);
                 }
@@ -247,7 +249,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     em.persist(entity);
                 }
 
-                String userId = (String) MDC.get("userId");
+                String userId = (String) MDC.get(MdcKeys.USER_ID);
                 SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED 
                         ? SecurityEventType.CHECKPOINT_COMPLETED 
                         : SecurityEventType.CHECKPOINT_FAILED;
@@ -349,17 +351,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             String canonicalName = t.getClass().getName();
             if (canonicalName.equals(LockAcquisitionException.class.getName()) ||
                 canonicalName.equals("jakarta.persistence.OptimisticLockException") ||
-                canonicalName.contains("SQLiteException")) {
+                canonicalName.contains(SqliteErrorStrings.SQLITE_EXCEPTION)) {
                 return true;
             }
 
             String msg = t.getMessage();
             if (msg != null) {
                 String lower = msg.toLowerCase();
-                if (lower.contains("busy") || 
-                    lower.contains("database is locked") || 
-                    lower.contains("sqlite_busy") ||
-                    lower.contains("snapshot")) {
+                if (lower.contains(SqliteErrorStrings.BUSY) || 
+                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
+                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
+                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
                     return true;
                 }
             }

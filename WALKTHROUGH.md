@@ -1995,3 +1995,20 @@ Normalized the agent state storage by moving reasoning steps from a monolithic J
 - ✅ **Regression**: Verified that `AgentResourceTest` in `arcclaw-app` correctly reports agent status using the new mechanism.
 - ✅ **Performance**: Total test suite run time maintained at ~02:30 mins for 471 tests.
 
+---
+
+## Phase 56 — Hardcoded String Constant Sweep ✅
+
+Performed a comprehensive sweep of the codebase to eliminate magic strings in production logic, centralizing them into type-safe constants and enums.
+
+### Key Improvements:
+
+1.  **Tool Name Enforcement**: Strictly adhered to Rule 6 by replacing all hardcoded tool names with `ToolCapability.toolName()`.
+2.  **Role Standardization**: Replaced raw strings like `"coordinator"` and `"coder"` with `AgentRoleEnum.toScopedName()`.
+3.  **Tiered Constants**: Introduced functional constant classes for SQLite errors, HTTP headers, MDC logging keys, and Agent sentinels.
+4.  **Audit Integrity**: Updated audit and security logging to use centralized keys, ensuring structured logs remain consistent across the app.
+
+### Verification Results:
+- ✅ **Tool Name Compliance**: Verified via grep that no raw tool name literals remain in reasoning logic.
+- ✅ **Standard Regression**: Full 121-test suite passed successfully in 02:35 mins.
+

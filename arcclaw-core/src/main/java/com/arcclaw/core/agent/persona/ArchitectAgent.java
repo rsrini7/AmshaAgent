@@ -42,7 +42,7 @@ public class ArchitectAgent implements Agent {
 
     @Override
     public String role() {
-        return "architect";
+        return AgentRoleEnum.ARCHITECT.toScopedName();
     }
 
     @Override

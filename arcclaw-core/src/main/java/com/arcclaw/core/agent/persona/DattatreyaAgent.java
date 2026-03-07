@@ -53,7 +53,7 @@ public class DattatreyaAgent implements Agent {
 
     @Override
     public String role() {
-        return "synthesizer";
+        return AgentRoleEnum.DATTATREYA.toScopedName();
     }
 
     @Override

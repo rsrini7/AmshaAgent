@@ -6,6 +6,8 @@ import java.util.Map;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.core.agent.AgentSentinels;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -114,8 +116,8 @@ public class AgentLoop {
         final String canonicalRole = resolvedRole.toScopedName();
 
         // --- CONTEXT SETUP ---
-        MDC.put("sessionId", sessionId);
-        MDC.put("agentRole", canonicalRole);
+        MDC.put(MdcKeys.SESSION_ID, sessionId);
+        MDC.put(MdcKeys.AGENT_ROLE, canonicalRole);
 
         AgentResult result = null;
         try {
@@ -143,7 +145,7 @@ public class AgentLoop {
 
             // resumedHistory is mutable (from deserializeSteps) when status == AWAITING_APPROVAL —
             // the L134 condition guarantees this. On a fresh turn, resumedHistory = List.of()
-            // (immutable) but handleResumeHook returns early (goal doesn't start with "resuming task"),
+            // (immutable) but handleResumeHook returns early (goal doesn't start with AgentSentinels.RESUME_GOAL_PREFIX),
             // so history.add() inside the hook is never reached on an immutable list. Safe.
             AgentResult resumeResult = checkpointResumeHandler.handle(
                     sessionId, canonicalRole, goal, resumedHistory);
@@ -202,13 +204,13 @@ public class AgentLoop {
         } finally {
             if (result != null) {
                 String goalHash = AuditHashUtil.sha256hex(goal);
-                String userId = MDC.get("userId") != null ? (String) MDC.get("userId") : "unknown";
+                String userId = MDC.get(MdcKeys.USER_ID) != null ? (String) MDC.get(MdcKeys.USER_ID) : "unknown";
                 final AgentResult finalResult = result;
                 observers.forEach(o -> o.onLoopComplete(sessionId, userId, canonicalRole, goalHash, finalResult));
             }
             // --- CONTEXT TEARDOWN ---
-            MDC.remove("sessionId");
-            MDC.remove("agentRole");
+            MDC.remove(MdcKeys.SESSION_ID);
+            MDC.remove(MdcKeys.AGENT_ROLE);
             otelContext.endSessionSpan(sessionId);
         }
     }
@@ -233,7 +235,7 @@ public class AgentLoop {
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
         String role = WorkspaceContext.agentRole();
         if (role == null) {
-            role = "coordinator";
+            role = AgentRoleEnum.COORDINATOR.toScopedName();
         }
         AgentExecutionContext context = new AgentExecutionContext(
                 WorkspaceScopeHolder.getRequired(),

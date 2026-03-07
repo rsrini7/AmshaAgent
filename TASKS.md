@@ -919,4 +919,16 @@
 - [x] Cleanup: Remove unused `ObjectMapper` from `AgentSessionService` <!-- id: 339 -->
 - [x] Verify: `mvn clean test -pl arcclaw-core,arcclaw-app -am` (All 471 tests passed) <!-- id: 340 -->
 
+---
+
+# Phase 56 — Hardcoded String Constant Sweep ✅
+- [x] Remediate Category 1 (P0 tool names) <!-- id: 341 -->
+- [x] Remediate Category 2 (role strings) <!-- id: 342 -->
+- [x] Remediate Category 3 (SQLite strings) <!-- id: 343 -->
+- [x] Remediate Category 4 (crypto strings) <!-- id: 344 -->
+- [x] Remediate Category 5 (HTTP headers) <!-- id: 345 -->
+- [x] Remediate Category 6 (MDC keys) <!-- id: 346 -->
+- [x] Remediate Category 7 (approval sentinels) <!-- id: 347 -->
+- [x] Verify: Full system regression passes (121/121 tests) <!-- id: 348 -->
+
 

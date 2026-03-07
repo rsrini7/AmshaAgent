@@ -453,3 +453,232 @@ DEFINITION OF DONE
 - Full test suite passes: .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
 - Dev note: delete data folder and restart app to apply schema change
 ```
+
+---
+
+Phase 56 — Hardcoded String Constant Sweep
+
+SCAN ONLY in Phase 56.1. No code changes until the plan is approved.
+Implementation in Phase 56.2 after category-by-category confirmation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUND TRUTH — READ BEFORE SCANNING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Rule 6 (already in policy): No magic string tool names — all tool
+   references must use ToolCapability.toolName(). Any violation of
+   this rule is P0 regardless of how many files it appears in.
+
+2. AgentRoleEnum already exists with toScopedName(). Role strings
+   ("coordinator", "coder", "debugger", etc.) in production code that
+   are not going through AgentRoleEnum.fromString() are violations.
+
+3. Test-only strings (session IDs, user IDs, goal text used as test
+   fixtures) are NOT candidates for shared constants — they are
+   intentional test data. Do not extract them.
+
+4. Config key strings in @ConfigProperty annotations are NOT candidates
+   — Quarkus injects them directly and they are already the canonical
+   definition. Only duplicated config key strings in non-annotation
+   contexts (e.g. System.getProperty, hardcoded in logic) are candidates.
+
+5. Regex patterns and prompt text are NOT in scope for this phase —
+   covered in separate phases.
+
+6. DO NOT change any constant that is part of a public API contract
+   (e.g. HTTP header names, JSON field names returned to clients) without
+   explicit approval — these are breaking changes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 56.1 — SCAN AND CATEGORIZE (no code changes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scan all .java production files (src/main/java only) across
+arcclaw-core, arcclaw-app, arcclaw-channel-api for string literals
+that appear in 2+ locations and fit one of the categories below.
+
+For each finding print: string value, category, files affected,
+proposed home (class + field name), and approach.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 1 — Tool name violations (P0 — Rule 6)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Known violations from source scan:
+  "github"         — appears in production code outside ToolCapability
+  "scheduletask"   — appears in LangChainReasoningEngine, AgentStateMachineRunner
+  "manageschedule" — appears in LangChainReasoningEngine, AgentStateMachineRunner
+  "memory_search"  — appears in MemorySearchTool and production callers
+
+Approach: replace ALL with ToolCapability.GITHUB.toolName(),
+ToolCapability.SCHEDULE_TASK.toolName(), etc.
+Verify ToolCapability enum has entries for each before replacing.
+If an entry is missing from ToolCapability, add it first.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 2 — Agent role strings in production code
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Before replacing any role string, verify AgentRoleEnum has a matching
+entry for that role. If missing, add the enum constant first before
+any replacement. Apply same discipline as Category 1.
+
+Known violations — role name literals in production src/main/java
+that bypass AgentRoleEnum:
+  "coordinator", "coder", "debugger", "researcher", "architect",
+  "brahma", "saraswati", "shiva", "brihaspati", "synthesizer"
+
+Approach: replace with AgentRoleEnum.COORDINATOR.toScopedName()
+(or .name().toLowerCase() if toScopedName() is not appropriate).
+AgentRoleEnum.fromString() already exists — use it at parse boundaries.
+Do NOT replace role strings in @DefaultValue annotations or
+application.properties — Quarkus needs literal strings there.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 3 — SQLite retry detection strings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Known violations — same strings scattered across:
+  WorkspaceManager, AsyncPersistenceEngine, StatefulAgentStoreImpl:
+  "database is locked"
+  "sqlite_busy"
+  "busy"
+  "SQLiteException"
+  "snapshot"
+
+Approach: create
+  arcclaw-core/.../persistence/SqliteErrorStrings.java
+  (package-private final class, no CDI)
+  static final String DATABASE_LOCKED = "database is locked";
+  static final String SQLITE_BUSY     = "sqlite_busy";
+  static final String BUSY            = "busy";
+  static final String SQLITE_EXCEPTION = "SQLiteException";
+  static final String SNAPSHOT        = "snapshot";
+
+All three retry-detection sites reference SqliteErrorStrings.*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 4 — Security / crypto algorithm strings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Known violations:
+  "HmacSHA256" — ApiKeyRegistry, AuditEventRepository, AuditVerifier
+
+Approach: create
+  arcclaw-core/.../security/CryptoConstants.java
+  (package-private final class, no CDI)
+  static final String HMAC_ALGORITHM = "HmacSHA256";
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 5 — HTTP / API contract strings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Known violations:
+  "X-ArcClaw-API-Key" — ApiKeyAuthFilter, ApiKeyAuthFilterTest,
+                         AgentResourceTest
+
+Approach: create
+  arcclaw-app/.../security/ArcClawHttpHeaders.java
+  (public final class, no CDI)
+  public static final String API_KEY_HEADER = "X-ArcClaw-API-Key";
+
+NOTE: this is a public API contract string — flag it for explicit
+confirmation before replacing. Changing the header name is a
+breaking change; only extract to constant, do not rename.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 6 — MDC key strings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Known violations:
+  "userId"    — AgentLoop, AgentSessionService, ApiKeyAuthFilter,
+                AgentCronScheduler, WorkspaceScopeHolder
+  "sessionId" — AgentLoop, AuditResource, AgentOtelContext
+  "agentRole" — AgentLoop, AgentCheckpoint, ToolRegistry
+  "role"      — MetricsAgentObserver, StatefulAgentStoreImpl
+
+Approach: create
+  arcclaw-core/.../observability/MdcKeys.java
+  (public final class, no CDI)
+  public static final String USER_ID    = "userId";
+  public static final String SESSION_ID = "sessionId";
+  public static final String AGENT_ROLE = "agentRole";
+  public static final String ROLE       = "role";
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 7 — Approval flow sentinel strings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Known violations:
+  "Resuming task after approval" — AgentStateMachineRunner,
+    LangChainReasoningEngine, ApproveReflex (3 production files)
+  "Human denied the tool execution." — DenyReflex, tests
+  "as per our agreement" is embedded inside the COMPLIANCE_OVERRIDE_PATTERN
+  regex in ChatHistoryAssembler. Only extract as AgentSentinels.COMPLIANCE_TAG
+  if it also appears as a standalone string comparison outside the regex.
+  If it only appears inside the regex pattern, leave it in place — extracting
+  a substring out of a regex pattern makes the pattern harder to read and
+  is non-standard.
+  
+RESUME_AFTER_APPROVAL = "Resuming task after approval" covers the full-string
+usage in AgentStateMachineRunner only.
+
+CheckpointResumeHandler uses goal.toLowerCase().startsWith("resuming task") —
+a prefix check, different pattern. Either leave it as-is or add a separate:
+  static final String RESUME_GOAL_PREFIX = "resuming task";
+Do NOT replace the startsWith() call with RESUME_AFTER_APPROVAL — they are
+not interchangeable.  
+
+Approach: add to existing class or create
+  arcclaw-core/.../agent/loop/AgentSentinels.java
+  package com.arcclaw.core.agent.loop;
+  (package-private final class, no CDI)
+  static final String RESUME_AFTER_APPROVAL = "Resuming task after approval";
+  static final String HUMAN_DENIED          = "Human denied the tool execution.";
+  static final String COMPLIANCE_TAG        = "as per our agreement";
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 8 — Config key strings in non-annotation contexts
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scan for config key strings used outside @ConfigProperty annotations:
+  "arcclaw.workspace.root-dir"
+  "arcclaw.sandbox.podman-path"
+  "arcclaw.audit.hmac-key"
+  "arcclaw.vault.pepper"
+
+If any appear in System.getProperty(), string comparisons, or log
+messages (not in @ConfigProperty), extract to a constants class.
+If they only appear in @ConfigProperty annotations, skip — no action.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 56.1 OUTPUT FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each category print a table:
+
+Category N — <name>
+| String          | Files (prod only) | Proposed constant     | Action |
+|-----------------|-------------------|-----------------------|--------|
+| "github"        | 3                 | ToolCapability.GITHUB | P0     |
+...
+
+Then STOP. Do not implement anything.
+Wait for category-by-category approval before Phase 56.2.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 56.2 — IMPLEMENTATION (after approval)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Execute approved categories in this order:
+1. Category 1 (P0 tool names) — highest risk if wrong, fix first
+2. Category 2 (role strings)
+3. Category 3 (SQLite strings)
+4. Category 4 (crypto strings)
+5. Category 5 (HTTP headers — explicit confirmation required)
+6. Category 6 (MDC keys)
+7. Category 7 (approval sentinels)
+8. Category 8 (config key strings if any found)
+
+Run after each category:
+  .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEFINITION OF DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- No magic tool name strings in production code — all via ToolCapability
+- No raw role name strings in production code — all via AgentRoleEnum
+- SqliteErrorStrings, CryptoConstants, MdcKeys, AgentSentinels classes created
+- ArcClawHttpHeaders created with API_KEY_HEADER constant
+- All replaced sites compile and tests pass per category
+- Full suite passes: .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+- Test fixture strings (session IDs, goal text) left unchanged
+

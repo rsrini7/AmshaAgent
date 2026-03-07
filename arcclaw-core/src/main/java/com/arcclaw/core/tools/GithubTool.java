@@ -2,6 +2,7 @@ package com.arcclaw.core.tools;
 
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.agent.role.ToolCapability;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -24,7 +25,7 @@ public class GithubTool implements AgentTool {
     private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
-    public static final String NAME = "github";
+    public static final String NAME = ToolCapability.GITHUB.toolName();
 
     @Override
     public String name() {

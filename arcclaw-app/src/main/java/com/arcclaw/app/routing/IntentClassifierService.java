@@ -1,6 +1,7 @@
 package com.arcclaw.app.routing;
 
 import java.util.List;
+
 import org.jboss.logging.Logger;
 
 import com.arcclaw.app.security.DestructiveVocabularyFilter;
@@ -69,7 +70,7 @@ public class IntentClassifierService implements IntentClassifier {
                    "tomorrow", "at HH:MM", "schedule", "remind me", "every day",
                    "once a week", "later".
                    This rule fires regardless of all other keywords present.
-                   "fetch", "repo", "github", "code", "research", "write", "debug"
+                   "fetch", "repo", ToolCapability.GITHUB.toolName(), "code", "research", "write", "debug"
                    do NOT override this rule.
 
                 CRITICAL GUARDRAILS:
@@ -115,7 +116,7 @@ public class IntentClassifierService implements IntentClassifier {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
             Log.warnf(e, "Intent classifier failed for session, defaulting to coordinator");
-            return "coordinator";
+            return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         long elapsed = System.currentTimeMillis() - start;
 
@@ -133,13 +134,13 @@ public class IntentClassifierService implements IntentClassifier {
     private String sanitize(String raw) {
         String lowerRaw = raw.toLowerCase();
         // Translate persona to actual functional duty
-        if (lowerRaw.contains("shiva") || lowerRaw.contains("debugger")) return "debugger";
-        if (lowerRaw.contains("brahma") || lowerRaw.contains("coder")) return "coder";
-        if (lowerRaw.contains("saraswati") || lowerRaw.contains("researcher")) return "researcher";
-        if (lowerRaw.contains("architect") || lowerRaw.contains("brihaspati")
-                || lowerRaw.contains("brahaspati")) return "architect"; // keep old spelling as fallback
-        if (lowerRaw.contains("synthesizer") || lowerRaw.contains("dattatreya")
-                || lowerRaw.contains("datta")) return "synthesizer";
-        return "coordinator";
+        if (lowerRaw.contains("shiva") || lowerRaw.contains(AgentRoleEnum.DEBUGGER.toScopedName())) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (lowerRaw.contains("brahma") || lowerRaw.contains(AgentRoleEnum.CODER.toScopedName())) return AgentRoleEnum.CODER.toScopedName();
+        if (lowerRaw.contains("saraswati") || lowerRaw.contains(AgentRoleEnum.RESEARCHER.toScopedName())) return AgentRoleEnum.RESEARCHER.toScopedName();
+        if (lowerRaw.contains(AgentRoleEnum.ARCHITECT.toScopedName()) || lowerRaw.contains("brihaspati")
+                || lowerRaw.contains("brahaspati")) return AgentRoleEnum.ARCHITECT.toScopedName(); // keep old spelling as fallback
+        if (lowerRaw.contains("synthesizer") || lowerRaw.contains(AgentRoleEnum.DATTATREYA.toScopedName())
+                || lowerRaw.contains("datta")) return AgentRoleEnum.DATTATREYA.toScopedName();
+        return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 }

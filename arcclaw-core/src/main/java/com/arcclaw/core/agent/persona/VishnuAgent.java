@@ -53,7 +53,7 @@ public class VishnuAgent implements Agent {
 
     @Override
     public String role() {
-        return "coordinator";
+        return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
     @Override

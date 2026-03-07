@@ -7,6 +7,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -106,7 +107,7 @@ public class ToolInvocationGuard {
 
         // 3. HITL PRE-APPROVAL CHECK
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
-        boolean isSchedulingTool = "scheduletask".equals(toolName) || "manageschedule".equals(toolName);
+        boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName) || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
         if (roleRegistry.requiresApprovalForTools(resolvedRole)
                 && !isSchedulingTool

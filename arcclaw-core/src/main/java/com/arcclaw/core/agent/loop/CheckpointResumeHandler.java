@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -37,7 +38,7 @@ public class CheckpointResumeHandler {
 
     public AgentResult handle(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
         // 1. Only proceed if the goal explicitly signals a resumption attempt
-        if (goal == null || !goal.toLowerCase().startsWith("resuming task")) {
+        if (goal == null || !goal.toLowerCase().startsWith(AgentSentinels.RESUME_GOAL_PREFIX)) {
             return null;
         }
         

@@ -28,6 +28,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 /**
@@ -336,7 +337,7 @@ public class AgentStateMachineRunner {
         } else {
             consecutiveFailures = 0;
 
-            if ("scheduletask".equals(toolName) || "manageschedule".equals(toolName)) {
+            if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName) || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
                 log.infof("[STATE-MACHINE] Fast-path exit triggered for tool '%s' to save LLM quota.", toolName);
                 String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
                 String finalFastPathAnswer = "✅ " + cleanOutput;

@@ -27,6 +27,7 @@ import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.arcclaw.core.util.MdcKeys;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -138,8 +139,8 @@ public class ToolRegistry {
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
             
-            String userId = (String) MDC.get("userId");
-            String agentRole = (String) MDC.get("agentRole");
+            String userId = (String) MDC.get(MdcKeys.USER_ID);
+            String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
             auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
                 SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
 
@@ -162,8 +163,8 @@ public class ToolRegistry {
                 String output = isolationExecutor.executeSandboxed(
                         WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
                 
-                String userId = (String) MDC.get("userId");
-                String agentRole = (String) MDC.get("agentRole");
+                String userId = (String) MDC.get(MdcKeys.USER_ID);
+                String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
                 auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
                     
@@ -174,8 +175,8 @@ public class ToolRegistry {
                 // Catch sandbox failures so the LLM can see the error and retry
                 log.errorf(e, "Tool '%s' execution failed: %s", toolName, e.getMessage());
                 
-                String userId = (String) MDC.get("userId");
-                String agentRole = (String) MDC.get("agentRole");
+                String userId = (String) MDC.get(MdcKeys.USER_ID);
+                String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
                 auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
                     
@@ -186,8 +187,8 @@ public class ToolRegistry {
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         ToolResponse response = tool.execute(params);
         
-        String userId = (String) MDC.get("userId");
-        String agentRole = (String) MDC.get("agentRole");
+        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
         auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
             SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
             
