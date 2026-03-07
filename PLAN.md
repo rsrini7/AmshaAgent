@@ -2965,7 +2965,8 @@ Implement the Dattatreya (Synthesizer) role — a meta-agent designed to integra
 ### Core Module — Agent & Prompt Architecture
 
 #### [MODIFY] [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentRoleEnum.java)
-- Added DATTATREYA with maxIterations=10 and equiresApproval=true.
+- Added DATTATREYA with maxIterations=10 and 
+equiresApproval=true.
 - Added deity and canonical string mappings.
 
 #### [NEW] [DattatreyaAgent.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/DattatreyaAgent.java)
@@ -2988,3 +2989,45 @@ Implement the Dattatreya (Synthesizer) role — a meta-agent designed to integra
 - ✅ DattatreyaAgentTest: Comprehensive behavioral and persona verification.
 - ✅ AgentPersonaRegistryTest: Registry discovery and rendering verification.
 - ✅ Full suite regression: All tests passing.
+
+---
+
+# Phase 53 — AgentCronScheduler SRP Refactor ✅
+
+Refactored the monolithic `AgentCronScheduler` into three specialized components to adhere to the Single Responsibility Principle (SRP) and improve maintainability.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Separation of Concerns**:
+> - `AgentCronScheduler`: Pure dispatcher. Manages @Scheduled polling and semaphore-based concurrency.
+> - `CronJobRunner`: Execution orchestrator. Manages workspace context setup, delivery ID assignment, and session lifecycle.
+> - `CronResultHandler`: Outcome processor. Manages database status updates, audit logging, and completion events.
+
+> [!NOTE]
+> **HITL Session Preservation**: The `AWAITING_APPROVAL` state now explicitly pauses the session via `CronResultHandler.handleApprovalPause()`, ensuring `WorkspaceManager.terminateSession()` is NOT called, allowing for subsequent manual user intervention.
+
+> [!CAUTION]
+> **Delivery ID Ordering**: `cronRepository.setDeliveryId()` MUST be called before `WorkspaceContext.run()`. This ensures that if the setup fails later, the approval flow can still locate the checkpoint via the delivery ID.
+
+## Proposed Changes
+
+#### [MODIFY] [AgentCronScheduler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/AgentCronScheduler.java)
+- Removed all execution logic.
+- Injects `CronJobRunner` for job execution.
+- Simplified `@PostConstruct` and added testing hooks.
+
+#### [NEW] [CronJobRunner.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/CronJobRunner.java)
+- Encapsulates the virtual thread execution logic.
+- Orchestrates `WorkspaceContext` and `AgentLoop` invocation.
+
+#### [NEW] [CronResultHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/scheduler/CronResultHandler.java)
+- Logic for `handleNormalCompletion`, `handleApprovalPause`, and `handleFailure`.
+- Corrected `SecurityEventType.CRONFAILED` for error paths.
+- Added audit logging for `LOOP_AWAITING_APPROVAL` events.
+
+## Verification Plan
+
+- ✅ `AgentCronSchedulerConcurrencyTest`: Verified semaphore behavior and permit leaks.
+- ✅ `CronResultHandlerTest`: Verified audit logging and session termination logic.
+- ✅ `AgentCronSchedulerTest`: Verified staleness reclamation window.
