@@ -68,6 +68,7 @@
 | 53 | Vault Key Caching (P3-1) | 100% success | `@WorkspaceScoped` cache with `@PreDestroy` wipe + Cron cleanup |
 | 52 | DattatreyaAgent: The Synthesizer | 100% success | Meta-agent for multi-specialist integration and conflict resolution |
 | 53 | AgentCronScheduler SRP Refactor | 100% success | Separated dispatcher, executor, and handler logic; fixed audit logging |
+| 53.3 | Agent State Machine Refactor | 100% success | Extracted Guard, Invoker, and Writer for modular loop logic |
 
 
 
@@ -88,6 +89,25 @@ Modernized the messaging infrastructure and moved implementations to `arcclaw-co
 - ✅ `mvnw clean package -pl arcclaw-app -am` succeeds.
 - ✅ All core and app tests (including new pipeline integration tests) are green.
 - ✅ CDI `UnsatisfiedDependency` issues verified as resolved in multiple environments.
+
+---
+
+## Phase 53.3: Agent State Machine Refactor ✅
+
+Modulerized the reasoning loop by splitting `AgentStateMachineRunner` into focused helper components.
+
+| File | Purpose |
+|------|---------|
+| [ToolInvocationGuard.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvocationGuard.java) | Evaluates guards (Dedup, GitHub, HITL) and returns `GuardDecision`. |
+| [ToolInvoker.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvoker.java) | Standardizes tool execution and re-throws persistence-critical exceptions. |
+| [ChatMemoryWriter.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ChatMemoryWriter.java) | Handles goal and answer persistence to `ChatMemoryStore`. |
+| [AgentStateMachineRunner.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentStateMachineRunner.java) | Slimmed down to an orchestrator with a unified `persistApprovalCheckpoint` helper. |
+
+**Verification**:
+- ✅ `AgentStateMachineRunnerTest` (orchestration) passes.
+- ✅ `ToolInvocationGuardTest` (security logic) passes.
+- ✅ `ToolInvokerTest` (exception safety) passes.
+- ✅ Full suite `arcclaw-core` regression check completed (100% pass).
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -1725,3 +1745,29 @@ Post-refactor, three surgical fixes were applied to harden the implementation:
 1.  **Encapsulated Iteration**: Removed `getHeartbeats()` from `SessionHeartbeatTracker` to prevent leaking internal state. Replaced it with `forEachExpired(Instant cutoff, Consumer<String> action)`, moving expiration logic into the tracker.
 2.  **Shutdown Safety**: Added a `shuttingDown` guard to `SessionReaper.gcSweep()`, ensuring scheduled tasks don't attempt to access resources while the application is stopping.
 3.  **Test Clarity**: Renamed `testGcSweepExpiresOldSessions()` in `WorkspaceManagerTest.java` to `testTerminateSession_removesHeartbeatAndMarksCheckpointFailed()` and updated its Javadoc to accurately reflect that it verifies the core termination logic rather than the GC sweep orchestrator.
+
+---
+
+## Phase 53.3: Agent State Machine Refactor ✅
+
+Modularized the reasoning loop by splitting the monolithic `AgentStateMachineRunner` into three focused helper components and a slimmed-down orchestrator. This improves maintainability and testability of the core reasoning loop.
+
+| File | Purpose |
+|------|---------|
+| [ToolInvocationGuard.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvocationGuard.java) | Centralizes tool deduplication, GitHub mandatory approval guards, and HITL evaluation logic. |
+| [ToolInvoker.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvoker.java) | Standardizes tool invocation with strict exception ordering for safe approval persistence. |
+| [ChatMemoryWriter.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ChatMemoryWriter.java) | Decouples chat memory persistence logic for goals and final answers. |
+| [AgentStateMachineRunner.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentStateMachineRunner.java) | Slimmed down to focus on loop orchestration and checkpoint persistence. |
+
+### Key Improvements
+
+1.  **Modular Logic**: Each stage of the tool invocation lifecycle (guarding, execution, persistence) is now isolated and unit-testable.
+2.  **Safety Fail-Saves**: Implemented `GuardDecision.Blocked` for HITL serialization failures to prevent "fail-open" security bugs.
+3.  **Exception Propagation**: Standardized how `RequiresApprovalException` is re-thrown and handled by the runner's new `persistApprovalCheckpoint()` helper.
+4.  **Test Scoping**: Resolved `ScopedValue` issues in unit tests by ensuring proper `WorkspaceContext.run()` wrapping for autonomy-aware guards.
+
+**Verification Results**:
+- ✅ `ToolInvocationGuardTest`: 100% pass (Deduplication, GitHub Guard, HITL logic).
+- ✅ `ToolInvokerTest`: 100% pass (Success, Security wrapping, Exception propagation).
+- ✅ `AgentStateMachineRunnerTest`: 100% pass (Orchestration logic with mocked components).
+- ✅ Full `arcclaw-core` suite regression check: All 350+ tests pass.

@@ -806,3 +806,14 @@
   - [x] Verify: Concurrency and logic tests PASS <!-- id: 307 -->
 
 ---
+
+# Phase 53.3 — Agent State Machine Refactor ✅
+- [x] Create `ToolInvocationGuard.java` (Dedup, GitHub Guard, HITL Evaluation)
+- [x] Create `ToolInvoker.java` (Unified invocation + exception handling)
+- [x] Create `ChatMemoryWriter.java` (Centralized chat memory persistence)
+- [x] Slim `AgentStateMachineRunner.java` to stay as orchestrator
+- [x] Implement `persistApprovalCheckpoint()` helper in runner
+- [x] Verify: Targeted unit tests for Guard, Invoker, and Runner pass (100% success)
+- [x] Verify: Final surgical fixes for safe HITL serialization and test scoping
+
+---

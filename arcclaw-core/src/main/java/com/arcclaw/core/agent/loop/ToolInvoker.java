@@ -1,0 +1,48 @@
+package com.arcclaw.core.agent.loop;
+
+import com.arcclaw.core.governance.RequiresApprovalException;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.Map;
+
+/**
+ * Standardized executor for tool calls.
+ * Wraps {@link ToolRegistry} with consistent exception handling.
+ */
+@ApplicationScoped
+public class ToolInvoker {
+    private static final Logger log = Logger.getLogger(ToolInvoker.class);
+
+    @Inject ToolRegistry toolRegistry;
+
+    /**
+     * Invokes a tool and wraps exceptions into a {@link ToolResponse}.
+     * <p>
+     * Re-throws {@link RequiresApprovalException} so the runner can pause the loop.
+     *
+     * @param toolName  The unique tool name.
+     * @param params    Tool parameters.
+     * @param sessionId For logging only.
+     * @return The tool response.
+     * @throws RequiresApprovalException If the tool requires human approval.
+     */
+    public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
+        try {
+            // Call the 2-arg overload as per spec
+            return toolRegistry.invokeTool(toolName, params);
+        } catch (RequiresApprovalException e) {
+            // Re-throw for runner checkpoint persistence
+            throw e;
+        } catch (SecurityException e) {
+            log.warnf("Tool '%s' blocked by governance in session %s: %s", toolName, sessionId, e.getMessage());
+            return ToolResponse.failure(1, "Security violation: " + e.getMessage());
+        } catch (Exception e) {
+            log.errorf(e, "Tool '%s' threw unexpected exception in session %s", toolName, sessionId);
+            return ToolResponse.failure(1, "Tool execution error: " + e.getMessage());
+        }
+    }
+}

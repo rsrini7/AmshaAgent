@@ -32,10 +32,8 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.exception.InvalidRequestException;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.inject.Instance;
 
 class AgentStateMachineRunnerTest {
@@ -45,9 +43,9 @@ class AgentStateMachineRunnerTest {
     private ToolRegistry toolRegistry;
     private StatefulAgentStore agentStore;
     private GovernanceLayer governanceLayer;
-    private ChatMemoryStore chatMemoryStore;
-    private RoleRegistry roleRegistry;
-    private ObjectMapper objectMapper;
+    private com.arcclaw.core.agent.loop.ToolInvocationGuard guard;
+    private com.arcclaw.core.agent.loop.ToolInvoker invoker;
+    private com.arcclaw.core.agent.loop.ChatMemoryWriter writer;
 
     @SuppressWarnings("unchecked")
     Instance<AgentObserver> observers = mock(Instance.class);
@@ -59,17 +57,17 @@ class AgentStateMachineRunnerTest {
         toolRegistry = mock(ToolRegistry.class);
         agentStore = mock(StatefulAgentStore.class);
         governanceLayer = mock(GovernanceLayer.class);
-        chatMemoryStore = mock(ChatMemoryStore.class);
-        roleRegistry = mock(RoleRegistry.class);
-        objectMapper = new ObjectMapper();
+        guard = mock(com.arcclaw.core.agent.loop.ToolInvocationGuard.class);
+        invoker = mock(com.arcclaw.core.agent.loop.ToolInvoker.class);
+        writer = mock(com.arcclaw.core.agent.loop.ChatMemoryWriter.class);
 
         runner.toolRegistry = toolRegistry;
         runner.agentStore = agentStore;
         runner.governanceLayer = governanceLayer;
-        runner.chatMemoryStore = chatMemoryStore;
         runner.observers = observers;
-        runner.roleRegistry = roleRegistry;
-        runner.objectMapper = objectMapper;
+        runner.guard = guard;
+        runner.invoker = invoker;
+        runner.writer = writer;
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());
     }
@@ -95,7 +93,10 @@ class AgentStateMachineRunnerTest {
         ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 0, 0);
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenReturn(new ToolResponse(0, "output", true));
+        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+                .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.Allow());
+        when(invoker.invoke(anyString(), anyMap(), anyString()))
+                .thenReturn(new ToolResponse(0, "output", true));
 
         AgentExecutionContext ctx = new AgentExecutionContext("s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2);
         AgentResult result = runner.run(ctx, engine, List.of());
@@ -142,7 +143,8 @@ class AgentStateMachineRunnerTest {
             ReasoningStep toolStep = ReasoningStep.pending("thought", "protected-tool", Map.of(), 0, 0);
             when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
             when(toolRegistry.findTool("protected-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
-            when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
+            when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+                    .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.PauseForApproval("protected-tool", "{}"));
             when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(new AgentCheckpoint()));
 
             AgentExecutionContext ctx = new AgentExecutionContext("s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5);
@@ -162,15 +164,16 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(toolStep1)
                 .thenReturn(toolStep2);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(toolRegistry.invokeTool(anyString(), anyMap()))
+        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+                .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.Allow());
+        when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(1, "error", false));
-        when(roleRegistry.requiresApprovalForTools(any())).thenReturn(false);
 
         AgentResult result = runner.run(createCtx(), engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
-        verify(toolRegistry, times(2)).invokeTool(any(), any());
+        verify(invoker, times(2)).invoke(anyString(), anyMap(), anyString());
     }
 
     @Test
@@ -194,69 +197,18 @@ class AgentStateMachineRunnerTest {
         ReasoningStep scheduleStep = ReasoningStep.pending("planning", "scheduletask", Map.of("task", "clean"), 0, 0);
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(scheduleStep);
         when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenReturn(new ToolResponse(0, "Scheduled cleaning", true));
+        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+                .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.Allow());
+        when(invoker.invoke(anyString(), anyMap(), anyString()))
+                .thenReturn(new ToolResponse(0, "Scheduled cleaning", true));
 
         AgentResult result = runner.run(createCtx(), engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("Scheduled cleaning"));
         verify(engine, times(1)).nextStep(any(), any(), any(), any()); // Fast-path: no 2nd call to engine
+        verify(writer).saveAnswer(anyString(), anyString());
     }
 
-    @Test
-    void testDuplicateToolCallReturnsCachedObservation() {
-        AgentExecutionContext ctx = new AgentExecutionContext(
-            "session-1", "user-1", "chat-1", "coordinator",
-            "fetch rsrini7/ArcClaw repo description",  // ← contains github keywords
-            AutonomyLevel.FULL, 5);
-
-        ReasoningStep toolStep = ReasoningStep.pending("thought", "github",
-                Map.of("action", "repo", "command", "view", "target", "rsrini7/ArcClaw"), 0, 0);
-        ReasoningStep finishStep = ReasoningStep.pending("done", ReasoningStep.FINISH,
-                Map.of("answer", "done"), 0, 0);
-
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
-                .thenReturn(toolStep)
-                .thenReturn(toolStep)   // duplicate call
-                .thenReturn(finishStep);
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(toolRegistry.invokeTool(anyString(), anyMap()))
-                .thenReturn(new ToolResponse(0, "repo description here", true));
-        // github isPreApproved check
-        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
-
-        AgentResult result = runner.run(ctx, engine, List.of());
-
-        assertInstanceOf(AgentResult.Finished.class, result);
-        verify(toolRegistry, times(1)).invokeTool(any(), any()); // cached on 2nd call
-    }
-
-    @Test
-    void testFailedToolObservationIsNotCached() {
-        AgentExecutionContext ctx = new AgentExecutionContext(
-            "session-1", "user-1", "chat-1", "coordinator",
-            "fetch rsrini7/ArcClaw repo",  // ← github keyword
-            AutonomyLevel.FULL, 5);
-
-        ReasoningStep toolStep1 = ReasoningStep.pending("thought1", "github",
-                Map.of("action", "repo", "command", "view", "target", "rsrini7/ArcClaw", "attempt", 1), 0, 0);
-        ReasoningStep toolStep2 = ReasoningStep.pending("thought2", "github",
-                Map.of("action", "repo", "command", "view", "target", "rsrini7/ArcClaw", "attempt", 2), 0, 0);
-
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
-                .thenReturn(toolStep1)
-                .thenReturn(toolStep2);
-
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(toolRegistry.invokeTool(anyString(), anyMap()))
-                .thenReturn(new ToolResponse(1, "error output", false));
-        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
-
-        AgentResult result = runner.run(ctx, engine, List.of());
-
-        assertInstanceOf(AgentResult.Finished.class, result);
-        assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
-        verify(toolRegistry, times(2)).invokeTool(any(), any()); // no dedup — both calls real because of different params
-    }
 
 }

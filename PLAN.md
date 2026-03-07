@@ -3077,3 +3077,46 @@ Separate the concerns of heartbeat tracking, scheduled cleanup, and session term
 - ✅ `WorkspaceManagerTest`: Verified zombie recovery and basic termination lifecycle.
 - ✅ `WorkspaceManagerGcSweepTest`: Verified GC sweep and approval timeout logic with real heartbeat injection.
 - ✅ `ChatCommandApprovalTest`: Verified CLI heartbeat recording using the new tracker mock.
+
+---
+
+# Phase 53.3 — Agent State Machine Refactor ✅
+
+Split the monolith logic of `AgentStateMachineRunner` into three focused helpers and a simplified orchestrator.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Component Breakout**:
+> - `ToolInvocationGuard`: Handles deduplication, GitHub intent guarding, and HITL pre-approval. Returns a sealed `GuardDecision`.
+> - `ToolInvoker`: Standardizes invocation with strict exception handling. Re-throws `RequiresApprovalException` for runner persistence.
+> - `ChatMemoryWriter`: Handles all chat memory persistence for goals and answers.
+> - `AgentStateMachineRunner`: Reduced to a pure orchestrator.
+
+> [!NOTE]
+> **Unified Approval Utility**: Extracted a `persistApprovalCheckpoint()` private helper in `AgentStateMachineRunner` to dry up the code that handles both `PauseForApproval` guard results and caught `RequiresApprovalException` from the invoker.
+
+> [!CAUTION]
+> **Surgical Safety**: Added a fail-safe in `ToolInvocationGuard` to return `Blocked` if HITL parameter serialization fails, ensuring we never accidentally "fail-open" to `Allow`.
+
+## Proposed Changes
+
+#### [MODIFY] [AgentStateMachineRunner.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentStateMachineRunner.java)
+- Delegated guard evaluation and tool invocation to new components.
+- Added `persistApprovalCheckpoint()` helper.
+- Removed imports for `ChatMemoryStore`, `RoleRegistry`, and `ObjectMapper`.
+
+#### [NEW] [ToolInvocationGuard.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvocationGuard.java)
+- Implementation of the `evaluate()` logic and `GuardDecision` sealed interface.
+
+#### [NEW] [ToolInvoker.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvoker.java)
+- Standardized invocation wrapper with strict catch ordering.
+
+#### [NEW] [ChatMemoryWriter.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ChatMemoryWriter.java)
+- Utility for saving goals and final answers to memory.
+
+## Verification Plan
+
+- ✅ `AgentStateMachineRunnerTest`: Verified orchestration with mocked helpers.
+- ✅ `ToolInvocationGuardTest`: Verified deduplication, GitHub guard, and ScopedValue-safe HITL evaluation.
+- ✅ `ToolInvokerTest`: Verified success, security violation wrapping, and exception propagation.
