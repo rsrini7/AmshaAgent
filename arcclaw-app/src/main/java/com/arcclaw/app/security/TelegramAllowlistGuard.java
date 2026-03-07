@@ -18,13 +18,13 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
     @ConfigProperty(name = "arcclaw.channel.telegram.allowed-user-ids")
     Optional<List<Long>> allowedUserIds;
 
-    @ConfigProperty(name = "arcclaw.telegram.allowed-users", defaultValue = "")
+    @ConfigProperty(name = "arcclaw.channel.telegram.allowed-users", defaultValue = "")
     Optional<List<String>> allowedUsers;
 
-    @ConfigProperty(name = "arcclaw.telegram.block-response", defaultValue = "⛔ Access denied.")
+    @ConfigProperty(name = "arcclaw.channel.telegram.block-response", defaultValue = "⛔ Access denied.")
     String blockResponse;
 
-    @ConfigProperty(name = "arcclaw.telegram.silent-block", defaultValue = "false")
+    @ConfigProperty(name = "arcclaw.channel.telegram.silent-block", defaultValue = "false")
     boolean silentBlock;
 
     @Override

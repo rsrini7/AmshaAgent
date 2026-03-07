@@ -73,6 +73,7 @@
 | 53.5 | Package Reorganization | 100% success | Moved 23 core agent classes into logical sub-packages |
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 | 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
+| 55.2 | ScopedValue & Constructor Injection | 121/121 tests | Migrated CliAgentObserver to ScopedValue and 10 beans to Constructor Injection |
 
 
 ---
@@ -1956,3 +1957,23 @@ Conducted a mechanical sweep to modernize the codebase using JDK 21+ features an
 - ✅ `arcclaw-core`: 350 tests pass.
 - ✅ `arcclaw-app`: 121 tests pass.
 - ✅ Total 471 tests passed in 02:27 mins.
+
+---
+
+## Phase 55.2 — JDK Modernization (ScopedValue & DI) ✅
+
+Refactored core components to use JDK 24's `ScopedValue` and migrated to constructor injection for core beans, addressing issues with `@InjectMocks` and field injection in tests.
+
+### Key Improvements:
+
+- **ScopedValue Integration**: Migrated `CliAgentObserver` from `static volatile boolean` to `ScopedValue<Boolean> ENABLED`. This provides a more robust and immutable way to propagate the CLI flag, especially useful for scoped execution in virtual threads.
+- **Constructor Injection Conversion**: Converted 10 production beans (including `AuditService`, `SystemPromptBuilder`, and `AgentSessionService`) to use constructor injection. This eliminates the need for `@InjectMocks` (as per Rule 10) and makes tests more straightforward by using manual instantiation in `@BeforeEach`.
+- **Telegram Namespace Unification**: Corrected the Telegram property namespace from `arcclaw.telegram.*` to the unified `arcclaw.channel.telegram.*`, ensuring consistency across the project's configuration.
+
+### Troubleshooting Case: `AgentSessionServiceTest`
+Initially tried using `@QuarkusTest` + `@InjectMock` for `AgentSessionServiceTest`. However, this failed with `NullPointerException` due to conflicting with static mocking of `WorkspaceScopeHolder`. Reverting to pure Mockito with `MockitoExtension` and constructor injection proved to be the most reliable and maintainable approach.
+
+### Verification:
+- ✅ **Core**: 350 tests pass.
+- ✅ **App**: 121 tests pass.
+- ✅ **Total**: 471 tests green.

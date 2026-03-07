@@ -4,7 +4,6 @@ import java.time.Instant;
 
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -16,17 +15,24 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class SystemPromptBuilder {
 
-    @Inject
-    AgentPersonaRegistry agentPersonaRegistry;
+    private final AgentPersonaRegistry agentPersonaRegistry;
+    private final PromptTemplateEngine promptTemplateEngine;
+    private final CompactionSummaryRepository compactionSummaryRepository;
+
+    protected SystemPromptBuilder() {
+        this.agentPersonaRegistry = null;
+        this.promptTemplateEngine = null;
+        this.compactionSummaryRepository = null;
+    }
 
     @Inject
-    PromptTemplateEngine promptTemplateEngine;
-
-    @Inject
-    CompactionSummaryRepository compactionSummaryRepository;
-
-    @Inject
-    RoleRegistry roleRegistry;
+    public SystemPromptBuilder(AgentPersonaRegistry agentPersonaRegistry,
+                               PromptTemplateEngine promptTemplateEngine,
+                               CompactionSummaryRepository compactionSummaryRepository) {
+        this.agentPersonaRegistry = agentPersonaRegistry;
+        this.promptTemplateEngine = promptTemplateEngine;
+        this.compactionSummaryRepository = compactionSummaryRepository;
+    }
 
     private static final String SECURITY_RULES_PROMPT = """
             RESPONSE LENGTH RULE:

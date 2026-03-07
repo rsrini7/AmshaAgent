@@ -12,13 +12,13 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -65,12 +65,14 @@ class AgentSessionServiceTest {
     AgentResponseMapper responseMapper;
 
     @Mock
-    Logger log;
-
-    @Mock
     ObjectMapper objectMapper;
 
-    @InjectMocks
+    @Mock
+    ExecutorService vThreads;
+
+    @Mock
+    Logger log;
+
     AgentSessionService service;
 
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
@@ -79,6 +81,9 @@ class AgentSessionServiceTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
+        service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
+                heartbeatTracker, devSeeder, responseMapper, objectMapper, vThreads);
+        
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
 

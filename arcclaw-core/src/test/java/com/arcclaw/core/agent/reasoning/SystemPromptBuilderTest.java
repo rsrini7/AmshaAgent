@@ -8,13 +8,11 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 
 class SystemPromptBuilderTest {
@@ -28,15 +26,13 @@ class SystemPromptBuilderTest {
     @Mock
     CompactionSummaryRepository compactionSummaryRepository;
 
-    @Mock
-    RoleRegistry roleRegistry;
-
-    @InjectMocks
     SystemPromptBuilder builder;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        builder = new SystemPromptBuilder(agentPersonaRegistry, promptTemplateEngine,
+                compactionSummaryRepository);
     }
 
     @Test

@@ -66,6 +66,8 @@
 | **CDI** | Test field overrides ignored | `@Inject` provides a Client Proxy; modifications to its fields have no effect on the bean. | Use `io.quarkus.arc.ClientProxy.unwrap(bean)` to access and modify the actual implementation instance. |
 | **Build** | `cannot find symbol` (Core) | `-pl arcclaw-app` used without `-am` after core changes. | Add `-am` (also-make) flag to rebuild dependency modules. |
 | **Security** | Regex Boundary Failure | `\b` fails on `rm -rf` due to space/dash. | Split pattern into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN` (`(?i)rm\s*-rf`). |
+| **Testing** | `TestInstantiationException` | `@InjectMock` on `@Singleton` / Field Injection incompatibility. | Migrate to **Constructor Injection** and use `MockitoExtension` for manual instantiation. |
+| **Config** | Missing Telegram Config | `arcclaw.telegram.*` properties ignored. | Ensure all Telegram properties use the `arcclaw.channel.telegram.*` namespace. |
  
 ---
 

@@ -8,7 +8,6 @@ import java.util.Collections;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
@@ -24,12 +23,12 @@ class ReasoningStepParserTest {
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
-    @InjectMocks
     ReasoningStepParser parser;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        parser = new ReasoningStepParser(objectMapper);
     }
 
     @Test

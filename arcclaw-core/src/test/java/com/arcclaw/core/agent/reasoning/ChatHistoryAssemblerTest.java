@@ -9,7 +9,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
@@ -31,12 +30,12 @@ class ChatHistoryAssemblerTest {
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
-    @InjectMocks
     ChatHistoryAssembler assembler;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        assembler = new ChatHistoryAssembler(chatMemoryStore, objectMapper);
     }
 
     @Test

@@ -9,11 +9,20 @@ import java.math.BigDecimal;
 @ApplicationScoped
 public class AuditService {
 
-    @Inject
-    TelemetryAuditService telemetryAuditService;
+    private final TelemetryAuditService telemetryAuditService;
+    private final ComplianceAuditService complianceAuditService;
+
+    protected AuditService() {
+        this.telemetryAuditService = null;
+        this.complianceAuditService = null;
+    }
 
     @Inject
-    ComplianceAuditService complianceAuditService;
+    public AuditService(TelemetryAuditService telemetryAuditService,
+                        ComplianceAuditService complianceAuditService) {
+        this.telemetryAuditService = telemetryAuditService;
+        this.complianceAuditService = complianceAuditService;
+    }
 
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
         telemetryAuditService.record(sessionId, userId, agentRole, type, detail);

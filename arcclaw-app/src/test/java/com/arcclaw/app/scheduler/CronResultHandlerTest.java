@@ -12,7 +12,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -41,7 +40,6 @@ class CronResultHandlerTest {
     @Mock
     Event<AgentJobCompleted> jobCompletedEvent;
 
-    @InjectMocks
     CronResultHandler handler;
 
     private AgentCronEntity job;
@@ -50,6 +48,7 @@ class CronResultHandlerTest {
 
     @BeforeEach
     void setup() {
+        handler = new CronResultHandler(cronRepository, auditService, workspaceManager, jobCompletedEvent);
         job = new AgentCronEntity();
         job.id = "cron-1";
         job.userId = "user-1";

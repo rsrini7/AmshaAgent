@@ -21,11 +21,19 @@ public class CheckpointResumeHandler {
 
     private static final Logger log = Logger.getLogger(CheckpointResumeHandler.class);
 
-    @Inject
-    StatefulAgentStore agentStore;
+    private final StatefulAgentStore agentStore;
+    private final ToolRegistry toolRegistry;
+
+    protected CheckpointResumeHandler() {
+        this.agentStore = null;
+        this.toolRegistry = null;
+    }
 
     @Inject
-    ToolRegistry toolRegistry;
+    public CheckpointResumeHandler(StatefulAgentStore agentStore, ToolRegistry toolRegistry) {
+        this.agentStore = agentStore;
+        this.toolRegistry = toolRegistry;
+    }
 
     public AgentResult handle(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
         // 1. Only proceed if the goal explicitly signals a resumption attempt

@@ -24,11 +24,19 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class ChatHistoryAssembler {
 
-    @Inject
-    ChatMemoryStore chatMemoryStore;
+    private final ChatMemoryStore chatMemoryStore;
+    private final ObjectMapper objectMapper;
+
+    protected ChatHistoryAssembler() {
+        this.chatMemoryStore = null;
+        this.objectMapper = null;
+    }
 
     @Inject
-    ObjectMapper objectMapper;
+    public ChatHistoryAssembler(ChatMemoryStore chatMemoryStore, ObjectMapper objectMapper) {
+        this.chatMemoryStore = chatMemoryStore;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * Detects LLM compliance override responses — organic LLM output where the

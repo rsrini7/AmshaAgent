@@ -30,17 +30,28 @@ public class CronResultHandler {
 
     private static final Logger log = Logger.getLogger(CronResultHandler.class);
 
-    @Inject
-    AgentCronRepository cronRepository;
+    private final AgentCronRepository cronRepository;
+    private final AuditService auditService;
+    private final WorkspaceManager workspaceManager;
+    private final Event<AgentJobCompleted> jobCompletedEvent;
+
+    protected CronResultHandler() {
+        this.cronRepository = null;
+        this.auditService = null;
+        this.workspaceManager = null;
+        this.jobCompletedEvent = null;
+    }
 
     @Inject
-    AuditService auditService;
-
-    @Inject
-    WorkspaceManager workspaceManager;
-
-    @Inject
-    Event<AgentJobCompleted> jobCompletedEvent;
+    public CronResultHandler(AgentCronRepository cronRepository,
+                             AuditService auditService,
+                             WorkspaceManager workspaceManager,
+                             Event<AgentJobCompleted> jobCompletedEvent) {
+        this.cronRepository = cronRepository;
+        this.auditService = auditService;
+        this.workspaceManager = workspaceManager;
+        this.jobCompletedEvent = jobCompletedEvent;
+    }
 
     public void handleSuccess(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
         if (result instanceof AgentResult.AwaitingApproval a) {

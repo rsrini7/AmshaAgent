@@ -36,36 +36,52 @@ import jakarta.ws.rs.core.Response;
 @ApplicationScoped
 public class AgentSessionService {
 
-    @Inject
-    Logger log;
+    private final Logger log;
+    private final AgentLoop agentLoop;
+    private final ReasoningEngine reasoningEngine;
+    private final StatefulAgentStore agentStore;
+    private final WorkspaceManager workspaceManager;
+    private final SessionHeartbeatTracker heartbeatTracker;
+    private final DevSecretSeeder devSeeder;
+    private final AgentResponseMapper responseMapper;
+    private final ObjectMapper objectMapper;
+    private final ExecutorService vThreads;
+
+    protected AgentSessionService() {
+        this.log = null;
+        this.agentLoop = null;
+        this.reasoningEngine = null;
+        this.agentStore = null;
+        this.workspaceManager = null;
+        this.heartbeatTracker = null;
+        this.devSeeder = null;
+        this.responseMapper = null;
+        this.objectMapper = null;
+        this.vThreads = null;
+    }
 
     @Inject
-    AgentLoop agentLoop;
-
-    @Inject
-    ReasoningEngine reasoningEngine;
-
-    @Inject
-    StatefulAgentStore agentStore;
-
-    @Inject
-    WorkspaceManager workspaceManager;
-
-    @Inject
-    SessionHeartbeatTracker heartbeatTracker;
-
-    @Inject
-    DevSecretSeeder devSeeder;
-
-    @Inject
-    AgentResponseMapper responseMapper;
-
-    @Inject
-    ObjectMapper objectMapper;
-
-    @Inject
-    @VirtualThreads
-    ExecutorService vThreads;
+    public AgentSessionService(Logger log,
+                               AgentLoop agentLoop,
+                               ReasoningEngine reasoningEngine,
+                               StatefulAgentStore agentStore,
+                               WorkspaceManager workspaceManager,
+                               SessionHeartbeatTracker heartbeatTracker,
+                               DevSecretSeeder devSeeder,
+                               AgentResponseMapper responseMapper,
+                               ObjectMapper objectMapper,
+                               @VirtualThreads ExecutorService vThreads) {
+        this.log = log;
+        this.agentLoop = agentLoop;
+        this.reasoningEngine = reasoningEngine;
+        this.agentStore = agentStore;
+        this.workspaceManager = workspaceManager;
+        this.heartbeatTracker = heartbeatTracker;
+        this.devSeeder = devSeeder;
+        this.responseMapper = responseMapper;
+        this.objectMapper = objectMapper;
+        this.vThreads = vThreads;
+    }
 
     public String createSession() {
         String sessionId = UUID.randomUUID().toString();

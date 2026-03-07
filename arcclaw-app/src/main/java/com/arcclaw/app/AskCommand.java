@@ -55,25 +55,25 @@ public class AskCommand implements Runnable {
         String sessionId = UUID.randomUUID().toString();
         try {
             WorkspaceScopeHolder.run(sessionId, () -> {
-                CliAgentObserver.enabled = true;
+                ScopedValue.where(CliAgentObserver.ENABLED, true).run(() -> {
+                    // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
+                    devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
-                // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
-                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
+                    AgentResult result = agentLoop.run(sessionId, role, goal,
+                            reasoningEngine, 5);
 
-                AgentResult result = agentLoop.run(sessionId, role, goal,
-                        reasoningEngine, 5);
-                
-                String output = switch (result) {
-                    case AgentResult.Finished f -> f.answer();
-                    case AgentResult.Failed f -> "Error: " + f.reason();
-                    case AgentResult.LoopExceeded l -> "Timed out after " + l.maxIterations() + " steps.";
-                    case AgentResult.AwaitingApproval a -> "Agent requires approval to run tool: " + a.toolName();
-                };
-                System.out.println("\n✅ Final Answer:\n" + output);
+                    String output = switch (result) {
+                        case AgentResult.Finished f -> f.answer();
+                        case AgentResult.Failed f -> "Error: " + f.reason();
+                        case AgentResult.LoopExceeded l -> "Timed out after " + l.maxIterations() + " steps.";
+                        case AgentResult.AwaitingApproval a -> "Agent requires approval to run tool: " + a.toolName();
+                    };
+                    System.out.println("\n✅ Final Answer:\n" + output);
+                });
             });
         } finally {
-            CliAgentObserver.enabled = false;
             workspaceManager.terminateSession(sessionId);
         }
     }
+
 }

@@ -11,11 +11,20 @@ public class ComplianceAuditService {
 
     private static final Logger log = Logger.getLogger(ComplianceAuditService.class);
 
-    @Inject
-    AuditEventRepository auditEventRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final AsyncPersistenceEngine persistenceEngine;
+
+    protected ComplianceAuditService() {
+        this.auditEventRepository = null;
+        this.persistenceEngine = null;
+    }
 
     @Inject
-    AsyncPersistenceEngine persistenceEngine;
+    public ComplianceAuditService(AuditEventRepository auditEventRepository,
+                                  AsyncPersistenceEngine persistenceEngine) {
+        this.auditEventRepository = auditEventRepository;
+        this.persistenceEngine = persistenceEngine;
+    }
 
     /**
      * Records a MANDATORY security event — fail-closed.

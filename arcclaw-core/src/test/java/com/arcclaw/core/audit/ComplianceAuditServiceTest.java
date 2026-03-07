@@ -1,17 +1,22 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.persistence.AsyncPersistenceEngine;
-import com.arcclaw.core.persistence.PersistenceEvent;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+import com.arcclaw.core.persistence.PersistenceEvent;
 
 @ExtendWith(MockitoExtension.class)
 class ComplianceAuditServiceTest {
@@ -22,8 +27,12 @@ class ComplianceAuditServiceTest {
     @Mock
     AsyncPersistenceEngine persistenceEngine;
 
-    @InjectMocks
     ComplianceAuditService complianceAuditService;
+
+    @BeforeEach
+    void setUp() {
+        complianceAuditService = new ComplianceAuditService(auditEventRepository, persistenceEngine);
+    }
 
     @Test
     void testRecordMandatorySucceeds() {
