@@ -788,11 +788,21 @@
 - [x] Add DattatreyaAgent to AgentPersonaRegistryTest setup <!-- id: 290 -->
 - [x] Create DattatreyaAgentTest.java with comprehensive persona/tool tests <!-- id: 291 -->
 - [x] Verify: All 320+ system tests pass GREEN <!-- id: 292 -->
-# Phase 53 — AgentCronScheduler SRP Refactor ✅
-- [x] Split `AgentCronScheduler.java` (Dispatcher) <!-- id: 293 -->
-- [x] Create `CronJobRunner.java` (Execution Context) <!-- id: 294 -->
-- [x] Create `CronResultHandler.java` (State & Telemetry) <!-- id: 295 -->
-- [x] Implement AWAITING_APPROVAL session preservation logic <!-- id: 296 -->
-- [x] Add audit logging for HITL pause events <!-- id: 297 -->
-- [x] Ensure `setDeliveryId` ordering before `WorkspaceContext.run()` <!-- id: 298 -->
-- [x] Verify: Concurrency and logic tests PASS <!-- id: 299 -->
+# Phase 53 — AgentCronScheduler & WorkspaceManager SRP Refactor ✅
+- [x] **Phase 53.1: WorkspaceManager Split** <!-- id: 300 -->
+  - [x] Create `SessionHeartbeatTracker.java` (In-memory state) <!-- id: 301 -->
+  - [x] Create `SessionReaper.java` (Scheduled GC & Zombie Recovery) <!-- id: 302 -->
+  - [x] Slim `WorkspaceManager.java` (Termination & Disk only) <!-- id: 303 -->
+  - [x] Update `AgentResource.java` & `ChatCommand.java` to use Tracker <!-- id: 304 -->
+  - [x] Add `testSweepTimedOutApprovals` to `WorkspaceManagerGcSweepTest` <!-- id: 305 -->
+  - [x] Verify: All tests pass (340+ system tests total) <!-- id: 306 -->
+- [x] **Phase 53.2: AgentCronScheduler SRP Refactor** <!-- id: 293 -->
+  - [x] Split `AgentCronScheduler.java` (Dispatcher) <!-- id: 294 -->
+  - [x] Create `CronJobRunner.java` (Execution Context) <!-- id: 295 -->
+  - [x] Create `CronResultHandler.java` (State & Telemetry) <!-- id: 296 -->
+  - [x] Implement AWAITING_APPROVAL session preservation logic <!-- id: 297 -->
+  - [x] Add audit logging for HITL pause events <!-- id: 298 -->
+  - [x] Ensure `setDeliveryId` ordering before `WorkspaceContext.run()` <!-- id: 299 -->
+  - [x] Verify: Concurrency and logic tests PASS <!-- id: 307 -->
+
+---
