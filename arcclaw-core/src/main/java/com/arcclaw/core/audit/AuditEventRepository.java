@@ -36,7 +36,7 @@ public class AuditEventRepository {
                 Long.class)
                 .setParameter("sid", event.sessionId)
                 .getResultList();
-        event.sequence = (maxSeqResult.isEmpty() ? 0L : maxSeqResult.get(0)) + 1;
+        event.sequence = (maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst()) + 1;
 
         // Step 2: chain to previous hash
         String prevHash = findLatestHash(event.sessionId);
@@ -63,7 +63,7 @@ public class AuditEventRepository {
                 .setMaxResults(1)
                 .getResultList();
         
-        return results.isEmpty() ? null : results.get(0);
+        return results.isEmpty() ? null : results.getFirst();
     }
 
 

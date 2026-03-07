@@ -98,7 +98,7 @@ public class ChatCommand implements Runnable {
             String input;
             try {
                 input = scanner.nextLine().trim();
-            } catch (NoSuchElementException e) {
+            } catch (NoSuchElementException _) {
                 break;
             }
 

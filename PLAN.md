@@ -3291,3 +3291,41 @@ Refactor agent tests by moving them to the appropriate Maven module (`arcclaw-co
 ## Verification
 - ✅ `mvn clean test -pl arcclaw-core`: 350 tests green.
 - ✅ `mvn clean test -pl arcclaw-app -am`: 121 tests green (100% success).
+
+---
+
+# Phase 55.1 — JDK Modernization Sweep ✅
+
+Mechanical sweep to modernize the codebase using JDK 21+ features and clean up legacy synchronization.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **No Behavioral Changes**: All updates are strictly mechanical and validated by the existing 471-test suite.
+
+> [!TIP]
+> **Sequenced Collections**: Replaces verbose `.get(0)` and `.get(size()-1)` with expressive `.getFirst()` and `.getLast()` methods.
+
+> [!NOTE]
+> **Unnamed Variables**: Uses `_` for caught exceptions that are logged but not inspected, or purely for satisfying syntax.
+
+## Proposed Changes
+
+### Core Module — Modernization
+
+#### [MODIFY] [AgentErrorMessageUtil.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/util/AgentErrorMessageUtil.java)
+- Extracted inline `Pattern.compile` into `private static final Pattern` constants for `TOKEN_LIMIT`, `RETRY_AFTER`, and `DURATION`.
+
+#### [MODIFY] [AgentStateMachineRunner.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/AgentStateMachineRunner.java)
+- Removed `synchronized(history)` blocks. `history` is an `ArrayList` local to the `run()` method, which is executed within a single-threaded virtual thread loop. Synchronization was redundant and vestigial.
+
+### Wide — Unnamed Variables & Sequenced Collections
+- Applied `_` to unused catch blocks across `arcclaw-core` and `arcclaw-app`.
+- Applied `.getFirst()` / `.getLast()` to production code in `arcclaw-core`.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `mvnw clean test -pl arcclaw-core,arcclaw-app -am`
+- Total: 471 tests passed (350 core, 121 app).
+

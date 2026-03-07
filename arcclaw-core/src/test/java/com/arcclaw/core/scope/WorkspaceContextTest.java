@@ -21,12 +21,12 @@ class WorkspaceContextTest {
             WorkspaceContext.runWithFullAutonomy("sess-1", "user-1", "chat-1", "coordinator", () -> {
                 thread1Level.set(WorkspaceContext.autonomy());
                 latch1.countDown();
-                try { latch2.await(); } catch (InterruptedException e) {}
+                try { latch2.await(); } catch (InterruptedException _) {}
             });
         });
 
         Thread t2 = new Thread(() -> {
-            try { latch1.await(); } catch (InterruptedException e) {}
+            try { latch1.await(); } catch (InterruptedException _) {}
             WorkspaceContext.run("sess-2", "user-2", "chat-2", AutonomyLevel.READONLY, "researcher", () -> {
                 thread2Level.set(WorkspaceContext.autonomy());
                 latch2.countDown();

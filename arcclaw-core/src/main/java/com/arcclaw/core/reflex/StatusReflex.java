@@ -46,7 +46,7 @@ public class StatusReflex implements AgentReflex {
                 return c2.getUpdatedAt().compareTo(c1.getUpdatedAt()); // Descending (newest first)
             });
             
-            status = checkpoints.get(0).getStatus().name();
+            status = checkpoints.getFirst().getStatus().name();
 
             // 2. Override: If ANY role is currently running or waiting, that is the session's true status
             for (AgentCheckpoint cp : checkpoints) {

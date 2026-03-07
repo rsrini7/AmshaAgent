@@ -870,3 +870,13 @@
 - [x] Verify: `AgentResilienceTest` correctly moved to `com.arcclaw.core.agent.loop` in `arcclaw-core`.
 - [x] Verify: `arcclaw-core` tests pass (350/350).
 - [x] Verify: `arcclaw-app` tests pass (121/121) after fixing reactor compilation consistency (`-am`).
+
+---
+
+# Phase 55.1 — JDK Modernization Sweep ✅
+- [x] Replace unused catch variables and try-with-resources variables with `_` (JEP 456). <!-- id: 307 -->
+- [x] Migrate `.get(0)` to `.getFirst()` and `.get(size()-1)` to `.getLast()` (Sequenced Collections). <!-- id: 308 -->
+- [x] Extract inline `Pattern.compile` calls in `AgentErrorMessageUtil.java` to static final fields. <!-- id: 309 -->
+- [x] Remove redundant `synchronized(history)` wrapper blocks in `AgentStateMachineRunner.java`. <!-- id: 310 -->
+- [x] Verify: `mvnw clean test -pl arcclaw-core,arcclaw-app -am` passes. <!-- id: 311 -->
+

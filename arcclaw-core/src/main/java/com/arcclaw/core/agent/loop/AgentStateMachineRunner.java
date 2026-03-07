@@ -101,9 +101,7 @@ public class AgentStateMachineRunner {
 
         log.warnf("StateMachine exceeded %d iterations for session=%s",
                 context.maxIterations(), context.sessionId());
-        synchronized (history) {
-            return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
-        }
+        return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
     }
 
     private void saveGoalToChatMemory(String sessionId, String goal) {
@@ -122,13 +120,9 @@ public class AgentStateMachineRunner {
         }
 
         final ReasoningStep completedStep = step.withObservation("Task completed.");
-        synchronized (history) {
-            history.add(completedStep);
-        }
+        history.add(completedStep);
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
-        synchronized (history) {
-            return AgentResult.finished(answer, List.copyOf(history));
-        }
+        return AgentResult.finished(answer, List.copyOf(history));
     }
 
     /**
@@ -205,17 +199,15 @@ public class AgentStateMachineRunner {
                     String warningObservation = "⚠️ BUDGET WARNING: " + bw.getMessage() +
                             " Keep all subsequent responses to 1-2 sentences maximum.";
                     step = step.withObservation(warningObservation);
-                    synchronized (history) { history.add(step); }
+                    history.add(step);
                 } catch (BudgetExceededException be) {
                     log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
                     String observationMessage = "System Intervention: " + be.getMessage() +
                             ". Further actions blocked. Ending loop.";
                     step = step.withObservation(observationMessage);
-                    synchronized (history) {
-                        history.add(step);
-                        String failReason = AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage());
-                        return StepDecision.terminal(AgentResult.failed(failReason, AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
-                    }
+                    history.add(step);
+                    String failReason = AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage());
+                    return StepDecision.terminal(AgentResult.failed(failReason, AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history)));
                 }
             }
         } catch (Exception e) {
@@ -229,9 +221,7 @@ public class AgentStateMachineRunner {
                 llmSchemaErrorCount++;
                 if (llmSchemaErrorCount >= 2) {
                     log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
-                    synchronized (history) {
                         return StepDecision.terminal(AgentResult.failed("SCHEMA_ERROR", AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
-                    }
                 }
                 String nextTransientError = "System: Your previous tool call was rejected by the API because the " +
                         "arguments did not match the required schema. Error: " + e.getMessage() +
@@ -243,25 +233,19 @@ public class AgentStateMachineRunner {
             if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
                 String humanMessage = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
                 log.warnf("[STATE-MACHINE] Rate limit hit for session %s: %s", sessionId, humanMessage);
-                synchronized (history) {
                     return StepDecision.terminal(AgentResult.failed(
                         humanMessage,  // already formatted — no re-sanitization needed downstream
                         AgentResult.FailureCategory.SYSTEM_ERROR,
                         List.copyOf(history)));
-                }
             }
 
             log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
-            synchronized (history) {
-                return StepDecision.terminal(AgentResult.failed("ReasoningEngine error: " + e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
-            }
+            return StepDecision.terminal(AgentResult.failed("ReasoningEngine error: " + e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
 
         if (step == null) {
             log.warn("ReasoningEngine returned null step — terminating");
-            synchronized (history) {
-                return StepDecision.terminal(AgentResult.failed("ReasoningEngine returned null step", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
-            }
+            return StepDecision.terminal(AgentResult.failed("ReasoningEngine returned null step", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
 
         return StepDecision.proceed(step);
@@ -277,17 +261,13 @@ public class AgentStateMachineRunner {
                     toolName, toolRegistry.listTools());
             log.warnf("Hallucination intercepted: tool '%s' not found", toolName);
             final ReasoningStep completedStep = step.withObservation(errorObs);
-            synchronized (history) {
-                history.add(completedStep);
-            }
+            history.add(completedStep);
             observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
 
             consecutiveFailures++;
             if (consecutiveFailures >= 2) {
-                synchronized (history) {
                     return StepDecision.terminal(AgentResult.finished("❌ I encountered repeated errors trying to execute that task. " +
                             "Please rephrase your request or check the parameters.", List.copyOf(history)));
-                }
             }
             return StepDecision.retryValidation(consecutiveFailures);
         }
@@ -306,18 +286,14 @@ public class AgentStateMachineRunner {
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
-            synchronized (history) {
-                history.add(dedupStep);
-            }
+            history.add(dedupStep);
             observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
             return StepDecision.proceedWithFailures(dedupStep, consecutiveFailures);
         }
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
             final ReasoningStep blockedStep = step.withObservation(b.observation());
-            synchronized (history) {
-                history.add(blockedStep);
-            }
+            history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
             return StepDecision.retryValidation(consecutiveFailures);
         }
@@ -343,9 +319,7 @@ public class AgentStateMachineRunner {
         }
 
         final ReasoningStep completedStep = step.withObservation(observation);
-        synchronized (history) {
-            history.add(completedStep);
-        }
+        history.add(completedStep);
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
         log.debugf("Observation for '%s': %s", toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
 
@@ -354,12 +328,10 @@ public class AgentStateMachineRunner {
             if (consecutiveFailures >= 2) {
                 log.warnf("[STATE-MACHINE] Circuit breaker tripped for session %s. Tool '%s' failed %d times consecutively.",
                         sessionId, toolName, consecutiveFailures);
-                synchronized (history) {
-                    return StepDecision.terminal(AgentResult.finished(
-                            "❌ I encountered repeated errors trying to execute that task. " +
-                                    "Please rephrase your request or check the parameters.",
-                            List.copyOf(history)));
-                }
+                return StepDecision.terminal(AgentResult.finished(
+                        "❌ I encountered repeated errors trying to execute that task. " +
+                                "Please rephrase your request or check the parameters.",
+                        List.copyOf(history)));
             }
         } else {
             consecutiveFailures = 0;
@@ -370,9 +342,7 @@ public class AgentStateMachineRunner {
                 String finalFastPathAnswer = "✅ " + cleanOutput;
                 writer.saveAnswer(sessionId, finalFastPathAnswer);
 
-                synchronized (history) {
-                    return StepDecision.terminal(AgentResult.finished(finalFastPathAnswer, List.copyOf(history)));
-                }
+                return StepDecision.terminal(AgentResult.finished(finalFastPathAnswer, List.copyOf(history)));
             }
         }
 

@@ -91,12 +91,12 @@ class GovernanceLayerTest {
             // Stage 1: Warning
             try {
                 governanceLayer.recordLlmCall(sessionB, 1000000, 1000000);
-            } catch (BudgetWarningException e) {}
+            } catch (BudgetWarningException _) {}
             
             // Stage 2: Exceeded
             try {
                 governanceLayer.recordLlmCall(sessionB, 1, 1);
-            } catch (BudgetExceededException e) {}
+            } catch (BudgetExceededException _) {}
         });
 
         WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {

@@ -40,7 +40,7 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
                     if (allowedUserIds.get().contains(userId)) {
                         return true;
                     }
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException _) {
                     // Ignore parsing error, will fall back or return false
                 }
             }

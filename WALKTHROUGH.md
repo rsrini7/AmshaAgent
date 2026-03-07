@@ -72,6 +72,7 @@
 | 53.4 | LangChainReasoningEngine Split | 100% success | Extracted Parser, Assembler, and Builder for modular LLM logic |
 | 53.5 | Package Reorganization | 100% success | Moved 23 core agent classes into logical sub-packages |
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
+| 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
 
 
 ---
@@ -1936,3 +1937,22 @@ Refactored agent tests by moving them from `arcclaw-app` to `arcclaw-core` to al
 ### Verification:
 - ✅ `mvn clean test -pl arcclaw-core`: 350 tests green.
 - ✅ `mvn clean test -pl arcclaw-app -am`: 121 tests green (100% success).
+
+
+---
+
+## Phase 55.1 — JDK Modernization Sweep ✅
+
+Conducted a mechanical sweep to modernize the codebase using JDK 21+ features and clean up legacy synchronization.
+
+| Section | Change | Purpose |
+| :--- | :--- | :--- |
+| **A** | Unnamed Variables (`_`) | Replaced unused exception/resource variables with `_` (JEP 456). |
+| **B** | Sequenced Collections | Migrated `.get(0)` to `.getFirst()` and `.getLast()` equivalent. |
+| **C** | Pattern Extraction | Extracted inline `Pattern.compile` calls in `AgentErrorMessageUtil.java`. |
+| **D** | Sync Removal | Removed redundant `synchronized(history)` in `AgentStateMachineRunner.java`. |
+
+**Verification**:
+- ✅ `arcclaw-core`: 350 tests pass.
+- ✅ `arcclaw-app`: 121 tests pass.
+- ✅ Total 471 tests passed in 02:27 mins.

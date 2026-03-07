@@ -43,7 +43,7 @@ public class DestructiveVocabularyFilter {
         AgentRoleEnum resolvedRole;
         try {
             resolvedRole = AgentRoleEnum.fromString(role);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             // Fallback for unknown roles — cannot safely determine capability
             return role;
         }

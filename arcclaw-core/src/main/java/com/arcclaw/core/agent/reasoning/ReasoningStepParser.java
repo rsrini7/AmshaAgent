@@ -30,7 +30,7 @@ public class ReasoningStepParser {
         int outputTokens = response.tokenUsage() != null ? response.tokenUsage().outputTokenCount() : 0;
 
         if (aiMessage.hasToolExecutionRequests()) {
-            ToolExecutionRequest req = aiMessage.toolExecutionRequests().get(0);
+            ToolExecutionRequest req = aiMessage.toolExecutionRequests().getFirst();
 
             log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
 
