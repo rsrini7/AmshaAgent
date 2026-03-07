@@ -10,11 +10,19 @@ import static org.mockito.Mockito.when;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -50,6 +58,19 @@ class LangChainReasoningEngineTest {
 
     @InjectMock
     ReasoningStepParser stepParser;
+
+    @InjectMock
+    RoleRegistry roleRegistry;
+
+    @InjectMock
+    ToolRegistry toolRegistry;
+
+    @BeforeEach
+    void setUp() {
+        // Default behavior for mocks
+        when(roleRegistry.permittedTools(any())).thenReturn(Collections.emptySet());
+        when(toolRegistry.listTools()).thenReturn(Collections.emptyList());
+    }
 
     @Test
     void testNextStepReturnsFinish() {
@@ -256,6 +277,7 @@ class LangChainReasoningEngineTest {
 
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
+        when(roleRegistry.permittedTools(any())).thenReturn(Set.of());                
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -279,6 +301,20 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+
+        // Mock RoleRegistry to return permitted tools for researcher
+        when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
+                .thenReturn(Set.of("github", "memory_search"));
+
+        // Mock ToolRegistry to return available tools
+        AgentTool github = Mockito.mock(AgentTool.class);
+        when(github.name()).thenReturn("github");
+        AgentTool memorySearch = Mockito.mock(AgentTool.class);
+        when(memorySearch.name()).thenReturn("memory_search");
+        
+        when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search", "scheduletask", "manageschedule"));
+        when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
+        when(toolRegistry.findTool("memory_search")).thenReturn(Optional.of(memorySearch));
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
@@ -314,6 +350,24 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(
                 ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
+
+        // Mock RoleRegistry to return permitted tools for coordinator
+        when(roleRegistry.permittedTools(AgentRoleEnum.COORDINATOR))
+                .thenReturn(Set.of("github", "scheduletask", "manageschedule"));
+
+        // Mock ToolRegistry to return available tools
+        AgentTool github = Mockito.mock(AgentTool.class);
+        when(github.name()).thenReturn("github");
+        AgentTool sched = Mockito.mock(AgentTool.class);
+        when(sched.name()).thenReturn("scheduletask");
+        AgentTool manage = Mockito.mock(AgentTool.class);
+        when(manage.name()).thenReturn("manageschedule");
+        
+        when(toolRegistry.listTools()).thenReturn(List.of("github", "scheduletask", "manageschedule"));
+        when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
+        when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(sched));
+        when(toolRegistry.findTool("manageschedule")).thenReturn(Optional.of(manage));
+
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
