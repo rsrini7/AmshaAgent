@@ -1,6 +1,6 @@
 package com.arcclaw.core.api.dto;
 
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import java.util.List;
 
 public record SessionStatusResponse(

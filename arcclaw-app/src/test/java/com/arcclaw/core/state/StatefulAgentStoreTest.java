@@ -1,6 +1,6 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;

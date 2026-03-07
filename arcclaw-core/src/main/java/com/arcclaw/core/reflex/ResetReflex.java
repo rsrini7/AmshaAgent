@@ -1,6 +1,6 @@
 package com.arcclaw.core.reflex;
 
-import com.arcclaw.core.agent.AgentRoleEnum;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.StatefulAgentStore;

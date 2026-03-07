@@ -3157,3 +3157,35 @@ Refactored the monolithic `LangChainReasoningEngine` into modular, single-respon
 - ✅ `ReasoningStepParserTest`: Verified parsing of tool calls, text, and errors.
 - ✅ `AgentLoopTest`: Verified end-to-end integration and goal injection.
 - ✅ `LangChainReasoningEngineTest`: Verified integration with mocked helpers.
+
+---
+
+# Phase 53.5 — Package Reorganization
+
+Reorganized the `com.arcclaw.core.agent` package into logical sub-packages to improve maintainability and strictly enforce architectural boundaries. All 23 classes were moved, and the root package is now empty.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Sub-package Strategy**:
+> - `loop`: Orchestration classes (`AgentLoop`, `AgentStateMachineRunner`, `AgentExecutionContext`) and invocation logic (`ToolInvoker`, `ChatMemoryWriter`, `ToolInvocationGuard`).
+> - `reasoning`: LLM interaction logic (`LangChainReasoningEngine`, `ReasoningStepParser`, `ChatHistoryAssembler`, `SystemPromptBuilder`, etc.).
+> - `persona`: Concrete agent definitions (`BrahmaAgent`, etc.), the base `Agent` class, and the registry.
+> - `role`: Security and capability definitions (`AgentRole`, `RoleRegistry`, `ToolCapability`).
+> - `result`: Discrete outcome models (`AgentResult`, `AgentState`).
+
+> [!NOTE]
+> **Zero Logic Changes**: This phase was strictly a "Move" refactoring. Logic changes from previous 53.x phases were preserved exactly.
+
+## Proposed Changes
+
+#### [MODIFY] [arcclaw-core package structure](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent)
+- **Moved** 23 classes from `com.arcclaw.core.agent` into five functional sub-packages.
+- Updated all internal and cross-module imports (including `arcclaw-app` tests).
+- Verified `jandex` indexes were correctly updated during the build.
+
+## Verification Plan
+
+- ✅ `mvn clean verify`: SUCCESS (266/266 tests pass).
+- ✅ Package review: Root `com.arcclaw.core.agent` is empty (no orphans).
+- ✅ Import audit: No stale or unrelated imports were introduced during automated refactoring.

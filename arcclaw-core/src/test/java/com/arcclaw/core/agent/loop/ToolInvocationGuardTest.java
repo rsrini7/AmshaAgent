@@ -1,7 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.agent.ReasoningStep;
-import com.arcclaw.core.agent.RoleRegistry;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;

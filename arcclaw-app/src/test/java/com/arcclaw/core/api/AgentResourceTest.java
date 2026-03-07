@@ -1,8 +1,8 @@
 package com.arcclaw.core.api;
 
 import com.arcclaw.core.api.dto.RunAgentRequest;
-import com.arcclaw.core.agent.ReasoningEngine;
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -22,7 +22,7 @@ class AgentResourceTest {
         ReasoningEngine reasoningEngine;
 
         @InjectMock
-        com.arcclaw.core.agent.AgentLoop agentLoop;
+        com.arcclaw.core.agent.loop.AgentLoop agentLoop;
 
         @InjectMock
         com.arcclaw.core.state.StatefulAgentStore agentStore;
@@ -37,7 +37,7 @@ class AgentResourceTest {
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
 
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Finished("42", java.util.List.of(), 10, 5));
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.Finished("42", java.util.List.of(), 10, 5));
 
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
                 Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
@@ -156,8 +156,8 @@ class AgentResourceTest {
         @Test
         void testComplianceViolationReturns451() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
-                                                "Blocked by policy", com.arcclaw.core.agent.AgentResult.FailureCategory.COMPLIANCE_VIOLATION,
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.Failed(
+                                                "Blocked by policy", com.arcclaw.core.agent.result.AgentResult.FailureCategory.COMPLIANCE_VIOLATION,
                                                 java.util.List.of(), 0, 0));
 
                 given()
@@ -173,8 +173,8 @@ class AgentResourceTest {
         @Test
         void testBudgetExceededReturns429() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
-                                                "Token limit", com.arcclaw.core.agent.AgentResult.FailureCategory.BUDGET_EXCEEDED,
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.Failed(
+                                                "Token limit", com.arcclaw.core.agent.result.AgentResult.FailureCategory.BUDGET_EXCEEDED,
                                                 java.util.List.of(), 0, 0));
 
                 given()
@@ -190,8 +190,8 @@ class AgentResourceTest {
         @Test
         void testUserDeniedReturns422() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
-                                                "User said no", com.arcclaw.core.agent.AgentResult.FailureCategory.USER_DENIED,
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.Failed(
+                                                "User said no", com.arcclaw.core.agent.result.AgentResult.FailureCategory.USER_DENIED,
                                                 java.util.List.of(), 0, 0));
 
                 given()
@@ -207,8 +207,8 @@ class AgentResourceTest {
         @Test
         void testSchemaErrorReturns422() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
-                                                "Bad tool params", com.arcclaw.core.agent.AgentResult.FailureCategory.SCHEMA_ERROR,
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.Failed(
+                                                "Bad tool params", com.arcclaw.core.agent.result.AgentResult.FailureCategory.SCHEMA_ERROR,
                                                 java.util.List.of(), 0, 0));
 
                 given()
@@ -224,8 +224,8 @@ class AgentResourceTest {
         @Test
         void testSystemErrorReturns500() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.Failed(
-                                                "Internal crash", com.arcclaw.core.agent.AgentResult.FailureCategory.SYSTEM_ERROR,
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.Failed(
+                                                "Internal crash", com.arcclaw.core.agent.result.AgentResult.FailureCategory.SYSTEM_ERROR,
                                                 java.util.List.of(), 0, 0));
 
                 given()
@@ -241,7 +241,7 @@ class AgentResourceTest {
         @Test
         void testLoopExceededReturns408() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.LoopExceeded(5, java.util.List.of(), 0, 0));
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.LoopExceeded(5, java.util.List.of(), 0, 0));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -256,7 +256,7 @@ class AgentResourceTest {
         @Test
         void testApprovalRequiredReturns202WithShape() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
-                                .thenReturn(new com.arcclaw.core.agent.AgentResult.AwaitingApproval(
+                                .thenReturn(new com.arcclaw.core.agent.result.AgentResult.AwaitingApproval(
                                                 "gh-tool", "{}", "sess-123", java.util.List.of(), 0, 0));
 
                 given()

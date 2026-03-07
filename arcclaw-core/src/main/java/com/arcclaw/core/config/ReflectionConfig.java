@@ -2,8 +2,8 @@ package com.arcclaw.core.config;
 
 import org.hibernate.community.dialect.SQLiteDialect;
 
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;

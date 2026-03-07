@@ -1,14 +1,14 @@
 package com.arcclaw.core.agent.reasoning;
 
-import com.arcclaw.core.agent.AgentPersonaRegistry;
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.PromptTemplateEngine;
-import com.arcclaw.core.agent.RoleRegistry;
+import java.time.Instant;
+
+import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-
-import java.time.Instant;
 
 /**
  * Builds the system prompt for ArcClaw agents.

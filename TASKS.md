@@ -817,6 +817,7 @@
 - [x] Verify: Final surgical fixes for safe HITL serialization and test scoping
 
 ---
+
 # Phase 53.4 — LangChainReasoningEngine Split ✅
 - [x] Create `ReasoningStepParser.java` (Response parsing & token usage)
 - [x] Create `ChatHistoryAssembler.java` (Compliance filtering & goal injection)
@@ -824,3 +825,14 @@
 - [x] Slim `LangChainReasoningEngine.java` to stay as orchestrator
 - [x] Verify: Comprehensive unit tests for all new components pass
 - [x] Verify: `AgentLoopTest` and `LangChainReasoningEngineTest` integration passes
+
+---
+
+# Phase 53.5: Package Reorganization ✅
+- [x] Step 1: Move `loop` classes (`AgentLoop`, `AgentStateMachineRunner`, `AgentExecutionContext`)
+- [x] Step 2: Move `reasoning` classes (`LangChainReasoningEngine`, `ReasoningEngine`, `ReasoningStep`, `PromptTemplateEngine`, `MessageTag`)
+- [x] Step 3: Move `persona` classes (`Agent`, `AgentRole`, `AgentPersonaRegistry`, and 6 deity agents)
+- [x] Step 4: Move `role` classes (`AgentRoleEnum`, `RoleDefinition`, `RoleRegistry`, `ToolCapability`)
+- [x] Step 5: Move `result` classes (`AgentResult`, `AgentState`)
+- [x] Verify: All 23 classes moved out of root `com.arcclaw.core.agent`
+- [x] Verify: Full system regression (266/266 tests pass)

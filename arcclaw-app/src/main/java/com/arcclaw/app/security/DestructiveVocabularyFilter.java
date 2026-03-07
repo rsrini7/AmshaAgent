@@ -1,6 +1,6 @@
 package com.arcclaw.app.security;
 
-import com.arcclaw.core.agent.AgentRoleEnum;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
