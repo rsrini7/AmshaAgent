@@ -113,7 +113,9 @@ class AgentCronSchedulerTest {
 
         scheduler.pollAndDispatch();
 
-        verify(cronRepository).reclaimStaleCrons(any(Instant.class));
+        verify(cronRepository).reclaimStaleCrons(org.mockito.ArgumentMatchers.argThat(t ->
+                t.isAfter(Instant.now().minus(6, ChronoUnit.MINUTES)) &&
+                t.isBefore(Instant.now().minus(4, ChronoUnit.MINUTES))));
     }
 
     @Test

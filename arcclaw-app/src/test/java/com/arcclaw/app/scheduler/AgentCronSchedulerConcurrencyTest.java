@@ -76,6 +76,7 @@ class AgentCronSchedulerConcurrencyTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
     void testThrottledJobIsSkippedNotMarkedFailed() throws Exception {
         AgentCronEntity job1 = createDueJob(false);
         AgentCronEntity job2 = createDueJob(false);
@@ -122,6 +123,7 @@ class AgentCronSchedulerConcurrencyTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
     void testSemaphoreReleasedAfterSuccessfulCompletion() throws Exception {
         AgentCronEntity job1 = createDueJob(true);
         AgentCronEntity job2 = createDueJob(true);
@@ -178,6 +180,7 @@ class AgentCronSchedulerConcurrencyTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
     void testSemaphoreReleasedAfterInnerException() throws Exception {
         AgentCronEntity job1 = createDueJob(true);
         AgentCronEntity job2 = createDueJob(true);

@@ -45,7 +45,10 @@ public class CronJobRunner {
     public void execute(AgentCronEntity job) {
         String executionId = UUID.randomUUID().toString();
         
-        // CRITICAL: set delivery ID first so ApproveReflex can find the session if setup fails later
+        // ORDERING CRITICAL: set delivery ID before workspace context is created.
+        // ApproveReflex.handleCronApproval() uses findByUserId() + deliveryId to locate
+        // the checkpoint for this execution. If this is moved after WorkspaceContext.run(),
+        // approval routing will break if setup fails mid-execution.
         cronRepository.setDeliveryId(job.id, executionId);
 
         String cronSessionId = "cron-" + job.id + "-" + executionId;

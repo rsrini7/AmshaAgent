@@ -50,15 +50,12 @@ public class AgentCronScheduler {
 
     @PostConstruct
     void init() {
-        // Redundant if produced elsewhere, but keeps the original init logic
-        if (this.concurrencyLimiter == null) {
-            this.concurrencyLimiter = new Semaphore(maxConcurrent);
-        }
+        this.concurrencyLimiter = new Semaphore(maxConcurrent);
     }
 
     /**
      * Resets the concurrency limit to a specific number of permits.
-     * Used exclusively for test synchronization to ensure a clean slate.
+     * // @VisibleForTesting — mutates live semaphore state, do not call from production code
      */
     void resetConcurrencyLimit(int permits) {
         log.warnf("CRON-RESET-LIMIT permits=%d", permits);

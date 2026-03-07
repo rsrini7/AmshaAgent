@@ -43,34 +43,44 @@ public class CronResultHandler {
     Event<AgentJobCompleted> jobCompletedEvent;
 
     public void handleSuccess(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
-        boolean wasApprovalRequested = result instanceof AgentResult.AwaitingApproval;
-        String rawAnswer = wasApprovalRequested
-            ? CronResultFormatter.formatCronHitl(job.id, job.goal, ((AgentResult.AwaitingApproval) result).toolName())
-            : CronResultFormatter.format(result);
-        
-        // Defensive guard against empty LLM outputs
-        String finalAnswer = rawAnswer.trim().isEmpty() 
-                ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.goal 
-                : rawAnswer;
-
-        if (wasApprovalRequested) {
-            // Explicit HITL pause — prevents reclaimStaleCrons infinite re-fire loop
-            cronRepository.markAwaitingApproval(job.id);
-            log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
-                    job.id, ((AgentResult.AwaitingApproval) result).toolName());
+        if (result instanceof AgentResult.AwaitingApproval a) {
+            handleApprovalPause(job, cronSessionId, executionId, a);
         } else {
-            handleFinalResult(job, cronSessionId, result);
+            handleNormalCompletion(job, cronSessionId, executionId, result);
         }
+    }
 
-        // Fire CDI event — delivery is the observer's responsibility
+    // Handles Finished, Failed, LoopExceeded — always terminates session
+    private void handleNormalCompletion(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
+        String answer = CronResultFormatter.format(result);
+        String finalAnswer = answer.trim().isEmpty()
+                ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.goal
+                : answer;
+
+        handleFinalResult(job, cronSessionId, result);
+
+        // Fire delivery event BEFORE session teardown — observer needs session context
         fireCompletionEvent(job, executionId, finalAnswer, null);
+        workspaceManager.terminateSession(cronSessionId);
+    }
 
-        // Terminate session unless awaiting approval
-        if (!wasApprovalRequested) {
-            workspaceManager.terminateSession(cronSessionId);
-        } else {
-            log.infof("[CronResultHandler] Skipping session termination for cron=%s — AWAITING_APPROVAL, session kept alive for user approval.", cronSessionId);
-        }
+    // Handles AwaitingApproval — session must stay alive for ApproveReflex
+    private void handleApprovalPause(AgentCronEntity job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
+        cronRepository.markAwaitingApproval(job.id);
+        log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
+                job.id, result.toolName());
+
+        // audit the HITL pause event
+        auditService.record(cronSessionId, job.userId,
+            AgentRoleEnum.COORDINATOR.toScopedName(),
+            SecurityEventType.LOOP_AWAITING_APPROVAL,
+            "cronId=" + job.id + " pendingTool=" + result.toolName());
+
+        String answer = CronResultFormatter.formatCronHitl(job.id, job.goal, result.toolName());
+        // Fire delivery event — session intentionally kept alive for approval
+        fireCompletionEvent(job, executionId, answer, null);
+
+        log.infof("[CronResultHandler] Session kept alive for cron=%s — AWAITING_APPROVAL.", cronSessionId);
     }
 
     public void handleFailure(AgentCronEntity job, String cronSessionId, String executionId, Throwable t) {
@@ -117,7 +127,7 @@ public class CronResultHandler {
             cronRepository.markFailed(job.id, CronResultFormatter.format(result));
             auditService.record(cronSessionId, job.userId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
-                    SecurityEventType.CRONFIRED,
+                    SecurityEventType.CRONFAILED,
                     "cronId=" + job.id + " status=FAILED result=" + result.getClass().getSimpleName());
         }
     }

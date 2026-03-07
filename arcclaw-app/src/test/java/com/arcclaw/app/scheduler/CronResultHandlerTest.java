@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.AgentCronEntity;
@@ -67,6 +68,9 @@ class CronResultHandlerTest {
         verify(cronRepository).markCompleted(eq(job.id), any(Instant.class));
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(auditService).record(anyString(), eq(job.userId), anyString(),
+                eq(com.arcclaw.core.audit.SecurityEventType.CRONFIRED),
+                org.mockito.ArgumentMatchers.contains("runOnce=true"));
     }
 
     @Test
@@ -81,6 +85,9 @@ class CronResultHandlerTest {
         verify(cronRepository).markFired(eq(job.id), any(Instant.class), any(Instant.class));
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(auditService).record(anyString(), eq(job.userId), anyString(),
+                eq(com.arcclaw.core.audit.SecurityEventType.CRONFIRED),
+                org.mockito.ArgumentMatchers.contains("runOnce=false"));
     }
 
     @Test
@@ -92,6 +99,10 @@ class CronResultHandlerTest {
         verify(cronRepository).markAwaitingApproval(job.id);
         verify(workspaceManager, never()).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+
+        verify(auditService).record(anyString(), eq(job.userId), anyString(),
+            eq(SecurityEventType.LOOP_AWAITING_APPROVAL),
+            org.mockito.ArgumentMatchers.contains("pendingTool=tool"));
     }
 
     @Test
@@ -103,6 +114,8 @@ class CronResultHandlerTest {
         verify(cronRepository).markFailed(eq(job.id), anyString());
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(auditService).record(anyString(), eq(job.userId), anyString(),
+                eq(com.arcclaw.core.audit.SecurityEventType.CRONFAILED), anyString());
     }
 
     @Test
@@ -114,6 +127,8 @@ class CronResultHandlerTest {
         verify(cronRepository).markFailed(eq(job.id), anyString());
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(auditService).record(anyString(), eq(job.userId), anyString(),
+                eq(com.arcclaw.core.audit.SecurityEventType.CRONFAILED), anyString());
     }
 
     @Test
@@ -125,5 +140,7 @@ class CronResultHandlerTest {
         verify(cronRepository).markFailed(job.id, "crash");
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(auditService).record(anyString(), eq(job.userId), anyString(),
+                eq(com.arcclaw.core.audit.SecurityEventType.CRONFAILED), anyString());
     }
 }
