@@ -191,4 +191,42 @@ class StatefulAgentStoreTest {
         });
     }
 
+    /**
+     * Verify that saveAndFinalize persists both the checkpoint and granular
+     * steps in a single atomic transaction, and that loadSteps correctly
+     * reconstructs them.
+     */
+    @Test
+    void testSaveAndFinalizeAndLoadSteps() {
+        String sessionFinal = SESSION + "-finalize";
+        WorkspaceScopeHolder.run(sessionFinal, () -> {
+            var steps = List.of(
+                    new ReasoningStep("Step A", "cmd1", Map.of("p", "v"), "obs1", 10, 5),
+                    new ReasoningStep("Step B", ReasoningStep.FINISH, Map.of("ans", "42"), "obs2", 20, 10));
+
+            // Save and finalize
+            var cp = store.saveAndFinalize(sessionFinal, ROLE, steps, CheckpointStatus.COMPLETED);
+
+            assertNotNull(cp.getId());
+            assertEquals(CheckpointStatus.COMPLETED, cp.getStatus());
+            assertNotNull(cp.getCompletedAt());
+            assertNotNull(cp.getStateJson(), "Dual-write stateJson must be populated");
+
+            // Load via loadSteps
+            var loadedSteps = store.loadSteps(cp.getId());
+            assertEquals(2, loadedSteps.size());
+            
+            assertEquals("Step A", loadedSteps.get(0).thought());
+            assertEquals("cmd1", loadedSteps.get(0).action());
+            assertEquals("v", loadedSteps.get(0).actionInput().get("p"));
+            assertEquals("obs1", loadedSteps.get(0).observation());
+            assertEquals(10, loadedSteps.get(0).inputTokens());
+            assertEquals(5, loadedSteps.get(0).outputTokens());
+
+            assertEquals("Step B", loadedSteps.get(1).thought());
+            assertEquals(ReasoningStep.FINISH, loadedSteps.get(1).action());
+            assertEquals("42", loadedSteps.get(1).actionInput().get("ans"));
+        });
+    }
+
 }

@@ -62,6 +62,9 @@ class AgentResourceTest {
                 checkpoint.setStateJson("[{\"description\":\"Calculated final answer\"}]");
                 
                 Mockito.when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(checkpoint));
+                Mockito.when(agentStore.loadSteps(any())).thenReturn(List.of(
+                    new ReasoningStep("Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), null, 0, 0)
+                ));
                 Mockito.when(agentStore.load(Mockito.eq("fake-id-123"), anyString())).thenReturn(Optional.empty());
         }
 

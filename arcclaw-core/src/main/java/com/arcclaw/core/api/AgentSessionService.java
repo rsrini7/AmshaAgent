@@ -10,10 +10,10 @@ import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -24,8 +24,6 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkus.virtual.threads.VirtualThreads;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,7 +42,6 @@ public class AgentSessionService {
     private final SessionHeartbeatTracker heartbeatTracker;
     private final DevSecretSeeder devSeeder;
     private final AgentResponseMapper responseMapper;
-    private final ObjectMapper objectMapper;
     private final ExecutorService vThreads;
 
     protected AgentSessionService() {
@@ -56,7 +53,6 @@ public class AgentSessionService {
         this.heartbeatTracker = null;
         this.devSeeder = null;
         this.responseMapper = null;
-        this.objectMapper = null;
         this.vThreads = null;
     }
 
@@ -69,7 +65,6 @@ public class AgentSessionService {
                                SessionHeartbeatTracker heartbeatTracker,
                                DevSecretSeeder devSeeder,
                                AgentResponseMapper responseMapper,
-                               ObjectMapper objectMapper,
                                @VirtualThreads ExecutorService vThreads) {
         this.log = log;
         this.agentLoop = agentLoop;
@@ -79,7 +74,6 @@ public class AgentSessionService {
         this.heartbeatTracker = heartbeatTracker;
         this.devSeeder = devSeeder;
         this.responseMapper = responseMapper;
-        this.objectMapper = objectMapper;
         this.vThreads = vThreads;
     }
 
@@ -216,13 +210,10 @@ public class AgentSessionService {
         return agentStore.load(sessionId, canonicalRole)
                 .map(cp -> {
                     try {
-                        List<ReasoningStep> steps = List.of();
-                        if (cp.getStateJson() != null && !cp.getStateJson().isBlank()) {
-                            steps = objectMapper.readValue(cp.getStateJson(), new TypeReference<List<ReasoningStep>>() {});
-                        }
+                        List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
                         return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                     } catch (Exception e) {
-                        log.errorf("Failed to parse stateJson for session %s: %s", sessionId, e.getMessage(), e);
+                        log.errorf("Failed to load steps for session %s: %s", sessionId, e.getMessage(), e);
                         return Response.serverError().entity(e.getMessage()).build();
                     }
                 })

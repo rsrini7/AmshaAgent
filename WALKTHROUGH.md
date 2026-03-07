@@ -1977,3 +1977,21 @@ Initially tried using `@QuarkusTest` + `@InjectMock` for `AgentSessionServiceTes
 - ✅ **Core**: 350 tests pass.
 - ✅ **App**: 121 tests pass.
 - ✅ **Total**: 471 tests green.
+
+---
+
+## Phase 55.3 — AgentCheckpoint Normalization ✅
+
+Normalized the agent state storage by moving reasoning steps from a monolithic JSON blob to granular database records.
+
+### Key Architectural Changes:
+1.  **Structured Persistence**: Reasoning steps are now stored as individual rows in the `reasoning_step` table via [ReasoningStepEntity.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ReasoningStepEntity.java).
+2.  **Atomic Finalization**: The `saveAndFinalize()` method in [StatefulAgentStoreImpl.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java) ensures that the final state of an agent run (status + all steps) is persisted in a single transactional block.
+3.  **Reader Migration**: [AgentSessionService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentSessionService.java) was updated to use `loadSteps()`, which reconstructs the step history from the granular records, making the status endpoint faster and more robust.
+4.  **Dual-Write Compatibility**: To support a gradual transition (and Phase 55.4 deletions), `saveAndFinalize()` still writes to the legacy `stateJson` field, but all new code reads from the granular entities.
+
+### Verification Results:
+- ✅ **New Integration Test**: Added `testSaveAndFinalizeAndLoadSteps` to [StatefulAgentStoreTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/state/StatefulAgentStoreTest.java).
+- ✅ **Regression**: Verified that `AgentResourceTest` in `arcclaw-app` correctly reports agent status using the new mechanism.
+- ✅ **Performance**: Total test suite run time maintained at ~02:30 mins for 471 tests.
+

@@ -3374,3 +3374,53 @@ Refactor core components to use JDK 24 finalized `ScopedValue` and migrate to co
 - ✅ `grep -r "arcclaw.telegram."` confirms all properties migrated to `arcclaw.channel.telegram.*`.
 - ✅ `mvn clean test -pl arcclaw-core,arcclaw-app -am` (121 tests passed).
 
+---
+
+# Phase 55.3 — AgentCheckpoint Normalization (ReasoningStepEntity) ✅
+
+Normalize the agent checkpoint storage by moving reasoning steps from a monolithic JSON blob to granular database records.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Granular Persistence**: Introduced `ReasoningStepEntity` to store each reasoning step as a separate row. This enables structured querying, better auditability, and reduces the risk of JSON serialization limits for extremely long sessions.
+
+> [!TIP]
+> **Atomic saveAndFinalize()**: Collapsed the `save()` and `markCompleted()` calls in `AgentLoop` into a single `@Transactional` `saveAndFinalize()` method. This ensures that the checkpoint status update and the final reasoning steps are persisted atomically.
+
+> [!NOTE]
+> **Backward Compatibility**: Retained the `stateJson` field (marked as `@Deprecated`) and implemented dual-writing in `saveAndFinalize()`. This allows existing readers (like `deserializeSteps()`) to continue working while we transition to `loadSteps()`.
+
+## Completed Changes
+
+### Core Module — State Persistence
+
+#### [NEW] [ReasoningStepEntity.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/ReasoningStepEntity.java)
+- New JPA entity representing a single `ReasoningStep`.
+- Fields: `checkpointId`, `sequenceNum`, `thoughtJson`, `action`, `actionInputJson`, `observation`, `inputTokens`, `outputTokens`.
+
+#### [MODIFY] [AgentCheckpoint.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java)
+- Added `completedAt` timestamp.
+- Marked `stateJson` as `@Deprecated`.
+
+#### [MODIFY] [StatefulAgentStore.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStore.java) + [StatefulAgentStoreImpl.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java)
+- Implemented `saveAndFinalize()`: Persists `AgentCheckpoint` and associated `ReasoningStepEntity` records.
+- Implemented `loadSteps()`: Reconstructs `ReasoningStep` list from granular entities.
+- Marked `deserializeSteps()` as `@Deprecated`.
+
+### Core Module — Logic & API
+
+#### [MODIFY] [AgentLoop.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/AgentLoop.java)
+- Replaced `save()` + `markCompleted()` sequence with a single `saveAndFinalize()` call for finished tasks.
+
+#### [MODIFY] [AgentSessionService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentSessionService.java)
+- Migrated `getStatus()` to use `agentStore.loadSteps()` instead of parsing `stateJson`.
+- Removed unused `ObjectMapper` dependency.
+
+## Verification
+
+- ✅ `StatefulAgentStoreTest.testSaveAndFinalizeAndLoadSteps` passes.
+- ✅ `AgentResourceTest.testFullAgentLifecycle` passes with updated mocks.
+- ✅ Total: 471 tests green.
+
+

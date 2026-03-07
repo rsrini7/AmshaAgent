@@ -166,12 +166,13 @@ public class AgentLoop {
             if (result instanceof AgentResult.AwaitingApproval) {
                 log.debugf("Session %s paused, waiting for human approval.", sessionId);
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
-                var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                 if (result instanceof AgentResult.Finished) {
-                    agentStore.markCompleted(cp.getId());
+                    agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED);
                 } else if (result instanceof AgentResult.Failed f) {
+                    var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(), f.reason());
                 } else if (result instanceof AgentResult.LoopExceeded l) {
+                    var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
                 }
             }
