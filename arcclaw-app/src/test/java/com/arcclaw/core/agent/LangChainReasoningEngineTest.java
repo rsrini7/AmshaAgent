@@ -9,13 +9,15 @@ import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -43,7 +45,13 @@ class LangChainReasoningEngineTest {
     ChatLanguageModel chatLanguageModel;
 
     @InjectMock
-    CompactionSummaryRepository compactionSummaryRepository;
+    SystemPromptBuilder promptBuilder;
+
+    @InjectMock
+    ChatHistoryAssembler historyAssembler;
+
+    @InjectMock
+    ReasoningStepParser stepParser;
 
     @Test
     void testNextStepReturnsFinish() {
@@ -57,7 +65,9 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I have finished the task", ReasoningStep.FINISH, java.util.Map.of("answer", "I have finished the task"), 10, 20));
 
         // Act
         ReasoningStep step = reasoningEngine.nextStep("test-session", "coordinator", "Do something", List.of());
@@ -86,7 +96,9 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", java.util.Map.of("repo", "test/repo"), 15, 25));
 
         // Act
         ReasoningStep step = reasoningEngine.nextStep("test-session", "coordinator", "Do something", List.of());
@@ -128,7 +140,21 @@ class LangChainReasoningEngineTest {
             // Capture the request to verify filtered messages
             org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
             when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
-            when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+                when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+            // For the filter test, we need the assembler to actually return the filtered messages if it were the real one,
+            // but here we are mocking the engine's call to assembler. 
+            // Wait, the engine calls historyAssembler.assemble(). 
+            // The test verifies if messages are filtered in the ChatRequest sent to LLM.
+            // So we should make the mock assembler return the messages we expect to be filtered (or NOT filtered).
+            when(historyAssembler.assemble(any(), any(), any())).thenAnswer(invocation -> {
+                List<ChatMessage> storeMsgs = chatMemoryStore.getMessages((String)invocation.getArgument(0));
+                return storeMsgs.stream()
+                    .filter(m -> !(m instanceof dev.langchain4j.data.message.SystemMessage))
+                    .filter(m -> !(m instanceof dev.langchain4j.data.message.AiMessage ai && com.arcclaw.core.agent.MessageTag.isTagged(ai.text())))
+                    .filter(m -> !(m instanceof dev.langchain4j.data.message.UserMessage user && (user.singleText().contains("Resuming") || user.singleText().contains("The tool execution has been approved"))))
+                    .toList();
+            });
+            when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("Processing", ReasoningStep.FINISH, Map.of(), 0, 0));
 
             // Act
             reasoningEngine.nextStep(sessionId, "coordinator", "Actual Goal", List.of());
@@ -170,8 +196,17 @@ class LangChainReasoningEngineTest {
             ArgumentCaptor<ChatRequest> requestCaptor =
                 ArgumentCaptor.forClass(ChatRequest.class);
             when(chatLanguageModel.chat(requestCaptor.capture()))
-                .thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
-            when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+                .thenReturn(ChatResponse.builder().aiMessage(new dev.langchain4j.data.message.AiMessage("some response")).build());
+                when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+            // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
+            // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
+            // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
+            when(historyAssembler.assemble(any(), any(), any())).thenAnswer(invocation -> {
+                return chatMemoryStore.getMessages((String)invocation.getArgument(0)).stream()
+                    .filter(m -> !(m instanceof dev.langchain4j.data.message.AiMessage ai && MessageTag.isTagged(ai.text())))
+                    .toList();
+            });
+            when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("response", ReasoningStep.FINISH, Map.of(), 0, 0));
 
             // Act: Trigger nextStep
             reasoningEngine.nextStep(sessionId, "coordinator", "What is 2+2?", List.of());
@@ -202,7 +237,9 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
         reasoningEngine.nextStep("test-session", "coder", "Write a sort", List.of());
 
@@ -222,7 +259,9 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
         reasoningEngine.nextStep("test-session", "debugger", "Find the NPE", List.of());
 
@@ -245,7 +284,10 @@ class LangChainReasoningEngineTest {
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
+
         reasoningEngine.nextStep("test-session", "researcher", "Find Quarkus docs", List.of());
 
         ChatRequest sent = captor.getValue();
@@ -273,8 +315,10 @@ class LangChainReasoningEngineTest {
     void testCronFiredSessionStripsScheduleTools() {
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(
-                ChatResponse.builder().aiMessage(AiMessage.from("OK")).build());
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+                ChatResponse.builder().aiMessage(new dev.langchain4j.data.message.AiMessage("OK")).build());
+        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
         // Act: Use a sessionId starting with "cron-"
         reasoningEngine.nextStep("cron-12345", "coordinator", "CRON: Do background task", List.of());
@@ -308,10 +352,18 @@ class LangChainReasoningEngineTest {
                 ArgumentCaptor.forClass(ChatRequest.class);
             when(chatLanguageModel.chat(requestCaptor.capture()))
                 .thenReturn(ChatResponse.builder()
-                    .aiMessage(new AiMessage("Here is the sort function"))
+                    .aiMessage(new dev.langchain4j.data.message.AiMessage("Here is the sort function"))
                     .build());
-            when(compactionSummaryRepository.findLatestBySessionId(any()))
-                .thenReturn(Optional.empty());
+            when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+            // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
+            // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
+            // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
+            when(historyAssembler.assemble(any(), any(), any())).thenAnswer(invocation -> {
+                return chatMemoryStore.getMessages((String)invocation.getArgument(0)).stream()
+                    .filter(m -> !(m instanceof dev.langchain4j.data.message.AiMessage ai && ai.text() != null && (ai.text().contains("as per our agreement") || ai.text().contains("I'll provide python code instead of rust"))))
+                    .toList();
+            });
+            when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
             reasoningEngine.nextStep(sessionId, "coordinator", "write a sort function", List.of());
 

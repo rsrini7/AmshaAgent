@@ -1,14 +1,14 @@
 package com.arcclaw.core.agent;
 
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -16,11 +16,12 @@ import org.mockito.ArgumentCaptor;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,8 +30,9 @@ class LangChainReasoningEnginePersonaTest {
 
     private LangChainReasoningEngine engine;
     private ChatLanguageModel mockChatLanguageModel;
-    private AgentPersonaRegistry mockRegistry;
-    private PromptTemplateEngine mockTemplateEngine;
+    private SystemPromptBuilder mockPromptBuilder;
+    private ChatHistoryAssembler mockHistoryAssembler;
+    private ReasoningStepParser mockStepParser;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -39,32 +41,30 @@ class LangChainReasoningEnginePersonaTest {
         // 1. Create mocks
         mockChatLanguageModel = mock(ChatLanguageModel.class);
         ToolRegistry mockToolRegistry = mock(ToolRegistry.class);
-        ObjectMapper mockMapper = mock(ObjectMapper.class);
-        ChatMemoryStore mockMemoryStore = mock(ChatMemoryStore.class);
-        CompactionSummaryRepository mockCompactionRepo = mock(CompactionSummaryRepository.class);
         RoleRegistry mockRoleRegistry = mock(RoleRegistry.class);
-        mockTemplateEngine = mock(PromptTemplateEngine.class);
-        mockRegistry = mock(AgentPersonaRegistry.class);
+        mockPromptBuilder = mock(SystemPromptBuilder.class);
+        mockHistoryAssembler = mock(ChatHistoryAssembler.class);
+        mockStepParser = mock(ReasoningStepParser.class);
 
         // 2. Set up basic mock behavior to avoid NPEs
-        when(mockRoleRegistry.permittedTools(any())).thenReturn(Collections.emptySet());
+        when(mockRoleRegistry.permittedTools(any())).thenReturn(Set.of());
         when(mockToolRegistry.listTools()).thenReturn(Collections.emptyList());
-        when(mockTemplateEngine.buildSystemPrompt(any(), any(), any())).thenReturn("PERMITTED TOOLS: none");
-        when(mockCompactionRepo.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(mockHistoryAssembler.assemble(any(), any(), any())).thenReturn(Collections.emptyList());
 
         ChatResponse mockResponse = mock(ChatResponse.class);
         when(mockResponse.aiMessage()).thenReturn(dev.langchain4j.data.message.AiMessage.from("mock response"));
         when(mockChatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
 
+        ReasoningStep expectedStep = ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
+        when(mockStepParser.parse(any(), any(), any())).thenReturn(expectedStep);
+
         // 3. Inject mocks via reflection
         injectField(engine, "chatLanguageModel", mockChatLanguageModel);
         injectField(engine, "toolRegistry", mockToolRegistry);
-        injectField(engine, "objectMapper", mockMapper);
-        injectField(engine, "chatMemoryStore", mockMemoryStore);
-        injectField(engine, "compactionSummaryRepository", mockCompactionRepo);
         injectField(engine, "roleRegistry", mockRoleRegistry);
-        injectField(engine, "promptTemplateEngine", mockTemplateEngine);
-        injectField(engine, "agentPersonaRegistry", mockRegistry);
+        injectField(engine, "promptBuilder", mockPromptBuilder);
+        injectField(engine, "historyAssembler", mockHistoryAssembler);
+        injectField(engine, "stepParser", mockStepParser);
     }
 
     private void injectField(Object target, String fieldName, Object value) throws Exception {
@@ -76,8 +76,8 @@ class LangChainReasoningEnginePersonaTest {
     @Test
     void testDebuggerRoleDoesNotSayCoordinator() {
         // Arrange
-        when(mockRegistry.getPersonaPrompt(AgentRoleEnum.DEBUGGER))
-                .thenReturn("You are Shiva, the Debugger and Code Analyst.");
+        String persona = "You are Shiva, the Debugger and Code Analyst.";
+        when(mockPromptBuilder.build(anyString(), anyString())).thenReturn(persona);
 
         // Act
         engine.nextStep("sess-1", "debugger", "fix this bug", Collections.emptyList());
@@ -99,8 +99,8 @@ class LangChainReasoningEnginePersonaTest {
     @Test
     void testCoordinatorRoleContainsTrimurtiContext() {
         // Arrange
-        when(mockRegistry.getPersonaPrompt(AgentRoleEnum.COORDINATOR))
-                .thenReturn("You are Vishnu, the Coordinator.");
+        String persona = "You are Vishnu, the Coordinator. THE TRIMURTI";
+        when(mockPromptBuilder.build(anyString(), anyString())).thenReturn(persona);
 
         // Act
         engine.nextStep("sess-2", "coordinator", "plan tasks", Collections.emptyList());

@@ -817,3 +817,10 @@
 - [x] Verify: Final surgical fixes for safe HITL serialization and test scoping
 
 ---
+# Phase 53.4 — LangChainReasoningEngine Split ✅
+- [x] Create `ReasoningStepParser.java` (Response parsing & token usage)
+- [x] Create `ChatHistoryAssembler.java` (Compliance filtering & goal injection)
+- [x] Create `SystemPromptBuilder.java` (Persona & security rule assembly)
+- [x] Slim `LangChainReasoningEngine.java` to stay as orchestrator
+- [x] Verify: Comprehensive unit tests for all new components pass
+- [x] Verify: `AgentLoopTest` and `LangChainReasoningEngineTest` integration passes
