@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+import java.util.Arrays;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +54,7 @@ class AgentLoopTest {
     }
 
     private void setField(Object target, String name, Object value) throws Exception {
-        java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+        Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
     }
@@ -65,13 +68,13 @@ class AgentLoopTest {
         String[] deletedMethods = {"runLoop", "processEngineStep", "validateTool", "invokeToolAndObserve", "handleFinishAction", "saveGoalToChatMemory"};
         
         for (String methodName : deletedMethods) {
-            boolean exists = java.util.Arrays.stream(clazz.getDeclaredMethods())
+            boolean exists = Arrays.stream(clazz.getDeclaredMethods())
                     .anyMatch(m -> m.getName().equals(methodName));
             assertFalse(exists, "Method " + methodName + " should have been deleted from AgentLoop");
         }
         
         // Also check if the injection is there
-        boolean hasRunner = java.util.Arrays.stream(clazz.getDeclaredFields())
+        boolean hasRunner = Arrays.stream(clazz.getDeclaredFields())
                 .anyMatch(f -> f.getName().equals("stateMachineRunner"));
         assertTrue(hasRunner, "AgentLoop should have stateMachineRunner injected");
     }

@@ -1,24 +1,29 @@
 package com.arcclaw.core.lifecycle;
 
-import com.arcclaw.core.scope.WorkspaceScoped;
-import com.arcclaw.core.governance.GovernanceLayer;
-import com.arcclaw.core.scope.WorkspaceScopeContext;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import io.quarkus.arc.Arc;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import jakarta.persistence.EntityManager;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.List;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
+import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.scope.WorkspaceScopeContext;
+import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
 
 /**
  * Lifecycle orchestrator for workspace session termination and disk management.
@@ -136,7 +141,7 @@ public class WorkspaceManager {
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                QuarkusTransaction.requiringNew().run(() -> {
                     List<AgentCheckpoint> checkpoints = em.createQuery(
                             "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status != :failed",
                             AgentCheckpoint.class)

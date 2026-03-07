@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.persona;
 
+import java.util.Collections;
+
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -16,7 +18,7 @@ public class AgentPersonaRegistry {
     private final Iterable<Agent> agents;
 
     protected AgentPersonaRegistry() {
-        this.agents = java.util.Collections.emptyList();
+        this.agents = Collections.emptyList();
     }
 
     @Inject

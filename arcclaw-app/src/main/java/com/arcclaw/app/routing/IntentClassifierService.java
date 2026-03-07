@@ -10,6 +10,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -31,7 +32,7 @@ public class IntentClassifierService implements IntentClassifier {
 
     private String dynamicClassifierPrompt;
 
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     void init() {
         StringBuilder sb = new StringBuilder();
         sb.append("""

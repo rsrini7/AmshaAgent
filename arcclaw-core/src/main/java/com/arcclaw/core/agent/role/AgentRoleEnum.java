@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.Set;
+
 /**
  * Type-safe registry of all permitted agent roles in the ArcClaw system.
  * Prevents magic-string routing errors and typo-driven persona switching.
@@ -11,7 +13,7 @@ public enum AgentRoleEnum {
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
             7,
             true,
-            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
     )),
 
     COORDINATOR("coordinator", new RoleDefinition(
@@ -20,7 +22,7 @@ public enum AgentRoleEnum {
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
             7,
             true,
-            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH)
     )),
 
     RESEARCHER("researcher", new RoleDefinition(
@@ -29,7 +31,7 @@ public enum AgentRoleEnum {
             "Perform information retrieval, web searches, and documentation lookups.",
             10,
             true,
-            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
     )),
 
     CODER("coder", new RoleDefinition(
@@ -38,7 +40,7 @@ public enum AgentRoleEnum {
             "Writes new architectural code, features from scratch, and logic implementations.",
             3,
             false,
-            java.util.Set.of() // SANDBOX_EXEC deferred to Phase 48
+            Set.of() // SANDBOX_EXEC deferred to Phase 48
     )),
 
     DEBUGGER("debugger", new RoleDefinition(
@@ -47,7 +49,7 @@ public enum AgentRoleEnum {
             "Analyzes stack traces, finds bugs, and fixes broken code.",
             3,
             false,
-            java.util.Set.of(ToolCapability.GITHUB)
+            Set.of(ToolCapability.GITHUB)
     )),
 
     DATTATREYA("synthesizer", new RoleDefinition(
@@ -58,7 +60,7 @@ public enum AgentRoleEnum {
             "and their outputs need integration or conflict resolution.",
             10,
             true,
-            java.util.Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
                              ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE)
     ));
 

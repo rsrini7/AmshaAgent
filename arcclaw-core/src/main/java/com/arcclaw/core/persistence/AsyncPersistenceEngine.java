@@ -1,17 +1,25 @@
 package com.arcclaw.core.persistence;
 
-import com.arcclaw.core.audit.ComplianceViolationException;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.quarkus.runtime.ShutdownEvent;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.runtime.ShutdownEvent;
+
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
-import java.util.concurrent.LinkedBlockingQueue;
+import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 
 /**
  * Asynchronous persistence engine using a single background Virtual Thread
@@ -50,7 +58,7 @@ public class AsyncPersistenceEngine {
     EntityManager em;
 
     @Inject
-    org.eclipse.microprofile.context.ManagedExecutor managedExecutor;
+    ManagedExecutor managedExecutor;
 
     private volatile boolean running = true;
 
@@ -95,7 +103,7 @@ public class AsyncPersistenceEngine {
         // Block the caller until the consumer confirms or fails the future
         try {
             event.getFuture().join();
-        } catch (java.util.concurrent.CompletionException ce) {
+        } catch (CompletionException ce) {
             Throwable cause = ce.getCause();
             if (cause instanceof ComplianceViolationException cve) {
                 throw cve;
@@ -118,7 +126,7 @@ public class AsyncPersistenceEngine {
         }
     }
 
-    private final java.util.concurrent.atomic.AtomicBoolean processing = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final AtomicBoolean processing = new AtomicBoolean(false);
 
     /**
      * Blocks until all currently queued events are processed.
@@ -140,7 +148,7 @@ public class AsyncPersistenceEngine {
         while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 // Poll with timeout to check for shutdown
-                PersistenceEvent event = queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS);
+                PersistenceEvent event = queue.poll(100, TimeUnit.MILLISECONDS);
                 if (event != null) {
                     processing.set(true);
                     try {
@@ -162,7 +170,7 @@ public class AsyncPersistenceEngine {
 
     private void processEvent(PersistenceEvent event) {
         // Guard against processing during shutdown when Arc is gone
-        if (io.quarkus.arc.Arc.container() == null) {
+        if (Arc.container() == null) {
             log.warnf("[AsyncPersistenceEngine] Arc container is gone. Discarding event %s for session %s", 
                     event.getEventType(), event.getSessionId());
             if (event.getFuture() != null) {
@@ -200,7 +208,7 @@ public class AsyncPersistenceEngine {
      */
     private void executeWithRetry(PersistenceEvent event) {
         // Second-check: container may have gone since processEvent() passed its guard
-        if (!running || io.quarkus.arc.Arc.container() == null) {
+        if (!running || Arc.container() == null) {
             log.debugf("[AsyncPersistenceEngine] Skipping write (shutdown): %s session=%s",
                     event.getEventType(), event.getSessionId());
             if (event.getFuture() != null) event.getFuture().complete(null);
@@ -234,7 +242,7 @@ public class AsyncPersistenceEngine {
                     sleepQuietly(backoff);
                 } else {
                     // Non-BUSY error — check if it's a shutdown race before logging as ERROR
-                    if (!running || io.quarkus.arc.Arc.container() == null) {
+                    if (!running || Arc.container() == null) {
                         log.debugf("[AsyncPersistenceEngine] Shutdown race: discarding event %s for session=%s",
                                 event.getEventType(), event.getSessionId());
                         if (event.getFuture() != null) {

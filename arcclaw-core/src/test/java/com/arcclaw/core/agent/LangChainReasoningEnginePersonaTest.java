@@ -1,28 +1,28 @@
 package com.arcclaw.core.agent;
 
-import com.arcclaw.core.agent.role.RoleRegistry;
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
-import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
+
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
-import java.lang.reflect.Field;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,7 +58,7 @@ class LangChainReasoningEnginePersonaTest {
         when(mockHistoryAssembler.assemble(any(), any(), any())).thenReturn(Collections.emptyList());
 
         ChatResponse mockResponse = mock(ChatResponse.class);
-        when(mockResponse.aiMessage()).thenReturn(dev.langchain4j.data.message.AiMessage.from("mock response"));
+        when(mockResponse.aiMessage()).thenReturn(AiMessage.from("mock response"));
         when(mockChatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
 
         ReasoningStep expectedStep = ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);

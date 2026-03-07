@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -87,7 +88,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 return ReasoningStep.pending(
                         "Attempted to call a tool not available in this context",
                         "OBSERVE",
-                        java.util.Map.of(),
+                        Map.of(),
                         0, 0
                 ).withObservation(
                         "That tool is not available in the current execution context. " +

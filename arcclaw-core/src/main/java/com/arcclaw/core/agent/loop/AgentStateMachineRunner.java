@@ -1,15 +1,25 @@
 package com.arcclaw.core.agent.loop;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InvalidRequestException;
 
 import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
@@ -19,12 +29,6 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
-import dev.langchain4j.exception.HttpException;
-import dev.langchain4j.exception.InvalidRequestException;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 /**
  * High-level runner that executes the Thought-Plan-Act-Observe reasoning loop.
@@ -144,7 +148,7 @@ public class AgentStateMachineRunner {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
-        cp.setUpdatedAt(java.time.LocalDateTime.now());
+        cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);
         log.infof("[STATE-MACHINE] Pausing session %s for human approval of tool '%s'",
                 sessionId, toolName);
@@ -196,13 +200,13 @@ public class AgentStateMachineRunner {
                     for (var observer : observers) {
                         observer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
                     }
-                } catch (com.arcclaw.core.governance.BudgetWarningException bw) {
+                } catch (BudgetWarningException bw) {
                     log.warnf("Budget warning for session %s: %s", sessionId, bw.getMessage());
                     String warningObservation = "⚠️ BUDGET WARNING: " + bw.getMessage() +
                             " Keep all subsequent responses to 1-2 sentences maximum.";
                     step = step.withObservation(warningObservation);
                     synchronized (history) { history.add(step); }
-                } catch (com.arcclaw.core.governance.BudgetExceededException be) {
+                } catch (BudgetExceededException be) {
                     log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
                     String observationMessage = "System Intervention: " + be.getMessage() +
                             ". Further actions blocked. Ending loop.";

@@ -69,7 +69,7 @@ class CronResultHandlerTest {
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
-                eq(com.arcclaw.core.audit.SecurityEventType.CRONFIRED),
+                eq(SecurityEventType.CRONFIRED),
                 org.mockito.ArgumentMatchers.contains("runOnce=true"));
     }
 
@@ -86,7 +86,7 @@ class CronResultHandlerTest {
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
-                eq(com.arcclaw.core.audit.SecurityEventType.CRONFIRED),
+                eq(SecurityEventType.CRONFIRED),
                 org.mockito.ArgumentMatchers.contains("runOnce=false"));
     }
 

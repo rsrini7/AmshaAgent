@@ -12,12 +12,14 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -38,8 +40,8 @@ class AgentCronSchedulerConcurrencyTest {
 
     public static class SmallPoolProfile implements QuarkusTestProfile {
         @Override
-        public java.util.Map<String, String> getConfigOverrides() {
-            return java.util.Map.of("arcclaw.cron.max-concurrent", "2");
+        public Map<String, String> getConfigOverrides() {
+            return Map.of("arcclaw.cron.max-concurrent", "2");
         }
     }
 
@@ -76,7 +78,7 @@ class AgentCronSchedulerConcurrencyTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testThrottledJobIsSkippedNotMarkedFailed() throws Exception {
         AgentCronEntity job1 = createDueJob(false);
         AgentCronEntity job2 = createDueJob(false);

@@ -2,6 +2,9 @@ package com.arcclaw.core.audit;
 
 import static org.mockito.Mockito.verify;
 
+import java.math.BigDecimal;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,8 +33,8 @@ class AuditServiceTest {
 
     @Test
     void testRecordLoopCompletionDelegates() {
-        AgentResult result = AgentResult.finished("done", java.util.List.of());
-        java.math.BigDecimal cost = new java.math.BigDecimal("0.01");
+        AgentResult result = AgentResult.finished("done", List.of());
+        BigDecimal cost = new BigDecimal("0.01");
         auditService.recordLoopCompletion("ses", "u", "r", "hash", result, 10, 20, cost);
         verify(telemetryAuditService).recordLoopCompletion("ses", "u", "r", "hash", result, 10, 20, cost);
     }

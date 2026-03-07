@@ -1,23 +1,28 @@
 package com.arcclaw.core.lifecycle;
 
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import io.quarkus.runtime.ShutdownEvent;
-import io.quarkus.runtime.StartupEvent;
-import io.quarkus.scheduler.Scheduled;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
+import io.quarkus.scheduler.Scheduled;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
 
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.
@@ -59,7 +64,7 @@ public class SessionReaper {
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                QuarkusTransaction.requiringNew().run(() -> {
                     doRecoverZombies();
                 });
                 return; // success
@@ -167,8 +172,8 @@ public class SessionReaper {
     public void sweepTimedOutApprovals() {
         if (shuttingDown) return;
 
-        var cutoff = java.time.LocalDateTime.now()
-                .minus(java.time.Duration.ofMinutes(approvalTimeoutMinutes));
+        var cutoff = LocalDateTime.now()
+                .minus(Duration.ofMinutes(approvalTimeoutMinutes));
         List<AgentCheckpoint> timedOut = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)

@@ -2,7 +2,12 @@ package com.arcclaw.core.pipeline;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+
+import java.time.Instant;
+import java.util.stream.Stream;
+
 import jakarta.enterprise.inject.Instance;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,8 +27,8 @@ class MessagePipelineErrorTest {
 
     @BeforeEach
     void setup() {
-        user = new ChannelUser("123", "alice", com.arcclaw.channel.api.ChannelType.CLI);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", java.time.Instant.now());
+        user = new ChannelUser("123", "alice", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         sender = mock(ChannelSender.class);
         context = new MessageContext("chat1", user, msg, sender);
     }
@@ -72,7 +77,7 @@ class MessagePipelineErrorTest {
     @SuppressWarnings("unchecked")
     private void setupPipeline(MessageHandler... handlers) {
         Instance<MessageHandler> instance = mock(Instance.class);
-        when(instance.stream()).thenReturn(java.util.stream.Stream.of(handlers));
+        when(instance.stream()).thenReturn(Stream.of(handlers));
         pipeline = new MessagePipeline(instance);
     }
 }

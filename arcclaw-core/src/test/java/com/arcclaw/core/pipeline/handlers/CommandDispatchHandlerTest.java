@@ -1,17 +1,19 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import java.time.Instant;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,8 +35,8 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testApproveWithCronIdStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", com.arcclaw.channel.api.ChannelType.CLI);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", java.time.Instant.now());
+        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve cron123")))
@@ -46,8 +48,8 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testApproveWithoutCronIdStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", com.arcclaw.channel.api.ChannelType.CLI);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", java.time.Instant.now());
+        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve")))
@@ -59,8 +61,8 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testTextPassesThrough() {
-        ChannelUser user = new ChannelUser("1", "user", com.arcclaw.channel.api.ChannelType.CLI);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, "Hello world", "sid", java.time.Instant.now());
+        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "Hello world", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
 
         assertEquals(HandleResult.CONTINUE, handler.handle(ctx));
@@ -69,8 +71,8 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testDenyStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", com.arcclaw.channel.api.ChannelType.CLI);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "sid", java.time.Instant.now());
+        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
 
         when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString()))
