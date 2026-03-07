@@ -3452,4 +3452,35 @@ Codebase sweep to centralize hardcoded string literals into dedicated constant c
 
 - ✅ `mvn clean test -pl arcclaw-core,arcclaw-app -am`: 121 tests green (100% success).
 
+---
 
+# Phase 57 — Rate Limit User Notification ✅
+
+Harden the system against LLM rate limits by providing immediate user feedback and graceful fallbacks during intent classification.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Immediate Acknowledgment**: Telegram messages now receive an immediate "⏳" reaction/message to signal that processing has started, preventing the user from thinking the bot is hung during internal retries.
+
+> [!NOTE]
+> **Graceful Degradation**: If the intent classifier hits a 429 (Rate Limit) error after internal retries are exhausted, the system now notifies the user and defaults to the `COORDINATOR` role rather than failing silently.
+
+## Completed Changes
+
+#### [MODIFY] [TelegramAgentHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramAgentHandler.java)
+- Added immediate `⏳` acknowledgment for non-command free-text messages.
+
+#### [MODIFY] [IntentClassificationHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/IntentClassificationHandler.java)
+- Implemented `HttpException` (429) catch block.
+- Added user notification: "⏳ Rate limited on classification — defaulting to coordinator."
+- Defaulted role to `COORDINATOR` on rate limit.
+
+#### [NEW] [IntentClassificationHandlerTest.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/test/java/com/arcclaw/core/pipeline/handlers/IntentClassificationHandlerTest.java)
+- Verified rate limit notification and fallback logic.
+- Verified successful role assignment path.
+
+## Verification
+
+- ✅ `IntentClassificationHandlerTest` passes with 100% coverage of the new logic.
+- ✅ Manual verification of Telegram "⏳" acknowledgment.

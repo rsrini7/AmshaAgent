@@ -2012,3 +2012,19 @@ Performed a comprehensive sweep of the codebase to eliminate magic strings in pr
 - ✅ **Tool Name Compliance**: Verified via grep that no raw tool name literals remain in reasoning logic.
 - ✅ **Standard Regression**: Full 121-test suite passed successfully in 02:35 mins.
 
+---
+
+## Phase 57 — Rate Limit User Notification ✅
+
+Implemented proactive user notification and graceful fallback for rate-limiting scenarios.
+
+### Key Improvements:
+
+1.  **Immediate Feedback**: Users now receive an immediate "⏳" when sending free-text messages to Telegram, providing acknowledgment while the internal retry logic and intent classification run.
+2.  **Robust Exception Handling**: `IntentClassificationHandler` now specifically catches `HttpException` with status code 429 (Rate Limited).
+3.  **Graceful Fallback**: When rate limited, the system notifies the user and defaults to the `COORDINATOR` role instead of failing silently or crashing the pipeline.
+4.  **Unit Test Coverage**: Added `IntentClassificationHandlerTest` to ensure that 429 responses trigger the correct user notification and fallback role.
+
+### Verification Results:
+- ✅ `IntentClassificationHandlerTest`: 100% pass for both success and rate-limit scenarios.
+- ✅ **Full Regression**: Verified that 121 tests pass with the new acknowledgment logic.

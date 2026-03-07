@@ -104,10 +104,10 @@ class AgentResponseMapperTest {
     }
 
     @Test
-    void testMapResult_failed_rateLimit_returns500() {
+    void testMapResult_failed_rateLimit_returns429() {
         AgentResult.Failed result = new AgentResult.Failed("Slow down", AgentResult.FailureCategory.RATE_LIMIT, List.of(), 0, 0);
         Response response = mapper.mapResult(result, false);
-        assertEquals(500, response.getStatus());
+        assertEquals(429, response.getStatus());
         ErrorResponse entity = (ErrorResponse) response.getEntity();
         assertEquals("RATE_LIMIT", entity.code());
     }

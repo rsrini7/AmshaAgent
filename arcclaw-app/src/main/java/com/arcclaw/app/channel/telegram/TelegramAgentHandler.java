@@ -93,6 +93,12 @@ public class TelegramAgentHandler {
         }
 
         MessageContext context = new MessageContext(chatId, user, channelMessage, sender);
+        
+        // Immediate acknowledgment for non-command messages
+        if (text != null && !text.trim().startsWith("/")) {
+            sender.sendRaw(user, "⏳");
+        }
+
         queueForChat(chatId).submit(() -> processPipeline(context));
     }
 

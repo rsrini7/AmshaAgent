@@ -40,7 +40,7 @@ public class AgentResponseMapper {
                     .entity(new ErrorResponse(f.reason(), "SCHEMA")).build();
             case SYSTEM_ERROR -> Response.serverError()
                     .entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
-            case RATE_LIMIT -> Response.serverError()
+            case RATE_LIMIT -> Response.status(429)
                     .entity(new ErrorResponse(f.reason(), "RATE_LIMIT")).build();
         };
     }

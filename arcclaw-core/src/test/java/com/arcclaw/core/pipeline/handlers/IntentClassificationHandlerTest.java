@@ -1,49 +1,65 @@
 package com.arcclaw.core.pipeline.handlers;
 
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.pipeline.HandleResult;
-import com.arcclaw.core.pipeline.MessageContext;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.pipeline.HandleResult;
+import com.arcclaw.core.pipeline.MessageContext;
+
+import dev.langchain4j.exception.HttpException;
 
 class IntentClassificationHandlerTest {
 
     private IntentClassificationHandler handler;
     private IntentClassifier classifier;
-    private MessageContext context;
+    private ChannelSender sender;
 
     @BeforeEach
-    void setup() {
-        classifier = mock(IntentClassifier.class);
+    void setUp() {
         handler = new IntentClassificationHandler();
+        classifier = mock(IntentClassifier.class);
+        sender = mock(ChannelSender.class);
         handler.classifier = classifier;
-        
-        ChannelUser user = new ChannelUser("123", "alice", com.arcclaw.channel.api.ChannelType.CLI);
-        context = new MessageContext("chat1", user, new ChannelMessage.CliMessage(user, "need some code", "sid", java.time.Instant.now()), mock(ChannelSender.class));
     }
 
     @Test
-    void testClassificationSetsRoleAndContinues() {
-        when(classifier.classify("need some code")).thenReturn("coder");
+    void testHandle_rateLimit_notifiesUserAndDefaultsToCoordinator() {
+        ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", java.time.Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg, sender);
 
-        assertEquals(HandleResult.CONTINUE, handler.handle(context));
-        assertTrue(context.getAgentRole().isPresent());
-        assertEquals("coder", context.getAgentRole().get());
+        when(classifier.classify(anyString())).thenThrow(new HttpException(429, "Too many requests"));
+
+        HandleResult result = handler.handle(context);
+
+        assertEquals(HandleResult.CONTINUE, result);
+        assertEquals(AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+        verify(sender).sendRaw(eq(user), eq("⏳ Rate limited on classification — defaulting to coordinator."));
     }
 
     @Test
-    void testClassificationFailureDefaultsToCoordinator() {
-        when(classifier.classify(any())).thenThrow(new RuntimeException("API down"));
+    void testHandle_success_setsRole() {
+        ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", java.time.Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg, sender);
 
-        assertEquals(HandleResult.CONTINUE, handler.handle(context));
-        assertTrue(context.getAgentRole().isPresent());
-        assertEquals("coordinator", context.getAgentRole().get());
+        when(classifier.classify(anyString())).thenReturn("developer");
+
+        handler.handle(context);
+
+        assertEquals("developer", context.getAgentRole().get());
     }
 }

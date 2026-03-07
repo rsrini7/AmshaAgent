@@ -3192,3 +3192,16 @@ arcclaw:
 
 **Resolution:** Added `import java.util.Map;` to the imports section of `StatefulAgentStoreImpl.java`.
 
+---
+
+### 23. Phase 57: Rate Limit Handling & Telegram Feedback
+
+#### 23.1. `HttpException` (429) Catching
+*   **Symptom**: Intent classification fails silently with a long delay (~4-8s) when rate limits are hit.
+*   **Root Cause**: `RetryUtils` exhausts retries internally, and the calling handler was catching all exceptions generically and defaulting to "coordinator" without notifying the user.
+*   **Resolution**: Implement a specific catch block for `dev.langchain4j.exception.HttpException` and check for status code 429. Notify the user with a "⏳" prefix and default to the `COORDINATOR` role.
+
+#### 23.2. `ChannelMessage` Test Instantiation
+*   **Symptom**: `IntentClassificationHandlerTest` fails with `NoSuchMethodError` or `ClassCastException` during mock setup or execution.
+*   **Root Cause**: The `ChannelMessage` sealed interface requires specific record implementations (e.g., `TelegramMessage`) and an `Instant` timestamp. Older tests using anonymous implementations or incomplete mocks failed.
+*   **Resolution**: Use `new ChannelMessage.TelegramMessage(sender, text, chatId, Instant.now())` for deterministic test message creation.

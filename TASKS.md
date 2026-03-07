@@ -931,4 +931,10 @@
 - [x] Remediate Category 7 (approval sentinels) <!-- id: 347 -->
 - [x] Verify: Full system regression passes (121/121 tests) <!-- id: 348 -->
 
+---
 
+## Phase 57 — Rate Limit User Notification ✅
+- [x] Fix 1: Immediate Telegram Acknowledgment (`⏳`) for free-text messages <!-- id: 349 -->
+- [x] Fix 2: `IntentClassificationHandler` rate limit detection and user notification <!-- id: 350 -->
+- [x] Create `IntentClassificationHandlerTest` to verify 429 handling and defaults <!-- id: 351 -->
+- [x] Verify: All tests pass (including specific rate limit scenarios) <!-- id: 352 -->
