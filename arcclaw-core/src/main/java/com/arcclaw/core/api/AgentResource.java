@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -65,6 +66,9 @@ public class AgentResource {
     WorkspaceManager workspaceManager;
 
     @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
     AgentLoop agentLoop;
 
     @Inject
@@ -87,7 +91,7 @@ public class AgentResource {
     public Response createSession() {
         String sessionId = UUID.randomUUID().toString();
         log.infof("Creating new session: {}", sessionId);
-        workspaceManager.recordHeartbeat(sessionId);
+        heartbeatTracker.recordHeartbeat(sessionId);
         return Response.status(Response.Status.CREATED)
                 .entity(new CreateSessionResponse(sessionId))
                 .build();
@@ -289,7 +293,7 @@ public class AgentResource {
 
                 MDC.put("userId", "rest:deny");
                 agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
-                workspaceManager.removeHeartbeat(sessionId);
+                heartbeatTracker.removeHeartbeat(sessionId);
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
         } catch (Exception e) {

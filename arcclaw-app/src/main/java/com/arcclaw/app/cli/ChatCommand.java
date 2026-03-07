@@ -12,6 +12,7 @@ import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.AgentRoleEnum;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -32,6 +33,7 @@ public class ChatCommand implements Runnable {
     @Inject AgentLoop agentLoop;
     @Inject ReasoningEngine reasoningEngine;
     @Inject WorkspaceManager workspaceManager;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
     @Inject ReflexRegistry reflexRegistry;
     @Inject DevSecretSeeder devSeeder;
 
@@ -65,7 +67,7 @@ public class ChatCommand implements Runnable {
 
     private void runChatLoop(String sessionId) {
         try {
-            workspaceManager.recordHeartbeat(sessionId);
+            heartbeatTracker.recordHeartbeat(sessionId);
             WorkspaceContext.run(
                 sessionId, "cli-user", "cli-chat",
                 AutonomyLevel.SUPERVISED,
@@ -106,7 +108,7 @@ public class ChatCommand implements Runnable {
             }
             if (input.isBlank()) continue;
 
-            workspaceManager.recordHeartbeat(sessionId);
+            heartbeatTracker.recordHeartbeat(sessionId);
 
             ReflexResult reflexResult = reflexRegistry.processIfReflex(
                 sessionId, "cli-user", "cli-chat", input);
@@ -134,7 +136,7 @@ public class ChatCommand implements Runnable {
                 case AgentResult.Failed f        -> "❌ Error: " + f.reason();
                 case AgentResult.LoopExceeded l  -> "⏱ Timed out after " + l.maxIterations() + " steps.";
                 case AgentResult.AwaitingApproval a -> {
-                    workspaceManager.recordHeartbeat(sessionId);
+                    heartbeatTracker.recordHeartbeat(sessionId);
                     String truncatedParams = a.paramsJson() != null
                             && a.paramsJson().length() > 200
                             ? a.paramsJson().substring(0, 200) + "... [truncated]"
