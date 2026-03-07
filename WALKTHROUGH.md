@@ -1921,3 +1921,18 @@ I have successfully refactored `AgentResource` to decouple REST concerns from bu
 - ✅ `AgentSessionServiceTest`: 9/9 tests passed (Unit).
 - ✅ `AgentResourceTest`: 11/11 tests passed (Integration).
 - ✅ Full Project Regression: All existing features preserved.
+
+---
+
+## Phase 54: Agent Test Refactor ✅
+
+Refactored agent tests by moving them from `arcclaw-app` to `arcclaw-core` to align with the core module's subject area and resolve package reorganization misplacements.
+
+### Key Improvements:
+- **Module Clarity**: Moved 10 core-focused tests to `arcclaw-core`, ensuring they live in the same module as the classes they test.
+- **Cyclic Dependency Guard**: Reverted 3 tests (`SecretVaultImplTest`, `WorkspaceScopeTest`, `AuditServiceIntegrationTest`) to `arcclaw-app` to prevent a Maven cyclic dependency between `core` and `deployment`.
+- **Agent Loop Specialization**: Moved `AgentResilienceTest.java` to `com.arcclaw.core.agent.loop` in `arcclaw-core`, reflecting the sub-package structure established in Phase 53.5.
+
+### Verification:
+- ✅ `mvn clean test -pl arcclaw-core`: 350 tests green.
+- ✅ `mvn clean test -pl arcclaw-app -am`: 121 tests green (100% success).

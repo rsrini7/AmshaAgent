@@ -858,3 +858,15 @@
 - [x] Create `AgentSessionServiceTest` (Unit)
 - [x] Verify: `AgentResourceTest` passes unchanged
 - [x] Verify: Full project regression passes
+
+---
+
+# Phase 54: Move misplaced JUnit tests ✅
+- [x] Scan `arcclaw-app/src/test/java/` for test classes.
+- [x] Identify 13 test files testing `arcclaw-core` pure subjects.
+- [x] Move 10 tests to `arcclaw-core` matching package under `src/test/java/`.
+- [x] Revert 3 tests (`SecretVaultImplTest`, `WorkspaceScopeTest`, `AuditServiceIntegrationTest`) back to `arcclaw-app` due to Maven cyclic dependency (`core` <-> `deployment`).
+- [x] Keep `AgentResourceTest` and `PodmanHealthCheckTest` in `arcclaw-app` (HTTP/App layer).
+- [x] Verify: `AgentResilienceTest` correctly moved to `com.arcclaw.core.agent.loop` in `arcclaw-core`.
+- [x] Verify: `arcclaw-core` tests pass (350/350).
+- [x] Verify: `arcclaw-app` tests pass (121/121) after fixing reactor compilation consistency (`-am`).

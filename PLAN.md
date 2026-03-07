@@ -3244,3 +3244,50 @@ Split `com.arcclaw.core.api.AgentResource` into `AgentResponseMapper`, `AgentSes
 - [x] Unit test: `AgentResponseMapperTest` (Covers all response mapping logic).
 - [x] Unit test: `AgentSessionServiceTest` (Covers business logic and workspace scoping).
 - [x] Integration test: `AgentResourceTest` (Verified REST endpoints via RestAssured pass unchanged).
+
+---
+
+# Phase 54 — Agent Test Refactor ✅
+
+Refactor agent tests by moving them to the appropriate Maven module (`arcclaw-core` or `arcclaw-app`) while resolving build and runtime issues.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Module Alignment**: Unit tests for core subjects are moved to `arcclaw-core` to ensure they live in the same module as the classes they test.
+
+> [!CAUTION]
+> **Cyclic Dependency Blocker**: Tests relying on `@WorkspaceScoped` registration (e.g., `SecretVaultImplTest`, `WorkspaceScopeTest`, `AuditServiceIntegrationTest`) cannot move to `arcclaw-core` because they depend on `arcclaw-deployment`, which would create a cycle. These tests are reverted to `arcclaw-app`.
+
+> [!TIP]
+> **HTTP Integration Separation**: Tests using `@QuarkusTest` and RestAssured (e.g., `AgentResourceTest`) stay in `arcclaw-app` as they test the full deployed stack.
+
+## Completed Changes
+
+### Test Movement
+- [MODIFY] Moved 10 test files to `arcclaw-core/src/test/java/com/arcclaw/core/...`:
+    - `ToolRegistryTest.java`
+    - `StatefulAgentStoreTest.java`
+    - `PersistentChatMemoryStoreTest.java`
+    - `ContextCompactionServiceIntegrationTest.java`
+    - `WorkspaceGovernanceTest.java`
+    - `GovernanceLayerTest.java`
+    - `AuditObserverTest.java`
+    - `AuditEventRepositoryTest.java`
+    - `LangChainReasoningEngineTest.java`
+    - `AgentResilienceTest.java` (Moved to `com.arcclaw.core.agent.loop`).
+
+### Test Retention (App Layer)
+- Retained 2 tests in `arcclaw-app` due to HTTP/App level dependency:
+    - `AgentResourceTest.java`
+    - `PodmanHealthCheckTest.java`
+
+### Test Reversion (Cyclic Dependency)
+- Reverted 3 tests to `arcclaw-app` to avoid Maven cyclic dependency:
+    - `SecretVaultImplTest.java`
+    - `WorkspaceScopeTest.java`
+    - `AuditServiceIntegrationTest.java`
+
+## Verification
+- ✅ `mvn clean test -pl arcclaw-core`: 350 tests green.
+- ✅ `mvn clean test -pl arcclaw-app -am`: 121 tests green (100% success).
