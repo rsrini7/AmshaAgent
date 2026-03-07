@@ -1417,3 +1417,71 @@ Definition of done
 - runAgentAsync() inline deny-path preserved unchanged in AgentSessionService.runAsync()
 - WorkspaceScopeHolder/WorkspaceContext/AutonomyLevel in AgentSessionService only
 - No circular CDI injection
+
+
+---
+
+Phase 54
+Move misplaced JUnit tests to their correct Maven module.
+No logic changes — pure file move only.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUND TRUTH — READ BEFORE MOVING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. A test class must live in the same Maven module as the class it tests.
+     arcclaw-core tests → arcclaw-core/src/test/java/
+     arcclaw-app tests  → arcclaw-app/src/test/java/
+
+2. TIEBREAKER — @QuarkusTest + RestAssured (HTTP-level) tests stay in arcclaw-app
+   regardless of where the tested class lives. They test the full deployed stack,
+   not a unit. Only move tests where the subject is a pure arcclaw-core class
+   with no HTTP layer involved.
+   → AgentResourceTest uses @QuarkusTest + RestAssured → STAYS in arcclaw-app
+   → LangChainReasoningEngineTest tests LangChainReasoningEngine (arcclaw-core)
+     with no HTTP layer → MOVE to arcclaw-core
+
+3. Before moving any @QuarkusTest class to arcclaw-core, verify
+   arcclaw-core/pom.xml has these in test scope:
+     quarkus-junit5
+     quarkus-test-mockito
+   If missing, add them before moving.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXECUTION ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Scan arcclaw-app/src/test/ — for every test class determine:
+     a. Does its primary subject (@Inject / @InjectMocks target) live in arcclaw-core?
+     b. Does it use @QuarkusTest + RestAssured? (if yes → stays in arcclaw-app)
+   Print the full classified list before moving anything.
+
+2. For each test confirmed to move:
+     a. Verify arcclaw-core/pom.xml has quarkus-junit5 + quarkus-test-mockito
+        in test scope — add if missing
+     b. Move file to matching package under arcclaw-core/src/test/java/
+     c. Update package declaration to match new directory
+
+3. Run ./mvnw clean test -pl arcclaw-core
+   All moved tests must pass.
+
+4. Run ./mvnw clean test -pl arcclaw-app
+   All remaining tests must pass, nothing broken.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KNOWN CLASSIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  arcclaw-app/.../LangChainReasoningEngineTest.java
+    → subject: LangChainReasoningEngine (arcclaw-core), no HTTP layer
+    → MOVE to arcclaw-core/src/test/java/com/arcclaw/core/agent/reasoning/
+
+  arcclaw-app/.../AgentResourceTest.java
+    → @QuarkusTest + RestAssured (HTTP-level)
+    → STAYS in arcclaw-app
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEFINITION OF DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- No non-HTTP test in arcclaw-app/src/test/ has its primary subject in arcclaw-core
+- All moved tests pass in arcclaw-core
+- All @QuarkusTest + RestAssured tests remain in arcclaw-app and pass
+- Full test suite passes across both modules
+- No logic changes — pure move only

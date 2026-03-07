@@ -3156,5 +3156,16 @@ arcclaw:
       max-tokens: 2048
 ```
 
+---
 
+### 21. Phase 54: Agent Test Refactor & Cyclic Dependencies
 
+#### 21.1 Maven Cyclic Dependency (`core` <-> `deployment`)
+* **Symptom:** Build fails with `The projects in the reactor contain a cyclic reference`.
+* **Root Cause:** Moving tests that use `@WorkspaceScoped` (like `SecretVaultImplTest`) to `arcclaw-core` requires adding `arcclaw-deployment` as a test dependency to register the scope. However, `arcclaw-deployment` already depends on `arcclaw-core`, creating a cycle.
+* **Resolution:** Revert these specific tests to `arcclaw-app`. The `arcclaw-app` module can safely depend on both `core` and `deployment` without creating a cycle.
+
+#### 21.2 App Module Compilation Errors after Core Reorganization
+* **Symptom:** `package AgentResult does not exist` or `AgentRoleEnum.COORDINATOR does not exist` in `arcclaw-app` after a successful `arcclaw-core` build.
+* **Root Cause:** Maven reactor inconsistency when running `-pl arcclaw-app` without `-am`. The app module was attempting to compile against a stale version of `arcclaw-core` in the local repository instead of the updated source in the reactor.
+* **Resolution:** Always use the `-am` (also-make) flag when building a specific submodule to ensure all internal dependencies are updated in the reactor: `./mvnw clean test -pl arcclaw-app -am`.

@@ -8,6 +8,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import io.smallrye.common.annotation.Identifier;
 import jakarta.inject.Inject;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,10 +28,22 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.data.message.AiMessage;
 
 @QuarkusTest
-@TestProfile(CompactionTestProfile.class)
+@TestProfile(ContextCompactionServiceIntegrationTest.CompactionTestProfile.class)
 class ContextCompactionServiceIntegrationTest {
 
     private static final String TEST_SESSION_ID = "integration-session-123";
+
+    public static class CompactionTestProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                    "arcclaw.memory.compaction.enabled", "true",
+                    "arcclaw.memory.compaction.threshold", "4",
+                    "arcclaw.memory.compaction.keep-recent", "2",
+                    "quarkus.langchain4j.groq.api-key", "mock-key-for-tests-only"
+            );
+        }
+    }
 
     @Inject
     ContextCompactionService service;
