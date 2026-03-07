@@ -1,34 +1,27 @@
 package com.arcclaw.core.agent;
 
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
+import com.arcclaw.core.agent.loop.ChatMemoryWriter;
+import com.arcclaw.core.agent.loop.ToolInvocationGuard;
+import com.arcclaw.core.agent.loop.ToolInvoker;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -46,18 +39,10 @@ public class AgentStateMachineRunner {
     @Inject ToolRegistry toolRegistry;
     @Inject StatefulAgentStore agentStore;
     @Inject GovernanceLayer governanceLayer;
-    @Inject ChatMemoryStore chatMemoryStore;
     @Inject Instance<AgentObserver> observers;
-    @Inject RoleRegistry roleRegistry;
-    @Inject ObjectMapper objectMapper;
-
-    // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
-    private static final Pattern GITHUB_TRIGGER_PATTERN =
-            Pattern.compile(
-                    "(?i)\\b(repo|repository|github|gh|fetch|gist|clone|" +
-                            "pull\\s+request|pr|get|show|describe|description|desc|" +
-                            "star|fork|issue|commit|branch|tag|readme|release)\\b"
-            );
+    @Inject ToolInvocationGuard guard;
+    @Inject ToolInvoker invoker;
+    @Inject ChatMemoryWriter writer;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
@@ -104,7 +89,8 @@ public class AgentStateMachineRunner {
             step = validationDecision.step();
 
             StepDecision invocationDecision = invokeToolAndObserve(
-                    context.sessionId(), context.agentRole(), history, step, consecutiveFailures);
+                    context.sessionId(), context.agentRole(), history, step,
+                    consecutiveFailures, context.goal());
             if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
             consecutiveFailures = invocationDecision.consecutiveFailures();
         }
@@ -117,28 +103,7 @@ public class AgentStateMachineRunner {
     }
 
     private void saveGoalToChatMemory(String sessionId, String goal) {
-        if (sessionId != null && goal != null && !goal.isEmpty()) {
-            if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
-                    && !"Resuming task after approval".equals(goal)
-                    && !("Resuming task after denial").equals(goal)) {
-
-                List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
-                if (currentHistory == null) currentHistory = new ArrayList<>();
-                else currentHistory = new ArrayList<>(currentHistory);
-
-                boolean alreadySaved = false;
-                if (!currentHistory.isEmpty()) {
-                    ChatMessage lastMsg = currentHistory.get(currentHistory.size() - 1);
-                    if (lastMsg instanceof UserMessage && lastMsg.toString().contains(goal)) {
-                        alreadySaved = true;
-                    }
-                }
-                if (!alreadySaved) {
-                    currentHistory.add(UserMessage.from(goal));
-                    chatMemoryStore.updateMessages(sessionId, currentHistory);
-                }
-            }
-        }
+        writer.saveGoal(sessionId, goal);
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole, List<ReasoningStep> history, ReasoningStep step, int iteration) {
@@ -149,14 +114,7 @@ public class AgentStateMachineRunner {
         }
 
         if (sessionId != null && answer != null && !answer.isBlank()) {
-            List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
-            if (currentHistory == null) {
-                currentHistory = new ArrayList<>();
-            } else {
-                currentHistory = new ArrayList<>(currentHistory);
-            }
-            currentHistory.add(AiMessage.from(answer));
-            chatMemoryStore.updateMessages(sessionId, currentHistory);
+            writer.saveAnswer(sessionId, answer);
         }
 
         final ReasoningStep completedStep = step.withObservation("Task completed.");
@@ -167,6 +125,31 @@ public class AgentStateMachineRunner {
         synchronized (history) {
             return AgentResult.finished(answer, List.copyOf(history));
         }
+    }
+
+    /**
+     * Consolidates logic for pausing the loop for human approval of a tool call.
+     */
+    private AgentResult persistApprovalCheckpoint(
+            String sessionId, String agentRole,
+            String toolName, String paramsJson,
+            List<ReasoningStep> history) {
+        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
+                .orElseGet(() -> {
+                    AgentCheckpoint c = new AgentCheckpoint();
+                    c.setSessionId(sessionId);
+                    c.setAgentRole(agentRole);
+                    return c;
+                });
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setPendingToolName(toolName);
+        cp.setPendingToolParametersJson(paramsJson);
+        cp.setUpdatedAt(java.time.LocalDateTime.now());
+        agentStore.save(cp);
+        log.infof("[STATE-MACHINE] Pausing session %s for human approval of tool '%s'",
+                sessionId, toolName);
+        return AgentResult.awaitingApproval(toolName, paramsJson, sessionId,
+                List.copyOf(history));
     }
 
     private enum DecisionType { CONTINUE, TERMINAL, PROCEED }
@@ -305,124 +288,54 @@ public class AgentStateMachineRunner {
             return StepDecision.retryValidation(consecutiveFailures);
         }
 
-        if (GithubTool.NAME.equals(toolName)) {
-             // Tool was already approved by human via HITL — skip trigger guard
-            boolean isPreApproved = agentStore.load(sessionId, agentRole)
-                                    .filter(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL
-                                                && toolName.equals(cp.getPendingToolName()))
-                                    .isPresent();
-
-            if (!isPreApproved && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
-                String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
-                        "the user's request does not reference a GitHub resource. " +
-                        "Please answer the user's question using your own knowledge " +
-                        "and respond with FINISH. Do not call any tools.";
-
-                log.warnf("[TOOL-INTENT-GUARD] github blocked session=%s goal='%s'",
-                        sessionId, goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
-
-                final ReasoningStep guardedStep = step.withObservation(guardObs);
-                synchronized (history) { history.add(guardedStep); }
-                observers.forEach(o -> o.onStepComplete(sessionId, agentRole, guardedStep));
-                return StepDecision.retryValidation(consecutiveFailures);
-            }
-        }
-
         return StepDecision.proceedWithFailures(step, consecutiveFailures);
     }
 
-    private StepDecision invokeToolAndObserve(String sessionId, String agentRole, List<ReasoningStep> history, ReasoningStep step, int consecutiveFailures) {
+    private StepDecision invokeToolAndObserve(String sessionId, String agentRole,
+                                              List<ReasoningStep> history, ReasoningStep step,
+                                              int consecutiveFailures, String goal) {
+
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
 
-        // DEDUPLICATION GUARD: if the same tool+args already has a result in this
-        // session's history, return the cached observation instead of re-invoking.
-        // Prevents redundant Podman cold starts for identical tool calls.
-        synchronized (history) {
-            for (ReasoningStep past : history) {
-                if (toolName.equals(past.action())
-                        && past.observation() != null
-                        && !past.observation().isBlank()) {
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(sessionId, agentRole, toolName, params, history, goal);
 
-                    // Primary check: Map equality (fast)
-                    boolean argsMatch = java.util.Objects.equals(params, past.actionInput());
-
-                    // Fallback check: JSON string equality (handles LinkedHashMap ordering differences)
-                    if (!argsMatch) {
-                        try {
-                            String currentArgs = objectMapper.writeValueAsString(params);
-                            String pastArgs = objectMapper.writeValueAsString(past.actionInput());
-                            argsMatch = currentArgs.equals(pastArgs);
-                        } catch (Exception e) {
-                            // JSON serialization failed — skip dedup, let tool execute normally
-                            log.debugf("DEDUP-GUARD: JSON comparison failed for tool '%s': %s",
-                                    toolName, e.getMessage());
-                        }
-                    }
-
-                    if (argsMatch) {
-                        log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — " +
-                                "returning cached observation, skipping execution.", toolName, sessionId);
-                        final ReasoningStep dedupStep = step.withObservation(
-                                past.observation() + "\n\n[NOTE: This result was retrieved from " +
-                                "the current session cache. The tool was not re-executed.]");
-                        history.add(dedupStep);
-                        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
-                        return StepDecision.proceedWithFailures(dedupStep, consecutiveFailures);
-                    }
-                }
+        if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
+            final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
+            synchronized (history) {
+                history.add(dedupStep);
             }
+            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
+            return StepDecision.proceedWithFailures(dedupStep, consecutiveFailures);
         }
-        
-        String observation;
-        boolean stepFailed = false;
 
+        if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
+            final ReasoningStep blockedStep = step.withObservation(b.observation());
+            synchronized (history) {
+                history.add(blockedStep);
+            }
+            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
+            return StepDecision.retryValidation(consecutiveFailures);
+        }
+
+        if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
+            return StepDecision.terminal(
+                    persistApprovalCheckpoint(sessionId, agentRole, p.toolName(), p.paramsJson(), history));
+        }
+
+        // Decision is Allow
+        ToolResponse response;
         try {
-            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
-            boolean isSchedulingTool = "scheduletask".equals(toolName) || "manageschedule".equals(toolName);
-
-            if (roleRegistry.requiresApprovalForTools(resolvedRole)
-                    && !isSchedulingTool
-                    && !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())) {
-
-                String paramsJson = objectMapper.writeValueAsString(params);
-                throw new RequiresApprovalException(toolName, paramsJson, sessionId);
-            }
-
-            ToolResponse response = toolRegistry.invokeTool(toolName, params);
-            observation = response.output();
-            if (!response.success()) {
-                observation = "Tool execution failed: " + observation +
-                        " (exit=" + response.exitCode() + ")";
-                stepFailed = true;
-            }
+            response = invoker.invoke(toolName, params, sessionId);
         } catch (RequiresApprovalException e) {
-            AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
-                    .orElseGet(() -> {
-                        AgentCheckpoint c = new AgentCheckpoint();
-                        c.setSessionId(sessionId);
-                        c.setAgentRole(agentRole);
-                        return c;
-                    });
-            cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-            cp.setPendingToolName(e.getToolName());
-            cp.setPendingToolParametersJson(e.getToolParametersJson());
-            cp.setUpdatedAt(java.time.LocalDateTime.now());
-            agentStore.save(cp);
-            log.infof("[STATE-MACHINE] Pausing session %s for human approval of tool '%s'", sessionId, e.getToolName());
-            return StepDecision.terminal(AgentResult.awaitingApproval(
-                    e.getToolName(),
-                    e.getToolParametersJson(),
-                    sessionId,
-                    List.copyOf(history)));
-        } catch (SecurityException e) {
-            observation = "Security violation: " + e.getMessage() + ". The current autonomy level does not permit this operation.";
-            log.warnf("Tool '%s' blocked by governance: %s", toolName, e.getMessage());
-            stepFailed = true;
-        } catch (Exception e) {
-            observation = "Tool execution error: " + e.getMessage();
-            log.errorf(e, "Tool '%s' threw unexpected exception", toolName);
-            stepFailed = true;
+            return StepDecision.terminal(
+                    persistApprovalCheckpoint(sessionId, agentRole, e.getToolName(), e.getToolParametersJson(), history));
+        }
+
+        String observation = response.output();
+        boolean stepFailed = !response.success();
+        if (stepFailed && !observation.startsWith("Tool execution failed:")) {
+            observation = "Tool execution failed: " + observation + " (exit=" + response.exitCode() + ")";
         }
 
         final ReasoningStep completedStep = step.withObservation(observation);
@@ -449,20 +362,9 @@ public class AgentStateMachineRunner {
 
             if ("scheduletask".equals(toolName) || "manageschedule".equals(toolName)) {
                 log.infof("[STATE-MACHINE] Fast-path exit triggered for tool '%s' to save LLM quota.", toolName);
-
                 String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
                 String finalFastPathAnswer = "✅ " + cleanOutput;
-
-                if (sessionId != null) {
-                    List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
-                    if (currentHistory == null) {
-                        currentHistory = new ArrayList<>();
-                    } else {
-                        currentHistory = new ArrayList<>(currentHistory);
-                    }
-                    currentHistory.add(AiMessage.from(finalFastPathAnswer));
-                    chatMemoryStore.updateMessages(sessionId, currentHistory);
-                }
+                writer.saveAnswer(sessionId, finalFastPathAnswer);
 
                 synchronized (history) {
                     return StepDecision.terminal(AgentResult.finished(finalFastPathAnswer, List.copyOf(history)));
