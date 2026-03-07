@@ -1818,3 +1818,29 @@ Refactored the monolithic reasoning engine into specialized, single-responsibili
 - ✅ `ReasoningStepParserTest`: 100% pass (Tool-calling vs Answer parsing, Error handling).
 - ✅ `AgentLoopTest`: Integration passes with tool argument flattening.
 - ✅ `LangChainReasoningEngineTest`: Integration passes with modular mocks and stubs.
+
+---
+
+## Phase 53.5: Package Reorganization ✅
+
+Reorganized the `com.arcclaw.core.agent` package into a hierarchical structure of five sub-packages. This move refactoring strictly enforces architectural boundaries and improves codebase navigation without changing any underlying business logic.
+
+| Sub-package | Description | Classes Moved |
+|-------------|-------------|---------------|
+| `loop`      | Agent orchestration and execution lifecycle | `AgentLoop`, `AgentStateMachineRunner`, `AgentExecutionContext`, `ToolInvoker`, `ChatMemoryWriter`, `ToolInvocationGuard` |
+| `reasoning` | LLM-backed decision making and prompt logic | `LangChainReasoningEngine`, `ReasoningEngine`, `ReasoningStep`, `PromptTemplateEngine`, `ReasoningStepParser`, `ChatHistoryAssembler`, `SystemPromptBuilder`, `MessageTag` |
+| `persona`   | Agent definitions and identity registry | `Agent`, `AgentPersonaRegistry`, `AgentRole`, `BrahmaAgent`, `ShivaAgent`, `SaraswatiAgent`, `ArchitectAgent`, `VishnuAgent`, `DattatreyaAgent` |
+| `role`      | Tool capabilities and security definitions | `AgentRoleEnum`, `RoleDefinition`, `RoleRegistry`, `ToolCapability` |
+| `result`    | Outcome models and state representations | `AgentResult`, `AgentState` |
+
+### Key Improvements
+
+1.  **Architectural Clarity**: Separates "How we run" (`loop`) from "How we think" (`reasoning`) and "Who we are" (`persona`).
+2.  **Strict Boundaries**: The root `com.arcclaw.core.agent` package is now completely empty, preventing the accidental accumulation of kitchen-sink utilities.
+3.  **Refactor Integrity**: Utilized an automated Python script to perform the move and rewrite thousands of imports across both `arcclaw-core` and `arcclaw-app`.
+4.  **Verification Coverage**: Each of the 5 reorganization steps was verified with manual `git diff` audits and a full 266-test regression suite.
+
+**Verification Results**:
+- ✅ `mvn clean verify`: 100% pass (266/266 tests).
+- ✅ Import Audit: Confirmed no stale imports or corrupted package declarations across 40+ modified files.
+- ✅ Jandex Index: Confirmed CDI bean discovery remains fully functional for all moved agents and components.
