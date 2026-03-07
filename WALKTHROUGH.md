@@ -67,6 +67,8 @@
 | 52 | Telegram Hardening (P3-12) | 100% success | Caffeine cache for chat queues + crash notifications |
 | 53 | Vault Key Caching (P3-1) | 100% success | `@WorkspaceScoped` cache with `@PreDestroy` wipe + Cron cleanup |
 | 52 | DattatreyaAgent: The Synthesizer | 100% success | Meta-agent for multi-specialist integration and conflict resolution |
+| 53 | AgentCronScheduler SRP Refactor | 100% success | Separated dispatcher, executor, and handler logic; fixed audit logging |
+
 
 
 ---
@@ -1663,3 +1665,29 @@ Introduced the Dattatreya (Synthesizer) role — a meta-agent designed to integr
 **Key Evidence**:
 - mvnw test -pl arcclaw-core -Dtest='DattatreyaAgentTest,AgentPersonaRegistryTest,RoleDefinitionTest' succeeds with all tests green.
 - Manual verification of AgentRoleEnum.java and IntentClassifierService.java confirms correct deity mapping and sanitization.
+
+---
+
+## Phase 53: AgentCronScheduler SRP Refactor ✅
+
+The `AgentCronScheduler` was refactored from a monolithic class into three distinct components to improve maintainability and strictly adhere to the Single Responsibility Principle.
+
+### Component Breakdown
+
+| Component | Responsibility |
+|-----------|----------------|
+| `AgentCronScheduler` | **Dispatcher**: Handles the `@Scheduled` polling interval and manages the `concurrencyLimiter` semaphore. |
+| `CronJobRunner` | **Execution Context**: Managed within virtual threads. Sets up the `WorkspaceContext`, assigns `deliveryId`, and invokes the `AgentLoop`. |
+| `CronResultHandler` | **Outcome Processing**: Updates the database with final results or `AWAITING_APPROVAL` status. Handles audit logging and CDI completion events. |
+
+### Key Improvements
+
+1.  **Session Preservation**: The refactor explicitly handles the `AWAITING_APPROVAL` state by preserving the session (allowing manual approval later) while terminating sessions for other completion states.
+2.  **Audit Integrity**: Corrected `SecurityEventType.CRONFAILED` for error paths and added `LOOP_AWAITING_APPROVAL` auditing for HITL pauses.
+3.  **Critical Ordering**: Ensured `setDeliveryId` is called *before* context setup, allowing the system to track checkpoints even during setup failures.
+4.  **Test Hardening**: Enhanced `CronResultHandlerTest` with audit verification and added `@Timeout` guards to concurrency tests to prevent CI deadlocks.
+
+**Verification Results**:
+- ✅ All unit and concurrency tests pass (335+ total system tests).
+- ✅ Manual verification of audit logs confirms correct event types.
+- ✅ AWAITING_APPROVAL path correctly keeps sessions alive for intervention.

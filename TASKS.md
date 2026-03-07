@@ -788,3 +788,11 @@
 - [x] Add DattatreyaAgent to AgentPersonaRegistryTest setup <!-- id: 290 -->
 - [x] Create DattatreyaAgentTest.java with comprehensive persona/tool tests <!-- id: 291 -->
 - [x] Verify: All 320+ system tests pass GREEN <!-- id: 292 -->
+# Phase 53 — AgentCronScheduler SRP Refactor ✅
+- [x] Split `AgentCronScheduler.java` (Dispatcher) <!-- id: 293 -->
+- [x] Create `CronJobRunner.java` (Execution Context) <!-- id: 294 -->
+- [x] Create `CronResultHandler.java` (State & Telemetry) <!-- id: 295 -->
+- [x] Implement AWAITING_APPROVAL session preservation logic <!-- id: 296 -->
+- [x] Add audit logging for HITL pause events <!-- id: 297 -->
+- [x] Ensure `setDeliveryId` ordering before `WorkspaceContext.run()` <!-- id: 298 -->
+- [x] Verify: Concurrency and logic tests PASS <!-- id: 299 -->
