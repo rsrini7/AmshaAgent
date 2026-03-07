@@ -1,12 +1,9 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.reasoning.MessageTag;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.ChatMessageDeserializer;
-import dev.langchain4j.data.message.ChatMessageSerializer;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.annotation.Priority;
@@ -14,11 +11,17 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ChatMessageDeserializer;
+import dev.langchain4j.data.message.ChatMessageSerializer;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import com.arcclaw.core.agent.reasoning.MessageTag;
 
 /**
  * SQLite-backed ChatMemoryStore implementation for LangChain4j.
@@ -87,10 +90,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         String sessionId = String.valueOf(memoryId);
         List<ChatMessage> sanitized = messages.stream()
             .filter(msg -> {
-                if (!(msg instanceof dev.langchain4j.data.message.AiMessage ai)) return true;
+                if (!(msg instanceof AiMessage ai)) return true;
                 return !MessageTag.isTagged(ai.text());
             })
-            .collect(java.util.stream.Collectors.toList());
+            .collect(Collectors.toList());
 
         if (sanitized.size() < messages.size()) {
             log.warnf("Filtered %d compliance injection AiMessage(s) from session %s",

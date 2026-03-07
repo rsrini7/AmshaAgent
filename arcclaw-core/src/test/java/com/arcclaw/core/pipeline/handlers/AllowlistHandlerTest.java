@@ -3,9 +3,13 @@ package com.arcclaw.core.pipeline.handlers;
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
+
+import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,8 +30,8 @@ class AllowlistHandlerTest {
         handler = new AllowlistHandler();
         handler.allowlist = allowlist;
 
-        ChannelUser user = new ChannelUser("123", "alice", com.arcclaw.channel.api.ChannelType.CLI);
-        context = new MessageContext("chat1", user, new ChannelMessage.CliMessage(user, "hi", "sid", java.time.Instant.now()), sender);
+        ChannelUser user = new ChannelUser("123", "alice", ChannelType.CLI);
+        context = new MessageContext("chat1", user, new ChannelMessage.CliMessage(user, "hi", "sid", Instant.now()), sender);
     }
 
     @Test

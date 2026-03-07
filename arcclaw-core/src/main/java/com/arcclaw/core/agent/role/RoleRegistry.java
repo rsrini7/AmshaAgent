@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.Set;
+
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
@@ -20,8 +22,8 @@ public class RoleRegistry {
      * @param role the agent role
      * @return the set of permitted tools for the given role
      */
-    public java.util.Set<String> permittedTools(AgentRoleEnum role) {
-        if (role == null) return java.util.Set.of();
+    public Set<String> permittedTools(AgentRoleEnum role) {
+        if (role == null) return Set.of();
         return role.definition().toolNames();
     }
 

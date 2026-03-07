@@ -49,9 +49,9 @@ class AgentStateMachineRunnerTest {
     private ToolRegistry toolRegistry;
     private StatefulAgentStore agentStore;
     private GovernanceLayer governanceLayer;
-    private com.arcclaw.core.agent.loop.ToolInvocationGuard guard;
-    private com.arcclaw.core.agent.loop.ToolInvoker invoker;
-    private com.arcclaw.core.agent.loop.ChatMemoryWriter writer;
+    private ToolInvocationGuard guard;
+    private ToolInvoker invoker;
+    private ChatMemoryWriter writer;
 
     @SuppressWarnings("unchecked")
     Instance<AgentObserver> observers = mock(Instance.class);
@@ -63,9 +63,9 @@ class AgentStateMachineRunnerTest {
         toolRegistry = mock(ToolRegistry.class);
         agentStore = mock(StatefulAgentStore.class);
         governanceLayer = mock(GovernanceLayer.class);
-        guard = mock(com.arcclaw.core.agent.loop.ToolInvocationGuard.class);
-        invoker = mock(com.arcclaw.core.agent.loop.ToolInvoker.class);
-        writer = mock(com.arcclaw.core.agent.loop.ChatMemoryWriter.class);
+        guard = mock(ToolInvocationGuard.class);
+        invoker = mock(ToolInvoker.class);
+        writer = mock(ChatMemoryWriter.class);
 
         runner.toolRegistry = toolRegistry;
         runner.agentStore = agentStore;
@@ -100,7 +100,7 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
-                .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.Allow());
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(0, "output", true));
 
@@ -150,7 +150,7 @@ class AgentStateMachineRunnerTest {
             when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
             when(toolRegistry.findTool("protected-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
             when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
-                    .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.PauseForApproval("protected-tool", "{}"));
+                    .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval("protected-tool", "{}"));
             when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(new AgentCheckpoint()));
 
             AgentExecutionContext ctx = new AgentExecutionContext("s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5);
@@ -171,7 +171,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(toolStep2);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
-                .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.Allow());
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(1, "error", false));
 
@@ -204,7 +204,7 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(scheduleStep);
         when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
-                .thenReturn(new com.arcclaw.core.agent.loop.ToolInvocationGuard.GuardDecision.Allow());
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(0, "Scheduled cleaning", true));
 

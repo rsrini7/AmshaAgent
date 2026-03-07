@@ -2,6 +2,8 @@ package com.arcclaw.core.persistence;
 
 import com.arcclaw.core.audit.SecurityEventType;
 
+import jakarta.persistence.EntityManager;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -23,7 +25,7 @@ public final class PersistenceEvent {
     private final Tier tier;
     private final String sessionId;
     private final SecurityEventType eventType;
-    private final Consumer<jakarta.persistence.EntityManager> dbAction;
+    private final Consumer<EntityManager> dbAction;
 
     /**
      * For CRITICAL events only — the caller joins on this future.
@@ -34,7 +36,7 @@ public final class PersistenceEvent {
     private PersistenceEvent(Tier tier,
                              String sessionId,
                              SecurityEventType eventType,
-                             Consumer<jakarta.persistence.EntityManager> dbAction,
+                             Consumer<EntityManager> dbAction,
                              CompletableFuture<Void> future) {
         this.tier = tier;
         this.sessionId = sessionId;
@@ -46,20 +48,20 @@ public final class PersistenceEvent {
     /** Create a blocking CRITICAL event. The returned future must be joined by the caller. */
     public static PersistenceEvent critical(String sessionId,
                                             SecurityEventType eventType,
-                                            Consumer<jakarta.persistence.EntityManager> dbAction) {
+                                            Consumer<EntityManager> dbAction) {
         return new PersistenceEvent(Tier.CRITICAL, sessionId, eventType, dbAction, new CompletableFuture<>());
     }
 
     /** Create a fire-and-forget TELEMETRY event. */
     public static PersistenceEvent telemetry(String sessionId,
                                               SecurityEventType eventType,
-                                              Consumer<jakarta.persistence.EntityManager> dbAction) {
+                                              Consumer<EntityManager> dbAction) {
         return new PersistenceEvent(Tier.TELEMETRY, sessionId, eventType, dbAction, null);
     }
 
     public Tier getTier() { return tier; }
     public String getSessionId() { return sessionId; }
     public SecurityEventType getEventType() { return eventType; }
-    public Consumer<jakarta.persistence.EntityManager> getDbAction() { return dbAction; }
+    public Consumer<EntityManager> getDbAction() { return dbAction; }
     public CompletableFuture<Void> getFuture() { return future; }
 }

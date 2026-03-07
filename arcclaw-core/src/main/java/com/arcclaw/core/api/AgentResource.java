@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -82,7 +83,7 @@ public class AgentResource {
 
     @Inject
     @VirtualThreads
-    java.util.concurrent.ExecutorService vThreads;
+    ExecutorService vThreads;
 
     @Inject
     DevSecretSeeder devSeeder;

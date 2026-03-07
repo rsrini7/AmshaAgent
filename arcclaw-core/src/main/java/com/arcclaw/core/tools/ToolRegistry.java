@@ -1,29 +1,35 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.security.AutonomyPolicy;
-import com.arcclaw.core.security.RequiresSecret;
-import com.arcclaw.core.security.RequiresSecrets;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.arcclaw.core.governance.RequiresApprovalException;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.StreamSupport;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.lang.reflect.Method;
-import java.util.*;
-import java.util.stream.StreamSupport;
-
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.AutonomyPolicy;
+import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.security.RequiresSecrets;
+import com.arcclaw.core.security.ToolOperation;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 /**
  * CDI-based tool registry with governance enforcement.
@@ -124,7 +130,7 @@ public class ToolRegistry {
                 try {
                     String paramsJson = objectMapper.writeValueAsString(params);
                     throw new RequiresApprovalException(toolName, paramsJson, WorkspaceContext.requireSessionId());
-                } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                } catch (JsonProcessingException e) {
                     throw new RuntimeException("Failed to serialize tool parameters", e);
                 }
             }
@@ -201,7 +207,7 @@ public class ToolRegistry {
             @SuppressWarnings("unchecked")
             Map<String, Object> params = objectMapper.readValue(paramsJson, Map.class);
             return invokeTool(toolName, params);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Failed to deserialize tool parameters for " + toolName, e);
         }
     }

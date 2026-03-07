@@ -10,6 +10,7 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
@@ -70,7 +71,7 @@ public class TelegramAgentHandler {
                 String fallbackUserId = msg.getFrom() != null
                     ? String.valueOf(msg.getFrom().getId()) : "unknown";
                 ChannelUser fallbackUser = new ChannelUser(
-                    fallbackUserId, null, com.arcclaw.channel.api.ChannelType.TELEGRAM);
+                    fallbackUserId, null, ChannelType.TELEGRAM);
 
                 queueForChat(chatId).submit(() ->
                     sender.sendRaw(fallbackUser,
@@ -84,7 +85,7 @@ public class TelegramAgentHandler {
         String username = msg.getFrom().getUsername();
         String text = msg.getText();
 
-        ChannelUser user = new ChannelUser(userId, username, com.arcclaw.channel.api.ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser(userId, username, ChannelType.TELEGRAM);
         ChannelMessage channelMessage = messageMapper.map(text, user, chatId);
 
         if (channelMessage == null) {

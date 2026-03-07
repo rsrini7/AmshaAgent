@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -38,8 +39,8 @@ public class ChatHistoryAssembler {
      * Updated per Phase 53.3: Authoritative version copied and then updated to cover
      * legacy manual checks.
      */
-    private static final java.util.regex.Pattern COMPLIANCE_OVERRIDE_PATTERN =
-        java.util.regex.Pattern.compile(
+    private static final Pattern COMPLIANCE_OVERRIDE_PATTERN =
+        Pattern.compile(
             "(?i)(as per our agreement|" +
             "as per your request[,]? i will provide|" +
             "i'?ll provide .{0,30} instead of|" +

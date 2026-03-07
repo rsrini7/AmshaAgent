@@ -5,6 +5,7 @@ import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * Tracks active session liveness via heartbeats.
@@ -64,7 +65,7 @@ public class SessionHeartbeatTracker {
      * invoking the action for each expired sessionId.
      * Safe for concurrent modification — ConcurrentHashMap.forEach() is used internally.
      */
-    public void forEachExpired(java.time.Instant cutoff, java.util.function.Consumer<String> action) {
+    public void forEachExpired(Instant cutoff, Consumer<String> action) {
         heartbeats.forEach((sessionId, lastHeartbeat) -> {
             if (lastHeartbeat.isBefore(cutoff)) {
                 action.accept(sessionId);

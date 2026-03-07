@@ -3,6 +3,7 @@ package com.arcclaw.core.reflex;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -17,7 +18,7 @@ public class StatusReflex implements AgentReflex {
     StatefulAgentStore statefulAgentStore;
 
     @Inject
-    com.arcclaw.core.state.CompactionSummaryRepository compactionSummaryRepository;
+    CompactionSummaryRepository compactionSummaryRepository;
 
     @Inject
     GovernanceLayer governanceLayer;

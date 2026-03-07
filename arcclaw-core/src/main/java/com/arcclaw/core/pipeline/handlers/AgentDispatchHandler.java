@@ -10,6 +10,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.CronResultFormatter;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -64,7 +65,7 @@ public class AgentDispatchHandler implements MessageHandler {
         }
 
         // Render result back to user (placeholder until ReplyRenderer is fully integrated)
-        String output = com.arcclaw.core.util.CronResultFormatter.format(result);
+        String output = CronResultFormatter.format(result);
         context.getSender().sendRaw(context.getUser(), output);
 
         return HandleResult.STOP;

@@ -1,5 +1,9 @@
 package com.arcclaw.core.scheduler;
 
+import java.util.List;
+
+import org.jboss.logging.Logger;
+
 import io.quarkus.runtime.StartupEvent;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -8,7 +12,6 @@ import jakarta.inject.Inject;
 import jakarta.interceptor.Interceptor;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.jboss.logging.Logger;
 
 /**
  * Creates the {@code agentcron} table and indexes at startup.
@@ -94,7 +97,7 @@ public class CronSchemaEnforcer {
         try {
             // Using a more robust check that works across different SQLite/JDBC versions
             @SuppressWarnings("unchecked")
-            java.util.List<Object> results = em.createNativeQuery(
+            List<Object> results = em.createNativeQuery(
                     "PRAGMA table_info(" + tableName + ")"
             ).getResultList();
 

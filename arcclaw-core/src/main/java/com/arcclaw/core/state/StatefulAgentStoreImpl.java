@@ -1,22 +1,29 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.Random;
+import java.util.concurrent.Callable;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.transaction.Transactional;
+
+import io.quarkus.narayana.jta.QuarkusTransaction;
+
+import org.hibernate.exception.LockAcquisitionException;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * JPA EntityManager-based implementation of {@link StatefulAgentStore}.
@@ -46,12 +53,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     AuditService auditService;
 
     private static final long BACKOFF_BASE_MS = 50;
-    private static final java.util.Random JITTER = new java.util.Random();
+    private static final Random JITTER = new Random();
 
     @Override
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
         return withRetry(() -> {
-            return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
+            return QuarkusTransaction.requiringNew().call(() -> {
                 String json = serializeSteps(steps);
                 Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
@@ -83,7 +90,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public AgentCheckpoint save(AgentCheckpoint checkpoint) {
         return withRetry(() -> {
-            return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
+            return QuarkusTransaction.requiringNew().call(() -> {
                 if (checkpoint.getId() == null) {
                     em.persist(checkpoint);
                     return checkpoint;
@@ -116,7 +123,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public void markFailed(Long checkpointId, String reason) {
         withRetry(() -> {
-            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            QuarkusTransaction.requiringNew().run(() -> {
                 AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
                 if (checkpoint != null) {
                     doMarkFailed(checkpoint, reason);
@@ -129,7 +136,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public void markFailed(AgentCheckpoint checkpoint, String reason) {
         withRetry(() -> {
-            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            QuarkusTransaction.requiringNew().run(() -> {
                 doMarkFailed(checkpoint, reason);
             });
             return null;
@@ -169,7 +176,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public void markCompleted(Long checkpointId) {
         withRetry(() -> {
-            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            QuarkusTransaction.requiringNew().run(() -> {
                 AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
                 if (checkpoint != null) {
                     checkpoint.setStatus(CheckpointStatus.COMPLETED);
@@ -185,7 +192,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         }, "markCompleted");
     }
 
-    private <T> T withRetry(java.util.concurrent.Callable<T> task, String operation) {
+    private <T> T withRetry(Callable<T> task, String operation) {
         int maxRetries = 5;
         Exception lastEx = null;
 
@@ -218,7 +225,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private boolean isSqliteBusy(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             String canonicalName = t.getClass().getName();
-            if (canonicalName.equals("org.hibernate.exception.LockAcquisitionException") ||
+            if (canonicalName.equals(LockAcquisitionException.class.getName()) ||
                 canonicalName.equals("jakarta.persistence.OptimisticLockException") ||
                 canonicalName.contains("SQLiteException")) {
                 return true;

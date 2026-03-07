@@ -5,6 +5,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.spi.DeploymentException;
 
 import java.util.List;
 import java.util.Optional;
@@ -58,7 +59,7 @@ public class StartupSecurityValidator {
 
             // Phase 48: String-username-only allowlist is forbidden in non-dev/non-test
             if (!hasUserIds && hasUsernames) {
-                throw new jakarta.enterprise.inject.spi.DeploymentException(
+                throw new DeploymentException(
                     "SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is " +
                     "not configured, but arcclaw.channel.telegram.allowed-users " +
                     "(string username list) is. String username allowlists are a " +
