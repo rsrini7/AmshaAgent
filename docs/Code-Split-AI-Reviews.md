@@ -915,3 +915,274 @@ Definition of done
 - Full test suite passes
 - No circular CDI injection
 ```
+
+---
+
+Split ProcessIsolationExecutor.java (424 lines) into 6 classes.
+Package: com.arcclaw.core.sandbox for all classes.
+Current file is attached.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUND TRUTH — READ BEFORE IMPLEMENTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ProcessIsolationExecutorTest (arcclaw-core) calls executor.getPodmanFailureThreshold()
+   and executor.getResetTimeoutSeconds() — these two public methods must stay on
+   ProcessIsolationExecutor as delegating wrappers to SandboxCircuitBreaker.
+   Do NOT remove them from the executor or the test will break.
+
+2. ToolExecutionException is currently a nested static class inside
+   ProcessIsolationExecutor. It must become a standalone top-level class in
+   com.arcclaw.core.sandbox — it is thrown by PodmanContainerExecutor,
+   NamespaceExecutor, and DirectExecutor, and caught by ProcessIsolationExecutor.
+   Extract it FIRST before the other classes.
+
+3. executeSandboxed() catches ToolExecutionException and re-throws it immediately
+   (do NOT fall back to namespace on tool failure — only on Podman infrastructure
+   failures). This catch-and-rethrow must be preserved exactly in the slimmed
+   executeSandboxed() routing method.
+
+4. checkPodmanAvailability() is @PostConstruct and stays on ProcessIsolationExecutor.
+   It uses sandboxStrategy + podmanPath config, then calls circuitBreaker.openCircuit().
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ToolExecutionException.java  (extract FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.sandbox
+Not a CDI bean — plain class, no annotation.
+
+public class ToolExecutionException extends RuntimeException {
+    public ToolExecutionException(String message) { super(message); }
+}
+
+Remove the nested static class from ProcessIsolationExecutor after creating this.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. SandboxCircuitBreaker.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.sandbox
+@ApplicationScoped
+
+Move from ProcessIsolationExecutor:
+  public enum CircuitBreakerState { CLOSED, OPEN, HALF_OPEN }
+  private final AtomicReference<CircuitBreakerState> state
+  private final AtomicInteger podmanFailures
+  private final AtomicLong openedAt
+  @ConfigProperty arcclaw.sandbox.podman.failure-threshold  → podmanFailureThreshold
+  @ConfigProperty arcclaw.sandbox.podman.reset-timeout-seconds → resetTimeoutSeconds
+
+Methods:
+  public void openCircuit()          — sets state=OPEN, records openedAt timestamp
+  public int getPodmanFailureThreshold()
+  public int getResetTimeoutSeconds()
+
+  /**
+   * Called at the start of each Podman attempt. Handles OPEN→HALF_OPEN transition.
+   * Returns true if a Podman attempt should proceed, false if circuit is OPEN
+   * and reset timeout has not elapsed.
+   */
+  public boolean shouldAttemptPodman() {
+      CircuitBreakerState current = state.get();
+      if (current == CircuitBreakerState.OPEN) {
+          long elapsed = System.currentTimeMillis() - openedAt.get();
+          if (elapsed >= TimeUnit.SECONDS.toMillis(resetTimeoutSeconds)) {
+              log.infof("Podman circuit breaker reset timeout reached. Transitioning to HALF_OPEN.");
+              state.compareAndSet(CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN);
+              return true;
+          }
+          return false;
+      }
+      return true; // CLOSED or HALF_OPEN
+  }
+
+  /**
+   * Called after a successful Podman execution.
+   */
+  public void recordSuccess() {
+      if (state.get() == CircuitBreakerState.HALF_OPEN) {
+          log.infof("Podman successful in HALF_OPEN state. Closing circuit breaker.");
+      }
+      state.set(CircuitBreakerState.CLOSED);
+      podmanFailures.set(0);
+  }
+
+  /**
+   * Called after a Podman infrastructure failure (NOT ToolExecutionException).
+   * @param stateAtCallTime the circuit state captured before the failed attempt
+   */
+  public void recordFailure(CircuitBreakerState stateAtCallTime) {
+      int failures = podmanFailures.incrementAndGet();
+      log.errorf("Podman execution failed (failureCount=%d, state=%s)", failures, stateAtCallTime);
+      if (stateAtCallTime == CircuitBreakerState.HALF_OPEN || failures >= podmanFailureThreshold) {
+          log.errorf("Podman failed. Opening circuit breaker (state was %s).", stateAtCallTime);
+          openCircuit();
+      }
+  }
+
+  public CircuitBreakerState getState() { return state.get(); }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. SandboxSecretResolver.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.sandbox
+@ApplicationScoped
+Inject: SecretVault
+
+Move resolveSecrets() verbatim — method signature and body unchanged:
+  public Map<String, byte[]> resolveSecrets(Map<String, String> requiredSecrets)
+
+The fail-closed contract comments must move with it verbatim.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. PodmanContainerExecutor.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.sandbox
+@ApplicationScoped
+Inject: AgentOtelContext, SandboxSecretResolver
+
+Move from ProcessIsolationExecutor:
+  @ConfigProperty arcclaw.sandbox.container-image  → containerImage
+  @ConfigProperty arcclaw.sandbox.timeout-seconds  → timeoutSeconds
+  @ConfigProperty arcclaw.sandbox.memory-limit     → containerMemoryLimit
+  @ConfigProperty arcclaw.sandbox.cpu-limit        → containerCpuLimit
+  @ConfigProperty arcclaw.sandbox.podman-path      → podmanPath
+  @ConfigProperty arcclaw.workspace.root-dir       → workspaceRootDir
+  @ConfigProperty arcclaw.sandbox.tmpfs-path       → tmpfsPath
+  private static final String CONTAINER_PIDS_LIMIT = "64"
+  private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet()
+
+  @PreDestroy stopAllContainersOnShutdown()   — move verbatim, uses podmanPath + activeContainerNames
+  String executeInContainer(sessionId, workspaceRoot, command, requiredSecrets) — move verbatim
+
+  CRITICAL: executeInContainer() currently calls resolveSecrets() directly on this class.
+  After split, replace with: sandboxSecretResolver.resolveSecrets(requiredSecrets)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. NamespaceExecutor.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.sandbox
+@ApplicationScoped
+@ConfigProperty arcclaw.sandbox.timeout-seconds → timeoutSeconds
+
+Move executeInNamespace() verbatim — method becomes public:
+  public String executeInNamespace(Path workspaceRoot, List<String> command) throws Exception
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. DirectExecutor.java
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.sandbox
+@ApplicationScoped
+@ConfigProperty arcclaw.sandbox.timeout-seconds → timeoutSeconds
+
+Move executeDirectly() verbatim — method becomes public:
+  public String executeDirectly(Path workspaceRoot, List<String> command) throws Exception
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. ProcessIsolationExecutor.java (slimmed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Inject KEEP: SandboxCircuitBreaker, PodmanContainerExecutor, NamespaceExecutor, DirectExecutor
+Inject REMOVE: SecretVault, AgentOtelContext
+Config KEEP: sandboxStrategy, podmanPath (needed for @PostConstruct check only)
+Config REMOVE: all others (moved to their respective classes)
+Remove: CircuitBreakerState enum, state/podmanFailures/openedAt fields,
+  CONTAINER_PIDS_LIMIT, activeContainerNames, resolveSecrets(), executeInContainer(),
+  executeInNamespace(), executeDirectly(), stopAllContainersOnShutdown()
+Remove: nested ToolExecutionException (now top-level class)
+
+KEEP these two public delegating methods (tested by ProcessIsolationExecutorTest):
+  public int getPodmanFailureThreshold() {
+      return circuitBreaker.getPodmanFailureThreshold();
+  }
+  public int getResetTimeoutSeconds() {
+      return circuitBreaker.getResetTimeoutSeconds();
+  }
+
+@PostConstruct checkPodmanAvailability() — stays here, unchanged except
+  openCircuit() → circuitBreaker.openCircuit()
+
+executeSandboxed() after split (~30 lines):
+
+  public String executeSandboxed(String sessionId, Path workspaceRoot,
+      List<String> command, Map<String, String> requiredSecrets) throws Exception {
+
+      if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
+          return directExecutor.executeDirectly(workspaceRoot, command);
+      }
+
+      if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
+          if (circuitBreaker.shouldAttemptPodman()) {
+              CircuitBreakerState stateAtCall = circuitBreaker.getState();
+              try {
+                  String result = podmanExecutor.executeInContainer(
+                      sessionId, workspaceRoot, command, requiredSecrets);
+                  circuitBreaker.recordSuccess();
+                  return result;
+              } catch (ToolExecutionException e) {
+                  // Tool ran but failed — do NOT fall back to namespace
+                  throw e;
+              } catch (Exception e) {
+                  log.errorf("Podman execution failed (session=%s): %s", sessionId, e.getMessage());
+                  circuitBreaker.recordFailure(stateAtCall);
+              }
+          }
+      }
+      return namespaceExecutor.executeInNamespace(workspaceRoot, command);
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Test updates
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ProcessIsolationExecutorTest.java (arcclaw-core — MODIFY):
+  Current test calls executor.getPodmanFailureThreshold() and
+  executor.getResetTimeoutSeconds() — these delegate to SandboxCircuitBreaker.
+  No change needed to test assertions — the delegating methods preserve the API.
+
+ProcessIsolationExecutorTest.java (arcclaw-app — already @QuarkusTest, no changes):
+  Tests the NONE strategy path via executeSandboxed() — CDI wires everything.
+  No changes needed.
+
+SandboxCircuitBreakerTest.java (NEW — plain Mockito):
+  testShouldAttemptPodman_closedState_returnsTrue()
+  testShouldAttemptPodman_openState_returnsFalse_beforeTimeout()
+  testShouldAttemptPodman_openState_transitionsToHalfOpen_afterTimeout()
+  testRecordSuccess_closesCircuit()
+  testRecordFailure_opensCircuit_afterThreshold()
+  testRecordFailure_opensCircuit_whenHalfOpen()
+
+SandboxSecretResolverTest.java (NEW — plain Mockito):
+  Mock: SecretVault
+  testResolveSecrets_nullMap_throwsIllegalArgument()
+  testResolveSecrets_emptyMap_returnsEmpty()
+  testResolveSecrets_missingKey_throwsSecurityException()
+  testResolveSecrets_success_returnsByteArrayMap()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Execution order
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Extract ToolExecutionException as top-level class
+2. Create SandboxCircuitBreaker
+3. Create SandboxSecretResolver
+4. Create PodmanContainerExecutor (depends on SandboxSecretResolver)
+5. Create NamespaceExecutor
+6. Create DirectExecutor
+7. Slim ProcessIsolationExecutor (depends on all above)
+8. Update tests
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Definition of done
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- ToolExecutionException is top-level, nested class removed from executor
+- ToolExecutionException catch-and-rethrow preserved in executeSandboxed()
+- getPodmanFailureThreshold() and getResetTimeoutSeconds() remain on
+  ProcessIsolationExecutor as delegates — ProcessIsolationExecutorTest passes unchanged
+- @PreDestroy stopAllContainersOnShutdown() is on PodmanContainerExecutor only
+- @PostConstruct checkPodmanAvailability() is on ProcessIsolationExecutor only
+- resolveSecrets() is on SandboxSecretResolver only — PodmanContainerExecutor
+  calls secretResolver.resolveSecrets()
+- sandboxStrategy on ProcessIsolationExecutor only
+- podmanPath is intentionally duplicated: ProcessIsolationExecutor (@PostConstruct)
+  and PodmanContainerExecutor (executeInContainer + stopAllContainersOnShutdown)
+  — same config key bound in both beans
+- timeout-seconds config duplicated on PodmanContainerExecutor, NamespaceExecutor,
+  DirectExecutor — this is intentional (each class is independently configurable)
+- All existing tests pass unchanged
+- No circular CDI injection
