@@ -69,6 +69,7 @@
 | 52 | DattatreyaAgent: The Synthesizer | 100% success | Meta-agent for multi-specialist integration and conflict resolution |
 | 53 | AgentCronScheduler SRP Refactor | 100% success | Separated dispatcher, executor, and handler logic; fixed audit logging |
 | 53.3 | Agent State Machine Refactor | 100% success | Extracted Guard, Invoker, and Writer for modular loop logic |
+| 53.4 | LangChainReasoningEngine Split | 100% success | Extracted Parser, Assembler, and Builder for modular LLM logic |
 
 
 
@@ -108,6 +109,25 @@ Modulerized the reasoning loop by splitting `AgentStateMachineRunner` into focus
 - ✅ `ToolInvocationGuardTest` (security logic) passes.
 - ✅ `ToolInvokerTest` (exception safety) passes.
 - ✅ Full suite `arcclaw-core` regression check completed (100% pass).
+
+---
+
+## Phase 53.4: LangChainReasoningEngine Split ✅
+
+Refactored the monolithic reasoning engine into specialized components to improve modularity and testability.
+
+| File | Purpose |
+|------|---------|
+| [SystemPromptBuilder.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/SystemPromptBuilder.java) | Assembles the multi-segment system prompt (Persona, Security, Tools). |
+| [ChatHistoryAssembler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java) | Filters history, redacts compliance markers, and injects goals. |
+| [ReasoningStepParser.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java) | Standardizes conversion from LLM responses to `ReasoningStep` objects. |
+| [LangChainReasoningEngine.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Slimmed orchestrator delegating to the above components. |
+
+**Verification**:
+- ✅ `SystemPromptBuilderTest` (persona/ordering) passes.
+- ✅ `ChatHistoryAssemblerTest` (filtering/truncation) passes.
+- ✅ `ReasoningStepParserTest` (JSON safety/tokens) passes.
+- ✅ Integration with `AgentLoopTest` and `LangChainReasoningEngineTest` verified successfully.
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -1771,3 +1791,30 @@ Modularized the reasoning loop by splitting the monolithic `AgentStateMachineRun
 - ✅ `ToolInvokerTest`: 100% pass (Success, Security wrapping, Exception propagation).
 - ✅ `AgentStateMachineRunnerTest`: 100% pass (Orchestration logic with mocked components).
 - ✅ Full `arcclaw-core` suite regression check: All 350+ tests pass.
+
+---
+
+## Phase 53.4: LangChainReasoningEngine Split ✅
+
+Refactored the monolithic reasoning engine into specialized, single-responsibility components to improve modularity and testability while maintaining precise prompt assembly order.
+
+| File | Purpose |
+|------|---------|
+| [SystemPromptBuilder.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/SystemPromptBuilder.java) | Assembles the multi-segment system prompt (Persona, Security, Tools). |
+| [ChatHistoryAssembler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java) | Filters history, redacts compliance markers, and injects goals. |
+| [ReasoningStepParser.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java) | Standardizes conversion from LLM responses to `ReasoningStep` objects. |
+| [LangChainReasoningEngine.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java) | Slimmed orchestrator delegating to the specialized helpers. |
+
+### Key Improvements
+
+1.  **Deterministic Prompts**: The `SystemPromptBuilder` guarantees the exact concatenation order of persona, architecture, security, and tool contracts.
+2.  **History Integrity**: `ChatHistoryAssembler` isolates complex filtering logic (compliance redaction, observation truncation) from the execution loop.
+3.  **Robust Parsing**: `ReasoningStepParser` traps JSON hallucinations and ensures token usage is correctly mapped even if usage records are null-partial.
+4.  **Test Independence**: Created dedicated unit test suites for each new component, reducing reliance on expensive integration tests.
+
+**Verification Results**:
+- ✅ `SystemPromptBuilderTest`: 100% pass (Orchestrated prompt ordering).
+- ✅ `ChatHistoryAssemblerTest`: 100% pass (Filtering, Redaction, Truncation).
+- ✅ `ReasoningStepParserTest`: 100% pass (Tool-calling vs Answer parsing, Error handling).
+- ✅ `AgentLoopTest`: Integration passes with tool argument flattening.
+- ✅ `LangChainReasoningEngineTest`: Integration passes with modular mocks and stubs.

@@ -3120,3 +3120,40 @@ Split the monolith logic of `AgentStateMachineRunner` into three focused helpers
 - ✅ `AgentStateMachineRunnerTest`: Verified orchestration with mocked helpers.
 - ✅ `ToolInvocationGuardTest`: Verified deduplication, GitHub guard, and ScopedValue-safe HITL evaluation.
 - ✅ `ToolInvokerTest`: Verified success, security violation wrapping, and exception propagation.
+---
+
+# Phase 53.4 — LangChainReasoningEngine Split
+
+Refactored the monolithic `LangChainReasoningEngine` into modular, single-responsibility components to improve testability and maintain precise prompt assembly.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Prompt Assembly Order**: Maintained strict ordering of persona, architecture context, security rules, and tool contracts to ensure LLM behavior stability.
+
+> [!NOTE]
+> **Regex Verbatim Copying**: The `COMPLIANCE_OVERRIDE_PATTERN` was moved to `ChatHistoryAssembler` with localized literal coverage for consistent filtering.
+
+## Proposed Changes
+
+#### [MODIFY] [LangChainReasoningEngine.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/LangChainReasoningEngine.java)
+- Delegated prompt building, history assembly, and response parsing to new helper classes.
+- Maintained tool specification construction and the final `chatLanguageModel.chat(ChatRequest)` call.
+
+#### [NEW] [SystemPromptBuilder.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/SystemPromptBuilder.java)
+- Logic for precisely concatenating system prompt segments.
+
+#### [NEW] [ChatHistoryAssembler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java)
+- Handles message filtering, long observation truncation, and goal injection.
+
+#### [NEW] [ReasoningStepParser.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java)
+- Converts LLM responses into `ReasoningStep` objects with JSON error trapping and token usage population.
+
+## Verification Plan
+
+- ✅ `mvn test-compile`: SUCCESS
+- ✅ `SystemPromptBuilderTest`: Verified prompt ordering and conditional segments.
+- ✅ `ChatHistoryAssemblerTest`: Verified history filtering and truncation.
+- ✅ `ReasoningStepParserTest`: Verified parsing of tool calls, text, and errors.
+- ✅ `AgentLoopTest`: Verified end-to-end integration and goal injection.
+- ✅ `LangChainReasoningEngineTest`: Verified integration with mocked helpers.

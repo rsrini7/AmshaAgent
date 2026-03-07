@@ -9,13 +9,15 @@ import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -32,10 +34,6 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import java.util.Map;
-import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
-import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
-import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 
 @QuarkusTest
 class LangChainReasoningEngineTest {
@@ -45,9 +43,6 @@ class LangChainReasoningEngineTest {
 
     @InjectMock
     ChatLanguageModel chatLanguageModel;
-
-    @InjectMock
-    CompactionSummaryRepository compactionSummaryRepository;
 
     @InjectMock
     SystemPromptBuilder promptBuilder;
@@ -70,7 +65,6 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I have finished the task", ReasoningStep.FINISH, java.util.Map.of("answer", "I have finished the task"), 10, 20));
@@ -102,7 +96,6 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", java.util.Map.of("repo", "test/repo"), 15, 25));
@@ -147,8 +140,7 @@ class LangChainReasoningEngineTest {
             // Capture the request to verify filtered messages
             org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
             when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
-            when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
-            when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+                when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
             // For the filter test, we need the assembler to actually return the filtered messages if it were the real one,
             // but here we are mocking the engine's call to assembler. 
             // Wait, the engine calls historyAssembler.assemble(). 
@@ -205,8 +197,10 @@ class LangChainReasoningEngineTest {
                 ArgumentCaptor.forClass(ChatRequest.class);
             when(chatLanguageModel.chat(requestCaptor.capture()))
                 .thenReturn(ChatResponse.builder().aiMessage(new dev.langchain4j.data.message.AiMessage("some response")).build());
-            when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
-            when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+                when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+            // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
+            // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
+            // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
             when(historyAssembler.assemble(any(), any(), any())).thenAnswer(invocation -> {
                 return chatMemoryStore.getMessages((String)invocation.getArgument(0)).stream()
                     .filter(m -> !(m instanceof dev.langchain4j.data.message.AiMessage ai && MessageTag.isTagged(ai.text())))
@@ -243,7 +237,6 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -266,7 +259,6 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -292,7 +284,6 @@ class LangChainReasoningEngineTest {
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -325,7 +316,6 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         when(chatLanguageModel.chat(captor.capture())).thenReturn(
                 ChatResponse.builder().aiMessage(new dev.langchain4j.data.message.AiMessage("OK")).build());
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -364,9 +354,10 @@ class LangChainReasoningEngineTest {
                 .thenReturn(ChatResponse.builder()
                     .aiMessage(new dev.langchain4j.data.message.AiMessage("Here is the sort function"))
                     .build());
-            when(compactionSummaryRepository.findLatestBySessionId(any()))
-                .thenReturn(Optional.empty());
             when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+            // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
+            // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
+            // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
             when(historyAssembler.assemble(any(), any(), any())).thenAnswer(invocation -> {
                 return chatMemoryStore.getMessages((String)invocation.getArgument(0)).stream()
                     .filter(m -> !(m instanceof dev.langchain4j.data.message.AiMessage ai && ai.text() != null && (ai.text().contains("as per our agreement") || ai.text().contains("I'll provide python code instead of rust"))))
