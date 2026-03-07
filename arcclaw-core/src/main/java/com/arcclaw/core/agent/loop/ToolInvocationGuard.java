@@ -1,13 +1,13 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
-import com.arcclaw.core.agent.RoleRegistry;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

@@ -9,10 +9,10 @@ import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.agent.AgentLoop;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;

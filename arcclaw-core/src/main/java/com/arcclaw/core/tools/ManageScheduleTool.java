@@ -1,6 +1,6 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.agent.AgentRoleEnum;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;

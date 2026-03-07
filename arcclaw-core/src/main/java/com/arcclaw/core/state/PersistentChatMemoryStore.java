@@ -1,6 +1,6 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.MessageTag;
+import com.arcclaw.core.agent.reasoning.MessageTag;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageDeserializer;

@@ -8,11 +8,11 @@ import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
-import com.arcclaw.core.agent.AgentLoop;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.ReasoningEngine;
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;

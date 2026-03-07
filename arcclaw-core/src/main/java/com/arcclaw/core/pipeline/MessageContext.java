@@ -3,7 +3,7 @@ package com.arcclaw.core.pipeline;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.agent.AgentState;
+import com.arcclaw.core.agent.result.AgentState;
 
 import java.util.Optional;
 

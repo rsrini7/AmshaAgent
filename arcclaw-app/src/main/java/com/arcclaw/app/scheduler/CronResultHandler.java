@@ -5,8 +5,8 @@ import java.time.Instant;
 import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.AgentRoleEnum;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;

@@ -1,7 +1,7 @@
 package com.arcclaw.core.cron;
 
 import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.result.AgentResult;
 
 /**
  * CDI event fired when a scheduled cron job completes execution.

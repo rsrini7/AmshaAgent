@@ -1,6 +1,6 @@
 package com.arcclaw.core.util;
 
-import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.result.AgentResult;
 
 /**
  * Shared logic for rendering {@link AgentResult} to user-friendly text.

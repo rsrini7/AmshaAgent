@@ -1,21 +1,21 @@
 package com.arcclaw.core.agent.reasoning;
 
-import com.arcclaw.core.agent.AgentPersonaRegistry;
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.PromptTemplateEngine;
-import com.arcclaw.core.agent.RoleRegistry;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.state.CompactionSummaryRepository;
 
 class SystemPromptBuilderTest {
 

@@ -1,6 +1,6 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

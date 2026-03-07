@@ -1,6 +1,6 @@
 package com.arcclaw.app;
 
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.observability.AgentObserver;
 import jakarta.enterprise.context.ApplicationScoped;
 

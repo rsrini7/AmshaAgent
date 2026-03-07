@@ -2,9 +2,9 @@ package com.arcclaw.core.pipeline.handlers;
 
 import org.jboss.logging.Logger;
 
-import com.arcclaw.core.agent.AgentLoop;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;

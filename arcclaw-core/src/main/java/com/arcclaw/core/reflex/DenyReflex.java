@@ -8,10 +8,10 @@ import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.agent.AgentLoop;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.agent.AgentRoleEnum;
-import com.arcclaw.core.agent.ReasoningEngine;
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -76,7 +76,7 @@ public class DenyReflex implements AgentReflex {
 
                 // 2. Session checkpoint — interactive approval
                 String activeRole = null;
-                for (com.arcclaw.core.agent.AgentRoleEnum role : com.arcclaw.core.agent.AgentRoleEnum.values()) {
+                for (com.arcclaw.core.agent.role.AgentRoleEnum role : com.arcclaw.core.agent.role.AgentRoleEnum.values()) {
                     Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role.toScopedName());
                     if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                         activeRole = role.toScopedName();

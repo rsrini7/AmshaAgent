@@ -1,7 +1,7 @@
 package com.arcclaw.app.observability;
 
 import com.arcclaw.core.observability.AgentObserver;
-import com.arcclaw.core.agent.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

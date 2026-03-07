@@ -1,6 +1,6 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.agent.AgentResult;
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import jakarta.enterprise.context.ApplicationScoped;
