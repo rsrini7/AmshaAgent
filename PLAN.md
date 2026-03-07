@@ -3031,3 +3031,49 @@ Refactored the monolithic `AgentCronScheduler` into three specialized components
 - ✅ `AgentCronSchedulerConcurrencyTest`: Verified semaphore behavior and permit leaks.
 - ✅ `CronResultHandlerTest`: Verified audit logging and session termination logic.
 - ✅ `AgentCronSchedulerTest`: Verified staleness reclamation window.
+
+---
+
+# Phase 53 — AgentCronScheduler & WorkspaceManager SRP Refactor ✅
+
+Separate the concerns of heartbeat tracking, scheduled cleanup, and session termination to improve maintainability and testability.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **WorkspaceManager Split**:
+> - `SessionHeartbeatTracker`: Owns the in-memory `ConcurrentHashMap` of heartbeats. Pure state holder.
+> - `SessionReaper`: Owns `@Scheduled` logic for GC sweeps and `@Observes StartupEvent` for zombie recovery. Pure orchestrator.
+> - `WorkspaceManager`: Slimmed down to focus on session termination (checkpoint marking, disk wiping, scope destruction). Pure executor.
+
+> [!NOTE]
+> **Static Helper Copy**: `isSqliteBusy()` is copied as a `private static` method in both `WorkspaceManager` and `SessionReaper` to avoid premature abstraction of a single utility method.
+
+> [!TIP]
+> **Test Injectability**: By making `SessionHeartbeatTracker` a real bean in `WorkspaceManagerGcSweepTest` (instead of a mock), the `injectHeartbeat()` test-only method can actually write to the internal map, allowing the `SessionReaper` logic to be verified realistically.
+
+## Proposed Changes
+
+#### [MODIFY] [WorkspaceManager.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Removed heartbeat map and all `@Scheduled` / `@Observes StartupEvent` logic.
+- Injects `SessionHeartbeatTracker`.
+- Heartbeat removal in `terminateSession()` is now delegated to the tracker.
+
+#### [NEW] [SessionHeartbeatTracker.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionHeartbeatTracker.java)
+- Manages `heartbeats` map.
+- Provides `recordHeartbeat`, `removeHeartbeat`, `activeSessionCount`, and `clearAll`.
+- Added `@VisibleForTesting` `injectHeartbeat` for GC sweep verification.
+
+#### [NEW] [SessionReaper.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
+- Implements `gcSweep()` and `sweepTimedOutApprovals()` scheduled tasks.
+- Implements `onStartup()` / `doRecoverZombies()` logic.
+- Injects `WorkspaceManager` for session termination delegation.
+
+#### [MODIFY] [AgentResource.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResource.java) / [ChatCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/ChatCommand.java)
+- Redirected heartbeat recording/removal calls to `SessionHeartbeatTracker`.
+
+## Verification Plan
+
+- ✅ `WorkspaceManagerTest`: Verified zombie recovery and basic termination lifecycle.
+- ✅ `WorkspaceManagerGcSweepTest`: Verified GC sweep and approval timeout logic with real heartbeat injection.
+- ✅ `ChatCommandApprovalTest`: Verified CLI heartbeat recording using the new tracker mock.

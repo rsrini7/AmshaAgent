@@ -24,6 +24,7 @@ import com.arcclaw.core.agent.AgentLoop;
 import com.arcclaw.core.agent.AgentResult;
 import com.arcclaw.core.agent.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 
@@ -42,6 +43,9 @@ public class ChatCommandApprovalTest {
 
     @InjectMock
     WorkspaceManager workspaceManager;
+
+    @InjectMock
+    SessionHeartbeatTracker heartbeatTracker;
 
     @InjectMock
     ReflexRegistry reflexRegistry;
@@ -90,7 +94,7 @@ public class ChatCommandApprovalTest {
         // 1. Session start
         // 2. After "run sensitive tool" input
         // 3. On AwaitingApproval
-        verify(workspaceManager, atLeastOnce()).recordHeartbeat(anyString());
+        verify(heartbeatTracker, atLeastOnce()).recordHeartbeat(anyString());
 
         // Verify output formatting
         String output = testOut.toString();

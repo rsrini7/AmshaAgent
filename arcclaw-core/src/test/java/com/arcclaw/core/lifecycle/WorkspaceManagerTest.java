@@ -31,6 +31,12 @@ class WorkspaceManagerTest {
     WorkspaceManager workspaceManager;
 
     @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    SessionReaper sessionReaper;
+
+    @Inject
     StatefulAgentStore agentStore;
 
     @Inject
@@ -47,7 +53,7 @@ class WorkspaceManagerTest {
 
         // Clear all checkpoints between tests
         em.createQuery("DELETE FROM AgentCheckpoint").executeUpdate();
-        workspaceManager.clearAll();
+        heartbeatTracker.clearAll();
     }
 
     /**
@@ -71,7 +77,7 @@ class WorkspaceManagerTest {
         });
 
         // Act: simulate startup zombie recovery
-        workspaceManager.onStartup(null);
+        sessionReaper.onStartup(null);
 
         // Assert: checkpoint should now be FAILED
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
@@ -85,12 +91,12 @@ class WorkspaceManagerTest {
     }
 
     /**
-     * Test 2: GC Sweep expiration.
-     * Record a heartbeat with a timestamp far in the past,
-     * then run the GC sweep and verify the session was terminated.
+     * Test 2: Session termination removes heartbeat and marks checkpoint FAILED.
+     * Verifies terminateSession() cleans up both heartbeat tracking and DB state.
+     * The GC sweep path that calls terminateSession() is covered in WorkspaceManagerGcSweepTest.
      */
     @Test
-    void testGcSweepExpiresOldSessions() {
+    void testTerminateSession_removesHeartbeatAndMarksCheckpointFailed() {
         String sessionId = "gc-expired-session";
 
         // Arrange: create a checkpoint for this session
@@ -99,15 +105,15 @@ class WorkspaceManagerTest {
             agentStore.save(sessionId, "debugger", steps);
         });
 
-        // Record heartbeat (but manually replace with a past timestamp)
-        workspaceManager.recordHeartbeat(sessionId);
-        assertEquals(1, workspaceManager.activeSessionCount());
+        // Record heartbeat
+        heartbeatTracker.recordHeartbeat(sessionId);
+        assertEquals(1, heartbeatTracker.activeSessionCount());
 
         // Act: call terminateSession directly to verify termination behavior
         workspaceManager.terminateSession(sessionId);
 
         // Assert: session removed from heartbeats
-        assertEquals(0, workspaceManager.activeSessionCount());
+        assertEquals(0, heartbeatTracker.activeSessionCount());
 
         // Assert: checkpoint should be marked FAILED
         WorkspaceScopeHolder.run(sessionId, () -> {
@@ -206,7 +212,7 @@ class WorkspaceManagerTest {
         auditService.waitForIdle();
 
         // Act
-        workspaceManager.onStartup(null);
+        sessionReaper.onStartup(null);
 
         // Assert
         WorkspaceScopeHolder.run(sessionId, () -> {

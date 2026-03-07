@@ -5,62 +5,34 @@ import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.arc.Arc;
-import io.quarkus.runtime.ShutdownEvent;
-import io.quarkus.runtime.StartupEvent;
-import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
- * Lifecycle orchestrator connecting CDI scope, state store, and workspace
- * management.
+ * Lifecycle orchestrator for workspace session termination and disk management.
  * <p>
  * <strong>Responsibilities:</strong>
  * <ul>
- * <li><b>Heartbeats:</b> Track active session liveness via
- * {@link ConcurrentHashMap}</li>
- * <li><b>GC Sweep:</b> {@code @Scheduled} reaping of sessions exceeding
- * TTL</li>
- * <li><b>Zombie Recovery:</b> On startup, mark any orphaned IN_PROGRESS
- * checkpoints as FAILED</li>
- * <li><b>Termination:</b> Mark FAILED, wipe workspace dir, destroy CDI
- * scope</li>
+ * <li><b>Termination:</b> Mark checkpoints FAILED, wipe workspace dir, destroy CDI scope.</li>
+ * <li><b>Disk Management:</b> Physical cleanup of workspace directories.</li>
  * </ul>
- * <p>
- * All shared state is guarded by {@code synchronized} per JEP 491 — safe for
- * virtual threads on JDK 25.
  */
 @ApplicationScoped
 public class WorkspaceManager {
 
     private static final Logger log = Logger.getLogger(WorkspaceManager.class);
-
-    private volatile boolean shuttingDown = false;
-
-    /** Active session heartbeats: sessionId → last heartbeat timestamp. */
-    private final ConcurrentHashMap<String, Instant> heartbeats = new ConcurrentHashMap<>();
-
-    @Inject
-    StatefulAgentStore agentStore;
 
     @Inject
     EntityManager em;
@@ -71,203 +43,14 @@ public class WorkspaceManager {
     @Inject
     ChatMemoryStore chatMemoryStore;
 
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
-    @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
-    long sessionTtlMinutes;
-
-    @ConfigProperty(name = "arcclaw.governance.approval-timeout-minutes", defaultValue = "60")
-    long approvalTimeoutMinutes;
-
     @ConfigProperty(name = "arcclaw.chat-memory.max-messages", defaultValue = "100")
     int maxMessages;
-
-    void onShutdown(@Observes ShutdownEvent event) {
-        shuttingDown = true;
-    }
-
-    // -------------------------------------------------------------------------
-    // Heartbeat Management
-    // -------------------------------------------------------------------------
-
-    /**
-     * Record a heartbeat for a session — proves the session is still alive.
-     *
-     * @param sessionId The workspace session ID.
-     */
-    public void recordHeartbeat(String sessionId) {
-        heartbeats.put(sessionId, Instant.now());
-        log.debugf("Heartbeat recorded for session=%s", sessionId);
-    }
-
-    /**
-     * Remove a session from heartbeat tracking.
-     */
-    public void removeHeartbeat(String sessionId) {
-        heartbeats.remove(sessionId);
-    }
-
-    /**
-     * Get the number of tracked sessions (for testing/monitoring).
-     */
-    public int activeSessionCount() {
-        return heartbeats.size();
-    }
-
-    /**
-     * Clear all tracked sessions (for testing).
-     */
-    public void clearAll() {
-        heartbeats.clear();
-    }
-
-    // -------------------------------------------------------------------------
-    // Zombie Recovery (Startup)
-    // -------------------------------------------------------------------------
-
-    /**
-     * On application startup, find any IN_PROGRESS checkpoints from a previous
-     * JVM crash and mark them as FAILED.
-     * <p>
-     * This ensures no orphaned sessions linger with stale state.
-     */
-    public void onStartup(@Observes StartupEvent event) {
-        int maxRetries = 5;
-        long backoffMs = 50;
-        Exception lastEx = null;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
-                    doRecoverZombies();
-                });
-                return; // success
-            } catch (Exception e) {
-                lastEx = e;
-                if (isSqliteBusy(e)) {
-                    log.warnf("SQLite BUSY on onStartup attempt %d/%d — retrying in %dms",
-                            attempt, maxRetries, backoffMs * attempt);
-                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
-                } else {
-                    log.errorf(e, "Non-retryable error during onStartup zombie recovery");
-                    return;
-                }
-            }
-        }
-        log.errorf(lastEx, "Failed onStartup zombie recovery after %d retries", maxRetries);
-    }
-
-    private void doRecoverZombies() {
-        // 1. Recover IN_PROGRESS zombies
-        List<AgentCheckpoint> inProgressZombies = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.IN_PROGRESS)
-                .getResultList();
-
-        if (!inProgressZombies.isEmpty()) {
-            log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
-                    inProgressZombies.size());
-            Instant now = Instant.now();
-            for (var checkpoint : inProgressZombies) {
-                checkpoint.setStatus(CheckpointStatus.FAILED);
-                checkpoint.setFailedAt(now);
-                checkpoint.setFailReason("JVM crash recovery — session was IN_PROGRESS at startup");
-                em.merge(checkpoint);
-                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                        checkpoint.getId(), checkpoint.getSessionId(), checkpoint.getAgentRole());
-            }
-        } else {
-            log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
-        }
-
-        // 2. Recover AWAITING_APPROVAL zombies
-        List<AgentCheckpoint> approvalZombies = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .getResultList();
-
-        if (!approvalZombies.isEmpty()) {
-            log.warnf("Zombie recovery: found %d orphaned AWAITING_APPROVAL checkpoint(s) — marking FAILED",
-                    approvalZombies.size());
-            Instant now = Instant.now();
-            for (var checkpoint : approvalZombies) {
-                checkpoint.setStatus(CheckpointStatus.FAILED);
-                checkpoint.setFailedAt(now);
-                checkpoint.setFailReason("JVM crash recovery: approval was pending at shutdown");
-                em.merge(checkpoint);
-                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                        checkpoint.getId(), checkpoint.getSessionId(), checkpoint.getAgentRole());
-            }
-        } else {
-            log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Garbage Collection (Scheduled)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Scheduled GC sweep — terminates sessions whose heartbeat exceeds the TTL.
-     * <p>
-     * Runs at the interval configured by {@code arcclaw.workspace.gc-interval}.
-     */
-    @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
-    void gcSweep() {
-        if (heartbeats.isEmpty()) {
-            return;
-        }
-
-        Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
-        log.debugf("GC sweep: checking %d session(s) against TTL=%dm (cutoff=%s)",
-                heartbeats.size(), sessionTtlMinutes, cutoff);
-
-        // 1 Bulk Query instead of N+1 individual queries
-        Set<String> awaitingApprovalIds = em.createQuery(
-                "SELECT c.sessionId FROM AgentCheckpoint c WHERE c.status = :status", String.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .getResultStream()
-                .collect(Collectors.toSet());
-
-        heartbeats.forEach((sessionId, lastHeartbeat) -> {
-            if (lastHeartbeat.isBefore(cutoff)) {
-                // Check memory Set instead of making a DB trip
-                if (awaitingApprovalIds.contains(sessionId)) {
-                    log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
-                    return;
-                }
-
-                log.warnf("GC sweep: session=%s expired (last heartbeat=%s, cutoff=%s)", sessionId, lastHeartbeat, cutoff);
-                terminateSession(sessionId);
-            }
-        });
-    }
-
-    /**
-     * Terminate sessions that have been AWAITING_APPROVAL for too long.
-     */
-    @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
-    @Transactional
-    public void sweepTimedOutApprovals() {
-        if (shuttingDown) return;   // ← skip if JVM is shutting down
-
-        var cutoff = java.time.LocalDateTime.now()
-                .minus(java.time.Duration.ofMinutes(approvalTimeoutMinutes));
-        List<AgentCheckpoint> timedOut = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("cutoff", cutoff)
-                .getResultList();
-
-        for (var cp : timedOut) {
-            log.warnf("Approval timeout session=%s. Terminating.", cp.getSessionId());
-            terminateSession(cp.getSessionId());
-        }
-    }
 
     // -------------------------------------------------------------------------
     // Session Termination
@@ -275,22 +58,12 @@ public class WorkspaceManager {
 
     /**
      * Terminate a workspace session completely.
-     * <p>
-     * Steps:
-     * <ol>
-     * <li>Remove from heartbeat tracking</li>
-     * <li>Mark any DB checkpoints as FAILED</li>
-     * <li>Wipe the physical workspace directory</li>
-     * <li><b>Clear in-memory LangChain4j ChatMemory</b> (prevent stale re-persistence)</li>
-     * <li>Delete chat memory from SQLite</li>
-     * <li>Destroy the CDI scope (all @WorkspaceScoped beans)</li>
-     * </ol>
      */
     public void terminateSession(String sessionId) {
         log.infof("Terminating session: %s", sessionId);
 
         // 1. Remove from heartbeat tracking
-        heartbeats.remove(sessionId);
+        heartbeatTracker.removeHeartbeat(sessionId);
 
         // 1a. Clear budget memory
         governanceLayer.clearSession(sessionId);
@@ -302,13 +75,9 @@ public class WorkspaceManager {
         wipeWorkspaceDir(sessionId);
 
         // 4. Clear in-memory LangChain4j ChatMemory
-        // We MUST call .clear() on the MessageWindowChatMemory bean BEFORE deleting SQLite rows.
-        // LangChain4j often keeps a cached list of messages in the JVM heap; if we only delete 
-        // from SQLite, the next turn will see the cached messages and re-persist them into DB,
-        // poisoning the "new" session with old history.
         clearInMemoryChatMemory(sessionId);
 
-        // 5. Delete chat memory from persistence (belt-and-suspenders guarantee)
+        // 5. Delete chat memory from persistence
         try {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
@@ -331,16 +100,12 @@ public class WorkspaceManager {
 
     /**
      * Reset the session state while keeping the session record (WORM compliance).
-     * <p>
-     * Clears in-memory cache and deletes SQLite messages. Checkpoints are preserved.
      */
     public void resetSessionState(String sessionId) {
         log.infof("Resetting session state for: %s", sessionId);
         
-        // 1. Clear in-memory cache to prevent re-persistence
         clearInMemoryChatMemory(sessionId);
         
-        // 2. Wipe SQLite DB records
         try {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
@@ -349,12 +114,8 @@ public class WorkspaceManager {
         }
     }
 
-    /**
-     * Internal helper to flush LangChain4j's in-memory MessageWindowChatMemory.
-     */
     private void clearInMemoryChatMemory(String sessionId) {
         try {
-            // Build a transient instance keyed by sessionId to find the cached memory in JVM heap
             MessageWindowChatMemory.builder()
                     .id(sessionId)
                     .maxMessages(maxMessages)
@@ -363,21 +124,11 @@ public class WorkspaceManager {
                     .clear();
             log.debugf("In-memory chat memory cleared for session=%s", sessionId);
         } catch (Exception e) {
-            // Non-fatal: do not block session termination if memory clearing fails
             log.warnf("Failed to clear in-memory chat memory for session=%s (non-fatal): %s", 
                 sessionId, e.getMessage());
         }
     }
 
-    /**
-     * Marks all non-FAILED checkpoints for a session as FAILED.
-     * <p>
-     * Includes a lightweight retry loop (up to 5 attempts with linear backoff) to
-     * handle {@code SQLITE_BUSY} lock contention with the
-     * {@link com.arcclaw.core.persistence.AsyncPersistenceEngine} background thread.
-     * SQLite WAL mode allows only one writer at a time; a concurrent TELEMETRY write
-     * can transiently block this call.
-     */
     void markCheckpointsFailed(String sessionId) {
         int maxRetries = 5;
         long backoffMs = 50;
@@ -413,7 +164,7 @@ public class WorkspaceManager {
                     try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
                 } else {
                     log.errorf(e, "Non-retryable error marking checkpoints FAILED for session=%s", sessionId);
-                    throw e; // Rethrow to let it bubble up
+                    throw e;
                 }
             }
         }
@@ -421,8 +172,9 @@ public class WorkspaceManager {
         if (lastEx != null) throw new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, lastEx);
     }
 
-    /** Traverses getCause() chain to detect SQLite BUSY / locked errors. */
     private static boolean isSqliteBusy(Throwable e) {
+        // Intentional copy — also exists in SessionReaper.
+        // Kept private static to avoid extracting a shared utility for one method.
         for (Throwable t = e; t != null; t = t.getCause()) {
             String msg = t.getMessage();
             if (msg != null) {
@@ -439,10 +191,9 @@ public class WorkspaceManager {
                     var method = t.getClass().getMethod("getResultCode");
                     Object code = method.invoke(t);
                     if (code instanceof Integer rc) {
-                        // 5 = SQLITE_BUSY, 6 = SQLITE_LOCKED, 261 = SQLITE_BUSY_SNAPSHOT
                         if (rc == 5 || rc == 6 || rc == 261) return true;
                     }
-                } catch (Exception ignored) { /* best-effort */ }
+                } catch (Exception ignored) { }
             }
         }
         return false;
