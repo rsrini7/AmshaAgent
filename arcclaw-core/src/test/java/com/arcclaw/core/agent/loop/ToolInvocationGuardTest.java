@@ -85,10 +85,13 @@ class ToolInvocationGuardTest {
         cp.setPendingToolName(GithubTool.NAME);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
 
-        ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?");
-
-        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
+        // Wrap in scope — after GitHub guard passes, evaluate() reaches HITL step
+        // which calls WorkspaceContext.autonomy() (ScopedValue — must be bound)
+        workspaceRun("s1", AutonomyLevel.FULL, () -> {
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?");
+            assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
+        });
     }
 
     @Test

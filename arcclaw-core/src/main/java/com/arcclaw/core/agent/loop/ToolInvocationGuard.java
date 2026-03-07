@@ -116,9 +116,10 @@ public class ToolInvocationGuard {
                 String paramsJson = objectMapper.writeValueAsString(params);
                 return new GuardDecision.PauseForApproval(toolName, paramsJson);
             } catch (Exception e) {
-                log.errorf(e, "Failed to serialize tool parameters for HITL approval in session %s", sessionId);
-                // Fall through to Allow or let runner handle the potential exception later?
-                // Plan says: serialize params with objectMapper, return PauseForApproval(toolName, paramsJson)
+                log.errorf(e, "Failed to serialize params for HITL in session %s — blocking tool for safety",
+                        sessionId);
+                return new GuardDecision.Blocked(
+                        "Tool blocked: failed to serialize parameters for approval.");
             }
         }
 
