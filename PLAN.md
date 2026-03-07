@@ -3189,3 +3189,36 @@ Reorganized the `com.arcclaw.core.agent` package into logical sub-packages to im
 - ✅ `mvn clean verify`: SUCCESS (266/266 tests pass).
 - ✅ Package review: Root `com.arcclaw.core.agent` is empty (no orphans).
 - ✅ Import audit: No stale or unrelated imports were introduced during automated refactoring.
+
+---
+
+# Phase 53.6 — AgentLoop & AuditService Split
+
+Extracted `CheckpointResumeHandler` out of `AgentLoop` to reduce LOC and improve modularity. Split `AuditService` into a 2-tier architecture (Telemetry/Compliance) to enforce strict fail-open/fail-closed semantics.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Audit Tiering**: `TelemetryAuditService` is fire-and-forget (swallows exceptions). `ComplianceAuditService` is fail-closed (throws `ComplianceViolationException` on failure). `AuditService` remains as a Facade for backward compatibility.
+> **CheckpointResumeHandler Extracted**: `AgentLoop.handleResumeHook()` extracted directly into `CheckpointResumeHandler`. Uses the exact same null check branching logic for AgentResult short-circuiting.
+
+## Proposed Changes
+
+#### [NEW] [CheckpointResumeHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java)
+- Extracts resume hook and checkpoint evaluation logic from `AgentLoop`.
+
+#### [NEW] [TelemetryAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/TelemetryAuditService.java)
+- Contains `record`, `recordLoopCompletion`, and `waitForIdle`. Fail-open.
+
+#### [NEW] [ComplianceAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/ComplianceAuditService.java)
+- Contains `recordMandatory`. Fail-closed.
+
+#### [MODIFY] [AuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditService.java)
+- Refactored into a facade wrapping `TelemetryAuditService` and `ComplianceAuditService`.
+
+## Verification Plan
+
+- ✅ Verified `CheckpointResumeHandlerTest` handles tool denial, approval, and serialization.
+- ✅ Verified `AgentLoopTest` integration.
+- ✅ Verified new tiered audit tests (`TelemetryAuditServiceTest`, `ComplianceAuditServiceTest`).
+- ✅ Verified full project build and tests pass.

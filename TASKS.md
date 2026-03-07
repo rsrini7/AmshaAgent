@@ -836,3 +836,14 @@
 - [x] Step 5: Move `result` classes (`AgentResult`, `AgentState`)
 - [x] Verify: All 23 classes moved out of root `com.arcclaw.core.agent`
 - [x] Verify: Full system regression (266/266 tests pass)
+
+---
+
+# Phase 53.6 — AgentLoop & AuditService Split ✅
+- [x] Extract `CheckpointResumeHandler` from `AgentLoop`
+- [x] Create `CheckpointResumeHandlerTest` and move `testResumedHistoryHasFlatToolArguments`
+- [x] Splitting `AuditService` into `TelemetryAuditService` and `ComplianceAuditService`
+- [x] Refactor `AuditService` into a facade delegating to the new tier services
+- [x] Create `TelemetryAuditServiceTest` and `ComplianceAuditServiceTest`
+- [x] Update `AuditServiceTest` to test delegation logic only
+- [x] Verify: Full system regression passes
