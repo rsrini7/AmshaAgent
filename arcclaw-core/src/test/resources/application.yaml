@@ -11,6 +11,9 @@ arcclaw:
       bot-token: "test-bot-token"
 
 quarkus:
+  application:
+    name: arcclaw
+    version: "1.0.0"
   langchain4j:
     chat-model:
       provider: openai
@@ -19,6 +22,8 @@ quarkus:
       base-url: "http://localhost:9999"
       chat-model:
         model-name: "gpt-4o-mini"
+  rest:
+    path: /api/v1
   otel:
     sdk:
       disabled: true

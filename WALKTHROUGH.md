@@ -2028,3 +2028,22 @@ Implemented proactive user notification and graceful fallback for rate-limiting 
 ### Verification Results:
 - ✅ `IntentClassificationHandlerTest`: 100% pass for both success and rate-limit scenarios.
 - ✅ **Full Regression**: Verified that 121 tests pass with the new acknowledgment logic.
+
+---
+
+## Phase 58: System Metadata Registry ✅
+
+Implemented a central registry for application metadata and exposed it via management and public endpoints.
+
+| File | Purpose |
+|------|---------|
+| [SystemMetadataRegistry.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/config/SystemMetadataRegistry.java) | Centralized metadata (version, env, startup time). |
+| [SystemMetadataHealthCheck.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/health/SystemMetadataHealthCheck.java) | Surfaced metadata in `/q/health/ready`. |
+| [SystemInfoResource.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/SystemInfoResource.java) | Public `/api/v1/info` JSON endpoint. |
+| [TelemetryAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/TelemetryAuditService.java) | Version-aware audit logging. |
+
+**Verification**:
+- ✅ `SystemInfoResourceTest`: GET `/api/v1/info` → 200 OK.
+- ✅ `ApiKeyAuthFilterTest`: Verified `/info` bypasses authentication.
+- ✅ Audit integrity: `AuditEvent` now contains `app_version` for all new security events.
+- ✅ Full suite regression count: **122 tests**.

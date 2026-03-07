@@ -55,6 +55,9 @@ public class AuditEvent {
     @Column(updatable = false)
     public int iterationsUsed;
 
+    @Column(name = "app_version", length = 32)
+    public String appVersion;
+
     // Monotonic per-session insert order — set exclusively by AuditEventRepository.record()
     @Column(nullable = false, updatable = false)
     public long sequence;

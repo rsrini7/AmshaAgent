@@ -868,3 +868,244 @@ DEFINITION OF DONE
 - Full test suite passes:
   .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
   
+
+---
+
+Phase 58 — SystemMetadataRegistry
+
+Add a central registry exposing app version, build info, and
+environment — surfaced in /q/health responses, audit logs,
+and a new /info endpoint.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUND TRUTH — READ BEFORE IMPLEMENTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. application.yaml already has:
+     quarkus.application.name: arcclaw
+     quarkus.application.version: "1.0.0"
+   Use @ConfigProperty to read these — do NOT hardcode them.
+
+2. LaunchMode.current() is a static runtime API returning
+   DEVELOPMENT, TEST, or NORMAL. Do NOT @Inject LaunchMode —
+   call it statically inside a package-private helper method
+   (see Step 1 for the exact pattern).
+
+3. quarkus-smallrye-health is already in arcclaw-app/pom.xml.
+   Existing health checks: PodmanHealthCheck (@Liveness),
+   PodmanImageHealthCheck (@Readiness). Do NOT modify them.
+   Add SystemMetadataHealthCheck as a separate @Readiness check.
+
+4. SystemMetadataRegistry lives in arcclaw-core (not arcclaw-app)
+   so it can be referenced from audit logging and REST resources
+   without cross-module dependency.
+
+5. AgentResource uses @Path("/sessions") and AuditResource uses
+   @Path("/audit") — no /api/v1 prefix at class level. Use
+   @Path("/info") for SystemInfoResource consistently.
+
+6. Check ApiKeyAuthFilter for the path exclusion list (same place
+   /q/health is excluded). Add "/info" to that list
+   unconditionally — this endpoint is intentionally public.
+
+7. DO NOT add git commit hash in this phase. Use only what is
+   available from Quarkus config and LaunchMode at runtime.
+
+8. AuditEvent.appVersion has no @NotNull — existing tests that
+   construct AuditEvent without it compile and run unchanged.
+   Only TelemetryAuditServiceTest needs a new assertion verifying
+   the field is populated when record() is called.
+
+9. Data folder will be deleted before restart — Hibernate
+   drop-and-create handles the new app_version column.
+   No Flyway migration needed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — SystemMetadataRegistry.java (NEW)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.config
+File: arcclaw-core/.../config/SystemMetadataRegistry.java
+@ApplicationScoped
+
+Injected fields:
+  @ConfigProperty(name = "quarkus.application.name",
+      defaultValue = "arcclaw")
+  String appName;
+
+  @ConfigProperty(name = "quarkus.application.version",
+      defaultValue = "unknown")
+  String appVersion;
+
+Computed field (set in @PostConstruct):
+  private String startedAt;  // Instant.now().toString()
+
+Methods:
+
+  @PostConstruct
+  void init() {
+      startedAt = Instant.now().toString();
+  }
+
+  public String getAppName()    { return appName; }
+  public String getAppVersion() { return appVersion; }
+  public String getStartedAt()  { return startedAt; }
+
+  // Package-private for unit testing — receives LaunchMode as arg
+  // so tests can call resolveEnvironment(LaunchMode.DEVELOPMENT)
+  // without needing to mock the static LaunchMode.current() call.
+  String resolveEnvironment(LaunchMode mode) {
+      return switch (mode) {
+          case DEVELOPMENT -> "dev";
+          case TEST        -> "test";
+          case NORMAL      -> "prod";
+      };
+  }
+
+  // Production entry point — calls static LaunchMode.current()
+  public String getEnvironment() {
+      return resolveEnvironment(LaunchMode.current());
+  }
+
+  public SystemInfo toInfo() {
+      return new SystemInfo(appName, appVersion,
+          getEnvironment(), startedAt);
+  }
+
+  public record SystemInfo(
+      String name,
+      String version,
+      String environment,
+      String startedAt
+  ) {}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — SystemMetadataHealthCheck.java (NEW)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.health
+File: arcclaw-core/.../health/SystemMetadataHealthCheck.java
+
+@Readiness
+@ApplicationScoped
+implements HealthCheck
+
+Inject: SystemMetadataRegistry registry
+
+  @Override
+  public HealthCheckResponse call() {
+      return HealthCheckResponse
+          .named("System Metadata")
+          .up()
+          .withData("version",     registry.getAppVersion())
+          .withData("environment", registry.getEnvironment())
+          .withData("startedAt",   registry.getStartedAt())
+          .build();
+  }
+
+Always returns UP — informational only, not a failure gate.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — SystemInfoResource.java (NEW) + ApiKeyAuthFilter
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Package: com.arcclaw.core.api
+File: arcclaw-core/.../api/SystemInfoResource.java
+
+@ApplicationScoped
+@Path("/info")
+@Produces(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
+
+Inject: SystemMetadataRegistry registry
+
+  @GET
+  public Response getInfo() {
+      return Response.ok(registry.toInfo()).build();
+  }
+
+Response shape:
+  {
+    "name": "arcclaw",
+    "version": "1.0.0",
+    "environment": "dev",
+    "startedAt": "2026-03-07T13:37:00.000Z"
+  }
+
+Also in this step:
+  Open ApiKeyAuthFilter and find the path exclusion list
+  (where /q/health and similar paths are excluded from auth).
+  Add "/info" to that list unconditionally.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — AuditEvent + TelemetryAuditService (MODIFY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: arcclaw-core/.../audit/AuditEvent.java
+Add field:
+  @Column(name = "app_version", length = 32)
+  public String appVersion;
+
+File: arcclaw-core/.../audit/TelemetryAuditService.java
+Inject: SystemMetadataRegistry registry
+
+In record() where AuditEvent is constructed, add:
+  event.appVersion = registry.getAppVersion();
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXECUTION ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Create SystemMetadataRegistry
+2. Create SystemMetadataHealthCheck
+3. Create SystemInfoResource + ApiKeyAuthFilter exclusion
+4. Modify AuditEvent + TelemetryAuditService
+
+Run after each step:
+  .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TESTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SystemMetadataRegistryTest (NEW — plain Mockito, no CDI):
+  Instantiate SystemMetadataRegistry directly (constructor injection
+  or field injection via Mockito — no @QuarkusTest needed).
+
+  testResolveEnvironment_development_returnsDev()
+    — registry.resolveEnvironment(LaunchMode.DEVELOPMENT) == "dev"
+
+  testResolveEnvironment_test_returnsTest()
+    — registry.resolveEnvironment(LaunchMode.TEST) == "test"
+
+  testResolveEnvironment_normal_returnsProd()
+    — registry.resolveEnvironment(LaunchMode.NORMAL) == "prod"
+
+  testToInfo_populatesAllFields()
+    — set appName/appVersion via @ConfigProperty field or constructor
+    — call toInfo() and assert all 4 fields non-null
+
+  testStartedAt_isSetAtStartup_notNull()
+    — call init() manually, assert getStartedAt() != null
+
+SystemInfoResourceTest (NEW — @QuarkusTest + RestAssured):
+  testGetInfo_returns200WithCorrectShape()
+    — GET /info → status 200
+    — body.name != null
+    — body.version != null
+    — body.environment in ["dev", "test", "prod"]
+    — body.startedAt != null
+
+TelemetryAuditServiceTest (MODIFY):
+  Add assertion in the record() test that event.appVersion
+  equals registry.getAppVersion() after record() is called.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEFINITION OF DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- GET /info returns 200 with name, version, environment, startedAt
+- /q/health readiness response includes "System Metadata" check
+  with version, environment, startedAt in withData fields
+- AuditEvent has appVersion field, populated by TelemetryAuditService
+- No hardcoded version strings — all from quarkus.application.* config
+- LaunchMode.current() called via resolveEnvironment() helper —
+  no @Inject LaunchMode field anywhere
+- /info is in ApiKeyAuthFilter exclusion list — no auth required
+- SystemMetadataRegistry has no CDI circular dependency
+- All test suite passes:
+  .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+- Delete data folder before restarting app to apply schema change
+

@@ -68,12 +68,22 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
+    void testInfoEndpointSkipsAuth() {
+        // /api/v1/info should skip the filter even without a key
+        given()
+          .when().get("/api/v1/info")
+          .then()
+             .statusCode(200);
+    }
+
+    @Test
     void testFilterHasNoPathMatchingLogic() throws Exception {
         java.nio.file.Path sourceFile = java.nio.file.Path.of("src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java");
         if (java.nio.file.Files.exists(sourceFile)) {
             String content = java.nio.file.Files.readString(sourceFile);
             org.junit.jupiter.api.Assertions.assertFalse(content.contains(".startsWith(\"/q/"), "Filter should not have Quarkus path matching logic");
             org.junit.jupiter.api.Assertions.assertFalse(content.contains(".contains(\"/q/"), "Filter should not have Quarkus path matching logic");
+            org.junit.jupiter.api.Assertions.assertTrue(content.contains(".startsWith(\"/info\")"), "Filter should allow /info");
         }
     }
 }

@@ -42,6 +42,10 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         long startTime = System.currentTimeMillis();
         String path = uriInfo.getPath();
 
+        // /info endpoint is intentionally public — no auth required
+        if (path.startsWith("/info") || path.startsWith("/api/v1/info")) {
+            return;
+        }
 
         String apiKey = requestContext.getHeaderString(HttpConstants.X_ARCCLAW_API_KEY);
         String safeKey = apiKey != null
