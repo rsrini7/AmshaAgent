@@ -60,10 +60,15 @@ public class SessionHeartbeatTracker {
     }
 
     /**
-     * Get all active heartbeats.
-     * @return Map of sessionId to last heartbeat.
+     * Iterate over all sessions whose last heartbeat is before the cutoff,
+     * invoking the action for each expired sessionId.
+     * Safe for concurrent modification — ConcurrentHashMap.forEach() is used internally.
      */
-    public ConcurrentHashMap<String, Instant> getHeartbeats() {
-        return heartbeats;
+    public void forEachExpired(java.time.Instant cutoff, java.util.function.Consumer<String> action) {
+        heartbeats.forEach((sessionId, lastHeartbeat) -> {
+            if (lastHeartbeat.isBefore(cutoff)) {
+                action.accept(sessionId);
+            }
+        });
     }
 }

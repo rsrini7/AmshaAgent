@@ -131,6 +131,7 @@ public class SessionReaper {
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
     public void gcSweep() {
+        if (shuttingDown) return;
         if (heartbeatTracker.activeSessionCount() == 0) {
             return;
         }
@@ -146,17 +147,15 @@ public class SessionReaper {
                 .getResultStream()
                 .collect(Collectors.toSet());
 
-        heartbeatTracker.getHeartbeats().forEach((sessionId, lastHeartbeat) -> {
-            if (lastHeartbeat.isBefore(cutoff)) {
-                if (awaitingApprovalIds.contains(sessionId)) {
-                    log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
-                    return;
-                }
-
-                log.warnf("GC sweep: session=%s expired (last heartbeat=%s, cutoff=%s)", sessionId, lastHeartbeat, cutoff);
-                workspaceManager.terminateSession(sessionId);
-                heartbeatTracker.removeHeartbeat(sessionId);
+        heartbeatTracker.forEachExpired(cutoff, sessionId -> {
+            if (awaitingApprovalIds.contains(sessionId)) {
+                log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
+                return;
             }
+
+            log.warnf("GC sweep: session=%s expired", sessionId);
+            workspaceManager.terminateSession(sessionId);
+            heartbeatTracker.removeHeartbeat(sessionId);
         });
     }
 

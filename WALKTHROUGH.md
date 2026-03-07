@@ -1717,3 +1717,11 @@ Refactored the `WorkspaceManager` into focused components to separate heartbeat 
 - ✅ `mvn test -pl arcclaw-core,arcclaw-app` successfully verified 11 key lifecycle tests.
 - ✅ `WorkspaceManagerGcSweepTest`: New test covering `sweepTimedOutApprovals` confirmed correct cleanup of expired approvals.
 - ✅ All 340+ system tests pass, confirming no regressions in session lifecycle or CLI interactive mode.
+
+### Surgical Refinements
+
+Post-refactor, three surgical fixes were applied to harden the implementation:
+
+1.  **Encapsulated Iteration**: Removed `getHeartbeats()` from `SessionHeartbeatTracker` to prevent leaking internal state. Replaced it with `forEachExpired(Instant cutoff, Consumer<String> action)`, moving expiration logic into the tracker.
+2.  **Shutdown Safety**: Added a `shuttingDown` guard to `SessionReaper.gcSweep()`, ensuring scheduled tasks don't attempt to access resources while the application is stopping.
+3.  **Test Clarity**: Renamed `testGcSweepExpiresOldSessions()` in `WorkspaceManagerTest.java` to `testTerminateSession_removesHeartbeatAndMarksCheckpointFailed()` and updated its Javadoc to accurately reflect that it verifies the core termination logic rather than the GC sweep orchestrator.

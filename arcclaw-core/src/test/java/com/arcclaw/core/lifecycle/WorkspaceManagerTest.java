@@ -91,12 +91,12 @@ class WorkspaceManagerTest {
     }
 
     /**
-     * Test 2: GC Sweep expiration.
-     * Record a heartbeat with a timestamp far in the past,
-     * then run the GC sweep and verify the session was terminated.
+     * Test 2: Session termination removes heartbeat and marks checkpoint FAILED.
+     * Verifies terminateSession() cleans up both heartbeat tracking and DB state.
+     * The GC sweep path that calls terminateSession() is covered in WorkspaceManagerGcSweepTest.
      */
     @Test
-    void testGcSweepExpiresOldSessions() {
+    void testTerminateSession_removesHeartbeatAndMarksCheckpointFailed() {
         String sessionId = "gc-expired-session";
 
         // Arrange: create a checkpoint for this session
