@@ -1,0 +1,221 @@
+package com.arcclaw.core.api;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
+
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.DevSecretSeeder;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.quarkus.virtual.threads.VirtualThreads;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Response;
+
+@ApplicationScoped
+public class AgentSessionService {
+
+    @Inject
+    Logger log;
+
+    @Inject
+    AgentLoop agentLoop;
+
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    StatefulAgentStore agentStore;
+
+    @Inject
+    WorkspaceManager workspaceManager;
+
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    DevSecretSeeder devSeeder;
+
+    @Inject
+    AgentResponseMapper responseMapper;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    @VirtualThreads
+    ExecutorService vThreads;
+
+    public String createSession() {
+        String sessionId = UUID.randomUUID().toString();
+        log.infof("Creating new session: {}", sessionId);
+        heartbeatTracker.recordHeartbeat(sessionId);
+        return sessionId;
+    }
+
+    public Response runSync(String sessionId, RunAgentRequest request) {
+        log.infof("Running agent sync for session: {}, role: {}, goal: {}", sessionId, request.agentRole(),
+                request.goal());
+        int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
+
+        try {
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                devSeeder.seedDevSecrets();
+                return WorkspaceContext.run(
+                        sessionId, "rest:sync", null, AutonomyLevel.SUPERVISED, request.agentRole(),
+                        () -> {
+                            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
+                            return responseMapper.mapResult(result, false);
+                        }
+                );
+            });
+        } catch (Exception e) {
+            log.errorf("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+            return Response.serverError()
+                    .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
+                    .build();
+        }
+    }
+
+    public void runAsync(String sessionId, RunAgentRequest request, AsyncResponse response) {
+        log.infof("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
+        int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
+
+        vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
+            try {
+                boolean isApproval = "/approve".equalsIgnoreCase(request.goal());
+                boolean isDeny     = "/deny".equalsIgnoreCase(request.goal());
+
+                if (isDeny) {
+                    String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                    agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                        cp.setStatus(CheckpointStatus.FAILED);
+                        cp.setFailedAt(Instant.now());
+                        cp.setFailReason("Human denied tool execution via REST.");
+                        agentStore.save(cp);
+                    });
+                    response.resume(Response.ok()
+                            .entity(Map.of(
+                                "status",  "DENIED",
+                                "message", "Tool execution denied. Session terminated."
+                            ))
+                            .build());
+                    return;
+                }
+
+                devSeeder.seedDevSecrets();
+
+                AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
+
+                WorkspaceContext.run(sessionId, "rest:async", null, runLevel, request.agentRole(), () -> {
+                    AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                            request.goal(), reasoningEngine, maxIterations);
+                    response.resume(responseMapper.mapResult(result, true));
+                });
+
+            } catch (Exception e) {
+                log.errorf("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+                response.resume(Response.serverError()
+                        .entity(Map.of("status", "ERROR", "message",
+                            e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
+                        .build());
+            }
+        }));
+    }
+
+    public Response approve(String sessionId, String agentRole) {
+        log.infof("REST approve for session %s role %s", sessionId, agentRole);
+        try {
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
+                var checkpoint = agentStore.load(sessionId, canonicalRole);
+                if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+                    return Response.status(Response.Status.CONFLICT)
+                            .entity(Map.of("error", "No pending approval for this session"))
+                            .build();
+                }
+
+                MDC.put("userId", "rest:approve");
+                return WorkspaceContext.run(sessionId, "rest:approve", null, AutonomyLevel.FULL, canonicalRole, () -> {
+                    AgentResult result = agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
+                    return responseMapper.mapResult(result, false);
+                });
+            });
+        } catch (Exception e) {
+            log.errorf("Failed to approve session " + sessionId, e);
+            return Response.serverError().entity(e.getMessage()).build();
+        } finally {
+            MDC.remove("userId");
+        }
+    }
+
+    public Response deny(String sessionId, String agentRole) {
+        log.infof("REST deny for session %s role %s", sessionId, agentRole);
+        try {
+            return WorkspaceScopeHolder.call(sessionId, () -> {
+                String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
+                var checkpoint = agentStore.load(sessionId, canonicalRole);
+                if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+                    return Response.status(Response.Status.CONFLICT)
+                            .entity(Map.of("error", "No pending approval for this session"))
+                            .build();
+                }
+
+                MDC.put("userId", "rest:deny");
+                agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
+                heartbeatTracker.removeHeartbeat(sessionId);
+                return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
+            });
+        } catch (Exception e) {
+            log.error("Failed to deny session " + sessionId, e);
+            return Response.serverError().entity(e.getMessage()).build();
+        } finally {
+            MDC.remove("userId");
+        }
+    }
+
+    public Response getStatus(String sessionId, String role) {
+        String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
+        return agentStore.load(sessionId, canonicalRole)
+                .map(cp -> {
+                    try {
+                        List<ReasoningStep> steps = List.of();
+                        if (cp.getStateJson() != null && !cp.getStateJson().isBlank()) {
+                            steps = objectMapper.readValue(cp.getStateJson(), new TypeReference<List<ReasoningStep>>() {});
+                        }
+                        return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
+                    } catch (Exception e) {
+                        log.errorf("Failed to parse stateJson for session %s: %s", sessionId, e.getMessage(), e);
+                        return Response.serverError().entity(e.getMessage()).build();
+                    }
+                })
+                .orElseGet(() -> Response.status(Response.Status.NOT_FOUND).build());
+    }
+
+    public Response terminateSession(String sessionId) {
+        log.infof("Terminating session: {}", sessionId);
+        workspaceManager.terminateSession(sessionId);
+        return Response.noContent().build();
+    }
+}

@@ -847,3 +847,14 @@
 - [x] Create `TelemetryAuditServiceTest` and `ComplianceAuditServiceTest`
 - [x] Update `AuditServiceTest` to test delegation logic only
 - [x] Verify: Full system regression passes
+
+---
+
+# Phase 53.9 - AgentResource Split ✅
+- [x] Create `AgentResponseMapper` with top-level response records
+- [x] Create `AgentSessionService` with moved business logic
+- [x] Slim `AgentResource` to delegate only
+- [x] Create `AgentResponseMapperTest` (Unit)
+- [x] Create `AgentSessionServiceTest` (Unit)
+- [x] Verify: `AgentResourceTest` passes unchanged
+- [x] Verify: Full project regression passes
