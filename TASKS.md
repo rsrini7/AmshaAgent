@@ -906,3 +906,17 @@
   - [x] `AgentSessionServiceTest` <!-- id: 330 -->
 - [x] Verify: `mvn clean test -pl arcclaw-core,arcclaw-app -am` (121 tests passed) <!-- id: 331 -->
 
+---
+
+# Phase 55.3 — AgentCheckpoint Normalization ✅
+- [x] Create `ReasoningStepEntity` JPA entity <!-- id: 332 -->
+- [x] Mark `AgentCheckpoint.stateJson` as `@Deprecated` and add `completedAt` <!-- id: 333 -->
+- [x] Add `saveAndFinalize()` to `StatefulAgentStore` and implement in `Impl` <!-- id: 334 -->
+- [x] Add `loadSteps()` to `StatefulAgentStore` and implement in `Impl` <!-- id: 335 -->
+- [x] Replace `save() + markCompleted()` pair in `AgentLoop.java` with `saveAndFinalize()` <!-- id: 336 -->
+- [x] Update `AgentSessionService.getStatus()` to use `loadSteps()` <!-- id: 337 -->
+- [x] Mark `deserializeSteps()` as `@Deprecated` (DO NOT delete) <!-- id: 338 -->
+- [x] Cleanup: Remove unused `ObjectMapper` from `AgentSessionService` <!-- id: 339 -->
+- [x] Verify: `mvn clean test -pl arcclaw-core,arcclaw-app -am` (All 471 tests passed) <!-- id: 340 -->
+
+

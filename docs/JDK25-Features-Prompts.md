@@ -294,114 +294,162 @@ DEFINITION OF DONE
 
 ---
 
-## Phase 55.3 — Database / API Changes
-
-```
 Phase 55.3 — AgentCheckpoint normalization + saveAndFinalize() collapse.
+Development mode — schema applied via Hibernate drop-and-create (delete
+data folder before starting). No Flyway migration required.
 HIGHEST RISK — run full test suite after each section.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-GROUND TRUTH
+GROUND TRUTH — verified from source scan
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. AgentCheckpoint.stateJson is a JSON blob serialized from
-   List<ReasoningStep>. Normalization moves this to a proper
-   ReasoningStepEntity table with a FK to AgentCheckpoint.
-2. All callers of save() + markCompleted() in sequence must be
-   updated to use saveAndFinalize(). Find all call sites before
-   changing the method signatures.
-3. Flyway or Liquibase migration script required for the schema
-   change — do not apply DDL in @PostConstruct or application code.
-4. SessionStatusResponse still reads steps from the store —
-   verify the new query returns steps in insertion order.
+1. Only ONE save() + markCompleted() pair exists — in AgentLoop.java:
+     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
+     agentStore.markCompleted(cp.getId());
+   This pair becomes saveAndFinalize(). All other save() calls are
+   intermediate state saves — leave them unchanged.
+
+2. stateJson has exactly ONE production reader outside the store:
+     AgentSessionService.getStatus() (was AgentResource.java) —
+     reads cp.getStateJson() and parses to List<ReasoningStep>.
+   This migrates to loadSteps() in Section D.
+
+3. StatefulAgentStoreImpl.deserializeSteps() also reads stateJson —
+   keep it working during transition (stateJson still populated).
+   Mark @Deprecated but do not remove.
+
+4. AgentCheckpointTest has a reflection test checking stateJson field
+   is private — update it to also accept the field being @Deprecated,
+   or leave it unchanged if it still passes.
+
+5. No Flyway. Schema applied via Hibernate. In application.properties
+   (dev profile): quarkus.hibernate-orm.database.generation=drop-and-create
+   Delete the data folder before starting the app after this change.
+
+6. SessionStatusResponse must still return steps in insertion order
+   (sequenceNum ascending).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — Scan and plan before any changes
+SECTION A — Scan and confirm before any changes
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Before writing any code:
+Confirm the following from source (do not implement yet):
 
-1. List every call site of agentStore.save() across both modules.
-2. List every call site of agentStore.markCompleted().
-3. Find every pair where save() is immediately followed by
-   markCompleted() in the same method — these become saveAndFinalize().
-4. Find callers of save() that do NOT call markCompleted() — these
-   remain as save() calls (intermediate state saves).
-5. List every reader of stateJson — these must migrate to reading
-   from ReasoningStepEntity after normalization.
+1. AgentLoop.java — save() + markCompleted() pair (line numbers)
+2. All other save() call sites — confirm none pair with markCompleted()
+3. AgentSessionService.getStatus() — confirm stateJson parse location
+4. StatefulAgentStoreImpl.deserializeSteps() — confirm stateJson read
+5. Confirm no other stateJson readers outside the above
 
-Print the full analysis then STOP. Do not write any code in
-Sections B–D until explicitly told to proceed.
+Print confirmation then STOP. Do not write any code until told to proceed.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION B — ReasoningStepEntity table + migration
+SECTION B — ReasoningStepEntity
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Create: arcclaw-core/.../state/ReasoningStepEntity.java
-  @Entity, @Table(name = "reasoning_step")
-  Fields: id (Long PK), checkpointId (FK → agent_checkpoint.id),
-          sequenceNum (int), thoughtJson (TEXT), action (VARCHAR),
-          actionInputJson (TEXT), observation (TEXT),
-          inputTokens (int), outputTokens (int)
 
-Create Flyway migration:
-  V<next>__create_reasoning_step_table.sql
-  CREATE TABLE reasoning_step (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      checkpoint_id INTEGER NOT NULL REFERENCES agent_checkpoint(id),
-      sequence_num INTEGER NOT NULL,
-      thought_json TEXT,
-      action VARCHAR(128),
-      action_input_json TEXT,
-      observation TEXT,
-      input_tokens INTEGER DEFAULT 0,
-      output_tokens INTEGER DEFAULT 0
-  );
+  @Entity
+  @Table(name = "reasoning_step")
+  public class ReasoningStepEntity {
+      @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+      private Long id;
 
-Keep stateJson column on AgentCheckpoint for now — mark @Deprecated.
-Do NOT remove it until all readers are migrated and verified.
+      @Column(name = "checkpoint_id", nullable = false)
+      private Long checkpointId;
+
+      @Column(name = "sequence_num", nullable = false)
+      private int sequenceNum;
+
+      @Column(columnDefinition = "TEXT")
+      private String thoughtJson;
+
+      @Column(length = 128)
+      private String action;
+
+      @Column(columnDefinition = "TEXT")
+      private String actionInputJson;
+
+      @Column(columnDefinition = "TEXT")
+      private String observation;
+
+      @Column(name = "input_tokens")
+      private int inputTokens;
+
+      @Column(name = "output_tokens")
+      private int outputTokens;
+  }
+
+Mark stateJson on AgentCheckpoint with @Deprecated — do NOT remove it.
+
+Run: .\mvnw.cmd clean test -pl arcclaw-core -am
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION C — saveAndFinalize() in StatefulAgentStore
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Add to StatefulAgentStore interface:
-  @Transactional
-  void saveAndFinalize(AgentCheckpoint checkpoint,
-                       List<ReasoningStep> steps,
-                       CheckpointStatus finalStatus);
+  AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
+                                  List<ReasoningStep> steps,
+                                  CheckpointStatus finalStatus);
 
 Implement in StatefulAgentStoreImpl:
-  - Persist ReasoningStepEntity rows with sequenceNum = index
+  @Transactional
+  - Call existing save(sessionId, agentRole, steps) logic to upsert checkpoint
+  - Persist one ReasoningStepEntity per step with sequenceNum = list index
+    (use objectMapper to serialize step.thought() to thoughtJson,
+     step.actionInput() to actionInputJson)
   - Set checkpoint.status = finalStatus
-  - Set checkpoint.completedAt = Instant.now() if COMPLETED
-  - Set checkpoint.failedAt = Instant.now() if FAILED
-  - Single transaction — both checkpoint and steps commit together
+  - Set checkpoint.completedAt = Instant.now() if finalStatus == COMPLETED
+  - Set checkpoint.failedAt = Instant.now() if finalStatus == FAILED
+  - Single transaction — checkpoint + all step rows commit together
+  - Still populate stateJson (keep existing serialization) — dual-write
+    during transition so deserializeSteps() keeps working
 
-Update all callers identified in Section A where save() + 
-markCompleted() are paired → replace with saveAndFinalize().
+In AgentLoop.java — replace the one paired call:
+  // BEFORE:
+  var cp = agentStore.save(sessionId, canonicalRole, result.steps());
+  agentStore.markCompleted(cp.getId());
+  // AFTER:
+  agentStore.saveAndFinalize(sessionId, canonicalRole,
+      result.steps(), CheckpointStatus.COMPLETED);
+
+Run: .\mvnw.cmd clean test -pl arcclaw-core -am
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION D — Migrate readers off stateJson
+SECTION D — loadSteps() + migrate reader
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Every reader of checkpoint.getStateJson() must now query
-ReasoningStepEntity by checkpointId ordered by sequenceNum.
+Add to StatefulAgentStore interface:
+  List<ReasoningStep> loadSteps(Long checkpointId);
 
-Add to StatefulAgentStore:
-  List<ReasoningStep> loadSteps(String checkpointId);
+Implement in StatefulAgentStoreImpl:
+  - JPQL: SELECT r FROM ReasoningStepEntity r
+          WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC
+  - Reconstruct ReasoningStep from entity fields
+    (deserialize thoughtJson, actionInputJson via objectMapper)
+  - Return List.copyOf(result)
 
-Update AgentSessionService.getStatus() (and any other readers)
-to call loadSteps() instead of parsing stateJson.
+Update AgentSessionService.getStatus():
+  Replace:
+    if (cp.getStateJson() != null && !cp.getStateJson().isBlank()) {
+        steps = objectMapper.readValue(cp.getStateJson(), ...);
+    }
+  With:
+    steps = agentStore.loadSteps(cp.getId());
 
-Verify SessionStatusResponse still returns steps in correct order.
+Verify: SessionStatusResponse returns steps ordered by sequenceNum.
 
-Do NOT remove the stateJson field or drop the column in this prompt.
-That is deferred to Phase 55.4. stateJson stays @Deprecated and
-populated until Phase 55.4 explicitly removes it.
+Do NOT remove stateJson field or @Deprecated deserializeSteps().
+That is deferred to Phase 55.4.
+
+Run: .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DEFINITION OF DONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- ReasoningStepEntity table exists with Flyway migration
-- saveAndFinalize() is @Transactional and used at all terminal save sites
-- No caller pairs save() + markCompleted() in sequence
-- All stateJson readers migrated to loadSteps()
-- SessionStatusResponse returns steps in insertion order
+- ReasoningStepEntity class exists, Hibernate creates table on startup
+- saveAndFinalize() is @Transactional, used in AgentLoop for the
+  one save+markCompleted pair — no other callers changed
+- stateJson still populated (dual-write) — @Deprecated but not removed
+- AgentSessionService.getStatus() reads from loadSteps(), not stateJson
+- SessionStatusResponse returns steps in sequenceNum order
+- deserializeSteps() kept as-is (@Deprecated) for Phase 55.4 removal
 - Full test suite passes: .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am
+- Dev note: delete data folder and restart app to apply schema change
 ```

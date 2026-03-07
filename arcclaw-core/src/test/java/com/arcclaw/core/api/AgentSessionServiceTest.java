@@ -36,7 +36,6 @@ import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.ws.rs.core.Response;
 
@@ -65,9 +64,6 @@ class AgentSessionServiceTest {
     AgentResponseMapper responseMapper;
 
     @Mock
-    ObjectMapper objectMapper;
-
-    @Mock
     ExecutorService vThreads;
 
     @Mock
@@ -82,7 +78,7 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, devSeeder, responseMapper, objectMapper, vThreads);
+                heartbeatTracker, devSeeder, responseMapper, vThreads);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);

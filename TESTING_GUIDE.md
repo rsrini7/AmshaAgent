@@ -193,6 +193,8 @@ sqlite3 arcclaw-meta.db "SELECT * FROM compaction_summary;"
 
 sqlite3 arcclaw-meta.db "SELECT eventType, sessionId, timestamp FROM audit_event WHERE eventType = 'CONTEXT_COMPACTED';"
 
+sqlite3 arcclaw-meta.db "SELECT * FROM reasoning_step ORDER BY checkpoint_id, sequence_num;"
+
 # Should show 1 row
 ```
 

@@ -72,6 +72,31 @@ public interface StatefulAgentStore {
     void markCompleted(Long checkpointId);
 
     /**
+     * Save the final state of a checkpoint and mark it as completed or failed.
+     * <p>
+     * This creates/updates the {@link AgentCheckpoint} and persists all
+     * {@link ReasoningStepEntity} rows in a single atomic transaction.
+     *
+     * @param sessionId   The workspace session ID.
+     * @param agentRole   The agent role identifier.
+     * @param steps       The final reasoning history to persist.
+     * @param finalStatus The final status (COMPLETED or FAILED).
+     * @return The finalized checkpoint.
+     */
+    AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
+                                    List<ReasoningStep> steps,
+                                    CheckpointStatus finalStatus);
+
+    /**
+     * Load reasoning steps for a specific checkpoint from the granular
+     * step repository.
+     *
+     * @param checkpointId The checkpoint ID.
+     * @return List of reasoning steps reconstructed from entities.
+     */
+    List<ReasoningStep> loadSteps(Long checkpointId);
+
+    /**
      * Find the most recent AWAITING_APPROVAL checkpoint for a cron session
      * with the given cronId. Matches sessionId pattern: "cron-{cronId}-%".
      */

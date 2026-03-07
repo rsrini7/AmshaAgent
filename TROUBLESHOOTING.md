@@ -3171,3 +3171,24 @@ arcclaw:
 * **Symptom:** `package AgentResult does not exist` or `AgentRoleEnum.COORDINATOR does not exist` in `arcclaw-app` after a successful `arcclaw-core` build.
 * **Root Cause:** Maven reactor inconsistency when running `-pl arcclaw-app` without `-am`. The app module was attempting to compile against a stale version of `arcclaw-core` in the local repository instead of the updated source in the reactor.
 * **Resolution:** Always use the `-am` (also-make) flag when building a specific submodule to ensure all internal dependencies are updated in the reactor: `./mvnw clean test -pl arcclaw-app -am`.
+
+---
+
+## 22. Phase 55.3 — AgentCheckpoint Normalization
+
+### 🔴 Failure: `SQLITE_CONSTRAINT_NOTNULL` on `agent_checkpoint.status`
+
+**Symptom:** During `saveAndFinalize()`, Hibernate throws a `ConstraintViolationException`: `[SQLITE_CONSTRAINT_NOTNULL] A NOT NULL constraint failed (agent_checkpoint.status)`.
+
+**Root Cause:** The `saveAndFinalize()` method was attempting to `em.persist(checkpoint)` before the `status` and `role` fields were explicitly set on the new entity instance. Since these fields are marked as `NOT NULL` in the schema, the database rejected the partial insert.
+
+**Resolution:** Ensure all `NOT NULL` fields (`id`, `sessionId`, `agentRole`, `status`) are set on the `AgentCheckpoint` entity **before** calling `em.persist()`.
+
+### 🔴 Failure: Compilation Error — Missing `java.util.Map` in `StatefulAgentStoreImpl`
+
+**Symptom:** `mvn compile` fails with `cannot find symbol: class Map` in `StatefulAgentStoreImpl.java`.
+
+**Root Cause:** The implementation of `loadSteps()` introduced the use of `Map.of()` but forgot to import `java.util.Map`.
+
+**Resolution:** Added `import java.util.Map;` to the imports section of `StatefulAgentStoreImpl.java`.
+

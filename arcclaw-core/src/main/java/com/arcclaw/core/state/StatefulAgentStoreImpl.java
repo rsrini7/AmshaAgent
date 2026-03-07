@@ -2,6 +2,7 @@ package com.arcclaw.core.state;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -108,6 +109,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Deprecated
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
         if (checkpoint.getStateJson() == null || checkpoint.getStateJson().isBlank()) {
             return List.of();
@@ -180,6 +182,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
                 if (checkpoint != null) {
                     checkpoint.setStatus(CheckpointStatus.COMPLETED);
+                    checkpoint.setCompletedAt(Instant.now());
                     em.merge(checkpoint);
                     
                     String userId = (String) MDC.get("userId");
@@ -190,6 +193,125 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             });
             return null;
         }, "markCompleted");
+    }
+
+    @Override
+    public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, List<ReasoningStep> steps, CheckpointStatus finalStatus) {
+        return withRetry(() -> {
+            return QuarkusTransaction.requiringNew().call(() -> {
+                String json = serializeSteps(steps);
+                Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
+
+                AgentCheckpoint checkpoint;
+                if (existing.isPresent()) {
+                    checkpoint = existing.get();
+                    checkpoint.setStateJson(json);
+                    log.debugf("Updating checkpoint for finalization: session=%s, role=%s", sessionId, agentRole);
+                } else {
+                    checkpoint = new AgentCheckpoint();
+                    checkpoint.setSessionId(sessionId);
+                    checkpoint.setAgentRole(agentRole);
+                    checkpoint.setStateJson(json);
+                    checkpoint.setStatus(finalStatus); // Fix: Set status before persist
+                    em.persist(checkpoint);
+                    
+                    String userId = (String) MDC.get("userId");
+                    auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
+                    log.infof("Created new checkpoint for finalization: session=%s, role=%s", sessionId, agentRole);
+                }
+
+                checkpoint.setStatus(finalStatus);
+                if (finalStatus == CheckpointStatus.COMPLETED) {
+                    checkpoint.setCompletedAt(Instant.now());
+                } else if (finalStatus == CheckpointStatus.FAILED) {
+                    checkpoint.setFailedAt(Instant.now());
+                }
+                checkpoint = em.merge(checkpoint);
+
+                final Long cpId = checkpoint.getId();
+                em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
+                        .setParameter("id", cpId)
+                        .executeUpdate();
+
+                for (int i = 0; i < steps.size(); i++) {
+                    ReasoningStep step = steps.get(i);
+                    ReasoningStepEntity entity = new ReasoningStepEntity();
+                    entity.setCheckpointId(cpId);
+                    entity.setSequenceNum(i);
+                    entity.setThoughtJson(serialize(step.thought()));
+                    entity.setAction(step.action());
+                    entity.setActionInputJson(serialize(step.actionInput()));
+                    entity.setObservation(step.observation());
+                    entity.setInputTokens(step.inputTokens());
+                    entity.setOutputTokens(step.outputTokens());
+                    em.persist(entity);
+                }
+
+                String userId = (String) MDC.get("userId");
+                SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED 
+                        ? SecurityEventType.CHECKPOINT_COMPLETED 
+                        : SecurityEventType.CHECKPOINT_FAILED;
+                auditService.record(sessionId, userId, agentRole, eventType, null);
+
+                log.infof("Checkpoint session=%s role=%s finalized with status=%s", sessionId, agentRole, finalStatus);
+                return checkpoint;
+            });
+        }, "saveAndFinalize");
+    }
+
+    @Override
+    @Transactional
+    public List<ReasoningStep> loadSteps(Long checkpointId) {
+        TypedQuery<ReasoningStepEntity> q = em.createQuery(
+                "SELECT r FROM ReasoningStepEntity r WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC",
+                ReasoningStepEntity.class
+        );
+        q.setParameter("id", checkpointId);
+        List<ReasoningStepEntity> entities = q.getResultList();
+
+        return entities.stream()
+                .map(this::mapToReasoningStep)
+                .toList();
+    }
+
+    private ReasoningStep mapToReasoningStep(ReasoningStepEntity entity) {
+        return new ReasoningStep(
+                deserialize(entity.getThoughtJson(), String.class),
+                entity.getAction(),
+                deserialize(entity.getActionInputJson(), new TypeReference<Map<String, Object>>() {}),
+                entity.getObservation(),
+                entity.getInputTokens(),
+                entity.getOutputTokens()
+        );
+    }
+
+    private <T> T deserialize(String json, Class<T> clazz) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, clazz);
+        } catch (JsonProcessingException e) {
+            log.errorf(e, "Failed to deserialize reasoning step component: %s", json);
+            return null;
+        }
+    }
+
+    private <T> T deserialize(String json, TypeReference<T> typeRef) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, typeRef);
+        } catch (JsonProcessingException e) {
+            log.errorf(e, "Failed to deserialize reasoning step component: %s", json);
+            return null;
+        }
+    }
+
+    private String serialize(Object obj) {
+        if (obj == null) return null;
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize reasoning step component", e);
+        }
     }
 
     private <T> T withRetry(Callable<T> task, String operation) {

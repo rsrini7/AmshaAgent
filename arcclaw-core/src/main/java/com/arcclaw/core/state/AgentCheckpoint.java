@@ -65,12 +65,17 @@ public class AgentCheckpoint {
      * Jackson-serialized {@code List<ReasoningStep>}.
      * <p>
      * Stored as standard TEXT — no {@code @Lob} for SQLite compatibility.
+     * @deprecated Replaced by {@link ReasoningStepEntity} in Phase 55.3.
      */
+    @Deprecated
     @Column(columnDefinition = "TEXT")
     private String stateJson;
 
     /** Timestamp when a failure occurred (null if not failed). */
     private Instant failedAt;
+
+    /** Timestamp when the checkpoint completed successfully (null if not completed). */
+    private Instant completedAt;
 
     /** Human-readable failure reason (null if not failed). */
     @Column(length = 1024)
@@ -149,6 +154,14 @@ public class AgentCheckpoint {
 
     public void setFailedAt(Instant failedAt) {
         this.failedAt = failedAt;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(Instant completedAt) {
+        this.completedAt = completedAt;
     }
 
     public String getFailReason() {
