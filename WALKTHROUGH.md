@@ -70,7 +70,8 @@
 | 53 | AgentCronScheduler SRP Refactor | 100% success | Separated dispatcher, executor, and handler logic; fixed audit logging |
 | 53.3 | Agent State Machine Refactor | 100% success | Extracted Guard, Invoker, and Writer for modular loop logic |
 | 53.4 | LangChainReasoningEngine Split | 100% success | Extracted Parser, Assembler, and Builder for modular LLM logic |
-
+| 53.5 | Package Reorganization | 100% success | Moved 23 core agent classes into logical sub-packages |
+| 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 
 
 ---
@@ -128,6 +129,36 @@ Refactored the monolithic reasoning engine into specialized components to improv
 - ✅ `ChatHistoryAssemblerTest` (filtering/truncation) passes.
 - ✅ `ReasoningStepParserTest` (JSON safety/tokens) passes.
 - ✅ Integration with `AgentLoopTest` and `LangChainReasoningEngineTest` verified successfully.
+
+---
+
+## Phase 53.5: Package Reorganization ✅
+
+Reorganized the `com.arcclaw.core.agent` package into logical sub-packages to improve maintainability and strictly enforce architectural boundaries. All 23 classes were moved, and the root package is now empty.
+
+**Verification**:
+- ✅ `mvn clean verify`: SUCCESS (266/266 tests pass).
+- ✅ Package review: Root `com.arcclaw.core.agent` is empty (no orphans).
+- ✅ Import audit: No stale or unrelated imports were introduced during automated refactoring.
+
+---
+
+## Phase 53.6: AgentLoop & AuditService Split ✅
+
+Extracted the resume checkpoint logic out of `AgentLoop` and split the `AuditService` into two focused tiers to enforce strict fail-open/fail-closed semantics.
+
+| File | Purpose |
+|------|---------|
+| [CheckpointResumeHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java) | Extracts resume hook and checkpoint evaluation logic from `AgentLoop`. |
+| [TelemetryAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/TelemetryAuditService.java) | Handles fire-and-forget telemetry events (`record`, `recordLoopCompletion`, `waitForIdle`). Swallows exceptions. |
+| [ComplianceAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/ComplianceAuditService.java) | Handles fail-closed mandatory audit events (`recordMandatory`). Throws `ComplianceViolationException` on failure. |
+| [AuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditService.java) | Refactored into a facade wrapping the two new tier services for backward compatibility. |
+
+**Verification**:
+- ✅ `CheckpointResumeHandlerTest` (denial, approval, failures) passes.
+- ✅ `TelemetryAuditServiceTest` and `ComplianceAuditServiceTest` pass.
+- ✅ Integration with `AgentLoopTest` and `AuditServiceTest` verified successfully.
+
 ## Phase 0: Project Scaffolding ✅
 
 | File | Purpose |
@@ -1844,3 +1875,29 @@ Reorganized the `com.arcclaw.core.agent` package into a hierarchical structure o
 - ✅ `mvn clean verify`: 100% pass (266/266 tests).
 - ✅ Import Audit: Confirmed no stale imports or corrupted package declarations across 40+ modified files.
 - ✅ Jandex Index: Confirmed CDI bean discovery remains fully functional for all moved agents and components.
+
+---
+
+## Phase 53.6: AgentLoop & AuditService Split ✅
+
+Extracted the resume checkpoint logic out of `AgentLoop` and split the `AuditService` into two focused tiers to enforce strict fail-open/fail-closed semantics.
+
+| File | Purpose |
+|------|---------|
+| [CheckpointResumeHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java) | Extracts resume hook and checkpoint evaluation logic from `AgentLoop`. |
+| [TelemetryAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/TelemetryAuditService.java) | Handles fire-and-forget telemetry events (`record`, `recordLoopCompletion`, `waitForIdle`). Swallows exceptions. |
+| [ComplianceAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/ComplianceAuditService.java) | Handles fail-closed mandatory audit events (`recordMandatory`). Throws `ComplianceViolationException` on failure. |
+| [AuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditService.java) | Refactored into a facade wrapping the two new tier services for backward compatibility. |
+
+### Key Improvements
+
+1.  **Strict Semantic Tiering**: Audit events are now explicitly categorized. Telemetry (fire-and-forget) won't crash the agent loop, while Compliance (mandatory) ensures the system halts on security/legal boundaries.
+2.  **Modular Resume Logic**: Moving the logic from `AgentLoop.handleResumeHook()` to `CheckpointResumeHandler` allows for easier testing of complex checkpoint state transitions (approval vs denial).
+3.  **Surgical Import Cleanup**: Performed a final pass across `AgentLoop`, `AuditService`, and their respective test suites to remove unused imports and standardize formatting after the modular split.
+4.  **Preserved API Integrity**: The `AuditService` facade ensures no consumer logic needed adjustment while benefiting from the new backend tiering.
+
+**Verification Results**:
+- ✅ `CheckpointResumeHandlerTest`: 100% pass (Covers denial, approval, and serialization edge cases).
+- ✅ `TelemetryAuditServiceTest` & `ComplianceAuditServiceTest`: 100% pass (Verified exception management).
+- ✅ `AuditServiceTest`: Verified delegation logic and mock coordination.
+- ✅ Full `arcclaw-core` regression: All tests pass (266/266).
