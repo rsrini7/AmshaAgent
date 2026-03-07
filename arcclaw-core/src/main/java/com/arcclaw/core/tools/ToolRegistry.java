@@ -246,7 +246,7 @@ public class ToolRegistry {
                 secrets.put(single.envVar(), single.vaultKey());
             }
 
-        } catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException _) {
             log.warnf("Tool %s has no %s(Map) method — no secrets extracted",
                     actualClass.getName(), methodName);
         }

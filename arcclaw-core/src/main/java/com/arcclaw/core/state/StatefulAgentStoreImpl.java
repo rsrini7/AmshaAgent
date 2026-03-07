@@ -255,7 +255,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .setParameter("role", agentRole)
                 .setMaxResults(1)
                 .getResultList();
-        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
     }
 
     private String serializeSteps(List<ReasoningStep> steps) {

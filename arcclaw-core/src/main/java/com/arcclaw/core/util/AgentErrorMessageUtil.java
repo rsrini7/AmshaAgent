@@ -4,6 +4,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class AgentErrorMessageUtil {
+    
+    private static final Pattern TOKEN_LIMIT_PATTERN = Pattern.compile("Limit (\\d+), Used (\\d+), Requested (\\d+)");
+    private static final Pattern RETRY_AFTER_PATTERN = Pattern.compile("Please try again in ([\\dhms.]+)");
+    private static final Pattern DURATION_PATTERN = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?");
 
     private AgentErrorMessageUtil() {}
 
@@ -63,7 +67,7 @@ public final class AgentErrorMessageUtil {
         String waitTime = extractWaitTime(apiMessage);
         
         // Extract Limits from Groq's payload: "Limit 100000, Used 99854, Requested 5526"
-        Matcher tokenMatcher = Pattern.compile("Limit (\\d+), Used (\\d+), Requested (\\d+)").matcher(apiMessage);
+        Matcher tokenMatcher = TOKEN_LIMIT_PATTERN.matcher(apiMessage);
         
         if (tokenMatcher.find()) {
             String limit = tokenMatcher.group(1);
@@ -83,7 +87,7 @@ public final class AgentErrorMessageUtil {
 
     private static String extractWaitTime(String text) {
         // Matches "1h17m28.32s.", "26m47s", "120s" (sometimes includes the trailing period)
-        Matcher m = Pattern.compile("Please try again in ([\\dhms.]+)").matcher(text);
+        Matcher m = RETRY_AFTER_PATTERN.matcher(text);
         if (m.find()) {
             String timeStr = m.group(1);
             // Strip the trailing period if the regex greedily grabbed the end of the sentence
@@ -102,7 +106,7 @@ public final class AgentErrorMessageUtil {
         String s = rawInterval.trim().toLowerCase();
 
         // Match "(Xh)?(Ym)?(Zs)?"
-        Matcher m1 = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?").matcher(s);
+        Matcher m1 = DURATION_PATTERN.matcher(s);
         
         if (m1.matches()) {
             if (m1.group(1) != null) hours = Integer.parseInt(m1.group(1));

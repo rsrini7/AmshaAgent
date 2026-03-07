@@ -110,7 +110,7 @@ public class PodmanContainerExecutor {
             span.setAttribute("sandbox.strategy", "PODMAN");
 
             activeContainerNames.add(containerName); // track before start — avoids race on early failure
-            try (Scope scope = span.makeCurrent()) {
+            try (Scope _ = span.makeCurrent()) {
                 var podmanCmd = new ArrayList<>(List.of(
                         podmanPath, "run", "--rm",
                         "--name", containerName, // Fix G2: named for tracking + graceful stop

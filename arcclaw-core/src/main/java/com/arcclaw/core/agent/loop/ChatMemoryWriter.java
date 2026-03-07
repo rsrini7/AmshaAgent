@@ -33,7 +33,7 @@ public class ChatMemoryWriter {
 
                 boolean alreadySaved = false;
                 if (!currentHistory.isEmpty()) {
-                    ChatMessage lastMsg = currentHistory.get(currentHistory.size() - 1);
+                    ChatMessage lastMsg = currentHistory.getLast();
                     if (lastMsg instanceof UserMessage && lastMsg.toString().contains(goal)) {
                         alreadySaved = true;
                     }
