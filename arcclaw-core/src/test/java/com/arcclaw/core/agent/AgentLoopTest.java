@@ -4,23 +4,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.tools.ToolRegistry;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -28,60 +27,69 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 class AgentLoopTest {
 
     private ChatLanguageModel model;
     private ToolRegistry toolRegistry;
-    private ObjectMapper objectMapper;
-    private ChatMemoryStore chatMemoryStore;
-    private CompactionSummaryRepository compactionSummaryRepository;
     private RoleRegistry roleRegistry;
-    private PromptTemplateEngine promptTemplateEngine;
-    private AgentPersonaRegistry agentPersonaRegistry;
+    private SystemPromptBuilder promptBuilder;
+    private ChatHistoryAssembler historyAssembler;
+    private ReasoningStepParser stepParser;
     private LangChainReasoningEngine engine;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         model = mock(ChatLanguageModel.class);
         toolRegistry = mock(ToolRegistry.class);
-        objectMapper = new ObjectMapper();
-        chatMemoryStore = mock(ChatMemoryStore.class);
-        compactionSummaryRepository = mock(CompactionSummaryRepository.class);
         roleRegistry = mock(RoleRegistry.class);
-        promptTemplateEngine = mock(PromptTemplateEngine.class);
-        agentPersonaRegistry = mock(AgentPersonaRegistry.class);
+        promptBuilder = mock(SystemPromptBuilder.class);
+        historyAssembler = mock(ChatHistoryAssembler.class);
+        stepParser = mock(ReasoningStepParser.class);
         
-        when(compactionSummaryRepository.findLatestBySessionId(anyString()))
-                .thenReturn(Optional.empty());
-        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any()))
-                .thenReturn("MOCK SYSTEM PROMPT");
-        when(agentPersonaRegistry.getPersonaPrompt(any()))
-                .thenReturn("MOCK PERSONA PROMPT");
+        when(promptBuilder.build(any(), any())).thenReturn("MOCK SYSTEM PROMPT");
 
         engine = new LangChainReasoningEngine();
-        engine.chatLanguageModel = model;
-        engine.toolRegistry = toolRegistry;
-        engine.objectMapper = objectMapper;
-        engine.chatMemoryStore = chatMemoryStore;
-        engine.compactionSummaryRepository = compactionSummaryRepository;
-        engine.roleRegistry = roleRegistry;
-        engine.promptTemplateEngine = promptTemplateEngine;
-        engine.agentPersonaRegistry = agentPersonaRegistry;
+        
+        // Use reflection to set private fields
+        setField(engine, "chatLanguageModel", model);
+        setField(engine, "toolRegistry", toolRegistry);
+        setField(engine, "roleRegistry", roleRegistry);
+        setField(engine, "promptBuilder", promptBuilder);
+        setField(engine, "historyAssembler", historyAssembler);
+        setField(engine, "stepParser", stepParser);
+    }
+
+    private void setField(Object target, String name, Object value) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     @Test
     void testResumedHistoryHasFlatToolArguments() {
         WorkspaceScopeHolder.run("test-session", () -> {
-            // Create a ReasoningStep with toolName="github",
-            // toolArguments="..." but stored via actionInput wrapped in "parameters" exactly like AgentLoop does
+            // Act
             Map<String, Object> params = Map.of("parameters", "{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}");
             ReasoningStep step = new ReasoningStep("thought", "github", params, "obs", 0, 0);
 
             // Mock response to just return something
             when(model.chat(any(ChatRequest.class))).thenReturn(
                     ChatResponse.builder().aiMessage(AiMessage.from("response")).build()
+            );
+
+            // Mock history assembler to return a message with tool call
+            ToolExecutionRequest req = ToolExecutionRequest.builder()
+                    .name("github")
+                    .arguments("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}")
+                    .build();
+            when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of(
+                    AiMessage.from("thought", List.of(req))
+            ));
+            
+            // Mock parser
+            when(stepParser.parse(any(), any(), any())).thenReturn(
+                ReasoningStep.pending("response", ReasoningStep.FINISH, Map.of(), 0, 0)
             );
 
             engine.nextStep("test-session", "coordinator", "goal", List.of(step));
@@ -94,11 +102,11 @@ class AgentLoopTest {
             boolean found = false;
             for (ChatMessage msg : messages) {
                 if (msg instanceof AiMessage m && m.hasToolExecutionRequests()) {
-                    ToolExecutionRequest req = m.toolExecutionRequests().get(0);
-                    if ("github".equals(req.name())) {
+                    ToolExecutionRequest r = m.toolExecutionRequests().get(0);
+                    if ("github".equals(r.name())) {
                         found = true;
                         assertEquals("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}",
-                                req.arguments());
+                                r.arguments());
                     }
                 }
             }
