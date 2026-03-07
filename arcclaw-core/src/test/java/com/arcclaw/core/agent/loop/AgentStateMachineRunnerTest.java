@@ -39,6 +39,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 
+import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
 import jakarta.enterprise.inject.Instance;
 
@@ -216,5 +217,17 @@ class AgentStateMachineRunnerTest {
         verify(writer).saveAnswer(anyString(), anyString());
     }
 
+    @Test
+    void testRateLimitReturnsRateLimitCategory() {
+        HttpException ex = new HttpException(429, "Rate limit reached");
+        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+                .thenThrow(ex);
+
+        AgentResult result = runner.run(createCtx(), engine, List.of());
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertEquals(AgentResult.FailureCategory.RATE_LIMIT, ((AgentResult.Failed) result).category());
+        assertTrue(((AgentResult.Failed) result).reason().contains("⏳")); // Sanitizer adds this
+    }
 
 }

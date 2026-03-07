@@ -6,6 +6,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import dev.langchain4j.exception.HttpException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -37,8 +38,18 @@ public class IntentClassificationHandler implements MessageHandler {
                 String role = classifier.classify(message.text());
                 context.setAgentRole(role);
                 log.infof("Classified message as role '%s' for chat %s", role, context.getChatId());
+            } catch (HttpException e) {
+                if (e.statusCode() == 429 || (e.getMessage() != null && e.getMessage().contains("rate limit"))) {
+                    log.warnf("Intent classifier rate limited for chat %s — defaulting to coordinator: %s",
+                            context.getChatId(), e.getMessage());
+                    context.getSender().sendRaw(context.getUser(),
+                            "⏳ Rate limited on classification — defaulting to coordinator.");
+                    context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+                } else {
+                    throw e; // re-throw non-rate-limit HTTP errors
+                }
             } catch (Exception e) {
-                log.warnf("Intent classification failed, defaulting to 'coordinator': %s", e.getMessage());
+                log.warnf("Intent classification failed, defaulting to coordinator: %s", e.getMessage());
                 context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
             }
         } else {

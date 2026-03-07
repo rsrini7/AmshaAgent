@@ -236,7 +236,7 @@ public class AgentStateMachineRunner {
                 log.warnf("[STATE-MACHINE] Rate limit hit for session %s: %s", sessionId, humanMessage);
                     return StepDecision.terminal(AgentResult.failed(
                         humanMessage,  // already formatted — no re-sanitization needed downstream
-                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        AgentResult.FailureCategory.RATE_LIMIT,
                         List.copyOf(history)));
             }
 

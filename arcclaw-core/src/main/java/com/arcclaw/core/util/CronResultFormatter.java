@@ -14,7 +14,11 @@ public class CronResultFormatter {
             case AgentResult.AwaitingApproval a -> "⏸ Approval needed for tool: " + a.toolName() 
                                                 + "\nReply /approve or /deny";
             case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
-            case AgentResult.Failed f         -> "❌ " + AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
+            case AgentResult.Failed f         -> {
+                String msg = AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
+                yield (f.category() == AgentResult.FailureCategory.RATE_LIMIT || msg.startsWith("⏳"))
+                        ? msg : "❌ " + msg;
+            }
         };
 
         if (reply == null || reply.isBlank()) {
