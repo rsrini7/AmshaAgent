@@ -23,7 +23,7 @@ class TelegramAllowlistGuardRestrictedTest {
                 "quarkus.profile",                               "test",
                 "arcclaw.vault.pepper",                          "safe-pepper-for-boot-000000000000",
                 "arcclaw.audit.hmac-key",                        "safe-hmac-key-for-boot-000000000",
-                "arcclaw.telegram.allowed-users", "Alice,@Bob,charlie",
+                "arcclaw.channel.telegram.allowed-users", "Alice,@Bob,charlie",
                 "arcclaw.channel.telegram.allowed-user-ids",     ""
             );
         }

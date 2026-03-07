@@ -21,8 +21,16 @@ public class ReasoningStepParser {
 
     private static final Logger log = Logger.getLogger(ReasoningStepParser.class);
 
+    private final ObjectMapper objectMapper;
+
+    protected ReasoningStepParser() {
+        this.objectMapper = null;
+    }
+
     @Inject
-    ObjectMapper objectMapper;
+    public ReasoningStepParser(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     public ReasoningStep parse(String sessionId, String agentRole, ChatResponse response) {
         AiMessage aiMessage = response.aiMessage();

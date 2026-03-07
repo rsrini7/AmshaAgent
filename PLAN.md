@@ -3329,3 +3329,48 @@ Mechanical sweep to modernize the codebase using JDK 21+ features and clean up l
 - ✅ `mvnw clean test -pl arcclaw-core,arcclaw-app -am`
 - Total: 471 tests passed (350 core, 121 app).
 
+---
+
+# Phase 55.2 — JDK Modernization (ScopedValue & DI) ✅
+
+Refactor core components to use JDK 24 finalized `ScopedValue` and migrate to constructor injection to eliminate `@InjectMocks` and improve testability.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **ScopedValue vs ThreadLocal**: `CliAgentObserver` migrated to `ScopedValue<Boolean>` to ensure immutable, thread-safe propagation of the CLI enablement flag across virtual threads without the risk of `ThreadLocal` leaks.
+
+> [!IMPORTANT]
+> **Constructor Injection Mandatory**: Moved all 10 production beans to constructor injection. This is mandatory for beans being mocked in tests to avoid `@InjectMocks` (Rule 10), ensuring Mockito can reliably inject mocks through the constructor.
+
+> [!CAUTION]
+> **`AgentSessionService` DI Strategy**: Initially attempted `@QuarkusTest` + `@InjectMock` for `AgentSessionServiceTest`, but this failed due to static mocking of `WorkspaceScopeHolder` and `@Singleton` dependencies. Reverted to constructor injection + `MockitoExtension` for reliability.
+
+## Completed Changes
+
+### Core Module — Modernization
+
+#### [MODIFY] [CliAgentObserver.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/CliAgentObserver.java)
+- Migrated `static volatile boolean enabled` to `ScopedValue<Boolean> ENABLED`.
+
+#### [MODIFY] [AskCommand.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-app/src/main/java/com/arcclaw/app/cli/AskCommand.java)
+- Wrapped agent execution in `CliAgentObserver.ENABLED.where(true, ...)` call.
+
+### Core Module — Refactoring (Constructor Injection)
+
+#### [MODIFY] [SandboxSecretResolver.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/SandboxSecretResolver.java)
+#### [MODIFY] [AuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditService.java)
+#### [MODIFY] [ComplianceAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/ComplianceAuditService.java)
+#### [MODIFY] [TelemetryAuditService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/audit/TelemetryAuditService.java)
+#### [MODIFY] [ChatHistoryAssembler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java)
+#### [MODIFY] [ReasoningStepParser.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java)
+#### [MODIFY] [SystemPromptBuilder.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/SystemPromptBuilder.java)
+#### [MODIFY] [CheckpointResumeHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java)
+#### [MODIFY] [CronResultHandler.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CronResultHandler.java)
+#### [MODIFY] [AgentSessionService.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentSessionService.java)
+
+## Verification
+
+- ✅ `grep -r "arcclaw.telegram."` confirms all properties migrated to `arcclaw.channel.telegram.*`.
+- ✅ `mvn clean test -pl arcclaw-core,arcclaw-app -am` (121 tests passed).
+

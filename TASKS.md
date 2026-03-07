@@ -880,3 +880,29 @@
 - [x] Remove redundant `synchronized(history)` wrapper blocks in `AgentStateMachineRunner.java`. <!-- id: 310 -->
 - [x] Verify: `mvnw clean test -pl arcclaw-core,arcclaw-app -am` passes. <!-- id: 311 -->
 
+---
+
+# Phase 55.2 — JDK Modernization (ScopedValue & DI) ✅
+- [x] Migrate `CliAgentObserver` from `static volatile boolean` to `ScopedValue<Boolean>` <!-- id: 312 -->
+- [x] Update `AskCommand` to use `ScopedValue.where()` for agent execution <!-- id: 313 -->
+- [x] Fix Telegram config namespace: `arcclaw.telegram.*` -> `arcclaw.channel.telegram.*` <!-- id: 314 -->
+- [x] Refactor 10 beans to Constructor Injection (Rule 10):
+  - [x] `SandboxSecretResolver` <!-- id: 315 -->
+  - [x] `AuditService` facade <!-- id: 316 -->
+  - [x] `ComplianceAuditService` <!-- id: 317 -->
+  - [x] `TelemetryAuditService` <!-- id: 318 -->
+  - [x] `ChatHistoryAssembler` <!-- id: 319 -->
+  - [x] `ReasoningStepParser` <!-- id: 320 -->
+  - [x] `SystemPromptBuilder` <!-- id: 321 -->
+  - [x] `CheckpointResumeHandler` <!-- id: 322 -->
+  - [x] `CronResultHandler` <!-- id: 323 -->
+  - [x] `AgentSessionService` <!-- id: 324 -->
+- [x] Update test files to use constructor injection and remove `@InjectMocks`:
+  - [x] `SandboxSecretResolverTest` <!-- id: 325 -->
+  - [x] `AgentStateMachineRunnerTest` <!-- id: 326 -->
+  - [x] `SystemPromptBuilderTest` <!-- id: 327 -->
+  - [x] `ChatHistoryAssemblerTest` <!-- id: 328 -->
+  - [x] `ReasoningStepParserTest` <!-- id: 329 -->
+  - [x] `AgentSessionServiceTest` <!-- id: 330 -->
+- [x] Verify: `mvn clean test -pl arcclaw-core,arcclaw-app -am` (121 tests passed) <!-- id: 331 -->
+

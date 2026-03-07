@@ -11,8 +11,16 @@ import java.util.Map;
 @ApplicationScoped
 public class SandboxSecretResolver {
 
+    private final SecretVault secretVault;
+
+    protected SandboxSecretResolver() {
+        this.secretVault = null;
+    }
+
     @Inject
-    SecretVault secretVault;
+    public SandboxSecretResolver(SecretVault secretVault) {
+        this.secretVault = secretVault;
+    }
 
     /**
      * Resolves vault secrets for container injection as raw byte arrays.

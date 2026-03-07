@@ -14,11 +14,20 @@ public class TelemetryAuditService {
 
     private static final Logger log = Logger.getLogger(TelemetryAuditService.class);
 
-    @Inject
-    AuditEventRepository auditEventRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final AsyncPersistenceEngine persistenceEngine;
+
+    protected TelemetryAuditService() {
+        this.auditEventRepository = null;
+        this.persistenceEngine = null;
+    }
 
     @Inject
-    AsyncPersistenceEngine persistenceEngine;
+    public TelemetryAuditService(AuditEventRepository auditEventRepository,
+                                 AsyncPersistenceEngine persistenceEngine) {
+        this.auditEventRepository = auditEventRepository;
+        this.persistenceEngine = persistenceEngine;
+    }
 
     /**
      * Records a point-in-time security event.

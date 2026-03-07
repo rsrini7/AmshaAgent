@@ -1,19 +1,24 @@
 package com.arcclaw.core.sandbox;
 
-import com.arcclaw.core.security.SecretVault;
-import com.arcclaw.core.security.VaultKey;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultKey;
 
 public class SandboxSecretResolverTest {
 
@@ -23,12 +28,12 @@ public class SandboxSecretResolverTest {
     @Mock
     VaultKey vaultKey;
 
-    @InjectMocks
     SandboxSecretResolver secretResolver;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        secretResolver = new SandboxSecretResolver(secretVault);
     }
 
     @Test
