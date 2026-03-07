@@ -1,9 +1,9 @@
 package com.arcclaw.app.scheduler;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -13,17 +13,12 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.arcclaw.core.agent.AgentLoop;
-import com.arcclaw.core.agent.AgentResult;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
@@ -32,8 +27,6 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 /**
@@ -42,16 +35,6 @@ import jakarta.inject.Inject;
 @QuarkusTest
 @TestProfile(AgentCronSchedulerConcurrencyTest.SmallPoolProfile.class)
 class AgentCronSchedulerConcurrencyTest {
-
-    @ApplicationScoped
-    public static class EventCollector {
-        private final List<AgentJobCompleted> events = new CopyOnWriteArrayList<>();
-        void onJobCompleted(@Observes AgentJobCompleted event) {
-            events.add(event);
-        }
-        public List<AgentJobCompleted> getEvents() { return events; }
-        public void clear() { events.clear(); }
-    }
 
     public static class SmallPoolProfile implements QuarkusTestProfile {
         @Override
@@ -67,13 +50,7 @@ class AgentCronSchedulerConcurrencyTest {
     AgentCronRepository cronRepository;
 
     @InjectMock
-    AgentLoop agentLoop;
-
-    @InjectMock
-    AuditService auditService;
-
-    @Inject
-    EventCollector collector;
+    CronJobRunner jobRunner;
 
     private AgentCronEntity createDueJob(boolean runOnce) {
         AgentCronEntity e = new AgentCronEntity();
@@ -92,8 +69,7 @@ class AgentCronSchedulerConcurrencyTest {
 
     @BeforeEach
     void setup() {
-        reset(cronRepository, agentLoop, auditService);
-        collector.clear();
+        reset(cronRepository, jobRunner);
 
         // Ensure exactly 2 permits are available via delegated method call
         scheduler.resetConcurrencyLimit(2);
@@ -112,15 +88,15 @@ class AgentCronSchedulerConcurrencyTest {
         CountDownLatch gateLatch = new CountDownLatch(1);
         CountDownLatch finishLatch = new CountDownLatch(2);
 
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenAnswer(inv -> {
+        doAnswer(inv -> {
             try {
                 startLatch.countDown();
                 gateLatch.await(60, TimeUnit.SECONDS);
-                return AgentResult.finished("OK", List.of());
+                return null;
             } finally {
                 finishLatch.countDown();
             }
-        });
+        }).when(jobRunner).execute(any());
 
         scheduler.pollAndDispatch();
 
@@ -160,15 +136,15 @@ class AgentCronSchedulerConcurrencyTest {
         CountDownLatch gateLatch = new CountDownLatch(1);
         CountDownLatch finishLatch = new CountDownLatch(2);
 
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenAnswer(inv -> {
+        doAnswer(inv -> {
             try {
                 startLatch.countDown();
                 gateLatch.await(60, TimeUnit.SECONDS);
-                return AgentResult.finished("done", List.of());
+                return null;
             } finally {
                 finishLatch.countDown();
             }
-        });
+        }).when(jobRunner).execute(any());
 
         // Fire first two jobs
         scheduler.pollAndDispatch();
@@ -183,18 +159,18 @@ class AgentCronSchedulerConcurrencyTest {
 
         // Fire third job - should succeed if semaphore was released
         CountDownLatch finishLatch3 = new CountDownLatch(1);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenAnswer(inv -> {
+        doAnswer(inv -> {
             try {
-                return AgentResult.finished("done", List.of());
+                return null;
             } finally {
                 finishLatch3.countDown();
             }
-        });
+        }).when(jobRunner).execute(any());
 
         scheduler.pollAndDispatch();
         assertTrue(finishLatch3.await(60, TimeUnit.SECONDS), "Job 3 did not finish after release");
         
-        verify(agentLoop, times(3)).run(anyString(), anyString(), anyString(), any(), anyInt());
+        verify(jobRunner, times(3)).execute(any());
     }
 
     private void assertTrue(boolean condition, String msg) {
@@ -215,24 +191,14 @@ class AgentCronSchedulerConcurrencyTest {
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch finishLatch = new CountDownLatch(2);
 
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
-            .thenAnswer(inv -> {
-                try {
-                    startLatch.countDown();
-                    throw new RuntimeException("inner-failure");
-                } finally {
-                    finishLatch.countDown();
-                }
-            })
-            .thenAnswer(inv -> {
-                try {
-                    startLatch.countDown();
-                    throw new RuntimeException("inner-failure");
-                } finally {
-                    finishLatch.countDown();
-                }
-            })
-            .thenReturn(AgentResult.finished("ok", List.of()));
+        doAnswer(inv -> {
+            try {
+                startLatch.countDown();
+                throw new RuntimeException("inner-failure");
+            } finally {
+                finishLatch.countDown();
+            }
+        }).when(jobRunner).execute(any());
 
         // Fire first two jobs that throw
         scheduler.pollAndDispatch();
@@ -242,21 +208,19 @@ class AgentCronSchedulerConcurrencyTest {
         // Wait for permit release
         waitForPermits(2);
 
-        verify(cronRepository, times(2)).markFailed(anyString(), eq("inner-failure"));
-
         // Fire third job - should execute if permits were released
         CountDownLatch finishLatch3 = new CountDownLatch(1);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenAnswer(inv -> {
+        doAnswer(inv -> {
             try {
-                return AgentResult.finished("ok", List.of());
+                return null;
             } finally {
                 finishLatch3.countDown();
             }
-        });
+        }).when(jobRunner).execute(any());
 
         scheduler.pollAndDispatch();
         assertTrue(finishLatch3.await(60, TimeUnit.SECONDS), "Job 3 did not execute after exceptions");
         
-        verify(agentLoop, times(3)).run(anyString(), anyString(), anyString(), any(), anyInt());
+        verify(jobRunner, times(3)).execute(any());
     }
 }

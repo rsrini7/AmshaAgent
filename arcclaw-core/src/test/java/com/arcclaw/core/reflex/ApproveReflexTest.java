@@ -74,7 +74,11 @@ class ApproveReflexTest {
         cron.lastDeliveryId = "dlv-1";
         cron.chatId = "chat-1";
 
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId("cron-session-123");
+
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
+        when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
                 .thenReturn(AgentResult.finished("Cron Success", List.of()));
 
