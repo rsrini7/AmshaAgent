@@ -78,19 +78,59 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 > [!NOTE]
 > The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
 
-### Deity Alias Reference
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'fontSize': '14px'}}}%%
+graph LR
+    classDef classifier fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
+    classDef coordinator fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
+    classDef researcher fill:#1a0d2a,stroke:#ce93d8,stroke-width:1.5px,color:#e1bee7
+    classDef coder fill:#1a1a0d,stroke:#e8a045,stroke-width:1.5px,color:#fff9c4
+    classDef debugger fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2
+    classDef architect fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
+    classDef synthesizer fill:#0d1a1a,stroke:#4dd0e1,stroke-width:1.5px,color:#b2ebf2
+    classDef tool fill:#1a1200,stroke:#ffb74d,stroke-width:1px,color:#ffe0b2
+    classDef policy fill:#0d0d1a,stroke:#7986cb,stroke-width:1px,color:#c5cae9
+    classDef empty fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
 
-All deity names also work as the `agentRole` value in REST requests and CLI flags:
+    IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
 
-```json
-{ "agentRole": "vishnu"     }  →  coordinator
-{ "agentRole": "saraswati"  }  →  researcher
-{ "agentRole": "brahma"     }  →  coder
-{ "agentRole": "shiva"      }  →  debugger
-{ "agentRole": "dattatreya" }  →  synthesizer
+    subgraph AGENTS["  🕉️  THE COSMIC PANTHEON — SIX AGENTS  "]
+        direction TB
+        A1["🔵 coordinator — Vishnu<br/>The Preserver<br/>Routes · Delegates · Synthesizes"]:::coordinator
+        A2["🟣 researcher — Saraswati<br/>Knowledge Goddess<br/>Fact retrieval · No code"]:::researcher
+        A3["🟠 coder — Brahma<br/>The Creator<br/>Pure logic · EMPTY tool schema"]:::coder
+        A4["🔴 debugger — Shiva<br/>The Transformer<br/>Contrarian · Finds blind spots"]:::debugger
+        A5["🟡 architect — Brihaspati<br/>System Designer<br/>ADRs · Trade-offs · No prod code"]:::architect
+        A6["🟢 synthesizer — Dattatreya<br/>Trinity Incarnate<br/>Cross-domain · Multi-specialist"]:::synthesizer
+    end
+
+    subgraph TOOLS["  🛠️  TOOLS & GOVERNANCE LAYER  "]
+        direction TB
+        T1["🐙 github<br/>GH CLI via Podman sandbox<br/>GH_TOKEN injected via tmpfs"]:::tool
+        T2["⏰ scheduletask<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
+        T3["📋 manageschedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
+        T4["🔍 memory_search<br/>SQLite FTS5 full-text<br/>Past compaction summaries"]:::tool
+    end
+
+    subgraph AUTONOMY["  🔰  AUTONOMY POLICY  "]
+        direction TB
+        AU1["FULL — All ops permitted"]:::policy
+        AU2["SUPERVISED ← default<br/>NETWORK_OUTBOUND → HITL pause"]:::policy
+        AU3["BACKGROUND — READ_FS only<br/>No scheduling"]:::policy
+        AU4["READONLY — READ_FS only<br/>Most restricted"]:::policy
+    end
+
+    IC --> A1 & A2 & A3 & A4 & A5 & A6
+
+    A1 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
+    A2 -->|"github · memory_search"| T1 & T4
+    A3 -.->|"∅ structurally empty<br/>no tool access"| TOOLS
+    A4 -->|"github only"| T1
+    A5 -->|"github · memory_search"| T1 & T4
+    A6 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
+
+    TOOLS --> AUTONOMY
 ```
-
-`architect` (Brihaspati) uses the role name directly — no deity alias registered.
 
 ### Tool Schema Enforcement
 
@@ -125,144 +165,234 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 8. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
 
 ```mermaid
-graph TD
-    RestClient([REST Client / UI]) -->|HTTP| REST[AgentResource REST API]
-    CLIUser([CLI User]) -->|chat / ask / serve| CLI[PicoCLI Commands]
-    TelegramUser([Telegram User]) -->|Apache Camel Route| TH[TelegramAgentHandler]
-    FutureChannel([Future Channel<br/>Discord / Slack / SMS]) -.->|ChannelSender impl| Pipeline
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d1420', 'fontSize': '14px'}}}%%
+flowchart TD
+    classDef entry fill:#1a3a2a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
+    classDef handler fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
+    classDef reflex fill:#1a1a0d,stroke:#e8a045,stroke-width:1.5px,color:#ffe082
+    classDef reflexOut fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffcc80
+    classDef decision fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7
+    classDef loop fill:#0d1a2a,stroke:#4fc3f7,stroke-width:1px,color:#b3e5fc
+    classDef approval fill:#1a0d0d,stroke:#ef9a9a,stroke-width:2px,color:#ffcdd2
+    classDef sandbox fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
+    classDef result fill:#1a2a1a,stroke:#81c784,stroke-width:2px,color:#a5d6a7,font-weight:bold
 
-    CLI --> Pipeline[MessagePipeline]
+    IN(["📨 Inbound Message<br/>REST · Telegram · CLI"]):::entry
+
+    subgraph PIPELINE["  🔀  MESSAGE PIPELINE  "]
+        direction TB
+        P1["① AllowlistHandler<br/>Block non-permitted users"]:::handler
+        P2["② SessionResolutionHandler<br/>Derive deterministic session UUID"]:::handler
+        P3{"③ ReflexRegistry<br/>Zero-token fast-path?"}:::decision
+        P4["④ IntentClassificationHandler<br/>llama-3.1-8b-instant → best role"]:::handler
+        P5["⑤ CompactionHandler<br/>Rolling window threshold check"]:::handler
+        P6["⑥ AgentDispatchHandler<br/>Spawn ReAct loop"]:::handler
+    end
+
+    subgraph REFLEXES["  ⚡  REFLEX SHORTCUTS — No LLM tokens consumed  "]
+        direction LR
+        R1["/approve · /deny · /halt"]:::reflexOut
+        R2["/status · /history · /crons"]:::reflexOut
+        R3["PII Scan → Redact or Block"]:::reflexOut
+        R4["Prompt Injection → Block"]:::reflexOut
+    end
+
+    subgraph REACT["  🔁  ReAct AGENT LOOP — LangChain4J  "]
+        direction TB
+        L1["🧠 LLM Reasoning<br/>Thought + Plan"]:::loop
+        L2{"Tool call<br/>required?"}:::decision
+        L3{"HITL Gate<br/>NETWORK_OUTBOUND<br/>+ SUPERVISED?"}:::decision
+        L4["⏸ AWAITING_APPROVAL<br/>Checkpoint saved → 202"]:::approval
+        L5["🏖 ProcessIsolationExecutor<br/>Podman → Namespace → Direct"]:::sandbox
+        L6["📝 Observation appended<br/>SQLite checkpoint written"]:::loop
+        L7{"FINISH<br/>detected?"}:::decision
+        L8(["✅ AgentResult<br/>Reply sent to channel"]):::result
+    end
+
+    IN --> P1 --> P2 --> P3
+    P3 -->|"reflex matched"| REFLEXES
+    P3 -->|"no reflex"| P4 --> P5 --> P6
+    P6 --> L1 --> L2
+    L2 -->|"no"| L7
+    L2 -->|"yes"| L3
+    L3 -->|"approved / FULL autonomy"| L5
+    L3 -->|"needs approval"| L4
+    L5 --> L6 --> L7
+    L7 -->|"no — next iteration"| L1
+    L7 -->|"yes"| L8
+```
+
+<details>
+<summary>Detailed Architecture Diagrams</summary>
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d2035', 'fontSize': '13px'}}}%%
+graph TD
+    classDef client fill:#1a2a1a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
+    classDef channel fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
+    classDef pipeline fill:#0d1420,stroke:#4fc3f7,stroke-width:1px,color:#b3e5fc
+    classDef reflex fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffe082
+    classDef reflexNode fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffcc80
+    classDef kernel fill:#0d1a2a,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
+    classDef ai fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
+    classDef schema fill:#1a1200,stroke:#ffb74d,stroke-width:1px,color:#ffe0b2
+    classDef noTool fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
+    classDef sandbox fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
+    classDef podman fill:#0d1a0d,stroke:#81c784,stroke-width:2px,color:#a5d6a7,font-weight:bold
+    classDef namespace fill:#0d1a10,stroke:#4db6ac,stroke-width:1.5px,color:#b2dfdb
+    classDef direct fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2,stroke-dasharray:4 4
+    classDef hitl fill:#1a1000,stroke:#ffb74d,stroke-width:2px,color:#ffe0b2,font-weight:bold
+    classDef cron fill:#0d1535,stroke:#7986cb,stroke-width:1.5px,color:#c5cae9
+    classDef db fill:#0d1420,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
+    classDef groq fill:#1a0d35,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
+    classDef future fill:#111111,stroke:#444,stroke-width:1px,color:#666,stroke-dasharray:6 3
+
+    RestClient(["🖥 REST Client / UI"]):::client
+    CLIUser(["💻 CLI User"]):::client
+    TelegramUser(["📱 Telegram User"]):::client
+    FutureChannel(["🔮 Future Channel<br/>Discord / Slack / SMS"]):::future
+
+    RestClient -->|HTTP| REST["🌐 AgentResource<br/>REST API"]:::channel
+    CLIUser -->|"chat / ask / serve"| CLI["⌨️ PicoCLI Commands"]:::channel
+    TelegramUser -->|"Apache Camel Route"| TH["🤖 TelegramAgentHandler"]:::channel
+    FutureChannel -.->|"ChannelSender impl"| Pipeline
+
+    CLI --> Pipeline["🔀 MessagePipeline"]:::pipeline
     TH --> Pipeline
     REST --> Pipeline
 
-    subgraph Message Pipeline
-        Pipeline --> ALH[AllowlistHandler<br/>user allowlist check]
-        ALH --> CDH[CommandDispatchHandler<br/>Reflex fast-path]
-        CDH --> SRH[SessionResolutionHandler<br/>session binding]
-        SRH --> ICH[IntentClassificationHandler<br/>llama-3.1-8b-instant]
-        ICH --> CH[CompactionHandler<br/>FTS5 compaction trigger]
-        CH --> ADH[AgentDispatchHandler<br/>Agent run]
+    subgraph MP["  📨  MESSAGE PIPELINE  "]
+        Pipeline --> ALH["① AllowlistHandler<br/>User allowlist check"]:::pipeline
+        ALH --> CDH["② CommandDispatchHandler<br/>Reflex fast-path"]:::pipeline
+        CDH --> SRH["③ SessionResolutionHandler<br/>Session binding"]:::pipeline
+        SRH --> ICH["④ IntentClassificationHandler<br/>llama-3.1-8b-instant"]:::pipeline
+        ICH --> CH["⑤ CompactionHandler<br/>FTS5 compaction trigger"]:::pipeline
+        CH --> ADH["⑥ AgentDispatchHandler<br/>Agent run"]:::pipeline
     end
 
-    subgraph Reflex System - No LLM Tokens Consumed
-        CDH -->|matches| RR[ReflexRegistry]
-        RR --> ApR[ApproveReflex /approve]
-        RR --> DeR[DenyReflex /deny]
-        RR --> HaR[HaltReflex /halt]
-        RR --> HiR[HistoryReflex /history]
-        RR --> StR[StatusReflex /status]
-        RR --> LC[ListCronsReflex /crons]
-        RR --> DC[DeleteCronReflex deletecron id]
-        RR --> ReR[ResetReflex /reset]
-        RR --> PII[PiiScanReflex redact before LLM]
-        RR --> PIR[PromptInjectionReflex block jailbreaks]
+    subgraph RS["  ⚡  REFLEX SYSTEM — Zero LLM Tokens Consumed  "]
+        CDH -->|matches| RR["🔍 ReflexRegistry"]:::reflex
+        RR --> ApR["✅ ApproveReflex — /approve"]:::reflexNode
+        RR --> DeR["❌ DenyReflex — /deny"]:::reflexNode
+        RR --> HaR["🛑 HaltReflex — /halt"]:::reflexNode
+        RR --> HiR["📋 HistoryReflex — /history"]:::reflexNode
+        RR --> StR["📊 StatusReflex — /status"]:::reflexNode
+        RR --> LC["⏰ ListCronsReflex — /crons"]:::reflexNode
+        RR --> DC["🗑 DeleteCronReflex — deletecron id"]:::reflexNode
+        RR --> ReR["🔄 ResetReflex — /reset"]:::reflexNode
+        RR --> PII["🔒 PiiScanReflex<br/>Redact before LLM"]:::reflexNode
+        RR --> PIR["🚫 PromptInjectionReflex<br/>Block jailbreaks"]:::reflexNode
     end
 
-    ADH --> Loop[AgentLoop Orchestrator]
+    ADH --> Loop["🧠 AgentLoop Orchestrator"]:::kernel
 
-    subgraph Core Kernel
-        Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB<br/>WAL + Async Writer)]
-        Loop <-->|JDBC ChatMemory<br/>Rolling Window| JDBC[(Persistent ChatMemory<br/>+ FTS5 Long-Term Memory)]
-        Loop <-->|Prompt + Role-Filtered<br/>Tool Schema| AI[LangChainReasoningEngine]
-        Loop -->|Execute Tool Request| ToolReg[ToolRegistry<br/>Governance + HITL]
+    subgraph CK["  ⚙️  CORE KERNEL  "]
+        Loop <-->|"Load / Save State"| SQLite[("🗃 SQLite Checkpoint DB<br/>WAL + Async Writer")]:::db
+        Loop <-->|"JDBC ChatMemory<br/>Rolling Window"| JDBC[("💾 Persistent ChatMemory<br/>+ FTS5 Long-Term Memory")]:::db
+        Loop <-->|"Prompt + Role-Filtered<br/>Tool Schema"| AI["✨ LangChainReasoningEngine"]:::ai
+        Loop -->|"Execute Tool Request"| ToolReg["🔰 ToolRegistry<br/>Governance + HITL"]:::kernel
     end
 
-    subgraph Strict Tool Binding per Role
-        AI -->|agentRole filter| Schema{Schema Filter<br/>getPermittedToolNames}
-        Schema -->|coordinator / synthesizer| ST[scheduletask + manageschedule]
-        Schema -->|coordinator / researcher / architect / synthesizer| MS[memory_search]
-        Schema -->|coordinator / researcher / architect / debugger / synthesizer| GT[github]
-        Schema -->|coder| NoTool[empty schema<br/>tool bias impossible]
+    subgraph STB["  🎭  STRICT TOOL BINDING PER ROLE  "]
+        AI -->|"agentRole filter"| Schema{"🔀 Schema Filter<br/>getPermittedToolNames"}:::schema
+        Schema -->|"coordinator / synthesizer"| ST["⏰ scheduletask<br/>manageschedule"]:::schema
+        Schema -->|"coordinator / researcher<br/>architect / synthesizer"| MS["🔍 memory_search"]:::schema
+        Schema -->|"coordinator / researcher<br/>architect / debugger / synthesizer"| GT["🐙 github"]:::schema
+        Schema -->|"coder"| NoTool["∅ empty schema<br/>tool bias impossible"]:::noTool
     end
 
-    AI <-->|Cloud Reasoning| Groq((Groq: llama-4-scout<br/>17b-16e-instruct))
-    Loop -->|Micrometer| Prom[Prometheus /q/metrics]
+    AI <-->|"Cloud Reasoning"| Groq(["☁️ Groq — llama-4-scout<br/>17b-16e-instruct"]):::groq
+    Loop -->|"Micrometer"| Prom["📈 Prometheus /q/metrics"]:::cron
 
-    subgraph Sandbox Layer - Three-Tier Degradation
-        ToolReg -->|requiresSandbox=true| AgentToolImpl[AgentTool Implementation]
-        AgentToolImpl -->|sandboxCommand + @RequiresSecret| PIE[ProcessIsolationExecutor]
-
-        PIE -->|strategy=PODMAN<br/>Podman available| Podman[(Podman Rootless Container<br/>--network=none --read-only<br/>memory=512m + cpu=0.5)]
-        PIE -->|Podman circuit open<br/>3 failures| NS[Linux unshare Namespaces<br/>pid + net + mount isolated]
-        PIE -->|strategy=NONE<br/>%test profile or Windows| Direct[Direct ProcessBuilder<br/>Host PATH execution<br/>no isolation]
+    subgraph SL["  🏖  SANDBOX LAYER — Three-Tier Degradation  "]
+        ToolReg -->|"requiresSandbox=true"| AgentToolImpl["🛠 AgentTool Implementation"]:::sandbox
+        AgentToolImpl -->|"sandboxCommand + @RequiresSecret"| PIE["⚡ ProcessIsolationExecutor"]:::sandbox
+        PIE -->|"strategy=PODMAN<br/>Podman available"| Podman[("🐳 Podman Rootless Container<br/>--network=none · --read-only<br/>memory=512m · cpu=0.5")]:::podman
+        PIE -->|"Podman circuit open<br/>3 failures"| NS["🐧 Linux unshare Namespaces<br/>pid + net + mount isolated"]:::namespace
+        PIE -->|"strategy=NONE<br/>%test or Windows"| Direct["⚠️ Direct ProcessBuilder<br/>Host PATH · No isolation"]:::direct
     end
 
-    subgraph HITL Governance
-        ToolReg -->|NETWORK_OUTBOUND<br/>SUPERVISED level| Pause[Pause + Save AWAITING_APPROVAL]
-        Pause -->|/approve via any channel| Resume[Resume from SQLite Checkpoint]
-        Pause -->|/deny via any channel| Terminate[Mark FAILED + Wipe State]
+    subgraph HG["  👤  HITL GOVERNANCE  "]
+        ToolReg -->|"NETWORK_OUTBOUND<br/>SUPERVISED level"| Pause["⏸ Pause + Save<br/>AWAITING_APPROVAL"]:::hitl
+        Pause -->|"/approve via any channel"| Resume["▶️ Resume from<br/>SQLite Checkpoint"]:::hitl
+        Pause -->|"/deny via any channel"| Terminate["🛑 Mark FAILED<br/>Wipe State"]:::hitl
     end
 
-    subgraph Cron Scheduler
-        AgentCronScheduler[AgentCronScheduler<br/>poll every 30s] -->|pending jobs| CronJobRunner
-        CronJobRunner -->|runs agent loop| Loop
-        CronJobRunner -->|notifies| CronObs[CronNotificationObserver<br/>Telegram / CLI / custom]
+    subgraph CR["  ⏰  CRON SCHEDULER  "]
+        AgentCronScheduler["🔄 AgentCronScheduler<br/>poll every 30s"]:::cron -->|"pending jobs"| CronJobRunner["⚙️ CronJobRunner"]:::cron
+        CronJobRunner -->|"runs agent loop"| Loop
+        CronJobRunner -->|"notifies"| CronObs["📬 CronNotificationObserver<br/>Telegram / CLI / custom"]:::cron
     end
 ```
 
 ### Sequence Flow
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'activationBorderColor': '#e8a045', 'activationBkgColor': '#1a2a3a', 'actorBkg': '#0d1420', 'actorBorder': '#4fc3f7', 'actorTextColor': '#c9d8ee', 'actorLineColor': '#2a4060', 'signalColor': '#e8a045', 'signalTextColor': '#ffe082', 'labelBoxBkgColor': '#0d1420', 'labelBoxBorderColor': '#1e2d45', 'labelTextColor': '#c9d8ee', 'loopTextColor': '#ffe082', 'noteBkgColor': '#1a1200', 'noteBorderColor': '#e8a045', 'noteTextColor': '#ffe082', 'fontSize': '13px'}}}%%
 sequenceDiagram
-    participant U as User / Client<br/>(REST · CLI · Telegram · ...)
-    participant CH as Channel Adapter<br/>(AgentResource · ChatCommand · TelegramAgentHandler)
-    participant PP as MessagePipeline
-    participant RR as ReflexRegistry
-    participant IC as IntentClassifier
-    participant AL as AgentLoop
-    participant LLM as ReasoningEngine (Llama-4-Scout)
-    participant TR as ToolRegistry
-    participant PIE as ProcessIsolationExecutor
-    participant DB as SQLite WAL + AsyncWriter
+    actor U as 👤 User / Client<br/>REST · CLI · Telegram
+    participant CH as 🌐 Channel Adapter<br/>AgentResource · ChatCommand · TelegramAgentHandler
+    participant PP as 🔀 MessagePipeline
+    participant RR as ⚡ ReflexRegistry
+    participant IC as 🎯 IntentClassifier
+    participant AL as 🧠 AgentLoop
+    participant LLM as ✨ ReasoningEngine<br/>Llama-4-Scout
+    participant TR as 🔰 ToolRegistry
+    participant PIE as 🏖 ProcessIsolationExecutor
+    participant DB as 🗃 SQLite WAL<br/>AsyncWriter
 
     U->>CH: Send message / goal
     CH->>PP: process(MessageContext)
 
     PP->>RR: processIfReflex(input)
-    alt Reflex matches (e.g. /approve /halt /history /status)
-        RR-->>U: Deterministic response (0 LLM tokens)
-    else No reflex match
+
+    alt ⚡ Reflex matches — /approve · /halt · /history · /status
+        RR-->>U: Deterministic response — 0 LLM tokens consumed
+    else 🔄 No reflex match — full pipeline
         PP->>IC: Classify intent → role
-        IC-->>PP: coordinator / coder / debugger / researcher / architect / synthesizer
+        IC-->>PP: coordinator / coder / debugger<br/>researcher / architect / synthesizer
         PP->>AL: run(sessionId, role, goal)
+
+        Note over AL,LLM: ReAct loop begins — maxIterations bounded<br/>Thought → Plan → Act → Observe
 
         loop maxIterations — Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
-            Note over LLM: Role-filtered tool schema injected<br/>coder → empty schema<br/>researcher / architect → github + memory_search<br/>coordinator / synthesizer → all tools
+            Note over LLM: Role-filtered tool schema injected<br/>coder → empty schema — tool bias impossible<br/>researcher / architect → github + memory_search<br/>coordinator / synthesizer → all tools
             LLM-->>AL: Action (ToolName + Args) OR FINISH
 
-            alt Tool call requested
+            alt 🛠 Tool call requested
                 AL->>TR: invokeTool(toolName, params)
                 TR->>TR: Governance check<br/>AutonomyPolicy.isAllowed()
 
-                alt SUPERVISED + NETWORK_OUTBOUND
-                    TR-->>U: ⚠️ Approval required — /approve or /deny
+                alt ⚠️ SUPERVISED + NETWORK_OUTBOUND
+                    TR-->>U: Approval required — /approve or /deny
                     AL->>DB: 💾 Save AWAITING_APPROVAL checkpoint
                     U->>CH: /approve
                     CH->>AL: Resume from checkpoint
-                    AL->>TR: invokeTool (elevated to FULL)
+                    AL->>TR: invokeTool — elevated to FULL autonomy
                 end
 
-                TR->>PIE: executeSandboxed(sessionId, workspaceRoot, command, secrets)
+                TR->>PIE: executeSandboxed(sessionId, workspaceRoot,<br/>command, secrets)
 
-                alt strategy=PODMAN — Podman available
-                    PIE->>PIE: executeInContainer()<br/>--network=none --read-only<br/>memory + CPU capped
-                else Podman circuit open — Linux host
+                alt 🐳 strategy=PODMAN — Podman available
+                    PIE->>PIE: executeInContainer()<br/>--network=none · --read-only<br/>memory + CPU capped
+                else 🐧 Podman circuit open — Linux host fallback
                     PIE->>PIE: executeInNamespace()<br/>unshare pid + net + mount
-                else strategy=NONE — %test profile or Windows
-                    PIE->>PIE: executeDirectly()<br/>host PATH ProcessBuilder
+                else ⚠️ strategy=NONE — %test profile or Windows
+                    PIE->>PIE: executeDirectly()<br/>host PATH ProcessBuilder · no isolation
                 end
 
                 PIE-->>AL: 🔍 Tool output observation
-            else FINISH
+            else ✅ FINISH signal received
                 AL->>DB: 💾 Checkpoint COMPLETED
-                AL-->>U: 🏁 Final answer
+                AL-->>U: 🏁 Final answer delivered
             end
 
-            AL->>DB: 💾 Async checkpoint each iteration
+            AL->>DB: 💾 Async checkpoint — every iteration
         end
     end
 ```
+</details>
 
 ---
 
@@ -450,18 +580,33 @@ ArcClaw uses a **dual-database SQLite architecture**:
 The two databases are connected at runtime via `ATTACH DATABASE`. All writes to SQLite are serialized through a single-threaded `AsyncPersistenceEngine` backed by a `LinkedBlockingQueue`, eliminating WAL contention across concurrent virtual threads.
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d2035', 'fontSize': '14px'}}}%%
 graph LR
-    subgraph SQLite WAL Dual-DB
-        Meta[(arcclaw-meta.db<br/>checkpoints<br/>chat_memory<br/>agent_cron<br/>audit_event<br/>encrypted_secret<br/>compaction_summary)]
-        FTS[(arcclaw-fts.db<br/>compaction_summary_fts<br/>FTS5 full-text index)]
-        Meta -- ATTACH DATABASE --> FTS
+    classDef writer fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
+    classDef compactor fill:#1a1535,stroke:#ce93d8,stroke-width:1.5px,color:#e1bee7
+    classDef searcher fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
+    classDef reaper fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2
+    classDef metadb fill:#0d1420,stroke:#4fc3f7,stroke-width:2.5px,color:#b3e5fc,font-weight:bold
+    classDef ftsdb fill:#0d1a0d,stroke:#81c784,stroke-width:2.5px,color:#c8e6c9,font-weight:bold
+    classDef attach fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffe082
+
+    APE["⚙️ AsyncPersistenceEngine<br/>LinkedBlockingQueue<br/>single writer thread"]:::writer
+    CC["🧠 ContextCompactionService<br/>llama-3.1-8b-instant<br/>Summarises rolling window"]:::compactor
+    MST["🔍 MemorySearchTool<br/>FTS5 query scoped by userId<br/>Cross-tenant isolation in Java"]:::searcher
+    SR["🗑 SessionReaper<br/>Scheduled GC<br/>Purges stale sessions"]:::reaper
+
+    subgraph DUAL["  🗃  SQLite WAL DUAL-DATABASE  "]
+        direction TB
+        Meta[("📦 arcclaw-meta.db<br/>─────────────────<br/>checkpoints<br/>chat_memory<br/>agent_cron<br/>audit_event<br/>encrypted_secret<br/>compaction_summary")]:::metadb
+        FTS[("🔎 arcclaw-fts.db<br/>─────────────────<br/>compaction_summary_fts<br/>FTS5 full-text index<br/>Queryable via MATCH")]:::ftsdb
+        Meta -->|"ATTACH DATABASE<br/>runtime link"| FTS
     end
 
-    APE[AsyncPersistenceEngine<br/>LinkedBlockingQueue<br/>single writer thread] -->|serialized writes| Meta
-    CC[ContextCompactionService<br/>llama-3.1-8b-instant] -->|compaction summaries| Meta
-    CC -->|FTS index population| FTS
-    MST[MemorySearchTool] -->|FTS5 query by userId| FTS
-    SR[SessionReaper<br/>Scheduled GC] -->|purge stale sessions| Meta
+    APE -->|"serialized writes<br/>eliminates WAL contention"| Meta
+    CC -->|"compaction summaries<br/>CONTEXT_COMPACTED audit event"| Meta
+    CC -->|"FTS index population<br/>on every compaction"| FTS
+    MST -->|"FTS5 query by userId<br/>returns past session summaries"| FTS
+    SR -->|"purge stale sessions<br/>+ orphaned checkpoints"| Meta
 ```
 
 ### Context Compaction (`ContextCompactionService`)
@@ -488,6 +633,38 @@ After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Re
 
 ## ⏰ Autonomous Cron Scheduler
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'activationBorderColor': '#e8a045', 'activationBkgColor': '#1a2a3a', 'actorBkg': '#0d1420', 'actorBorder': '#4fc3f7', 'actorTextColor': '#c9d8ee', 'actorLineColor': '#2a4060', 'signalColor': '#e8a045', 'signalTextColor': '#ffe082', 'labelBoxBkgColor': '#0d1420', 'labelBoxBorderColor': '#1e2d45', 'labelTextColor': '#c9d8ee', 'loopTextColor': '#ffe082', 'noteBkgColor': '#1a1200', 'noteBorderColor': '#e8a045', 'noteTextColor': '#ffe082', 'fontSize': '13px'}}}%%
+sequenceDiagram
+    actor U as 👤 User — Telegram / CLI
+    participant AL as 🧠 AgentLoop<br/>ReAct Engine
+    participant ST as ⏰ ScheduleTaskTool<br/>Fork-bomb + Pronoun Guard
+    participant DB as 🗃 SQLite<br/>agent_cron table
+    participant CS as 🔄 AgentCronScheduler<br/>polls every 30s
+    participant CJR as ⚙️ CronJobRunner<br/>maxIterations=2
+    participant TN as 📬 CronNotificationObserver<br/>Telegram / CLI
+
+    U->>AL: "remind me every day at 9am to check alerts"
+    AL->>ST: scheduletask(cronExpression="0 9 * * *",<br/>goal="Check alerts...", runOnce=false)
+    ST->>DB: INSERT agent_cron<br/>status=PENDING · nextFireTime calculated
+    ST-->>AL: ✅ Scheduled — cronId=abc-123
+    AL-->>U: Cron job created successfully
+
+    Note over CS,DB: Polling loop — every 30 seconds
+
+    loop Every 30 seconds
+        CS->>DB: SELECT WHERE status=PENDING<br/>AND nextFireTime ≤ now()
+        DB-->>CS: [job abc-123 ready]
+        CS->>CJR: run(cronEntity)
+        Note over CJR,AL: maxConcurrent=10 · maxIterations=2<br/>Goal prefixed with CRON: for fork-bomb exclusion
+        CJR->>AL: agentLoop(goal, role=coordinator,<br/>maxIterations=2)
+        AL-->>CJR: AgentResult
+        CJR->>DB: UPDATE status=COMPLETED (or FAILED)<br/>nextFireTime recalculated for recurring jobs
+        CJR->>TN: fire CDI AgentJobCompleted event
+        TN-->>U: 🕐 Scheduled task result delivered
+    end
+```
+
 ArcClaw supports fully autonomous scheduled tasks via a built-in cron engine backed by SQLite persistence.
 
 - **`ScheduleTaskTool`**: An agent can create a cron job mid-conversation using a standard 5-field UNIX expression. The goal must be self-contained (naked-pronoun guard rejects vague references). Tasks are prefixed with `CRON:` to enable structural fork-bomb exclusion.
@@ -499,36 +676,62 @@ ArcClaw supports fully autonomous scheduled tasks via a built-in cron engine bac
 
 **Naked-pronoun guard**: Vague references ("it", "this", "that", "the result") in a cron goal are rejected — the agent is prompted to restate the goal with specific, self-contained instructions.
 
-```mermaid
-sequenceDiagram
-    participant U as User (Telegram / CLI)
-    participant AL as AgentLoop
-    participant ST as ScheduleTaskTool
-    participant DB as SQLite agent_cron
-    participant CS as AgentCronScheduler (every 30s)
-    participant CJR as CronJobRunner
-    participant TN as TelegramCronNotificationObserver
 
-    U->>AL: "remind me every day at 9am to check alerts"
-    AL->>ST: scheduletask(cronExpression="0 9 * * *", goal="Check alerts...", runOnce=false)
-    ST->>DB: INSERT agent_cron (PENDING, nextFireTime)
-    ST-->>AL: ✅ Scheduled. cronId=abc-123
-
-    loop Every 30 seconds
-        CS->>DB: SELECT WHERE status=PENDING AND nextFireTime <= now()
-        DB-->>CS: [job abc-123]
-        CS->>CJR: run(cronEntity)
-        CJR->>AL: agentLoop(goal, role=coordinator, maxIterations=2)
-        AL-->>CJR: AgentResult
-        CJR->>DB: UPDATE status=COMPLETED (or FAILED)
-        CJR->>TN: fire AgentJobCompleted event
-        TN-->>U: 🕐 Scheduled task result: ...
-    end
-```
 
 ---
 
 ## 🔒 Security Architecture
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'activationBorderColor': '#e8a045', 'activationBkgColor': '#1e2d45', 'sequenceNumberColor': '#e8a045', 'actorBkg': '#0d1420', 'actorBorder': '#4fc3f7', 'actorTextColor': '#c9d8ee', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#ffe082', 'labelBoxBkgColor': '#0d1420', 'labelBoxBorderColor': '#1e2d45', 'labelTextColor': '#c9d8ee', 'loopTextColor': '#c9d8ee', 'noteBkgColor': '#1a1a0d', 'noteBorderColor': '#e8a045', 'noteTextColor': '#ffe082', 'fontSize': '13px'}}}%%
+sequenceDiagram
+    actor User
+    participant API as 🌐 REST / Telegram / CLI
+    participant Vault as 🔐 SecretVault<br/>AES-256-GCM-SIV
+    participant Guard as 🛡 ToolInvocationGuard<br/>HITL Gate
+    participant Sandbox as 🏖 ProcessIsolationExecutor<br/>Podman → Namespace → Direct
+    participant SQLite as 🗃 SQLite WAL<br/>arcclaw-meta.db
+    participant FTS as 🔍 FTS5<br/>arcclaw-fts.db
+    participant Audit as 📜 Audit Chain<br/>HMAC-SHA256
+
+    User->>API: Send message / goal
+    API->>API: ① PiiScanReflex<br/>Redact emails · PAN · SSN · JWTs
+    API->>API: ② PromptInjectionReflex<br/>Block jailbreak patterns
+    API->>SQLite: Resolve or create session checkpoint
+
+    Note over API,SQLite: ReAct loop begins — every tick checkpointed to SQLite WAL
+
+    API->>Guard: Tool call requested (e.g. github)
+    Guard->>Guard: Check ToolOperation vs Autonomy level
+
+    alt NETWORK_OUTBOUND + SUPERVISED
+        Guard-->>API: RequiresApprovalException thrown
+        API-->>SQLite: Save AWAITING_APPROVAL checkpoint
+        API-->>User: 202 — awaiting /approve
+        User->>API: /approve or /deny
+        API->>SQLite: Resume or fail checkpoint
+    end
+
+    Guard->>Vault: Resolve secret<br/>vaultKey → GH_TOKEN
+    Vault->>Vault: Argon2id KDF — 64MB · 3 iter<br/>AES-GCM-SIV decrypt
+    Vault-->>Sandbox: Raw secret bytes via AutoCloseable
+
+    Sandbox->>Sandbox: Write tmpfs env-file — mode 600
+    Sandbox->>Sandbox: Podman rootless<br/>--network=none · --read-only<br/>memory + CPU capped
+    Sandbox-->>Sandbox: close() → zero bytes + unlink tmpfs
+
+    Sandbox-->>API: Tool output / observation
+    API->>SQLite: AsyncPersistenceEngine<br/>LinkedBlockingQueue — single writer thread
+    API->>Audit: Append HMAC row<br/>HMAC-SHA256(prevHash ‖ payload)
+
+    Note over SQLite,FTS: When chat window exceeds threshold — default 5 messages
+
+    API->>SQLite: ContextCompactionService<br/>Summarise oldest msgs via llama-3.1-8b-instant
+    SQLite->>FTS: Write compaction_summary_fts<br/>via ATTACH DATABASE
+    FTS-->>API: memory_search queries FTS5<br/>scoped to userId — cross-tenant proof
+
+    API-->>User: Final reply<br/>Audit verifiable at GET /api/v1/audit/{sessionId}/verify
+```
 
 ### API Authentication & Rate Limiting
 
