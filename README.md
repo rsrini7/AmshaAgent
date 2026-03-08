@@ -165,11 +165,10 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 8. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d1420', 'fontSize': '14px'}}}%%
-flowchart TD
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d1420', 'fontSize': '13px'}}}%%
+flowchart LR
     classDef entry fill:#1a3a2a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
     classDef handler fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
-    classDef reflex fill:#1a1a0d,stroke:#e8a045,stroke-width:1.5px,color:#ffe082
     classDef reflexOut fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffcc80
     classDef decision fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7
     classDef loop fill:#0d1a2a,stroke:#4fc3f7,stroke-width:1px,color:#b3e5fc
@@ -177,48 +176,49 @@ flowchart TD
     classDef sandbox fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
     classDef result fill:#1a2a1a,stroke:#81c784,stroke-width:2px,color:#a5d6a7,font-weight:bold
 
-    IN(["📨 Inbound Message<br/>REST · Telegram · CLI"]):::entry
+    IN(["📨 Inbound<br/>REST·TG·CLI"]):::entry
 
-    subgraph PIPELINE["  🔀  MESSAGE PIPELINE  "]
+    subgraph PIPELINE["🔀 PIPELINE"]
         direction TB
-        P1["① AllowlistHandler<br/>Block non-permitted users"]:::handler
-        P2["② SessionResolutionHandler<br/>Derive deterministic session UUID"]:::handler
-        P3{"③ ReflexRegistry<br/>Zero-token fast-path?"}:::decision
-        P4["④ IntentClassificationHandler<br/>llama-3.1-8b-instant → best role"]:::handler
-        P5["⑤ CompactionHandler<br/>Rolling window threshold check"]:::handler
-        P6["⑥ AgentDispatchHandler<br/>Spawn ReAct loop"]:::handler
+        P1["① Allowlist"]:::handler
+        P2["② Session"]:::handler
+        P3{"③ Reflex?"}:::decision
+        P4["④ Intent Classifier<br/>llama-3.1-8b"]:::handler
+        P5["⑤ Compaction"]:::handler
+        P6["⑥ Dispatch"]:::handler
     end
 
-    subgraph REFLEXES["  ⚡  REFLEX SHORTCUTS — No LLM tokens consumed  "]
-        direction LR
+    subgraph REFLEXES["⚡ REFLEXES — 0 tokens"]
+        direction TB
         R1["/approve · /deny · /halt"]:::reflexOut
         R2["/status · /history · /crons"]:::reflexOut
-        R3["PII Scan → Redact or Block"]:::reflexOut
+        R3["PII Scan → Redact/Block"]:::reflexOut
         R4["Prompt Injection → Block"]:::reflexOut
     end
 
-    subgraph REACT["  🔁  ReAct AGENT LOOP — LangChain4J  "]
+    subgraph REACT["🔁 ReAct LOOP — LangChain4J"]
         direction TB
-        L1["🧠 LLM Reasoning<br/>Thought + Plan"]:::loop
-        L2{"Tool call<br/>required?"}:::decision
-        L3{"HITL Gate<br/>NETWORK_OUTBOUND<br/>+ SUPERVISED?"}:::decision
-        L4["⏸ AWAITING_APPROVAL<br/>Checkpoint saved → 202"]:::approval
-        L5["🏖 ProcessIsolationExecutor<br/>Podman → Namespace → Direct"]:::sandbox
-        L6["📝 Observation appended<br/>SQLite checkpoint written"]:::loop
-        L7{"FINISH<br/>detected?"}:::decision
-        L8(["✅ AgentResult<br/>Reply sent to channel"]):::result
+        L1["🧠 LLM Reason<br/>Thought + Plan"]:::loop
+        L2{"Tool<br/>call?"}:::decision
+        L3{"HITL Gate<br/>SUPERVISED?"}:::decision
+        L4["⏸ AWAITING_APPROVAL<br/>→ 202"]:::approval
+        L5["🏖 ProcessIsolationExecutor<br/>Podman→NS→Direct"]:::sandbox
+        L6["📝 Observe<br/>SQLite tick"]:::loop
+        L7{"FINISH?"}:::decision
+        L8(["✅ AgentResult<br/>Reply sent"]):::result
     end
 
     IN --> P1 --> P2 --> P3
-    P3 -->|"reflex matched"| REFLEXES
-    P3 -->|"no reflex"| P4 --> P5 --> P6
+    P3 -->|"matched"| REFLEXES
+    P3 -->|"no match"| P4 --> P5 --> P6
     P6 --> L1 --> L2
     L2 -->|"no"| L7
     L2 -->|"yes"| L3
-    L3 -->|"approved / FULL autonomy"| L5
+    L3 -->|"FULL / approved"| L5
     L3 -->|"needs approval"| L4
+    L4 -.->|"/approve"| L5
     L5 --> L6 --> L7
-    L7 -->|"no — next iteration"| L1
+    L7 -->|"next iter"| L1
     L7 -->|"yes"| L8
 ```
 
