@@ -27,6 +27,7 @@
     <bouncycastle.version>1.83</bouncycastle.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <quarkus.config.build-time-config-sources>false</quarkus.config.build-time-config-sources>
   </properties>
 
   <dependencyManagement>

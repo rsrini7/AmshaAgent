@@ -252,7 +252,7 @@ arcclaw:
 
   channel:
     telegram:
-      enabled: true
+      enabled: "${ARCCLAW_TELEGRAM_ENABLED:false}"
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
       default-autonomy-level: SUPERVISED
       allowed-user-ids: "${ARCCLAW_TELEGRAM_ALLOWED_USER_IDS:}"
