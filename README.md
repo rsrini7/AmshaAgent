@@ -66,7 +66,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#e0ecff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#0d1f35', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#0d2035', 'labelBoxBorderColor': '#4fc3f7', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#209cff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1f35', 'tertiaryColor': '#0d1f35', 'clusterBkg': '#0d1f35', 'clusterBorder': '#1e3a5f', 'titleColor': '#209cff', 'edgeLabelBackground': '#0d1420', 'fontSize': '14px'}}}%%
 flowchart TD
     classDef entry fill:#1a3a2a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
     classDef handler fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
@@ -314,7 +314,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 > The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#e0ecff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#0d1f35', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#0d2035', 'labelBoxBorderColor': '#4fc3f7', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#209cff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1f35', 'tertiaryColor': '#0d1f35', 'clusterBkg': '#0d1f35', 'clusterBorder': '#1e3a5f', 'titleColor': '#209cff', 'edgeLabelBackground': '#0d1420', 'fontSize': '14px'}}}%%
 graph LR
     classDef classifier fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
     classDef coordinator fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
@@ -323,23 +323,24 @@ graph LR
     classDef debugger fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2
     classDef architect fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
     classDef synthesizer fill:#0d1a1a,stroke:#4dd0e1,stroke-width:1.5px,color:#b2ebf2
-    classDef tool fill:#1a1200,stroke:#ffb74d,stroke-width:1px,color:#ffe0b2
-    classDef policy fill:#0d0d1a,stroke:#7986cb,stroke-width:1px,color:#c5cae9
-    classDef empty fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
+    classDef tool fill:#1a1200,stroke:#ffb74d,stroke-width:1.5px,color:#ffe0b2
+    classDef policy fill:#0d0d1a,stroke:#7986cb,stroke-width:1.5px,color:#c5cae9
+    classDef schema fill:#1a1200,stroke:#ffb74d,stroke-width:1.5px,color:#ffe0b2
+    classDef noTool fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
 
     IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
 
-    subgraph AGENTS["  🕉️  THE COSMIC PANTHEON — SIX AGENTS  "]
+    subgraph AGENTS["🕉️ THE COSMIC PANTHEON — SIX AGENTS"]
         direction TB
-        A1["🔵 coordinator — Vishnu<br/>The Preserver<br/>Routes · Delegates · Synthesizes"]:::coordinator
-        A2["🟣 researcher — Saraswati<br/>Knowledge Goddess<br/>Fact retrieval · No code"]:::researcher
-        A3["🟠 coder — Brahma<br/>The Creator<br/>Pure logic · EMPTY tool schema"]:::coder
-        A4["🔴 debugger — Shiva<br/>The Transformer<br/>Contrarian · Finds blind spots"]:::debugger
-        A5["🟡 architect — Brihaspati<br/>System Designer<br/>ADRs · Trade-offs · No prod code"]:::architect
-        A6["🟢 synthesizer — Dattatreya<br/>Trinity Incarnate<br/>Cross-domain · Multi-specialist"]:::synthesizer
+        A1["🔵 coordinator — Vishnu<br/>Routes · Delegates · Synthesizes"]:::coordinator
+        A2["🟣 researcher — Saraswati<br/>Fact retrieval · No code"]:::researcher
+        A3["🟠 coder — Brahma<br/>Pure logic · EMPTY tool schema"]:::coder
+        A4["🔴 debugger — Shiva<br/>Contrarian · Finds blind spots"]:::debugger
+        A5["🟡 architect — Brihaspati<br/>ADRs · Trade-offs · No prod code"]:::architect
+        A6["🟢 synthesizer — Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
     end
 
-    subgraph TOOLS["  🛠️  TOOLS & GOVERNANCE LAYER  "]
+    subgraph TOOLS["🛠️ TOOLS"]
         direction TB
         T1["🐙 github<br/>GH CLI via Podman sandbox<br/>GH_TOKEN injected via tmpfs"]:::tool
         T2["⏰ scheduletask<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
@@ -347,7 +348,7 @@ graph LR
         T4["🔍 memory_search<br/>SQLite FTS5 full-text<br/>Past compaction summaries"]:::tool
     end
 
-    subgraph AUTONOMY["  🔰  AUTONOMY POLICY  "]
+    subgraph AUTONOMY["🔰 AUTONOMY POLICY"]
         direction TB
         AU1["FULL — All ops permitted"]:::policy
         AU2["SUPERVISED ← default<br/>NETWORK_OUTBOUND → HITL pause"]:::policy
@@ -357,12 +358,12 @@ graph LR
 
     IC --> A1 & A2 & A3 & A4 & A5 & A6
 
-    A1 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
+    A1 -->|"all tools"| T1 & T2 & T3 & T4
     A2 -->|"github · memory_search"| T1 & T4
-    A3 -.->|"∅ structurally empty<br/>no tool access"| TOOLS
+    A3 -.->|"∅ empty schema"| T1
     A4 -->|"github only"| T1
     A5 -->|"github · memory_search"| T1 & T4
-    A6 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
+    A6 -->|"all tools"| T1 & T2 & T3 & T4
 
     TOOLS --> AUTONOMY
 ```
@@ -561,7 +562,7 @@ ArcClaw uses a **dual-database SQLite architecture**:
 The two databases are connected at runtime via `ATTACH DATABASE`. All writes to SQLite are serialized through a single-threaded `AsyncPersistenceEngine` backed by a `LinkedBlockingQueue`, eliminating WAL contention across concurrent virtual threads.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#e0ecff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#0d1f35', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#0d2035', 'labelBoxBorderColor': '#4fc3f7', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#209cff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1f35', 'tertiaryColor': '#0d1f35', 'clusterBkg': '#0d1f35', 'clusterBorder': '#1e3a5f', 'titleColor': '#209cff', 'edgeLabelBackground': '#0d1420', 'fontSize': '14px'}}}%%
 graph LR
     classDef writer fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
     classDef compactor fill:#1a1535,stroke:#ce93d8,stroke-width:1.5px,color:#e1bee7
@@ -615,7 +616,7 @@ After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Re
 ## ⏰ Autonomous Cron Scheduler
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#e0ecff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#0d1f35', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#0d2035', 'labelBoxBorderColor': '#4fc3f7', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#209cff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1f35', 'tertiaryColor': '#0d1f35', 'clusterBkg': '#0d1f35', 'clusterBorder': '#1e3a5f', 'titleColor': '#209cff', 'edgeLabelBackground': '#0d1420', 'fontSize': '14px'}}}%%
 sequenceDiagram
     actor U as 👤 User — Telegram / CLI
     participant AL as 🧠 AgentLoop<br/>ReAct Engine
@@ -664,7 +665,7 @@ ArcClaw supports fully autonomous scheduled tasks via a built-in cron engine bac
 ## 🔒 Security Architecture
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#e0ecff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#0d1f35', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#0d2035', 'labelBoxBorderColor': '#4fc3f7', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#209cff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1f35', 'tertiaryColor': '#0d1f35', 'clusterBkg': '#0d1f35', 'clusterBorder': '#1e3a5f', 'titleColor': '#209cff', 'edgeLabelBackground': '#0d1420', 'fontSize': '14px'}}}%%
 sequenceDiagram
     actor User
     participant API as 🌐 REST / Telegram / CLI
@@ -749,7 +750,7 @@ server pepper (env var) + user password
 Secrets for sandboxed tools are transported via `TmpfsSecretTransport`:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#e0ecff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#0d1f35', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#0d2035', 'labelBoxBorderColor': '#4fc3f7', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#0d1420', 'mainBkg': '#0d1420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#209cff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1f35', 'tertiaryColor': '#0d1f35', 'clusterBkg': '#0d1f35', 'clusterBorder': '#1e3a5f', 'titleColor': '#209cff', 'edgeLabelBackground': '#0d1420', 'fontSize': '14px'}}}%%
 graph LR
     SV[SecretVault<br/>AES-GCM-SIV Decrypt] -->|raw bytes| SR[SandboxSecretResolver]
     SR --> TT[TmpfsSecretTransport<br/>tmpfs-backed env-file<br/>mode=600]
