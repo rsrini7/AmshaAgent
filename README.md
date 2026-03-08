@@ -615,7 +615,7 @@ After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Re
 ## ⏰ Autonomous Cron Scheduler
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'activationBorderColor': '#e8a045', 'activationBkgColor': '#1a2a3a', 'actorBkg': '#0d1420', 'actorBorder': '#4fc3f7', 'actorTextColor': '#c9d8ee', 'actorLineColor': '#2a4060', 'signalColor': '#e8a045', 'signalTextColor': '#ffe082', 'labelBoxBkgColor': '#0d1420', 'labelBoxBorderColor': '#1e2d45', 'labelTextColor': '#c9d8ee', 'loopTextColor': '#ffe082', 'noteBkgColor': '#1a1200', 'noteBorderColor': '#e8a045', 'noteTextColor': '#ffe082', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'default', 'themeVariables': {'primaryColor': '#e8f4fd', 'primaryTextColor': '#1a2a3a', 'primaryBorderColor': '#2196f3', 'lineColor': '#1565c0', 'activationBorderColor': '#1565c0', 'activationBkgColor': '#bbdefb', 'actorBkg': '#1565c0', 'actorBorder': '#0d47a1', 'actorTextColor': '#ffffff', 'actorLineColor': '#90caf9', 'signalColor': '#1565c0', 'signalTextColor': '#1a2a3a', 'labelBoxBkgColor': '#e3f2fd', 'labelBoxBorderColor': '#90caf9', 'labelTextColor': '#1a2a3a', 'loopTextColor': '#1a2a3a', 'noteBkgColor': '#fff8e1', 'noteBorderColor': '#f9a825', 'noteTextColor': '#4a3000', 'fontSize': '13px'}}}%%
 sequenceDiagram
     actor U as 👤 User — Telegram / CLI
     participant AL as 🧠 AgentLoop<br/>ReAct Engine
@@ -635,12 +635,12 @@ sequenceDiagram
 
     loop Every 30 seconds
         CS->>DB: SELECT WHERE status=PENDING<br/>AND nextFireTime ≤ now()
-        DB-->>CS: [job abc-123 ready]
+        DB-->>CS: job abc-123 ready
         CS->>CJR: run(cronEntity)
         Note over CJR,AL: maxConcurrent=10 · maxIterations=2<br/>Goal prefixed with CRON: for fork-bomb exclusion
         CJR->>AL: agentLoop(goal, role=coordinator,<br/>maxIterations=2)
         AL-->>CJR: AgentResult
-        CJR->>DB: UPDATE status=COMPLETED (or FAILED)<br/>nextFireTime recalculated for recurring jobs
+        CJR->>DB: UPDATE status=COMPLETED or FAILED<br/>nextFireTime recalculated for recurring jobs
         CJR->>TN: fire CDI AgentJobCompleted event
         TN-->>U: 🕐 Scheduled task result delivered
     end
