@@ -421,16 +421,16 @@ INFO  Context compacted for session <id>. Compacted N messages, kept M.
 
 ```bash
 # Check compaction_summary was written
-sqlite3 data/arcclaw.db "SELECT * FROM compaction_summary;"
+sqlite3 data/arcclaw-meta.db "SELECT * FROM compaction_summary;"
 # Expected: 1 row with sessionId, summary text, and compactedAt timestamp
 
 # Verify the audit event was recorded
-sqlite3 data/arcclaw.db \
+sqlite3 data/arcclaw-meta.db \
   "SELECT eventType, sessionId, timestamp FROM audit_event WHERE eventType = 'CONTEXT_COMPACTED';"
 # Expected: 1 row
 
 # Inspect the reasoning step trajectory
-sqlite3 data/arcclaw.db \
+sqlite3 data/arcclaw-meta.db \
   "SELECT * FROM reasoning_step ORDER BY checkpoint_id, sequence_num;"
 ```
 
@@ -510,7 +510,7 @@ After accumulating at least one compaction summary (see [Section 16](#16-context
 If upgrading an existing deployment where `compaction_summary` rows have null `user_id`:
 
 ```bash
-sqlite3 data/arcclaw.db
+sqlite3 data/arcclaw-meta.db
 ```
 
 ```sql
@@ -826,7 +826,7 @@ sudo apt install sqlite3   # Ubuntu — recent packages include FTS5
 ### FTS5 Backfill (Upgrading from pre-Phase 45)
 
 ```bash
-sqlite3 data/arcclaw.db
+sqlite3 data/arcclaw-meta.db
 ```
 
 ```sql

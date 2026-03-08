@@ -167,7 +167,7 @@ X-ArcClaw-API-Key: {{validKey}}
 #
 # Step 1: Get a session with some audit rows (use auditSession above).
 # Step 2: In a terminal, run:
-#   sqlite3 .data/arcclaw.db
+#   sqlite3 .data/arcclaw-meta.db
 #   DROP TRIGGER IF EXISTS prevent_audit_update;
 #   UPDATE audit_event SET event_detail='TAMPERED' WHERE sequence=2
 #     AND session_id='<paste auditSession sessionId here>';

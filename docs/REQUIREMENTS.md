@@ -501,7 +501,7 @@ quarkus:
   datasource:
     db-kind: sqlite
     jdbc:
-      url: jdbc:sqlite:${ARCCLAW_DATA_DIR}/arcclaw.db
+      url: jdbc:sqlite:${ARCCLAW_DATA_DIR}/arcclaw-meta.db
   hibernate-orm:
     packages: com.arcclaw.core.state
     database:

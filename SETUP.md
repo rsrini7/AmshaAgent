@@ -363,7 +363,7 @@ By default, `ARCCLAW_DATA_DIR=./data`. ArcClaw creates the following at runtime:
 
 ```
 data/
-├── arcclaw.db          # Main SQLite WAL database (chat memory, audit events, cron jobs,
+├── arcclaw-meta.db          # Main SQLite WAL database (chat memory, audit events, cron jobs,
 │                       #   agent checkpoints, encrypted secrets, compaction summaries)
 ├── arcclaw-fts.db      # Separate FTS5 full-text search index (compaction summaries)
 └── workspaces/         # Ephemeral per-session sandboxed working directories

@@ -808,7 +808,7 @@ if (camelContext.getRoute("telegram-bot") == null) {
 ### 4. SQLite `CHECK` Constraint Failure on Pause
 * **Symptom:** `[SQLITE_CONSTRAINT_CHECK] A CHECK constraint failed (CHECK constraint failed: status in ('IN_PROGRESS','COMPLETED','FAILED'))`
 * **Root Cause:** Added the `AWAITING_APPROVAL` state to the `CheckpointStatus` Java enum. However, SQLite does not support `ALTER TABLE` for modifying existing `CHECK` constraints generated previously by Hibernate.
-* **Resolution:** In local dev mode, deleted the `arcclaw.db` file from the `data/` directory and allowed Hibernate to recreate the schema from scratch with the new enum values.
+* **Resolution:** In local dev mode, deleted the `arcclaw-meta.db` file from the `data/` directory and allowed Hibernate to recreate the schema from scratch with the new enum values.
 
 ### 5. The "State Machine Overwrite" Bug (Phantom Approvals)
 * **Symptom:** After the agent requests human approval, replying `/approve` results in `❌ No pending approval found for your session.` The database shows the session as `FAILED`.
@@ -1762,7 +1762,7 @@ a JDBC driver corresponding to the database kind 'other' for the default datasou
 
 **Resolution:** Remove `quarkus.datasource.db-kind` entirely from the test properties file. Quarkus auto-detects `db-kind=sqlite` from the classpath extension. Only override the JDBC URL:
 ```properties
-quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw.db
+quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw-meta.db
 ```
 
 ***
@@ -1776,7 +1776,7 @@ missing database (no such table: agent_checkpoint)
 ```
 Triggered from `WorkspaceManager.onStartup()` which queries `agent_checkpoint` during the `StartupEvent`.
 
-**Root Cause:** The test SQLite DB file (`./target/test-arcclaw.db`) is created empty. Hibernate does not auto-create the schema unless explicitly configured. `WorkspaceManager.onStartup()` fires before test mocks are injected, so it hits the real (empty) database.
+**Root Cause:** The test SQLite DB file (`./target/test-arcclaw-meta.db`) is created empty. Hibernate does not auto-create the schema unless explicitly configured. `WorkspaceManager.onStartup()` fires before test mocks are injected, so it hits the real (empty) database.
 
 **Resolution:** Add schema generation to `arcclaw-core/src/test/resources/application.properties`:
 ```properties
@@ -1833,7 +1833,7 @@ arcclaw.vault.master-key=test-master-key-32-chars-padded!
 quarkus.otel.sdk.disabled=true
 
 # SQLite — auto-detected db-kind, explicit URL, schema creation (T-4, T-5)
-quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw.db
+quarkus.datasource.jdbc.url=jdbc:sqlite:./target/test-arcclaw-meta.db
 quarkus.hibernate-orm.database.generation=drop-and-create
 ```
 
@@ -2261,7 +2261,7 @@ quarkus:
 [AUDIT] session=6a26b16d-... type=CHECKPOINT_CREATED persisted
 
 # Verify SQLite directly:
-sqlite3 /path/to/arcclaw.db "SELECT event_type, event_detail, timestamp FROM audit_event ORDER BY sequence ASC LIMIT 10;"
+sqlite3 /path/to/arcclaw-meta.db "SELECT event_type, event_detail, timestamp FROM audit_event ORDER BY sequence ASC LIMIT 10;"
 ```
 
 ---
@@ -2300,7 +2300,7 @@ WARN GenerationTarget encountered exception... index idx_audit_userId already ex
 INFO AuditSchemaEnforcer: WORM triggers and indexes verified.
 
 # Indexes still present and used — verify via SQLite CLI:
-sqlite3 arcclaw.db ".indexes audit_event"
+sqlite3 arcclaw-meta.db ".indexes audit_event"
 # Output:
 # idx_audit_session
 # idx_audit_timestamp
