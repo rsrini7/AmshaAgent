@@ -226,169 +226,141 @@ flowchart TD
 <summary>Detailed Architecture Diagrams</summary>
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d2035', 'fontSize': '13px'}}}%%
 graph TD
-    classDef client fill:#1a2a1a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
-    classDef channel fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
-    classDef pipeline fill:#0d1420,stroke:#4fc3f7,stroke-width:1px,color:#b3e5fc
-    classDef reflex fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffe082
-    classDef reflexNode fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffcc80
-    classDef kernel fill:#0d1a2a,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
-    classDef ai fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
-    classDef schema fill:#1a1200,stroke:#ffb74d,stroke-width:1px,color:#ffe0b2
-    classDef noTool fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
-    classDef sandbox fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
-    classDef podman fill:#0d1a0d,stroke:#81c784,stroke-width:2px,color:#a5d6a7,font-weight:bold
-    classDef namespace fill:#0d1a10,stroke:#4db6ac,stroke-width:1.5px,color:#b2dfdb
-    classDef direct fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2,stroke-dasharray:4 4
-    classDef hitl fill:#1a1000,stroke:#ffb74d,stroke-width:2px,color:#ffe0b2,font-weight:bold
-    classDef cron fill:#0d1535,stroke:#7986cb,stroke-width:1.5px,color:#c5cae9
-    classDef db fill:#0d1420,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
-    classDef groq fill:#1a0d35,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
-    classDef future fill:#111111,stroke:#444,stroke-width:1px,color:#666,stroke-dasharray:6 3
+    RestClient([REST Client / UI]) -->|HTTP| REST[AgentResource REST API]
+    CLIUser([CLI User]) -->|chat / ask / serve| CLI[PicoCLI Commands]
+    TelegramUser([Telegram User]) -->|Apache Camel Route| TH[TelegramAgentHandler]
+    FutureChannel([Future Channel<br/>Discord / Slack / SMS]) -.->|ChannelSender impl| Pipeline
 
-    RestClient(["🖥 REST Client / UI"]):::client
-    CLIUser(["💻 CLI User"]):::client
-    TelegramUser(["📱 Telegram User"]):::client
-    FutureChannel(["🔮 Future Channel<br/>Discord / Slack / SMS"]):::future
-
-    RestClient -->|HTTP| REST["🌐 AgentResource<br/>REST API"]:::channel
-    CLIUser -->|"chat / ask / serve"| CLI["⌨️ PicoCLI Commands"]:::channel
-    TelegramUser -->|"Apache Camel Route"| TH["🤖 TelegramAgentHandler"]:::channel
-    FutureChannel -.->|"ChannelSender impl"| Pipeline
-
-    CLI --> Pipeline["🔀 MessagePipeline"]:::pipeline
+    CLI --> Pipeline[MessagePipeline]
     TH --> Pipeline
     REST --> Pipeline
 
-    subgraph MP["  📨  MESSAGE PIPELINE  "]
-        Pipeline --> ALH["① AllowlistHandler<br/>User allowlist check"]:::pipeline
-        ALH --> CDH["② CommandDispatchHandler<br/>Reflex fast-path"]:::pipeline
-        CDH --> SRH["③ SessionResolutionHandler<br/>Session binding"]:::pipeline
-        SRH --> ICH["④ IntentClassificationHandler<br/>llama-3.1-8b-instant"]:::pipeline
-        ICH --> CH["⑤ CompactionHandler<br/>FTS5 compaction trigger"]:::pipeline
-        CH --> ADH["⑥ AgentDispatchHandler<br/>Agent run"]:::pipeline
+    subgraph Message Pipeline
+        Pipeline --> ALH[AllowlistHandler<br/>user allowlist check]
+        ALH --> CDH[CommandDispatchHandler<br/>Reflex fast-path]
+        CDH --> SRH[SessionResolutionHandler<br/>session binding]
+        SRH --> ICH[IntentClassificationHandler<br/>llama-3.1-8b-instant]
+        ICH --> CH[CompactionHandler<br/>FTS5 compaction trigger]
+        CH --> ADH[AgentDispatchHandler<br/>Agent run]
     end
 
-    subgraph RS["  ⚡  REFLEX SYSTEM — Zero LLM Tokens Consumed  "]
-        CDH -->|matches| RR["🔍 ReflexRegistry"]:::reflex
-        RR --> ApR["✅ ApproveReflex — /approve"]:::reflexNode
-        RR --> DeR["❌ DenyReflex — /deny"]:::reflexNode
-        RR --> HaR["🛑 HaltReflex — /halt"]:::reflexNode
-        RR --> HiR["📋 HistoryReflex — /history"]:::reflexNode
-        RR --> StR["📊 StatusReflex — /status"]:::reflexNode
-        RR --> LC["⏰ ListCronsReflex — /crons"]:::reflexNode
-        RR --> DC["🗑 DeleteCronReflex — deletecron id"]:::reflexNode
-        RR --> ReR["🔄 ResetReflex — /reset"]:::reflexNode
-        RR --> PII["🔒 PiiScanReflex<br/>Redact before LLM"]:::reflexNode
-        RR --> PIR["🚫 PromptInjectionReflex<br/>Block jailbreaks"]:::reflexNode
+    subgraph Reflex System - No LLM Tokens Consumed
+        CDH -->|matches| RR[ReflexRegistry]
+        RR --> ApR[ApproveReflex /approve]
+        RR --> DeR[DenyReflex /deny]
+        RR --> HaR[HaltReflex /halt]
+        RR --> HiR[HistoryReflex /history]
+        RR --> StR[StatusReflex /status]
+        RR --> LC[ListCronsReflex /crons]
+        RR --> DC[DeleteCronReflex deletecron id]
+        RR --> ReR[ResetReflex /reset]
+        RR --> PII[PiiScanReflex redact before LLM]
+        RR --> PIR[PromptInjectionReflex block jailbreaks]
     end
 
-    ADH --> Loop["🧠 AgentLoop Orchestrator"]:::kernel
+    ADH --> Loop[AgentLoop Orchestrator]
 
-    subgraph CK["  ⚙️  CORE KERNEL  "]
-        Loop <-->|"Load / Save State"| SQLite[("🗃 SQLite Checkpoint DB<br/>WAL + Async Writer")]:::db
-        Loop <-->|"JDBC ChatMemory<br/>Rolling Window"| JDBC[("💾 Persistent ChatMemory<br/>+ FTS5 Long-Term Memory")]:::db
-        Loop <-->|"Prompt + Role-Filtered<br/>Tool Schema"| AI["✨ LangChainReasoningEngine"]:::ai
-        Loop -->|"Execute Tool Request"| ToolReg["🔰 ToolRegistry<br/>Governance + HITL"]:::kernel
+    subgraph Core Kernel
+        Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB<br/>WAL + Async Writer)]
+        Loop <-->|JDBC ChatMemory<br/>Rolling Window| JDBC[(Persistent ChatMemory<br/>+ FTS5 Long-Term Memory)]
+        Loop <-->|Prompt + Role-Filtered<br/>Tool Schema| AI[LangChainReasoningEngine]
+        Loop -->|Execute Tool Request| ToolReg[ToolRegistry<br/>Governance + HITL]
     end
 
-    subgraph STB["  🎭  STRICT TOOL BINDING PER ROLE  "]
-        AI -->|"agentRole filter"| Schema{"🔀 Schema Filter<br/>getPermittedToolNames"}:::schema
-        Schema -->|"coordinator / synthesizer"| ST["⏰ scheduletask<br/>manageschedule"]:::schema
-        Schema -->|"coordinator / researcher<br/>architect / synthesizer"| MS["🔍 memory_search"]:::schema
-        Schema -->|"coordinator / researcher<br/>architect / debugger / synthesizer"| GT["🐙 github"]:::schema
-        Schema -->|"coder"| NoTool["∅ empty schema<br/>tool bias impossible"]:::noTool
+    subgraph Strict Tool Binding per Role
+        AI -->|agentRole filter| Schema{Schema Filter<br/>getPermittedToolNames}
+        Schema -->|coordinator / synthesizer| ST[scheduletask + manageschedule]
+        Schema -->|coordinator / researcher / architect / synthesizer| MS[memory_search]
+        Schema -->|coordinator / researcher / architect / debugger / synthesizer| GT[github]
+        Schema -->|coder| NoTool[empty schema<br/>tool bias impossible]
     end
 
-    AI <-->|"Cloud Reasoning"| Groq(["☁️ Groq — llama-4-scout<br/>17b-16e-instruct"]):::groq
-    Loop -->|"Micrometer"| Prom["📈 Prometheus /q/metrics"]:::cron
+    AI <-->|Cloud Reasoning| Groq((Groq: llama-4-scout<br/>17b-16e-instruct))
+    Loop -->|Micrometer| Prom[Prometheus /q/metrics]
 
-    subgraph SL["  🏖  SANDBOX LAYER — Three-Tier Degradation  "]
-        ToolReg -->|"requiresSandbox=true"| AgentToolImpl["🛠 AgentTool Implementation"]:::sandbox
-        AgentToolImpl -->|"sandboxCommand + @RequiresSecret"| PIE["⚡ ProcessIsolationExecutor"]:::sandbox
-        PIE -->|"strategy=PODMAN<br/>Podman available"| Podman[("🐳 Podman Rootless Container<br/>--network=none · --read-only<br/>memory=512m · cpu=0.5")]:::podman
-        PIE -->|"Podman circuit open<br/>3 failures"| NS["🐧 Linux unshare Namespaces<br/>pid + net + mount isolated"]:::namespace
-        PIE -->|"strategy=NONE<br/>%test or Windows"| Direct["⚠️ Direct ProcessBuilder<br/>Host PATH · No isolation"]:::direct
+    subgraph Sandbox Layer - Three-Tier Degradation
+        ToolReg -->|requiresSandbox=true| AgentToolImpl[AgentTool Implementation]
+        AgentToolImpl -->|sandboxCommand + @RequiresSecret| PIE[ProcessIsolationExecutor]
+
+        PIE -->|strategy=PODMAN<br/>Podman available| Podman[(Podman Rootless Container<br/>--network=none --read-only<br/>memory=512m + cpu=0.5)]
+        PIE -->|Podman circuit open<br/>3 failures| NS[Linux unshare Namespaces<br/>pid + net + mount isolated]
+        PIE -->|strategy=NONE<br/>%test profile or Windows| Direct[Direct ProcessBuilder<br/>Host PATH execution<br/>no isolation]
     end
 
-    subgraph HG["  👤  HITL GOVERNANCE  "]
-        ToolReg -->|"NETWORK_OUTBOUND<br/>SUPERVISED level"| Pause["⏸ Pause + Save<br/>AWAITING_APPROVAL"]:::hitl
-        Pause -->|"/approve via any channel"| Resume["▶️ Resume from<br/>SQLite Checkpoint"]:::hitl
-        Pause -->|"/deny via any channel"| Terminate["🛑 Mark FAILED<br/>Wipe State"]:::hitl
+    subgraph HITL Governance
+        ToolReg -->|NETWORK_OUTBOUND<br/>SUPERVISED level| Pause[Pause + Save AWAITING_APPROVAL]
+        Pause -->|/approve via any channel| Resume[Resume from SQLite Checkpoint]
+        Pause -->|/deny via any channel| Terminate[Mark FAILED + Wipe State]
     end
 
-    subgraph CR["  ⏰  CRON SCHEDULER  "]
-        AgentCronScheduler["🔄 AgentCronScheduler<br/>poll every 30s"]:::cron -->|"pending jobs"| CronJobRunner["⚙️ CronJobRunner"]:::cron
-        CronJobRunner -->|"runs agent loop"| Loop
-        CronJobRunner -->|"notifies"| CronObs["📬 CronNotificationObserver<br/>Telegram / CLI / custom"]:::cron
+    subgraph Cron Scheduler
+        AgentCronScheduler[AgentCronScheduler<br/>poll every 30s] -->|pending jobs| CronJobRunner
+        CronJobRunner -->|runs agent loop| Loop
+        CronJobRunner -->|notifies| CronObs[CronNotificationObserver<br/>Telegram / CLI / custom]
     end
 ```
 
 ### Sequence Flow
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'activationBorderColor': '#e8a045', 'activationBkgColor': '#1a2a3a', 'actorBkg': '#0d1420', 'actorBorder': '#4fc3f7', 'actorTextColor': '#c9d8ee', 'actorLineColor': '#2a4060', 'signalColor': '#e8a045', 'signalTextColor': '#ffe082', 'labelBoxBkgColor': '#0d1420', 'labelBoxBorderColor': '#1e2d45', 'labelTextColor': '#c9d8ee', 'loopTextColor': '#ffe082', 'noteBkgColor': '#1a1200', 'noteBorderColor': '#e8a045', 'noteTextColor': '#ffe082', 'fontSize': '13px'}}}%%
 sequenceDiagram
-    actor U as 👤 User / Client<br/>REST · CLI · Telegram
-    participant CH as 🌐 Channel Adapter<br/>AgentResource · ChatCommand · TelegramAgentHandler
-    participant PP as 🔀 MessagePipeline
-    participant RR as ⚡ ReflexRegistry
-    participant IC as 🎯 IntentClassifier
-    participant AL as 🧠 AgentLoop
-    participant LLM as ✨ ReasoningEngine<br/>Llama-4-Scout
-    participant TR as 🔰 ToolRegistry
-    participant PIE as 🏖 ProcessIsolationExecutor
-    participant DB as 🗃 SQLite WAL<br/>AsyncWriter
+    participant U as User / Client<br/>(REST · CLI · Telegram · ...)
+    participant CH as Channel Adapter<br/>(AgentResource · ChatCommand · TelegramAgentHandler)
+    participant PP as MessagePipeline
+    participant RR as ReflexRegistry
+    participant IC as IntentClassifier
+    participant AL as AgentLoop
+    participant LLM as ReasoningEngine (Llama-4-Scout)
+    participant TR as ToolRegistry
+    participant PIE as ProcessIsolationExecutor
+    participant DB as SQLite WAL + AsyncWriter
 
     U->>CH: Send message / goal
     CH->>PP: process(MessageContext)
 
     PP->>RR: processIfReflex(input)
-
-    alt ⚡ Reflex matches — /approve · /halt · /history · /status
-        RR-->>U: Deterministic response — 0 LLM tokens consumed
-    else 🔄 No reflex match — full pipeline
+    alt Reflex matches (e.g. /approve /halt /history /status)
+        RR-->>U: Deterministic response (0 LLM tokens)
+    else No reflex match
         PP->>IC: Classify intent → role
-        IC-->>PP: coordinator / coder / debugger<br/>researcher / architect / synthesizer
+        IC-->>PP: coordinator / coder / debugger / researcher / architect / synthesizer
         PP->>AL: run(sessionId, role, goal)
-
-        Note over AL,LLM: ReAct loop begins — maxIterations bounded<br/>Thought → Plan → Act → Observe
 
         loop maxIterations — Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
-            Note over LLM: Role-filtered tool schema injected<br/>coder → empty schema — tool bias impossible<br/>researcher / architect → github + memory_search<br/>coordinator / synthesizer → all tools
+            Note over LLM: Role-filtered tool schema injected<br/>coder → empty schema<br/>researcher / architect → github + memory_search<br/>coordinator / synthesizer → all tools
             LLM-->>AL: Action (ToolName + Args) OR FINISH
 
-            alt 🛠 Tool call requested
+            alt Tool call requested
                 AL->>TR: invokeTool(toolName, params)
                 TR->>TR: Governance check<br/>AutonomyPolicy.isAllowed()
 
-                alt ⚠️ SUPERVISED + NETWORK_OUTBOUND
-                    TR-->>U: Approval required — /approve or /deny
+                alt SUPERVISED + NETWORK_OUTBOUND
+                    TR-->>U: ⚠️ Approval required — /approve or /deny
                     AL->>DB: 💾 Save AWAITING_APPROVAL checkpoint
                     U->>CH: /approve
                     CH->>AL: Resume from checkpoint
-                    AL->>TR: invokeTool — elevated to FULL autonomy
+                    AL->>TR: invokeTool (elevated to FULL)
                 end
 
-                TR->>PIE: executeSandboxed(sessionId, workspaceRoot,<br/>command, secrets)
+                TR->>PIE: executeSandboxed(sessionId, workspaceRoot, command, secrets)
 
-                alt 🐳 strategy=PODMAN — Podman available
-                    PIE->>PIE: executeInContainer()<br/>--network=none · --read-only<br/>memory + CPU capped
-                else 🐧 Podman circuit open — Linux host fallback
+                alt strategy=PODMAN — Podman available
+                    PIE->>PIE: executeInContainer()<br/>--network=none --read-only<br/>memory + CPU capped
+                else Podman circuit open — Linux host
                     PIE->>PIE: executeInNamespace()<br/>unshare pid + net + mount
-                else ⚠️ strategy=NONE — %test profile or Windows
-                    PIE->>PIE: executeDirectly()<br/>host PATH ProcessBuilder · no isolation
+                else strategy=NONE — %test profile or Windows
+                    PIE->>PIE: executeDirectly()<br/>host PATH ProcessBuilder
                 end
 
                 PIE-->>AL: 🔍 Tool output observation
-            else ✅ FINISH signal received
+            else FINISH
                 AL->>DB: 💾 Checkpoint COMPLETED
-                AL-->>U: 🏁 Final answer delivered
+                AL-->>U: 🏁 Final answer
             end
 
-            AL->>DB: 💾 Async checkpoint — every iteration
+            AL->>DB: 💾 Async checkpoint each iteration
         end
     end
 ```
