@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.jboss.logging.Logger;
+
 /**
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.
  * <p>
@@ -20,7 +22,7 @@ import java.util.Set;
 @ApplicationScoped
 public class GithubTool implements AgentTool {
 
-    private static final org.jboss.logging.Logger log = org.jboss.logging.Logger.getLogger(GithubTool.class);
+    private static final Logger log = Logger.getLogger(GithubTool.class);
 
     private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
