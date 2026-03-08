@@ -19,6 +19,7 @@
 5. [Common: Podman / Container Setup](#5-common-podman--container-setup)
 6. [Common: Build the Application](#6-common-build-the-application)
 7. [Common: Run Modes](#7-common-run-modes)
+   - 7.7 [Telegram Bot Setup](#77-telegram-bot-setup-required-for-attach-telegram-mode)
 8. [Common: Docker Compose Stack (Full Observability)](#8-common-docker-compose-stack-full-observability)
 9. [Common: Native Binary Build](#9-common-native-binary-build)
 10. [Windows PowerShell (Native Wrapper)](#10-windows-powershell-native-wrapper)
@@ -262,6 +263,23 @@ cp .env.example .env
 
 Open `.env` and fill in the values. The minimum required set for development:
 
+**Quick Reference — Key Variables**
+
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `GROQ_API_KEY` | `(empty)` | **Required.** Authenticates with Groq Cloud for the reasoning engine and intent classifier. |
+| `TELEGRAM_BOT_TOKEN` | `(empty)` | **Required for `attach telegram` mode.** Connects the daemon to your Telegram bot. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Points to the local or remote Ollama provider (disabled by default in V1.0.0). |
+| `GITHUB_TOKEN` | `(empty)` | Required if using the `GithubTool` (`researcher`, `coordinator`, `architect`, `synthesizer`, `debugger` roles). |
+| `ARCCLAW_DATA_DIR` | `./data` | Host path where SQLite databases and workspaces are saved. |
+| `ARCCLAW_API_KEY_INTERNAL` | `key-internal-changeme` | Bearer token for internal API access via `X-ArcClaw-API-Key` header. **Change in production.** |
+| `ARCCLAW_API_KEY_CI` | `key-ci-changeme` | Bearer token for CI/CD pipeline access. **Change in production.** |
+| `ARCCLAW_VAULT_PEPPER` | `dev-pepper-...` | Server-side secret for Argon2id key derivation. **Must be 32+ bytes in production.** |
+| `ARCCLAW_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` | HMAC key for audit event integrity chain. **Must be 32+ bytes in production.** |
+| `ARCCLAW_SESSION_BUDGET_USD` | `10.00` | Per-session USD budget cap. Downgrades to `READONLY` autonomy when exceeded. |
+| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | `(empty = open access)` | Comma-separated numeric Telegram user IDs. **Empty allows all users.** |
+| `ARCCLAW_PII_MODE` | `REDACT_AND_FORWARD` | PII handling mode. Set to `BLOCK_AND_NOTIFY` to reject messages containing PII outright. |
+
 ```bash
 # =============================================================================
 # Core Settings
@@ -318,10 +336,13 @@ ARCCLAW_API_KEY_CI=key-<generate-a-random-string>
 # =============================================================================
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
 
-# Allowlist: space-separated numeric Telegram user IDs (not usernames)
+# Allowlist: comma-separated numeric Telegram user IDs (not usernames).
+# Single value: ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789
+# Multiple values: ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789,987654321
+# Leave empty to allow all users (open-access mode).
 ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789
 
-# Allowlist: space-separated Telegram usernames (without @)
+# Allowlist: comma-separated Telegram usernames (without @). Deprecated — prefer numeric IDs.
 ARCCLAW_TELEGRAM_ALLOWED_USERS=yourusername
 
 # =============================================================================
@@ -541,6 +562,58 @@ All run modes pass specific JVM flags required for compatibility with JDK 25:
 | `-Dsun.misc.unsafe.memory.access=allow` | Suppresses `InaccessibleObjectException` from Netty. |
 | `-Dfile.encoding=UTF-8` + encoding flags | Forces UTF-8 on stdin/stdout/stderr so terminal symbols (`✦`, `⚡`, `🛡️`) render correctly, especially on Windows. |
 | `-Dquarkus.profile=%cli` | Activates the `%cli` profile: suppresses HTTP server binding, startup banner, and Dev UI. |
+
+### 7.7 Telegram Bot Setup (Required for `attach telegram` Mode)
+
+If you intend to use ArcClaw via Telegram, you must create a bot before running in `attach` mode.
+
+**Step 1 — Create a Bot via BotFather**
+
+1. Open Telegram and search for **@BotFather**.
+2. Send the command `/newbot`.
+3. Give it a display name (e.g. `ArcClaw Dev Bot`) and a username ending in `bot` (e.g. `arcclaw_dev_bot`).
+4. BotFather will issue an HTTP API token (format: `123456789:ABCdefGHIjklmNOPQrsTUVwxyz`). Copy this.
+
+**Step 2 — Configure `.env`**
+
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
+
+# Find your numeric Telegram user ID via @userinfobot
+# Comma-separate multiple IDs: 123456789,987654321
+ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789
+ARCCLAW_TELEGRAM_ALLOWED_USERS=yourusername
+```
+
+**Step 3 — Start in Attach Mode**
+
+```bash
+# Dev mode (uses %dev profile — no Podman isolation)
+./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=attach"
+
+# OR packaged jar (recommended)
+java \
+  --add-opens=java.base/java.nio=ALL-UNNAMED \
+  --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  --enable-native-access=ALL-UNNAMED \
+  "-Dsun.misc.unsafe.memory.access=allow" \
+  "-Dquarkus.profile=%cli" \
+  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar attach telegram
+```
+
+Confirm the route registered in startup logs:
+
+```
+INFO  [TelegramChannelRoute] Telegram route self-registered and started via StartupEvent.
+INFO  [TelegramChannelRoute] Route count: 1, routeStatus=Started
+```
+
+If you see `Telegram bot token is a placeholder — skipping route registration`, the token is not set in `.env`.
+
+> **Token Revocation**: If ghost connections are polling your bot from old sessions, open `@BotFather`, select your bot, send `/revoke`, replace `TELEGRAM_BOT_TOKEN` in `.env` with the new token, and restart the daemon.
+
+For comprehensive Telegram testing and verification, see [TESTING_GUIDE.md Section 18](./TESTING_GUIDE.md#18-telegram-bot-integration--verification) and [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md).
 
 ---
 

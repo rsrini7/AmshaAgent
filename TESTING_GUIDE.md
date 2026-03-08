@@ -526,6 +526,24 @@ ATTACH DATABASE './data/arcclaw-fts.db' AS fts;
 
 For comprehensive Telegram testing, see [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md). This section covers basic integration verification.
 
+### Available Telegram Commands
+
+Once connected, these commands are handled by the Reflex System (zero LLM tokens consumed):
+
+| Command | Description |
+|---|---|
+| `/approve` | Approve a pending HITL tool execution and resume the agent from checkpoint |
+| `/deny` | Deny a pending HITL tool execution and mark the checkpoint `FAILED` |
+| `/halt` | Emergency stop — terminate the current session immediately |
+| `/status` | Show current agent state, USD spent, iteration count, and compaction stats |
+| `/history` | Show recent conversation turns and compaction summaries |
+| `/crons` or `/list crons` | List all scheduled autonomous tasks for your user |
+| `deletecron <id>` | Delete a specific scheduled task by ID |
+| `/reset` | Soft-reset session state (wipes ReAct loop, preserves chat memory) |
+| `store <key>=<value>` | Store a secret in the encrypted vault (e.g. `store MY_API_KEY=abc123`). Note: bypasses PII scanning to protect secret values. |
+
+> `store <key>=<value>` stores the value in the AES-256-GCM-SIV vault. The key name must match a `@RequiresSecret(vaultKey=...)` annotation on the tool that needs it (e.g. `store GITHUB_TOKEN=ghp_...`).
+
 ### 18.1 Create a Bot via BotFather
 
 1. Open Telegram and search for `@BotFather`.
@@ -538,7 +556,8 @@ For comprehensive Telegram testing, see [TELEGRAM_TESTING.md](./TELEGRAM_TESTING
 ```env
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
 
-# Find your Telegram user ID via @userinfobot
+# Find your numeric Telegram user ID via @userinfobot
+# Comma-separate multiple IDs: ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789,987654321
 ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789
 ARCCLAW_TELEGRAM_ALLOWED_USERS=yourusername
 ```
