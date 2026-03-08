@@ -223,7 +223,7 @@ flowchart TD
 ```
 
 <details>
-<summary>Detailed Architecture Diagrams</summary>
+<summary>Detailed Architecture Flow Diagram</summary>
 
 ```mermaid
 graph TD
@@ -300,6 +300,10 @@ graph TD
         CronJobRunner -->|notifies| CronObs[CronNotificationObserver<br/>Telegram / CLI / custom]
     end
 ```
+</details>
+
+<details>
+<summary>Detailed Architecture Sequence Diagram</summary>
 
 ### Sequence Flow
 
