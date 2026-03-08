@@ -24,6 +24,19 @@ following command in your terminal session:
 Machine "podman-machine-default" started successfully
 
 ---
+
+mac:
+brew install podman
+
+/usr/libexec/java_home -V
+
+if we have Jenv
+jenv add /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
+jenv global 25.0
+
+Common:
+
+Podman / Docker commands:
 IF incase less memory,
 podman machine init --memory 6144 --cpus 4 --disk-size 40
 
@@ -35,18 +48,10 @@ export DOCKER_HOST="unix:///run/user/1000/podman/podman.sock"
 docker compose build tool-runner
 podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
 
-brew install podman
-
-/usr/libexec/java_home -V
-
-if we have Jenv
-jenv add /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
-jenv global 25.0
-
+maven commands
 native graalvm install then do below to reduce memory issue inside podman
 ./mvnw clean package -Pnative -Dquarkus.native.container-build=false -DskipTests
 
-Other commands
 ./mvn clean verify -pl arcclaw-app -am
 
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
@@ -56,7 +61,8 @@ Other commands
 .\mvnw.cmd test -pl arcclaw-app -am "-Dtest=PersistentChatMemoryStoreTest,LangChainReasoningEngineTest" "-Dsurefire.failIfNoSpecifiedTests=false"
 
 .\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"
-http://localhost:8080/q/dev
+
+Application commands:
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
@@ -66,17 +72,14 @@ java "-Dquarkus.profile=cli" --enable-native-access=ALL-UNNAMED -jar arcclaw-app
 
 .\arcclaw-cli.ps1 ask "who are you" -r debugger
 
----
+Git commands
 
 git fetch origin
 git diff origin/main...HEAD  > diff-phaseX.md
 
-
 git diff --name-only --staged | xargs cat > all_staged_content.txt
 
 git diff --name-only --staged | ForEach-Object { Get-Content $_ } | Set-Content all_staged_content.txt
-
----
 
 git diff --name-only --diff-filter=AM origin/main...HEAD |
 Where-Object { $_ -notmatch "\.(md|txt)$" } |
@@ -92,8 +95,6 @@ ForEach-Object {
 Stop-Process -Id (Get-NetTCPConnection -LocalPort 8081).OwningProcess -Force; Start-Sleep 3
 
 Get-Process -Id (Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue).OwningProcess | Stop-Process -Force; Start-Sleep 2; cmd.exe /c ".\mvnw.cmd quarkus:dev -pl arcclaw-app -Dquarkus.http.port=8081 > quarkus_boot_3.log 2>&1"
-
-Invoke-RestMethod -Uri "http://localhost:8081/debug-agents" | ConvertTo-Json
 
 Invoke-RestMethod -Uri "http://localhost:8081/api/v1/debug-agents" -Headers @{"X-ArcClaw-API-Key"="key-internal-changeme"} | ConvertTo-Json
 
