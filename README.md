@@ -126,9 +126,14 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 
 ```mermaid
 graph TD
-    Client([Client / UI]) -->|REST| REST[AgentResource REST API]
-    Telegram([Telegram User]) -->|Apache Camel Route| TH[TelegramAgentHandler]
-    TH --> Pipeline[MessagePipeline]
+    RestClient([REST Client / UI]) -->|HTTP| REST[AgentResource REST API]
+    CLIUser([CLI User]) -->|chat / ask / serve| CLI[PicoCLI Commands]
+    TelegramUser([Telegram User]) -->|Apache Camel Route| TH[TelegramAgentHandler]
+    FutureChannel([Future Channel<br/>Discord / Slack / SMS]) -.->|ChannelSender impl| Pipeline
+
+    CLI --> Pipeline[MessagePipeline]
+    TH --> Pipeline
+    REST --> Pipeline
 
     subgraph Message Pipeline
         Pipeline --> ALH[AllowlistHandler<br/>user allowlist check]
@@ -153,8 +158,7 @@ graph TD
         RR --> PIR[PromptInjectionReflex block jailbreaks]
     end
 
-    ADH -->|Routed Role| REST
-    REST --> Loop[AgentLoop Orchestrator]
+    ADH --> Loop[AgentLoop Orchestrator]
 
     subgraph Core Kernel
         Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB<br/>WAL + Async Writer)]
@@ -178,21 +182,21 @@ graph TD
         ToolReg -->|requiresSandbox=true| AgentToolImpl[AgentTool Implementation]
         AgentToolImpl -->|sandboxCommand + @RequiresSecret| PIE[ProcessIsolationExecutor]
 
-        PIE -->|%prod + Podman running| Podman[(Podman Rootless Container<br/>--network=none --read-only<br/>memory=512m + cpu=0.5)]
-        PIE -->|Podman circuit open 3 failures| NS[Linux unshare Namespaces<br/>pid + net + mount isolated]
-        PIE -->|%dev strategy=NONE<br/>or Windows fallback| Direct[Direct ProcessBuilder<br/>Host PATH execution<br/>no isolation]
+        PIE -->|strategy=PODMAN<br/>Podman available| Podman[(Podman Rootless Container<br/>--network=none --read-only<br/>memory=512m + cpu=0.5)]
+        PIE -->|Podman circuit open<br/>3 failures| NS[Linux unshare Namespaces<br/>pid + net + mount isolated]
+        PIE -->|strategy=NONE<br/>%test profile or Windows| Direct[Direct ProcessBuilder<br/>Host PATH execution<br/>no isolation]
     end
 
     subgraph HITL Governance
         ToolReg -->|NETWORK_OUTBOUND<br/>SUPERVISED level| Pause[Pause + Save AWAITING_APPROVAL]
-        Pause -->|/approve via Telegram or CLI| Resume[Resume from SQLite Checkpoint]
-        Pause -->|/deny via Telegram or CLI| Terminate[Mark FAILED + Wipe State]
+        Pause -->|/approve via any channel| Resume[Resume from SQLite Checkpoint]
+        Pause -->|/deny via any channel| Terminate[Mark FAILED + Wipe State]
     end
 
     subgraph Cron Scheduler
         AgentCronScheduler[AgentCronScheduler<br/>poll every 30s] -->|pending jobs| CronJobRunner
         CronJobRunner -->|runs agent loop| Loop
-        CronJobRunner -->|notifies| TelegramCron[TelegramCronNotificationObserver]
+        CronJobRunner -->|notifies| CronObs[CronNotificationObserver<br/>Telegram / CLI / custom]
     end
 ```
 
@@ -200,8 +204,8 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant T as Telegram User
-    participant TH as TelegramAgentHandler
+    participant U as User / Client<br/>(REST · CLI · Telegram · ...)
+    participant CH as Channel Adapter<br/>(AgentResource · ChatCommand · TelegramAgentHandler)
     participant PP as MessagePipeline
     participant RR as ReflexRegistry
     participant IC as IntentClassifier
@@ -211,12 +215,12 @@ sequenceDiagram
     participant PIE as ProcessIsolationExecutor
     participant DB as SQLite WAL + AsyncWriter
 
-    T->>TH: Send message
-    TH->>PP: process(MessageContext)
+    U->>CH: Send message / goal
+    CH->>PP: process(MessageContext)
 
     PP->>RR: processIfReflex(input)
     alt Reflex matches (e.g. /approve /halt /history /status)
-        RR-->>T: Deterministic response (0 LLM tokens)
+        RR-->>U: Deterministic response (0 LLM tokens)
     else No reflex match
         PP->>IC: Classify intent → role
         IC-->>PP: coordinator / coder / debugger / researcher / architect / synthesizer
@@ -232,27 +236,27 @@ sequenceDiagram
                 TR->>TR: Governance check<br/>AutonomyPolicy.isAllowed()
 
                 alt SUPERVISED + NETWORK_OUTBOUND
-                    TR-->>T: ⚠️ Approval required — /approve or /deny
+                    TR-->>U: ⚠️ Approval required — /approve or /deny
                     AL->>DB: 💾 Save AWAITING_APPROVAL checkpoint
-                    T->>TH: /approve
-                    TH->>AL: Resume from checkpoint
+                    U->>CH: /approve
+                    CH->>AL: Resume from checkpoint
                     AL->>TR: invokeTool (elevated to FULL)
                 end
 
                 TR->>PIE: executeSandboxed(sessionId, workspaceRoot, command, secrets)
 
-                alt %prod — Podman available
+                alt strategy=PODMAN — Podman available
                     PIE->>PIE: executeInContainer()<br/>--network=none --read-only<br/>memory + CPU capped
                 else Podman circuit open — Linux host
                     PIE->>PIE: executeInNamespace()<br/>unshare pid + net + mount
-                else %dev strategy=NONE or Windows
+                else strategy=NONE — %test profile or Windows
                     PIE->>PIE: executeDirectly()<br/>host PATH ProcessBuilder
                 end
 
                 PIE-->>AL: 🔍 Tool output observation
             else FINISH
                 AL->>DB: 💾 Checkpoint COMPLETED
-                AL-->>T: 🏁 Final answer
+                AL-->>U: 🏁 Final answer
             end
 
             AL->>DB: 💾 Async checkpoint each iteration
