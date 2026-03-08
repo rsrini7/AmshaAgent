@@ -66,7 +66,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 flowchart TD
 
     IN(["📨 REST · Telegram · CLI"]):::entry
@@ -143,7 +143,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 <summary>Detailed Architecture Flow Diagram</summary>
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 graph TD
     RestClient([REST Client / UI]) -->|HTTP| REST[AgentResource REST API]
     CLIUser([CLI User]) -->|chat / ask / serve| CLI[PicoCLI Commands]
@@ -226,7 +226,7 @@ graph TD
 ### Sequence Flow
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 sequenceDiagram
     participant U as User / Client<br/>(REST · CLI · Telegram · ...)
     participant CH as Channel Adapter<br/>(AgentResource · ChatCommand · TelegramAgentHandler)
@@ -308,7 +308,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 > The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 graph LR
 
     IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
@@ -545,7 +545,7 @@ ArcClaw uses a **dual-database SQLite architecture**:
 The two databases are connected at runtime via `ATTACH DATABASE`. All writes to SQLite are serialized through a single-threaded `AsyncPersistenceEngine` backed by a `LinkedBlockingQueue`, eliminating WAL contention across concurrent virtual threads.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 graph LR
 
     APE["⚙️ AsyncPersistenceEngine<br/>LinkedBlockingQueue<br/>single writer thread"]:::writer
@@ -592,7 +592,7 @@ After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Re
 ## ⏰ Autonomous Cron Scheduler
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 sequenceDiagram
     actor U as 👤 User — Telegram / CLI
     participant AL as 🧠 AgentLoop<br/>ReAct Engine
@@ -641,7 +641,7 @@ ArcClaw supports fully autonomous scheduled tasks via a built-in cron engine bac
 ## 🔒 Security Architecture
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 sequenceDiagram
     actor User
     participant API as 🌐 REST / Telegram / CLI
@@ -726,7 +726,7 @@ server pepper (env var) + user password
 Secrets for sandboxed tools are transported via `TmpfsSecretTransport`:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'background': '#09a420', 'mainBkg': '#09a420', 'primaryColor': '#1e3a5f', 'primaryTextColor': '#2092ff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'secondaryColor': '#122030', 'tertiaryColor': '#808080', 'activationBorderColor': '#4fc3f7', 'activationBkgColor': '#1e3a5f', 'actorBkg': '#1e3a5f', 'actorBorder': '#4fc3f7', 'actorTextColor': '#e0ecff', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#e8a045', 'labelBoxBkgColor': '#09a420', 'labelBoxBorderColor': '#0b0c0cff', 'labelTextColor': '#e0ecff', 'loopTextColor': '#e0ecff', 'noteBkgColor': '#1a2a0d', 'noteBorderColor': '#81c784', 'noteTextColor': '#c8e6c9', 'edgeLabelBackground': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#000000','primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 graph LR
     SV[SecretVault<br/>AES-GCM-SIV Decrypt] -->|raw bytes| SR[SandboxSecretResolver]
     SR --> TT[TmpfsSecretTransport<br/>tmpfs-backed env-file<br/>mode=600]
