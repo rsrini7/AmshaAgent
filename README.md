@@ -62,87 +62,69 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 ---
 
-## 🕉️ The Cosmic Pantheon — Full Agent Roster
+## 🌊 High-Level Architecture Flow
 
-ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, with two additional specialist roles derived from extended Vedic tradition. The default multi-agent architecture is informed by four-agent collaborative reasoning frameworks designed for high reasoning capability. Roles are selected automatically by the intent classifier or passed explicitly via `agentRole` in the API/CLI.
-
-| Role | Deity | Canonical Name | Tools | Description |
-|---|---|---|---|---|
-| `coordinator` | **Vishnu** | coordinator | `github`, `scheduletask`, `manageschedule`, `memory_search` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
-| `researcher` | **Saraswati** | researcher | `github`, `memory_search` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
-| `coder` | **Brahma** | coder | *(none — empty schema)* | The Creator. Pure logic and engineering brain; refuses conversational tasks |
-| `debugger` | **Shiva** | debugger | `github` | The Transformer. Contrarian balance expert; finds blind spots and challenges assumptions |
-| `architect` | **Brihaspati** | architect | `github`, `memory_search` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
-| `synthesizer` | **Dattatreya** | synthesizer | `github`, `scheduletask`, `manageschedule`, `memory_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
-
-> [!NOTE]
-> The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'fontSize': '14px'}}}%%
-graph LR
-    classDef classifier fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
-    classDef coordinator fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
-    classDef researcher fill:#1a0d2a,stroke:#ce93d8,stroke-width:1.5px,color:#e1bee7
-    classDef coder fill:#1a1a0d,stroke:#e8a045,stroke-width:1.5px,color:#fff9c4
-    classDef debugger fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2
-    classDef architect fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
-    classDef synthesizer fill:#0d1a1a,stroke:#4dd0e1,stroke-width:1.5px,color:#b2ebf2
-    classDef tool fill:#1a1200,stroke:#ffb74d,stroke-width:1px,color:#ffe0b2
-    classDef policy fill:#0d0d1a,stroke:#7986cb,stroke-width:1px,color:#c5cae9
-    classDef empty fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d1420', 'fontSize': '13px'}}}%%
+flowchart TD
+    classDef entry fill:#1a3a2a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
+    classDef handler fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
+    classDef reflexOut fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffcc80
+    classDef decision fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7
+    classDef loop fill:#0d1a2a,stroke:#4fc3f7,stroke-width:1px,color:#b3e5fc
+    classDef approval fill:#1a0d0d,stroke:#ef9a9a,stroke-width:2px,color:#ffcdd2
+    classDef sandbox fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
+    classDef result fill:#1a2a1a,stroke:#81c784,stroke-width:2px,color:#a5d6a7,font-weight:bold
 
-    IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
+    IN(["📨 REST · Telegram · CLI"]):::entry
 
-    subgraph AGENTS["  🕉️  THE COSMIC PANTHEON — SIX AGENTS  "]
-        direction TB
-        A1["🔵 coordinator — Vishnu<br/>The Preserver<br/>Routes · Delegates · Synthesizes"]:::coordinator
-        A2["🟣 researcher — Saraswati<br/>Knowledge Goddess<br/>Fact retrieval · No code"]:::researcher
-        A3["🟠 coder — Brahma<br/>The Creator<br/>Pure logic · EMPTY tool schema"]:::coder
-        A4["🔴 debugger — Shiva<br/>The Transformer<br/>Contrarian · Finds blind spots"]:::debugger
-        A5["🟡 architect — Brihaspati<br/>System Designer<br/>ADRs · Trade-offs · No prod code"]:::architect
-        A6["🟢 synthesizer — Dattatreya<br/>Trinity Incarnate<br/>Cross-domain · Multi-specialist"]:::synthesizer
+    subgraph PIPELINE["🔀 MESSAGE PIPELINE"]
+        direction LR
+        P1["① Allowlist"]:::handler
+        P2["② Session"]:::handler
+        P3{"③ Reflex?"}:::decision
+        P4["④ Intent Classifier"]:::handler
+        P5["⑤ Compaction"]:::handler
+        P6["⑥ Dispatch"]:::handler
     end
 
-    subgraph TOOLS["  🛠️  TOOLS & GOVERNANCE LAYER  "]
-        direction TB
-        T1["🐙 github<br/>GH CLI via Podman sandbox<br/>GH_TOKEN injected via tmpfs"]:::tool
-        T2["⏰ scheduletask<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
-        T3["📋 manageschedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
-        T4["🔍 memory_search<br/>SQLite FTS5 full-text<br/>Past compaction summaries"]:::tool
+    subgraph REFLEXES["⚡ REFLEXES — 0 LLM tokens"]
+        direction LR
+        R1["/approve · /deny · /halt"]:::reflexOut
+        R2["/status · /history · /crons"]:::reflexOut
+        R3["PII Scan → Redact/Block"]:::reflexOut
+        R4["Prompt Injection → Block"]:::reflexOut
     end
 
-    subgraph AUTONOMY["  🔰  AUTONOMY POLICY  "]
-        direction TB
-        AU1["FULL — All ops permitted"]:::policy
-        AU2["SUPERVISED ← default<br/>NETWORK_OUTBOUND → HITL pause"]:::policy
-        AU3["BACKGROUND — READ_FS only<br/>No scheduling"]:::policy
-        AU4["READONLY — READ_FS only<br/>Most restricted"]:::policy
+    subgraph REACT["🔁 ReAct AGENT LOOP — LangChain4J"]
+        direction LR
+        L1["🧠 LLM<br/>Reason"]:::loop
+        L2{"Tool<br/>call?"}:::decision
+        L3{"HITL<br/>Gate?"}:::decision
+        L4["⏸ AWAITING<br/>APPROVAL"]:::approval
+        L5["🏖 Sandbox<br/>Podman→NS→Direct"]:::sandbox
+        L6["📝 Observe<br/>+ SQLite tick"]:::loop
+        L7{"FINISH?"}:::decision
+        L8(["✅ Reply sent"]):::result
     end
 
-    IC --> A1 & A2 & A3 & A4 & A5 & A6
+    IN --> PIPELINE
+    P1 --> P2 --> P3
+    P3 -->|"matched"| REFLEXES
+    P3 -->|"no match"| P4 --> P5 --> P6
 
-    A1 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
-    A2 -->|"github · memory_search"| T1 & T4
-    A3 -.->|"∅ structurally empty<br/>no tool access"| TOOLS
-    A4 -->|"github only"| T1
-    A5 -->|"github · memory_search"| T1 & T4
-    A6 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
-
-    TOOLS --> AUTONOMY
+    P6 --> REACT
+    L1 --> L2
+    L2 -->|"no"| L7
+    L2 -->|"yes"| L3
+    L3 -->|"approved"| L5
+    L3 -->|"needs approval"| L4
+    L4 -.->|"/approve"| L5
+    L5 --> L6 --> L7
+    L7 -->|"next iter"| L1
+    L7 -->|"done"| L8
 ```
-
-### Tool Schema Enforcement
-
-The tool schema for each role is enforced **structurally** in `LangChainReasoningEngine.getPermittedToolNames()` — it intersects the agent's declared `allowedTools()` with the full registered tool list. Any tool not in the intersection is **invisible to the LLM** for that role, regardless of what the user prompt says. This is a **structural guarantee**, not a system-prompt instruction.
-
-### Intent Classification
-
-The `IntentClassifierService` uses `llama-3.1-8b-instant` to automatically route free-text messages to the best-fit role. It defaults to `coordinator` on any error or rate limit. You can override by passing `agentRole` explicitly.
-
----
-
-## 🌊 High-Level Architecture Flow
 
 When a REST call hits the kernel, the execution sequence is rigorously defined:
 
@@ -164,63 +146,6 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 7. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 8. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
 
-```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d1420', 'fontSize': '13px'}}}%%
-flowchart LR
-    classDef entry fill:#1a3a2a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
-    classDef handler fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
-    classDef reflexOut fill:#1a1200,stroke:#e8a045,stroke-width:1px,color:#ffcc80
-    classDef decision fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7
-    classDef loop fill:#0d1a2a,stroke:#4fc3f7,stroke-width:1px,color:#b3e5fc
-    classDef approval fill:#1a0d0d,stroke:#ef9a9a,stroke-width:2px,color:#ffcdd2
-    classDef sandbox fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
-    classDef result fill:#1a2a1a,stroke:#81c784,stroke-width:2px,color:#a5d6a7,font-weight:bold
-
-    IN(["📨 Inbound<br/>REST·TG·CLI"]):::entry
-
-    subgraph PIPELINE["🔀 PIPELINE"]
-        direction TB
-        P1["① Allowlist"]:::handler
-        P2["② Session"]:::handler
-        P3{"③ Reflex?"}:::decision
-        P4["④ Intent Classifier<br/>llama-3.1-8b"]:::handler
-        P5["⑤ Compaction"]:::handler
-        P6["⑥ Dispatch"]:::handler
-    end
-
-    subgraph REFLEXES["⚡ REFLEXES — 0 tokens"]
-        direction TB
-        R1["/approve · /deny · /halt"]:::reflexOut
-        R2["/status · /history · /crons"]:::reflexOut
-        R3["PII Scan → Redact/Block"]:::reflexOut
-        R4["Prompt Injection → Block"]:::reflexOut
-    end
-
-    subgraph REACT["🔁 ReAct LOOP — LangChain4J"]
-        direction TB
-        L1["🧠 LLM Reason<br/>Thought + Plan"]:::loop
-        L2{"Tool<br/>call?"}:::decision
-        L3{"HITL Gate<br/>SUPERVISED?"}:::decision
-        L4["⏸ AWAITING_APPROVAL<br/>→ 202"]:::approval
-        L5["🏖 ProcessIsolationExecutor<br/>Podman→NS→Direct"]:::sandbox
-        L6["📝 Observe<br/>SQLite tick"]:::loop
-        L7{"FINISH?"}:::decision
-        L8(["✅ AgentResult<br/>Reply sent"]):::result
-    end
-
-    IN --> P1 --> P2 --> P3
-    P3 -->|"matched"| REFLEXES
-    P3 -->|"no match"| P4 --> P5 --> P6
-    P6 --> L1 --> L2
-    L2 -->|"no"| L7
-    L2 -->|"yes"| L3
-    L3 -->|"FULL / approved"| L5
-    L3 -->|"needs approval"| L4
-    L4 -.->|"/approve"| L5
-    L5 --> L6 --> L7
-    L7 -->|"next iter"| L1
-    L7 -->|"yes"| L8
-```
 
 <details>
 <summary>Detailed Architecture Flow Diagram</summary>
@@ -369,6 +294,86 @@ sequenceDiagram
     end
 ```
 </details>
+
+---
+
+## 🕉️ The Cosmic Pantheon — Full Agent Roster
+
+ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, with two additional specialist roles derived from extended Vedic tradition. The default multi-agent architecture is informed by four-agent collaborative reasoning frameworks designed for high reasoning capability. Roles are selected automatically by the intent classifier or passed explicitly via `agentRole` in the API/CLI.
+
+| Role | Deity | Canonical Name | Tools | Description |
+|---|---|---|---|---|
+| `coordinator` | **Vishnu** | coordinator | `github`, `scheduletask`, `manageschedule`, `memory_search` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
+| `researcher` | **Saraswati** | researcher | `github`, `memory_search` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
+| `coder` | **Brahma** | coder | *(none — empty schema)* | The Creator. Pure logic and engineering brain; refuses conversational tasks |
+| `debugger` | **Shiva** | debugger | `github` | The Transformer. Contrarian balance expert; finds blind spots and challenges assumptions |
+| `architect` | **Brihaspati** | architect | `github`, `memory_search` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
+| `synthesizer` | **Dattatreya** | synthesizer | `github`, `scheduletask`, `manageschedule`, `memory_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
+
+> [!NOTE]
+> The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'fontSize': '14px'}}}%%
+graph LR
+    classDef classifier fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
+    classDef coordinator fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
+    classDef researcher fill:#1a0d2a,stroke:#ce93d8,stroke-width:1.5px,color:#e1bee7
+    classDef coder fill:#1a1a0d,stroke:#e8a045,stroke-width:1.5px,color:#fff9c4
+    classDef debugger fill:#1a0d0d,stroke:#ef9a9a,stroke-width:1.5px,color:#ffcdd2
+    classDef architect fill:#0d1a0d,stroke:#81c784,stroke-width:1.5px,color:#c8e6c9
+    classDef synthesizer fill:#0d1a1a,stroke:#4dd0e1,stroke-width:1.5px,color:#b2ebf2
+    classDef tool fill:#1a1200,stroke:#ffb74d,stroke-width:1px,color:#ffe0b2
+    classDef policy fill:#0d0d1a,stroke:#7986cb,stroke-width:1px,color:#c5cae9
+    classDef empty fill:#1a0d0d,stroke:#ef5350,stroke-width:2px,color:#ef9a9a,stroke-dasharray:5 5
+
+    IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
+
+    subgraph AGENTS["  🕉️  THE COSMIC PANTHEON — SIX AGENTS  "]
+        direction TB
+        A1["🔵 coordinator — Vishnu<br/>The Preserver<br/>Routes · Delegates · Synthesizes"]:::coordinator
+        A2["🟣 researcher — Saraswati<br/>Knowledge Goddess<br/>Fact retrieval · No code"]:::researcher
+        A3["🟠 coder — Brahma<br/>The Creator<br/>Pure logic · EMPTY tool schema"]:::coder
+        A4["🔴 debugger — Shiva<br/>The Transformer<br/>Contrarian · Finds blind spots"]:::debugger
+        A5["🟡 architect — Brihaspati<br/>System Designer<br/>ADRs · Trade-offs · No prod code"]:::architect
+        A6["🟢 synthesizer — Dattatreya<br/>Trinity Incarnate<br/>Cross-domain · Multi-specialist"]:::synthesizer
+    end
+
+    subgraph TOOLS["  🛠️  TOOLS & GOVERNANCE LAYER  "]
+        direction TB
+        T1["🐙 github<br/>GH CLI via Podman sandbox<br/>GH_TOKEN injected via tmpfs"]:::tool
+        T2["⏰ scheduletask<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
+        T3["📋 manageschedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
+        T4["🔍 memory_search<br/>SQLite FTS5 full-text<br/>Past compaction summaries"]:::tool
+    end
+
+    subgraph AUTONOMY["  🔰  AUTONOMY POLICY  "]
+        direction TB
+        AU1["FULL — All ops permitted"]:::policy
+        AU2["SUPERVISED ← default<br/>NETWORK_OUTBOUND → HITL pause"]:::policy
+        AU3["BACKGROUND — READ_FS only<br/>No scheduling"]:::policy
+        AU4["READONLY — READ_FS only<br/>Most restricted"]:::policy
+    end
+
+    IC --> A1 & A2 & A3 & A4 & A5 & A6
+
+    A1 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
+    A2 -->|"github · memory_search"| T1 & T4
+    A3 -.->|"∅ structurally empty<br/>no tool access"| TOOLS
+    A4 -->|"github only"| T1
+    A5 -->|"github · memory_search"| T1 & T4
+    A6 -->|"github · scheduletask<br/>manageschedule · memory_search"| T1 & T2 & T3 & T4
+
+    TOOLS --> AUTONOMY
+```
+
+### Tool Schema Enforcement
+
+The tool schema for each role is enforced **structurally** in `LangChainReasoningEngine.getPermittedToolNames()` — it intersects the agent's declared `allowedTools()` with the full registered tool list. Any tool not in the intersection is **invisible to the LLM** for that role, regardless of what the user prompt says. This is a **structural guarantee**, not a system-prompt instruction.
+
+### Intent Classification
+
+The `IntentClassifierService` uses `llama-3.1-8b-instant` to automatically route free-text messages to the best-fit role. It defaults to `coordinator` on any error or rate limit. You can override by passing `agentRole` explicitly.
 
 ---
 
