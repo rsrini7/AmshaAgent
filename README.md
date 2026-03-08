@@ -129,12 +129,12 @@ graph TD
     TH --> Pipeline[MessagePipeline]
 
     subgraph Message Pipeline
-        Pipeline --> ALH[AllowlistHandler\nuser allowlist check]
-        ALH --> CDH[CommandDispatchHandler\nReflex fast-path]
-        CDH --> SRH[SessionResolutionHandler\nsession binding]
-        SRH --> ICH[IntentClassificationHandler\nllama-3.1-8b-instant]
-        ICH --> CH[CompactionHandler\nFTS5 compaction trigger]
-        CH --> ADH[AgentDispatchHandler\nAgent run]
+        Pipeline --> ALH[AllowlistHandler<br/>user allowlist check]
+        ALH --> CDH[CommandDispatchHandler<br/>Reflex fast-path]
+        CDH --> SRH[SessionResolutionHandler<br/>session binding]
+        SRH --> ICH[IntentClassificationHandler<br/>llama-3.1-8b-instant]
+        ICH --> CH[CompactionHandler<br/>FTS5 compaction trigger]
+        CH --> ADH[AgentDispatchHandler<br/>Agent run]
     end
 
     subgraph Reflex System - No LLM Tokens Consumed
@@ -155,40 +155,40 @@ graph TD
     REST --> Loop[AgentLoop Orchestrator]
 
     subgraph Core Kernel
-        Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB\nWAL + Async Writer)]
-        Loop <-->|JDBC ChatMemory\nRolling Window| JDBC[(Persistent ChatMemory\n+ FTS5 Long-Term Memory)]
-        Loop <-->|Prompt + Role-Filtered\nTool Schema| AI[LangChainReasoningEngine]
-        Loop -->|Execute Tool Request| ToolReg[ToolRegistry\nGovernance + HITL]
+        Loop <-->|Load/Save State| SQLite[(SQLite Checkpoint DB<br/>WAL + Async Writer)]
+        Loop <-->|JDBC ChatMemory<br/>Rolling Window| JDBC[(Persistent ChatMemory<br/>+ FTS5 Long-Term Memory)]
+        Loop <-->|Prompt + Role-Filtered<br/>Tool Schema| AI[LangChainReasoningEngine]
+        Loop -->|Execute Tool Request| ToolReg[ToolRegistry<br/>Governance + HITL]
     end
 
     subgraph Strict Tool Binding per Role
-        AI -->|agentRole filter| Schema{Schema Filter\ngetPermittedToolNames}
+        AI -->|agentRole filter| Schema{Schema Filter<br/>getPermittedToolNames}
         Schema -->|coordinator / synthesizer| ST[scheduletask + manageschedule]
         Schema -->|coordinator / researcher / architect / synthesizer| MS[memory_search]
         Schema -->|coordinator / researcher / architect / debugger / synthesizer| GT[github]
-        Schema -->|coder| NoTool[empty schema\ntool bias impossible]
+        Schema -->|coder| NoTool[empty schema<br/>tool bias impossible]
     end
 
-    AI <-->|Cloud Reasoning| Groq((Groq: llama-4-scout\n17b-16e-instruct))
+    AI <-->|Cloud Reasoning| Groq((Groq: llama-4-scout<br/>17b-16e-instruct))
     Loop -->|Micrometer| Prom[Prometheus /q/metrics]
 
     subgraph Sandbox Layer - Three-Tier Degradation
         ToolReg -->|requiresSandbox=true| AgentToolImpl[AgentTool Implementation]
         AgentToolImpl -->|sandboxCommand + @RequiresSecret| PIE[ProcessIsolationExecutor]
 
-        PIE -->|%prod + Podman running| Podman[(Podman Rootless Container\n--network=none --read-only\nmemory=512m + cpu=0.5)]
-        PIE -->|Podman circuit open 3 failures| NS[Linux unshare Namespaces\npid + net + mount isolated]
-        PIE -->|%dev strategy=NONE\nor Windows fallback| Direct[Direct ProcessBuilder\nHost PATH execution\nno isolation]
+        PIE -->|%prod + Podman running| Podman[(Podman Rootless Container<br/>--network=none --read-only<br/>memory=512m + cpu=0.5)]
+        PIE -->|Podman circuit open 3 failures| NS[Linux unshare Namespaces<br/>pid + net + mount isolated]
+        PIE -->|%dev strategy=NONE<br/>or Windows fallback| Direct[Direct ProcessBuilder<br/>Host PATH execution<br/>no isolation]
     end
 
     subgraph HITL Governance
-        ToolReg -->|NETWORK_OUTBOUND\nSUPERVISED level| Pause[Pause + Save AWAITING_APPROVAL]
+        ToolReg -->|NETWORK_OUTBOUND<br/>SUPERVISED level| Pause[Pause + Save AWAITING_APPROVAL]
         Pause -->|/approve via Telegram or CLI| Resume[Resume from SQLite Checkpoint]
         Pause -->|/deny via Telegram or CLI| Terminate[Mark FAILED + Wipe State]
     end
 
     subgraph Cron Scheduler
-        AgentCronScheduler[AgentCronScheduler\npoll every 30s] -->|pending jobs| CronJobRunner
+        AgentCronScheduler[AgentCronScheduler<br/>poll every 30s] -->|pending jobs| CronJobRunner
         CronJobRunner -->|runs agent loop| Loop
         CronJobRunner -->|notifies| TelegramCron[TelegramCronNotificationObserver]
     end
@@ -222,12 +222,12 @@ sequenceDiagram
 
         loop maxIterations — Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
-            Note over LLM: Role-filtered tool schema injected\ncoder → empty schema\nresearcher / architect → github + memory_search\ncoordinator / synthesizer → all tools
+            Note over LLM: Role-filtered tool schema injected<br/>coder → empty schema<br/>researcher / architect → github + memory_search<br/>coordinator / synthesizer → all tools
             LLM-->>AL: Action (ToolName + Args) OR FINISH
 
             alt Tool call requested
                 AL->>TR: invokeTool(toolName, params)
-                TR->>TR: Governance check\nAutonomyPolicy.isAllowed()
+                TR->>TR: Governance check<br/>AutonomyPolicy.isAllowed()
 
                 alt SUPERVISED + NETWORK_OUTBOUND
                     TR-->>T: ⚠️ Approval required — /approve or /deny
@@ -240,11 +240,11 @@ sequenceDiagram
                 TR->>PIE: executeSandboxed(sessionId, workspaceRoot, command, secrets)
 
                 alt %prod — Podman available
-                    PIE->>PIE: executeInContainer()\n--network=none --read-only\nmemory + CPU capped
+                    PIE->>PIE: executeInContainer()<br/>--network=none --read-only<br/>memory + CPU capped
                 else Podman circuit open — Linux host
-                    PIE->>PIE: executeInNamespace()\nunshare pid + net + mount
+                    PIE->>PIE: executeInNamespace()<br/>unshare pid + net + mount
                 else %dev strategy=NONE or Windows
-                    PIE->>PIE: executeDirectly()\nhost PATH ProcessBuilder
+                    PIE->>PIE: executeDirectly()<br/>host PATH ProcessBuilder
                 end
 
                 PIE-->>AL: 🔍 Tool output observation
@@ -446,16 +446,16 @@ The two databases are connected at runtime via `ATTACH DATABASE`. All writes to 
 ```mermaid
 graph LR
     subgraph SQLite WAL Dual-DB
-        Meta[(arcclaw-meta.db\ncheckpoints\nchat_memory\nagent_cron\naudit_event\nencrypted_secret\ncompaction_summary)]
-        FTS[(arcclaw-fts.db\ncompaction_summary_fts\nFTS5 full-text index)]
+        Meta[(arcclaw-meta.db<br/>checkpoints<br/>chat_memory<br/>agent_cron<br/>audit_event<br/>encrypted_secret<br/>compaction_summary)]
+        FTS[(arcclaw-fts.db<br/>compaction_summary_fts<br/>FTS5 full-text index)]
         Meta -- ATTACH DATABASE --> FTS
     end
 
-    APE[AsyncPersistenceEngine\nLinkedBlockingQueue\nsingle writer thread] -->|serialized writes| Meta
-    CC[ContextCompactionService\nllama-3.1-8b-instant] -->|compaction summaries| Meta
+    APE[AsyncPersistenceEngine<br/>LinkedBlockingQueue<br/>single writer thread] -->|serialized writes| Meta
+    CC[ContextCompactionService<br/>llama-3.1-8b-instant] -->|compaction summaries| Meta
     CC -->|FTS index population| FTS
     MST[MemorySearchTool] -->|FTS5 query by userId| FTS
-    SR[SessionReaper\nScheduled GC] -->|purge stale sessions| Meta
+    SR[SessionReaper<br/>Scheduled GC] -->|purge stale sessions| Meta
 ```
 
 ### Context Compaction (`ContextCompactionService`)
@@ -560,8 +560,8 @@ Secrets for sandboxed tools are transported via `TmpfsSecretTransport`:
 
 ```mermaid
 graph LR
-    SV[SecretVault\nAES-GCM-SIV Decrypt] -->|raw bytes| SR[SandboxSecretResolver]
-    SR --> TT[TmpfsSecretTransport\ntmpfs-backed env-file\nmode=600]
+    SV[SecretVault<br/>AES-GCM-SIV Decrypt] -->|raw bytes| SR[SandboxSecretResolver]
+    SR --> TT[TmpfsSecretTransport<br/>tmpfs-backed env-file<br/>mode=600]
     TT -->|--env-file /run/arcclaw/secrets/...| Podman[Podman Container]
     TT -->|AutoCloseable.close| Zero[Zero bytes in JVM + unlink tmpfs file]
 ```
