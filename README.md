@@ -66,7 +66,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d1420', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'default', 'themeVariables': {'primaryColor': '#e8f4fd', 'primaryTextColor': '#1a2a3a', 'primaryBorderColor': '#2196f3', 'lineColor': '#1565c0', 'activationBorderColor': '#1565c0', 'activationBkgColor': '#bbdefb', 'actorBkg': '#1565c0', 'actorBorder': '#0d47a1', 'actorTextColor': '#ffffff', 'actorLineColor': '#90caf9', 'signalColor': '#1565c0', 'signalTextColor': '#1a2a3a', 'labelBoxBkgColor': '#e3f2fd', 'labelBoxBorderColor': '#90caf9', 'labelTextColor': '#1a2a3a', 'loopTextColor': '#1a2a3a', 'noteBkgColor': '#fff8e1', 'noteBorderColor': '#f9a825', 'noteTextColor': '#4a3000', 'fontSize': '13px'}}}%%
 flowchart TD
     classDef entry fill:#1a3a2a,stroke:#81c784,stroke-width:2px,color:#c8e6c9,font-weight:bold
     classDef handler fill:#0d2035,stroke:#4fc3f7,stroke-width:1.5px,color:#b3e5fc
@@ -314,7 +314,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 > The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'fontSize': '14px'}}}%%
+%%{init: {'theme': 'default', 'themeVariables': {'primaryColor': '#e8f4fd', 'primaryTextColor': '#1a2a3a', 'primaryBorderColor': '#2196f3', 'lineColor': '#1565c0', 'activationBorderColor': '#1565c0', 'activationBkgColor': '#bbdefb', 'actorBkg': '#1565c0', 'actorBorder': '#0d47a1', 'actorTextColor': '#ffffff', 'actorLineColor': '#90caf9', 'signalColor': '#1565c0', 'signalTextColor': '#1a2a3a', 'labelBoxBkgColor': '#e3f2fd', 'labelBoxBorderColor': '#90caf9', 'labelTextColor': '#1a2a3a', 'loopTextColor': '#1a2a3a', 'noteBkgColor': '#fff8e1', 'noteBorderColor': '#f9a825', 'noteTextColor': '#4a3000', 'fontSize': '13px'}}}%%
 graph LR
     classDef classifier fill:#1a1535,stroke:#ce93d8,stroke-width:2px,color:#e1bee7,font-weight:bold
     classDef coordinator fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
@@ -561,7 +561,7 @@ ArcClaw uses a **dual-database SQLite architecture**:
 The two databases are connected at runtime via `ATTACH DATABASE`. All writes to SQLite are serialized through a single-threaded `AsyncPersistenceEngine` backed by a `LinkedBlockingQueue`, eliminating WAL contention across concurrent virtual threads.
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'secondaryColor': '#0d1420', 'tertiaryColor': '#0d2035', 'fontSize': '14px'}}}%%
+%%{init: {'theme': 'default', 'themeVariables': {'primaryColor': '#e8f4fd', 'primaryTextColor': '#1a2a3a', 'primaryBorderColor': '#2196f3', 'lineColor': '#1565c0', 'activationBorderColor': '#1565c0', 'activationBkgColor': '#bbdefb', 'actorBkg': '#1565c0', 'actorBorder': '#0d47a1', 'actorTextColor': '#ffffff', 'actorLineColor': '#90caf9', 'signalColor': '#1565c0', 'signalTextColor': '#1a2a3a', 'labelBoxBkgColor': '#e3f2fd', 'labelBoxBorderColor': '#90caf9', 'labelTextColor': '#1a2a3a', 'loopTextColor': '#1a2a3a', 'noteBkgColor': '#fff8e1', 'noteBorderColor': '#f9a825', 'noteTextColor': '#4a3000', 'fontSize': '13px'}}}%%
 graph LR
     classDef writer fill:#0d2035,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc,font-weight:bold
     classDef compactor fill:#1a1535,stroke:#ce93d8,stroke-width:1.5px,color:#e1bee7
