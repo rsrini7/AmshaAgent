@@ -1,0 +1,256 @@
+### ═══════════════════════════════════════════════════════════════
+### 06 — REFLEX COMMANDS (ZERO-TOKEN FAST PATH)
+###
+### The ReflexRegistry intercepts specific input patterns BEFORE
+### the LLM is ever invoked. These consume zero LLM tokens.
+### They work identically via REST (goal string) or Telegram.
+###
+### All reflexes are sent as the "goal" field in a /run request.
+###
+### Reflex map:
+###   /status        → StatusReflex    — checkpoint state + USD spent
+###   /halt          → HaltReflex      — emergency stop, terminate workspace
+###   /reset         → ResetReflex     — soft reset (wipes ReAct state, keeps chat memory)
+###   /history       → HistoryReflex   — recent chat + compaction summaries
+###   /crons         → ListCronsReflex — list all scheduled tasks for user
+###   /cron          → ListCronsReflex — alias for /crons
+###   /list crons    → ListCronsReflex — natural language alias
+###   deletecron <id>→ DeleteCronReflex— delete cron job by ID
+###
+### PiiScanReflex and PromptInjectionReflex are covered in 07_security.http
+###
+### Prerequisites: ArcClaw serve mode
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-changeme
+
+# ─────────────────────────────────────────────────────────────────
+# SETUP: Create a shared session for reflex tests
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-0] Create session
+# @name reflexSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /STATUS — shows current checkpoint state + governance budget
+# StatusReflex queries: StatefulAgentStore, GovernanceLayer, CompactionSummaryRepository
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-1] /status — on a fresh session (no checkpoint yet)
+# Expect 200: status message like "No active session found" or budget=0.00
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/status",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### Run a quick agent task first to create a checkpoint
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 1 + 1?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-2] /status — after an agent run (now has checkpoint)
+# Expect 200: body contains COMPLETED status, token counts, USD spent
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/status",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /HISTORY — shows recent chat messages + compaction summaries
+# HistoryReflex reads from ChatMemoryStore + CompactionSummaryRepository
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-3] /history — view conversation history
+# Expect 200: formatted list of recent messages and any compaction summaries
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/history",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /RESET — soft reset: wipes ReAct loop state, keeps chat memory
+# Prevents "ghost tool trigger" contamination from previous runs.
+# After reset, the agent can start fresh on the same session.
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-4] /reset — soft reset session state
+# Expect 200: confirmation that session was reset
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/reset",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-5] Verify: can still run an agent after reset
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 3 + 3?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /CRONS and /LIST CRONS — list scheduled tasks (no LLM needed)
+# ListCronsReflex queries AgentCronRepository.findByUserId()
+# UserId comes from WorkspaceScopeHolder — tenant-isolated
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-6] /crons — list all scheduled tasks (alias 1)
+# Expect 200: "No scheduled tasks found." or formatted cron list
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/crons",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-7] /cron — alias 2 (same behaviour)
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/cron",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-8] /list crons — natural language alias (same behaviour)
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/list crons",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# DELETECRON <id> — delete a specific cron job by ID
+# DeleteCronReflex: matches input.startsWith("deletecron")
+# Tenant-isolated: user can only delete their own cron jobs.
+# Use after scheduling a task (see 09_cron_scheduler.http) to get an ID.
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-9] deletecron with a fake ID — expect "not found" error message
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "deletecron 00000000-dead-beef-0000-000000000000",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /HALT — emergency stop
+# HaltReflex calls WorkspaceManager.terminateSession() immediately.
+# Session is wiped; subsequent runs on this sessionId will find no state.
+# Create a fresh session AFTER testing halt.
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-10] /halt — terminates workspace immediately
+# Expect 200: "🛑 System Halted. Workspace terminated."
+# WARNING: session is now terminated — do not reuse reflexSession after this
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/halt",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-11] Verify halt: status on terminated session → 404
+GET {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [REFLEX-12] Create a fresh session after halt
+# @name postHaltSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [REFLEX-13] Agent works normally on new session after halt
+POST {{baseUrl}}/api/v1/sessions/{{postHaltSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say: System fully recovered after halt.",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{postHaltSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###

@@ -1,0 +1,80 @@
+### ═══════════════════════════════════════════════════════════════
+### 01 — SYSTEM HEALTH, METRICS & SYSTEM INFO
+###
+### These endpoints are fully public — no API key required.
+### Run these first to confirm the server is up before anything else.
+###
+### Prerequisites: ArcClaw running in serve mode on port 8080
+###   mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl = http://localhost:8080
+
+# ─────────────────────────────────────────────────────────────────
+# SYSTEM INFO  (always public — ApiKeyAuthFilter explicitly skips /info)
+# ─────────────────────────────────────────────────────────────────
+
+### [INFO-1] System metadata — name, version, environment, startedAt
+# Expect 200: {"name":"arcclaw","version":"1.0.0","environment":"dev","startedAt":"..."}
+GET {{baseUrl}}/api/v1/info
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# HEALTH CHECKS  (/q/health — Quarkus SmallRye Health, no auth)
+# Three checks registered:
+#   PodmanHealthCheck      — Liveness  (podman --version succeeds)
+#   PodmanImageHealthCheck — Readiness (arcclaw-tool-runner:latest present)
+#   SystemMetadataHealthCheck — Readiness (registry populated)
+# ─────────────────────────────────────────────────────────────────
+
+### [HEALTH-1] Combined health (all liveness + readiness checks)
+# Expect 200: {"status":"UP","checks":[...]}
+# Note: PodmanImageHealthCheck may report DOWN in %dev if image not built — that is expected.
+GET {{baseUrl}}/q/health
+
+###
+
+### [HEALTH-2] Liveness only — is the JVM alive?
+# Expect 200: {"status":"UP","checks":[{"name":"podman","status":"UP",...}]}
+GET {{baseUrl}}/q/health/live
+
+###
+
+### [HEALTH-3] Readiness only — is the app ready to accept traffic?
+# Expect 200 or 503 depending on whether Podman image is present
+GET {{baseUrl}}/q/health/ready
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# PROMETHEUS METRICS  (/q/metrics — no auth, scrape endpoint)
+# ─────────────────────────────────────────────────────────────────
+
+### [METRICS-1] Full Prometheus text format
+# Expect 200: large prometheus text body with jvm_*, http_*, arcclaw_* metrics
+GET {{baseUrl}}/q/metrics
+
+###
+
+### [METRICS-2] Filter for ArcClaw-specific counters only (if supported by your client)
+# In curl: curl http://localhost:8080/q/metrics | grep arcclaw
+GET {{baseUrl}}/q/metrics
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# OPENAPI / SWAGGER UI
+# ─────────────────────────────────────────────────────────────────
+
+### [SWAGGER-1] OpenAPI spec (JSON)
+# Expect 200: full OpenAPI 3.0 spec
+GET {{baseUrl}}/q/openapi
+
+###
+
+### [SWAGGER-2] Swagger UI landing page (browser-friendly)
+# Open in browser: http://localhost:8080/q/swagger-ui
+GET {{baseUrl}}/q/swagger-ui
+
+###

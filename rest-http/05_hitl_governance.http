@@ -1,0 +1,225 @@
+### ═══════════════════════════════════════════════════════════════
+### 05 — HUMAN-IN-THE-LOOP (HITL) GOVERNANCE & APPROVAL FLOW
+###
+### When an agent invokes a tool with operation = NETWORK_OUTBOUND
+### and the session autonomy level is SUPERVISED (default), the
+### ToolRegistry throws RequiresApprovalException instead of executing
+### the tool. The AgentLoop saves the checkpoint as AWAITING_APPROVAL
+### and returns a 202 response describing what needs approval.
+###
+### Two paths to approve/deny:
+###   A) REST endpoints (tested here):
+###        POST /api/v1/sessions/{id}/approve?agentRole=coordinator
+###        POST /api/v1/sessions/{id}/deny?agentRole=coordinator
+###   B) Goal string in run/run-async (legacy path):
+###        goal: "/approve"  or  goal: "/deny"
+###
+### Checkpoint states involved:
+###   AWAITING_APPROVAL → agent paused, saved to SQLite
+###   COMPLETED         → after successful approve + resume
+###   FAILED            → after deny or approval timeout
+###
+### Prerequisites: ArcClaw serve mode, GROQ_API_KEY + GITHUB_TOKEN set
+###   (GithubTool is NETWORK_OUTBOUND — the only tool that triggers HITL)
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-changeme
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW A: REST APPROVE
+# Create session → trigger AWAITING_APPROVAL → poll status → approve
+# ─────────────────────────────────────────────────────────────────
+
+### [HITL-1] Create session for approve flow
+# @name approveSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-2] Run async — ask coordinator to use GitHub tool
+# The GithubTool has ToolOperation=NETWORK_OUTBOUND + autonomy=SUPERVISED
+# → ToolRegistry pauses execution and saves AWAITING_APPROVAL checkpoint
+# Expect 202: {"toolName":"github","paramsJson":"{...}","sessionId":"..."}
+POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "List the public repositories of GitHub user rsrini7 using the github tool.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [HITL-3] Poll status — should show AWAITING_APPROVAL
+# Expect 200: {"sessionId":"...","status":"AWAITING_APPROVAL","steps":[...],"failReason":null}
+# Run this immediately after HITL-2 before approving
+GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-4] APPROVE via dedicated REST endpoint
+# agentRole query param (default: coordinator) must match the role in the checkpoint
+# Expect 200: {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
+# The agent resumes from the saved checkpoint with AutonomyLevel.FULL for this invocation
+POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-5] Poll status after approve — should now be COMPLETED
+# Expect 200: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
+GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW B: REST DENY
+# Create session → trigger AWAITING_APPROVAL → deny → check FAILED
+# ─────────────────────────────────────────────────────────────────
+
+### [HITL-6] Create session for deny flow
+# @name denySession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-7] Run async — trigger AWAITING_APPROVAL again
+POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "List the public repositories of GitHub user rsrini7 using the github tool.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [HITL-8] DENY via dedicated REST endpoint
+# Expect 200: {"status":"DENIED","session":"..."}
+# AgentSessionService.deny() calls agentStore.markFailed() and removes heartbeat
+POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/deny?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-9] Status after deny — should be FAILED
+# Expect 200: {"sessionId":"...","status":"FAILED","steps":[...],"failReason":"Human denied via REST"}
+GET {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW C: APPROVE VIA GOAL STRING (legacy in-band method)
+# Sending goal="/approve" in run-async triggers the same approval path.
+# ─────────────────────────────────────────────────────────────────
+
+### [HITL-10] Create session
+# @name goalApproveSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-11] Trigger AWAITING_APPROVAL
+POST {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "View the rsrini7/arcclaw repository using the github tool.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [HITL-12] Approve via goal="/approve" in run-async
+# AgentSessionService.runAsync() special-cases "/approve" → sets AutonomyLevel.FULL
+# Expect: agent resumes and completes
+POST {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [HITL-13] Deny via goal="/deny" in run-async
+# Note: use on a DIFFERENT session that is AWAITING_APPROVAL
+# AgentSessionService.runAsync() special-cases "/deny" → marks checkpoint FAILED
+POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/deny",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# ERROR / EDGE CASES
+# ─────────────────────────────────────────────────────────────────
+
+### [HITL-14] Approve on non-existent session → expect 404 / CONFLICT
+# AgentSessionService.approve() returns 409 CONFLICT if no AWAITING_APPROVAL checkpoint
+POST {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-15] Approve on COMPLETED session → expect 409 CONFLICT (no pending approval)
+POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-16] Approve without API key → expect 401
+POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve
+Content-Type: application/json
+
+###
+
+### [HITL-17] Deny without API key → expect 401
+POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/deny
+Content-Type: application/json
+
+###

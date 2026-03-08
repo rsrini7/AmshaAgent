@@ -1,0 +1,131 @@
+### ═══════════════════════════════════════════════════════════════
+### 02 — API KEY AUTHENTICATION & RATE LIMITING
+###
+### All /api/v1/* endpoints (except /api/v1/info) require the header:
+###   X-ArcClaw-API-Key: <key>
+###
+### Default keys from .env.example / application.yaml:
+###   internal key : key-internal-changeme    (name: "internal")
+###   CI key       : key-ci-changeme          (name: "ci-pipeline")
+###
+### Change these in production via:
+###   ARCCLAW_API_KEY_INTERNAL=<your-key>
+###   ARCCLAW_API_KEY_CI=<your-key>
+###
+### Rate limit: 20 requests/minute per key → HTTP 429 on the 21st
+###
+### Prerequisites: ArcClaw running in serve mode
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl    = http://localhost:8080
+@validKey   = key-internal-changeme
+@ciKey      = key-ci-changeme
+@invalidKey = totally-wrong-key
+
+# ─────────────────────────────────────────────────────────────────
+# NEGATIVE TESTS — all should be rejected (401)
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTH-1] Missing API key → expect 401
+# Response: {"error":"UNAUTHORIZED","message":"Missing or invalid API key","timestamp":"..."}
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+
+###
+
+### [AUTH-2] Invalid API key → expect 401
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{invalidKey}}
+
+###
+
+### [AUTH-3] Empty API key → expect 401
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key:
+
+###
+
+### [AUTH-4] Audit endpoint without key → expect 401
+GET {{baseUrl}}/api/v1/audit/session/00000000-0000-0000-0000-000000000000
+
+###
+
+### [AUTH-5] Audit endpoint with invalid key → expect 401
+GET {{baseUrl}}/api/v1/audit/session/00000000-0000-0000-0000-000000000000
+X-ArcClaw-API-Key: {{invalidKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# PUBLIC BYPASS — these endpoints skip auth entirely
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTH-6] /q/health bypasses auth → expect 200 (no key needed)
+GET {{baseUrl}}/q/health
+
+###
+
+### [AUTH-7] /q/metrics bypasses auth → expect 200
+GET {{baseUrl}}/q/metrics
+
+###
+
+### [AUTH-8] /api/v1/info bypasses auth → expect 200
+# ApiKeyAuthFilter explicitly allows path starting with /info
+GET {{baseUrl}}/api/v1/info
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# POSITIVE TESTS — both named keys should be accepted
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTH-9] Internal key accepted → expect 201 session created
+# @name authInternalSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [AUTH-10] CI pipeline key accepted → expect 201
+# @name authCiSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{ciKey}}
+
+###
+
+### [AUTH-11] Cleanup: terminate the test sessions
+DELETE {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{ciKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# RATE LIMIT TEST
+# ApiKeyRegistry tracks requests per minute per key.
+# Default: 20 requests/minute → 21st request returns HTTP 429.
+#
+# HOW TO TEST: Send the request below 21 times rapidly in quick
+# succession using your HTTP client's "repeat" feature.
+# The 21st (or sooner) should return:
+#   HTTP 429 + header "Retry-After: 60"
+#   body: {"error":"RATE_LIMITED","message":"Too many requests...","retryAfterSeconds":60}
+#
+# Note: the rate limit window resets after 60 seconds.
+# ─────────────────────────────────────────────────────────────────
+
+### [RATELIMIT-1] Rate limit probe — run this 21 times rapidly
+# Watch for HTTP 429 + Retry-After: 60 on the 21st hit
+GET {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000000/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###

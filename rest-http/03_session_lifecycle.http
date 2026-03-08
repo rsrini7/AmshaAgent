@@ -1,0 +1,187 @@
+### ═══════════════════════════════════════════════════════════════
+### 03 — SESSION LIFECYCLE: CREATE → RUN → STATUS → TERMINATE
+###
+### Full happy-path flow for a synchronous and asynchronous agent run.
+###
+### Endpoint map (all under /api/v1):
+###   POST   /sessions                     → create session (201)
+###   POST   /sessions/{id}/run            → run agent synchronously (200/202/408/4xx/5xx)
+###   POST   /sessions/{id}/run-async      → run agent async, returns immediately (202)
+###   GET    /sessions/{id}/status/{role}  → poll checkpoint state (200 / 404)
+###   DELETE /sessions/{id}               → terminate session (204)
+###
+### Response shapes:
+###   run/run-async (Finished)         → {answer, totalInputTokens, totalOutputTokens}
+###   run/run-async (AwaitingApproval) → {toolName, paramsJson, sessionId}  HTTP 202
+###   run/run-async (LoopExceeded)     → {reason, code:"LOOP_EXCEEDED"}     HTTP 408
+###   run/run-async (Failed/Budget)    → {reason, code:"BUDGET"}            HTTP 429
+###   run/run-async (Failed/Denied)    → {reason, code:"USER_DENIED"}       HTTP 422
+###   status                           → {sessionId, status, steps[], failReason}
+###     status values: IN_PROGRESS | AWAITING_APPROVAL | COMPLETED | FAILED | COMPROMISED
+###
+### Prerequisites: ArcClaw running in serve mode, GROQ_API_KEY set
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-changeme
+
+# ─────────────────────────────────────────────────────────────────
+# STEP 1 — CREATE SESSION
+# Returns a fresh UUID-based sessionId. No DB writes yet — just a
+# heartbeat registration.
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-1] Create a new session
+# @name mainSession
+# Expect 201: {"sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# STEP 2a — SYNCHRONOUS RUN (blocks until agent finishes)
+# The HTTP connection stays open until the agent loop completes.
+# Ideal for short tasks (maxIterations ≤ 3).
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-2] Run agent synchronously — simple arithmetic (no tools needed)
+# Expect 200: {"answer": "4", "totalInputTokens": N, "totalOutputTokens": N}
+POST {{baseUrl}}/api/v1/sessions/{{mainSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 2 + 2? Answer with just the number.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [SESSION-3] Check status after sync run
+# Expect 200: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
+GET {{baseUrl}}/api/v1/sessions/{{mainSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# STEP 2b — ASYNCHRONOUS RUN (returns immediately; poll status)
+# The HTTP response returns once the virtual thread is spawned.
+# Use /status/{role} to poll the checkpoint until COMPLETED or FAILED.
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-4] Create a second session for async test
+# @name asyncSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-5] Run agent asynchronously
+# Returns immediately: {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
+# or HTTP 202 AwaitingApproval if a tool needs HITL
+# For a deeper task, increase maxIterations
+POST {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Summarize what ArcClaw is in one sentence, based on your training knowledge.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [SESSION-6] Poll status (run a few times until status is COMPLETED)
+# Expect 200: status = IN_PROGRESS (while running) → COMPLETED (when done)
+GET {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# STEP 3 — TERMINATE SESSION
+# Wipes workspace directory and removes heartbeat registration.
+# Idempotent — terminating an already-terminated session is safe.
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-7] Terminate session — expect 204 No Content
+DELETE {{baseUrl}}/api/v1/sessions/{{mainSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-8] Terminate async session
+DELETE {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# ERROR CASES
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-9] Status on non-existent session → expect 404
+GET {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-10] Invalid request body — null goal → expect 400 (Bean Validation)
+POST {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000001/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": null,
+    "agentRole": "",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-11] Unknown agent role → expect 500 (IllegalArgumentException from AgentRoleEnum.fromString)
+# Valid roles: coordinator | researcher | coder | debugger | architect | synthesizer
+POST {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000001/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Hello",
+    "agentRole": "unknown-role",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-12] maxIterations hit — expect 408 LoopExceeded
+# @name loopSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### Ask a multi-step question with maxIterations=1 to force loop exceeded
+# Expect 408: {"reason":"Iteration limit 1 reached","code":"LOOP_EXCEEDED"}
+POST {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Write a 500-word essay about the history of Java and then analyze its performance characteristics.",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###

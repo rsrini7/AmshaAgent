@@ -1,0 +1,306 @@
+### ═══════════════════════════════════════════════════════════════
+### 04 — ALL SIX AGENT ROLES
+###
+### ArcClaw ships six persona-based agents. Each has a distinct
+### system prompt, tool schema, and maxIterations constraint.
+###
+### Role → Deity       → Tools available
+### ────────────────────────────────────────────────────────────
+### coordinator → Vishnu    → github, scheduletask, manageschedule, memory_search
+### researcher  → Saraswati → github, memory_search
+### coder       → Brahma    → NONE (empty schema — by design)
+### debugger    → Shiva     → github only
+### architect   → Brihaspati→ github, memory_search
+### synthesizer → Dattatreya→ github, scheduletask, manageschedule, memory_search
+###
+### Hindu deity aliases also work (e.g. agentRole: "vishnu", "brahma", "shiva")
+###
+### NOTE: coder + debugger have an intentionally EMPTY tool schema.
+###       They cannot trigger tool calls regardless of prompt content.
+###       This is a structural guarantee, not just a system-prompt rule.
+###
+### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-changeme
+
+# ─────────────────────────────────────────────────────────────────
+# COORDINATOR — Vishnu (orchestrator, delegation, scheduling)
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-1] Create session for coordinator
+# @name coordSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-2] Coordinator: task decomposition (no tools needed)
+# Expect 200 Finished: Vishnu's synthesized answer
+POST {{baseUrl}}/api/v1/sessions/{{coordSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Explain what a ReAct agent loop is in exactly 2 sentences.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{coordSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# RESEARCHER — Saraswati (facts, knowledge retrieval)
+# Strict rule: never fabricates, only cites what it knows.
+# Has access to github + memory_search tools.
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-3] Create session for researcher
+# @name researchSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-4] Researcher: knowledge question (no external tool needed)
+# Expect 200 Finished: fact-based answer from Saraswati
+POST {{baseUrl}}/api/v1/sessions/{{researchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is the difference between AES-GCM and AES-GCM-SIV encryption modes?",
+    "agentRole": "researcher",
+    "maxIterations": 3
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{researchSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# CODER — Brahma (code generation, math, logic)
+# Empty tool schema — structurally cannot make any tool calls.
+# Will refuse conversational/non-technical requests.
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-5] Create session for coder
+# @name coderSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-6] Coder: pure code generation (no tools needed — empty schema)
+# Expect 200 Finished: Java code from Brahma
+POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Write a Java 21 method that takes a list of integers and returns the top 3 distinct values in descending order using streams.",
+    "agentRole": "coder",
+    "maxIterations": 3
+}
+
+###
+
+### [ROLE-7] Coder: Brahma alias works identically
+POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is Big-O complexity of QuickSort in the average case? Show the proof.",
+    "agentRole": "brahma",
+    "maxIterations": 2
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# DEBUGGER — Shiva (bug analysis, stack traces, security audits)
+# Contrarian persona — will challenge assumptions and surface blind spots.
+# Has github tool (read-only operations only).
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-8] Create session for debugger
+# @name debugSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-9] Debugger: analyze a stack trace
+# Expect 200 Finished: root cause analysis from Shiva
+POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Analyze this stack trace and identify the root cause:\njava.lang.NullPointerException: Cannot invoke method on null object\n  at com.example.UserService.getUser(UserService.java:42)\n  at com.example.UserController.handleRequest(UserController.java:18)",
+    "agentRole": "debugger",
+    "maxIterations": 3
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# ARCHITECT — Brihaspati (system design, ADRs, trade-off analysis)
+# Will NOT write production code — delegates that back to Brahma.
+# Has github + memory_search tools for reviewing existing code/context.
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-10] Create session for architect
+# @name archSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-11] Architect: design trade-off analysis
+# Expect 200 Finished: Brihaspati's architectural assessment
+POST {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Evaluate the architectural trade-offs of using SQLite WAL mode vs PostgreSQL for an agentic AI kernel that handles hundreds of concurrent sessions. Consider latency, portability, and ACID guarantees.",
+    "agentRole": "architect",
+    "maxIterations": 3
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# SYNTHESIZER — Dattatreya (cross-domain: code + debug + research + arch)
+# The Trinity Incarnate. Only activate when ONE task genuinely spans
+# multiple specialist domains simultaneously.
+# Has all tools: github, scheduletask, manageschedule, memory_search.
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-12] Create session for synthesizer
+# @name synthSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-13] Synthesizer: cross-domain task
+# Expect 200 Finished: integrated analysis from Dattatreya
+POST {{baseUrl}}/api/v1/sessions/{{synthSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "A Java service is experiencing high memory under load. Diagnose whether the root cause is a code defect (Brahma's domain), a design flaw (Brihaspati's domain), or a known JVM behavior (Saraswati's domain). Synthesize a unified recommendation.",
+    "agentRole": "synthesizer",
+    "maxIterations": 4
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{synthSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# ROLE ALIAS VALIDATION
+# AgentRoleEnum.fromString() accepts both canonical names and deity aliases.
+# ─────────────────────────────────────────────────────────────────
+
+### [ROLE-14] Verify all deity aliases resolve correctly
+# @name aliasSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### "vishnu" alias → coordinator persona
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say: I am Vishnu, the Coordinator.",
+    "agentRole": "vishnu",
+    "maxIterations": 1
+}
+
+###
+
+### "saraswati" alias → researcher persona
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say: I am Saraswati, the Researcher.",
+    "agentRole": "saraswati",
+    "maxIterations": 1
+}
+
+###
+
+### "shiva" alias → debugger persona
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say: I am Shiva, the Debugger.",
+    "agentRole": "shiva",
+    "maxIterations": 1
+}
+
+###
+
+### "dattatreya" alias → synthesizer persona
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say: I am Dattatreya, the Synthesizer.",
+    "agentRole": "dattatreya",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
