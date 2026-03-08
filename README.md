@@ -541,8 +541,8 @@ curl -v -X POST http://localhost:8080/api/v1/sessions/abcd-1234-.../run-async \
 ```
 
 > [!TIP]
-> **Pro Tip: Use `api.http` instead!**
-> If you are using **IntelliJ IDEA** or **VSCode** (with the REST Client extension), you can skip manual `curl` commands and just use the provided [`api.http`](./api.http) file.
+> **Pro Tip: Use `*.http` inside ./rest-http folder for interactive API testing!**
+> If you are using **IntelliJ IDEA** or **VSCode** (with the REST Client extension), you can skip manual `curl` commands and just use the provided [`*.http`](./rest-http/) file.
 > 1. Run the first request to create the session.
 > 2. The script will automatically capture the `SESSION_ID`.
 > 3. Run the subsequent "Async" or "Sync" requests immediately without copying IDs!
