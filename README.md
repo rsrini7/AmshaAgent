@@ -114,10 +114,12 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 6. **ProcessIsolationExecutor:** The Sandbox layer enforces three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in dev mode (`strategy: NONE`). Tool schemas are also filtered per persona — the `coder` role receives an empty tool list, making tool bias architecturally impossible regardless of LLM instruction.
 
 > [!NOTE]
-> **Sandbox Degradation Details**: The ProcessIsolationExecutor operates in three tiers:
-> - **Production** (`%prod`): Full Podman rootless container isolation with circuit breaker (3-failure trip to fallback).
-> - **Namespace fallback**: If Podman circuit opens, Linux `unshare` namespaces for pid, net, and mount isolation.
-> - **Development** (`%dev`, strategy: NONE): Direct host execution — requires `gh` CLI installed on the host PATH. No container isolation.
+> **Sandbox Degradation Details**: The `ProcessIsolationExecutor` operates in three tiers:
+> - **All profiles except `%test`** (`%dev`, `%prod`, `%staging`): `strategy: PODMAN` — attempts full Podman rootless container isolation with a circuit breaker (3-failure trip to fallback). This applies to **both dev and prod**.
+> - **Namespace fallback**: If the Podman circuit opens (Podman unavailable or 3 consecutive failures), Linux `unshare` namespaces for pid, net, and mount isolation are used automatically.
+> - **Direct execution** (`%test` profile, or Windows OS detected): `strategy: NONE` — direct host `ProcessBuilder` execution. Requires `gh` CLI on the host `PATH`. No container isolation.
+>
+> In `%dev`, if Podman is running and `arcclaw-tool-runner:latest` is present, **full Tier 1 container isolation is active** — identical to production. Direct execution (`NONE`) is only the default for the `%test` profile and Windows hosts.
 
 7. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 8. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
