@@ -42,7 +42,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 | `synthesizer` | **Dattatreya** | synthesizer | github, memory_search, scheduletask, manageschedule | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
 
 > [!NOTE]
-> The `coder` and `debugger` roles receive an **empty tool schema** — tool bias is architecturally impossible regardless of LLM instruction. The `architect` and `synthesizer` roles are additional personas beyond the default four registered in `application.yaml`. They can be invoked via the REST API using their canonical role names.
+> The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
 
 *   **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files—never as process arguments.
 *   **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
@@ -61,7 +61,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 3.  **Reflex System:** Before the LLM is ever invoked, the `ReflexRegistry` scans the input for deterministic fast-path commands (e.g., `/approve`, `/deny`, `/halt`, `/history`, `/status`, `/crons`). If a reflex matches, it executes without consuming any LLM tokens and short-circuits the pipeline.
 4.  **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 5.  **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or bankrupt).
-6.  **ProcessIsolationExecutor:** The Sandbox layer enforces three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in dev mode (`strategy: NONE`). Tool schemas are also filtered per persona — coder and debugger roles receive an empty tool list, making tool bias architecturally impossible regardless of LLM instruction.
+6.  **ProcessIsolationExecutor:** The Sandbox layer enforces three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in dev mode (`strategy: NONE`). Tool schemas are also filtered per persona — the `coder` role receives an empty tool list, making tool bias architecturally impossible regardless of LLM instruction.
 
 > [!NOTE]
 > **Sandbox Degradation Details**: The ProcessIsolationExecutor operates in three tiers:
@@ -116,7 +116,7 @@ graph TD
         Schema -->|coordinator / synthesizer| ST[scheduletask + manageschedule]
         Schema -->|coordinator / researcher / architect / synthesizer| MS[memory_search]
         Schema -->|coordinator / researcher / architect / debugger / synthesizer| GT[github]
-        Schema -->|coder / debugger-no-github| NoTool[empty or read-only schema\ntool bias impossible]
+        Schema -->|coder| NoTool[empty schema\ntool bias impossible]
     end
 
     AI <-->|Cloud Reasoning| Groq((Groq: llama-4-scout\n17b-16e-instruct))
@@ -228,7 +228,7 @@ Before any message reaches the LLM, the `ReflexRegistry` evaluates it against al
 | `PromptInjectionReflex` | every message | Blocks jailbreak patterns (fake approvals, "reveal system prompt", auto-approve bypass attempts) |
 
 > [!NOTE]
-> The `PiiScanReflex` and `PromptInjectionReflex` run on **every message** via their `sanitize()` hook in `ReflexRegistry.processIfReflex()`, even when no other reflex matches. PII mode is configurable: `REDACT_AND_FORWARD` (default) silently redacts and passes to the LLM; `BLOCK_AND_NOTIFY` rejects the message outright.
+> The `PiiScanReflex` and `PromptInjectionReflex` run on **every message** via their `sanitize()` hook in `ReflexRegistry.processIfReflex()`, even when no other reflex matches. PII mode is configurable: `REDACT_AND_FORWARD` (default) silently redacts and passes to the LLM; `BLOCK_AND_NOTIFY` rejects the message outright. Override at runtime via `ARCCLAW_PII_MODE` in your `.env`.
 
 ---
 
@@ -338,12 +338,12 @@ ArcClaw's `SecretVaultImpl` uses a multi-layer cryptographic scheme:
 
 ### API Authentication & Rate Limiting
 
-*   **`ApiKeyAuthFilter`**: Bearer token authentication on all `/api/v1/*` endpoints. Supports multiple named API keys configured via environment: `ARCCLAW_API_KEY_INTERNAL` and `ARCCLAW_API_KEY_CI`. Key comparison uses constant-time equality to prevent timing attacks.
+*   **`ApiKeyAuthFilter`**: Bearer token authentication on all `/api/v1/*` endpoints via `Authorization: Bearer <key>`. Supports multiple named API keys: `ARCCLAW_API_KEY_INTERNAL` and `ARCCLAW_API_KEY_CI`. Key comparison uses constant-time equality to prevent timing attacks.
 *   **`ApiKeyRegistry`**: Registry that stores keys with their capabilities. Supports variable-length keys.
-*   **Rate Limiting**: 20 requests/minute per API key (configurable: `arcclaw.api.rate-limit.requests-per-minute`).
+*   **Rate Limiting**: 20 requests/minute per API key, configurable via `arcclaw.api.rate-limit.requests-per-minute`.
 *   **`DestructiveVocabularyFilter`**: Pre-execution filter that blocks messages containing dangerous shell keywords (e.g., `rm -rf`, `DROP TABLE`, `:(){ :|:& };:`) before they reach the LLM.
 *   **`StartupSecurityValidator`**: Validates the security posture at startup. In `%prod`, fails fast if weak default secrets are detected. In `%dev`, exempts validation with a warning.
-*   **`TelegramAllowlistGuard`**: Enforces an allowlist of permitted Telegram user IDs and usernames (`ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` / `ARCCLAW_TELEGRAM_ALLOWED_USERS`). Supports open-access mode (empty allowlist = everyone allowed) and silent-block mode.
+*   **`TelegramAllowlistGuard`**: Enforces an allowlist of permitted Telegram user IDs and usernames. Supports **open-access mode** (empty allowlist = everyone allowed) and silent-block mode.
 
 ### Sandbox Secret Transport
 
@@ -372,7 +372,7 @@ graph LR
 ### Observability Stack
 
 *   **Prometheus** (`/q/metrics`): Micrometer metrics exported for token consumption (`arcclaw.llm.tokens`), agent invocations (`arcclaw.agent.invocations`), and Quarkus scheduler metrics.
-*   **Jaeger** (`localhost:16686`): OTLP traces via `otel-collector`. SDK is disabled by default (`OTEL_SDK_DISABLED=true`); set to `false` when the collector is running.
+*   **Jaeger** (`localhost:16686`): OTLP traces via `otel-collector`. SDK is disabled by default (`OTEL_SDK_DISABLED=true`); set to `false` in your environment when the collector is running.
 *   **Structured Logging**: MDC-enriched log lines include `sessionId` in every log entry. Log format: `HH:mm:ss LEVEL [class] [sid=<sessionId>] (thread) message`.
 *   **`MetricsAgentObserver`**: CDI observer wired into `AgentLoop.recordLlmCall()`. Increments Micrometer counters per LLM call.
 *   **`AgentOtelContext`**: OpenTelemetry span holder for tool execution. Internal reasoning spans are stubbed as no-ops in V1.0.0; HTTP spans are active.
@@ -420,9 +420,9 @@ cp .env.example .env
 | `ARCCLAW_API_KEY_INTERNAL` | `key-internal-changeme` | Bearer token for internal API access. **Change in production.** |
 | `ARCCLAW_API_KEY_CI` | `key-ci-changeme` | Bearer token for CI/CD pipeline access. **Change in production.** |
 | `ARCCLAW_VAULT_PEPPER` | `dev-pepper-...` | Server-side secret for Argon2id key derivation. **Must be 32+ bytes in production.** |
-| `ARCCLAW_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` | HMAC key for audit event integrity. **Must be 32+ bytes in production.** |
-| `ARCCLAW_SESSION_BUDGET_USD` | `10.00` | Per-session USD budget cap. Downgrade to READONLY on exceed. |
-| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | `(empty = open)` | Comma-separated Telegram user ID allowlist. Empty allows all. |
+| `ARCCLAW_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` | HMAC key for audit event integrity chain. **Must be 32+ bytes in production.** |
+| `ARCCLAW_SESSION_BUDGET_USD` | `10.00` | Per-session USD budget cap. Downgrades to READONLY autonomy when exceeded. |
+| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | `(empty = open access)` | Comma-separated Telegram user ID allowlist. **Empty allows all users.** |
 
 ### Step 2: Compile the Native Binary (CRITICAL)
 Your `Dockerfile.native` expects the GraalVM native binary to already exist on your host machine. Docker will **not** compile your Java code; if you deploy without this step, the container will instantly fail with `failed to solve: lstat /arcclaw-app/target: no such file or directory` or cannot find `*-runner`.
@@ -438,7 +438,7 @@ Your `Dockerfile.native` expects the GraalVM native binary to already exist on y
 ```
 
 ### Step 3: Boot the Stack
-Once the `.env` is populated, the native binary is sitting in `target/`, and the compose file is updated with the `init-perms` block, you are ready for liftoff:
+Once the `.env` is populated and the native binary is sitting in `target/`, you are ready for liftoff:
 ```bash
 docker compose up -d --build
 ```
@@ -464,7 +464,7 @@ docker compose up -d
 * `init-perms` will boot instantly, change the permissions of the data volume to UID 1000 (`arcclaw`), and exit.
 * `arcclaw` will boot, safely initialize its SQLite DB, and bind to port 8080.
 
-You can then run the `curl` commands from your `TESTING_GUIDE.md`!
+You can then run the `curl` commands from `SETUP_TESTING_GUIDE.md`!
 
 ### 🧪 Running the Test Suite
 ArcClaw includes **150+ unit and integration tests** covering CDI scopes, LLM reasoning logic, SQLite checkpoints, sandbox circuit breakers, reflex system, audit integrity, cron scheduling, and secret vault operations. To run the full suite across all modules, use:
@@ -486,7 +486,7 @@ Run as a background REST API server.
 
 > [!NOTE]
 > **Dev Sandbox Limitations**: In the `%dev` profile (when running `quarkus:dev`), the container isolation strategy defaults to `NONE`. To test full Podman rootless isolation, you must run the packaged runner (or native binary) using the Prod profile.
-> If Quarkus dev mode fails with a console `NullPointerException`, disable the dev console by setting `quarkus.console.enabled=false`. See `TROUBLESHOOTING.md` for details.
+> If Quarkus dev mode fails with a console `NullPointerException`, disable the dev console by setting `quarkus.console.enabled=false`. See `SETUP_TESTING_GUIDE.md` for details.
 
 **Option B: Channel Daemon (`attach`)**
 Keep ArcClaw running as a background daemon to service external channel adapters (e.g., Telegram bots). The cron scheduler is active in this mode.
@@ -541,8 +541,8 @@ curl -v -X POST http://localhost:8080/api/v1/sessions/abcd-1234-.../run-async \
 ```
 
 > [!TIP]
-> **Pro Tip: Use `*.http` inside ./rest-http folder for interactive API testing!**
-> If you are using **IntelliJ IDEA** or **VSCode** (with the REST Client extension), you can skip manual `curl` commands and just use the provided [`*.http`](./rest-http/) file.
+> **Pro Tip: Use `*.http` inside the `./rest-http` folder for interactive API testing!**
+> If you are using **IntelliJ IDEA** or **VSCode** (with the REST Client extension), you can skip manual `curl` commands and just use the provided [`*.http`](./rest-http/) files.
 > 1. Run the first request to create the session.
 > 2. The script will automatically capture the `SESSION_ID`.
 > 3. Run the subsequent "Async" or "Sync" requests immediately without copying IDs!
@@ -596,7 +596,7 @@ It features several advanced conversational mechanisms:
 | `/crons` or `/list crons` | List all scheduled autonomous tasks |
 | `deletecron <id>` | Delete a specific scheduled task |
 | `/reset` | Soft-reset session state |
-| `store <key>=<value>` | Store a secret in the encrypted vault |
+| `store <key>=<value>` | Store a secret in the encrypted vault (e.g. `store MY_API_KEY=abc123`) |
 
 ### Step 1: Create a Telegram Bot
 1. Open Telegram and search for **@BotFather**.
@@ -647,26 +647,252 @@ If you have ghost container connections polling your bot, you can sever them by 
 
 ## 🧩 Extending ArcClaw
 
-ArcClaw is designed as a modular kernel. Adding new capabilities requires minimal boilerplate:
+ArcClaw is designed as a modular kernel. Every major subsystem exposes a clean CDI interface that you can implement once and have it discovered automatically. No wiring code, no registry modifications — just implement, annotate, and deploy.
 
-**1. Create a New Tool:**
-Implement the `AgentTool` interface, register it as an `@ApplicationScoped` bean, and ArcClaw handles the LangChain4J specification mapping and Sandbox isolation automatically.
+### 1. Create a New Tool
+
+Implement the `AgentTool` interface and mark it `@ApplicationScoped`. ArcClaw handles LangChain4J spec mapping, governance enforcement, and sandbox routing automatically.
+
+**Simple in-process tool (no sandbox, no secrets):**
 
 ```java
 @ApplicationScoped
 public class MyTool implements AgentTool {
-    @Override public String name() { return "mytool"; }
+    @Override public String name()        { return "mytool"; }
+    @Override public String description() { return "Does something useful."; }
     @Override public ToolOperation requiredOperation() { return ToolOperation.READ_FS; }
-    @Override public boolean requiresSandbox() { return false; }
-    @Override public ToolResponse execute(Map<String, Object> params) { ... }
+    @Override public boolean requiresSandbox()         { return false; }
+
+    @Override
+    public ToolResponse execute(Map<String, Object> params) {
+        String input = (String) params.get("input");
+        return ToolResponse.success("Result: " + input);
+    }
 }
 ```
 
-**2. Define a New Persona:**
-Create a new class implementing `Agent`. Define its `role()`, supply your custom `systemPrompt()`, and return a list of `allowedTools()`. Tag it with `@AgentRole("your_role")` to make it instantly available to the REST API and the intent classifier.
+**Sandboxed tool with secret injection (Podman + tmpfs):**
 
-**3. Register a New Reflex:**
-Implement `AgentReflex`, mark it `@ApplicationScoped`, and return `true` from `matches()` for your trigger pattern. ArcClaw's `ReflexRegistry` discovers it automatically via CDI.
+For tools that must make network calls or run untrusted binaries, enable sandbox isolation and declare the secrets your command needs. The `ToolRegistry` resolves them from `SecretVault` and injects them via a RAM-backed tmpfs env-file — they never appear in process arguments.
+
+```java
+@ApplicationScoped
+public class MyNetworkTool implements AgentTool {
+    @Override public String name()        { return "mynetworktool"; }
+    @Override public String description() { return "Fetches data from an external API."; }
+    @Override public ToolOperation requiredOperation() { return ToolOperation.NETWORK_OUTBOUND; }
+    @Override public boolean requiresSandbox()         { return true; }
+
+    @Override
+    @RequiresSecret(envVar = "MY_API_KEY", vaultKey = "MY_SERVICE_TOKEN")
+    public List<String> sandboxCommand(Map<String, Object> params) {
+        return List.of("my-cli", "fetch", "--target", (String) params.get("url"));
+    }
+
+    @Override
+    public ToolResponse execute(Map<String, Object> params) {
+        // Only called in %dev / direct-exec mode; Podman path goes through sandboxCommand()
+        throw new UnsupportedOperationException("Sandbox required in production.");
+    }
+}
+```
+
+Once deployed, the tool is available to any persona whose role is returned by `getPermittedToolNames()` in `ModelProducer`. Add your tool's name to whichever roles should have access.
+
+> [!NOTE]
+> **Storing secrets at runtime**: Users can store secrets interactively via the Telegram `store <key>=<value>` command (e.g. `store MY_SERVICE_TOKEN=abc123`). They are encrypted with AES-256-GCM-SIV and persisted in `arcclaw-meta.db`. Your `@RequiresSecret(vaultKey="MY_SERVICE_TOKEN")` declaration resolves against this vault automatically.
+
+---
+
+### 2. Define a New Persona
+
+Create a class implementing `Agent`, tag it with `@AgentRole("your_role")` and `@ApplicationScoped`, and it is instantly available to the REST API and the intent classifier.
+
+```java
+@AgentRole("analyst")
+@ApplicationScoped
+public class AnalystAgent implements Agent {
+
+    @Override
+    public String role() { return "analyst"; }
+
+    @Override
+    public String systemPrompt() {
+        return """
+            You are a data analyst. Your only job is to interpret structured data
+            and produce clear summaries. You never write code or make network calls.
+            """;
+    }
+
+    @Override
+    public List<String> allowedTools() {
+        // Return names of tools this persona may use; empty list = no tools
+        return List.of("memory_search");
+    }
+}
+```
+
+After registering the persona, wire its tool permissions into `ModelProducer.getPermittedToolNames()` so the schema filter knows which tools to expose in the LLM prompt:
+
+```java
+// In ModelProducer (arcclaw-app)
+case "analyst" -> Set.of("memory_search");
+```
+
+Without this step the persona boots correctly but the LLM receives an empty tool schema.
+
+---
+
+### 3. Register a New Reflex
+
+Implement `AgentReflex`, mark it `@ApplicationScoped`, and return `true` from `matches()` for your trigger pattern. The `ReflexRegistry` discovers it automatically at startup via CDI — no manual registration required.
+
+```java
+@ApplicationScoped
+public class PingReflex implements AgentReflex {
+
+    @Override
+    public boolean matches(String input) {
+        return "/ping".equalsIgnoreCase(input.strip());
+    }
+
+    @Override
+    public ReflexResult handle(MessageContext ctx) {
+        return ReflexResult.reply("🏓 Pong! ArcClaw is alive.");
+    }
+}
+```
+
+Reflexes run before the LLM on every message. Keep `matches()` cheap — it is called on the hot path for every inbound message. If your reflex needs access to session state, inject `WorkspaceScopeHolder` or `StatefulAgentStore`.
+
+---
+
+### 4. Add a New Channel Adapter
+
+All channel-specific code lives in `arcclaw-channel-api`. To add a new channel (e.g. Discord, Slack, SMS):
+
+**Step 1** — Implement `ChannelSender` and register it with `ChannelSenderRegistry`:
+
+```java
+@ApplicationScoped
+public class DiscordChannelSender implements ChannelSender {
+    @Override public ChannelType channelType() { return ChannelType.DISCORD; }
+
+    @Override
+    public void send(ChannelMessage message) {
+        // Post message.content() to the Discord webhook / bot API
+    }
+}
+```
+
+**Step 2** — Implement `ChannelAllowlist` for access control:
+
+```java
+@ApplicationScoped
+public class DiscordAllowlist implements ChannelAllowlist {
+    @Override public ChannelType channelType() { return ChannelType.DISCORD; }
+
+    @Override
+    public boolean isAllowed(ChannelUser user) {
+        return allowedDiscordIds.contains(user.externalId());
+    }
+}
+```
+
+**Step 3** — Implement `ReplyRenderer` to translate `ReplyNode` trees into your channel's markup format (e.g. Discord Markdown):
+
+```java
+@ApplicationScoped
+public class DiscordReplyRenderer implements ReplyRenderer {
+    @Override public ChannelType channelType() { return ChannelType.DISCORD; }
+
+    @Override
+    public String render(ReplyNode node) {
+        // Convert ReplyNode tree to Discord markdown
+    }
+}
+```
+
+**Step 4** — Create the route (Apache Camel or any polling loop) that drives messages into `MessagePipeline.process(MessageContext)`. See `TelegramChannelRoute` as a reference implementation.
+
+---
+
+### 5. Implement a Custom Agent Observer
+
+`AgentObserver` is a CDI event hook fired by `AgentLoop` at key lifecycle moments. Add one to integrate ArcClaw events into your own alerting, analytics, or audit system.
+
+```java
+@ApplicationScoped
+public class SlackAlertObserver implements AgentObserver {
+
+    @Override
+    public void onAgentStart(String sessionId, String role, String goal) {
+        slackClient.post("#agents", "▶️ Agent started: " + role + " — " + goal);
+    }
+
+    @Override
+    public void onAgentComplete(String sessionId, AgentResult result) {
+        slackClient.post("#agents", "✅ Agent completed: " + sessionId);
+    }
+
+    @Override
+    public void onAgentFailed(String sessionId, Throwable cause) {
+        slackClient.post("#agents-alerts", "❌ Agent failed: " + cause.getMessage());
+    }
+
+    @Override
+    public void onLlmCall(String sessionId, int promptTokens, int completionTokens) {
+        // Track token spend in your own billing system
+    }
+}
+```
+
+Multiple observers are supported — CDI discovers all `AgentObserver` beans automatically. The built-in `MetricsAgentObserver` (Micrometer) and `CliAgentObserver` are reference implementations.
+
+---
+
+### 6. Add a Cron Notification Channel
+
+When a scheduled cron job finishes, `CronResultHandler` fires a CDI `AgentJobCompleted` event. Implement `CronNotificationObserver` to deliver results to any new channel.
+
+```java
+@ApplicationScoped
+public class EmailCronNotificationObserver {
+
+    public void onJobCompleted(@Observes AgentJobCompleted event) {
+        String body = event.success()
+            ? "✅ Task completed:\n" + event.result()
+            : "❌ Task failed:\n" + event.error();
+        emailService.send(event.userId(), "Scheduled Task Result", body);
+    }
+}
+```
+
+See `TelegramCronNotificationObserver` and `CliCronNotificationObserver` as reference implementations.
+
+---
+
+### 7. Swap the Intent Classifier
+
+The `IntentClassifier` interface in `arcclaw-channel-api` decouples classification from the `IntentClassifierService` implementation. To replace the default `llama-3.1-8b-instant` classifier with a custom one (e.g. a rule-based classifier for cost control, or a different model):
+
+```java
+@ApplicationScoped
+@Alternative
+@Priority(1)
+public class RuleBasedIntentClassifier implements IntentClassifier {
+
+    @Override
+    public String classify(String input) {
+        if (input.contains("code") || input.contains("function")) return "coder";
+        if (input.contains("debug") || input.contains("error"))   return "debugger";
+        if (input.contains("find") || input.contains("search"))   return "researcher";
+        return "coordinator"; // default
+    }
+}
+```
+
+The `@Alternative @Priority(1)` CDI qualifiers override the default bean without modifying existing code.
 
 ---
 
@@ -735,7 +961,7 @@ The `docker-compose.yaml` provisions the full observability and inference stack:
 
 Our codebase was engineered for Future AI and Human contributors. Don't guess—read the docs:
 
-*   **[`SETUP_TESTING_GUIDE.md`](./SETUP_TESTING_GUIDE.md)** — Step-by-step Setup & Testing Guide.
+*   **[`SETUP_TESTING_GUIDE.md`](./SETUP_TESTING_GUIDE.md)** — Step-by-step Setup & Testing Guide covering macOS, WSL2, all run modes, sandbox tier testing, FTS5 verification, and the full E2E REST API workflow.
 *   **[`FAQ.md`](./FAQ.md)** — Frequently Asked Questions — Answered.
-*   **[`*.http`](./rest-http)** — IntelliJ / VSCode REST Client file for interactive API testing.
+*   **[`*.http`](./rest-http)** — IntelliJ / VSCode REST Client files for interactive API testing.
 *   **[`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md)** — Telegram bot testing guide.
