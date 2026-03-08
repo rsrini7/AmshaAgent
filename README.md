@@ -735,6 +735,7 @@ The `docker-compose.yaml` provisions the full observability and inference stack:
 
 Our codebase was engineered for Future AI and Human contributors. Don't guess—read the docs:
 
-*   **[`TESTING_GUIDE.md`](./TESTING_GUIDE.md)** — Comprehensive E2E `curl` commands, REST flows, and distributed tracing setups.
-*   **[`WSL2_SETUP_GUIDE.md`](./WSL2_SETUP_GUIDE.md)** — Step-by-step guide for setting up JDK 25 and native Podman inside WSL2.
+*   **[`SETUP_TESTING_GUIDE.md`](./SETUP_TESTING_GUIDE.md)** — Step-by-step Setup & Testing Guide.
 *   **[`FAQ.md`](./FAQ.md)** — Frequently Asked Questions — Answered.
+*   **[`*.http`](./rest-http)** — IntelliJ / VSCode REST Client file for interactive API testing.
+*   **[`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md)** — Telegram bot testing guide.

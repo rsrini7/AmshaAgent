@@ -1593,4 +1593,12 @@ ERROR [TelegramChannelSender]  TELEGRAM-SENDRAW: recipient or platformId is null
 
 ---
 
+## 📚 Related Documentation
+
+| Document | Purpose |
+|---|---|
+| [`FAQ.md`](./FAQ.md) | Frequently Asked Questions |
+| [`*.http`](./rest-http) | IntelliJ / VSCode REST Client file for interactive API testing |
+| [`SETUP_TESTING_GUIDE.md`](./SETUP_TESTING_GUIDE.md) | Setup & Testing Guide |
+
 *This guide covers ArcClaw V1.0.0. For REST-only testing, see the `.http` files — in particular `05_hitl_governance.http`, `07_pii_prompt_injection.http`, `08_audit_log.http`, and `09_cron_scheduler.http`, which are the REST equivalents of what is tested here via Telegram.*
