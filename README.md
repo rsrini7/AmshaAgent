@@ -664,7 +664,7 @@ ArcClaw supports fully autonomous scheduled tasks via a built-in cron engine bac
 ## 🔒 Security Architecture
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e2d45', 'primaryTextColor': '#c9d8ee', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#e8a045', 'activationBorderColor': '#e8a045', 'activationBkgColor': '#1e2d45', 'sequenceNumberColor': '#e8a045', 'actorBkg': '#0d1420', 'actorBorder': '#4fc3f7', 'actorTextColor': '#c9d8ee', 'actorLineColor': '#4fc3f7', 'signalColor': '#e8a045', 'signalTextColor': '#ffe082', 'labelBoxBkgColor': '#0d1420', 'labelBoxBorderColor': '#1e2d45', 'labelTextColor': '#c9d8ee', 'loopTextColor': '#c9d8ee', 'noteBkgColor': '#1a1a0d', 'noteBorderColor': '#e8a045', 'noteTextColor': '#ffe082', 'fontSize': '13px'}}}%%
+%%{init: {'theme': 'default', 'themeVariables': {'primaryColor': '#e8f4fd', 'primaryTextColor': '#1a2a3a', 'primaryBorderColor': '#2196f3', 'lineColor': '#1565c0', 'activationBorderColor': '#1565c0', 'activationBkgColor': '#bbdefb', 'actorBkg': '#1565c0', 'actorBorder': '#0d47a1', 'actorTextColor': '#ffffff', 'actorLineColor': '#90caf9', 'signalColor': '#1565c0', 'signalTextColor': '#1a2a3a', 'labelBoxBkgColor': '#e3f2fd', 'labelBoxBorderColor': '#90caf9', 'labelTextColor': '#1a2a3a', 'loopTextColor': '#1a2a3a', 'noteBkgColor': '#fff8e1', 'noteBorderColor': '#f9a825', 'noteTextColor': '#4a3000', 'fontSize': '13px'}}}%%
 sequenceDiagram
     actor User
     participant API as 🌐 REST / Telegram / CLI
