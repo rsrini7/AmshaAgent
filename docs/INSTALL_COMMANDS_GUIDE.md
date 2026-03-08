@@ -1,12 +1,3 @@
-brew install podman
-
-podman machine init --memory 6144 --cpus 4 --disk-size 40
-
-podman machine start
-
-----
-
-
 below points from brew gave..
 
 Starting machine "podman-machine-default"
@@ -32,53 +23,48 @@ following command in your terminal session:
 
 Machine "podman-machine-default" started successfully
 
-
 ---
+IF incase less memory,
+podman machine init --memory 6144 --cpus 4 --disk-size 40
 
-mvnw clean package -pl arcclaw-app -am -DskipTests
+podman machine start
 
-----
+to interact with docker commands
+export DOCKER_HOST="unix:///run/user/1000/podman/podman.sock"
+
+docker compose build tool-runner
+podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
+
+brew install podman
 
 /usr/libexec/java_home -V
 
+if we have Jenv
 jenv add /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
-
 jenv global 25.0
 
-
-graalvm install then do below
-
+native graalvm install then do below to reduce memory issue inside podman
 ./mvnw clean package -Pnative -Dquarkus.native.container-build=false -DskipTests
 
-mvn clean verify -pl arcclaw-app -am
+Other commands
+./mvn clean verify -pl arcclaw-app -am
 
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
 
 ./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
 
-java \
-  --add-opens=java.base/java.nio=ALL-UNNAMED \
-  --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED \
-  --add-opens=java.base/java.lang=ALL-UNNAMED \
-  -Dsun.misc.unsafe.memory.access=allow \
-  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar \
-  serve
+.\mvnw.cmd test -pl arcclaw-app -am "-Dtest=PersistentChatMemoryStoreTest,LangChainReasoningEngineTest" "-Dsurefire.failIfNoSpecifiedTests=false"
 
-java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED  --add-opens=java.base/java.lang=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
-
-$env:OTEL_SDK_DISABLED = "true"
+.\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"
+http://localhost:8080/q/dev
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
 
 java --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED "-Dsun.misc.unsafe.memory.access=allow" "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" "-Dsun.stdout.encoding=UTF-8" "-Dsun.stderr.encoding=UTF-8" "-Dquarkus.profile=%cli" -jar arcclaw-app/target/quarkus-app/quarkus-run.jar chat
 
-.\mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Dquarkus.console.enabled=false" ` "-Dquarkus.devui.enabled=false"
+java "-Dquarkus.profile=cli" --enable-native-access=ALL-UNNAMED -jar arcclaw-app/target/quarkus-app/quarkus-run.jar attach telegram
 
-http://localhost:8080/q/dev
-
-----
-
-podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
+.\arcclaw-cli.ps1 ask "who are you" -r debugger
 
 ---
 
