@@ -24,29 +24,116 @@ A production-grade, enterprise AI Agent Kernel built with:
 
 ## Completed Phases (DO NOT re-suggest or re-implement)
 
-- Phase 25–28: Core infrastructure (Quarkus, Telegram channel, GovernanceLayer,
-  SecretVault, WorkspaceManager, ToolRegistry, ProcessIsolationExecutor)
-- Phase 29: Memory Optimization — Dynamic Tool Schema Binding, Context Window
-  Rolling Pruning (PersistentChatMemoryStore, N=20)
-- Phase 30: ReflexRegistry — HaltReflex, StatusReflex, ResetReflex, ApproveReflex,
-  DenyReflex. Two-pass logic. ReflexResult record.
-- Phase 31: PiiScanReflex — 10 regex patterns, REDACT_AND_FORWARD / BLOCK_AND_NOTIFY
-- Phase 32: ApiKeyAuthFilter, ApiKeyRegistry sliding window rate limiter,
-  TelegramAllowlistGuard
-- Phase 33: PromptInjectionReflex, adversarial defense
-- Phase 34: Tool Schema & Agent Tooling
-- Phase 35: WORM Audit Log — AuditEvent, HMAC SHA-256 chain, SQLite triggers
-- Phase 36: OTel child span parenting, token accumulation, REST /approve + /deny
-- Phase 36.1: GithubTool Read-Only Schema Jail, LLM 400 Error Self-Healing
-- Phase 37: PodmanToolRunner Circuit Breaker CLOSED→OPEN
-- Phase 38: ContextCompactionService, CompactionSummaryRepository
-- Phase 39: Java/Maven migration 21→25, /history reflex, destructive vocab override
-- Phase 40: BudgetWarningException (80% soft threshold), /status extended output
-- Phase 41–43: DevSecretSeeder, TmpfsSecretTransport, Vault rotation
-- Phase 44: StatefulAgentStore checkpointing, AWAITING_APPROVAL resume flow
-- Phase 45: ScheduleTask tool, AgentCronScheduler, ManageSchedule tool
-- Phase 46: Proactive Autonomy, cron approval flow, RoleRegistry, AgentRoleEnum
-- Phase 47: Unified Capabilities & Context Modernization, Message Pipeline & Sealed Interface Refactor, Refined Routing & Templates, Agent State Machine Refactor, Prompt tuning for ScheduleTask and AgentErrorMessageUtil parsing logic fix.
+### Phases 0–15: Foundation
+
+| Phase | Name | Tests |
+|-------|------|-------|
+| 0 | Project Scaffolding | N/A |
+| 1 | Core Scope Layer | 3/3 |
+| 2 | Security Layer | 4/4 |
+| 3 | Sandbox Layer | 3/3 |
+| 4 | Tool Layer | 7/7 |
+| 5 | Agent & Orchestration | 5/5 |
+| 6 | State Layer (Checkpointing) | 4/4 |
+| 7 | Lifecycle Layer | 4/4 |
+| 8 | Governance Layer | 3/3 |
+| 9 | Observer / OTel | 2/2 |
+| 10 | Health Checks | 2/2 |
+| 11 | REST API | 3/3 |
+| 12 | LangChain4J Integration | 2/2 |
+| 13 | Deployment Artifacts | N/A |
+| 14 | Deployment Loops | Manual |
+| 15 | Dual-Mode Binary | N/A |
+
+***
+
+### Sprint 2A + Phases 18–24: Telegram & Hardening
+
+| Phase | Name | Tests |
+|-------|------|-------|
+| Sprint 2A | Telegram Channel Adapter | Manual |
+| 18 | Telegram Approval Flow (HITL) | Manual |
+| 19 | Day 2 Hardening | Manual |
+| 20A | Persistent ChatMemoryStore | 48/48 |
+| 20B | LLM-Based Intent Router | 48/48 |
+| 20C | Prometheus Metrics | Manual |
+| 20D | ShivaAgent Integration | Manual |
+| 20E | CLI Hardening (`%cli` profile) | Manual |
+| 21 | CLI Subcommands (Chat & Attach) | Manual |
+| 22 | Final Pre-Release Hardening & UX | Manual |
+| 23 | Sandbox Enforcement Centralization | 7/7 |
+| 24 | Context Tool Bias Fix + `/reset` | 48/48 |
+
+***
+
+### Phases 25–47: Core Infrastructure (Previously Provided)
+
+| Phase | Name | Tests |
+|-------|------|-------|
+| 25 | Sandbox Hardening | Manual |
+| 26 | Security Hardening | Manual |
+| 27 | Tool Flexibility & CDI Proxy Unwrapping | Manual |
+| 28 | Intent Hardening & Auto-Cancellation | Manual |
+| 29 | Memory Optimization — Rolling Window + Protocol Filtering | 13/13 |
+| 30 | ReflexRegistry — HaltReflex, StatusReflex, ResetReflex, ApproveReflex, DenyReflex | Pass |
+| 31 | PiiScanReflex — 10 patterns (expanded to 19+ in 41) | Pass |
+| 32 | ApiKeyAuthFilter, Rate Limiter, TelegramAllowlistGuard | 68/68 |
+| 33 | PromptInjectionReflex | Pass |
+| 34 | Tool Schema & Agent Tooling | 68/68 |
+| 35 | WORM Audit Log — HMAC SHA-256 chain, SQLite triggers | 12/12 |
+| 36 | OTel child spans, token accumulation, REST /approve + /deny | 71/71 |
+| 36.1 | GithubTool Read-Only Schema Jail, LLM 400 Error Self-Healing | Pass |
+| 37 | Security Hardening — Caffeine Rate Limiter, Optimistic Locking | 21/21 |
+| 38 | ContextCompactionService, CompactionSummaryRepository | Pass |
+| 39 | Java/Maven migration 21→25, /history reflex, destructive vocab override | Pass |
+| 40 | BudgetWarningException (80% soft), /status extended, HistoryReflex | 21/21 |
+| 41 | Resilience, Privacy & Observer Separation — 19+ PII patterns, Circuit Breaker | 100% |
+| 42 | ScopedValue Context Migration | 100% |
+| 43 | TmpfsSecretTransport — RAM-backed secret passing, zero-copy byte[] | 100% |
+| 44 | Production Hardening — SQLite IMMEDIATE, RoleRegistry refactor | 100% |
+| 45 | Agent Memory RAG via SQLite FTS5 | 100% |
+| 45.1 | FTS5 Hardening & Robustness | 100% |
+| 46 | Proactive Autonomy via Agent-Writable Cron | 100% |
+| 47.0 | Unified Capabilities & Context (Tier 1) — Bucket4j API Key refactor | 100% |
+| 47.1 | Message Pipeline & Sealed Interface Refactor (Tier 2A) | 100% |
+| 47.2 | Refined Routing & Templates — Qute system prompts (Tier 2B) | 100% |
+| 47.3 | Agent State Machine Refactor (Tier 3/3A) | 100% |
+
+***
+
+### Phases 48–58: Post-Phase 47 (New from Walkthrough)
+
+| Phase | Name | Tests |
+|-------|------|-------|
+| 48 | Telegram Bot Refactor — Removed tokens from URIs | 100% |
+| 49 | Intent & Governance Hardening — Prompt injection delimiters, zero-token guard | 100% |
+| 50 (P2-1) | CLI Approval Flow — Heartbeats, truncated params, SUPERVISED mode | 100% |
+| 50 (P2-4) | CronStatus Enum — Type-safe cron status | 100% |
+| 50 (P2-8) | Dynamic System Prompt Per Role — `AgentPersonaRegistry`, Shiva fix | 100% |
+| 51 | MessageTag Compliance — UUID-derived prefix for AI compliance filtering | 100% |
+| 51 | Fail Fast & Compaction Fix — Exit code 1 on permission failure | Manual |
+| 51 | Telegram Route Self-Registration — `@Observes StartupEvent` | 100% |
+| 51 | Destructive Regex & Typo Fix (P3-3) | 100% |
+| 51 | MessagePipeline Exception Handling (P3-6) — Crash notifications | 100% |
+| 51 | Stateful & Telegram Resilience — Exp. backoff, sequential queues | 100% |
+| 52 | General Hardening — Cron, Bot, Intent, Startup Profile Guards | 100% |
+| 52 | MessageTag Regex Cleanup — Removed legacy regex compliance filtering | 100% |
+| 52 | Telegram Hardening (P3-12) — Caffeine chat queue cache | 100% |
+| 52 | DattatreyaAgent: The Synthesizer — Meta-agent for specialist integration | 100% |
+| 53 | Vault Key Caching (P3-1) — `@WorkspaceScoped` cache + `@PreDestroy` wipe | 100% |
+| 53 | AgentCronScheduler SRP Refactor — Dispatcher, executor, handler split | 100% |
+| 53.3 | Agent State Machine Refactor — Guard, Invoker, Writer extraction | 100% |
+| 53.4 | LangChainReasoningEngine Split — Parser, Assembler, Builder | 100% |
+| 53.5 | Package Reorganization — 23 classes into 5 sub-packages | 266/266 |
+| 53.6 | AgentLoop & AuditService Split — ResumeHandler, Telemetry/Compliance tiers | 266/266 |
+| 53.9 | AgentResource Split — `AgentResponseMapper`, `AgentSessionService` | 30/30 |
+| 54 | Agent Test Refactor — Moved 10 tests to `arcclaw-core` | 471/471 |
+| 55.1 | JDK Modernization Sweep — Unnamed vars, Sequenced Collections, Pattern extraction | 471/471 |
+| 55.2 | ScopedValue & Constructor Injection — 10 beans migrated | 471/471 |
+| 55.3 | AgentCheckpoint Normalization — Granular `reasoning_step` table | 471/471 |
+| 56 | Hardcoded String Constant Sweep — `ToolCapability`, `AgentRoleEnum` constants | 121/121 |
+| 57 | Rate Limit User Notification — 429 graceful fallback, `⏳` acknowledgment | 121/121 |
+| 58 | System Metadata Registry — `/api/v1/info`, `SystemMetadataHealthCheck` | 122/122 |
 
 ## Known Architecture Nuances (ALWAYS apply these)
 
