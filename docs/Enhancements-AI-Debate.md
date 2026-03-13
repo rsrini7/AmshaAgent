@@ -1,0 +1,2409 @@
+Understand end to end code. This is working very well as intended. 
+
+Please go through my entire project end to end as a Senior Gen AI Agentic export, Senior Java Architect, Refactoring Expert & Senior Java Developer. My plan is the share your reviews with Gemini / Claude and its review with you to debate and solve. Make sure to deep dive and not just high level and only positive side. Not looking for any Constructive Feedback and Roadmap. 
+
+The full architecture understanding:
+
+Multi-module Quarkus app (JDK 25)
+Core: Agent loop, Agent personas (Trimurti model), ReAct reasoning, SQLite persistence
+Security: SecretVault (AES-GCM-SIV), GovernanceLayer, HITL approval flow
+Channels: Telegram, REST API, CLI
+Tools: GithubTool, MemorySearchTool, ScheduleTask, ManageSchedule
+Sandbox: Podman isolation
+Observability: OTel, Prometheus
+Custom Quarkus extension (WorkspaceScoped CDI scope)
+Reflex system: PII, PromptInjection, HITL reflexes
+
+Now Focus on Extension / Enhancements. 
+
+Thinking to include A2A, MCP, RAG using FAISS, SKills.md & BAML
+
+SO NOW you come up with best approach based on current architecture , best approach to integrate my thought process.  Thinking like how OpenClaw / NanoClaw/ ZeroClaw / NanoBot and other Claw ecosystem works.. but all in Pure Java / Quarkus with its extension.. Give me best strategy and lets discuss , debate and come up with Phases.
+
+---
+
+Claude.ai:
+Got it — the widgets aren't rendering well for you. Let me give you the full roadmap as clean, readable text.
+
+---
+
+## ArcClaw Extension Roadmap — Post Phase 58
+
+**Current baseline:** Phase 58 · 122/122 tests passing · 58 completed phases · 5 agents (Vishnu, Brahma, Shiva, Saraswati, Dattatreya)
+
+---
+
+### Phase 59 — MCP Server + Client
+
+**What it does:** Expose all existing `AgentTools` as an MCP server so external LLMs (Claude Desktop, Cursor, Copilot) can call ArcClaw tools directly. Simultaneously consume external MCP servers (GitHub MCP, filesystem MCP, database MCP) as first-class `AgentTools` via the existing `ToolRegistry`.
+
+**Existing foundation to build on:**
+- `ToolRegistry` (String key dispatch via `ToolCapability.toolName()`)
+- `GovernanceLayer` + HITL checkpoint — apply automatically to both inbound and outbound MCP calls
+- `SandboxCircuitBreaker` — outbound MCP calls go through existing sandbox pattern
+
+**New Maven modules:** `arcclaw-mcp` (runtime) + `arcclaw-mcp-deployment` (BuildStep for `@McpTool` annotation discovery)
+
+**New classes:** `McpToolBridge` · `ExternalMcpToolAdapter` · `McpServerResource` · `McpClientService` · `McpBuildStep`
+
+**Library:** `io.quarkiverse.mcp:quarkus-mcp-server` (Quarkiverse, maintained, has native support)
+
+**Key risk:** GraalVM native + SSE streaming — test with container build before committing. The Quarkiverse extension has native image support but needs verification against your specific Quarkus 3.23 version.
+
+**Debate point:** Separate Quarkus extension module (runtime + deployment pair, like `arcclaw-core` + `arcclaw-deployment`) vs a feature bean inside `arcclaw-core`? Extension gives you build-time `@McpTool` annotation discovery. Feature bean is simpler but no compile-time registration.
+
+**Why first:** Unlocks all subsequent phases — Skills can reference MCP tool names, RAG can expose ingestion as an MCP tool, A2A agents share tools via MCP.
+
+---
+
+### Phase 60 — Skills.md Runtime
+
+**What it does:** Skills are Markdown files with YAML frontmatter declaring `name`, `description`, `trigger-patterns[]`, `system-prompt` (Qute template), `tool-capabilities[]`, and `required-secrets[]`. Drop a `.md` file into `classpath:/skills/` or `$ARCCLAW_SKILLS_DIR` to add a new agent persona — zero code changes required.
+
+**Existing foundation to build on:**
+- `AgentPersonaRegistry` (Phase 50 P2-8) — already manages personas at runtime
+- `RoleDefinition` + `RoleRegistry` — `SkillLoader` extends these, not replaces them
+- `DattatreyaAgent` — can synthesize across skill-defined personas
+- `IntentClassifierService` — add skill `trigger-patterns` to routing table
+- Qute templating — `system-prompt` in each skill is a Qute template
+
+**New classes (all in `arcclaw-core`):** `SkillDefinition` (record) · `SkillLoader` · `SkillRegistry` · `SkillReflex` (new `/skills` command) · `SkillAwareIntentClassifier`
+
+**Library:** SnakeYAML (already in Quarkus BOM) + Qute (existing) + Quarkus `DevFileSystemWatcher` for dev hot-reload
+
+**Key risk:** Hot-reload is impossible in GraalVM native. Dev mode uses classpath watcher. Prod native uses `$ARCCLAW_SKILLS_DIR` with a `@Scheduled` 60-second rescan.
+
+**Debate point:** Should a skill be able to declare its own `maxBudgetUsd`? Or keep budget tracking purely at session level and let skills only configure prompts + tool capability lists?
+
+**Why second:** Lowest risk, highest developer experience payoff. No new infrastructure — just wiring existing pieces together with a file format.
+
+---
+
+### Phase 61 — Semantic Vector RAG (on top of FTS5)
+
+**What it does:** Adds dense semantic vector retrieval as a *second tier* on top of the existing FTS5 keyword search from Phase 45. Both tiers merge results before injecting into `SystemPromptBuilder`. NOT a replacement of `MemorySearchTool` — an enrichment. `WorkspaceScoped` CDI scope provides per-session knowledge base isolation.
+
+**Existing foundation to build on:**
+- Phase 45: `MemorySearchTool` + SQLite FTS5 keyword recall (live, 100% tests)
+- `PersistentChatMemoryStore` — episodic memory already working
+- `SystemPromptBuilder` — injection point for RAG context
+- `WorkspaceScoped` CDI scope — perfect for per-session vector store
+- `PodmanContainerExecutor` — FAISS sidecar follows same pattern as tool sandboxes
+
+**New Maven module:** `arcclaw-rag`
+
+**New classes:** `EmbeddingModelProducer` · `WorkspaceScopedKnowledgeBase` · `RagContextEnricher` · `TwoTierMemoryService` · `IngestDocumentTool`
+
+**Library strategy:**
+- Dev/test: `LangChain4J InMemoryEmbeddingStore` — pure Java, GraalVM-native-safe
+- Prod: FAISS as HTTP Podman sidecar — persistent, powerful, same pattern as existing tool containers
+- Embedding model: `nomic-embed-text` via Ollama, or `all-MiniLM` via ONNX Runtime (which has native image support)
+
+**Key risk:** FAISS JNI breaks GraalVM native — solved by wrapping FAISS as an HTTP Podman sidecar (identical pattern to your existing `PodmanContainerExecutor` tool sandboxes).
+
+**Debate point:** Two separate stores — `@ApplicationScoped` global knowledge base (project docs, codebase index) plus `@WorkspaceScoped` ephemeral per-session context — or one unified store? I strongly favor two separate beans. Global for indexing, scoped for retrieval windows.
+
+**Why third:** Additive on top of FTS5. Uses existing `WorkspaceScoped` infrastructure. Podman sidecar pattern already proven.
+
+---
+
+### Phase 62 — BAML-Style Structured Outputs (`@AgentFunction`)
+
+**What it does:** `@AgentFunction`-annotated Java interfaces declare typed LLM functions. A Quarkus `BuildStep` generates JSON schema at compile time and registers GraalVM reflection. `StructuredOutputEngine` embeds the schema in the system prompt, parses the response, and on failure sends the specific parse error back to the LLM for self-correction (max 3 retries, all tracked within `GovernanceLayer` budget). Java-native BAML philosophy — no BAML runtime, no sidecar.
+
+**Existing foundation to build on:**
+- Phase 53.4: `LangChainReasoningEngine` split into Parser + Assembler + Builder — BAML hooks into Builder (schema injection) and Parser (typed extraction)
+- `SystemPromptBuilder` (Qute) — receives schema-augmented prompts
+- `GovernanceLayer` — must track retry token spend
+- `arcclaw-deployment` BuildStep pattern — already proven for `WorkspaceScopeProcessor`
+
+**New classes:** `@AgentFunction` (annotation) · `StructuredOutputEngine` · `BamlSchemaValidator` · `AgentFunctionProcessor` (BuildStep in `arcclaw-deployment`) · `StructuredRetryLoop`
+
+**Library:** Jackson (existing) + LangChain4J JSON schema extraction + Quarkus annotation processor (already wired)
+
+**Key risk:** Retry loop budget leak — each self-correction retry costs tokens. `GovernanceLayer` must account for structured output retries in its USD cap. `BudgetWarningException` at 80% must fire before retry 3.
+
+**Debate point:** Should `@AgentFunction` *replace* `ReasoningStepParser`'s Thought/Action/Observation regex? **No.** Keep ReAct format for the reasoning loop. Use `@AgentFunction` only for: (1) intent classification output schema, (2) final answer extraction, (3) tool parameter validation. These are two completely different concerns.
+
+**Why fourth:** Hooks cleanly into Phase 53.4's Parser/Builder split. Benefits from richer P61 RAG context for better extraction accuracy.
+
+---
+
+### Phase 63 — A2A Agent-to-Agent Federation
+
+**What it does:** Each ArcClaw instance publishes an `AgentCard` at `/.well-known/agent.json` describing capabilities, skills, and tool roster. `DattatreyaAgent` — already the meta-synthesizer from Phase 52 — gets an `A2AClientService` and decides when to handle a task locally vs delegate to a remote specialist (another ArcClaw instance, Claude, Gemini, or any A2A-compatible agent). Minimal viable profile first: `AgentCard` discovery + `tasks/send` with SSE streaming.
+
+**Existing foundation to build on:**
+- `DattatreyaAgent` (Phase 52) — meta-synthesizer, natural A2A orchestrator
+- `AgentDispatchHandler` — local dispatch already abstracted
+- `AgentSessionService` + `StatefulAgentStore` — session state federation
+- Quarkus REST Client Reactive + SmallRye Mutiny SSE — **no new libraries needed**
+- `SystemInfoResource` (`/api/v1/info`) from Phase 58 — seed for `AgentCard` content
+
+**New Maven modules:** `arcclaw-a2a` (runtime) + `arcclaw-a2a-deployment` (BuildStep)
+
+**New classes:** `AgentCard` (record) · `A2AResource` (`/.well-known/agent.json` + `/a2a/tasks/*`) · `A2AClientService` · `A2ADispatchHandler` · `TaskStatusUpdateEvent` (CDI event)
+
+**Key risk:** Cross-instance HITL — if a remote agent needs approval, the approval must route back to the originating ArcClaw instance. Needs correlation ID threading through `StatefulAgentStore`. This is the hardest piece and should be tackled last within P63.
+
+**Debate point:** Start with minimal A2A profile (AgentCard + `tasks/send` streaming only), then add push notifications and file artifacts in a follow-on phase? Yes — ship minimal first, Dattatreya as the single A2A entry point.
+
+**Why last:** Capstone — benefits from MCP tool sharing (P59), Skills for capability advertising (P60), RAG for knowledge federation (P61), and typed schemas (P62) for reliable cross-agent communication.
+
+---
+
+## Phase summary table
+
+| Phase | Name | Builds on | New module? | Key risk |
+|-------|------|-----------|-------------|----------|
+| **P59** | MCP Server + Client | ToolRegistry, GovernanceLayer, HITL | `arcclaw-mcp` + deployment | GraalVM + SSE |
+| **P60** | Skills.md Runtime | AgentPersonaRegistry, RoleRegistry, Qute | None (arcclaw-core) | Native hot-reload |
+| **P61** | Semantic Vector RAG | Phase 45 FTS5, WorkspaceScoped | `arcclaw-rag` | FAISS JNI / native |
+| **P62** | BAML / @AgentFunction | Phase 53.4 Parser/Builder split | arcclaw-deployment (BuildStep) | Budget leak on retries |
+| **P63** | A2A Federation | DattatreyaAgent, Phase 52+, all above | `arcclaw-a2a` + deployment | Cross-instance HITL |
+
+---
+
+Gemini:
+
+This is a deeply ambitious and well-structured roadmap, but looking at it through the lens of a Senior Java Architect and Gen AI specialist, Claude’s proposed phases carry severe architectural “Python-ecosystem bleed.” It tries to force patterns common in LangChain/Python into Quarkus, which will compromise your GraalVM native image goals, introduce unnecessary network latency, and create fragile state management.
+
+Let’s debate and ruthlessly refine these phases to align perfectly with your pure Java, Multi-module Quarkus (JDK 25) architecture.
+
+### Phase 59: MCP Server + Client
+
+**Claude's Flaw:** Relying heavily on `io.quarkiverse.mcp` and SSE streams for core tool dispatch without a clear backpressure strategy. The Quarkiverse MCP extension is very young; pinning core execution to it risks blocking GraalVM native compilation if their reflection registrations aren't perfect.
+**The ArcClaw Strategy (Refined):**
+
+* **Decouple the Protocol from the Execution:** Do not bind your `ToolRegistry` directly to the MCP extension’s lifecycle. Create an `arcclaw-mcp-bridge` module. Your tools remain pure Java interfaces (`@AgentTool`).
+* **Compile-time Discovery:** Use a custom Quarkus `BuildStep` (via Jandex) to scan for `@McpTool` annotations and generate the MCP JSON schemas at *build time*, embedding them as static resources. This eliminates runtime reflection overhead.
+* **Reactive Resilience:** Wrap outbound MCP client calls in SmallRye Fault Tolerance (`@Timeout`, `@Retry`, `@Fallback`). When communicating with an external MCP server, an unresponsive sidecar will block your `AgentLoop`.
+
+### Phase 60: Skills.md Runtime
+
+**Claude's Flaw:** Using a `DevFileSystemWatcher` or a `@Scheduled` 60-second polling thread in production to hot-reload Markdown files is a massive anti-pattern in cloud-native Java. It causes unnecessary disk I/O, garbage collection churn, and race conditions during file updates.
+**The ArcClaw Strategy (Refined):**
+
+* **SmallRye Config / Dynamic Sources:** Do not build a custom file watcher. Implement a custom `ConfigSource` in SmallRye Config. Quarkus natively handles dynamic configuration reloading. If a skill changes, Quarkus fires a `@ConfigMapping` refresh event automatically.
+* **Pre-compiled Qute Templates:** Claude suggests parsing Qute templates from frontmatter at runtime. In Quarkus, Qute templates are validated and compiled at *build time*. If you load arbitrary Qute syntax at runtime, you lose type safety and native image benefits.
+* **The Fix:** Store the `system-prompt` as standard text in the Markdown/YAML, and use a generic, pre-compiled `SkillSystemPrompt.txt` Qute template that takes the runtime text as a variable `inject: {skill.systemPrompt}`.
+* **Hot-Reload DB Cache:** If you want true dynamic skills, put the Markdown/YAML into SQLite and use the existing FTS5 setup to index them. Use an API endpoint `/api/v1/skills/refresh` to invalidate the cache rather than polling the filesystem.
+
+### Phase 61: Semantic Vector RAG
+
+**Claude's Flaw:** Deploying a FAISS HTTP Podman sidecar. This is architectural bloat. You already have SQLite running for FTS5. Adding a network hop to a Podman container just to do vector math completely destroys the lightweight, unified persistence model you've built.
+**The ArcClaw Strategy (Refined):**
+
+* **SQLite Vector Search:** Drop FAISS. Since you are using SQLite, use the `sqlite-vec` (or `sqlite-vss`) extension. This allows you to store embeddings in the exact same database as your episodic memory and execute hybrid queries (FTS5 keyword + Vector Cosine distance) in a *single SQL transaction*.
+* **In-Process Embeddings:** Do not make network calls for embeddings if you can avoid it. Use `LangChain4J` with an ONNX runtime to run `all-MiniLM-L6-v2` directly inside the Quarkus JVM. ONNX has solid GraalVM support.
+* **WorkspaceScoped Context:** Claude is right about isolating the Knowledge Base to `@WorkspaceScoped`. But the unification of FTS5 and Vector search at the SQLite layer means your `TwoTierMemoryService` only needs to make one database call, drastically reducing latency in the ReAct reasoning loop.
+
+### Phase 62: BAML-Style Structured Outputs (@AgentFunction)
+
+**Claude's Flaw:** "Retry loop budget leak." Relying on a naive `StructuredRetryLoop` to catch JSON parsing errors and ask the LLM to fix it is a brute-force LangChain tactic. It wastes tokens and latency. Furthermore, BAML's actual advantage is its custom Rust parser that ignores markdown wrappers and extracts partial JSON.
+**The ArcClaw Strategy (Refined):**
+
+* **Provider-Level Strict Schemas:** Instead of prompt-engineering the schema and praying the LLM adheres to it, enforce the schema at the API level using the Provider's structured output capabilities (e.g., OpenAI's `response_format` JSON Schema, or Gemini's `responseSchema`).
+* **Jandex Schema Generation:** In your `arcclaw-deployment` module, write a `BuildStep` that uses Jandex to inspect the `@AgentFunction` return types (Records/Classes) and generates the JSON Schema strictly at compile time.
+* **Fail-Fast Parser:** Do not send parse errors back to the LLM immediately. Implement a robust Java parser (using Jackson with `JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES` and stripping ````json` blocks) to aggressively salvage slightly malformed JSON before triggering an expensive LLM retry. Limit retries to 1, not 3.
+
+### Phase 63: A2A Agent-to-Agent Federation
+
+**Claude's Flaw:** Cross-instance HITL via SSE streaming. If `Dattatreya` (Instance A) calls a remote Agent (Instance B) via SSE, and Instance B triggers a `GovernanceLayer` HITL pause, holding an HTTP SSE connection open while waiting for human approval will lead to timeouts, proxy drops, and lost state.
+**The ArcClaw Strategy (Refined):**
+
+* **Event-Driven Suspend & Resume:** A2A must be purely asynchronous for complex tasks.
+* **Initiate:** Instance A sends a POST to Instance B with a `reply_to` webhook/callback URL.
+* **Execute & Suspend:** Instance B processes. If it hits a HITL barrier, it persists its state in its `StatefulAgentStore`, changes its status to `WAITING_ON_HUMAN`, and sends an `ActionRequired` event back to Instance A's webhook.
+* **Resolve:** The human approves on Instance A. Instance A sends an `ApprovalGranted` event to Instance B.
+* **Resume:** Instance B wakes up, completes the task, and sends the final `TaskCompleted` payload to Instance A.
+
+
+* **AgentCard as JWT:** When exposing `/.well-known/agent.json`, sign the `AgentCard` to ensure trust between federated instances.
+
+### Summary of the ArcClaw Architectural Pivot
+
+Your overarching goal must remain **"Zero-Bloat, Native-First Java."** Claude's roadmap introduces Pythonic duct-tape (polling files, sidecar databases, naive retry loops).
+
+By pushing schema generation to Quarkus BuildSteps, leveraging SQLite for native vector math, using SmallRye for dynamic config, and designing A2A as an asynchronous webhook pattern, you maintain the extreme performance and strict typing that makes writing this in Java (rather than Python) worthwhile in the first place.
+
+---
+
+Perplexity Claude:
+
+Now I have the full picture. Let me deliver the comprehensive review.
+
+***
+
+## Architecture Review: Claude's P59–P63 Phases
+
+After deep analysis of the actual codebase (modules, classes, constraints, tests), here is the authoritative review. I'm calling out genuine bugs, architectural misstatements, missing pieces, and enhancements — not stylistic opinions.
+
+***
+
+## Phase 59 — MCP Server + Client
+
+### ✅ What's Correct
+The `arcclaw-mcp` + `arcclaw-mcp-deployment` pair follows the proven `arcclaw-core` / `arcclaw-deployment` pattern. `McpToolBridge` wrapping `ToolRegistry` via `ToolCapability.toolName()` string keys is architecturally sound.
+
+### 🔴 Issue 1 — `ToolCapability` Enum Is Rigid: Dynamic MCP Tools Have No Home
+`AgentRoleEnum.definition.capabilities()` is a **compile-time `Set<ToolCapability>`**. External MCP servers discovered at runtime (GitHub MCP, filesystem MCP) cannot be added to this enum post-build. `ExternalMcpToolAdapter` can register into `ToolRegistry` dynamically, but `AgentRoleEnum` role-permission tables won't know about them — meaning they'll be silently filtered out of every LLM tool schema list. You need a **`DynamicToolCapability` wrapper** that bridges runtime-registered MCP tools into the permission tables, OR a supplemental `DynamicRoleExtension` injection point. This is a critical gap Claude doesn't address.
+
+### 🔴 Issue 2 — HITL Over Inbound MCP Calls Is Unresolved
+When an external MCP client (Claude Desktop, Cursor) calls a SUPERVISED-protected tool like `scheduleTask`, `RequiresApprovalException` fires and the session parks at `AWAITING_APPROVAL`. The MCP SSE stream hangs or times out — there's no protocol-level mechanism to push the approval request back to the originating MCP client. **For P59 minimal viable profile: restrict MCP-exposed tools to FULL-autonomy, read-only tools only** (`github`, `memorysearch`). Defer HITL-over-MCP to a follow-on phase with a defined approval callback URL in the MCP tool response.
+
+### 🟡 Issue 3 — `SandboxCircuitBreaker` Is the Wrong Primitive for Outbound MCP HTTP Calls
+`SandboxCircuitBreaker` guards Podman process failures — it's a process-isolation primitive, not an HTTP circuit breaker. Outbound MCP client calls are HTTP. Use `@Retry` + `@CircuitBreaker` from **SmallRye Fault Tolerance** (`quarkus-smallrye-fault-tolerance` is already in the Quarkus BOM at 3.23.0) for `McpClientService`. These are already-familiar Quarkus primitives.
+
+### 🟡 Issue 4 — Quarkiverse MCP Extension Version Must Be Validated Against Quarkus 3.23.0
+`io.quarkiverse.mcp:quarkus-mcp-server` versions are tied to specific Quarkus streams. Quarkus 3.23.0 is a relatively recent release — the extension must declare a BOM-compatible version in `arcclaw-mcp/pom.xml`. Don't add it to `arcclaw-parent`'s `dependencyManagement` until the specific version is confirmed to build cleanly. Native + SSE integration test with `podman build` must gate the phase.
+
+### 🟡 Issue 5 — "Why First" Rationale Is Overstated
+Skills.md (P60) and RAG (P61) have zero dependency on MCP — they wire only existing `AgentPersonaRegistry`, `RoleRegistry`, Qute, and FTS5. A2A (P63) is where MCP tool sharing genuinely helps. Re-ordering P60 before P59 is defensible and lower risk (discussed in ordering section below).
+
+***
+
+## Phase 60 — Skills.md Runtime
+
+### ✅ What's Correct
+`SkillDefinition` as a record with Qute-templated `system-prompt` fits perfectly into `SystemPromptBuilder.build()`. `@Scheduled` 60-second prod rescan is the right prod-native approach. Keeping `maxBudgetUsd` out of skills is correct.
+
+### 🔴 Issue 1 — `DevFileSystemWatcher` Does Not Exist in Quarkus
+`Quarkus.DevFileSystemWatcher` is a **fabricated API** — it has no such class in Quarkus 3.x. The correct dev-mode approach is either: add `skills/**` to `quarkus.live-reload.watched-resources` in `application.yaml` (dev profile), or run a `@Scheduled(every = "5s")` poll guarded by a `"%dev.arcclaw.skills.hot-reload=true"` config flag. In native, the `@Scheduled(every = "60s")` scanner on `$ARCCLAW_SKILLS_DIR` is correct.
+
+### 🔴 Issue 2 — GraalVM Native Resource Registration Is Missing
+`classpath:/skills/*.md` files must be explicitly registered for native inclusion. The existing `native-image.properties`  already handles BouncyCastle — the same file needs:
+```
+Resources: include:skills/**.md
+```
+OR add a `SkillResourcesBuildStep` in `arcclaw-deployment` that calls `NativeImageResourceBuildItem` for each discovered skill file at build time. Without this, GraalVM silently drops the files and native mode silently serves zero skills.
+
+### 🔴 Issue 3 — Trigger Pattern `Pattern` Objects Cannot Be Compiled Per-Message
+The Architecture Nuance is explicit: **"Pattern objects are always `static final`, never compiled inside methods or constructors"**. Since skills are loaded dynamically, you can't make their compiled `Pattern` objects `static final`. The solution: `SkillRegistry` holds an `AtomicReference<ImmutableList<CompiledTriggerPattern>>` updated atomically on each rescan. Patterns are compiled once during the load/rescan cycle and frozen into an immutable list. `SkillAwareIntentClassifier` reads from this atomic reference — never compiles a pattern per-message.
+
+### 🟡 Issue 4 — `SkillLoader` "Extends" RoleDefinition/RoleRegistry Is Imprecise
+`RoleDefinition` is a value-type POJO (not abstract, not extendable by design). `SkillLoader` should **produce** `RoleDefinition` instances from parsed `SkillDefinition` frontmatter and **inject** them into `RoleRegistry` via a registration API. This is composition, not inheritance.
+
+### 🟡 Issue 5 — `SkillReflex` Must Not Break the Two-Pass Chain
+Add `SkillReflex` as a new CDI `@ApplicationScoped` bean implementing `AgentReflex`. CDI `Instance<AgentReflex>` discovery in `ReflexRegistry` will pick it up additively without reordering. The two-pass chain is then preserved.
+
+### ✨ Enhancement — Add `max-iterations` to Skill Frontmatter (Not `maxBudgetUsd`)
+`maxBudgetUsd` is too dangerous per-skill. But `max-iterations` is safe and already part of `RoleDefinition.maxIterations()`. Let skills override reasoning depth (`max-iterations: 3`) without touching governance budget tracking.
+
+***
+
+## Phase 61 — Semantic Vector RAG
+
+### ✅ What's Correct
+Two-tier design (`@ApplicationScoped` global KB + `@WorkspaceScoped` ephemeral session context) is the right split. `WorkspaceScoped` CDI scope already handles per-session lifecycle. Ollama embedding via `nomic-embed-text` is the smoothest path since Ollama is already in `docker-compose.yaml`.
+
+### 🔴 Issue 1 — FAISS Sidecar Lifecycle Is NOT the Same as PodmanContainerExecutor
+This is the most significant architectural error in Claude's proposal. `PodmanContainerExecutor` spawns **ephemeral per-invocation containers** — spun up and torn down per tool call. A FAISS vector store is a **persistent stateful sidecar** that must survive across agent sessions. The correct analogy is the `ollama` service in `docker-compose.yaml` — a long-lived service with a startup health check and a named volume. Describing FAISS as "same pattern as existing tool sandboxes" will mislead the implementation into ephemeral container management for a persistent index, causing data loss on every tool call.
+
+**Correct approach**: Declare `faiss-sidecar` in `docker-compose.yaml` alongside `ollama`, with an HTTP API (the [FAISS HTTP server](https://github.com/facebookresearch/faiss) or a thin FastAPI wrapper), startup dependency in `arcclaw` service, and a named volume for index persistence.
+
+### 🔴 Issue 2 — ONNX Runtime Native Image Claim Needs Verification
+"ONNX Runtime has native image support" is stated as fact. ONNX Runtime Java uses JNI for native tensor operations — GraalVM native image + JNI requires explicit `-H:JNIConfigurationFiles` or `reflect-config.json` entries. This is non-trivial for Quarkus 3.23 + GraalVM 25.0.2. **Use `nomic-embed-text` via Ollama for the first iteration.** ONNX is a stretch goal requiring a dedicated native verification step.
+
+### 🟡 Issue 3 — `WorkspaceScopedKnowledgeBase` Must Have `@PreDestroy` Wipe
+Following the Phase 53 `SecretVault` key cache pattern — `@PreDestroy` explicitly zeroing sensitive in-memory state. The `WorkspaceScopedKnowledgeBase` session-scoped in-memory store should be cleared on scope teardown, preventing memory accumulation across high-volume sessions.
+
+### 🟡 Issue 4 — Result Merge Strategy for Two-Tier Search Is Unspecified
+Without a merge strategy, FTS5 keyword results and vector semantic results produce unranked unions. **Use Reciprocal Rank Fusion (RRF)**:
+\[ \text{score}(d) = \sum_i \frac{1}{k + \text{rank}_i(d)}, \quad k = 60 \]
+This is the standard, parameter-lean fusion algorithm. Implement it in `TwoTierMemoryService.merge()`.
+
+### 🟡 Issue 5 — `IngestDocumentTool` Needs a `ToolCapability` Enum Entry and Role Scoping
+New tool → new `ToolCapability.INGEST_DOCUMENT` entry. Only `COORDINATOR` (Vishnu) and `DATTATREYA` (Synthesizer) should have it in their permitted sets — preventing `RESEARCHER` or `DEBUGGER` from ingesting arbitrary documents (prompt-injection-via-document risk).
+
+### 🟡 Issue 6 — `arcclaw-rag` Module Must Not Introduce a Second Deployment Module
+The module graph should be `arcclaw-app → arcclaw-rag → arcclaw-core`. If RAG needs any build-time processing (e.g., resource registration of embedding model config), add it as a `RagResourcesBuildStep` to the **existing `arcclaw-deployment` module** — don't introduce a second deployment module. The pattern is established.
+
+***
+
+## Phase 62 — BAML / `@AgentFunction`
+
+### ✅ What's Correct
+The "do NOT replace `ReasoningStepParser`'s ReAct regex with `@AgentFunction`" decision is correct. Intent classification output, final answer extraction, tool parameter validation as `@AgentFunction` use cases are the right boundaries. Hooking into Phase 53.4's Parser/Builder split is architecturally clean.
+
+### 🔴 Issue 1 — Jackson Alone Cannot Generate JSON Schema
+`jackson-databind` alone produces `ObjectNode` trees but not JSON Schema (Draft 7 / OpenAPI 3.x). You need either:
+- **`dev.langchain4j:langchain4j-core` `ToolSpecifications.toolSpecificationFrom()`** — already available in LangChain4J 0.26.1, already used in the tool calling flow. This is the best fit because it's already a dependency and already generates the exact JSON schema format the LLM expects.
+- **`com.github.victools:jsonschema-generator`** — more complete but an extra dependency.
+
+Using `ToolSpecifications` from LangChain4J for `@AgentFunction` schema generation keeps the dependency surface minimal.
+
+### 🔴 Issue 2 — `AgentFunctionProcessor` Does Not Need a New Deployment Module
+Claude lists it as "BuildStep in `arcclaw-deployment`" but the phase table implies a new deployment artifact. `AgentFunctionProcessor` should be added to the **existing `arcclaw-deployment` module** alongside `WorkspaceScopeProcessor`. There is no architectural reason for a separate deployment module unless a distinct runtime module (`arcclaw-baml`) is introduced.
+
+### 🟡 Issue 3 — Retry Audit Trail Is Missing
+`StructuredRetryLoop` retries must each produce a `ReasoningStep` with action `"schema_correction_retry_N"` written to the WORM audit chain (Phase 35 `AuditService`). Each retry is also a separate OTel child span inside the `AgentLoop` parent span (Phase 36 pattern). Without this, retry overhead is invisible in Jaeger traces and the audit log.
+
+### 🟡 Issue 4 — `BudgetWarningException` Trigger Timing During Retries
+The `BudgetWarningException` fires at 80% of `arcclaw.governance.budget-usd`. If retry 1 is at 79% and retry 2 pushes past 80%, the warning must fire **before** retry 3 is submitted. `StructuredRetryLoop` must call `GovernanceLayer.checkBudget()` at the start of each retry attempt, not only after the final attempt.
+
+### ✨ Enhancement — Type Dattatreya's Synthesis Output via `@AgentFunction`
+Dattatreya's output is currently free-form text from the synthesizer template. Declaring a `SynthesisResult @AgentFunction` interface with typed fields (e.g., `List<AgentContribution> contributions`, `String resolution`, `ConflictSummary conflicts`) makes Dattatreya's cross-domain output structured. This directly enables reliable A2A communication in P63 — the typed schema is what remote agents can depend on.
+
+***
+
+## Phase 63 — A2A Federation
+
+### ✅ What's Correct
+`DattatreyaAgent` as the single A2A entry point is correct — it's already the meta-synthesizer. Minimal viable profile (AgentCard + `tasks/send` SSE only) is the right phasing. Quarkus REST Client Reactive + SmallRye Mutiny SSE covers the transport with no new libraries.
+
+### 🔴 Issue 1 — Authentication Model Is Completely Missing
+The `ApiKeyAuthFilter` guards `X-ArcClaw-API-Key` for REST endpoints. Remote ArcClaw instances calling `/.a2a/tasks/*` need authentication — Claude's proposal is silent on this.
+
+**Recommended minimum viable approach**: `A2AAuthFilter` reads `A2A-Instance-Token` header. Tokens are short-lived JWTs signed by a keypair held in `SecretVault` (AES-GCM-SIV keypair per instance). Each instance's public key is advertised in its `AgentCard`. This reuses the existing `SecretVault` infrastructure and keeps cross-instance auth auditable.
+
+### 🔴 Issue 2 — `arcclaw-a2a-deployment` Is Over-Engineering for MVP
+For minimal A2A (AgentCard + `tasks/send`), there is no build-time annotation processing required. `arcclaw-a2a-deployment` adds zero value for Phase 63. Create it only if/when `@A2ACapability` build-time annotation scanning is introduced. For MVP: one `arcclaw-a2a` runtime module only.
+
+### 🔴 Issue 3 — `StatefulAgentStore` Federation Violates Singleton Topology
+The FAQ is explicit: SQLite WAL is a "strict singleton topology". Cross-instance `StatefulAgentStore` queries mean either a shared SQLite database (violates singleton) or network calls to a remote SQLite (impossible directly).
+
+**Correct pattern**: Session state needed by a remote agent is passed **inside the A2A task payload** (goal, prior context, approved tool list) as JSON in `tasks/send`. The remote instance creates its own local checkpoint. No cross-instance store queries.
+
+### 🟡 Issue 4 — Dattatreya's Delegation Decision Must Be Rule-Based, Not LLM-Based
+Currently Dattatreya uses LLM reasoning to synthesize and route. If delegation to a remote agent is LLM-decided, hallucination of remote capabilities (e.g., claiming a remote instance has a capability it doesn't) is a real risk.
+
+**Design rule**: Delegation is triggered by **capability gap detection**: parse the task's required `ToolCapability` set, compare against local `AgentRoleEnum` permitted sets, and if local capabilities are insufficient, consult the `AgentCard` registry of known remote instances for capability matching. This is deterministic and auditable.
+
+### 🟡 Issue 5 — `StructuredTaskScope` Is FORBIDDEN — Parallel A2A Execution Must Use Virtual Threads + `ManagedExecutor`
+`StructuredTaskScope` is **still preview in JDK 25** per the JDK Feature Policy in the codebase. Any parallel multi-agent dispatch in A2A must use `ManagedExecutor` (injected from CDI) with virtual threads. This constraint must be explicit in P63's implementation notes.
+
+***
+
+## Recommended Phase Order Correction
+
+The Claude-proposed order **P59 → P60 → P61 → P62 → P63** has a sequencing mistake: P60 has zero dependency on P59.
+
+| Recommended Order | Phase | Rationale |
+|---|---|---|
+| **1st** | **P60 Skills.md** | Zero new infrastructure; wires existing `AgentPersonaRegistry` + `RoleRegistry` + Qute. Maximum DX payoff, lowest risk. |
+| **2nd** | **P59 MCP** | Platform capability after team has confidence from P60. MCP minimal profile (read-only tools only, no HITL over MCP yet). |
+| **3rd** | **P61 RAG** | Additive on FTS5; Ollama already in stack; FAISS as persistent sidecar (not ephemeral). |
+| **4th** | **P62 BAML** | Hooks into Phase 53.4 Parser/Builder; benefits from P61 context richness. Type Dattatreya output here for P63. |
+| **5th** | **P63 A2A** | Genuine capstone. Benefits from all prior phases. |
+
+***
+
+## Cross-Cutting Enhancements Missing From All Phases
+
+**E1 — `native-image.properties` for Every New Module**
+`arcclaw-mcp`, `arcclaw-rag`, `arcclaw-a2a` each need `META-INF/native-image/<groupId>/native-image.properties` with `--initialize-at-build-time` / `--initialize-at-run-time` entries for their new dependencies. The existing BouncyCastle pattern  is the template.
+
+**E2 — Skills + RAG Integration via `knowledge-sources` Frontmatter**
+Add `knowledge-sources: [./docs/api.md]` to skill YAML frontmatter. When `SkillLoader` activates a skill, it triggers `IngestDocumentTool` to populate the `@ApplicationScoped` knowledge base with that skill's domain docs. This creates self-contained skill packages with their own knowledge pre-loaded.
+
+**E3 — A2A `AgentCard` Should Advertise MCP Endpoints**
+The `AgentCard` at `/.well-known/agent.json` should include a `mcpEndpoints` array listing available MCP tool names and the `McpServerResource` URL. This creates a unified discovery layer where an A2A client knows both the agent's tasks interface AND its MCP tool surface.
+
+**E4 — Test Count Discipline Must Continue**
+Every phase must maintain 100% test pass before proceeding. Each new class (e.g., `McpToolBridge`, `SkillLoader`, `TwoTierMemoryService`, `StructuredOutputEngine`, `A2AClientService`) needs unit tests in `arcclaw-core/src/test` and integration tests in `arcclaw-app/src/test` following the established two-module pattern.
+
+***
+
+## Phase Summary — Corrected
+
+| Phase | Name | Key Corrections |
+|---|---|---|
+| **P60** *(now first)* | Skills.md Runtime | No `DevFileSystemWatcher`; fix native resource registration; atomic `Pattern` refs; `max-iterations` not `maxBudgetUsd` |
+| **P59** *(now second)* | MCP Server + Client | `DynamicToolCapability` gap; no HITL-over-MCP for MVP; SmallRye FT not `SandboxCircuitBreaker`; verify Quarkiverse version |
+| **P61** | Semantic Vector RAG | FAISS is persistent sidecar not ephemeral; RRF merge; Ollama embedding only for MVP; `@PreDestroy` wipe |
+| **P62** | BAML / `@AgentFunction` | Use LangChain4J `ToolSpecifications` for schema; add to existing `arcclaw-deployment`; retry audit trail; type Dattatreya output |
+| **P63** | A2A Federation | Add auth model (JWT via `SecretVault`); drop `arcclaw-a2a-deployment` for MVP; no `StatefulAgentStore` federation; rule-based delegation; ban `StructuredTaskScope` |
+
+---
+
+Gemini:
+
+The synthesized roadmap represents a highly mature architectural convergence. The decision to reject persistent FAISS sidecars in favor of SQLite, to drop SSE hold-connections in favor of async webhooks, and to use `PermissiveJsonExtractor` to slash token burn are all enterprise-grade decisions.
+
+However, looking at this through the strict lens of a **Multi-module Quarkus (JDK 25) + GraalVM Native Image** deployment, the synthesis still carries three critical architectural blind spots that will cause catastrophic failures at compile time or runtime.
+
+Here is the definitive architectural teardown and the final, hardened execution plan.
+
+### The Three Critical Architectural Blind Spots
+
+#### 1. Phase 61: The GraalVM JNI Wall on `sqlite-vec`
+
+The synthesis claims that using `xerial/sqlite-jdbc` to execute `SELECT load_extension('vec0')` is the perfect single-node solution.
+**The Reality:** Dynamically loading a native shared library (`.so`/`.dll`) into SQLite at runtime inside a **GraalVM Native Image** is a massive risk. GraalVM's Substrate VM strictly controls memory boundaries and JNI (Java Native Interface) calls. The `sqlite-jdbc` driver is heavily customized with pre-compiled SQLite binaries specifically to survive GraalVM native compilation. Forcing it to load an external `vec0.so` at runtime will likely result in a segfault or a Substrate VM security exception unless extensive `jni-config.json` and `linker` flags are manually crafted.
+**The Fix:** You must gate Phase 61 with a dedicated Native JNI spike. If `sqlite-vec` fails native compilation, you must fall back to LangChain4J's pure-Java `InMemoryEmbeddingStore`, serialized to disk via Java Object Serialization or Jackson to a `.json` file in the same directory as your SQLite WAL. It maintains the single-node constraint without breaking GraalVM.
+
+#### 2. Phase 59: The Missing `stdio` Transport for MCP
+
+The synthesis focuses entirely on `SSE` (HTTP) for MCP communication and SmallRye Fault Tolerance.
+**The Reality:** 90% of the Model Context Protocol (MCP) ecosystem (e.g., official GitHub, PostgreSQL, and Filesystem servers) operates over `stdio` (stdin/stdout JSON-RPC), not SSE. They are designed to be run as local subprocesses.
+**The Fix:** You already have the perfect primitive: `PodmanContainerExecutor`. Instead of HTTP clients, your `arcclaw-mcp` module must implement a `PodmanMcpTransport`. When consuming an external MCP server, ArcClaw spins it up inside a Podman sandbox and attaches a reactive Mutiny stream to the container's `stdin`/`stdout` to exchange JSON-RPC messages. This isolates third-party MCP servers securely and requires zero HTTP overhead.
+
+#### 3. Phase 63: A2A Webhook Correlation Persistence
+
+The synthesis correctly pivots to an async webhook model for HITL, stating Instance A sends a POST to Instance B, and Instance B calls back to Instance A.
+**The Reality:** When Instance B's webhook hits Instance A's `/a2a/callbacks/{correlationId}` endpoint hours later, Instance A's original `WorkspaceScoped` context has been destroyed.
+**The Fix:** Instance A requires a new SQLite table: `a2a_suspended_correlations`. When Instance A delegates to Instance B, it serializes its *entire current reasoning state* to this table, keyed by `correlationId`, and terminates the local agent loop. When the webhook arrives, Instance A reconstitutes the state from SQLite, restores the `WorkspaceScoped` context, and resumes the ReAct loop exactly where it left off.
+
+---
+
+### The Finalized ArcClaw Execution Roadmap
+
+#### Phase 60: Skills.md Runtime (The Foundation)
+
+* **Architecture:** Dual-tier registry.
+* *Tier 1 (Static):* `src/main/resources/skills/*.md`. Registered via Quarkus `native-image.properties` (`Resources: include:skills/**.md`). Loaded on `StartupEvent`.
+* *Tier 2 (Dynamic):* SQLite `agent_skill` table. Managed via standard CRUD repository. Refreshed via `/api/v1/skills/refresh` to invalidate the `@ApplicationScoped` cache. Zero file-watching.
+
+
+* **Execution:** `SkillRegistry` holds an `AtomicReference<ImmutableList<CompiledSkillEntry>>`. Regex triggers are compiled exactly once per refresh cycle.
+* **Prompting:** Dynamic skills cannot parse Qute at runtime safely. Pass the database text into a pre-compiled `SkillSystemPrompt.html` template that exclusively performs `{skill.systemPrompt}` string injection.
+
+#### Phase 59: MCP Server + Client (The Ecosystem Bridge)
+
+* **Architecture (Client):** Build `PodmanMcpTransport` for `stdio`-based servers. Wrap outbound calls in SmallRye Mutiny timeouts. HTTP/SSE is strictly a secondary transport.
+* **Architecture (Server):** Expose ArcClaw's pure Java `@AgentTool` interfaces as an MCP server using `arcclaw-mcp-deployment` BuildSteps to generate the MCP JSON schemas at compile time.
+* **Security:** MVP exposes only read-only, fully autonomous tools (e.g., `MemorySearchTool`). Add a `DynamicToolCapabilityRegistry` injected into `ToolInvocationGuard` to allow runtime-loaded MCP tools to bypass the static `AgentRoleEnum` capability checks.
+
+#### Phase 61: Semantic Vector RAG (The Knowledge Layer)
+
+* **Architecture:** Attempt `sqlite-vec` integration via `xerial`. If GraalVM strictly rejects the dynamic library load, gracefully degrade to a persistent, disk-backed pure Java embedding store.
+* **Retrieval:** Implement standard Reciprocal Rank Fusion (RRF, k=60) in a `TwoTierMemoryService` to merge FTS5 keyword results with Vector cosine similarity results.
+* **Scope:** Maintain the strict boundary. `@ApplicationScoped` for the global index (populated via a role-restricted `IngestDocumentTool`). `@WorkspaceScoped` for the ephemeral session context (wiped on `@PreDestroy`).
+
+#### Phase 62: BAML-Style Structured Outputs (The Precision Layer)
+
+* **Architecture:** Use LangChain4J's `ToolSpecifications` in your existing `arcclaw-deployment` module to generate JSON Schemas via Jandex at compile time.
+* **Execution:** Inject the schema into the system prompt. Route the LLM response through a custom `PermissiveJsonExtractor` (stripping Markdown fences, allowing trailing commas via Jackson `ALLOW_UNQUOTED_FIELD_NAMES`).
+* **Resilience:** If extraction fails structurally, trigger a maximum of 1 LLM retry. Mandate a `GovernanceLayer.checkBudget()` call before the retry, emitting a `schema_correction_retry` trace to the OTel span and WORM audit log.
+
+#### Phase 63: A2A Federation (The Capstone)
+
+* **Architecture:** Pure asynchronous webhook architecture. No `StructuredTaskScope`. Parallel dispatch uses CDI-injected `ManagedExecutor` with Virtual Threads.
+* **State Management:** Create `a2a_suspended_correlations` in SQLite. Cross-instance state queries are forbidden; all necessary context is passed in the initial JSON payload, and suspension states are heavily checkpointed locally.
+* **Authentication:** Cross-instance calls are authenticated via Ed25519 JWTs. The keys are managed exclusively by the existing `SecretVault` (AES-GCM-SIV), with public keys advertised on the `.well-known/agent.json` AgentCard.
+* **Delegation:** `DattatreyaAgent` routes tasks deterministically based on capability matching against the `AgentCardRegistry`, never via LLM hallucination.
+
+---
+
+Claude.ai:
+
+This is exactly the right process — running the proposal through multiple reviewers exposes genuine gaps. Let me adjudicate each claim, accept what's correct, reject what's wrong, and synthesize the definitive approach.
+
+---
+
+## Adjudication: What Each Review Got Right vs Wrong
+
+### On Phase 59 (MCP)
+
+**Perplexity: ACCEPT ALL.** `DynamicToolCapability` gap is real and critical. HITL-over-MCP MVP restriction is correct. SmallRye FT over `SandboxCircuitBreaker` is correct.
+
+**Gemini: ACCEPT partially.** Compile-time Jandex `BuildStep` for schema generation is already in the proposal — agreed. However the claim that Quarkiverse MCP risks "blocking GraalVM native compilation" is speculative hand-waving without a specific version conflict identified. The Quarkiverse MCP server extension has native image metadata. The correct action is verify-first, not abandon-first.
+
+---
+
+### On Phase 60 (Skills.md)
+
+**Perplexity: ACCEPT ALL.** No `DevFileSystemWatcher` (fabricated API), fix native resource registration, atomic Pattern refs — all correct and grounded in your architecture nuances.
+
+**Gemini: ACCEPT one, REJECT one.** The suggestion to use SmallRye Config `ConfigSource` for loading Skills.md files is **wrong** — `ConfigSource` is designed for key/value config properties, not for parsing multi-block Markdown with YAML frontmatter, Qute templates, and pattern lists. It would be a severe misuse of the API. However Gemini's suggestion to **store dynamic skills in SQLite with an API refresh endpoint** is genuinely excellent — it fits your existing persistence model perfectly. The hybrid approach (classpath skills for built-ins, SQLite for runtime-added skills) is the right answer.
+
+Gemini's Qute pre-compilation point is **partially valid** — built-in skills can have pre-compiled Qute templates, but runtime-loaded skill prompts must use Qute's programmatic API (`Engine.parse()`) with a generic pre-compiled wrapper template. This is fine and well-supported.
+
+---
+
+### On Phase 61 (RAG/FAISS)
+
+**Perplexity: ACCEPT ALL.** FAISS as persistent sidecar (not ephemeral), `@PreDestroy` wipe, RRF merge algorithm, `IngestDocumentTool` role scoping — all correct.
+
+**Gemini: ACCEPT the sqlite-vec suggestion — this is the architectural winner.** `sqlite-vec` (the modern successor to `sqlite-vss`, actively maintained by Alex Garcia at Meta) stores float32 vectors in the same SQLite database you already use. A hybrid FTS5 keyword + vector cosine distance query executes in a **single SQL transaction with zero network hop**. This is architecturally superior to any sidecar approach and perfectly aligned with your "single-node, strict singleton topology" constraint.
+
+However Gemini's claim that "ONNX has solid GraalVM support" is **overstated**. ONNX Runtime Java uses JNI and requires explicit JNI config for native image. The safest embedding path remains Ollama (already in your `docker-compose.yaml`) via LangChain4J's `OllamaEmbeddingModel`. Use `InMemoryEmbeddingStore` for dev/test, sqlite-vec for prod.
+
+---
+
+### On Phase 62 (BAML)
+
+**Perplexity: ACCEPT ALL.** Use `LangChain4J ToolSpecifications` for schema generation (already in your dep tree), add `AgentFunctionProcessor` to existing `arcclaw-deployment`, retry audit trail is mandatory, `GovernanceLayer.checkBudget()` before each retry.
+
+**Gemini: ACCEPT the fail-fast parser idea — this is the most valuable addition.** Instead of immediately retrying the LLM on parse failure, implement a `PermissiveJsonExtractor` that strips ` ```json ` fences, handles trailing commas, and uses Jackson's `ALLOW_UNQUOTED_FIELD_NAMES`. Most LLM "failures" are cosmetic formatting issues, not structural JSON failures. This salvages ~80% of "failures" without any LLM call. Then max **1** LLM retry (not 3) for genuine structural errors.
+
+Gemini's provider-level structured output suggestion (`response_format: json_schema`) is **accept where available** — Groq supports JSON mode, and your `IntentClassifierService` already routes to Groq. Wire it in when the provider supports it, fall back to schema-in-prompt otherwise.
+
+---
+
+### On Phase 63 (A2A)
+
+**Perplexity: ACCEPT ALL.** Auth model missing (JWT via SecretVault), drop `arcclaw-a2a-deployment` for MVP, no cross-instance `StatefulAgentStore`, rule-based delegation, ban `StructuredTaskScope`.
+
+**Gemini: ACCEPT the async webhook/callback pattern — this is the most important architectural correction across all reviews.** Holding an SSE connection open while waiting for human HITL approval will timeout at every proxy, load balancer, and NAT boundary. The correct pattern is: POST task → async execute → emit `ActionRequired` event to callback URL if HITL needed → human approves on originating instance → `ApprovalGranted` event sent → remote resumes. This is well-aligned with your existing `RequiresApprovalException` → `AWAITING_APPROVAL` checkpoint flow, just extended across a network boundary.
+
+---
+
+## The Definitive Synthesized Approach
+
+### Recommended Phase Order (consensus across all three reviews)
+
+**P60 → P59 → P61 → P62 → P63**
+
+P60 first is now unanimous — zero new infrastructure, maximum DX, validates the skill/persona wiring before adding any network complexity.
+
+---
+
+### Phase 60 — Skills.md Runtime (first)
+
+**Storage model — two tiers:**
+
+Tier 1 (built-in, classpath): `src/main/resources/skills/*.md` — loaded at startup, pre-compiled Qute wrapper template, registered in `native-image.properties` as `Resources: include:skills/**.md`. These are the static persona definitions shipped with the binary.
+
+Tier 2 (dynamic, SQLite): New `agent_skill` table in the existing database. Skills added at runtime via `POST /api/v1/skills` or a new `RegisterSkillReflex`. A `GET /api/v1/skills/refresh` endpoint invalidates the registry cache. This replaces any file-watching scheme entirely — it uses your existing `AsyncPersistenceEngine` and stays inside the singleton topology.
+
+**Pattern compilation:** `SkillRegistry` holds `AtomicReference<ImmutableList<CompiledSkillEntry>>` where `CompiledSkillEntry` is a record wrapping the `SkillDefinition` + its pre-compiled `Pattern[]`. Updated atomically on each load/refresh cycle. No pattern compiled per-message, ever.
+
+**Qute integration:** Built-in skills reference named Qute template files (compile-time validated). Dynamic skills pass their system-prompt text to a generic pre-compiled wrapper: `SkillSystemPrompt.html` with `{skill.systemPrompt}` injection. No runtime Qute parsing.
+
+**SkillLoader composition (not inheritance):** Produces `RoleDefinition` instances from parsed `SkillDefinition` frontmatter and registers them into `RoleRegistry` via a new `RoleRegistry.registerDynamic(RoleDefinition)` method. Composition only — `RoleDefinition` is a value type.
+
+**New classes (all in `arcclaw-core`):** `SkillDefinition` (record with `name`, `description`, `triggerPatterns`, `systemPrompt`, `toolCapabilities`, `maxIterations`), `CompiledSkillEntry` (record), `SkillRegistry` (ApplicationScoped, AtomicReference), `SkillLoader` (ApplicationScoped, `@Observes StartupEvent`), `SkillReflex` (implements `AgentReflex`, CDI-discovered, preserves two-pass chain).
+
+**Native image:** Add `Resources: include:skills/**.md` to existing `native-image.properties` in `arcclaw-core`. No new module needed.
+
+**Schema addition — `max-iterations` only, not `maxBudgetUsd`:** Skills can declare `max-iterations: 3` which maps to `RoleDefinition.maxIterations()`. Budget stays at session level exclusively.
+
+**New DB table:**
+```sql
+CREATE TABLE IF NOT EXISTS agent_skill (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    definition_yaml TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+```
+
+---
+
+### Phase 59 — MCP Server + Client (second)
+
+**DynamicToolCapability — the critical gap:** `AgentRoleEnum` is a compile-time enum. External MCP tools registered at runtime have no home in the permission tables. Solution: introduce `DynamicToolCapabilityRegistry` (`@ApplicationScoped`) which holds a `ConcurrentHashMap<String, DynamicToolCapability>` of runtime-registered tool names. `ToolInvocationGuard` checks this registry as a second lookup after the static `ToolCapability` enum check. `AgentRoleEnum.definition().capabilities()` remains compile-time-only; dynamic permissions are declared per-connection in MCP server config.
+
+**MVP scope — read-only FULL-autonomy tools only:** `GithubTool` (read-only schema jail already in place, Phase 36.1) and `MemorySearchTool` are the only tools exposed in MVP. `ScheduleTaskTool`, `ManageScheduleTool` are excluded from MCP exposure until HITL-over-MCP is solved. Enforced by an `McpToolAllowlist` config property.
+
+**Outbound resilience:** `McpClientService` wraps outbound calls with SmallRye Fault Tolerance `@Timeout(5s)` + `@Retry(maxRetries=2)` + `@CircuitBreaker(requestVolumeThreshold=5)`. These are already in the Quarkus 3.23 BOM — zero new dependencies.
+
+**Module structure:** `arcclaw-mcp` (runtime only). `AgentFunctionProcessor` and `McpBuildStep` both go into the **existing** `arcclaw-deployment` module. No new deployment module.
+
+**Quarkiverse version gate:** Before writing any code, add `io.quarkiverse.mcp:quarkus-mcp-server:BOM-CHECK` to a scratch `pom.xml` profile and run `./mvnw quarkus:build -Pnative` as a smoke test. Gate the entire phase on this passing.
+
+**New classes:** `DynamicToolCapabilityRegistry`, `DynamicToolCapability` (record), `McpToolBridge` (wraps `ToolRegistry` tools as MCP tools), `ExternalMcpToolAdapter` (wraps inbound MCP calls as `AgentTool` implementations), `McpServerResource` (JAX-RS), `McpClientService` (Quarkus REST Client Reactive), `McpBuildStep` (in `arcclaw-deployment`), `McpToolAllowlist` (config record).
+
+---
+
+### Phase 61 — Semantic Vector RAG with sqlite-vec (third)
+
+**Storage: sqlite-vec, not FAISS.** `sqlite-vec` stores `float32` vectors as blobs in the same SQLite WAL file. Hybrid query: FTS5 BM25 keyword recall + vec cosine similarity, merged with RRF, in a single SQL call. No network hop. No sidecar lifecycle management. Perfectly aligned with "strict singleton topology."
+
+**sqlite-vec loading via xerial:** `sqlite-jdbc` (your existing JDBC driver) supports `SQLiteConfig.setExtensionLoading(true)` + `conn.createStatement().execute("SELECT load_extension('vec0')")`. The `vec0.so`/`vec0.dll` native library ships bundled in the `io.github.alex-plekhanov:sqlite-vec-java` JAR (cross-platform fat JAR). This is the correct integration path.
+
+**Two-tier architecture:**
+
+- `@ApplicationScoped GlobalKnowledgeBase`: Holds project documents, codebase indexes, skill knowledge sources. Persisted in sqlite-vec table `vec_global`. Populated by `IngestDocumentTool` (restricted to `COORDINATOR` + `DATTATREYA` roles via new `ToolCapability.INGEST_DOCUMENT`).
+- `@WorkspaceScoped SessionKnowledgeBase`: Per-session ephemeral context. Uses `LangChain4J InMemoryEmbeddingStore`. `@PreDestroy` clears the store on scope teardown. Not persisted.
+
+**Embedding model:** `nomic-embed-text` via Ollama (already in `docker-compose.yaml`). No ONNX, no JNI complexity for MVP.
+
+**Merge strategy — Reciprocal Rank Fusion:** `TwoTierMemoryService.merge(List<ScoredChunk> fts5Results, List<ScoredChunk> vectorResults)` implements RRF with k=60. Returns top-N chunks by unified score for injection into `SystemPromptBuilder`.
+
+**`RagContextEnricher`** intercepts `SystemPromptBuilder.build()` and prepends retrieved chunks in the system prompt before the role-specific Qute template renders. This is the injection point.
+
+**Module:** `arcclaw-rag` (runtime). Any build-time resource registration (sqlite-vec schema DDL) goes as a `RagSchemaInitializer` `@Observes StartupEvent` bean — no new deployment module.
+
+**New DB table:**
+```sql
+CREATE VIRTUAL TABLE IF NOT EXISTS vec_global USING vec0(
+    chunk_id TEXT PRIMARY KEY,
+    embedding float[768]
+);
+```
+
+---
+
+### Phase 62 — BAML-Style Structured Outputs (fourth)
+
+**Schema generation:** Use `LangChain4J ToolSpecifications.toolSpecificationFrom(Method)` — already in your dep tree, already generates the exact JSON schema format Groq expects. `AgentFunctionProcessor` (BuildStep in existing `arcclaw-deployment`) scans `@AgentFunction`-annotated interfaces via Jandex at build time, generates schemas as static JSON resources, registers reflection entries for GraalVM native.
+
+**Fail-fast parser before LLM retry — the key improvement:** `PermissiveJsonExtractor` runs first on every LLM response: strips ` ```json ` fences, normalises trailing commas, uses `JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES`. This recovers ~80% of cosmetic failures without any token spend. Only genuine structural failures trigger a single LLM retry.
+
+**Retry limit: 1, not 3.** Each retry: `GovernanceLayer.checkBudget()` first, then submit. Retry emits `ReasoningStep` with action `"schema_correction_retry_1"` into the WORM audit chain and an OTel child span.
+
+**Provider-level JSON mode where available:** `IntentClassifierService` already uses Groq. Groq supports `response_format: { type: "json_object" }`. Wire this for `@AgentFunction` calls to Groq. Fall back to schema-in-prompt for other providers.
+
+**Type Dattatreya's output:** `SynthesisResult @AgentFunction` interface with fields `List<AgentContribution> contributions`, `String resolution`, `Optional<ConflictSummary> conflicts`. This makes Dattatreya's cross-domain output structured — required before P63 A2A can depend on it reliably.
+
+**New classes (all in `arcclaw-core` + existing `arcclaw-deployment`):** `@AgentFunction` annotation, `StructuredOutputEngine`, `PermissiveJsonExtractor`, `BamlSchemaValidator`, `StructuredRetryLoop`, `SynthesisResult` record, `AgentContribution` record, `AgentFunctionProcessor` (BuildStep, in existing `arcclaw-deployment`).
+
+---
+
+### Phase 63 — A2A Federation (fifth, capstone)
+
+**Async webhook pattern — the critical correction from Gemini:** SSE is for streaming responses, not for holding connections during HITL waits. The protocol is:
+
+1. Instance A sends `POST /a2a/tasks/send` to Instance B with `{"goal": "...", "context": {...}, "callbackUrl": "https://instance-a/a2a/callbacks/{correlationId}"}`
+2. Instance B executes, creates local session + checkpoint in its own `StatefulAgentStore`
+3. If HITL needed: Instance B persists `AWAITING_APPROVAL`, POSTs `{"type": "ActionRequired", "correlationId": "...", "toolName": "...", "params": {...}}` to Instance A's callback URL
+4. Human approves on Instance A (via Telegram `/approve` or REST). Instance A POSTs `{"type": "ApprovalGranted", "correlationId": "..."}` to `POST /a2a/tasks/{taskId}/resume` on Instance B
+5. Instance B resumes, POSTs `{"type": "TaskCompleted", "result": {...}}` to Instance A's callback URL
+
+This maps cleanly onto your existing `RequiresApprovalException` → `AWAITING_APPROVAL` → resume flow. The only new piece is the HTTP callback.
+
+**No cross-instance `StatefulAgentStore`:** All state needed by Instance B is passed in the initial task payload. Instance B manages its own checkpoint entirely locally. SQLite singleton topology is preserved on both sides.
+
+**Authentication:** `A2AAuthFilter` reads `Authorization: Bearer <jwt>`. JWTs are short-lived (15 min TTL), signed by an Ed25519 keypair stored in each instance's `SecretVault`. Public key advertised in `AgentCard`. Reuses existing `SecretVault` infrastructure — no new crypto primitives.
+
+**Rule-based delegation in Dattatreya:** Delegation decision is deterministic. `A2ADispatchHandler` parses required `ToolCapability` set from the incoming task, compares against local `AgentRoleEnum` permitted sets + `DynamicToolCapabilityRegistry`, checks `AgentCardRegistry` for remote instances advertising the missing capabilities, selects the best match. LLM is never consulted for routing decisions.
+
+**Parallel dispatch:** `ManagedExecutor` (CDI-injected `@Inject ManagedExecutor`) with virtual threads. `StructuredTaskScope` is explicitly **forbidden** — still preview in JDK 25 per your architecture policy.
+
+**Module:** `arcclaw-a2a` (runtime only). No `arcclaw-a2a-deployment` for MVP — no build-time annotation processing needed.
+
+**AgentCard:** Signed JWT, published at `/.well-known/agent.json`. Includes `capabilities[]` (skill names), `toolRoster[]` (MCP tool names from P59), `a2aEndpoint`, `mcpEndpoint`, `publicKeyJwk`. `SystemInfoResource` (Phase 58) provides the seed data.
+
+**New classes:** `AgentCard` record, `A2AResource`, `A2ACallbackResource`, `A2AClientService`, `A2ADispatchHandler`, `A2AAuthFilter`, `AgentCardRegistry` (`@ApplicationScoped`, stores known remote instances), `TaskStatusUpdateEvent` (CDI), `A2ACorrelationStore` (lightweight in-memory + SQLite for pending correlations).
+
+---
+
+## Final Corrected Phase Summary
+
+| Phase | Name | Order | Key decisions |
+|-------|------|-------|---------------|
+| **P60** | Skills.md | 1st | SQLite-backed dynamic skills + classpath built-ins; atomic Pattern refs; `max-iterations` only; generic pre-compiled Qute wrapper; no file watching |
+| **P59** | MCP Server+Client | 2nd | `DynamicToolCapabilityRegistry` for runtime tools; MVP read-only tools only; SmallRye FT for outbound; Quarkiverse version gate first; existing `arcclaw-deployment` for BuildStep |
+| **P61** | Vector RAG | 3rd | sqlite-vec not FAISS (same DB, single SQL, no sidecar); Ollama embeddings not ONNX; RRF merge; `@ApplicationScoped` + `@WorkspaceScoped` dual store; `@PreDestroy` wipe; `INGEST_DOCUMENT` role-scoped |
+| **P62** | BAML/@AgentFunction | 4th | LangChain4J `ToolSpecifications` for schema; `PermissiveJsonExtractor` before retry; max 1 LLM retry; provider JSON mode where available; type Dattatreya output here |
+| **P63** | A2A Federation | 5th | Async webhook/callback (not SSE hold); Ed25519 JWT auth via SecretVault; state in payload (not cross-instance store); rule-based delegation; `ManagedExecutor` + virtual threads |
+
+---
+
+## Cross-Cutting Mandates (apply to all phases)
+
+Every new module needs `META-INF/native-image/<groupId>/native-image.properties` following the existing BouncyCastle pattern. Every new class gets unit tests in `arcclaw-core/src/test` and integration tests in `arcclaw-app/src/test`. Test count must be 100% green before any phase is considered complete. All new `@Scheduled` beans must be guarded with profile config flags (`%dev.*`, `%prod.*`). No `StructuredTaskScope` anywhere. No `DevFileSystemWatcher` — it does not exist.
+
+---
+
+Perplexity Claude:
+
+Now I have the complete picture from deep codebase reading. Let me deliver the final authoritative synthesis review.
+
+***
+
+## Final Synthesis Review — Remaining Gaps Across All Reviews
+
+The three-AI review cycle has produced excellent convergence, but after deep reading of `AsyncPersistenceEngine`, `AuditSchemaEnforcer`, `FtsConnectionInterceptor`, `GovernanceLayer`, `ReflectionConfig`, and `SecurityEventType`, there are **8 concrete issues no review has yet raised**.
+
+***
+
+## Remaining Unconverged Issues
+
+### 🔴 Issue 1 — `agent_skill` Raw DDL Violates the Core Architecture Nuance
+The synthesis shows a `CREATE TABLE IF NOT EXISTS agent_skill` SQL block. This directly violates Architecture Nuance #11: *"All schema changes are expressed solely as updated Entity class definitions. Hibernate will create the correct schema on first boot."*  This rule applies to **regular tables only**. `agent_skill` is a regular table — it must be defined as `@Entity AgentSkillEntity` so Hibernate auto-creates it. The precedent set by `AuditSchemaEnforcer` for raw DDL is specifically for things Hibernate cannot manage: virtual tables (FTS5 `USING fts5`), triggers, and indexes. `agent_skill` is none of those. Fix: drop the SQL block, write `@Entity @Table(name="agent_skill") class AgentSkillEntity`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+### 🔴 Issue 2 — sqlite-vec Extension Load Must Be Inside `FtsConnectionInterceptor`, Not `@Observes StartupEvent`
+All three reviews propose a `RagSchemaInitializer @Observes StartupEvent` bean for the `vec_global` DDL. But `AuditSchemaEnforcer` reveals the existing pattern: schema-level DDL runs via `EntityManager` in a `@Observes StartupEvent` bean — and this is fine for the `vec_global` CREATE VIRTUAL TABLE. However, `SELECT load_extension('vec0')` is **per-connection**, not per-startup. The `FtsConnectionInterceptor` already calls `ATTACH DATABASE arcclaw-fts.db AS fts` on every `onConnectionAcquire()`. The `load_extension('vec0')` call belongs in this same interceptor, in the same `onConnectionAcquire()` block, after the ATTACH. This ensures every connection in the pool has `vec0` loaded before any SQL that touches `vec_global`. A separate startup bean calling it once will only affect one connection — all other pool connections miss it and throw `no such function: vec_distance_cosine` at runtime. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+### 🔴 Issue 3 — `ReflectionConfig.java` Must Register All New Records for GraalVM
+`ReflectionConfig.java` uses `@RegisterForReflection(targets = {...})` to protect classes from GraalVM dead-code elimination. Every new record or DTO introduced across P60–P63 must be added: `SkillDefinition.class`, `CompiledSkillEntry.class`, `AgentCard.class`, `SynthesisResult.class`, `AgentContribution.class`, `ConflictSummary.class`, `DynamicToolCapability.class`, `A2ASuspendedCorrelationEntity.class`. The synthesis mentions `AgentFunctionProcessor` registering reflection for `@AgentFunction` return types at build time — this handles the `@AgentFunction` interfaces, but `ReflectionConfig.java` must cover all other new DTOs that aren't `@AgentFunction` return types. Missing any single class causes silent JSON serialization failure in native image. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+### 🔴 Issue 4 — `SecurityEventType` Enum Needs New Entries for P59–P63
+`SecurityEventType` is a closed enum with `isMandatory()` semantics. New phases introduce new security events that must be tracked in the WORM audit chain: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- `MCP_TOOL_INVOKED` (mandatory — same reasoning as `TOOL_INVOKED`)
+- `SKILL_LOADED` / `SKILL_REFRESHED` (telemetry)
+- `A2A_TASK_DELEGATED` (mandatory — cross-instance action)
+- `A2A_APPROVAL_PENDING` (mandatory — HITL extension)
+- `A2A_RESUME_GRANTED` (mandatory — equivalent to `APPROVAL_GRANTED`)
+- `STRUCTURED_OUTPUT_RETRY` (telemetry)
+
+Failing to add these means new cross-boundary actions are invisible to the HMAC-chained audit log — a compliance hole since Phase 35.
+
+### 🟡 Issue 5 — `GovernanceLayer` Is `@ApplicationScoped`, Not `@WorkspaceScoped` — `StructuredRetryLoop` Works Correctly, But Token Floor Applies
+The synthesis says `GovernanceLayer.checkBudget()` must be called before each retry. This is correct. But `GovernanceLayer.recordLlmCall()` has a **token floor** (`minTokensFloor = 10`) applied to zero-token reports. Structured output retries involve real LLM calls so this is fine. However the `BudgetWarningException` is thrown inside `recordLlmCall()` — if a retry triggers the warning, the `BudgetWarningException` propagates out of `recordLlmCall()`, not out of `checkBudget()`. `StructuredRetryLoop` must catch `BudgetWarningException` from `recordLlmCall()` calls too — not only pre-check via a separate `checkBudget()` guard. Looking at the implementation, there's no standalone `checkBudget()` method — the check is embedded in `recordLlmCall()`. **The synthesis references a `GovernanceLayer.checkBudget()` method that does not exist.** The correct pattern: call `GovernanceLayer.recordLlmCall(sessionId, 0, 0)` as a dry-run cost poll, OR add a new `GovernanceLayer.assertWithinBudget(sessionId)` method that reads `budgets.get(sessionId)` and throws if over threshold without side effects. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+### 🟡 Issue 6 — `AsyncPersistenceEngine` Scope: New Operations Must Know Which Path to Take
+`AsyncPersistenceEngine` serves the critical/telemetry audit path for `AuditEvent` and `AgentCheckpoint` writes. New P60–P63 operations: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- `AgentSkillEntity` CRUD → **regular `@Transactional` repository** (admin path, not hot-path)
+- `A2ASuspendedCorrelationEntity` reads/writes → **regular `@Transactional`** (infrequent, admin-tier)
+- New `SecurityEventType` events (`MCP_TOOL_INVOKED`, `A2A_TASK_DELEGATED`) → **`AsyncPersistenceEngine.submitCritical()`** (same mandatory audit path)
+
+Mixing these up — sending skill CRUD through `AsyncPersistenceEngine` or doing mandatory A2A audit writes via `@Transactional` directly — breaks either the queue throughput or the mandatory compliance guarantee.
+
+### 🟡 Issue 7 — Ed25519 JWT: `quarkus-smallrye-jwt` Is Not Currently in `arcclaw-app/pom.xml`
+The synthesis proposes Ed25519 JWTs using BouncyCastle 1.83 (already present) and recommends `quarkus-smallrye-jwt` as the JWT library. But `arcclaw-app/pom.xml` currently lists no JWT dependency. Two options: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **`quarkus-smallrye-jwt`**: Opinionated, requires MicroProfile JWT claims configuration (`mp.jwt.*`), best for incoming JWT validation. Needs `arcclaw-a2a/pom.xml` to declare it.
+- **`nimbus-jose-jwt`**: Available standalone, no Quarkus opinion imposed, supports `OctetKeyPair` (Ed25519) natively, already in the broader Java ecosystem. For generating/validating instance-to-instance tokens, Nimbus is cleaner since no MP JWT `@RolesAllowed` annotation wiring is needed. Add `com.nimbusds:nimbus-jose-jwt:9.37.3` to `arcclaw-a2a/pom.xml` with GraalVM native reflection config.
+
+The BouncyCastle `Ed25519Signer` handles signing, but JWT wrapping (headers, claims, serialization) still needs a library. Nimbus is the lower-friction choice for machine-to-machine tokens.
+
+### 🟡 Issue 8 — Ollama `nomic-embed-text` Pull Is Missing from `docker-compose.yaml`
+`docker-compose.yaml` has an `ollama-init` service that pulls `OLLAMA_MODEL` (defaults to `llama3.2:1b`). `nomic-embed-text` is a **separate model** that must also be pulled. It will NOT be auto-pulled by the existing init script. The `ollama-init` command block needs a second `curl -X POST http://ollama:11434/api/pull -d '{"name": "${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}"}'` call. Missing this causes a silent 404 from Ollama when `EmbeddingModelProducer` first calls `embed()` — with no clear error message since Ollama returns `{"error":"model not found"}` as a 200 response. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+***
+
+## Phase-by-Phase Final Hardened Notes
+
+### Phase 60 (now first) — Skills.md Runtime ✅ Consensus Firm
+
+The P60 synthesis is architecturally sound with these two corrections applied:
+
+- `agent_skill` → `@Entity AgentSkillEntity` (Hibernate-managed, not raw DDL)
+- `SkillDefinition`, `CompiledSkillEntry` → added to `ReflectionConfig.@RegisterForReflection` targets
+- `SkillReflex` as new `SKILL_LOADED` `SecurityEventType` for audit trail on skill registration events (telemetry tier)
+- P60 skills declare only **static `ToolCapability` enum entries** until P59 lands `DynamicToolCapabilityRegistry` — no forward dependency on unreleased code
+
+### Phase 59 (second) — MCP Server + Client ✅ Convergence Strong
+
+Gemini's `PodmanMcpTransport` for stdio MCP is correct and the best add across all reviews. Key clarification for implementation:
+
+| MCP Transport | Pattern | Lifecycle |
+|---|---|---|
+| stdio (GitHub MCP, filesystem MCP, etc.) | `PodmanMcpTransport` — Mutiny stream on container stdin/stdout | Session-lived container, `SandboxCircuitBreaker` applies |
+| SSE/HTTP (hosted MCP servers) | `McpClientService` — SmallRye FT `@Timeout + @Retry + @CircuitBreaker` | Per-call HTTP, no `SandboxCircuitBreaker` |
+
+`SandboxCircuitBreaker` applies to `PodmanMcpTransport` (Podman process), NOT to HTTP `McpClientService`. The Perplexity review was correct only for the HTTP case — the stdio case is correctly handled by the existing circuit breaker. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+`MCP_TOOL_INVOKED` added to `SecurityEventType` with `isMandatory() = true` — mandatory audit on every inbound MCP tool dispatch, same level as `TOOL_INVOKED`.
+
+### Phase 61 (third) — Semantic Vector RAG
+
+Gemini's sqlite-vec is the clear architectural winner. The **correct extension load integration** is via `FtsConnectionInterceptor.onConnectionAcquire()`:
+
+```java
+// In FtsConnectionInterceptor.onConnectionAcquire(), after ATTACH:
+try {
+    stmt.execute("SELECT load_extension('vec0')");
+} catch (Exception e) {
+    log.warn("sqlite-vec not available — vector search degraded to FTS5-only: " + e.getMessage());
+    vectorSearchEnabled.set(false); // graceful degradation flag
+}
+```
+
+`vectorSearchEnabled` is an `AtomicBoolean` on `FtsConnectionInterceptor`. `TwoTierMemoryService` checks this flag before attempting vector queries — if `false`, it falls through to FTS5-only. This gives a clean, runtime-detectable graceful degradation path without crashing, fully satisfying Gemini's GraalVM JNI spike gate requirement. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+`vec_global` DDL: `RagSchemaInitializer @Observes StartupEvent` runs via `em.createNativeQuery("CREATE VIRTUAL TABLE IF NOT EXISTS fts.vec_global USING vec0(...)")` — placed in `arcclaw-fts.db` (the FTS schema), following the exact `AuditSchemaEnforcer` precedent. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+### Phase 62 (fourth) — BAML / `@AgentFunction`
+
+The `GovernanceLayer.checkBudget()` method referenced in the synthesis **does not exist** — use `assertWithinBudget(sessionId)` as a new read-only guard method added to `GovernanceLayer`. Implementation:
+
+```java
+public void assertWithinBudget(String sessionId) {
+    SessionBudget b = budgets.get(sessionId);
+    if (b != null && b.getTotalCost() >= budgetUsd) {
+        throw new BudgetExceededException(...);
+    }
+    if (b != null && !b.warningSent && b.getTotalCost() >= budgetUsd * WARNING_THRESHOLD) {
+        b.warningSent = true;
+        throw new BudgetWarningException(...);
+    }
+}
+```
+
+Call this **before** submitting any LLM retry in `StructuredRetryLoop`, independently of `recordLlmCall()`. `SynthesisResult`, `AgentContribution`, `ConflictSummary` records → added to `ReflectionConfig` targets.
+
+### Phase 63 (fifth) — A2A Federation
+
+`A2ASuspendedCorrelationEntity` should be `@Entity @Table(name="a2a_suspended_correlation")` — Hibernate-managed, regular `@Transactional`. The serialized state is: `correlationId` (PK), `sessionId` (reference to local session), `checkpointId` (FK to `AgentCheckpoint`), `callbackUrl` (the originating instance's webhook), `status` (`PENDING`/`RESUMED`/`TIMED_OUT`), `expiresAt`. This **reuses the existing `AgentCheckpoint` reference** rather than duplicating state — the checkpoint already holds the full `List<ReasoningStep>`. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+JWT: use `nimbus-jose-jwt:9.37.3` in `arcclaw-a2a/pom.xml`. BouncyCastle handles key generation (`Ed25519KeyPairGenerator`), Nimbus handles JWT wrapping (`OctetKeyPair`, `JWSHeader.ALGORITHM = Ed25519`). Zero new crypto primitives — BouncyCastle 1.83 already declared in parent BOM. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+`A2A_TASK_DELEGATED`, `A2A_APPROVAL_PENDING`, `A2A_RESUME_GRANTED` → `SecurityEventType` with `isMandatory() = true`.
+
+***
+
+## Final Corrected Mandate Table
+
+| # | Applies To | Mandate |
+|---|---|---|
+| 1 | P60 | `agent_skill` → `@Entity AgentSkillEntity`, Hibernate-managed |
+| 2 | P61 | `vec0` extension load in `FtsConnectionInterceptor.onConnectionAcquire()` with `AtomicBoolean` degradation flag |
+| 3 | P60–P63 | All new records/DTOs added to `ReflectionConfig.@RegisterForReflection` |
+| 4 | P59–P63 | New `SecurityEventType` entries per phase; `isMandatory()` aligned to cross-boundary actions |
+| 5 | P62 | Add `GovernanceLayer.assertWithinBudget(sessionId)` — `checkBudget()` does not exist |
+| 6 | P59–P63 | New persistence: admin CRUD → regular `@Transactional`; new audit events → `AsyncPersistenceEngine` |
+| 7 | P63 | Use `nimbus-jose-jwt` (not SmallRye JWT) for A2A Ed25519 machine-to-machine tokens |
+| 8 | P61 | `docker-compose.yaml` `ollama-init`: add pull of `${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}` |
+| 9 | All | `StructuredTaskScope` forbidden; `ManagedExecutor` for all parallel dispatch |
+| 10 | All | `%test.*` profile guard on all new `@Scheduled` beans; `scheduler.enabled=false` in test profile already set |
+
+The roadmap is now architecturally sound. The convergence across Perplexity → Claude → Gemini → Perplexity round-trips has resolved every critical issue. **P60 is cleanest to start** — zero network complexity, purely wires existing `AgentPersonaRegistry` + `RoleRegistry` + Qute + SQLite with the corrections above applied from day one.
+
+---
+
+Final Claude.ai:
+
+This is now a four-AI, multi-round review cycle with genuine convergence. Let me adjudicate every finding cleanly, accept or reject with reasoning, and deliver the single definitive hardened execution plan that closes all open issues.
+
+---
+
+## Adjudication of All New Findings
+
+### Gemini's 3 Blind Spots
+
+**Blind Spot 1 — sqlite-vec GraalVM JNI Wall: ACCEPT with the graceful degradation fix.**
+The risk is real. `load_extension` at runtime inside GraalVM Substrate VM can produce segfaults depending on how `xerial/sqlite-jdbc`'s embedded native binary handles the secondary library load. The correct response is not to abandon sqlite-vec, but to wrap the load in `FtsConnectionInterceptor` with an `AtomicBoolean vectorSearchEnabled` degradation flag — exactly as Perplexity Claude independently converged on. If it fails at runtime, `TwoTierMemoryService` silently falls back to FTS5-only with a `WARN` log. No crash, no data loss, no code path change required.
+
+**Blind Spot 2 — stdio MCP transport via PodmanContainerExecutor: ACCEPT — this is the most important new finding across all reviews.**
+This is a genuine architectural gap that no prior review caught. The MCP ecosystem splits cleanly:
+- stdio-based servers (GitHub MCP, filesystem MCP, PostgreSQL MCP, ~90% of the ecosystem) → `PodmanMcpTransport` using `ProcessBuilder`/Podman + reactive Mutiny streams on stdin/stdout
+- SSE/HTTP-based servers (hosted, cloud-hosted MCP) → `McpClientService` with SmallRye FT
+
+`PodmanContainerExecutor` already exists for tool sandboxing. `PodmanMcpTransport` is a natural sibling. Critically: `SandboxCircuitBreaker` applies to `PodmanMcpTransport` (Podman process lifecycle), NOT to `McpClientService` (HTTP lifecycle — SmallRye FT handles that).
+
+**Blind Spot 3 — A2A correlation persistence: ACCEPT — Perplexity Claude independently converged here too.**
+`WorkspaceScoped` context is destroyed when the agent loop terminates. When Instance B's callback arrives hours later, Instance A needs to reconstitute state. The solution is `A2ASuspendedCorrelationEntity` as a Hibernate-managed `@Entity` (Nuance #11) referencing the existing `AgentCheckpoint` by FK — not duplicating state.
+
+---
+
+### Perplexity Claude's 8 Remaining Gaps
+
+**Gap 1 — `agent_skill` raw DDL violates Nuance #11: ACCEPT — critical.**
+Architecture Nuance #11 is explicit: regular tables are Hibernate-managed `@Entity` only. Raw `CREATE TABLE` SQL is reserved exclusively for virtual tables (`USING fts5`, `USING vec0`), triggers, and indexes. `agent_skill` is a regular table. Fix: `@Entity @Table(name="agent_skill") class AgentSkillEntity`. No DDL block.
+
+**Gap 2 — `load_extension('vec0')` belongs in `FtsConnectionInterceptor.onConnectionAcquire()`: ACCEPT — this is the most precise architectural finding in the entire review cycle.**
+`load_extension` is a per-connection operation. A `@Observes StartupEvent` bean calling it once affects exactly one connection in the pool. All other pooled connections miss it and throw `no such function: vec_distance_cosine` at query time. The `FtsConnectionInterceptor` already runs on every `onConnectionAcquire()`. This is the only correct placement.
+
+**Gap 3 — `ReflectionConfig.java` must register all new records: ACCEPT.**
+Every new record and DTO that Jackson touches in native image must be in `@RegisterForReflection(targets = {...})`. The `AgentFunctionProcessor` BuildStep handles `@AgentFunction` return types at build time, but all other DTOs need explicit registration in `ReflectionConfig`.
+
+**Gap 4 — `SecurityEventType` needs new entries: ACCEPT — compliance hole.**
+The WORM audit chain is meaningless if new cross-boundary actions are invisible to it. New mandatory events per phase are required.
+
+**Gap 5 — `GovernanceLayer.checkBudget()` does not exist: ACCEPT — this is a real code-level bug in the synthesis.**
+The synthesis referenced a method that does not exist in the codebase. The correct fix is adding `GovernanceLayer.assertWithinBudget(String sessionId)` as a new read-only guard that throws `BudgetExceededException` or `BudgetWarningException` without side effects, callable before any retry attempt.
+
+**Gap 6 — `AsyncPersistenceEngine` routing for new operations: ACCEPT.**
+New persistence operations must be explicitly routed. Admin-tier CRUD (skills, correlations) → regular `@Transactional`. Mandatory cross-boundary audit events → `AsyncPersistenceEngine.submitCritical()`.
+
+**Gap 7 — `nimbus-jose-jwt` over `quarkus-smallrye-jwt`: ACCEPT.**
+SmallRye JWT is opinionated around MicroProfile JWT `@RolesAllowed` annotation-driven server-side validation. For machine-to-machine Ed25519 instance tokens, `nimbus-jose-jwt` is lower friction: no `mp.jwt.*` config surface, native `OctetKeyPair` support, BouncyCastle already in BOM for key generation.
+
+**Gap 8 — `nomic-embed-text` Ollama pull missing from `docker-compose.yaml`: ACCEPT — silent 404 failure.**
+Ollama returns `{"error":"model not found"}` as a 200 OK response. Without a second pull in `ollama-init`, `EmbeddingModelProducer` will silently receive empty embeddings with no clear error. The `docker-compose.yaml` `ollama-init` command block needs a second pull for `${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}`.
+
+---
+
+## The Definitive Hardened Execution Plan
+
+---
+
+### Phase 60 — Skills.md Runtime
+
+**Storage — dual tier, both Hibernate-managed or standard persistence:**
+
+Tier 1 (built-in, classpath): `src/main/resources/skills/*.md` files. Loaded on `@Observes StartupEvent`. Registered in existing `native-image.properties` in `arcclaw-core`: `Resources: include:skills/**.md`. These ship with the binary and are immutable at runtime.
+
+Tier 2 (dynamic, SQLite): `AgentSkillEntity` — a standard Hibernate `@Entity` per Architecture Nuance #11. No raw DDL. Schema auto-created by Hibernate on first boot.
+
+```java
+@Entity
+@Table(name = "agent_skill")
+public class AgentSkillEntity {
+    @Id String id;
+    @Column(unique = true, nullable = false) String name;
+    @Column(nullable = false) String definitionYaml;
+    @Convert(converter = InstantToTextConverter.class) Instant createdAt;
+    @Convert(converter = InstantToTextConverter.class) Instant updatedAt;
+}
+```
+
+Dynamic skills are added via `POST /api/v1/skills` and refreshed via `GET /api/v1/skills/refresh`. Cache invalidation only. Zero file-watching. Zero polling threads.
+
+**Pattern compilation — atomic swap, never per-message:**
+
+`SkillRegistry` holds `AtomicReference<ImmutableList<CompiledSkillEntry>>`. `CompiledSkillEntry` is a record wrapping `SkillDefinition` + `Pattern[]` compiled from `triggerPatterns`. The reference is swapped atomically on each load cycle (startup + refresh). `SkillAwareIntentClassifier` reads from this reference — reads are non-blocking. Patterns are compiled exactly once per refresh cycle across the entire JVM lifetime. This satisfies Architecture Nuance #3.
+
+**Qute integration:**
+
+Built-in classpath skills: reference named Qute template files (`skills/researcher.html` etc.) — compile-time validated, type-safe.
+
+Dynamic SQLite skills: `systemPrompt` text from the database is injected into a single pre-compiled generic wrapper template `SkillSystemPrompt.html` via `{skill.systemPrompt}` variable injection. No runtime Qute parsing of arbitrary syntax. Consistent with how Qute is used in `SystemPromptBuilder` today.
+
+**SkillLoader → RoleRegistry (composition, not inheritance):**
+
+`SkillLoader` produces `RoleDefinition` instances from parsed `SkillDefinition` frontmatter and calls `RoleRegistry.registerDynamic(RoleDefinition)`. `RoleDefinition` is a value type — `SkillLoader` does not extend it, it constructs it.
+
+**Skill frontmatter schema:**
+```yaml
+name: code-reviewer
+description: Reviews code for bugs and style issues
+trigger-patterns:
+  - "review.*code"
+  - "check.*pr"
+tool-capabilities:
+  - GITHUB
+  - MEMORY_SEARCH
+max-iterations: 5
+system-prompt: |
+  You are a meticulous code reviewer...
+```
+
+`maxBudgetUsd` is explicitly excluded. `max-iterations` maps to `RoleDefinition.maxIterations()`. Budget remains session-scoped exclusively.
+
+**`SkillReflex`:** Implements `AgentReflex`. CDI `@ApplicationScoped` bean, discovered by `ReflexRegistry` via `Instance<AgentReflex>`. Handles `/skills` command. Does not reorder the two-pass chain — it's a new CDI bean, additively discovered.
+
+**GraalVM — `ReflectionConfig.java` additions:**
+Add `SkillDefinition.class`, `CompiledSkillEntry.class`, `AgentSkillEntity.class` to `@RegisterForReflection(targets = {...})`.
+
+**Audit — new `SecurityEventType` entries (telemetry tier):**
+`SKILL_LOADED`, `SKILL_REFRESHED` — `isMandatory() = false`. Written via regular `@Transactional` audit path, not `AsyncPersistenceEngine.submitCritical()`.
+
+**P60 tool capability constraint:** Skills declare only static `ToolCapability` enum entries until `DynamicToolCapabilityRegistry` lands in P59. No forward dependency on unreleased code.
+
+**New classes (all `arcclaw-core`):** `SkillDefinition` (record), `CompiledSkillEntry` (record), `SkillRegistry` (`@ApplicationScoped`), `SkillLoader` (`@ApplicationScoped`), `SkillReflex` (implements `AgentReflex`), `SkillAwareIntentClassifier`, `AgentSkillEntity` (`@Entity`), `AgentSkillRepository` (`@ApplicationScoped`).
+
+---
+
+### Phase 59 — MCP Server + Client
+
+**Transport split — two distinct implementations:**
+
+| Transport | Pattern | When Used | Circuit Breaker |
+|-----------|---------|-----------|-----------------|
+| stdio | `PodmanMcpTransport` — Mutiny reactive stream on Podman container stdin/stdout | Local MCP servers: GitHub MCP, filesystem MCP, PostgreSQL MCP (~90% of ecosystem) | `SandboxCircuitBreaker` (existing) |
+| HTTP/SSE | `McpClientService` — SmallRye FT `@Timeout(5s) @Retry(2) @CircuitBreaker` | Hosted/cloud MCP servers | SmallRye Fault Tolerance only |
+
+`PodmanMcpTransport` mirrors `PodmanContainerExecutor` pattern: spins a Podman container per session, attaches `ProcessInputStream`/`ProcessOutputStream`, exchanges JSON-RPC 2.0 messages via a reactive Mutiny pipeline. Container lifecycle is session-scoped, torn down on `WorkspaceManager.terminateSession()`. `SandboxCircuitBreaker` guards the Podman process launch exactly as it does for tool execution today.
+
+**DynamicToolCapabilityRegistry — closing the `AgentRoleEnum` gap:**
+
+```java
+@ApplicationScoped
+public class DynamicToolCapabilityRegistry {
+    private final ConcurrentHashMap<String, DynamicToolCapability> registry = new ConcurrentHashMap<>();
+    
+    public void register(DynamicToolCapability capability) { ... }
+    public Optional<DynamicToolCapability> find(String toolName) { ... }
+    public void deregister(String toolName) { ... }
+}
+```
+
+`ToolInvocationGuard` checks `DynamicToolCapabilityRegistry` as a second lookup after the static `ToolCapability` enum check. External MCP tools registered here bypass the compile-time `AgentRoleEnum` permission tables — their permissions are declared in MCP server config at connection time.
+
+**MVP tool exposure — read-only, FULL-autonomy only:**
+
+`McpToolAllowlist` config record (`arcclaw.mcp.exposed-tools`) defaults to `[MEMORY_SEARCH, GITHUB]`. `GithubTool` already has the read-only schema jail from Phase 36.1. `ScheduleTaskTool`, `ManageScheduleTool`, `IngestDocumentTool` explicitly excluded until HITL-over-MCP is solved in a follow-on phase.
+
+**Quarkiverse version gate — mandatory before any code:** Add `quarkus-mcp-server` to a scratch `%mcp-smoke-test` Maven profile, run `./mvnw quarkus:build -Pnative,mcp-smoke-test`. Gate the entire phase on a green native build. If the extension fails native compilation, implement a thin custom JSON-RPC 2.0 handler using standard Quarkus REST and Mutiny — no Quarkiverse dependency at all.
+
+**Module:** `arcclaw-mcp` (runtime only). `McpBuildStep` goes into existing `arcclaw-deployment`. No new deployment module.
+
+**`SecurityEventType` — new mandatory entries:**
+`MCP_TOOL_INVOKED` — `isMandatory() = true`. Written via `AsyncPersistenceEngine.submitCritical()` on every inbound MCP tool dispatch. Same mandatory level as `TOOL_INVOKED`.
+
+**`ReflectionConfig.java` additions:** `DynamicToolCapability.class`, `McpToolAllowlist.class`.
+
+**New classes:** `DynamicToolCapabilityRegistry` (`@ApplicationScoped`), `DynamicToolCapability` (record), `PodmanMcpTransport` (`@ApplicationScoped`), `McpToolBridge` (wraps `ToolRegistry` tools as MCP server tools), `ExternalMcpToolAdapter` (wraps inbound MCP calls as `AgentTool`), `McpServerResource` (JAX-RS), `McpClientService` (Quarkus REST Client Reactive), `McpToolAllowlist` (config record), `McpBuildStep` (in `arcclaw-deployment`).
+
+---
+
+### Phase 61 — Semantic Vector RAG with sqlite-vec
+
+**Extension load — inside `FtsConnectionInterceptor.onConnectionAcquire()` exclusively:**
+
+```java
+// In FtsConnectionInterceptor.onConnectionAcquire(), after ATTACH:
+try {
+    stmt.execute("SELECT load_extension('vec0')");
+} catch (Exception e) {
+    log.warnf("sqlite-vec unavailable — vector search degraded to FTS5-only: %s", e.getMessage());
+    vectorSearchEnabled.set(false);
+}
+```
+
+`vectorSearchEnabled` is an `AtomicBoolean` on `FtsConnectionInterceptor`. This ensures every connection in the pool has `vec0` loaded before any query touching `vec_global`. A `@Observes StartupEvent` bean calling it once would only affect one connection — explicitly wrong pattern per Gap 2.
+
+**Graceful degradation — GraalVM JNI spike gate:**
+
+`TwoTierMemoryService.search()` checks `FtsConnectionInterceptor.isVectorSearchEnabled()` before attempting vector queries. If `false`: FTS5-only path, no crash, a `WARN` log per query. This satisfies Gemini's spike-gate requirement without requiring a hard decision before implementation starts.
+
+**`vec_global` DDL — `RagSchemaInitializer @Observes StartupEvent`:**
+
+```java
+// Placed in arcclaw-fts.db schema (fts. prefix), following AuditSchemaEnforcer precedent:
+em.createNativeQuery("""
+    CREATE VIRTUAL TABLE IF NOT EXISTS fts.vec_global
+    USING vec0(
+        chunk_id TEXT PRIMARY KEY,
+        embedding float[768]
+    )
+""").executeUpdate();
+```
+
+This is a virtual table, so raw DDL is correct per Architecture Nuance #11. Regular `@Transactional` call in the startup bean. No `AsyncPersistenceEngine`.
+
+**Two-tier store architecture:**
+
+`@ApplicationScoped GlobalKnowledgeBase`: delegates to sqlite-vec `vec_global` table (when available) for persistent cross-session document embeddings. Falls back to `InMemoryEmbeddingStore` if `vectorSearchEnabled = false`.
+
+`@WorkspaceScoped SessionKnowledgeBase`: always `LangChain4J InMemoryEmbeddingStore`. Ephemeral. `@PreDestroy` calls `store.removeAll()` explicitly — same pattern as Phase 53 `VaultKeyCache`.
+
+**Merge — Reciprocal Rank Fusion:**
+
+`TwoTierMemoryService.merge(List<ScoredChunk> fts5, List<ScoredChunk> vector)` implements RRF with `k=60`. Returns top-N by unified score for `RagContextEnricher` injection. This is deterministic and parameter-lean.
+
+**`RagContextEnricher`** intercepts `SystemPromptBuilder.build()`. Prepends retrieved chunks before the role-specific Qute template renders. Chunk count is configurable: `arcclaw.rag.context-chunks=5` (default).
+
+**`IngestDocumentTool`:** New `ToolCapability.INGEST_DOCUMENT` enum entry. Permitted roles: `COORDINATOR` (Vishnu), `DATTATREYA` only. Explicitly excluded from `RESEARCHER`, `DEBUGGER`, `CODER` — prevents prompt-injection-via-document attacks.
+
+**Embedding model:** `nomic-embed-text` via Ollama. `docker-compose.yaml` `ollama-init` service gets a second pull:
+```yaml
+command: >
+  sh -c "
+    ollama pull ${OLLAMA_MODEL:-llama3.2:1b} &&
+    ollama pull ${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}
+  "
+```
+
+**`ReflectionConfig.java` additions:** No new records in this phase beyond what Hibernate manages — `RagContextEnricher`, `TwoTierMemoryService`, `EmbeddingModelProducer` are CDI beans, not serialized DTOs.
+
+**Module:** `arcclaw-rag` (runtime). Build-time DDL registration goes as a `RagResourcesBuildStep` in existing `arcclaw-deployment`. No new deployment module.
+
+**New classes:** `EmbeddingModelProducer` (`@ApplicationScoped`), `GlobalKnowledgeBase` (`@ApplicationScoped`), `SessionKnowledgeBase` (`@WorkspaceScoped`), `RagContextEnricher` (`@ApplicationScoped`), `TwoTierMemoryService` (`@ApplicationScoped`), `ScoredChunk` (record), `IngestDocumentTool` (implements `AgentTool`), `RagSchemaInitializer` (`@ApplicationScoped`, `@Observes StartupEvent`).
+
+---
+
+### Phase 62 — BAML-Style Structured Outputs
+
+**Schema generation — `LangChain4J ToolSpecifications`:**
+
+`AgentFunctionProcessor` (BuildStep in existing `arcclaw-deployment`) scans `@AgentFunction`-annotated interfaces via Jandex, calls `ToolSpecifications.toolSpecificationFrom(Method)` to generate JSON Schema, writes them as static resources at build time, registers GraalVM reflection entries for return types. No new dependencies — `langchain4j-core` already in BOM.
+
+**Fail-fast parser before any LLM retry:**
+
+`PermissiveJsonExtractor` runs first on every LLM response:
+1. Strip ` ```json ` and ` ``` ` fences
+2. Strip trailing commas
+3. Parse with `JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES` + `ALLOW_SINGLE_QUOTES`
+4. Attempt Jackson deserialization to target type
+
+If step 4 succeeds: done, zero token spend. Only genuine structural failures (missing required fields, wrong types) trigger one LLM retry.
+
+**Retry limit: exactly 1.** Before submitting the retry:
+
+```java
+// New method on GovernanceLayer — does not exist yet, must be added:
+public void assertWithinBudget(String sessionId) {
+    SessionBudget b = budgets.get(sessionId);
+    if (b == null) return;
+    if (b.getTotalCost() >= budgetUsd) throw new BudgetExceededException(...);
+    if (!b.warningSent && b.getTotalCost() >= budgetUsd * WARNING_THRESHOLD) {
+        b.warningSent = true;
+        throw new BudgetWarningException(...);
+    }
+}
+```
+
+`StructuredRetryLoop` calls `governanceLayer.assertWithinBudget(sessionId)` before submitting the single retry. Each retry emits `ReasoningStep` with action `"schema_correction_retry_1"` to the WORM audit chain and an OTel child span inside the `AgentLoop` parent.
+
+**Provider-level JSON mode where available:** `IntentClassifierService` already uses Groq. Groq supports `response_format: { type: "json_object" }`. Wire this in `LangChainReasoningEngine.Builder` for `@AgentFunction` calls to Groq. Fall back to schema-in-prompt for other providers. Both paths converge at `PermissiveJsonExtractor`.
+
+**Type Dattatreya's synthesis output — required for P63:**
+
+```java
+@AgentFunction
+public interface SynthesisFunction {
+    SynthesisResult synthesize(String combinedContext);
+}
+
+public record SynthesisResult(
+    List<AgentContribution> contributions,
+    String resolution,
+    Optional<ConflictSummary> conflicts
+) {}
+
+public record AgentContribution(String agentRole, String finding, double confidence) {}
+public record ConflictSummary(String description, List<String> conflictingRoles) {}
+```
+
+This makes `DattatreyaAgent`'s output typed and structured. Remote A2A instances in P63 can depend on the typed schema reliably.
+
+**`SecurityEventType` — new telemetry entry:**
+`STRUCTURED_OUTPUT_RETRY` — `isMandatory() = false`. Written via regular `@Transactional` audit path.
+
+**`ReflectionConfig.java` additions:** `SynthesisResult.class`, `AgentContribution.class`, `ConflictSummary.class`. (`@AgentFunction` return types handled by `AgentFunctionProcessor` BuildStep.)
+
+**No new module.** `@AgentFunction` annotation + `StructuredOutputEngine` + `PermissiveJsonExtractor` + `StructuredRetryLoop` all in `arcclaw-core`. `AgentFunctionProcessor` BuildStep in existing `arcclaw-deployment`. `GovernanceLayer.assertWithinBudget()` added to existing class.
+
+---
+
+### Phase 63 — A2A Federation (Capstone)
+
+**Async webhook/callback architecture — no SSE holds:**
+
+Instance A → Instance B flow:
+1. `POST /a2a/tasks/send` — payload: `{goal, context, approvedTools[], callbackUrl, correlationId}`
+2. Instance B creates local session + `AgentCheckpoint` in its own SQLite
+3. If HITL needed: Instance B saves `AWAITING_APPROVAL` checkpoint, POSTs `{type: "ActionRequired", correlationId, toolName, params}` to `callbackUrl` on Instance A, returns `202 Accepted`
+4. Instance A receives callback, looks up `A2ASuspendedCorrelationEntity` by `correlationId`, routes to human via Telegram/REST
+5. Human approves on Instance A. Instance A POSTs `{type: "ApprovalGranted", correlationId}` to `POST /a2a/tasks/{taskId}/resume` on Instance B
+6. Instance B resumes checkpoint, completes task, POSTs `{type: "TaskCompleted", result: SynthesisResult}` to Instance A's `callbackUrl`
+7. Instance A reconstitutes state from `A2ASuspendedCorrelationEntity`, merges result, continues local `AgentLoop`
+
+**State persistence on Instance A — `A2ASuspendedCorrelationEntity`:**
+
+Standard Hibernate `@Entity` per Architecture Nuance #11. References existing `AgentCheckpoint` by FK — no state duplication.
+
+```java
+@Entity
+@Table(name = "a2a_suspended_correlation")
+public class A2ASuspendedCorrelationEntity {
+    @Id String correlationId;
+    String sessionId;
+    String checkpointId;  // FK to agent_checkpoint
+    String remoteInstanceUrl;
+    String callbackUrl;
+    String status;        // PENDING / RESUMED / TIMED_OUT
+    @Convert(converter = InstantToTextConverter.class) Instant expiresAt;
+    @Convert(converter = InstantToTextConverter.class) Instant createdAt;
+}
+```
+
+**Authentication — Ed25519 JWT via BouncyCastle + Nimbus:**
+
+- Key generation: `Ed25519KeyPairGenerator` from BouncyCastle 1.83 (already in BOM)
+- JWT wrapping: `nimbus-jose-jwt:9.37.3` — `OctetKeyPair`, `JWSHeader.Algorithm = Ed25519`, 15-minute TTL
+- Key storage: private key in `SecretVault` (AES-GCM-SIV encrypted), public key in `AgentCard`
+- `A2AAuthFilter` reads `Authorization: Bearer <jwt>`, validates against peer's public key from `AgentCardRegistry`
+
+Add `com.nimbusds:nimbus-jose-jwt:9.37.3` to `arcclaw-a2a/pom.xml` with GraalVM reflection config in `native-image.properties`.
+
+**Rule-based delegation in Dattatreya — never LLM-decided:**
+
+`A2ADispatchHandler` algorithm:
+1. Parse required `ToolCapability` set from task
+2. Check local `AgentRoleEnum` permitted sets + `DynamicToolCapabilityRegistry`
+3. If local capabilities are sufficient: dispatch locally (existing flow)
+4. If capability gap exists: query `AgentCardRegistry` for remote instances advertising the missing capabilities
+5. Select best match by capability overlap score (deterministic)
+6. Delegate via async webhook. Log `A2A_TASK_DELEGATED` to WORM audit chain
+
+LLM is never consulted for routing decisions. Hallucination of remote capabilities is structurally impossible.
+
+**Parallel dispatch — `ManagedExecutor` + virtual threads:**
+
+```java
+@Inject ManagedExecutor executor;
+
+// In A2ADispatchHandler for parallel multi-agent fan-out:
+List<Future<AgentResult>> futures = tasks.stream()
+    .map(t -> executor.submit(() -> dispatch(t)))
+    .toList();
+```
+
+`StructuredTaskScope` is explicitly forbidden — still preview in JDK 25. No exceptions.
+
+**`SecurityEventType` — new mandatory entries:**
+`A2A_TASK_DELEGATED` — `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
+`A2A_APPROVAL_PENDING` — `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
+`A2A_RESUME_GRANTED` — `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
+
+**`AgentCard` published at `/.well-known/agent.json`:**
+
+```json
+{
+  "name": "arcclaw-instance-1",
+  "version": "1.0.0",
+  "a2aEndpoint": "https://host/a2a",
+  "mcpEndpoint": "https://host/mcp",
+  "capabilities": ["code-reviewer", "researcher"],
+  "toolRoster": ["memory_search", "github"],
+  "publicKeyJwk": { "kty": "OKP", "crv": "Ed25519", "x": "..." }
+}
+```
+
+`SystemInfoResource` (Phase 58) provides `version` and instance metadata. `AgentCardRegistry` (`@ApplicationScoped`) holds known peer instances loaded from `arcclaw.a2a.peers[]` config.
+
+**Module:** `arcclaw-a2a` (runtime only). No `arcclaw-a2a-deployment` for MVP — no build-time annotation processing required. Can be added later when `@A2ACapability` build-time scanning is introduced.
+
+**`ReflectionConfig.java` additions:** `AgentCard.class`, `A2ASuspendedCorrelationEntity.class`, Nimbus JWT classes via `native-image.properties` in `arcclaw-a2a`.
+
+---
+
+## The Complete Mandate Table — All 10 Cross-Cutting Rules
+
+| # | Phase | Mandate | Source |
+|---|-------|---------|--------|
+| 1 | P60 | `agent_skill` → `@Entity AgentSkillEntity`, Hibernate-managed. No raw DDL. | Perplexity Gap 1 |
+| 2 | P61 | `load_extension('vec0')` in `FtsConnectionInterceptor.onConnectionAcquire()` with `AtomicBoolean` degradation | Perplexity Gap 2 |
+| 3 | P60–P63 | All new records/DTOs added to `ReflectionConfig.@RegisterForReflection` targets | Perplexity Gap 3 |
+| 4 | P59–P63 | New `SecurityEventType` entries per phase; `isMandatory()` aligned to cross-boundary actions; routed to `AsyncPersistenceEngine` vs `@Transactional` accordingly | Perplexity Gap 4 + 6 |
+| 5 | P62 | Add `GovernanceLayer.assertWithinBudget(sessionId)` — `checkBudget()` does not exist in codebase | Perplexity Gap 5 |
+| 6 | P59 | `PodmanMcpTransport` for stdio; `McpClientService` + SmallRye FT for HTTP; `SandboxCircuitBreaker` on stdio only | Gemini Blind Spot 2 |
+| 7 | P61 | sqlite-vec graceful degradation via `AtomicBoolean vectorSearchEnabled`; FTS5-only fallback if JNI fails | Gemini Blind Spot 1 |
+| 8 | P63 | `A2ASuspendedCorrelationEntity` (`@Entity`, Hibernate-managed) references existing `AgentCheckpoint` by FK | Gemini Blind Spot 3 + Perplexity |
+| 9 | P63 | `nimbus-jose-jwt:9.37.3` for JWT wrapping; BouncyCastle for Ed25519 key gen; `quarkus-smallrye-jwt` excluded | Perplexity Gap 7 |
+| 10 | P61 | `docker-compose.yaml` ollama-init: add pull of `${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}` | Perplexity Gap 8 |
+| + | All | `StructuredTaskScope` forbidden. `ManagedExecutor` + virtual threads for all parallel dispatch | All reviews unanimous |
+| + | All | 100% test green before any phase completion. `%test.*` profile guard on all `@Scheduled` beans | All reviews unanimous |
+
+---
+
+## Final Phase Summary
+
+| Phase | Name | Order | New Modules | Key architectural decisions |
+|-------|------|-------|-------------|----------------------------|
+| **P60** | Skills.md | 1st | None | `@Entity AgentSkillEntity`; `AtomicReference<ImmutableList<CompiledSkillEntry>>`; generic pre-compiled Qute wrapper; SQLite-backed dynamic tier + classpath static tier |
+| **P59** | MCP | 2nd | `arcclaw-mcp` | `PodmanMcpTransport` (stdio) + `McpClientService` (HTTP); `DynamicToolCapabilityRegistry`; `McpBuildStep` in existing `arcclaw-deployment`; Quarkiverse native gate first |
+| **P61** | Vector RAG | 3rd | `arcclaw-rag` | sqlite-vec in `FtsConnectionInterceptor`; `AtomicBoolean` degradation; Ollama embeddings; RRF merge; dual `@ApplicationScoped`/`@WorkspaceScoped` stores; `@PreDestroy` wipe; ollama-init pull added |
+| **P62** | BAML | 4th | None | `LangChain4J ToolSpecifications`; `PermissiveJsonExtractor` before retry; max 1 retry; `GovernanceLayer.assertWithinBudget()` new method; type Dattatreya output; all in existing modules |
+| **P63** | A2A | 5th | `arcclaw-a2a` | Async webhook (no SSE holds); `A2ASuspendedCorrelationEntity` Hibernate-managed; Ed25519 JWT via Nimbus + BouncyCastle; rule-based delegation; `ManagedExecutor` + virtual threads |
+
+The roadmap is now fully hardened across four AI review rounds. Every critical issue has been adjudicated with a specific, codebase-grounded fix. P60 is the cleanest starting point — shall I produce the full P60 implementation prompt in your established format (`IMPLEMENTATION REQUIREMENTS`, component-by-component, test strategy, doc updates)?
+
+**Prompts::::**
+
+# ArcClaw — Phase 60: Skills.md Runtime
+## Antigravity IDE Implementation Prompt (v3 — Post 5-AI Review)
+
+### Review Changelog
+| Fix | Source | Status |
+|-----|--------|--------|
+| C1: `hibernate-orm.packages` missing `com.arcclaw.core.skill` | Perplexity | ✅ Applied — Component 0 |
+| C2: ToolCapability enum names wrong (MEMORYSEARCH vs MEMORY_SEARCH) | Perplexity | ❌ **REJECTED** — codebase confirms `MEMORY_SEARCH`, `SCHEDULE_TASK`, `MANAGE_SCHEDULE`, `SANDBOX_EXEC` WITH underscores are the actual enum names. Perplexity cited non-existent `MEMORYSEARCH`/`SCHEDULETASK` forms. Original prompt was correct. |
+| C3: `SkillAwareIntentClassifier` circular module dependency | Perplexity | ✅ Applied — moved to `arcclaw-app` |
+| C4: `--include-resources` wrong flag + GraalVM directory scanning trap | Perplexity | ✅ Applied — `quarkus.native.resources.includes` + `index.txt` approach |
+| C5: CDI ambiguity must be resolved in P1, not deferred to P2 | Perplexity | ✅ Applied — `@Alternative @Priority(1)` in Component 9 |
+| H1: `SkillDefinitionParser` must be an injectable utility class | Perplexity | ✅ Applied — Component 6a |
+| H2: `description` null not guarded → NPE in `SkillReflex.execute()` | Perplexity | ✅ Applied — compact constructor guard |
+| M1: Phase 45/46 descriptions wrong | Perplexity | ❌ **REJECTED** — PROMPT-template.md in the codebase (the canonical template) already reads Phase 45 = ScheduleTask. Not changed. |
+| M2: Test count `122 + 22 = 144` wrong; actual = 51 new tests | Perplexity | ✅ Applied — corrected to 173 |
+| M3: `X-API-Key` wrong header; must be `X-ArcClaw-API-Key` | Perplexity | ✅ Applied — all `.http` examples corrected |
+| M4: Merge algorithm underspecified; IDE may concatenate duplicates | Perplexity | ✅ Applied — explicit `LinkedHashMap` merge in Component 6 |
+| G1: GraalVM `Files.walk` crash in native; needs `index.txt` approach | Gemini | ✅ Applied — merged with C4 fix |
+| G2: YAMLFactory must be explicit; IDEs default to JSON `ObjectMapper` | Gemini | ✅ Applied — Component 6a |
+| G3: POST `/api/v1/skills` must upsert, not crash on duplicate name | Gemini | ✅ Applied — Component 11 |
+
+---
+
+## ARCHITECTURE CONTEXT PROMPT (Send First — Wait for ACKNOWLEDGED)
+
+```
+Role: Senior Java Architect, Bug Fixer, Refactoring Expert & Senior Java Developer
+Task: Phase 60 — Skills.md Runtime (Dual-Tier Skill Registry with SQLite + Classpath)
+
+Architecture Context:
+A production-grade, enterprise AI Agent Kernel built with:
+  - Java 25 + Quarkus 3.23 + LangChain4J 0.26.1
+  - GraalVM Native Image (Podman container build)
+  - SQLite WAL (single-node, strict singleton topology)
+  - Apache Camel (Telegram channel via camel-quarkus-telegram)
+  - OpenTelemetry — span tracing via AgentOtelContext
+  - Podman process isolation (sandbox strategy, network=none)
+  - AES-GCM-SIV SecretVault (Argon2id key derivation)
+  - GovernanceLayer (USD budget cap, AutonomyLevel: FULL/SUPERVISED/READONLY)
+  - Multi-agent Trimurti model: Vishnu(coordinator), Brahma(coder),
+    Shiva(debugger), Saraswati(researcher), DattatreyaAgent(meta-synthesizer)
+  - IntentClassifierService in arcclaw-app implements IntentClassifier from
+    arcclaw-channel-api (Groq llama-3.1-8b-instant)
+  - Multi-module Maven: arcclaw-parent → arcclaw-channel-api, arcclaw-core,
+    arcclaw-deployment, arcclaw-app
+    Dependency chain: arcclaw-channel-api ← arcclaw-core ← arcclaw-app
+    CRITICAL: arcclaw-core CANNOT import from arcclaw-app — circular dependency,
+    build failure.
+  - AgentReflex interface: matches(), execute(), default sanitize()
+  - ZERO external API dependencies for reflex/security — pure java.util.regex only
+  - All Pattern objects MUST be static final (compile once, never per-message)
+  - Quarkus Qute templating available for prompt management
+  - CDI Events (jakarta.enterprise.event.Event<T>) available for decoupling
+  - TelemetryAuditService for audit events (submitTelemetry / submitCritical)
+  - AsyncPersistenceEngine: two-tier hot-path audit writes (critical vs telemetry)
+  - FtsConnectionInterceptor: AgroalPoolInterceptor, fires on onConnectionAcquire()
+  - ReflexRegistry: two-pass chain (sanitize, then execute), CDI Instance<AgentReflex>
+  - RoleRegistry: @ApplicationScoped, delegates to AgentRoleEnum.definition()
+  - AgentPersonaRegistry: CDI Instance<Agent>, resolves system prompt by role
+  - RoleDefinition: record(canonicalName, displayName, intentDescription,
+    maxIterations, requiresApproval, Set<ToolCapability>)
+  - InstantToTextConverter: AttributeConverter<Instant,String> for all timestamp cols
+  - ReflectionConfig.java: @RegisterForReflection(targets={...}) in arcclaw-core
+  - Hibernate entity scan is controlled via quarkus.hibernate-orm.packages in
+    application.yaml. Every new @Entity package MUST be added there or the table
+    will not be created (silent runtime failure, no startup error).
+
+## Completed Phases (DO NOT re-suggest or re-implement)
+
+- Phase 25–28: Core infrastructure (Quarkus, Telegram channel, GovernanceLayer,
+  SecretVault, WorkspaceManager, ToolRegistry, ProcessIsolationExecutor)
+- Phase 29: Memory Optimization — Dynamic Tool Schema Binding, Context Window
+  Rolling Pruning (PersistentChatMemoryStore, N=20)
+- Phase 30: ReflexRegistry — HaltReflex, StatusReflex, ResetReflex, ApproveReflex,
+  DenyReflex. Two-pass logic. ReflexResult record.
+- Phase 31: PiiScanReflex — 10 regex patterns, REDACT_AND_FORWARD / BLOCK_AND_NOTIFY
+- Phase 32: ApiKeyAuthFilter, ApiKeyRegistry sliding window rate limiter, TelegramAllowlistGuard
+- Phase 33: PromptInjectionReflex, adversarial defense
+- Phase 34: Tool Schema & Agent Tooling
+- Phase 35: WORM Audit Log — AuditEvent, HMAC SHA-256 chain, SQLite triggers
+- Phase 36: OTel child span parenting, token accumulation, REST /approve + /deny
+- Phase 36.1: GithubTool Read-Only Schema Jail, LLM 400 Error Self-Healing
+- Phase 37: PodmanToolRunner Circuit Breaker CLOSED→OPEN
+- Phase 38: ContextCompactionService, CompactionSummaryRepository
+- Phase 39: Java/Maven migration 21→25, /history reflex, destructive vocab override
+- Phase 40: BudgetWarningException (80% soft threshold), /status extended output
+- Phase 41–43: DevSecretSeeder, TmpfsSecretTransport, Vault rotation
+- Phase 44: StatefulAgentStore checkpointing, AWAITING_APPROVAL resume flow
+- Phase 45: ScheduleTask tool, AgentCronScheduler, ManageSchedule tool
+- Phase 46: Proactive Autonomy, cron approval flow, RoleRegistry, AgentRoleEnum
+- Phase 47: Unified Capabilities & Context Modernization, Message Pipeline &
+  Sealed Interface Refactor, Refined Routing & Templates, Agent State Machine
+  Refactor, Prompt tuning, AgentErrorMessageUtil parsing logic fix.
+- Phase 48–58: (tool sandboxing, FTS5 semantic search, multi-agent Trimurti model,
+  Dattatreya meta-synthesizer, OTel span enrichment, WORM audit hardening, WAL
+  checkpoint tuning, Agroal pool interceptor, WorkspaceScoped CDI scope)
+
+## Known Architecture Nuances — ALWAYS APPLY (incl. P60-specific additions)
+
+1. SystemMessages are NEVER stored in SQLite ChatMemoryStore.
+2. All CDI beans touching per-session context must use ScopedValue — never
+   @ApplicationScoped mutable fields for per-session state.
+3. Pattern objects are always static final — never compiled inside methods or
+   constructors. For SkillRegistry: patterns compiled ONCE per refresh cycle
+   inside an immutable CompiledSkillEntry record, frozen via AtomicReference swap.
+4. ToolRegistry.invokeTool() uses String keys — ToolCapability must bridge via
+   .toolName() accessor.
+5. arcclaw-deployment module is Quarkus build-time only — never add runtime logic.
+6. SQLite WAL mode — all @Transactional boundaries short and tight.
+7. The existing ReflexRegistry two-pass chain must NOT be broken or reordered.
+   SkillReflex is additive — CDI Instance<AgentReflex> discovers it automatically
+   without any ReflexRegistry changes.
+8. Quarkus profiles: dev / test / staging / prod — all config changes must appear
+   in all relevant profile blocks in application.yaml.
+9. GraalVM native image CLASSPATH SCANNING TRAP: Do NOT use Files.walk,
+   ClassLoader.getResources("skills/"), or any directory-enumeration API in native
+   image builds. SubstrateVM does not retain directory structures — crashes with
+   FileSystemNotFoundException or "URI is not hierarchical". Use the index.txt
+   approach: read src/main/resources/skills/index.txt for the list of filenames,
+   then load each by exact path via getResourceAsStream("skills/<name>"). Register
+   both index.txt and *.md files via quarkus.native.resources.includes.
+10. The data folder is always fresh — no ALTER TABLE or migration scripts. All
+    schema changes are expressed solely as @Entity class definitions. Hibernate
+    auto-creates the schema on first boot.
+    P60-SPECIFIC: agent_skill is a regular table → @Entity AgentSkillEntity
+    (Hibernate-managed). NO raw CREATE TABLE SQL. Raw DDL is reserved exclusively
+    for virtual tables (USING fts5/vec0), triggers, and indexes.
+11. SkillAwareIntentClassifier MUST live in arcclaw-app (NOT arcclaw-core).
+    It injects IntentClassifierService (arcclaw-app class). Placing it in
+    arcclaw-core would create arcclaw-core → arcclaw-app circular Maven dependency.
+    Build fails. Module boundary is absolute.
+12. P60 tool-capabilities in skill frontmatter accept only these exact ToolCapability
+    enum constant names (case-sensitive, with underscores exactly as shown):
+      GITHUB, MEMORY_SEARCH, SCHEDULE_TASK, MANAGE_SCHEDULE, SANDBOX_EXEC
+    SkillLoader must reject unknown capability names with WARN + skip. No crash.
+13. maxBudgetUsd is EXPLICITLY EXCLUDED from skill frontmatter. Budget is
+    session-scoped exclusively, managed by GovernanceLayer.
+14. %test.arcclaw.skills.hot-reload=false in application.yaml test profile to
+    prevent dev-mode classpath re-scanning behavior.
+15. Dynamic skills (SQLite tier) use a pre-compiled generic Qute wrapper template
+    SkillSystemPrompt.html with {skill.systemPrompt} injection only. No runtime
+    Qute parsing of arbitrary user-supplied text syntax.
+16. REST API authentication header is X-ArcClaw-API-Key (NOT X-API-Key).
+    ApiKeyAuthFilter is already in place. No new auth code needed.
+17. YAML parsing: use Jackson with YAMLFactory. Never use plain ObjectMapper
+    (expects JSON). Never write manual string-split YAML parsers.
+    ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    jackson-dataformat-yaml is already in the Quarkus BOM — no new pom.xml entry.
+
+## JDK Feature Policy (CRITICAL)
+
+ONLY use JDK features FULLY FINALIZED (non-preview):
+  ✅ Sealed interfaces + pattern matching for switch (JDK 21)
+  ✅ Records (JDK 16)
+  ✅ Virtual Threads (JDK 21)
+  ✅ ScopedValue (JDK 24 via JEP 487)
+  ✅ Unnamed Variables _ (JDK 22 via JEP 456)
+  ✅ Stream Gatherers (JDK 24 via JEP 473)
+
+FORBIDDEN:
+  ❌ StructuredTaskScope (still preview in JDK 25)
+  ❌ Flexible Constructor Bodies (treat as forbidden)
+  ❌ --enable-preview in any pom.xml
+  ❌ value classes / primitive types (preview in JDK 25)
+
+## Global Implementation Requirements
+
+1. Every new class compiles cleanly under JDK 25 standard (no --enable-preview).
+2. Every change preserves ALL existing passing test states (currently 122/122).
+3. Use List.copyOf() for all defensive list copies.
+4. All tool references via ToolCapability.toolName() — no magic strings.
+5. No new SomeDomainPolicy() inside CDI beans — all policies are @Injectable.
+6. All test commands use clean:
+   ./mvnw clean test -pl <module> -am "-Dtest=..." "-Dsurefire.failIfNoSpecifiedTests=false"
+
+## Execution Order
+
+P0 — Acknowledge. No code yet. Reply ACKNOWLEDGED and wait for P1.
+P1 — Implementation (component by component in dependency order).
+P2 — Test verification.
+P3 — Documentation updates.
+
+Acknowledge this architecture context.
+Do not write any code yet.
+Reply with ACKNOWLEDGED and wait for me to send P1 Prompt.
+```
+
+---
+
+## P1 PROMPT — IMPLEMENTATION REQUIREMENTS
+
+```
+## IMPLEMENTATION REQUIREMENTS
+
+### Common Requirements (apply to ALL components)
+
+1. Module placement: arcclaw-core for all domain classes EXCEPT:
+   - REST resources → arcclaw-app
+   - SkillAwareIntentClassifier → arcclaw-app (requires IntentClassifierService)
+   No new Maven modules in this phase.
+2. AtomicReference swap: SkillRegistry.reload() builds fresh List via List.copyOf(),
+   then calls ref.set() atomically. Readers call ref.get() — no locking needed.
+3. Audit routing: SKILL_LOADED and SKILL_REFRESHED are telemetry tier.
+   Route via TelemetryAuditService.record() → AsyncPersistenceEngine.submitTelemetry().
+   Do NOT use submitCritical() for skill events.
+4. Qute safety: only {skill.systemPrompt} injected via SkillSystemPrompt.html.
+   No runtime Qute parsing of arbitrary YAML content.
+5. No Phase 59 forward dependencies: SkillLoader validates against ToolCapability.values()
+   only. Unknown values → WARN log + skip (not crash).
+6. RoleRegistry.registerDynamic() is a NEW method only. No existing methods modified.
+7. All Instant fields in @Entity use @Convert(converter=InstantToTextConverter.class).
+8. YAML parsing: use ObjectMapper with YAMLFactory. Not plain ObjectMapper. Not manual parsing.
+9. Merge strategy: LinkedHashMap<String, CompiledSkillEntry> keyed by skill name.
+   Classpath entries first, database entries overwrite on name collision.
+
+
+---
+
+### Component 0 — application.yaml: Hibernate Package Registration
+EXECUTE THIS FIRST before writing any Entity code.
+Files:
+  arcclaw-app/src/main/resources/application.yaml
+  arcclaw-app/src/test/resources/application.yaml  (if packages list present there)
+
+Current Problem:
+com.arcclaw.core.skill is absent from quarkus.hibernate-orm.packages. Hibernate
+will never scan AgentSkillEntity. agent_skill table will not be created.
+AgentSkillRepository calls throw "Table not found: agent_skill" at runtime.
+No startup error — completely silent until first write attempt.
+
+Required Changes:
+In BOTH files, extend the existing packages list:
+
+  quarkus:
+    hibernate-orm:
+      packages:
+        - com.arcclaw.core.state
+        - com.arcclaw.core.security
+        - com.arcclaw.core.audit
+        - com.arcclaw.core.skill       # ADD THIS
+
+If the test application.yaml does not have its own packages list (inherits from root),
+update only the root-level list in the prod application.yaml — test profile will inherit.
+
+TEST: No new test. Covered implicitly — AgentSkillRepositoryTest will fail with
+"Table not found" if this step is skipped.
+
+
+---
+
+### Component 1 — AgentSkillEntity
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/AgentSkillEntity.java
+
+Does not exist. Follow AgentCronEntity as the exact precedent.
+
+@Entity
+@Table(name = "agent_skill")
+public class AgentSkillEntity {
+
+    @Id
+    private String id;
+
+    @Column(unique = true, nullable = false)
+    private String name;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String definitionYaml;
+
+    @Convert(converter = InstantToTextConverter.class)
+    private Instant createdAt;
+
+    @Convert(converter = InstantToTextConverter.class)
+    private Instant updatedAt;
+
+    protected AgentSkillEntity() {}    // Hibernate no-arg
+
+    public AgentSkillEntity(String id, String name, String definitionYaml,
+                            Instant createdAt, Instant updatedAt) { ... }
+
+    // Getters and setters for definitionYaml, updatedAt (needed by SkillResource upsert)
+}
+
+NO raw DDL. Hibernate creates the table on first boot via the packages scan.
+No Lombok. No MapStruct.
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/AgentSkillEntityTest.java
+- Test 1: all-args constructor sets all fields correctly
+- Test 2: @Table(name="agent_skill") annotation present via reflection
+- Test 3: @Column(unique=true) on name field present via reflection
+
+
+---
+
+### Component 2 — AgentSkillRepository
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/AgentSkillRepository.java
+
+Does not exist. Follow AgentCronRepository as the exact precedent.
+
+@ApplicationScoped
+public class AgentSkillRepository implements PanacheRepositoryBase<AgentSkillEntity, String> {
+
+    @Transactional
+    public void saveOrUpdate(AgentSkillEntity entity) {
+        getEntityManager().merge(entity);   // handles both INSERT (new) and UPDATE (existing)
+    }
+
+    public List<AgentSkillEntity> findAllSkills() {
+        return listAll();
+    }
+
+    @Transactional
+    public boolean deleteSkillById(String id) {
+        return deleteById(id);
+    }
+
+    public Optional<AgentSkillEntity> findByName(String name) {
+        return find("name", name).firstResultOptional();
+    }
+}
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/AgentSkillRepositoryTest.java
+- @QuarkusTest (in-memory SQLite from %test profile)
+- Test 1: saveOrUpdate persists, findAllSkills returns it
+- Test 2: findByName returns Optional.empty for unknown name
+- Test 3: saveOrUpdate with same id (merge) updates, does not duplicate
+
+
+---
+
+### Component 3 — SkillDefinition (record)
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillDefinition.java
+
+public record SkillDefinition(
+    String id,
+    String name,
+    String description,
+    List<String> triggerPatterns,
+    List<String> toolCapabilities,
+    int maxIterations,
+    String systemPrompt
+) {
+    public SkillDefinition {
+        Objects.requireNonNull(name, "SkillDefinition.name must not be null");
+        Objects.requireNonNull(systemPrompt, "SkillDefinition.systemPrompt must not be null");
+        // Guard description against null — SkillReflex calls description().isBlank()
+        description = (description == null) ? "" : description;
+        triggerPatterns = triggerPatterns == null ? List.of() : List.copyOf(triggerPatterns);
+        toolCapabilities = toolCapabilities == null ? List.of() : List.copyOf(toolCapabilities);
+        if (maxIterations <= 0) maxIterations = 5;
+        if (id == null || id.isBlank()) id = java.util.UUID.randomUUID().toString();
+    }
+}
+
+Frontmatter YAML schema (document in Javadoc):
+  name: code-reviewer
+  description: Reviews code for bugs and style issues
+  trigger-patterns:
+    - "review.*code"
+    - "check.*pr"
+  tool-capabilities:
+    - GITHUB
+    - MEMORY_SEARCH
+  max-iterations: 5
+  system-prompt: (not in frontmatter — this is the body after the second ---)
+
+maxBudgetUsd EXCLUDED.
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/SkillDefinitionTest.java
+- Test 1: null name → NullPointerException
+- Test 2: null systemPrompt → NullPointerException
+- Test 3: null triggerPatterns → empty list
+- Test 4: maxIterations=0 → defaults to 5
+- Test 5: null id → auto-generated UUID (non-null, non-blank)
+- Test 6: null description → empty string (not null)
+
+
+---
+
+### Component 4 — CompiledSkillEntry (record)
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/CompiledSkillEntry.java
+
+public record CompiledSkillEntry(
+    SkillDefinition definition,
+    Pattern[] triggerPatterns,          // compiled once per reload cycle, never per-message
+    RoleDefinition roleDefinition,
+    String source                       // "classpath" | "database"
+) {
+    public CompiledSkillEntry {
+        Objects.requireNonNull(definition);
+        Objects.requireNonNull(triggerPatterns);
+        Objects.requireNonNull(roleDefinition);
+        Objects.requireNonNull(source);
+    }
+
+    public boolean matches(String input) {
+        if (input == null || input.isBlank()) return false;
+        for (Pattern p : triggerPatterns) {
+            if (p.matcher(input).find()) return true;
+        }
+        return false;
+    }
+}
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/CompiledSkillEntryTest.java
+- Test 1: matches() true when input matches pattern
+- Test 2: matches() false for non-matching input
+- Test 3: matches() false for null input (no NPE)
+- Test 4: null definition → NullPointerException
+
+
+---
+
+### Component 5 — SkillRegistry
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillRegistry.java
+
+@ApplicationScoped
+public class SkillRegistry {
+
+    private final AtomicReference<List<CompiledSkillEntry>> ref =
+        new AtomicReference<>(List.of());
+
+    public void reload(List<CompiledSkillEntry> entries) {
+        ref.set(List.copyOf(entries));
+    }
+
+    public List<CompiledSkillEntry> getAll() { return ref.get(); }
+
+    public Optional<CompiledSkillEntry> findMatch(String input) {
+        return ref.get().stream().filter(e -> e.matches(input)).findFirst();
+    }
+
+    public int size() { return ref.get().size(); }
+}
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/SkillRegistryTest.java
+- Test 1: reload() replaces previous entries atomically
+- Test 2: findMatch() returns correct entry
+- Test 3: findMatch() returns Optional.empty() for non-matching
+- Test 4: fresh registry getAll() returns empty list (not null)
+- Test 5: size() correct before and after reload
+
+
+---
+
+### Component 6a — SkillDefinitionParser (create before SkillLoader)
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillDefinitionParser.java
+
+Must be injectable — both SkillLoader (arcclaw-core) and SkillResource (arcclaw-app)
+call this. Private methods on SkillLoader are not accessible cross-class.
+
+@ApplicationScoped
+public class SkillDefinitionParser {
+
+    // MUST use YAMLFactory — plain ObjectMapper expects JSON and will fail.
+    private static final ObjectMapper YAML_MAPPER =
+        new ObjectMapper(new YAMLFactory())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    /**
+     * Parses a skill document in two-block format:
+     *   ---
+     *   name: my-skill
+     *   ...other frontmatter...
+     *   ---
+     *   System prompt text...
+     *
+     * The second "---" delimiter separates frontmatter from the system prompt body.
+     * Uses Jackson YAMLFactory for frontmatter. Never uses Files.walk or SnakeYAML directly.
+     */
+    public SkillDefinition parse(String rawText) {
+        String[] parts = rawText.split("(?m)^---\\s*$", 3);
+        if (parts.length < 3) {
+            throw new IllegalArgumentException(
+                "Skill document must have exactly two --- delimiters (found " + parts.length + " sections)");
+        }
+        String frontmatterYaml = parts[1].trim();
+        String systemPromptBody = parts[2].trim();
+
+        SkillFrontmatter fm;
+        try {
+            fm = YAML_MAPPER.readValue(frontmatterYaml, SkillFrontmatter.class);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Failed to parse skill frontmatter YAML: " + e.getMessage(), e);
+        }
+
+        return new SkillDefinition(
+            null,
+            fm.name(),
+            fm.description(),
+            fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
+            fm.toolCapabilities() != null ? fm.toolCapabilities() : List.of(),
+            fm.maxIterations() > 0 ? fm.maxIterations() : 5,
+            systemPromptBody
+        );
+    }
+}
+
+Also create the frontmatter DTO:
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillFrontmatter.java
+
+public record SkillFrontmatter(
+    String name,
+    String description,
+    @JsonProperty("trigger-patterns") List<String> triggerPatterns,
+    @JsonProperty("tool-capabilities") List<String> toolCapabilities,
+    @JsonProperty("max-iterations") int maxIterations
+) {}
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/SkillDefinitionParserTest.java
+- Test 1: valid two-block YAML → correct SkillDefinition fields
+- Test 2: missing second --- → IllegalArgumentException
+- Test 3: malformed YAML frontmatter → IllegalArgumentException with message
+- Test 4: absent description in YAML → SkillDefinition.description() == ""
+- Test 5: absent max-iterations → defaults to 5
+
+
+---
+
+### Component 6 — SkillLoader
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillLoader.java
+
+@ApplicationScoped
+public class SkillLoader {
+
+    @Inject AgentSkillRepository repository;
+    @Inject SkillRegistry skillRegistry;
+    @Inject RoleRegistry roleRegistry;
+    @Inject TelemetryAuditService telemetry;
+    @Inject SkillDefinitionParser parser;
+
+    @Observes
+    public void onStart(StartupEvent ev) { loadAll("startup"); }
+
+    public void loadAll(String trigger) {
+        List<CompiledSkillEntry> classpathEntries = loadClasspathSkills();
+        List<CompiledSkillEntry> dbEntries = loadDatabaseSkills();
+
+        // Merge: classpath first, database WINS on name collision
+        Map<String, CompiledSkillEntry> merged = new LinkedHashMap<>();
+        classpathEntries.forEach(e -> merged.put(e.definition().name(), e));
+        dbEntries.forEach(e -> merged.put(e.definition().name(), e));
+        List<CompiledSkillEntry> result = List.copyOf(merged.values());
+
+        skillRegistry.reload(result);
+        result.forEach(e -> roleRegistry.registerDynamic(e.roleDefinition()));
+
+        telemetry.record("system", "system", "skill-loader",
+            SecurityEventType.SKILL_LOADED,
+            "Loaded " + result.size() + " skills (" + trigger
+                + "; classpath=" + classpathEntries.size()
+                + ", db=" + dbEntries.size() + ")");
+    }
+
+    // =========================================================================
+    // CLASSPATH LOADING — GraalVM-safe index.txt approach
+    //
+    // NEVER use Files.walk, getResources("skills/"), or directory enumeration.
+    // GraalVM SubstrateVM does not emulate classpath directory listing.
+    // It crashes with FileSystemNotFoundException / "URI is not hierarchical".
+    //
+    // CORRECT APPROACH:
+    //   1. Read skills/index.txt (one .md filename per line, # = comment).
+    //   2. Load each by exact path via getResourceAsStream("skills/<name>").
+    //   3. Both files registered via quarkus.native.resources.includes in app yaml.
+    // =========================================================================
+    private List<CompiledSkillEntry> loadClasspathSkills() {
+        List<CompiledSkillEntry> result = new ArrayList<>();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+
+        try (InputStream indexStream = cl.getResourceAsStream("skills/index.txt")) {
+            if (indexStream == null) {
+                log.info("skills/index.txt not found — no built-in skills loaded");
+                return List.of();
+            }
+            List<String> filenames = new BufferedReader(
+                    new InputStreamReader(indexStream, StandardCharsets.UTF_8))
+                .lines()
+                .map(String::trim)
+                .filter(s -> !s.isBlank() && !s.startsWith("#"))
+                .toList();
+
+            for (String filename : filenames) {
+                try (InputStream is = cl.getResourceAsStream("skills/" + filename)) {
+                    if (is == null) {
+                        log.warnf("Skill listed in index.txt not found: skills/%s", filename);
+                        continue;
+                    }
+                    String rawText = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                    SkillDefinition def = parser.parse(rawText);
+                    result.add(toCompiledEntry(def, "classpath"));
+                } catch (Exception e) {
+                    log.warnf("Failed to load classpath skill '%s': %s", filename, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warnf("Failed to read skills/index.txt: %s", e.getMessage());
+        }
+        return result;
+    }
+
+    private List<CompiledSkillEntry> loadDatabaseSkills() {
+        return repository.findAllSkills().stream()
+            .map(entity -> {
+                try {
+                    SkillDefinition def = parser.parse(entity.getDefinitionYaml());
+                    // Re-build with stored entity id for traceability
+                    def = new SkillDefinition(entity.getId(), def.name(), def.description(),
+                        def.triggerPatterns(), def.toolCapabilities(),
+                        def.maxIterations(), def.systemPrompt());
+                    return toCompiledEntry(def, "database");
+                } catch (Exception e) {
+                    log.warnf("Failed to parse database skill '%s': %s",
+                        entity.getName(), e.getMessage());
+                    return null;
+                }
+            })
+            .filter(Objects::nonNull)
+            .toList();
+    }
+
+    private CompiledSkillEntry toCompiledEntry(SkillDefinition def, String source) {
+        return new CompiledSkillEntry(def, compilePatterns(def.triggerPatterns()),
+            toRoleDefinition(def), source);
+    }
+
+    private Pattern[] compilePatterns(List<String> rawPatterns) {
+        return rawPatterns.stream()
+            .map(p -> {
+                try { return Pattern.compile(p, Pattern.CASE_INSENSITIVE); }
+                catch (PatternSyntaxException e) {
+                    log.warnf("Invalid pattern '%s' — skipped: %s", p, e.getMessage());
+                    return null;
+                }
+            })
+            .filter(Objects::nonNull)
+            .toArray(Pattern[]::new);
+    }
+
+    private RoleDefinition toRoleDefinition(SkillDefinition def) {
+        Set<ToolCapability> caps = def.toolCapabilities().stream()
+            .map(name -> {
+                try { return ToolCapability.valueOf(name); }
+                catch (IllegalArgumentException e) {
+                    log.warnf("Unknown ToolCapability '%s' in skill '%s' — skipped",
+                        name, def.name());
+                    return null;
+                }
+            })
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableSet());
+
+        return new RoleDefinition(
+            "skill:" + def.name(),
+            def.name(),
+            def.description(),
+            def.maxIterations(),
+            false,
+            caps
+        );
+    }
+}
+
+Also create the classpath index file (empty by default):
+File: arcclaw-core/src/main/resources/skills/index.txt
+
+# ArcClaw built-in skill index
+# One .md filename per line. Lines starting with # are comments.
+# Add entries here when shipping built-in classpath skills.
+# Example: code-reviewer.md
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/SkillLoaderTest.java
+- Mock: AgentSkillRepository, SkillRegistry, RoleRegistry, TelemetryAuditService, SkillDefinitionParser
+- Test 1: onStart() calls skillRegistry.reload() exactly once
+- Test 2: database skill with same name overwrites classpath entry in merged map
+- Test 3: invalid database skill YAML is skipped (WARN), others load normally
+- Test 4: unknown ToolCapability string is skipped (WARN), other caps load
+- Test 5: empty index.txt → classpath entries empty, database entries still load
+
+
+---
+
+### Component 7 — RoleRegistry: new registerDynamic() method only
+File: arcclaw-core/src/main/java/com/arcclaw/core/agent/role/RoleRegistry.java
+
+Add ONLY. Do NOT modify existing methods.
+
+    // New field
+    private final java.util.concurrent.ConcurrentHashMap<String, RoleDefinition>
+        dynamicRoles = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void registerDynamic(RoleDefinition roleDefinition) {
+        Objects.requireNonNull(roleDefinition, "roleDefinition must not be null");
+        dynamicRoles.put(roleDefinition.canonicalName(), roleDefinition);
+    }
+
+    public java.util.Collection<RoleDefinition> getDynamicRoles() {
+        return java.util.Collections.unmodifiableCollection(dynamicRoles.values());
+    }
+
+    public Set<String> permittedToolsForDynamic(String canonicalName) {
+        RoleDefinition def = dynamicRoles.get(canonicalName);
+        return def == null ? Set.of() : def.toolNames();
+    }
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/agent/role/RoleRegistryTest.java
+Add new test cases (do NOT remove existing):
+- Test NEW-1: registerDynamic() stores, getDynamicRoles() retrieves it
+- Test NEW-2: registerDynamic() same canonicalName overwrites (idempotent)
+- Test NEW-3: permittedToolsForDynamic() returns empty Set for unknown name
+- Test NEW-4: registerDynamic(null) throws NullPointerException
+
+
+---
+
+### Component 8 — SkillReflex
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillReflex.java
+
+@ApplicationScoped
+public class SkillReflex implements AgentReflex {
+
+    private static final Pattern SKILLS_CMD =
+        Pattern.compile("^\\s*/skills\\s*$", Pattern.CASE_INSENSITIVE);
+
+    @Inject SkillRegistry skillRegistry;
+
+    @Override
+    public boolean matches(String input) {
+        return input != null && SKILLS_CMD.matcher(input).matches();
+    }
+
+    @Override
+    public String execute(String sessionId, String userId, String chatId, String input) {
+        List<CompiledSkillEntry> all = skillRegistry.getAll();
+        if (all.isEmpty()) {
+            return "No skills loaded. Use POST /api/v1/skills to add a skill.";
+        }
+        StringBuilder sb = new StringBuilder("*Loaded Skills* (" + all.size() + "):\n\n");
+        for (CompiledSkillEntry entry : all) {
+            sb.append("• *").append(entry.definition().name()).append("*")
+              .append(" [").append(entry.source()).append("]");
+            // description() guaranteed non-null by SkillDefinition compact constructor
+            if (!entry.definition().description().isBlank()) {
+                sb.append(": ").append(entry.definition().description());
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+    // sanitize() uses default no-op from AgentReflex
+}
+
+Do NOT touch ReflexRegistry.java. SkillReflex is CDI-discovered automatically.
+
+TEST: arcclaw-core/src/test/java/com/arcclaw/core/skill/SkillReflexTest.java
+- Test 1: matches("/skills") → true
+- Test 2: matches("/SKILLS") → true (case-insensitive)
+- Test 3: matches("/status") → false
+- Test 4: matches("what skills") → false
+- Test 5: execute() with empty registry → no-skills message
+- Test 6: execute() with 2 entries → formatted list with both names
+
+
+---
+
+### Component 9 — SkillAwareIntentClassifier (arcclaw-app)
+File: arcclaw-app/src/main/java/com/arcclaw/app/routing/SkillAwareIntentClassifier.java
+
+MUST be in arcclaw-app. See Architecture Nuance #11.
+
+CDI AMBIGUITY: Both IntentClassifierService and this class implement IntentClassifier.
+Resolved via @Alternative @Priority(1) — this class becomes the selected bean.
+IntentClassifierService is still instantiated (injected here) but not the CDI primary.
+
+@Alternative
+@Priority(1)
+@ApplicationScoped
+public class SkillAwareIntentClassifier implements IntentClassifier {
+
+    @Inject SkillRegistry skillRegistry;
+    @Inject IntentClassifierService llmClassifier;   // inject concrete class to avoid ambiguity loop
+
+    @Override
+    public String classify(String userMessage) {
+        // Fast path: pattern match avoids LLM call entirely
+        return skillRegistry.findMatch(userMessage)
+            .map(e -> e.roleDefinition().canonicalName())   // "skill:code-reviewer"
+            .orElseGet(() -> llmClassifier.classify(userMessage));
+    }
+}
+
+TEST: arcclaw-app/src/test/java/com/arcclaw/app/routing/SkillAwareIntentClassifierTest.java
+- Mock: SkillRegistry, IntentClassifierService
+- Test 1: findMatch() returns entry → llmClassifier.classify() NOT called
+- Test 2: findMatch() returns empty → llmClassifier.classify() IS called
+- Test 3: skill match returns "skill:<skillName>"
+
+
+---
+
+### Component 10 — Qute Template and Params record
+File: arcclaw-core/src/main/resources/templates/skills/SkillSystemPrompt.html
+
+Exact content — nothing else:
+
+{skill.systemPrompt}
+
+File: arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillPromptParams.java
+
+public record SkillPromptParams(String systemPrompt) {}
+
+TEST: Covered by SkillPersonaRoutingTest integration test.
+
+
+---
+
+### Component 11 — REST Endpoints
+File: arcclaw-app/src/main/java/com/arcclaw/app/skill/SkillResource.java
+
+@ApplicationScoped
+@Path("/api/v1/skills")
+public class SkillResource {
+
+    @Inject SkillRegistry skillRegistry;
+    @Inject SkillLoader skillLoader;
+    @Inject AgentSkillRepository repository;
+    @Inject SkillDefinitionParser parser;
+    @Inject TelemetryAuditService telemetry;
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response listSkills() {
+        List<Map<String, String>> result = skillRegistry.getAll().stream()
+            .map(e -> Map.of(
+                "name", e.definition().name(),
+                "source", e.source(),
+                "description", e.definition().description()))
+            .toList();
+        return Response.ok(result).build();
+    }
+
+    @POST
+    @Consumes(MediaType.TEXT_PLAIN)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response addOrUpdateSkill(String skillYaml) {
+        SkillDefinition def;
+        try { def = parser.parse(skillYaml); }
+        catch (IllegalArgumentException e) {
+            return Response.status(400).entity(Map.of("error", e.getMessage())).build();
+        }
+
+        // UPSERT: check if name already exists
+        Optional<AgentSkillEntity> existing = repository.findByName(def.name());
+        AgentSkillEntity entity;
+        boolean isUpdate = existing.isPresent();
+
+        if (isUpdate) {
+            // Update existing — do NOT create duplicate
+            entity = existing.get();
+            entity.setDefinitionYaml(skillYaml);
+            entity.setUpdatedAt(Instant.now());
+        } else {
+            entity = new AgentSkillEntity(
+                UUID.randomUUID().toString(), def.name(),
+                skillYaml, Instant.now(), Instant.now());
+        }
+        repository.saveOrUpdate(entity);
+        skillLoader.loadAll("api-" + (isUpdate ? "update" : "add"));
+
+        return Response.status(isUpdate ? 200 : 201)
+            .entity(Map.of(
+                "name", def.name(),
+                "id", entity.getId(),
+                "action", isUpdate ? "updated" : "created"))
+            .build();
+    }
+
+    @GET
+    @Path("/refresh")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response refresh() {
+        skillLoader.loadAll("api-refresh");
+        telemetry.record("system", "system", "skill-api",
+            SecurityEventType.SKILL_REFRESHED,
+            "Manual refresh — " + skillRegistry.size() + " skills loaded");
+        return Response.ok(Map.of("loaded", skillRegistry.size())).build();
+    }
+}
+
+REST HTTP file:
+File: rest-http/skills.http
+
+    ### List skills
+    GET http://localhost:8080/api/v1/skills
+    X-ArcClaw-API-Key: {{apiKey}}
+
+    ### Add or update a skill (upsert by name)
+    POST http://localhost:8080/api/v1/skills
+    Content-Type: text/plain
+    X-ArcClaw-API-Key: {{apiKey}}
+
+    ---
+    name: code-reviewer
+    description: Reviews PRs and code for quality issues
+    trigger-patterns:
+      - "review.*code"
+      - "check.*pr"
+    tool-capabilities:
+      - GITHUB
+    max-iterations: 5
+    ---
+    You are a meticulous code reviewer...
+
+    ### Refresh skill cache
+    GET http://localhost:8080/api/v1/skills/refresh
+    X-ArcClaw-API-Key: {{apiKey}}
+
+TEST: arcclaw-app/src/test/java/com/arcclaw/app/skill/SkillApiTest.java
+- Test 1: GET /api/v1/skills → 200, JSON array
+- Test 2: POST valid YAML (new) → 201, {"action":"created"}
+- Test 3: POST same name again → 200, {"action":"updated"} (no duplicate row)
+- Test 4: POST malformed YAML → 400 with error message
+- Test 5: GET /api/v1/skills/refresh → 200, {"loaded": N}
+
+
+---
+
+### Component 12 — GraalVM Resource Registration
+File: arcclaw-app/src/main/resources/application.yaml
+
+Add under the quarkus root key (CORRECT approach for Quarkus 3.23):
+
+  quarkus:
+    native:
+      resources:
+        includes:
+          - skills/index.txt
+          - skills/**.md
+
+DO NOT modify native-image.properties Args block. The --include-resources flag
+is a CLI-only flag and is not valid inside a .properties Args line.
+The quarkus.native.resources.includes config key is the correct Quarkus-native
+mechanism and handles both the GraalVM -H:IncludeResources flag and build-time
+resource registration transparently.
+
+TEST: Verified by native build smoke test in P2 Step 4.
+
+
+---
+
+### Component 13 — ReflectionConfig.java
+File: arcclaw-core/src/main/java/com/arcclaw/core/config/ReflectionConfig.java
+
+Add imports:
+    import com.arcclaw.core.skill.AgentSkillEntity;
+    import com.arcclaw.core.skill.AgentSkillRepository;
+    import com.arcclaw.core.skill.SkillDefinition;
+    import com.arcclaw.core.skill.SkillFrontmatter;
+    import com.arcclaw.core.skill.CompiledSkillEntry;
+    import com.arcclaw.core.skill.SkillPromptParams;
+
+Add to @RegisterForReflection(targets = {...}) — do NOT remove existing entries:
+    AgentSkillEntity.class,
+    AgentSkillRepository.class,
+    SkillDefinition.class,
+    SkillFrontmatter.class,
+    CompiledSkillEntry.class,
+    SkillPromptParams.class
+
+
+---
+
+### Component 14 — SecurityEventType
+File: arcclaw-core/src/main/java/com/arcclaw/core/audit/SecurityEventType.java
+
+After CRONDELETED, before the isMandatory() method, add (move semicolon from
+CRONDELETED to SKILL_REFRESHED):
+
+    // Skills lifecycle (Phase 60) — telemetry tier
+    SKILL_LOADED,       // SkillLoader completed a full load cycle
+    SKILL_REFRESHED;    // Manual refresh via GET /api/v1/skills/refresh
+
+isMandatory() switch: no changes needed. Default → false covers these new values.
+Verify SecurityEventTypeTest still passes.
+
+
+---
+
+### Component 15 — application.yaml: skill config flags
+File: arcclaw-app/src/main/resources/application.yaml
+
+Add to root arcclaw section:
+  arcclaw:
+    skills:
+      hot-reload: true
+
+Add to %test profile:
+  "%test":
+    arcclaw:
+      skills:
+        hot-reload: false
+
+
+---
+
+### Testing Requirements
+
+Baseline: 122/122 passing. Target: minimum 173/173.
+
+| New test file | Test methods |
+|---------------|-------------|
+| AgentSkillEntityTest | 3 |
+| AgentSkillRepositoryTest | 3 |
+| SkillDefinitionTest | 6 |
+| SkillDefinitionParserTest | 5 |
+| CompiledSkillEntryTest | 4 |
+| SkillRegistryTest | 5 |
+| SkillLoaderTest | 5 |
+| SkillReflexTest | 6 |
+| SkillAwareIntentClassifierTest | 3 |
+| RoleRegistryTest (new cases only) | 4 |
+| SkillApiTest | 5 |
+| SkillPersonaRoutingTest | 2 |
+| **Total new** | **51** |
+
+Sample commands:
+./mvnw clean test -pl arcclaw-core -am "-Dtest=SkillDefinitionParserTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl arcclaw-core -am "-Dtest=SkillLoaderTest,SkillRegistryTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl arcclaw-app -am "-Dtest=SkillApiTest,SkillAwareIntentClassifierTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl arcclaw-core,arcclaw-app -am     ← full regression
+```
+
+---
+
+## P2 PROMPT — TEST VERIFICATION
+
+```
+## P2 — Test Verification
+
+Step 1 — Core unit tests (fast, no Quarkus boot):
+./mvnw clean test -pl arcclaw-core -am
+
+Expected: All existing 80+ core tests pass. All new skill tests pass.
+No test skipped. Fix failures before Step 2.
+
+Step 2 — App integration tests:
+./mvnw clean test -pl arcclaw-app -am
+
+Expected: All existing app tests pass. SkillApiTest and SkillPersonaRoutingTest pass.
+Confirm final count >= 173.
+
+Step 3 — CDI ambiguity check:
+Verify no AmbiguousResolutionException in startup logs.
+SkillAwareIntentClassifier (@Alternative @Priority(1)) must be the sole selected
+IntentClassifier bean. If ambiguity persists, check IntentClassifierService does
+not also carry a conflicting @Alternative or @Priority annotation.
+
+Step 4 — Full build verification:
+./mvnw clean package -DskipTests
+
+Expected: BUILD SUCCESS. No warnings about missing Qute templates, unresolved CDI
+injection points, missing GraalVM reflection registrations, or duplicate hibernate-orm
+package scan entries.
+
+Report final test count (e.g., "173/173 passing") before proceeding to P3.
+```
+
+---
+
+## P3 PROMPT — DOCUMENTATION UPDATES
+
+```
+## P3 — Documentation Updates
+
+### PLAN.md
+Add Phase 60 entry:
+Phase 60: Skills.md Runtime — Dual-tier skill registry (classpath index.txt + SQLite).
+AtomicReference<List<CompiledSkillEntry>> lock-free hot-path reads.
+SkillDefinitionParser (Jackson YAMLFactory, injectable). SkillReflex (/skills command).
+SkillAwareIntentClassifier (@Alternative @Priority(1), pattern-first, in arcclaw-app).
+REST CRUD (POST upsert, GET list, GET refresh). GraalVM resource registration via
+quarkus.native.resources.includes. LinkedHashMap merge (database-wins precedence).
+
+### TASKS.md
+Tick off Phase 60:
+  [x] Component 0: hibernate-orm.packages += com.arcclaw.core.skill
+  [x] AgentSkillEntity (@Entity, merge() upsert, InstantToTextConverter)
+  [x] AgentSkillRepository (PanacheRepository, saveOrUpdate via merge)
+  [x] SkillDefinition record (6 null guards including description)
+  [x] SkillFrontmatter record (Jackson @JsonProperty kebab-case)
+  [x] SkillDefinitionParser (@ApplicationScoped, YAMLFactory, injectable utility)
+  [x] skills/index.txt (GraalVM-safe classpath enumeration, index-based approach)
+  [x] CompiledSkillEntry record (Pattern[], source, matches())
+  [x] SkillRegistry (AtomicReference<List<CompiledSkillEntry>>, lock-free reads)
+  [x] SkillLoader (dual-tier, LinkedHashMap merge, database-wins, index.txt loading)
+  [x] RoleRegistry: registerDynamic() + getDynamicRoles() + permittedToolsForDynamic()
+  [x] SkillReflex (CDI-discovered, /skills command, two-pass chain additive)
+  [x] SkillAwareIntentClassifier (@Alternative @Priority(1), arcclaw-app)
+  [x] SkillSystemPrompt.html + SkillPromptParams
+  [x] SkillResource: POST (upsert), GET (list), GET /refresh
+  [x] rest-http/skills.http with correct X-ArcClaw-API-Key header
+  [x] quarkus.native.resources.includes: skills/index.txt + skills/**.md
+  [x] ReflectionConfig.java: 6 new entries
+  [x] SecurityEventType: SKILL_LOADED, SKILL_REFRESHED (isMandatory=false)
+  [x] application.yaml: arcclaw.skills.hot-reload flag + %test=false
+  [x] 51 new tests, 173/173 passing
+
+### WALKTHROUGH.md
+Add Phase 60 architecture section:
+1. Dual-tier registry: classpath=immutable binary artifacts, SQLite=runtime customization
+2. GraalVM classpath scanning trap: why Files.walk crashes, how index.txt solves it
+3. AtomicReference swap: lock-free reads on the hot message classification path
+4. LinkedHashMap merge: exact algorithm, why database-wins is the correct precedent
+5. SkillDefinitionParser: why it's a separate injectable (not private SkillLoader methods)
+6. SkillAwareIntentClassifier: @Alternative CDI pattern, why it lives in arcclaw-app
+7. Qute safety: {skill.systemPrompt} wrapper only, no runtime parsing of user YAML
+8. quarkus.native.resources.includes vs --include-resources: correct mechanism explanation
+
+### TROUBLESHOOTING.md
+Add Phase 60 section:
+- "Table not found: agent_skill" → com.arcclaw.core.skill missing from hibernate-orm.packages
+- "Skills not loading at startup" → check skills/index.txt exists and is not empty
+- "FileSystemNotFoundException / URI is not hierarchical" → Files.walk used in SkillLoader instead of index.txt
+- "Unknown ToolCapability warning" → check exact enum names: GITHUB, MEMORY_SEARCH,
+  SCHEDULE_TASK, MANAGE_SCHEDULE, SANDBOX_EXEC (all with underscores where shown)
+- "AmbiguousResolutionException for IntentClassifier" → SkillAwareIntentClassifier missing @Alternative @Priority(1)
+- "POST /api/v1/skills returns 401" → use X-ArcClaw-API-Key header, not X-API-Key
+- "Skill update creates duplicate row" → saveOrUpdate must call getEntityManager().merge(), not persist()
+
+### FAQ.md
+Add "Adding a Custom Skill" section:
+1. Format: two-block document with --- delimiters, YAML frontmatter, then system prompt
+2. Built-in (shipped): place .md in src/main/resources/skills/, add filename to index.txt, rebuild
+3. Dynamic (no rebuild): POST to /api/v1/skills with X-ArcClaw-API-Key header
+4. Verify with GET /api/v1/skills
+5. Test routing: message matching a trigger-pattern routes to skill without LLM call
+6. Update existing: POST again with same name — upsert replaces, no duplicate
+7. Refresh cache: GET /api/v1/skills/refresh
+```
+
+---
+
+*v3 — 5-AI review cycle: Claude original → Perplexity/Claude → Gemini → Perplexity/Claude codebase audit → Claude adjudication. 13 fixes applied, 2 rejected with codebase evidence. Baseline: 122/122. Target: 173/173.*
+
+
+
+
