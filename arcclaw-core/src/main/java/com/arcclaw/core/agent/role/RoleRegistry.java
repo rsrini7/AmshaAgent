@@ -1,11 +1,16 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class RoleRegistry {
+
+    private final ConcurrentHashMap<String, RoleDefinition> dynamicRoles = new ConcurrentHashMap<>();
 
     /**
      * @param role the agent role
@@ -36,5 +41,34 @@ public class RoleRegistry {
     public boolean requiresApprovalForTools(AgentRoleEnum role) {
         if (role == null) return true;
         return role.definition().requiresApproval();
+    }
+
+
+    /**
+     * Registers a new dynamic role derived from a skill.
+     * @param name The canonical skill name
+     * @param definition The compiled role definition
+     */
+    public void registerDynamic(String name, RoleDefinition definition) {
+        dynamicRoles.put("skill:" + name, definition);
+    }
+
+    /**
+     * @return All currently registered dynamic roles.
+     */
+    public Collection<RoleDefinition> getDynamicRoles() {
+        return Collections.unmodifiableCollection(dynamicRoles.values());
+    }
+
+    /**
+     * Resolves permitted tools for a dynamic role.
+     * @param canonicalName The full canonical name (e.g. "skill:code-reviewer")
+     * @return The immutable set of tool names, or empty if unknown.
+     */
+    public Set<String> permittedToolsForDynamic(String canonicalName) {
+        RoleDefinition def = dynamicRoles.get(canonicalName);
+        return def == null ? Set.of() : def.capabilities().stream()
+                .map(ToolCapability::toolName)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 }

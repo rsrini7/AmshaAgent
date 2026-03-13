@@ -1,0 +1,29 @@
+### 11_skills.http
+### Testing the Dual-tier Skill Registry REST API
+
+### List All Skills
+GET http://localhost:8080/api/v1/skills
+Accept: application/json
+
+### Add or Update a Skill (Database tier, overrides static tier)
+POST http://localhost:8080/api/v1/skills
+Content-Type: text/plain
+
+---
+name: echo-bot
+description: Echos user input
+trigger-patterns:
+  - "echo.*"
+tool-capabilities:
+  - GITHUB
+max-iterations: 3
+---
+You are an echo bot. Repeat exactly what the user says.
+
+### Refresh the Skill Registry (Forces reload from classpath and DB)
+GET http://localhost:8080/api/v1/skills/refresh
+Accept: application/json
+
+### Delete a Specific Skill
+DELETE http://localhost:8080/api/v1/skills/echo-bot
+Accept: application/json
