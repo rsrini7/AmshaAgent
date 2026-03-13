@@ -56,6 +56,7 @@ quarkus:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
+      - com.arcclaw.core.skill
     log:
       sql: false
     schema-management:
@@ -174,6 +175,8 @@ quarkus:
       includes:
         - "META-INF/services/*"
         - "META-INF/native-image/**"
+        - "skills/index.txt"
+        - "skills/**.md"
 
   # ---------------------------------------------------------------------------
   # LOGGING
@@ -226,6 +229,8 @@ quarkus:
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
   auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
+  skills:
+    hot-reload: true
   security:
     prompt-injection:
       enabled: true
@@ -442,6 +447,8 @@ mp:
         log-responses: false
 
   arcclaw:
+    skills:
+      hot-reload: false
     memory:
       compaction:
         enabled: false

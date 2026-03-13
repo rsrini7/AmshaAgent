@@ -3530,3 +3530,50 @@ Implement a central registry for application metadata (version, build info, envi
 - ✅ `SystemInfoResourceTest`: Verified 200 OK and JSON shape of `/info`.
 - ✅ `ApiKeyAuthFilterTest`: Verified public access to `/info`.
 - ✅ `TelemetryAuditServiceTest`: Verified `appVersion` persistence in audit logs.
+
+---
+
+# Phase 60 — Dual-Tier Skill Registry ✅
+
+Consolidate modular tool execution into a dual-tier Skill Registry (Dynamic + Persistent) with REST management and GraalVM compatibility.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **JPA over Panache**: To avoid bytecode enhancement conflicts during multi-module test runs, `AgentSkillRepository` was refactored to use plain `EntityManager`.
+
+> [!NOTE]
+> **Virtual Threads**: `SkillResource` uses `@RunOnVirtualThread` to ensure blocking database and registry reload operations do not stall the event loop.
+
+> [!CAUTION]
+> **SQLite Snapshot Isolation**: SQLite in WAL mode can return stale snapshots if a read occurs immediately after a delete in separate transactions. `SkillResource` methods are annotated with `@Transactional` to unify the operation into a single JTA boundary, ensuring atomicity and visibility.
+
+## Completed Changes
+
+### Core Module — Skill Logic
+
+#### [NEW] [CompiledSkillEntry.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/CompiledSkillEntry.java)
+- JPA Entity: `id`, `name`, `description`, `instructions`, `parametersSchema`.
+
+#### [MODIFY] [SkillRegistry.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillRegistry.java)
+- Implemented `reload()` using `LinkedHashMap` for deterministic deduplication (latest wins).
+
+#### [MODIFY] [AgentSkillRepository.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/AgentSkillRepository.java)
+- Migrated to pure `EntityManager`.
+- Added `SUPPORTS` txn mode for read operations to minimize lock contention.
+
+### App Module — REST & Registry
+
+#### [NEW] [SkillResource.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/skill/SkillResource.java)
+- `@Path("/api/v1/skills")`, `@RunOnVirtualThread`.
+- Endpoints: `GET /`, `POST /upsert`, `DELETE /{name}`, `POST /refresh`.
+- Strict `@Transactional` boundaries for isolation safety.
+
+## Verification
+
+### Automated Tests
+- ✅ `SkillApiTest`: CRUD + Refresh lifecycle (5 tests).
+- ✅ `SkillPersonaRoutingTest`: Intelligence delegation (2 tests).
+- ✅ `SkillRegistryTest`: Deduplication logic.
+- ✅ Full Regression: **173/173** tests passing.
+

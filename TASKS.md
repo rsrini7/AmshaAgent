@@ -950,3 +950,17 @@
 - [x] Update `TelemetryAuditService` to populate `appVersion` <!-- id: 315 -->
 - [x] Update `ReflectionConfig` for `SystemInfo` native serialization <!-- id: 316 -->
 - [x] Verify: All Phase 58 unit and integration tests pass (122/122 total) <!-- id: 317 -->
+
+---
+
+## Phase 60 — Dual-Tier Skill Registry
+- [x] Create `CompiledSkillEntry` JPA Entity for persistence <!-- id: 400 -->
+- [x] Implement `AgentSkillRepository` with pure `EntityManager` <!-- id: 401 -->
+- [x] Refactor `SkillLoader` to sync database skills into `SkillRegistry` <!-- id: 402 -->
+- [x] Implement `SkillRegistry.reload()` with `LinkedHashMap` deduplication <!-- id: 403 -->
+- [x] Create `SkillResource` REST endpoints with `@RunOnVirtualThread` <!-- id: 404 -->
+- [x] Apply `@Transactional` to `SkillResource` for SQLite isolation safety <!-- id: 405 -->
+- [x] Verify: `SkillApiTest` passes (5 tests) <!-- id: 406 -->
+- [x] Verify: `SkillPersonaRoutingTest` passes (2 tests) <!-- id: 407 -->
+- [x] Verify: Full project regression (173/173 tests) <!-- id: 408 -->
+

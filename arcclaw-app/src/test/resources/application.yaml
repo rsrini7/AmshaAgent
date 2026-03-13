@@ -47,10 +47,15 @@ quarkus:
   hibernate-orm:
     database:
       generation: update
+    log:
+      sql: false
+    jdbc:
+      timezone: UTC
     packages:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
+      - com.arcclaw.core.skill
 
   langchain4j:
     openai:

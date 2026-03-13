@@ -70,6 +70,12 @@
         <artifactId>quarkus-qute</artifactId>
     </dependency>
 
+    <!-- YAML parsing -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+
     <!-- SQLite (pure-Java, native-image safe) -->
     <dependency>
       <groupId>io.quarkiverse.jdbc</groupId>

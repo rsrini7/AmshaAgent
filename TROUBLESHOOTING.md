@@ -3224,3 +3224,43 @@ arcclaw:
 *   **Symptom**: `cannot find symbol: method getPersistenceAction()` or missing `SystemMetadataRegistry` mock.
 *   **Root Cause**: Incomplete test refactoring after the `AuditService` split into `TelemetryAuditService`.
 *   **Resolution**: Updated test to use `getDbAction()` and injected the required `SystemMetadataRegistry` mock.
+
+---
+
+### 25. Phase 60: Dual-Tier Skill Registry & SQLite Contention
+
+#### 25.1. `BlockingOperationNotAllowedException` in REST endpoints
+*   **Symptom**: Calling `POST /skills` or `GET /skills/refresh` throws `io.quarkus.runtime.BlockingOperationNotAllowedException`.
+*   **Root Cause**: The endpoints were running on the default Vert.x IO thread, but they interact with the database (JPA/Hibernate) which is a blocking operation.
+*   **Resolution**: Annotated the `SkillResource` class with `@RunOnVirtualThread` to offload the execution to virtual threads, which are allowed to block.
+
+#### 25.2. `SQLITE_ERROR: cannot commit - no transaction is active` in Integration Tests
+*   **Symptom**: Tests like `SkillApiTest` or `SkillPersonaRoutingTest` fail with SQLite lock contention or "no transaction is active" errors.
+*   **Root Cause**: Setting up test data using `@Transactional` methods holds a database write lock. When a subsequent REST call is made (e.g., via RestAssured) to an endpoint that attempts to read the same table, it blocks waiting for the lock, leading to deadlocks or dropped transactions under SQLite's strict concurrency model.
+*   **Resolution**: Removed `@Transactional` from test `setup()` methods and converted them to use explicit, fast repository calls (or programmatic transaction wrapping) that commit *before* making the REST call. Also updated read-only repository methods (like `findByName`, `findAllSkills`) to use `@Transactional(Transactional.TxType.SUPPORTS)` to avoid eagerly starting/demanding a full transaction.
+
+#### 25.3. HTTP 401 Unauthorized in Integration Tests
+*   **Symptom**: Integration tests suddenly started failing with 401 Unauthorized.
+*   **Root Cause**: The testing framework was making RestAssured calls to protected endpoints (`/skills/*`) without providing the required API key header.
+*   **Resolution**: Updated all relevant tests to include `.header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")` in the `given()` block of RestAssured.
+
+#### 25.4. Uncommitted State leading to 404s/Size Mismatches in REST Tests
+*   **Symptom**: `SkillApiTest.testDeleteExistingSkill` fails with "Expected status code <200> but was <404>" or `body("size()", is(0))` returning `Actual: <1>`.
+*   **Root Cause**: When creating an entity directly via the repository in a test without ensuring transaction visibility or without fully cleaning the in-memory registry, the separate thread handling the REST request may see a stale state or fail to locate the entity.
+*   **Resolution**: Ensure `repository.deleteAll()` and `/skills/refresh` are run correctly in the `@BeforeEach` setup, using explicit programmatic transactions if necessary to ensure Database changes are globally visible to other threads before triggering API interactions.
+
+#### 25.5. PanacheEntityBase limitations across modules (`arcclaw-core` to `arcclaw-app`)
+*   **Symptom**: `AgentSkillRepository` methods like `count()` or `listAll()` failing, or entities throwing "This method is normally automatically overridden in subclasses" when accessed from `arcclaw-app` integration tests.
+*   **Root Cause**: Hibernate ORM with Panache relies on build-time bytecode enhancement. When `AgentSkillEntity` and `AgentSkillRepository` (extending `PanacheRepositoryBase`) are housed in `arcclaw-core`, but are being queried from testing components inside `arcclaw-app`, the Quarkus classloader often fails to resolve the enhanced Panache synthetic methods across module boundaries, especially in test profiles.
+*   **Resolution**: Removed `PanacheRepositoryBase` from `AgentSkillRepository` and refactored it to use direct `EntityManager` injection (`@Inject EntityManager em`). Writing raw HQL/JPA queries (`em.createQuery(...)`) completely bypasses the Panache enhancement requirement, ensuring robust cross-module compatibility in a multi-module Maven reactor.
+
+#### 25.6. BlockingOperationNotAllowedException on Vert.x IO Thread
+*   **Symptom**: `io.quarkus.runtime.BlockingOperationNotAllowedException: An operation which may block the execution thread has been exposed on a thread which should not block (event-loop or IO thread)`.
+*   **Root Cause**: Calling JTA-wrapped repository methods (like `repository.listAll()`) or `QuarkusTransaction` logic directly from a RESTEasy Reactive endpoint without offloading the work to a worker thread.
+*   **Resolution**: Annotated `SkillResource` with **`@RunOnVirtualThread`** and ensured all methods return a standard `Response` or DTO directly. This forces Quarkus to spawn or reuse a virtual thread, satisfying the blocking context required by Hibernate and JTA.
+
+#### 25.7. SQLite WAL Snapshot Isolation "Stale Read" Anomaly
+*   **Symptom**: Integration tests (e.g., `testDeleteExistingSkill`) fail where a deletion is confirmed in the database (via SQL logs), but a subsequent registry reload (calling many reads) still "sees" the deleted entity.
+*   **Root Cause**: SQLite in Write-Ahead Logging (WAL) mode provides snapshot isolation. If the reload logic starts its own transaction/read-operation immediately after the delete transaction commits, it may occasionally run against a stale snapshot if the commit hasn't fully propagated to the shared cache in every thread context.
+*   **Resolution**: Wrapped the REST endpoints (`upsertSkill`, `deleteSkill`) with **`@Transactional`**. This forces the modification AND the subsequent `skillLoader.reloadAll()` call into the **same JTA transaction**. This ensures that the registry reload is guaranteed to see the effects of the modification before the transaction commits and releases the locks.
+
