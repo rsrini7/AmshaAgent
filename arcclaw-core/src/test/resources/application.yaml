@@ -44,5 +44,6 @@ quarkus:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
+      - com.arcclaw.core.skill
   native:
     additional-build-args: --enable-native-access=ALL-UNNAMED

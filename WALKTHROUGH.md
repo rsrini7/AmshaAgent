@@ -2047,3 +2047,23 @@ Implemented a central registry for application metadata and exposed it via manag
 - ✅ `ApiKeyAuthFilterTest`: Verified `/info` bypasses authentication.
 - ✅ Audit integrity: `AuditEvent` now contains `app_version` for all new security events.
 - ✅ Full suite regression count: **122 tests**.
+
+---
+
+## Phase 60: Dual-Tier Skill Registry ✅
+
+Consolidated modular skills into a persistent registry with REST capabilities and unified JTA transaction management.
+
+| File | Purpose |
+|------|---------|
+| [CompiledSkillEntry.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/CompiledSkillEntry.java) | JPA entity for skill persistence. |
+| [SkillRegistry.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillRegistry.java) | Thread-safe registry with `LinkedHashMap` deduplication. |
+| [SkillLoader.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillLoader.java) | Orchestrates DB-to-Registry synchronization. |
+| [SkillResource.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/skill/SkillResource.java) | Virtual-thread REST API with `@Transactional` guards. |
+
+**Verification**:
+- ✅ `SkillApiTest`: Verified CRUD operations and registry refresh logic.
+- ✅ `SkillPersonaRoutingTest`: Verified dynamic tool availability based on persona role and skill state.
+- ✅ `SkillRegistryTest`: Verified deterministic "latest wins" deduplication.
+- ✅ **Full suite regression count: 173 tests (100% SUCCESS).**
+

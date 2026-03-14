@@ -42,7 +42,11 @@ public enum SecurityEventType {
     CRONCREATED,           // ScheduleTaskTool persisted a new cron row
     CRONFIRED,             // AgentCronScheduler dispatched successfully
     CRONFAILED,            // AgentCronScheduler caught exception
-    CRONDELETED;           // Reflex or tool deleted a cron row
+    CRONDELETED,           // Reflex or tool deleted a cron row
+
+    // Skills lifecycle (Phase 60) — telemetry tier
+    SKILL_LOADED,       // SkillLoader completed a full load cycle
+    SKILL_REFRESHED;    // Manual refresh via GET /api/v1/skills/refresh
 
     /**
      * Returns true if a write failure for this event type must HALT the agent

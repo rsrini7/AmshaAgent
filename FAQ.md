@@ -510,4 +510,13 @@ mvn test -pl arcclaw-core -Dtest=SandboxCircuitBreakerTest
 mvn verify -pl arcclaw-app -am -Darcclaw.debug.llm=true
 ```
 
+---
 
+## Custom Skill:
+1. Format: two-block document with --- delimiters, YAML frontmatter, then system prompt
+2. Built-in (shipped): place .md in src/main/resources/skills/, add filename to index.txt, rebuild
+3. Dynamic (no rebuild): POST to /api/v1/skills with X-ArcClaw-API-Key header
+4. Verify with GET /api/v1/skills
+5. Test routing: message matching a trigger-pattern routes to skill without LLM call
+6. Update existing: POST again with same name — upsert replaces, no duplicate
+7. Refresh cache: GET /api/v1/skills/refresh

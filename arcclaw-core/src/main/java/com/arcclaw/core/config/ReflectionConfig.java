@@ -11,6 +11,12 @@ import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.skill.AgentSkillEntity;
+import com.arcclaw.core.skill.AgentSkillRepository;
+import com.arcclaw.core.skill.CompiledSkillEntry;
+import com.arcclaw.core.skill.SkillDefinition;
+import com.arcclaw.core.skill.SkillFrontmatter;
+import com.arcclaw.core.skill.SkillPromptParams;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.InstantToTextConverter;
@@ -44,7 +50,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         ScheduleTaskTool.class,
         ManageScheduleTool.class,
         AgentCronRepository.class,
-        SQLiteDialect.class
+        SQLiteDialect.class,
+        AgentSkillEntity.class,
+        AgentSkillRepository.class,
+        SkillDefinition.class,
+        SkillFrontmatter.class,
+        CompiledSkillEntry.class,
+        SkillPromptParams.class
 })
 public class ReflectionConfig {
 }
