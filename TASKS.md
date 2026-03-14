@@ -964,3 +964,17 @@
 - [x] Verify: `SkillPersonaRoutingTest` passes (2 tests) <!-- id: 407 -->
 - [x] Verify: Full project regression (173/173 tests) <!-- id: 408 -->
 
+
+---
+
+## Phase 60 — Hibernate ORM 7 Migration & Native Image HARDENING
+- [x] Update `quarkus.version` to `3.27.2` (Hibernate ORM 7.1)
+- [x] Remove `langchain4j.quarkus.version` (managed by Quarkus BOM)
+- [x] Standardize `@Version` initialization on all entities
+- [x] Refactor `WorkspaceManager` to use `@Transactional(REQUIRES_NEW)` for CDI proxy stability
+- [x] Implement `ArcClawSQLiteDialect` to fix ORM 7 DDL "blank type" bug
+- [x] Standardize `@Id` columns with `columnDefinition = "INTEGER"` for identity tracking
+- [x] Fix Native Image `Random` instance heap failure in `StatefulAgentStoreImpl`
+- [x] Resolve JDK 25 ByteBuddy and `sun.misc.Unsafe` encapsulation issues
+- [x] Verify: 535/535 tests pass
+- [x] Verify: Native image build succeeds

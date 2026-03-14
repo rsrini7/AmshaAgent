@@ -3312,9 +3312,37 @@ arcclaw:
 ### 🔴 Failure: Hibernate ORM 7 + SQLite: Null Primary Keys (DDL Mismatch)
 **Symptom:** Queries return correct row counts but `null` primary keys. This causes `NPE`s and `StaleStateException` (unexpected row count 0) during updates/loads.
 **Root Cause:** Hibernate ORM 7 + Community Dialect generates invalid DDL for `IDENTITY` columns on SQLite. Despite `@Column(columnDefinition = "INTEGER")`, the generated DDL omits the type (e.g., `checkpoint_id,` instead of `checkpoint_id integer,`). SQLite without explicit `INTEGER` does not activate the `rowid` alias for auto-increment.
-**Attempted Mitigations:**
-1.  **Transactional Extraction:** Moved lambdas to `@Transactional(REQUIRES_NEW)` methods.
-2.  **DDL Overrides:** Applied `columnDefinition = "INTEGER"` and `"integer"`. Both ignored by the Hibernate DDL exporter for `IDENTITY` strategy.
-3.  **Native Query Workarounds:** Projecting IDs via Native SQL. Failed because row values themselves were stored as `NULL` in the DB.
-**Current Status:** Blocked on Hibernate 7 DDL generation bug. Investigating `GenerationType.AUTO` or forcing `INTEGER PRIMARY KEY` in DDL.
+**Resolution**: Implement a custom dialect overriding the type emission flag.
+```java
+public class ArcClawSQLiteDialect extends SQLiteDialect {
+    @Override
+    public IdentityColumnSupport getIdentityColumnSupport() {
+        return new SQLiteIdentityColumnSupport() {
+            @Override
+            public boolean hasDataTypeInIdentityColumn() {
+                return true; // Force-enable type emission in DDL
+            }
+        };
+    }
+}
+```
+
+---
+
+## 21. Hibernate ORM 7 & Native Image (Phase 60)
+
+### 🔴 Failure: Gate 4 — "blank type" in SQLite DDL
+**Symptom**: `checkpoint_id,` in `CREATE TABLE` statements instead of `checkpoint_id integer...`.
+**Root Cause**: `org.hibernate.community.dialect.identity.SQLiteIdentityColumnSupport.hasDataTypeInIdentityColumn()` returns `false`. ORM 7 interprets this as "no type needed", causing SQLite to fail identity auto-increment.
+**Resolution**: Implement `ArcClawSQLiteDialect` (see §20 above).
+
+### 🔴 Failure: Gate 5 — Native Image Static Random Heap Violation
+**Symptom**: `StatefulAgentStoreImpl` prevents native image build with "Object reached by analysis... part of the native image heap".
+**Root Cause**: A `static final Random RANDOM = new Random()` captures build-time heap state.
+**Resolution**: Use `java.util.concurrent.ThreadLocalRandom` which is initialized at runtime.
+
+### 🔴 Failure: JDK 25 `IllegalAccessError` (sun.misc.Unsafe)
+**Symptom**: `module java.base does not "opens sun.misc" to unnamed module`.
+**Root Cause**: JDK 25 strictly enforces encapsulation for Netty's buffer management.
+**Resolution**: Add `--add-opens java.base/sun.misc=ALL-UNNAMED` to Maven/Surefire JVM args.
 

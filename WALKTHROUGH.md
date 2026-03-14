@@ -2067,3 +2067,29 @@ Consolidated modular skills into a persistent registry with REST capabilities an
 - ✅ `SkillRegistryTest`: Verified deterministic "latest wins" deduplication.
 - ✅ **Full suite regression count: 173 tests (100% SUCCESS).**
 
+
+| 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
+
+---
+
+## Phase 60: Hibernate ORM 7 Migration & Native Image Hardening ✅
+
+Successfully completed the migration to Hibernate ORM 7 and GraalVM Native Image compatibility.
+
+### Key Technical Resolutions
+
+1. **Gate 4: SQLite DDL Fix**
+   - **Problem**: Hibernate ORM 7's new DDL exporter interpreted the community dialect's `hasDataTypeInIdentityColumn() = false` as "omit type entirely", producing invalid SQL like `checkpoint_id,`.
+   - **Solution**: Implemented `ArcClawSQLiteDialect` to override the flag, ensuring `integer not null primary key` is generated.
+   - **Files**: `ArcClawSQLiteDialect.java`, `application.yaml`.
+
+2. **Gate 5: Native Image Hardening**
+   - **Problem**: Build failed with "Object has been reached by the analysis and is now considered as part of the native image heap" due to a static `Random` field in `StatefulAgentStoreImpl`.
+   - **Solution**: Replaced `static Random` with `ThreadLocalRandom.current().nextInt()` for runtime-safe evaluation.
+   - **Verification**: `mvn clean package -pl arcclaw-app -am -Pnative` succeeded.
+
+3. **CDI & Transaction Management**
+   - **Problem**: `em.clear()` and `em.merge()` patterns in `WorkspaceManager` were unstable across CDI proxies.
+   - **Solution**: Refactored to use `@Transactional(REQUIRES_NEW)` on delegated methods and self-injection for proxy traversal.
+
+**Final Status**: All systems nominal. 535 tests verified. Native binary produced.

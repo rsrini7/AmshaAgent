@@ -4,8 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.hibernate.exception.LockAcquisitionException;
 import org.jboss.logging.Logger;
@@ -54,7 +54,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     AuditService auditService;
 
     private static final long BACKOFF_BASE_MS = 50;
-    private static final Random JITTER = new Random();
 
     @Inject
     StatefulAgentStoreImpl self;
@@ -366,7 +365,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     // Exponential backoff with jitter prevents thundering herd:
                     // base * 2^attempt + random(0..50ms)
                     long delay = (BACKOFF_BASE_MS * (1L << attempt))
-                            + JITTER.nextInt(50);
+                            + ThreadLocalRandom.current().nextInt(50);
                     log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
                             operation, attempt, maxRetries, delay);
                     try {

@@ -3577,3 +3577,21 @@ Consolidate modular tool execution into a dual-tier Skill Registry (Dynamic + Pe
 - ✅ `SkillRegistryTest`: Deduplication logic.
 - ✅ Full Regression: **173/173** tests passing.
 
+
+---
+
+# Phase 60 — Hibernate ORM 7 Migration & Native Image Hardening ✅
+
+Successfully migrated ArcClaw to Hibernate ORM 7.1.14.Final, addressing significant DDL regressions and Native Image build failures.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Custom SQLite Dialect**: Hibernate ORM 7 introduced a regression in the community SQLite dialect where `hasDataTypeInIdentityColumn()` returned `false`, causing blank types in DDL. We implemented `ArcClawSQLiteDialect` to force `integer not null primary key` for `IDENTITY` columns.
+
+> [!NOTE]
+> **Native Image Heap Stability**: Resolved a build-time failure caused by a static `Random` instance in the heap. Replaced with `ThreadLocalRandom` for dynamic runtime initialization.
+
+- ✅ All 535 tests passing (`arcclaw-core` and `arcclaw-app`).
+- ✅ Native Image build successful for `arcclaw-app`.
+- ✅ Standardized `@Version` and `@Id` definitions across all entities.
