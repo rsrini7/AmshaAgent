@@ -43,16 +43,15 @@ quarkus:
     db-kind: sqlite
     jdbc:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
-      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 5
-      initial-sql: "ATTACH DATABASE '${ARCCLAW_DATA_DIR:./data}/arcclaw-fts.db' AS fts"
 
   hibernate-orm:
     dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
     schema-management:
       strategy: update
       halt-on-error: false 
+    sql-load-script: no-file
     packages:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
@@ -111,10 +110,7 @@ quarkus:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
         protocol: grpc
     resource:
-      attributes:
-        service.name: "arcclaw"
-        service.version: "1.0.0"
-        deployment.environment: "${ARCCLAW_ENV:development}"
+      attributes: "deployment.environment=${ARCCLAW_ENV:development}"
     traces:
       enabled: true
       sampler: always_on
@@ -417,7 +413,6 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite::memory:"
-        initial-sql: "ATTACH DATABASE ':memory:' AS fts"
     hibernate-orm:
       schema-management:
         strategy: update
