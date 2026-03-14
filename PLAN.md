@@ -3533,6 +3533,44 @@ Implement a central registry for application metadata (version, build info, envi
 
 ---
 
+# Phase 59 — MCP Server + Client Setup ✅
+
+Implement the Model Context Protocol (MCP) server and client to enable standardized tool interoperability and remote tool execution.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Transport Split**: Stdio transport (`PodmanMcpTransport`) is strictly isolated via `SandboxCircuitBreaker` (JEP 491-safe), while HTTP/SSE transport (`McpClientService`) is guarded by SmallRye Fault Tolerance (`@Timeout`, `@Retry`, `@CircuitBreaker`).
+
+> [!NOTE]
+> **MVP Tool Set**: Initial exposure is limited to `GITHUB` and `MEMORY_SEARCH`. Orchestration-heavy tools (`ScheduleTaskTool`, `ManageScheduleTool`) are excluded until HITL-over-MCP is finalized.
+
+> [!CAUTION]
+> **Authentication Bypass in Tests**: Integration tests (`McpAdminResourceTest`) mock the `ApiKeyRegistry` to verify the MCP resource logic in isolation. The server must be explicitly enabled using a `TestProfile` as it is disabled by default in the `%test` profile.
+
+## Proposed Changes
+
+### MCP Module — Runtime & Transports
+
+#### [NEW] [arcclaw-mcp](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/pom.xml)
+- Minimal Maven module adding `quarkus-mcp-server-http` and `quarkus-mcp-server-stdio`.
+
+#### [NEW] [PodmanMcpTransport.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/PodmanMcpTransport.java)
+- Logic for stdio-based MCP communication with container-isolated tools.
+
+### App Module — Admin & Integration
+
+#### [NEW] [McpAdminResource.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/main/java/com/arcclaw/app/mcp/McpAdminResource.java)
+- REST endpoints for MCP status and tool listing under `/api/v1/mcp`.
+
+## Verification
+
+- ✅ `arcclaw-mcp` unit tests: `PodmanMcpTransportTest`, `McpClientServiceTest`.
+- ✅ `arcclaw-app` integration tests: `McpAdminResourceTest` (200 OK for `/tools`, `/status`).
+- ✅ Authentication check: `McpAdminResource` verified to require `valid-key` header (mocked).
+
+---
+
 # Phase 60 — Dual-Tier Skill Registry ✅
 
 Consolidate modular tool execution into a dual-tier Skill Registry (Dynamic + Persistent) with REST management and GraalVM compatibility.

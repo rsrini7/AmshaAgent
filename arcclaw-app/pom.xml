@@ -19,6 +19,11 @@
       <artifactId>arcclaw-channel-api</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-mcp</artifactId>
+    </dependency>
+
     <!-- Runtime module only — NOT deployment -->
     <dependency>
       <groupId>com.arcclaw</groupId>

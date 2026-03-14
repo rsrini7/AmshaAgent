@@ -27,9 +27,10 @@ import java.util.regex.Pattern;
 public class ToolInvocationGuard {
     private static final Logger log = Logger.getLogger(ToolInvocationGuard.class);
 
-    @Inject RoleRegistry roleRegistry;
-    @Inject ObjectMapper objectMapper;
-    @Inject StatefulAgentStore agentStore;
+    @Inject public RoleRegistry roleRegistry;
+    @Inject public ObjectMapper objectMapper;
+    @Inject public StatefulAgentStore agentStore;
+    @Inject public jakarta.enterprise.inject.Instance<com.arcclaw.core.tool.DynamicToolLookup> dynamicToolLookup;
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
     private static final Pattern GITHUB_TRIGGER_PATTERN =
@@ -84,6 +85,12 @@ public class ToolInvocationGuard {
                     return new GuardDecision.Deduplicate(cachedObs);
                 }
             }
+        }
+
+        // 1.5 DYNAMIC TOOL FALLBACK
+        if (dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
+                && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
+            return new GuardDecision.Allow(); // permitted via dynamic MCP registry
         }
 
         // 2. GITHUB INTENT GUARD

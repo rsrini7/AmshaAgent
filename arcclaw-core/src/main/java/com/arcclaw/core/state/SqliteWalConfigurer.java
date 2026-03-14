@@ -46,11 +46,24 @@ public class SqliteWalConfigurer {
             stmt.execute("PRAGMA busy_timeout=10000");
 
             // Isolated FTS schema attachment
-            String ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString();
-            stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+            String ftsPath;
+            if (":memory:".equals(dataDir)) {
+                ftsPath = ":memory:";
+            } else {
+                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString();
+            }
+            try {
+                stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+                log.info("FTS database attached: " + ftsPath);
+            } catch (SQLException e) {
+                if (e.getMessage().contains("already in use")) {
+                    log.debug("FTS database already attached");
+                } else {
+                    throw e;
+                }
+            }
 
             log.info("SQLite WAL mode configured: journal_mode=WAL, synchronous=NORMAL, busy_timeout=10000");
-            log.info("FTS database attached: " + ftsPath);
         } catch (SQLException e) {
             log.error("Failed to configure SQLite WAL mode — concurrent operations may encounter lock errors", e);
         }

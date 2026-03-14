@@ -53,6 +53,8 @@
 | **Observability** | Disconnected Spans | Child spans not linked to session root. | Use `Context.current().with(parentSpan)` explicitly when creating child spans. |
 | **Cron** | `SQLITE_BUSY` (polling) | Read locks blocking write-lock upgrades during fire cycle. | Use split transactions (move reads outside write-transaction block). |
 | **Security** | `NPE` in Validator | Missing `Optional` injection in unit tests for startup checks. | Ensure `@ConfigProperty` fields are correctly set using `injectFields` in mocks. |
+| **MCP** | HTTP 404 in Tests | MCP server disabled by default in `%test` profile. | Use `@TestProfile(EnabledMcpProfile.class)` to force `arcclaw.mcp.server-enabled=true`. |
+| **API** | HTTP 401 in Tests | MCP endpoints require API key authentication. | Mock `ApiKeyRegistry.isValidKey()` and `isAllowed()` to return `true`. |
 | **Cron** | `@Scheduled` methods never fire after first build |`quarkus-scheduler` dependency missing from `arcclaw-app/pom.xml` —`@Scheduled` is a no-op without it | Add `<dependency><groupId>io.quarkus</groupId><artifactId>quarkus-scheduler</artifactId></dependency>` to `arcclaw-app/pom.xml` |
 | **Cron** | `Unknown agent role: coordinator` error in JAR mode |`ArcClawSupervisor` re-introduced — its CDI `Instance<Agent>` lookup is empty on virtual threads in JAR mode (lazy instantiation timing) |`AgentCronScheduler` must inject `AgentLoop` directly. Remove `ArcClawSupervisor` and do NOT re-add it. |
 | **Cron** | Semaphore Permit Leak | `concurrencyLimiter.release()` not called in a master `finally` block. | Hoist `release()` and `MDC.remove()` to the outer virtual thread lambda. |

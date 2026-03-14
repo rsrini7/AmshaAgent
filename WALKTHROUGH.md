@@ -74,8 +74,10 @@
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 | 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
 | 55.2 | ScopedValue & Constructor Injection | 121/121 tests | Migrated CliAgentObserver to ScopedValue and 10 beans to Constructor Injection |
+| 59 | MCP Server + Client Setup | 7/7 tests | Mocked `ApiKeyRegistry` + `@TestProfile` for 404 fix |
 | 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
-| 65 | Quarkus LTS Migration | 535/535 tests | Hibernate 7 + LangChain4j 1.x + Native Hardening |
+| 60 | Dual-Tier Skill Registry | 173/173 tests | Persistent registry with JTA management |
+| 60.1 | Quarkus LTS & Hibernate 7 | 535/535 tests | LangChain4j 1.x + Native Image Hardening |
 
 ---
 
@@ -2048,6 +2050,30 @@ Implemented a central registry for application metadata and exposed it via manag
 - ✅ `ApiKeyAuthFilterTest`: Verified `/info` bypasses authentication.
 - ✅ Audit integrity: `AuditEvent` now contains `app_version` for all new security events.
 - ✅ Full suite regression count: **122 tests**.
+
+---
+
+## Phase 59: MCP Server + Client Setup ✅
+
+Implemented the Model Context Protocol (MCP) server and client, enabling standardized tool interoperability and remote execution with multi-transport support.
+
+| File | Purpose |
+|------|---------|
+| [arcclaw-mcp/pom.xml](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/pom.xml) | New runtime module with dual-transport MCP dependencies. |
+| [PodmanMcpTransport.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/PodmanMcpTransport.java) | Stdio transport for isolated tool execution via Podman. |
+| [McpClientService.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/src/main/java/com/arcclaw/mcp/client/McpClientService.java) | HTTP/SSE client with SmallRye Fault Tolerance guards. |
+| [McpAdminResource.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/main/java/com/arcclaw/app/mcp/McpAdminResource.java) | Admin REST endpoints for tool discovery and status. |
+
+### Key Architectural Decisions:
+1. **Transport Isolation**: Strictly separated `PodmanMcpTransport` (stdio) from `McpClientService` (HTTP/SSE), ensuring stdio tools are guarded by `SandboxCircuitBreaker` while HTTP clients use SmallRye Fault Tolerance.
+2. **MVP Tool Exposure**: Focused initial implementation on `GITHUB` and `MEMORY_SEARCH` tools to establish the protocol foundation before expanding to orchestration-heavy tools.
+3. **Security Integration**: Integrated with the existing `ApiKeyAuthFilter` and implemented `MCP_TOOL_INVOKED` mandatory audit events for all remote tool executions.
+
+### Verification Results:
+- ✅ **Tool Listing**: Verified `GET /api/v1/mcp/tools` returns correct MVP tool definitions.
+- ✅ **Status Monitoring**: Verified `GET /api/v1/mcp/status` correctly reports transport health.
+- ✅ **Testing Hardening**: Resolved 404/401 testing bottlenecks by implementing `EnabledMcpProfile` and mocking `ApiKeyRegistry`.
+- ✅ **Regression**: 7/7 MCP-specific tests and full system verification (173+ tests) pass.
 
 ---
 

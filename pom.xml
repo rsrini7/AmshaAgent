@@ -68,6 +68,11 @@
         <artifactId>arcclaw-deployment</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>com.arcclaw</groupId>
+        <artifactId>arcclaw-mcp</artifactId>
+        <version>${project.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
