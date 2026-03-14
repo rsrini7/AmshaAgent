@@ -13,6 +13,7 @@
   <modules>
     <module>arcclaw-channel-api</module>
     <module>arcclaw-core</module>
+    <module>arcclaw-mcp</module>
     <module>arcclaw-deployment</module>
     <module>arcclaw-app</module>
   </modules>
