@@ -3329,7 +3329,7 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 
 ---
 
-## 21. Hibernate ORM 7 & Native Image (Phase 60)
+**Hibernate ORM 7 & Native Image**
 
 ### 🔴 Failure: Gate 4 — "blank type" in SQLite DDL
 **Symptom**: `checkpoint_id,` in `CREATE TABLE` statements instead of `checkpoint_id integer...`.

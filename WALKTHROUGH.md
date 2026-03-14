@@ -74,7 +74,8 @@
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 | 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
 | 55.2 | ScopedValue & Constructor Injection | 121/121 tests | Migrated CliAgentObserver to ScopedValue and 10 beans to Constructor Injection |
-
+| 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
+| 65 | Quarkus LTS Migration | 535/535 tests | Hibernate 7 + LangChain4j 1.x + Native Hardening |
 
 ---
 
@@ -2068,28 +2069,29 @@ Consolidated modular skills into a persistent registry with REST capabilities an
 - ✅ **Full suite regression count: 173 tests (100% SUCCESS).**
 
 
-| 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
 
 ---
 
-## Phase 60: Hibernate ORM 7 Migration & Native Image Hardening ✅
+## Phase 60.1 — Quarkus LTS Migration (3.23.0 -> 3.27.2) ✅
 
-Successfully completed the migration to Hibernate ORM 7 and GraalVM Native Image compatibility.
+Comprehensive migration to the Quarkus 3.27.x LTS stream, resolving major breaking changes in Hibernate ORM 7 and LangChain4j 1.x while hardening the native image binary.
 
-### Key Technical Resolutions
+### Key Technical Resolutions:
 
-1. **Gate 4: SQLite DDL Fix**
-   - **Problem**: Hibernate ORM 7's new DDL exporter interpreted the community dialect's `hasDataTypeInIdentityColumn() = false` as "omit type entirely", producing invalid SQL like `checkpoint_id,`.
-   - **Solution**: Implemented `ArcClawSQLiteDialect` to override the flag, ensuring `integer not null primary key` is generated.
-   - **Files**: `ArcClawSQLiteDialect.java`, `application.yaml`.
+1. **Hibernate ORM 7 & Persistence**:
+   - **DDL Regressions**: Implemented `ArcClawSQLiteDialect` to fix a community dialect bug where identity columns were generated without types.
+   - **FTS Management**: Moved SQLite FTS attachment logic out of `initial-sql` (now unrecognized) into runtime JDBC lifecycle management.
+   - **Deterministic Entity State**: Standardized `@Id` and `@Version` handling for strict ORM 7 compliance.
 
-2. **Gate 5: Native Image Hardening**
-   - **Problem**: Build failed with "Object has been reached by the analysis and is now considered as part of the native image heap" due to a static `Random` field in `StatefulAgentStoreImpl`.
-   - **Solution**: Replaced `static Random` with `ThreadLocalRandom.current().nextInt()` for runtime-safe evaluation.
-   - **Verification**: `mvn clean package -pl arcclaw-app -am -Pnative` succeeded.
+2. **LangChain4j 1.x & AI Infrastructure**:
+   - **Config Modernization**: Renamed legacy AI properties (e.g., `max-tokens` -> `max-completion-tokens`) to align with 1.x extension schema.
+   - **API Stabilization**: Standardized `ChatLanguageModel` usage across the core reasoning engine.
 
-3. **CDI & Transaction Management**
-   - **Problem**: `em.clear()` and `em.merge()` patterns in `WorkspaceManager` were unstable across CDI proxies.
-   - **Solution**: Refactored to use `@Transactional(REQUIRES_NEW)` on delegated methods and self-injection for proxy traversal.
+3. **Native Image Hardening (Gates 1-10)**:
+   - **Reflection Registry**: Added native reflection metadata for Caffeine cache constructors (`SSLMSA`) and the custom SQLite dialect.
+   - **Qute Optimization**: Annotated all domain records and `AgentResult` implementations with `@TemplateData`, ensuring property access in AOT mode.
+   - **Heap Integrity**: Replaced static `Random` with `ThreadLocalRandom` to prevent native analysis heap capture failures.
+   - **Performance**: Pre-compiled HQL queries and increased transaction timeouts for cold-start resilience.
 
-**Final Status**: All systems nominal. 535 tests verified. Native binary produced.
+**Final Status**: All systems verified green. 535 tests pass. Native image production-ready.
+

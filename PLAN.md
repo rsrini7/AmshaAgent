@@ -3580,7 +3580,51 @@ Consolidate modular tool execution into a dual-tier Skill Registry (Dynamic + Pe
 
 ---
 
-# Phase 60 — Hibernate ORM 7 Migration & Native Image Hardening ✅
+# Phase 60.1 — Quarkus LTS Migration (3.23.0 -> 3.27.2) ✅
+
+Comprehensive upgrade to the Quarkus LTS branch (3.27.x), encompassing Hibernate ORM 7, LangChain4j 1.x, and significant Native Image hardening.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Hibernate ORM 7 & SQLite 3.42+ Alignment**:
+> - **Custom Dialect**: Implemented `ArcClawSQLiteDialect` to resolve DDL regressions where `IDENTITY` columns lost their types.
+> - **Reflection Connectivity**: Registered the custom dialect for reflection to prevent native image boot failures.
+> - **DDL Normalization**: Standardized `@Id` and `@Version` definitions to ensure strict compatibility with the new persistence engine.
+
+> [!NOTE]
+> **LangChain4j 1.x & OpenAI Integration**:
+> - **Unified API**: Migrated to the stabilized LangChain4j 1.x API, leveraging managed BOMs.
+> - **Property Modernization**: Standardized configuration keys (e.g., `openai.chat-model.max-completion-tokens`) to align with latest extension requirements.
+
+> [!CAUTION]
+> **Native Image Hardening (Gates 1-10)**:
+> - **Caffeine Registry**: Explicitly registered Caffeine-generated classes (e.g., `SSLMSA`) to fix runtime reflection missing errors.
+> - **Qute Indexing**: Applied `@TemplateData` to all agent domain records and `AgentResult` implementations to enable property resolution in AOT binaries.
+> - **FTS Runtime Attachment**: Migrated SQLite FTS schema attachment from `initial-sql` (unrecognized in Agroal) to runtime JDBC logic in `SqliteWalConfigurer`.
+> - **Pre-compiled HQL**: Forced pre-compilation of critical HQL queries to avoid runtime analysis overhead and heap leakage.
+
+## Completed Changes
+
+### Build & Dependencies
+- Updated `quarkus-bom` to `3.27.2`.
+- Migrated LangChain4j to 1.x and updated related Maven plugins (Surefire, Failsafe, Compiler).
+- Added `quarkus-caffeine` extension for native cache support.
+
+### Core & Persistence
+- **[NEW] [ArcClawSQLiteDialect.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/persistence/ArcClawSQLiteDialect.java)**: Custom dialect for Hibernate 7.
+- **[MODIFY] [SqliteWalConfigurer.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/SqliteWalConfigurer.java)**: Added runtime `ATTACH DATABASE` logic for FTS.
+- **[MODIFY] [AgentResult.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/result/AgentResult.java)**: Added `@TemplateData` to all records.
+
+### Configuration
+- Standardized `application.yaml` with modern `hibernate-orm.schema-management.strategy` and `langchain4j` keys.
+- Fixed `%test` profile nesting regressions in `arcclaw-app`.
+
+## Verification
+
+- ✅ 535/535 tests pass across all profiles.
+- ✅ Native image build successful (exit code 0).
+- ✅ Clean JVM startup with zero unrecognized configuration warnings.
 
 Successfully migrated ArcClaw to Hibernate ORM 7.1.14.Final, addressing significant DDL regressions and Native Image build failures.
 

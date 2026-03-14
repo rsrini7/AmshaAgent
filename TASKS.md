@@ -967,18 +967,14 @@
 
 ---
 
-## Phase 60 — Hibernate ORM 7 Migration & Native Image HARDENING
-- [x] Update `quarkus.version` to `3.27.2` (Hibernate ORM 7.1)
-- [x] Remove `langchain4j.quarkus.version` (managed by Quarkus BOM)
-- [x] Standardize `@Version` initialization on all entities
-- [x] Refactor `WorkspaceManager` to use `@Transactional(REQUIRES_NEW)` for CDI proxy stability
-- [x] Implement `ArcClawSQLiteDialect` to fix ORM 7 DDL "blank type" bug
-- [x] Standardize `@Id` columns with `columnDefinition = "INTEGER"` for identity tracking
-- [x] Fix Native Image `Random` instance heap failure in `StatefulAgentStoreImpl`
-- [x] Resolve JDK 25 ByteBuddy and `sun.misc.Unsafe` encapsulation issues
-- [x] Verify: 535/535 tests pass
-- [x] Verify: Native image build succeeds
-- [x] **Native Image Startup Fix (Gate 6)**
-    - [x] Add quarkus-caffeine extension
-    - [x] Modernize YAML property keys
-    - [x] Verify native build success
+## Phase 60.1 Quarkus LTS Migration (3.23.0 -> 3.27.2) ✅
+- [x] Update `quarkus.version` to `3.27.2` (Hibernate ORM 7.1) <!-- id: 450 -->
+- [x] Migrate LangChain4j to 1.x and update config property renames <!-- id: 451 -->
+- [x] Standardize `@Version` and `@Id` across all JPA entities <!-- id: 452 -->
+- [x] Implement `ArcClawSQLiteDialect` to resolve ORM 7 DDL identity bug <!-- id: 453 -->
+- [x] Move SQLite FTS attachment from `initial-sql` to runtime code <!-- id: 454 -->
+- [x] Register Caffeine-generated classes (`SSLMSA`) for native reflection <!-- id: 455 -->
+- [x] Pre-compile critical HQL queries for native image performance <!-- id: 456 -->
+- [x] Annotate all Qute template data records with `@TemplateData` <!-- id: 457 -->
+- [x] Clean up `application.yaml` deprecated keys and OTel syntax <!-- id: 458 -->
+- [x] Verify: 535/535 tests pass and native build succeeds <!-- id: 459 -->
