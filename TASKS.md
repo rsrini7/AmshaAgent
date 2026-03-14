@@ -972,9 +972,10 @@
 - [x] Migrate LangChain4j to 1.x and update config property renames <!-- id: 451 -->
 - [x] Standardize `@Version` and `@Id` across all JPA entities <!-- id: 452 -->
 - [x] Implement `ArcClawSQLiteDialect` to resolve ORM 7 DDL identity bug <!-- id: 453 -->
-- [x] Move SQLite FTS attachment from `initial-sql` to runtime code <!-- id: 454 -->
+- [x] Move SQLite FTS attachment from `initial-sql` to runtime code (`SqliteWalConfigurer`) <!-- id: 454 -->
 - [x] Register Caffeine-generated classes (`SSLMSA`) for native reflection <!-- id: 455 -->
-- [x] Pre-compile critical HQL queries for native image performance <!-- id: 456 -->
-- [x] Annotate all Qute template data records with `@TemplateData` <!-- id: 457 -->
-- [x] Clean up `application.yaml` deprecated keys and OTel syntax <!-- id: 458 -->
-- [x] Verify: 535/535 tests pass and native build succeeds <!-- id: 459 -->
+- [x] Replace static `Random` with `ThreadLocalRandom` to fix Native Image heap leakage <!-- id: 456 -->
+- [x] Pre-compile critical HQL queries for native image performance <!-- id: 457 -->
+- [x] Annotate Qute template data records (`AgentResult`, `RoleDefinition`, `AgentRoleEnum`, `ReasoningStep`) with `@TemplateData` <!-- id: 458 -->
+- [x] Clean up `application.yaml`: drop unsupported `langchain4j.groq` keys, remove duplicate `schema-management`, fix `%test` nesting, and increase tx timeout to 300s <!-- id: 459 -->
+- [x] Verify: 535/535 tests pass and native build succeeds <!-- id: 460 -->

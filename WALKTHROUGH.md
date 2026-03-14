@@ -2080,18 +2080,19 @@ Comprehensive migration to the Quarkus 3.27.x LTS stream, resolving major breaki
 
 1. **Hibernate ORM 7 & Persistence**:
    - **DDL Regressions**: Implemented `ArcClawSQLiteDialect` to fix a community dialect bug where identity columns were generated without types.
-   - **FTS Management**: Moved SQLite FTS attachment logic out of `initial-sql` (now unrecognized) into runtime JDBC lifecycle management.
+   - **FTS Management**: Moved SQLite FTS attachment logic out of `initial-sql` (now unrecognized in Agroal 3.x) into runtime JDBC lifecycle management in `SqliteWalConfigurer`.
    - **Deterministic Entity State**: Standardized `@Id` and `@Version` handling for strict ORM 7 compliance.
+   - **Lock & Timeout Safety**: Increased transaction timeouts to `300s` to prevent cold-start native image failures.
 
-2. **LangChain4j 1.x & AI Infrastructure**:
-   - **Config Modernization**: Renamed legacy AI properties (e.g., `max-tokens` -> `max-completion-tokens`) to align with 1.x extension schema.
+2. **LangChain4j 1.x & Configuration Housekeeping**:
+   - **Config Modernization**: Renamed legacy AI properties (e.g., `max-tokens` -> `max-completion-tokens`) and fixed `%test` profile nesting regressions in `application.yaml`.
+   - **Groq Cleanup**: Dropped unsupported `quarkus.langchain4j.groq.*` keys since `quarkus-langchain4j-groq` does not exist in the 1.2.0 BOM. Groq is now routed securely through the OpenAI extension (`base-url`).
    - **API Stabilization**: Standardized `ChatLanguageModel` usage across the core reasoning engine.
 
-3. **Native Image Hardening (Gates 1-10)**:
-   - **Reflection Registry**: Added native reflection metadata for Caffeine cache constructors (`SSLMSA`) and the custom SQLite dialect.
-   - **Qute Optimization**: Annotated all domain records and `AgentResult` implementations with `@TemplateData`, ensuring property access in AOT mode.
-   - **Heap Integrity**: Replaced static `Random` with `ThreadLocalRandom` to prevent native analysis heap capture failures.
-   - **Performance**: Pre-compiled HQL queries and increased transaction timeouts for cold-start resilience.
+3. **Native Image Hardening**:
+   - **Reflection Registry**: Added native reflection metadata for Caffeine cache constructors (`SSLMSA`) used by `TelegramAgentHandler`.
+   - **Qute Optimization**: Annotated explicit domain classes (`AgentResult`, `RoleDefinition`, `AgentRoleEnum`, `ReasoningStep`) with `@TemplateData` to resolve `TemplateException` property access in AOT mode.
+   - **Heap Integrity**: Replaced a static `Random` instance with `ThreadLocalRandom` to prevent native analysis heap capture failures.
 
-**Final Status**: All systems verified green. 535 tests pass. Native image production-ready.
+**Final Status**: All systems verified green. 535 tests pass. Clean Native image production-ready binary built successfully.
 

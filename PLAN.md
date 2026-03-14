@@ -3616,36 +3616,15 @@ Comprehensive upgrade to the Quarkus LTS branch (3.27.x), encompassing Hibernate
 - **[MODIFY] [SqliteWalConfigurer.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/state/SqliteWalConfigurer.java)**: Added runtime `ATTACH DATABASE` logic for FTS.
 - **[MODIFY] [AgentResult.java](file:///c:/Users/Srini/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/agent/result/AgentResult.java)**: Added `@TemplateData` to all records.
 
-### Configuration
+### Configuration & Cleanup
 - Standardized `application.yaml` with modern `hibernate-orm.schema-management.strategy` and `langchain4j` keys.
+- **Removed** `quarkus.langchain4j.groq.*` keys and routed Groq traffic seamlessly through the OpenAI extension.
 - Fixed `%test` profile nesting regressions in `arcclaw-app`.
+- Resolved duplicate `schema-management` YAML parse warnings.
+- Increased default transaction timeout to `300s` to guarantee cold-start stability for native binaries.
 
 ## Verification
 
-- ✅ 535/535 tests pass across all profiles.
-- ✅ Native image build successful (exit code 0).
-- ✅ Clean JVM startup with zero unrecognized configuration warnings.
-
-Successfully migrated ArcClaw to Hibernate ORM 7.1.14.Final, addressing significant DDL regressions and Native Image build failures.
-
-## Design Decisions
-
-> [!IMPORTANT]
-> **Custom SQLite Dialect**: Hibernate ORM 7 introduced a regression in the community SQLite dialect where `hasDataTypeInIdentityColumn()` returned `false`, causing blank types in DDL. We implemented `ArcClawSQLiteDialect` to force `integer not null primary key` for `IDENTITY` columns.
-
-> [!NOTE]
-> **Native Image Heap Stability**: Resolved a build-time failure caused by a static `Random` instance in the heap. Replaced with `ThreadLocalRandom` for dynamic runtime initialization.
-
-- ✅ All 535 tests passing (`arcclaw-core` and `arcclaw-app`).
-- ✅ Native Image build successful for `arcclaw-app`.
-- ✅ Standardized `@Version` and `@Id` definitions across all entities.
-
-### Native Image Startup Fixes & Config Modernization (Gate 6)
-
-#### Status: COMPLETED
-#### Changes:
-- Added quarkus-caffeine extension for native reflection metadata.
-- Standardized application.yaml properties (Hibernate strategy, OpenAI completion tokens).
-- Fixed %test profile nesting in arcclaw-app.
-- Increased transaction timeout to 300s for cold-start stability.
-- Verified successful native build (3m 13s).
+- ✅ 535/535 tests pass across all profiles (`arcclaw-core` and `arcclaw-app`).
+- ✅ Native image build successful (exit code 0, 3m 13s).
+- ✅ Clean JVM and Native startup with zero unrecognized configuration warnings or heap leakage.

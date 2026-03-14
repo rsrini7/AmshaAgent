@@ -3266,7 +3266,7 @@ arcclaw:
 
 ---
 
-## 26. Quarkus 3.23.0 to 3.27.2 Migration Troubleshooting
+## 26. Phase 60.1 — Quarkus 3.23.0 to 3.27.2 Migration Troubleshooting
 
 ### 🔴 Failure: `ClassNotFoundException: GlobalDevServicesConfig$Enabled`
 **Symptom:** Tests or package failing due to stale LangChain4j version pins.
