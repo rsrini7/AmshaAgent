@@ -1,7 +1,5 @@
 package com.arcclaw.core.config;
 
-
-
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.AuditEventResponse;
@@ -11,6 +9,7 @@ import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.persistence.ArcClawSQLiteDialect;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.skill.CompiledSkillEntry;
@@ -55,7 +54,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillDefinition.class,
         SkillFrontmatter.class,
         CompiledSkillEntry.class,
-        SkillPromptParams.class
+        SkillPromptParams.class,
+        ArcClawSQLiteDialect.class
 })
 public class ReflectionConfig {
 }
