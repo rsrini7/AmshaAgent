@@ -2094,6 +2094,20 @@ Applied 8 technical corrections to consolidate the MCP foundation and enforce pr
 - ✅ **App Integration**: `arcclaw-app` passes (under strict authentication mandate).
 - ✅ **Full Regression**: **BUILD SUCCESS** across all 6 modules. Total tests confirmed pass.
 
+### Phase 59 Extension: HTTP E2ETest & Protocol Compliance ✅
+
+Completed the E2E verification suite for the inbound MCP server and hardened the HTTP client for full spec compliance.
+
+1.  **Protocol Compliance**: Resolved "400 Bad Request" errors by implementing the mandatory dual `Accept: application/json, text/event-stream` header in `McpClientService`.
+2.  **Notification Handling**: Adjusted `McpServerE2ETest` to correctly handle `202 Accepted` status codes for protocol notifications, aligning with the Quarkiverse reactor-based handler.
+3.  **End-to-End Verification**: Successfully verified the complete handshake flow (`initialize` -> `initialized` -> `tools/list`) against the live `/mcp` route.
+
+**Final Verification**:
+- ✅ `McpServerE2ETest`: Full handshake and tool discovery verified.
+- ✅ `McpClientServiceTest`: Compliance with SSE dual-accept header confirmed.
+- ✅ **Standard Regression**: Full 535-test suite passed successfully.
+
+
 ---
 
 ## Phase 60: Dual-Tier Skill Registry ✅

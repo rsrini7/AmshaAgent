@@ -801,6 +801,40 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 
 ---
 
+# Phase 59 — MCP Server + Client Setup ✅
+
+Implemented the Model Context Protocol (MCP) server and client with dual-transport support (stdio/Podman and HTTP/SSE) and standardized tool integration.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Dual Transport Strategy**: 
+> - **stdio/Podman**: Primary transport for internal tool isolation, utilizing `ProcessIsolationExecutor` and `SandboxCircuitBreaker`.
+> - **HTTP/SSE**: Outbound client support for connecting to remote MCP servers, ensuring spec compliance with mandatory dual `Accept` headers (`application/json, text/event-stream`).
+
+> [!NOTE]
+> **Protocol Versioning**: Aligned with MCP version `2024-11-05`.
+
+## Completed Changes
+
+#### [NEW] [McpClientService.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/McpClientService.java)
+- Full HTTP/SSE client implementation with handshake and notification handling.
+
+#### [NEW] [McpServerE2ETest.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/test/java/com/arcclaw/app/mcp/McpServerE2ETest.java)
+- End-to-end protocol verification suite for the inbound `/mcp` endpoint.
+
+## Verification
+
+- ✅ Handshake sequence (`initialize` -> `initialized`) verified.
+- ✅ Tool listing and invocation via MCP protocol confirmed.
+- ✅ SSE compliance: Verified dual `Accept` header requirements for successful server connection.
+- ✅ Full project regression: 535 tests pass (3.27.2 LTS).
+
+---
+
+
+---
+
 # Phase 50 P2-4 — CronStatus Enum ✅
 
 Replace raw string status comparisons in `AgentCronEntity` with a type-safe enum for better validation and maintenance.
