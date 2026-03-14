@@ -156,7 +156,7 @@ class CheckpointResumeHandlerTest {
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         
         java.lang.reflect.Field field;
-        field = engine.getClass().getDeclaredField("ChatModel");
+        field = engine.getClass().getDeclaredField("chatModel");
         field.setAccessible(true);
         field.set(engine, model);
 

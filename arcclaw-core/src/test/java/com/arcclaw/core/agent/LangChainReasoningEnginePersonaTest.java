@@ -66,7 +66,7 @@ class LangChainReasoningEnginePersonaTest {
         when(mockStepParser.parse(any(), any(), any())).thenReturn(expectedStep);
 
         // 3. Inject mocks via reflection
-        injectField(engine, "ChatModel", mockChatLanguageModel);
+        injectField(engine, "chatModel", mockChatLanguageModel);
         injectField(engine, "toolRegistry", mockToolRegistry);
         injectField(engine, "roleRegistry", mockRoleRegistry);
         injectField(engine, "promptBuilder", mockPromptBuilder);

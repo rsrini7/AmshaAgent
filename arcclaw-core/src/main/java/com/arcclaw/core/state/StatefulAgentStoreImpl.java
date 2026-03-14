@@ -409,14 +409,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.agentRole = :role " +
-                "ORDER BY c.updatedAt DESC",
+                "WHERE c.sessionId = :sid AND c.agentRole = :role",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
                 .setMaxResults(1)
                 .getResultList()
-                .stream().findFirst();
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .findFirst();
     }
 
     private String serializeSteps(List<ReasoningStep> steps) {

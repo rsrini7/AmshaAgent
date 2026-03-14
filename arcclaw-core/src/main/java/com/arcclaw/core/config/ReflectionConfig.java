@@ -1,6 +1,6 @@
 package com.arcclaw.core.config;
 
-import org.hibernate.community.dialect.SQLiteDialect;
+
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -50,7 +50,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         ScheduleTaskTool.class,
         ManageScheduleTool.class,
         AgentCronRepository.class,
-        SQLiteDialect.class,
         AgentSkillEntity.class,
         AgentSkillRepository.class,
         SkillDefinition.class,

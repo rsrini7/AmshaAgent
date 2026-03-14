@@ -49,7 +49,7 @@ quarkus:
       initial-sql: "ATTACH DATABASE '${ARCCLAW_DATA_DIR:./data}/arcclaw-fts.db' AS fts"
 
   hibernate-orm:
-    dialect: org.hibernate.community.dialect.SQLiteDialect
+    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
     database:
       generation: update
     packages:
@@ -431,9 +431,13 @@ mp:
       jdbc:
         url: "jdbc:sqlite::memory:"
         initial-sql: "ATTACH DATABASE ':memory:' AS fts"
-    hibernate-orm:
       database:
         generation: update
+      dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    log:
+      category:
+        "org.hibernate.SQL":
+          level: DEBUG
     langchain4j:
       groq:
         api-key: "mock-api-key"

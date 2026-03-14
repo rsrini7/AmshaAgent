@@ -30,7 +30,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
 
     @Inject
-    ChatModel ChatModel;
+    ChatModel chatModel;
 
     @Inject
     ToolRegistry toolRegistry;
@@ -82,7 +82,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            response = ChatModel.chat(request);
+            response = chatModel.chat(request);
         } catch (InvalidRequestException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {

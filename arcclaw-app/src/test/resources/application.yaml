@@ -47,6 +47,7 @@ quarkus:
   hibernate-orm:
     database:
       generation: update
+    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
     log:
       sql: false
     jdbc:

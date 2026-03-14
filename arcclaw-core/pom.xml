@@ -82,16 +82,17 @@
       <artifactId>quarkus-jdbc-sqlite</artifactId>
       <version>3.0.11</version>
     </dependency>
+    
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-agroal</artifactId>
+    </dependency>
 
-    <!-- Hibernate ORM + Panache -->
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-hibernate-orm-panache</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.hibernate.orm</groupId>
-      <artifactId>hibernate-community-dialects</artifactId>
-    </dependency>
+
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-narayana-jta</artifactId>
@@ -190,17 +191,14 @@
     </resources>
     <plugins>
       <plugin>
-        <groupId>io.smallrye</groupId>
-        <artifactId>jandex-maven-plugin</artifactId>
-        <version>3.5.3</version>
-        <executions>
-          <execution>
-            <id>make-index</id>
-            <goals>
-              <goal>jandex</goal>
-            </goals>
-          </execution>
-        </executions>
+          <groupId>io.smallrye</groupId>
+          <artifactId>jandex-maven-plugin</artifactId>
+          <executions>
+              <execution>
+                  <id>make-index</id>
+                  <goals><goal>jandex</goal></goals>
+              </execution>
+          </executions>
       </plugin>
     </plugins>
   </build>

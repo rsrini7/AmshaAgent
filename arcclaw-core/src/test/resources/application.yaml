@@ -40,10 +40,17 @@ quarkus:
   hibernate-orm:
     database:
       generation: drop-and-create
+    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    log:
+      sql: false
     packages:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
       - com.arcclaw.core.skill
+  log:
+    category:
+      "org.hibernate.SQL":
+        level: WARN
   native:
     additional-build-args: --enable-native-access=ALL-UNNAMED

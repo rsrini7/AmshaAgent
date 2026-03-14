@@ -45,7 +45,7 @@ class AgentLoopTest {
         engine = new LangChainReasoningEngine();
         
         // Use reflection to set private fields
-        setField(engine, "ChatModel", model);
+        setField(engine, "chatModel", model);
         setField(engine, "toolRegistry", toolRegistry);
         setField(engine, "roleRegistry", roleRegistry);
         setField(engine, "promptBuilder", promptBuilder);

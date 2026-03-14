@@ -198,21 +198,23 @@ class WorkspaceManagerTest {
     @Test
     void testZombieRecoveryMarksAwaitingApprovalAsFailed() {
         String sessionId = "zombie-approval-1";
+        String agentRole = "coordinator";
         WorkspaceScopeHolder.run(sessionId, () -> {
             var steps = List.of(new ReasoningStep("thought", "action", Map.of(), null, 0, 0));
-            var cp = agentStore.save(sessionId, "coordinator", steps);
+            var _ = agentStore.save(sessionId, agentRole, steps);
 
             // Wait for background audit write from save() to finish
             auditService.waitForIdle();
 
-            // Manually set to AWAITING_APPROVAL in a separate transaction
-            AgentCheckpoint detachedCp = QuarkusTransaction.requiringNew().call(() -> {
-                return em.find(AgentCheckpoint.class, cp.getId());
-            });
+            // Load via store — CDI proxy ensures em binds correctly in REQUIRES_NEW context
+            AgentCheckpoint detachedCp = QuarkusTransaction.requiringNew()
+                .call(() -> agentStore.load(sessionId, agentRole).orElseThrow());
+
+            // Mutate off-transaction
             detachedCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-            QuarkusTransaction.requiringNew().run(() -> {
-                em.merge(detachedCp);
-            });
+
+            // Persist via store — uses load-then-copy pattern internally
+            agentStore.save(detachedCp);
         });
 
         // Wait for background audit write from merge() to finish
