@@ -31,7 +31,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * elimination
  * and are fully available for reflection in GraalVM Native Image mode.
  */
-@RegisterForReflection(targets = {
+@RegisterForReflection(
+    targets = {
         SystemMetadataRegistry.SystemInfo.class,
         ReasoningStep.class,
         AgentResult.class,
@@ -56,6 +57,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         CompiledSkillEntry.class,
         SkillPromptParams.class,
         ArcClawSQLiteDialect.class
-})
+    },
+    classNames = {
+        "com.github.benmanes.caffeine.cache.SSLMSA",
+        "com.github.benmanes.caffeine.cache.SSLMS",
+        "com.github.benmanes.caffeine.cache.SSMS",
+        "com.github.benmanes.caffeine.cache.SSMSA"
+    }
+)
 public class ReflectionConfig {
 }

@@ -20,6 +20,21 @@ public class AuditEventRepository {
     @Inject
     EntityManager em;
 
+    @jakarta.annotation.PostConstruct
+    void warmupQueryCache() {
+        // Force HQL compilation at startup (on the main thread, before first transaction)
+        // This prevents ANTLR cold-start under Narayana transaction timeout in native mode
+        try {
+            em.createQuery(
+                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid",
+                AuditEvent.class)
+                .setMaxResults(1);
+            // Do NOT execute — just parse and cache the query plan
+        } catch (Exception ignored) {
+            // Best-effort warmup; real queries will still work
+        }
+    }
+
     @ConfigProperty(name = "arcclaw.audit.hmac-key", 
                 defaultValue = "dev-audit-hmac-key-min-32-bytes-00000")
     String hmacKey;
