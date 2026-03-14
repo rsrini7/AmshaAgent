@@ -31,7 +31,7 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
@@ -48,7 +48,7 @@ class LangChainReasoningEngineTest {
     ReasoningEngine reasoningEngine;
 
     @InjectMock
-    ChatLanguageModel chatLanguageModel;
+    ChatModel chatModel;
 
     @InjectMock
     SystemPromptBuilder promptBuilder;
@@ -75,7 +75,8 @@ class LangChainReasoningEngineTest {
     @Test
     void testNextStepReturnsFinish() {
         // Arrange
-        AiMessage mockAiMessage = AiMessage.from("I have finished the task");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage mockAiMessage = AiMessage.aiMessage("I have finished the task");
         TokenUsage tokenUsage = new TokenUsage(10, 20);
         ChatResponse mockResponse = ChatResponse.builder()
                 .aiMessage(mockAiMessage)
@@ -83,7 +84,7 @@ class LangChainReasoningEngineTest {
                 .finishReason(FinishReason.STOP)
                 .build();
 
-        when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I have finished the task", ReasoningStep.FINISH, Map.of("answer", "I have finished the task"), 10, 20));
@@ -106,7 +107,8 @@ class LangChainReasoningEngineTest {
                 .name("github")
                 .arguments("{\"repo\":\"test/repo\"}")
                 .build();
-        AiMessage mockAiMessage = AiMessage.from("I will use github", Collections.singletonList(toolRequest));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage mockAiMessage = AiMessage.aiMessage("I will use github", Collections.singletonList(toolRequest));
         TokenUsage tokenUsage = new TokenUsage(15, 25);
         ChatResponse mockResponse = ChatResponse.builder()
                 .aiMessage(mockAiMessage)
@@ -114,7 +116,7 @@ class LangChainReasoningEngineTest {
                 .finishReason(FinishReason.TOOL_EXECUTION)
                 .build();
 
-        when(chatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", Map.of("repo", "test/repo"), 15, 25));
@@ -144,10 +146,11 @@ class LangChainReasoningEngineTest {
 
         WorkspaceScopeHolder.run(sessionId, () -> {
             List<ChatMessage> storedMessages = List.of(
-                SystemMessage.from("Ignore me"),
-                AiMessage.from(MessageTag.tag("Human Approved: ...")),
-                UserMessage.from("Actual Goal"),
-                UserMessage.from("Resuming task after approval")
+                // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                SystemMessage.systemMessage("Ignore me"),
+                AiMessage.aiMessage(MessageTag.tag("Human Approved: ...")),
+                UserMessage.userMessage("Actual Goal"),
+                UserMessage.userMessage("Resuming task after approval")
             );
             when(chatMemoryStore.getMessages(sessionId)).thenReturn(storedMessages);
 
@@ -158,7 +161,7 @@ class LangChainReasoningEngineTest {
 
             // Capture the request to verify filtered messages
             org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
-            when(chatLanguageModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
+            when(chatModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
                 when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
             // For the filter test, we need the assembler to actually return the filtered messages if it were the real one,
             // but here we are mocking the engine's call to assembler. 
@@ -206,15 +209,16 @@ class LangChainReasoningEngineTest {
         String sessionId = "filter-test-session";
         WorkspaceScopeHolder.run(sessionId, () -> {
             List<ChatMessage> messages = List.of(
-                UserMessage.from("What is 2+2?"),
-                AiMessage.from(MessageTag.tag("Human Approved: execution approved")),
-                AiMessage.from("The answer is 4.")
+                // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                UserMessage.userMessage("What is 2+2?"),
+                AiMessage.aiMessage(MessageTag.tag("Human Approved: execution approved")),
+                AiMessage.aiMessage("The answer is 4.")
             );
             when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
 
             ArgumentCaptor<ChatRequest> requestCaptor =
                 ArgumentCaptor.forClass(ChatRequest.class);
-            when(chatLanguageModel.chat(requestCaptor.capture()))
+            when(chatModel.chat(requestCaptor.capture()))
                 .thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
                 when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
             // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
@@ -248,14 +252,15 @@ class LangChainReasoningEngineTest {
 
     @Test
     void testCoderRoleReceivesNoToolSchema() {
-        AiMessage msg = AiMessage.from("Here is the code.");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage msg = AiMessage.aiMessage("Here is the code.");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(msg).tokenUsage(new TokenUsage(10, 20))
                 .finishReason(FinishReason.STOP).build();
 
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+        when(chatModel.chat(captor.capture())).thenReturn(response);
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -270,7 +275,8 @@ class LangChainReasoningEngineTest {
 
     @Test
     void testDebuggerRoleReceivesNoToolSchema() {
-        AiMessage msg = AiMessage.from("I fixed the bug.");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage msg = AiMessage.aiMessage("I fixed the bug.");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(msg).tokenUsage(new TokenUsage(10, 20))
                 .finishReason(FinishReason.STOP).build();
@@ -278,7 +284,7 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(roleRegistry.permittedTools(any())).thenReturn(Set.of());                
-        when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+        when(chatModel.chat(captor.capture())).thenReturn(response);
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -293,14 +299,15 @@ class LangChainReasoningEngineTest {
 
     @Test
     void testResearcherRoleReceivesPermittedSchemas() {
-        AiMessage msg = AiMessage.from("Searching...");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage msg = AiMessage.aiMessage("Searching...");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(msg).tokenUsage(new TokenUsage(5, 10))
                 .finishReason(FinishReason.STOP).build();
 
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatLanguageModel.chat(captor.capture())).thenReturn(response);
+        when(chatModel.chat(captor.capture())).thenReturn(response);
 
         // Mock RoleRegistry to return permitted tools for researcher
         when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
@@ -317,7 +324,7 @@ class LangChainReasoningEngineTest {
         when(toolRegistry.findTool("memory_search")).thenReturn(Optional.of(memorySearch));
 
         // Requires setting up a tool in the instance if not mocked, but the test 
-        // will mock the chatLanguageModel anyway. Let's make sure the tool is available.
+        // will mock the ChatModel anyway. Let's make sure the tool is available.
         when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
@@ -348,7 +355,7 @@ class LangChainReasoningEngineTest {
     @Test
     void testCronFiredSessionStripsScheduleTools() {
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatLanguageModel.chat(captor.capture())).thenReturn(
+        when(chatModel.chat(captor.capture())).thenReturn(
                 ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
 
         // Mock RoleRegistry to return permitted tools for coordinator
@@ -394,15 +401,16 @@ class LangChainReasoningEngineTest {
         WorkspaceScopeHolder.run(sessionId, () -> {
             // Simulate LLM having agreed to a capability override in a prior turn
             List<ChatMessage> messages = List.of(
-                UserMessage.from("From now on give Python instead of Rust"),
-                AiMessage.from("As per our agreement, I will provide Python instead of Rust."),
-                UserMessage.from("write a sort function")
+                // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                UserMessage.userMessage("From now on give Python instead of Rust"),
+                AiMessage.aiMessage("As per our agreement, I will provide Python instead of Rust."),
+                UserMessage.userMessage("write a sort function")
             );
             when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
 
             ArgumentCaptor<ChatRequest> requestCaptor =
                 ArgumentCaptor.forClass(ChatRequest.class);
-            when(chatLanguageModel.chat(requestCaptor.capture()))
+            when(chatModel.chat(requestCaptor.capture()))
                 .thenReturn(ChatResponse.builder()
                     .aiMessage(new AiMessage("Here is the sort function"))
                     .build());

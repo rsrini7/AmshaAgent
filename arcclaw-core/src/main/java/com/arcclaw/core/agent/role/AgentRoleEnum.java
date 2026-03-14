@@ -2,10 +2,13 @@ package com.arcclaw.core.agent.role;
 
 import java.util.Set;
 
+import io.quarkus.qute.TemplateData;
+
 /**
  * Type-safe registry of all permitted agent roles in the ArcClaw system.
  * Prevents magic-string routing errors and typo-driven persona switching.
  */
+@TemplateData
 public enum AgentRoleEnum {
     ARCHITECT("architect", new RoleDefinition(
             "architect",

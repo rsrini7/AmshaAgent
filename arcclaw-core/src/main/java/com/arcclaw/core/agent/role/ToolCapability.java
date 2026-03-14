@@ -1,11 +1,14 @@
 package com.arcclaw.core.agent.role;
 
+import io.quarkus.qute.TemplateData;
+
 /**
  * Defines the canonical tools available to agents within the ArcClaw ecosystem.
  * <p>
  * These capabilities map directly to the {@code AgentTool.name()} identifier
  * and are used within {@link RoleDefinition} to enforce strict role boundaries.
  */
+@TemplateData   // makes all fields/getters visible to Qute in native
 public enum ToolCapability {
 
     /**

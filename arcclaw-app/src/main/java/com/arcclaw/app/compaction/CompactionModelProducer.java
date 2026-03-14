@@ -1,7 +1,7 @@
 package com.arcclaw.app.compaction;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
@@ -11,10 +11,12 @@ import java.time.Duration;
 
 @ApplicationScoped
 public class CompactionModelProducer {
-    @ConfigProperty(name = "quarkus.langchain4j.groq.base-url", defaultValue = "https://api.groq.com/openai/v1/")
+    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
+                defaultValue = "https://api.groq.com/openai/v1/")
     String groqBaseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.groq.api-key", defaultValue = "mock-key-must-be-overridden")
+    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key",
+                defaultValue = "mock-key-must-be-overridden")
     String apiKey;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.model", defaultValue = "llama-3.1-8b-instant")
@@ -26,7 +28,7 @@ public class CompactionModelProducer {
     @Produces
     @Identifier("compaction")
     @ApplicationScoped
-    public ChatLanguageModel compactionModel() {
+    public ChatModel compactionModel() {
         return OpenAiChatModel.builder()
             .baseUrl(groqBaseUrl)
             .apiKey(apiKey)

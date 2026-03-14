@@ -964,3 +964,18 @@
 - [x] Verify: `SkillPersonaRoutingTest` passes (2 tests) <!-- id: 407 -->
 - [x] Verify: Full project regression (173/173 tests) <!-- id: 408 -->
 
+
+---
+
+## Phase 60.1 Quarkus LTS Migration (3.23.0 -> 3.27.2) ✅
+- [x] Update `quarkus.version` to `3.27.2` (Hibernate ORM 7.1) <!-- id: 450 -->
+- [x] Migrate LangChain4j to 1.x and update config property renames <!-- id: 451 -->
+- [x] Standardize `@Version` and `@Id` across all JPA entities <!-- id: 452 -->
+- [x] Implement `ArcClawSQLiteDialect` to resolve ORM 7 DDL identity bug <!-- id: 453 -->
+- [x] Move SQLite FTS attachment from `initial-sql` to runtime code (`SqliteWalConfigurer`) <!-- id: 454 -->
+- [x] Register Caffeine-generated classes (`SSLMSA`) for native reflection <!-- id: 455 -->
+- [x] Replace static `Random` with `ThreadLocalRandom` to fix Native Image heap leakage <!-- id: 456 -->
+- [x] Pre-compile critical HQL queries for native image performance <!-- id: 457 -->
+- [x] Annotate Qute template data records (`AgentResult`, `RoleDefinition`, `AgentRoleEnum`, `ReasoningStep`) with `@TemplateData` <!-- id: 458 -->
+- [x] Clean up `application.yaml`: drop unsupported `langchain4j.groq` keys, remove duplicate `schema-management`, fix `%test` nesting, and increase tx timeout to 300s <!-- id: 459 -->
+- [x] Verify: 535/535 tests pass and native build succeeds <!-- id: 460 -->

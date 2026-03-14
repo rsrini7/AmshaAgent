@@ -39,7 +39,8 @@ public class ChatMemoryWriter {
                     }
                 }
                 if (!alreadySaved) {
-                    currentHistory.add(UserMessage.from(goal));
+                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                    currentHistory.add(UserMessage.userMessage(goal));
                     chatMemoryStore.updateMessages(sessionId, currentHistory);
                 }
             }
@@ -57,7 +58,8 @@ public class ChatMemoryWriter {
             } else {
                 currentHistory = new ArrayList<>(currentHistory);
             }
-            currentHistory.add(AiMessage.from(answer));
+            // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+            currentHistory.add(AiMessage.aiMessage(answer));
             chatMemoryStore.updateMessages(sessionId, currentHistory);
         }
     }

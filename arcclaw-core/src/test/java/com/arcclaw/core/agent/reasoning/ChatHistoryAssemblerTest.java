@@ -42,8 +42,9 @@ class ChatHistoryAssemblerTest {
     void testAssemble_complianceOverrideIsRedacted() {
         // Arrange
         String sessionId = "s1";
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         List<ChatMessage> history = List.of(
-                AiMessage.from("as per our agreement I will provide something")
+                AiMessage.aiMessage("as per our agreement I will provide something")
         );
         when(chatMemoryStore.getMessages(sessionId)).thenReturn(history);
 
@@ -58,9 +59,10 @@ class ChatHistoryAssemblerTest {
     void testAssemble_systemMessagesSkipped() {
         // Arrange
         String sessionId = "s2";
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         List<ChatMessage> history = List.of(
-                SystemMessage.from("Instruction"),
-                UserMessage.from("Help")
+                SystemMessage.systemMessage("Instruction"),
+                UserMessage.userMessage("Help")
         );
         when(chatMemoryStore.getMessages(sessionId)).thenReturn(history);
 

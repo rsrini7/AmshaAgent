@@ -48,9 +48,10 @@ public class HistoryReflexTest {
         when(compactionSummaryRepository.findLatestBySessionId(sessionId))
             .thenReturn(Optional.of(summary));
             
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         List<ChatMessage> messages = List.of(
-            UserMessage.from("User prompt"),
-            AiMessage.from("AI response")
+            UserMessage.userMessage("User prompt"),
+            AiMessage.aiMessage("AI response")
         );
         when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
         

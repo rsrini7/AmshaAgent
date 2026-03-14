@@ -7,6 +7,9 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -31,6 +34,9 @@ public class SqliteWalConfigurer {
     @Inject
     AgroalDataSource dataSource;
 
+    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
+    String dataDir;
+
     void onStartup(@Observes StartupEvent event) {
         try (Connection conn = dataSource.getConnection();
                 Statement stmt = conn.createStatement()) {
@@ -39,7 +45,12 @@ public class SqliteWalConfigurer {
             stmt.execute("PRAGMA synchronous=NORMAL");
             stmt.execute("PRAGMA busy_timeout=10000");
 
+            // Isolated FTS schema attachment
+            String ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString();
+            stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+
             log.info("SQLite WAL mode configured: journal_mode=WAL, synchronous=NORMAL, busy_timeout=10000");
+            log.info("FTS database attached: " + ftsPath);
         } catch (SQLException e) {
             log.error("Failed to configure SQLite WAL mode — concurrent operations may encounter lock errors", e);
         }

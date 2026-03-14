@@ -46,7 +46,7 @@ class AgentCheckpointVersionTest {
         int initialVersion = checkpoint.getVersion();
 
         checkpoint.setStatus(CheckpointStatus.COMPLETED);
-        em.merge(checkpoint);
+        // No em.merge() — entity is already managed, dirty checking handles it
         em.flush();
 
         assertEquals(initialVersion + 1, checkpoint.getVersion(), "Version should increment on update");
@@ -60,8 +60,8 @@ class AgentCheckpointVersionTest {
         Long id = persistInNewTransaction(sessionId);
 
         // 2. Load two detached copies
-        AgentCheckpoint copy1 = em.find(AgentCheckpoint.class, id);
-        AgentCheckpoint copy2 = em.find(AgentCheckpoint.class, id);
+        AgentCheckpoint copy1 = loadInNewTransaction(id);
+        AgentCheckpoint copy2 = loadInNewTransaction(id);
         assertEquals(0, copy1.getVersion());
         assertEquals(0, copy2.getVersion());
 
@@ -97,5 +97,14 @@ class AgentCheckpointVersionTest {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     void tryMergeInNewTransaction(AgentCheckpoint cp) {
         em.merge(cp);
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    AgentCheckpoint loadInNewTransaction(Long id) {
+        AgentCheckpoint cp = em.find(AgentCheckpoint.class, id);
+        // Detach before returning so the caller holds a detached copy
+        // with the current version stamped on it
+        em.detach(cp);
+        return cp;
     }
 }

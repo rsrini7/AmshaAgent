@@ -45,8 +45,9 @@ quarkus:
   scheduler:
     enabled: false
   hibernate-orm:
-    database:
-      generation: update
+    schema-management:
+      strategy: update
+    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
     log:
       sql: false
     jdbc:

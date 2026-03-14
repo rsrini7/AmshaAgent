@@ -28,8 +28,9 @@ public class PersistentChatMemoryStoreTest {
     public void testPersistence() {
         String sessionId = UUID.randomUUID().toString();
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(UserMessage.from("Hello"));
-        messages.add(AiMessage.from("Hi there!"));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        messages.add(UserMessage.userMessage("Hello"));
+        messages.add(AiMessage.aiMessage("Hi there!"));
 
         // 1. Update messages
         chatMemoryStore.updateMessages(sessionId, messages);
@@ -62,11 +63,12 @@ public class PersistentChatMemoryStoreTest {
         List<ChatMessage> messages = new ArrayList<>();
         
         // 1. Add 1 System Message
-        messages.add(SystemMessage.from("Identity"));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        messages.add(SystemMessage.systemMessage("Identity"));
         
         // 2. Add 24 User Messages (Total 25)
         for (int i = 1; i <= 24; i++) {
-            messages.add(UserMessage.from("Message " + i));
+            messages.add(UserMessage.userMessage("Message " + i));
         }
         
         chatMemoryStore.updateMessages(sessionId, messages);
@@ -91,7 +93,8 @@ public class PersistentChatMemoryStoreTest {
         List<ChatMessage> messages = new ArrayList<>();
         
         for (int i = 1; i <= 15; i++) {
-            messages.add(UserMessage.from("Under Limit " + i));
+            // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+            messages.add(UserMessage.userMessage("Under Limit " + i));
         }
         
         chatMemoryStore.updateMessages(sessionId, messages);
@@ -104,10 +107,11 @@ public class PersistentChatMemoryStoreTest {
     void testMultipleSystemMessagesAlwaysPreserved() {
         String sessionId = UUID.randomUUID().toString();
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.from("Persona prompt"));
-        messages.add(SystemMessage.from("Tool binding contract"));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        messages.add(SystemMessage.systemMessage("Persona prompt"));
+        messages.add(SystemMessage.systemMessage("Tool binding contract"));
         for (int i = 1; i <= 22; i++) {
-            messages.add(UserMessage.from("msg " + i));
+            messages.add(UserMessage.userMessage("msg " + i));
         }
         chatMemoryStore.updateMessages(sessionId, messages);
         List<ChatMessage> retrieved = chatMemoryStore.getMessages(sessionId);

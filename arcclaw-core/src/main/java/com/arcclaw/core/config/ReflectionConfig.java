@@ -1,7 +1,5 @@
 package com.arcclaw.core.config;
 
-import org.hibernate.community.dialect.SQLiteDialect;
-
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.AuditEventResponse;
@@ -11,6 +9,7 @@ import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.persistence.ArcClawSQLiteDialect;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.skill.CompiledSkillEntry;
@@ -32,7 +31,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * elimination
  * and are fully available for reflection in GraalVM Native Image mode.
  */
-@RegisterForReflection(targets = {
+@RegisterForReflection(
+    targets = {
         SystemMetadataRegistry.SystemInfo.class,
         ReasoningStep.class,
         AgentResult.class,
@@ -50,13 +50,20 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         ScheduleTaskTool.class,
         ManageScheduleTool.class,
         AgentCronRepository.class,
-        SQLiteDialect.class,
         AgentSkillEntity.class,
         AgentSkillRepository.class,
         SkillDefinition.class,
         SkillFrontmatter.class,
         CompiledSkillEntry.class,
-        SkillPromptParams.class
-})
+        SkillPromptParams.class,
+        ArcClawSQLiteDialect.class
+    },
+    classNames = {
+        "com.github.benmanes.caffeine.cache.SSLMSA",
+        "com.github.benmanes.caffeine.cache.SSLMS",
+        "com.github.benmanes.caffeine.cache.SSMS",
+        "com.github.benmanes.caffeine.cache.SSMSA"
+    }
+)
 public class ReflectionConfig {
 }

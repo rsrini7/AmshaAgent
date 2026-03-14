@@ -18,7 +18,7 @@ import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.exception.InvalidRequestException;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -30,7 +30,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
 
     @Inject
-    ChatLanguageModel chatLanguageModel;
+    ChatModel chatModel;
 
     @Inject
     ToolRegistry toolRegistry;
@@ -57,7 +57,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 3. Prepend SystemMessage + build full message list
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.from(systemPrompt));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        messages.add(SystemMessage.systemMessage(systemPrompt));
         messages.addAll(assembled);
 
         // 4. Build tool specifications
@@ -81,7 +82,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            response = chatLanguageModel.chat(request);
+            response = chatModel.chat(request);
         } catch (InvalidRequestException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {

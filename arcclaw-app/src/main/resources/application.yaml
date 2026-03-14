@@ -43,15 +43,15 @@ quarkus:
     db-kind: sqlite
     jdbc:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
-      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 5
-      initial-sql: "ATTACH DATABASE '${ARCCLAW_DATA_DIR:./data}/arcclaw-fts.db' AS fts"
 
   hibernate-orm:
-    dialect: org.hibernate.community.dialect.SQLiteDialect
-    database:
-      generation: update
+    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    schema-management:
+      strategy: update
+      halt-on-error: false 
+    sql-load-script: no-file
     packages:
       - com.arcclaw.core.state
       - com.arcclaw.core.security
@@ -59,8 +59,6 @@ quarkus:
       - com.arcclaw.core.skill
     log:
       sql: false
-    schema-management:
-      halt-on-error: false 
 
   # ---------------------------------------------------------------------------
   # LANGCHAIN4J
@@ -73,12 +71,6 @@ quarkus:
       log-responses: false
       chat-model:
         enabled: false
-    groq:
-      api-key: "${GROQ_API_KEY}"
-      log-requests: false
-      log-responses: false
-      chat-model:
-        max-tokens: 768
     openai:
       log-requests: false
       log-responses: false
@@ -92,14 +84,12 @@ quarkus:
       api-key: "${GROQ_API_KEY}"
       timeout: 120s
       max-retries: 3
-      devservices:
-        enabled: false
       chat-model:
         #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
         #model-name: "llama-3.3-70b-versatile"
         model-name: "meta-llama/llama-4-scout-17b-16e-instruct"
         temperature: 0.1
-        max-tokens: 768
+        max-completion-tokens: 768
 
   # ---------------------------------------------------------------------------
   # OBSERVABILITY
@@ -120,10 +110,7 @@ quarkus:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
         protocol: grpc
     resource:
-      attributes:
-        service.name: "arcclaw"
-        service.version: "1.0.0"
-        deployment.environment: "${ARCCLAW_ENV:development}"
+      attributes: "deployment.environment=${ARCCLAW_ENV:development}"
     traces:
       enabled: true
       sampler: always_on
@@ -133,7 +120,7 @@ quarkus:
   # ---------------------------------------------------------------------------
   smallrye-health:
     ui:
-      enable: true
+      enabled: true
 
   # ---------------------------------------------------------------------------
   # SCHEDULER
@@ -150,6 +137,10 @@ quarkus:
     enabled: true
   thread-pool:
     core-threads: 1   # minimize platform threads; virtual threads handle concurrency
+
+  transaction-manager:
+    default-transaction-timeout: 300
+    enable-recovery: false
 
   # ---------------------------------------------------------------------------
   # INPUT VALIDATION
@@ -217,7 +208,7 @@ quarkus:
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
       color: true
     file:
-      enable: "${ARCCLAW_LOG_FILE_ENABLE:false}"
+      enabled: "${ARCCLAW_LOG_FILE_ENABLE:false}"
       path: "${ARCCLAW_LOG_DIR:./logs}/arcclaw.log"
       rotation:
         max-file-size: 50M
@@ -380,18 +371,10 @@ mp:
       sdk:
         disabled: true
     langchain4j:
-      groq:
-        api-key: "${GROQ_API_KEY}"
-        log-requests: "${arcclaw.debug.llm:false}"
-        log-responses: "${arcclaw.debug.llm:false}"
-        chat-model:
-          max-tokens: 768
       ollama:
         log-requests: "${arcclaw.debug.llm:false}"
         log-responses: "${arcclaw.debug.llm:false}"
       openai:
-        devservices:
-          enabled: false
         log-requests: "${arcclaw.debug.llm:false}"
         log-responses: "${arcclaw.debug.llm:false}"
     hibernate-orm:
@@ -430,15 +413,15 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite::memory:"
-        initial-sql: "ATTACH DATABASE ':memory:' AS fts"
     hibernate-orm:
-      database:
-        generation: update
+      schema-management:
+        strategy: update
+      dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    log:
+      category:
+        "org.hibernate.SQL":
+          level: DEBUG
     langchain4j:
-      groq:
-        api-key: "mock-api-key"
-        log-requests: false
-        log-responses: false
       ollama:
         log-requests: false
         log-responses: false
@@ -475,12 +458,6 @@ mp:
 "%staging":
   quarkus:
     langchain4j:
-      groq:
-        api-key: "${GROQ_API_KEY}"
-        log-requests: false
-        log-responses: false
-        chat-model:
-          max-tokens: 768
       ollama:
         log-requests: false
         log-responses: false
@@ -499,12 +476,6 @@ mp:
 "%prod":
   quarkus:
     langchain4j:
-      groq:
-        api-key: "${GROQ_API_KEY}"
-        log-requests: false
-        log-responses: false
-        chat-model:
-          max-tokens: 768
       ollama:
         log-requests: false
         log-responses: false

@@ -6,7 +6,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +24,7 @@ class ContextCompactionServiceTest {
     PersistentChatMemoryStore mockChatStore;
     CompactionSummaryRepository mockRepo;
     AuditService mockAudit;
-    ChatLanguageModel mockModel;
+    ChatModel mockModel;
 
     @BeforeEach
     void setup() {
@@ -32,7 +32,7 @@ class ContextCompactionServiceTest {
         mockChatStore = mock(PersistentChatMemoryStore.class);
         mockRepo = mock(CompactionSummaryRepository.class);
         mockAudit = mock(AuditService.class);
-        mockModel = mock(ChatLanguageModel.class);
+        mockModel = mock(ChatModel.class);
 
         service.chatMemoryStore = mockChatStore;
         service.summaryRepository = mockRepo;
@@ -53,7 +53,8 @@ class ContextCompactionServiceTest {
 
     @Test
     void testBelowThresholdNoop() {
-        List<ChatMessage> msgs = List.of(UserMessage.from("1"), AiMessage.from("2"));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        List<ChatMessage> msgs = List.of(UserMessage.userMessage("1"), AiMessage.aiMessage("2"));
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
         assertFalse(service.compactIfNeeded("session1", "test-user"));
         verifyNoInteractions(mockModel);
@@ -62,15 +63,16 @@ class ContextCompactionServiceTest {
     @Test
     void testCompactionTriggersAtThreshold() {
         List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(SystemMessage.from("SYS"));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        msgs.add(SystemMessage.systemMessage("SYS"));
         for (int i=0; i<10; i++) {
-            msgs.add(UserMessage.from("Msg" + i));
+            msgs.add(UserMessage.userMessage("Msg" + i));
         }
         
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
         when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.from("New Summary Text"))
+                .aiMessage(AiMessage.aiMessage("New Summary Text"))
                 .build());
 
         assertTrue(service.compactIfNeeded("session1", "test-user"));
@@ -85,11 +87,13 @@ class ContextCompactionServiceTest {
     void testBlankGuardHandling() {
         List<ChatMessage> msgs = new ArrayList<>();
         for (int i=0; i<10; i++) {
-            msgs.add(UserMessage.from("Msg" + i));
+            // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+            msgs.add(UserMessage.userMessage("Msg" + i));
         }
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.from("   \n "))
+                .aiMessage(AiMessage.aiMessage("   \n "))
                 .build());
 
         assertFalse(service.compactIfNeeded("session1", "test-user"));

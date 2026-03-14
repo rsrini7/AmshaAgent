@@ -4,7 +4,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import io.smallrye.common.annotation.Identifier;
@@ -30,7 +30,7 @@ public class ContextCompactionService {
 
     @Inject
     @Identifier("compaction")
-    ChatLanguageModel compactionModel;
+    ChatModel compactionModel;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
@@ -97,7 +97,8 @@ public class ContextCompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        String newSummary = compactionModel.chat(UserMessage.from(prompt))
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        String newSummary = compactionModel.chat(UserMessage.userMessage(prompt))
                 .aiMessage().text().trim();
 
         if (newSummary.isBlank()) {

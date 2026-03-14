@@ -74,7 +74,8 @@
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 | 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
 | 55.2 | ScopedValue & Constructor Injection | 121/121 tests | Migrated CliAgentObserver to ScopedValue and 10 beans to Constructor Injection |
-
+| 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
+| 65 | Quarkus LTS Migration | 535/535 tests | Hibernate 7 + LangChain4j 1.x + Native Hardening |
 
 ---
 
@@ -2066,4 +2067,32 @@ Consolidated modular skills into a persistent registry with REST capabilities an
 - ✅ `SkillPersonaRoutingTest`: Verified dynamic tool availability based on persona role and skill state.
 - ✅ `SkillRegistryTest`: Verified deterministic "latest wins" deduplication.
 - ✅ **Full suite regression count: 173 tests (100% SUCCESS).**
+
+
+
+---
+
+## Phase 60.1 — Quarkus LTS Migration (3.23.0 -> 3.27.2) ✅
+
+Comprehensive migration to the Quarkus 3.27.x LTS stream, resolving major breaking changes in Hibernate ORM 7 and LangChain4j 1.x while hardening the native image binary.
+
+### Key Technical Resolutions:
+
+1. **Hibernate ORM 7 & Persistence**:
+   - **DDL Regressions**: Implemented `ArcClawSQLiteDialect` to fix a community dialect bug where identity columns were generated without types.
+   - **FTS Management**: Moved SQLite FTS attachment logic out of `initial-sql` (now unrecognized in Agroal 3.x) into runtime JDBC lifecycle management in `SqliteWalConfigurer`.
+   - **Deterministic Entity State**: Standardized `@Id` and `@Version` handling for strict ORM 7 compliance.
+   - **Lock & Timeout Safety**: Increased transaction timeouts to `300s` to prevent cold-start native image failures.
+
+2. **LangChain4j 1.x & Configuration Housekeeping**:
+   - **Config Modernization**: Renamed legacy AI properties (e.g., `max-tokens` -> `max-completion-tokens`) and fixed `%test` profile nesting regressions in `application.yaml`.
+   - **Groq Cleanup**: Dropped unsupported `quarkus.langchain4j.groq.*` keys since `quarkus-langchain4j-groq` does not exist in the 1.2.0 BOM. Groq is now routed securely through the OpenAI extension (`base-url`).
+   - **API Stabilization**: Standardized `ChatLanguageModel` usage across the core reasoning engine.
+
+3. **Native Image Hardening**:
+   - **Reflection Registry**: Added native reflection metadata for Caffeine cache constructors (`SSLMSA`) used by `TelegramAgentHandler`.
+   - **Qute Optimization**: Annotated explicit domain classes (`AgentResult`, `RoleDefinition`, `AgentRoleEnum`, `ReasoningStep`) with `@TemplateData` to resolve `TemplateException` property access in AOT mode.
+   - **Heap Integrity**: Replaced a static `Random` instance with `ThreadLocalRandom` to prevent native analysis heap capture failures.
+
+**Final Status**: All systems verified green. 535 tests pass. Clean Native image production-ready binary built successfully.
 

@@ -39,7 +39,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
@@ -144,7 +144,7 @@ class CheckpointResumeHandlerTest {
     // Moved from AgentLoopTest
     @Test
     void testResumedHistoryHasFlatToolArguments() throws Exception {
-        ChatLanguageModel model = mock(ChatLanguageModel.class);
+        ChatModel model = mock(ChatModel.class);
         ToolRegistry tr = mock(ToolRegistry.class);
         RoleRegistry roleRegistry = mock(RoleRegistry.class);
         SystemPromptBuilder promptBuilder = mock(SystemPromptBuilder.class);
@@ -156,7 +156,7 @@ class CheckpointResumeHandlerTest {
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         
         java.lang.reflect.Field field;
-        field = engine.getClass().getDeclaredField("chatLanguageModel");
+        field = engine.getClass().getDeclaredField("chatModel");
         field.setAccessible(true);
         field.set(engine, model);
 
@@ -187,7 +187,8 @@ class CheckpointResumeHandlerTest {
 
             // Mock response to just return something
             when(model.chat(any(ChatRequest.class))).thenReturn(
-                    ChatResponse.builder().aiMessage(AiMessage.from("response")).build()
+                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                    ChatResponse.builder().aiMessage(AiMessage.aiMessage("response")).build()
             );
 
             // Mock history assembler to return a message with tool call
@@ -196,7 +197,8 @@ class CheckpointResumeHandlerTest {
                     .arguments("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}")
                     .build();
             when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of(
-                    AiMessage.from("thought", List.of(req))
+                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                    AiMessage.aiMessage("thought", List.of(req))
             ));
             
             // Mock parser

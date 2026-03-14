@@ -1,6 +1,8 @@
 package com.arcclaw.core.audit;
 
 import com.arcclaw.core.security.CryptoConstants;
+
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -19,6 +21,18 @@ public class AuditEventRepository {
 
     @Inject
     EntityManager em;
+
+    @PostConstruct
+    void warmupQueryCache() {
+        // Force HQL compilation at startup (on the main thread, before first transaction)
+        // This prevents ANTLR cold-start under Narayana transaction timeout in native mode
+        try {
+            em.createNamedQuery("AuditEvent.recordInsert", AuditEvent.class)
+                .setMaxResults(1);
+        } catch (Exception ignored) {
+            // Best-effort warmup; real queries will still work
+        }
+    }
 
     @ConfigProperty(name = "arcclaw.audit.hmac-key", 
                 defaultValue = "dev-audit-hmac-key-min-32-bytes-00000")

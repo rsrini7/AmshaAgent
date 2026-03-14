@@ -2,6 +2,8 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.util.Map;
 
+import io.quarkus.qute.TemplateData;
+
 /**
  * One tick of the Thought-Plan-Act-Observe reasoning loop.
  * <p>
@@ -17,6 +19,7 @@ import java.util.Map;
  * @param inputTokens  LLM input tokens consumed in this step.
  * @param outputTokens LLM output tokens generated in this step.
  */
+@TemplateData
 public record ReasoningStep(
         String thought,
         String action,

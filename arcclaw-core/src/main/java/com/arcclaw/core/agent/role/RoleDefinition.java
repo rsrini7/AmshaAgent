@@ -3,6 +3,8 @@ package com.arcclaw.core.agent.role;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import io.quarkus.qute.TemplateData;
+
 /**
  * Immutable definition of an agent's role attributes, operational constraints,
  * and permitted tool capabilities.
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
  * @param requiresApproval  If true, all tool executions by this role require explicit HITL approval.
  * @param capabilities      The set of Tools this role is allowed to invoke.
  */
+@TemplateData
 public record RoleDefinition(
         String canonicalName,
         String displayName,

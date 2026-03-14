@@ -1,6 +1,6 @@
 package com.arcclaw.app.routing;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.common.annotation.Identifier;
@@ -19,7 +19,7 @@ public class IntentClassifierServiceTest {
 
     @InjectMock
     @Identifier("intent-classifier")
-    ChatLanguageModel classifierModel;
+    ChatModel classifierModel;
 
     @Test
     void testNormalRouting() {
