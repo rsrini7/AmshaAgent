@@ -1,0 +1,357 @@
+### ═══════════════════════════════════════════════════════════════
+### 12 — MCP SERVER + CLIENT TESTING
+###
+### Tool: REST Client (humao.rest-client) for VS Code
+###
+### How session ID flows between requests:
+###   1. Run [MCP-1] — it is named with # @name mcpInit
+###   2. The variable @mcpSessionId is set from that response header
+###   3. All subsequent requests use {{mcpSessionId}} in the header
+###
+### IMPORTANT: Run requests in order — MCP-1 must be sent before
+###            any request that uses {{mcpSessionId}}.
+###
+### ArcClaw exposes two MCP surfaces:
+###
+###   A) MCP SERVER (inbound) — Quarkiverse endpoint at /mcp
+###      Handshake: initialize → notifications/initialized → tools/list → tools/call
+###
+###   B) MCP CLIENT (outbound) — McpConnectResource
+###      POST   /api/v1/mcp/connect        → connect to remote server
+###      DELETE /api/v1/mcp/connect/{name} → disconnect + deregister tools
+###      GET    /api/v1/mcp/connect        → list connected servers
+###
+###   C) MCP ADMIN (read-only)
+###      GET /api/v1/mcp/status  → enabled flag + dynamic tool count
+###      GET /api/v1/mcp/tools   → exposed internal + dynamic tools
+###
+### Telegram: /mcp → McpReflex shows live MCP status
+###
+### Prerequisites:
+###   ArcClaw running in serve mode
+###   arcclaw.mcp.server-enabled=true (default)
+###   McpConnectResource.java added to arcclaw-app/.../mcp/
+### ═══════════════════════════════════════════════════════════════
+
+@adminBase = http://localhost:8080/api/v1
+@mcpBase   = http://localhost:8080
+@validKey  = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+
+
+### ════════════════════════════════════════════════════════════════
+### FLOW A — MCP ADMIN (run first as health checks)
+### ════════════════════════════════════════════════════════════════
+
+### [MCP-ADMIN-1] Check MCP server status
+# Expect 200: {"serverEnabled":true,"dynamicToolCount":0}
+# If 404 → arcclaw.mcp.server-enabled=false in config
+GET {{adminBase}}/mcp/status
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [MCP-ADMIN-2] List all MCP tools — internal exposed + dynamic registered
+# Expect 200:
+# {
+#   "exposedInternalTools": [{"name":"github",...},{"name":"memory_search",...}],
+#   "registeredDynamicTools": []   ← empty until FLOW D runs
+# }
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+### ════════════════════════════════════════════════════════════════
+### FLOW B — MCP PROTOCOL (ArcClaw as server, you as client)
+###
+### Run in strict order: MCP-1 → MCP-2 → MCP-3 → MCP-4 → MCP-5
+###
+### After sending MCP-1, the @mcpSessionId variable below is
+### populated automatically from the response header. Every
+### request from MCP-2 onwards sends it as Mcp-Session-Id.
+### ════════════════════════════════════════════════════════════════
+
+### [MCP-1] Initialize — start the MCP handshake
+# Expect 200: JSON-RPC result with protocolVersion + capabilities
+# Mcp-Session-Id is captured from the response header below.
+# @name mcpInit
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "rest-client-test",
+      "version": "1.0"
+    }
+  }
+}
+
+###
+
+# Capture session ID from MCP-1 response header — must appear after MCP-1
+@mcpSessionId = {{mcpInit.response.headers.mcp-session-id}}
+
+###
+
+### [MCP-2] Send notifications/initialized — completes the handshake
+# Expect 202: empty body (notification, no JSON-RPC response per spec)
+# MUST be sent before tools/list or tools/call
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/initialized",
+  "params": {}
+}
+
+###
+
+### [MCP-3] List tools — discover what ArcClaw exposes
+# Expect 200: tools array containing "github" and "memory_search"
+# These come from arcclaw.mcp.exposed-tools via McpToolBridge
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list",
+  "params": {}
+}
+
+###
+
+### [MCP-4] Call memory_search tool
+# Expect 200: result.content[0].text = memory search output
+# Flow: McpToolsBean.memorySearch() → McpToolBridge.invoke()
+#       → ToolRegistry.invokeTool() → memory search impl
+# Audit event MCP_TOOL_INVOKED persisted for every call
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "memory_search",
+    "arguments": {
+      "query": "ArcClaw architecture overview"
+    }
+  }
+}
+
+###
+
+### [MCP-5] Call github tool
+# Expect 200: result.content[0].text = github output
+# Returns an error string inside content if GH_TOKEN not seeded — still HTTP 200
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "github",
+    "arguments": {
+      "operation": "list_repos",
+      "paramsJson": "{}"
+    }
+  }
+}
+
+###
+
+
+### ════════════════════════════════════════════════════════════════
+### FLOW C — MCP ERROR / EDGE CASES
+### ════════════════════════════════════════════════════════════════
+
+### [MCP-ERR-1] Call a tool NOT in the allowlist
+# Expect 200 HTTP with JSON-RPC error body (per JSON-RPC spec errors are HTTP 200)
+# {"jsonrpc":"2.0","id":5,"error":{"code":...,"message":"Tool 'sandbox_exec' not in allowlist"}}
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "sandbox_exec",
+    "arguments": {}
+  }
+}
+
+###
+
+### [MCP-ERR-2] tools/list without session ID → expect 4xx
+# Quarkiverse MCP session validation rejects missing Mcp-Session-Id header
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/list",
+  "params": {}
+}
+
+###
+
+
+### ════════════════════════════════════════════════════════════════
+### FLOW D — MCP CLIENT (ArcClaw connecting OUT to remote servers)
+###
+### Prerequisite: McpConnectResource.java added at:
+###   arcclaw-app/src/main/java/com/arcclaw/app/mcp/McpConnectResource.java
+###
+### Self-connect smoke test — no external server needed:
+###   MCP-CLIENT-1 connects ArcClaw to itself (localhost:8080/mcp).
+###   After MCP-CLIENT-1 succeeds:
+###     MCP-ADMIN-2 → registeredDynamicTools has 2 entries
+###     /mcp in Telegram → "Dynamic MCP tools (2): github [self, HTTP_SSE]..."
+### ════════════════════════════════════════════════════════════════
+
+### [MCP-CLIENT-1] Self-connect — ArcClaw connects to itself as an MCP client
+# Expect 200: {"name":"self","url":"...","toolsRegistered":2,"status":"connected"}
+# Proves the full outbound client stack:
+#   McpConnectResource → McpClientService.connect() →
+#   MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "name": "self",
+  "url": "http://localhost:8080/mcp"
+}
+
+###
+
+### [MCP-CLIENT-2] Verify dynamic tools are now registered
+# Expect 200: registeredDynamicTools contains github + memory_search
+# both with mcpServerName="self" and transport="HTTP_SSE"
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-3] List connected servers
+# Expect 200: {"connectedServers":[{"name":"self","url":"(url not stored)","toolCount":2}],"totalDynamicTools":2}
+GET {{adminBase}}/mcp/connect
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-4] Connect to a real external MCP server (edit url and uncomment)
+# After connecting, the agent can invoke those tools naturally via Telegram.
+# POST {{adminBase}}/mcp/connect
+# Content-Type: application/json
+# X-ArcClaw-API-Key: {{validKey}}
+#
+# {
+#   "name": "remote",
+#   "url": "http://your-mcp-server:3000/mcp"
+# }
+
+###
+
+### [MCP-CLIENT-5] Disconnect the self server
+# Expect 200: {"name":"self","deregistered":true,"toolsRemoved":2}
+# After this:
+#   MCP-ADMIN-2 shows registeredDynamicTools: []
+#   /mcp in Telegram → "Dynamic MCP tools: none connected"
+DELETE {{adminBase}}/mcp/connect/self
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-6] Verify dynamic tools cleared after disconnect
+# Expect 200: registeredDynamicTools: []
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+### ════════════════════════════════════════════════════════════════
+### FLOW E — MCP CLIENT ERROR / EDGE CASES
+### ════════════════════════════════════════════════════════════════
+
+### [MCP-CLIENT-ERR-1] Connect with missing url → expect 400
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "name": "no-url"
+}
+
+###
+
+### [MCP-CLIENT-ERR-2] Connect to unreachable server → expect 502
+# McpClientService throws McpConnectionException → McpConnectResource returns 502
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "name": "dead",
+  "url": "http://localhost:9999/mcp"
+}
+
+###
+
+### [MCP-CLIENT-ERR-3] Disconnect a server never connected → expect 404
+DELETE {{adminBase}}/mcp/connect/never-connected
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-ERR-4] Connect without API key → expect 401
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+
+{
+  "name": "unauth",
+  "url": "http://localhost:8080/mcp"
+}
+
+###

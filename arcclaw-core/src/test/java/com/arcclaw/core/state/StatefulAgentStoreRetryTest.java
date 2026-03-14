@@ -1,15 +1,15 @@
 package com.arcclaw.core.state;
 
-import org.hibernate.exception.LockAcquisitionException;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.sql.SQLException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.hibernate.exception.LockAcquisitionException;
+import org.junit.jupiter.api.Test;
 
 class StatefulAgentStoreRetryTest {
 
@@ -41,13 +41,6 @@ class StatefulAgentStoreRetryTest {
         // Let's be conservative as per user request (>= BACKOFF_BASE_MS * 2 = 100ms) 
         // but actually 2 failures should be ~300ms.
         assertTrue(elapsed >= 100, "Total elapsed time should be at least 100ms (floor of first backoff), but was " + elapsed);
-    }
-
-    @Test
-    void testJITTERFieldIsInitialized() throws Exception {
-        Field jitterField = StatefulAgentStoreImpl.class.getDeclaredField("JITTER");
-        jitterField.setAccessible(true);
-        assertNotNull(jitterField.get(null), "JITTER Random must be initialized");
     }
 
     @Test

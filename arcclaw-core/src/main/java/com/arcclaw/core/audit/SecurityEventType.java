@@ -46,7 +46,8 @@ public enum SecurityEventType {
 
     // Skills lifecycle (Phase 60) — telemetry tier
     SKILL_LOADED,       // SkillLoader completed a full load cycle
-    SKILL_REFRESHED;    // Manual refresh via GET /api/v1/skills/refresh
+    SKILL_REFRESHED,    // Manual refresh via GET /api/v1/skills/refresh
+    MCP_TOOL_INVOKED;   // External call to an internal tool via MCP server
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -57,7 +58,7 @@ public enum SecurityEventType {
         return switch (this) {
             case VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
                  PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
-                 CRONFIRED, CRONFAILED -> true;
+                 CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED -> true;
             default -> false;
         };
     }

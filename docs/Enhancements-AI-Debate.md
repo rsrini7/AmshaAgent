@@ -2419,7 +2419,8 @@ Task: Phase 59 — MCP Server + Client (Dual-Transport: stdio/Podman + HTTP/SSE)
 
 Architecture Context:
 A production-grade, enterprise AI Agent Kernel built with:
-  - Java 25 + Quarkus 3.23 + LangChain4J 0.26.1
+  - Java 25 + Quarkus 3.27.2 + LangChain4j core 1.5
+    (via io.quarkus.platform:quarkus-langchain4j-bom:3.27.2, extension 1.2.0)
   - GraalVM Native Image (Podman container build)
   - SQLite WAL (single-node, strict singleton topology)
   - Apache Camel (Telegram channel via camel-quarkus-telegram)
@@ -2429,7 +2430,10 @@ A production-grade, enterprise AI Agent Kernel built with:
   - GovernanceLayer (USD budget cap, AutonomyLevel: FULL/SUPERVISED/READONLY)
   - Multi-agent Trimurti model: Vishnu(coordinator), Brahma(coder),
     Shiva(debugger), Saraswati(researcher), DattatreyaAgent(meta-synthesizer)
-  - IntentClassifierService (llama-3.1-8b-instant via Groq, routes to agent role)
+  - IntentClassifierService (llama-3.1-8b-instant via Groq OpenAI-compatible API,
+    accessed via quarkus.langchain4j.openai.* namespace — quarkus.langchain4j.groq.*
+    namespace was removed during migration. CompactionModelProducer reads
+    quarkus.langchain4j.openai.base-url and quarkus.langchain4j.openai.api-key.)
   - Multi-module Maven: arcclaw-parent → arcclaw-channel-api, arcclaw-core,
     arcclaw-deployment, arcclaw-app
   - Dependency chain: arcclaw-channel-api ← arcclaw-core ← arcclaw-app (no reverse).
@@ -2462,7 +2466,7 @@ A production-grade, enterprise AI Agent Kernel built with:
   - InstantToTextConverter: AttributeConverter<Instant,String> for all Instant columns
   - ReflectionConfig.java: @RegisterForReflection(targets={...}) in arcclaw-core.
     This file ONLY imports from arcclaw-core. NEVER from arcclaw-mcp.
-  - SmallRye Fault Tolerance in Quarkus 3.23 BOM — @Timeout, @Retry, @CircuitBreaker
+  - SmallRye Fault Tolerance in Quarkus 3.27.2 BOM — @Timeout, @Retry, @CircuitBreaker
   - Quarkus REST Client Reactive available (quarkus-rest-client-reactive-jackson)
   - ManagedExecutor available via CDI (@Inject ManagedExecutor)
 
@@ -2505,8 +2509,12 @@ A production-grade, enterprise AI Agent Kernel built with:
   SkillSystemPrompt.html Qute wrapper, REST CRUD /api/v1/skills + /refresh + /delete,
   SecurityEventType: SKILL_LOADED / SKILL_REFRESHED (telemetry tier).
   App test baseline after P60 = 132.
+- Phase 60.1: Qute Native Reflection Fixes (Gate) — @TemplateData added to
+  RoleDefinition, AgentRoleEnum, ReasoningStep, ToolCapability,
+  AgentResult nested records (Finished, AwaitingApproval, LoopExceeded, Failed).
+  Zero new tests. Baseline unchanged at 535/535.
 
-## Known Architecture Nuances — ALWAYS APPLY (all 20, including P60 additions)
+## Known Architecture Nuances — ALWAYS APPLY (all 21, including P60 additions)
 
 1. SystemMessages are NEVER stored in SQLite ChatMemoryStore.
 2. All CDI beans touching per-session context must use ScopedValue — never
@@ -2531,16 +2539,20 @@ A production-grade, enterprise AI Agent Kernel built with:
 12. ToolCapability enum constants use underscores: GITHUB, MEMORY_SEARCH,
     SCHEDULE_TASK, MANAGE_SCHEDULE, SANDBOX_EXEC. ToolCapability.toolName()
     returns the lowercase no-underscore form: "github", "memorysearch", etc.
-    The McpToolAllowlist @WithDefault uses toolName() values (lowercase), NOT
+    McpToolAllowlist @WithDefault uses toolName() values (lowercase), NOT
     the enum constant names, because it is matched against external MCP server
     tool names which are always lowercase.
 13. maxBudgetUsd is EXPLICITLY EXCLUDED from skill frontmatter.
-14. %test.arcclaw.skills.hot-reload=false in application.yaml test profile.
+14. In application.yaml test profile. 
+    %test:
+	  arcclaw:
+	    skills:
+		  hot-reload=false 
 15. Dynamic skills use pre-compiled Qute wrapper SkillSystemPrompt.html only.
 16. *** P60-DISCOVERED: ALL REST resource classes that touch JPA/Hibernate or
     trigger async audit writes MUST be annotated @RunOnVirtualThread at class
     level. Missing → BlockingOperationNotAllowedException immediately on any
-    request. McpServerResource MUST have @RunOnVirtualThread. ***
+    request. McpAdminResource MUST have @RunOnVirtualThread. ***
 17. *** P60-DISCOVERED: Repository pattern in arcclaw-core ALWAYS uses raw
     EntityManager (@Inject EntityManager em). NEVER PanacheRepositoryBase or
     PanacheEntity — Panache bytecode enhancement is module-scoped and fails in
@@ -2561,6 +2573,16 @@ A production-grade, enterprise AI Agent Kernel built with:
     - Read inbound messages line-by-line using BufferedReader.readLine()
     Failure to frame with '\n' causes the remote MCP server to hang forever
     waiting for message termination. This is not optional. ***
+21. *** P60.1-DISCOVERED: In native image, EVERY class, record, or enum passed
+    as data to a Qute template via .data("key", object) MUST be annotated
+    @TemplateData (io.quarkus.qute.TemplateData). Without it, ANY property
+    access {var.field} throws TemplateException at runtime — NOT at build time.
+    This is silent in JVM mode and only surfaces in native. @TemplateData is
+    SEPARATE from @RegisterForReflection — both may be needed for the same class
+    but serve different purposes.
+    P59 scope: McpReflex uses StringBuilder (no Qute), McpToolDescriptor is
+    Jackson-serialized only. No new @TemplateData needed in P59. But any future
+    class passed to a .txt/.html template must have it. ***
 
 ## JDK Feature Policy (CRITICAL)
 
@@ -2603,7 +2625,7 @@ StructuredTaskScope is FORBIDDEN. Use ManagedExecutor + virtual threads instead.
     NEVER add arcclaw-mcp imports to ReflectionConfig.java. GraalVM registration
     for arcclaw-mcp classes is handled exclusively by McpBuildStep in
     arcclaw-deployment using string-based ReflectiveClassBuildItem. No
-    Component in this phase touches ReflectionConfig.java.
+    component in this phase touches ReflectionConfig.java.
 
 ## Execution Order
 
@@ -2635,18 +2657,24 @@ arcclaw-mcp/pom.xml:
   - artifactId: arcclaw-mcp
   - packaging: jar
   - minimal dependency: arcclaw-core (compile)
-  - one profile: mcp-smoke-test (adds quarkus-mcp-server)
+  - one profile: mcp-smoke-test (adds quarkus-mcp-server-http & quarkus-mcp-server-sse)
 
 Create the mcp-smoke-test Maven profile:
 <profiles>
   <profile>
     <id>mcp-smoke-test</id>
     <dependencies>
-      <dependency>
-        <groupId>io.quarkiverse.mcp</groupId>
-        <artifactId>quarkus-mcp-server</artifactId>
-        <version>1.1.0</version>
-      </dependency>
+		<dependency>
+		  <groupId>io.quarkiverse.mcp</groupId>
+		  <artifactId>quarkus-mcp-server-stdio</artifactId>
+		  <version>1.10.3</version>
+		</dependency>
+
+		<dependency>
+		  <groupId>io.quarkiverse.mcp</groupId>
+		  <artifactId>quarkus-mcp-server-http</artifactId>
+		  <version>1.10.3</version>
+		</dependency>
     </dependencies>
   </profile>
 </profiles>
@@ -2694,9 +2722,9 @@ Report the result. Wait for confirmation before writing any implementation code.
    as TOOL_INVOKED.
 5. McpServerResource: @RunOnVirtualThread at class level (Nuance #16).
    NO @Transactional anywhere on this class — it has no JPA writes.
-6. No Component in this phase touches ReflectionConfig.java (Nuance #11 in
-   Global Requirements). GraalVM registration for arcclaw-mcp classes is handled
-   exclusively by McpBuildStep via string-based ReflectiveClassBuildItem.
+6. No component in this phase touches ReflectionConfig.java. GraalVM registration
+   for arcclaw-mcp classes is handled exclusively by McpBuildStep via string-based
+   ReflectiveClassBuildItem (Global Requirement #11).
 7. McpToolAllowlist uses ToolCapability.toolName() values ("github","memorysearch")
    as the allowlist entries — NOT enum constant names — because these values
    are matched against external MCP server tool names (Nuance #12).
@@ -2726,6 +2754,8 @@ Finalize arcclaw-mcp/pom.xml (remove the mcp-smoke-test profile, add full deps):
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest</artifactId>
+      <!-- quarkus-mcp-server-http pulls the REST stack transitively;
+           kept explicit here only for reliable IDE import resolution -->
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -2756,9 +2786,9 @@ Add arcclaw-mcp to arcclaw-app/pom.xml:
   <dependency>
     <groupId>com.arcclaw</groupId>
     <artifactId>arcclaw-mcp</artifactId>
-    <!-- compile scope (default, no <scope> tag needed) — McpServerResource
-         in arcclaw-app imports arcclaw-mcp types at compile time. Do NOT use
-         runtime scope or McpServerResource.java will not compile. -->
+    <!-- compile scope (default — no <scope> tag needed). McpServerResource
+         in arcclaw-app imports arcclaw-mcp types at compile time. Do NOT
+         use runtime scope or McpServerResource.java will not compile. -->
   </dependency>
 
 native-image.properties for arcclaw-mcp:
@@ -2769,6 +2799,21 @@ Args = \
   --initialize-at-build-time=com.arcclaw.mcp.tool.McpTransportType \
   --initialize-at-build-time=com.arcclaw.mcp.config.McpToolAllowlist
 
+
+Add to the `<build><plugins>` section of `arcclaw-mcp/pom.xml`:
+```xml
+<plugin>
+    <groupId>io.smallrye</groupId>
+    <artifactId>jandex-maven-plugin</artifactId>
+    <version>3.5.3</version>
+    <executions>
+        <execution>
+            <id>make-index</id>
+            <goals><goal>jandex</goal></goals>
+        </execution>
+    </executions>
+</plugin>
+```
 
 ---
 
@@ -2783,16 +2828,16 @@ external MCP tools. External MCP servers register their tools at connection time
 
 Required Changes:
 
-File 1 — McpTransportType enum:
+File 1 — McpTransportType (top-level enum):
   public enum McpTransportType { STDIO, HTTP_SSE }
 
-File 2 — DynamicToolCapability record:
+File 2 — DynamicToolCapability (top-level record):
   public record DynamicToolCapability(
       String toolName,          // e.g. "search_repos" — unique registry key
-      String description,       // human-readable, surfaced in /mcp/tools
+      String description,
       String mcpServerName,     // which MCP server registered this tool
       McpTransportType transport,
-      boolean requiresApproval, // false for read-only MVP tools
+      boolean requiresApproval,
       String inputSchema        // JSON Schema string for the tool's input params
   ) {
       public DynamicToolCapability {
@@ -2820,8 +2865,7 @@ TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/tool/DynamicToolCapabilityTest.j
 File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/tool/DynamicToolCapabilityRegistry.java
 
 Current Problem:
-Does not exist. External MCP tools registered at runtime have no permission home
-and cannot be looked up by ToolInvocationGuard.
+Does not exist. External MCP tools registered at runtime have no lookup home.
 
 Required Changes:
 - @ApplicationScoped
@@ -2833,8 +2877,6 @@ Required Changes:
   public void register(DynamicToolCapability capability) {
       Objects.requireNonNull(capability);
       registry.put(capability.toolName(), capability);
-      log.infof("Registered dynamic MCP tool: %s (server: %s, transport: %s)",
-          capability.toolName(), capability.mcpServerName(), capability.transport());
   }
 
   public void deregister(String toolName) {
@@ -2870,15 +2912,15 @@ Files:
 
 Current Problem:
 ToolInvocationGuard (arcclaw-core) cannot inject DynamicToolCapabilityRegistry
-(arcclaw-mcp) without a circular dependency. A gateway interface in arcclaw-core
-allows arcclaw-mcp to provide the implementation via CDI.
+(arcclaw-mcp) without a circular Maven dependency. A gateway interface in
+arcclaw-core allows arcclaw-mcp to provide the CDI implementation.
 
-CRITICAL DESIGN: DynamicToolLookupImpl checks ONLY whether the tool is registered
-in DynamicToolCapabilityRegistry. It does NOT consult McpToolAllowlist.
-McpToolAllowlist governs which INTERNAL tools ArcClaw exposes OUT to external MCP
-clients. DynamicToolCapabilityRegistry governs which EXTERNAL tools have connected
-IN. These are orthogonal concerns — mixing them causes a permanent false-negative
-because external tool names (e.g. "search_repos") never appear in McpToolAllowlist.
+CRITICAL DESIGN RULE: DynamicToolLookupImpl checks ONLY whether the tool is
+registered in DynamicToolCapabilityRegistry. It does NOT consult McpToolAllowlist.
+- McpToolAllowlist = which INTERNAL ArcClaw tools are exposed OUT to external clients
+- DynamicToolCapabilityRegistry = which EXTERNAL tools have connected IN
+These are orthogonal. Mixing them causes a permanent false-negative because
+external tool names (e.g. "search_repos") never appear in McpToolAllowlist.
 
 Required Changes:
 
@@ -2909,33 +2951,30 @@ File 2 — DynamicToolLookupImpl (arcclaw-mcp):
 Update ToolInvocationGuard in arcclaw-core:
 ADD field:
   @Inject Instance<DynamicToolLookup> dynamicToolLookup;
-  // Instance<> makes this optional — no arcclaw-mcp on classpath = no dynamic tools
+  // Instance<> makes it optional — no arcclaw-mcp on classpath = no dynamic tools
 
-In the existing guard check method, AFTER the static ToolCapability enum
-check fails, add as a fallback:
+In the guard check method, AFTER the static ToolCapability enum check fails,
+add as a fallback:
   if (!dynamicToolLookup.isUnsatisfied()
           && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
       return; // permitted via dynamic MCP registry
   }
 
 Do NOT modify the existing static ToolCapability check logic in any way.
-This is purely additive — a second lookup path that only fires on a static miss.
 
 TEST: arcclaw-core/src/test/java/com/arcclaw/core/tool/ToolInvocationGuardDynamicTest.java
-- Test 1: when Instance<DynamicToolLookup> unsatisfied, guard static path is
+- Test 1: when Instance<DynamicToolLookup> is unsatisfied, guard static path is
   completely unaffected (no NPE, no behavioral change)
-- Test 2: when DynamicToolLookupImpl.isDynamicToolAllowed() returns true for a
-  toolName not in the static enum, guard permits invocation
-- Test 3: when DynamicToolLookupImpl.isDynamicToolAllowed() returns false,
-  guard blocks invocation
+- Test 2: when isDynamicToolAllowed() returns true for a toolName not in the
+  static enum, guard permits invocation
+- Test 3: when isDynamicToolAllowed() returns false, guard blocks invocation
 
 TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/tool/DynamicToolLookupImplTest.java
 - Test 1: registered tool → isDynamicToolAllowed() returns true
 - Test 2: unregistered tool → isDynamicToolAllowed() returns false
-- Test 3: deregistered tool (registered then removed) → returns false
-  (This test verifies that the allowlist is NOT consulted; registry presence
-  alone determines the result — use a mock registry that returns false for a
-  tool that WOULD be in McpToolAllowlist, and verify the method still returns false)
+- Test 3: tool that IS in McpToolAllowlist but NOT in DynamicToolCapabilityRegistry
+  → isDynamicToolAllowed() returns false. This verifies the allowlist is NOT
+  consulted; only registry presence determines the result.
 
 
 ---
@@ -2945,27 +2984,27 @@ File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/config/McpToolAllowlist.java
 
 Current Problem:
 Does not exist. MVP must restrict which internal ArcClaw tools are EXPOSED via
-the MCP server endpoint. SCHEDULE_TASK and MANAGE_SCHEDULE are excluded until
-HITL-over-MCP is implemented.
+the MCP server endpoint to external clients.
 
 Required Changes:
 @ConfigMapping(prefix = "arcclaw.mcp")
 public interface McpToolAllowlist {
     /**
      * ToolCapability.toolName() values of internal tools to expose via MCP.
-     * Uses toolName() (lowercase) values so they align with external MCP
-     * tool name conventions. Default: read-only FULL-autonomy tools only.
-     *
-     * NOTE: These values are matched against ToolCapability.toolName() results,
-     * NOT enum constant names. "github" matches ToolCapability.GITHUB.toolName(),
+     * Uses toolName() (lowercase) values to match external MCP conventions.
+     * "github" matches ToolCapability.GITHUB.toolName().
      * "memorysearch" matches ToolCapability.MEMORY_SEARCH.toolName().
+     *
+     * SCHEDULE_TASK and MANAGE_SCHEDULE are excluded until HITL-over-MCP
+     * is implemented.
      */
     @WithDefault("github,memorysearch")
     List<String> exposedTools();
 
     /**
-     * Whether the MCP server endpoint is enabled. Disable in test profile
-     * to prevent McpServerResource from binding during non-MCP tests.
+     * Reported by /api/v1/mcp/status. Note: the Quarkiverse extension always
+     * binds /mcp regardless of this flag — use quarkus.mcp.server.enabled=false
+     * to fully disable the extension in test if needed.
      */
     @WithDefault("true")
     boolean serverEnabled();
@@ -2979,8 +3018,18 @@ arcclaw:
     exposed-tools: github,memorysearch
     server-enabled: true
 
-TEST: Behavior validated via McpToolBridgeTest (Component 6) and
-McpServerResourceTest (Component 9). No standalone test for the config interface.
+application.yaml additions ("%test" profile):
+"%test":
+  arcclaw:
+    mcp:
+      server-enabled: false
+
+⚠️ IMPORTANT — application.yaml format guard:
+The existing quarkus.otel.resource.attributes is in flat format:
+  attributes: "deployment.environment=${ARCCLAW_ENV:development}"
+Do NOT revert it to dot-quoted YAML key format — that was a bug fixed in a
+recent cleanup. Any edits to application.yaml in this phase must preserve the
+flat format for that key.
 
 
 ---
@@ -2991,101 +3040,106 @@ Files:
   arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/PodmanMcpTransport.java
 
 Current Problem:
-Does not exist. ~90% of the MCP ecosystem uses stdio transport. There is no
-mechanism to connect to GitHub MCP, filesystem MCP, PostgreSQL MCP, etc.
+Does not exist. ~90% of the MCP ecosystem uses stdio transport.
 
 Required Changes:
 
-File 1 — McpServerConfig (MUST be a top-level record, NOT a nested class):
-  public record MccServerConfig(
-      String serverName,          // e.g. "github-mcp"
-      String podmanImage,         // e.g. "ghcr.io/github/github-mcp-server:latest"
-      List<String> envVars,       // e.g. ["GITHUB_PERSONAL_ACCESS_TOKEN=..."]
-      Map<String, String> labels  // metadata for audit
+File 1 — McpServerConfig (MUST be a TOP-LEVEL record in its own file):
+  public record McpServerConfig(
+      String serverName,
+      String podmanImage,
+      List<String> envVars,
+      Map<String, String> labels
   ) {
       public McpServerConfig {
           Objects.requireNonNull(serverName, "serverName must not be null");
           Objects.requireNonNull(podmanImage, "podmanImage must not be null");
           envVars = envVars == null ? List.of() : List.copyOf(envVars);
-          labels = labels == null ? Map.of() : Map.copyOf(labels);
+          labels  = labels  == null ? Map.of() : Map.copyOf(labels);
       }
   }
 
   IMPORTANT: McpServerConfig is a TOP-LEVEL class in com.arcclaw.mcp.transport.
-  It is NOT a nested class inside PodmanMcpTransport. This matters because
-  McpBuildStep references it by fully-qualified class name:
-  "com.arcclaw.mcp.transport.McpServerConfig" (no $ sign).
+  It is NOT a nested class inside PodmanMcpTransport. McpBuildStep references it
+  by FQN "com.arcclaw.mcp.transport.McpServerConfig" — no $ sign.
 
 File 2 — PodmanMcpTransport (@ApplicationScoped):
   Inject: SandboxCircuitBreaker, DynamicToolCapabilityRegistry
 
-  Per-server process state:
-    private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, BufferedWriter> writers    = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, BufferedReader> readers    = new ConcurrentHashMap<>();
+  Per-server state maps:
+    private final ConcurrentHashMap<String, Process>       activeProcesses = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BufferedWriter> writers         = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BufferedReader> readers         = new ConcurrentHashMap<>();
 
-  CRITICAL — Nuance #20 (stdio framing):
-  Every single write to a process OutputStream MUST:
-    1. Append '\n' to the JSON payload string
-    2. Call flush() after writing
-  Every read from a process InputStream MUST use BufferedReader.readLine()
-  to receive exactly one complete JSON-RPC message per call.
-  Failure to do this causes the remote MCP server to hang indefinitely.
-
-  Core methods:
+  *** NUANCE #20 — MANDATORY STDIO PROTOCOL FRAMING ***
+  Every outbound write:
+    writer.write(jsonPayload);
+    writer.write('\n');   // ← REQUIRED: MCP stdio uses newline-delimited JSON
+    writer.flush();       // ← REQUIRED: ensures bytes reach the process stdin
+  Every inbound read:
+    String line = reader.readLine();  // ← reads exactly one complete JSON-RPC message
 
   public Uni<Void> connect(McpServerConfig config) {
-      // 1. if (sandboxCircuitBreaker.isOpen()) throw McpConnectionException
-      // 2. ProcessBuilder pb = new ProcessBuilder("podman","run","--rm","-i",
-      //       "--network=none", ...envVars..., config.podmanImage());
+      // 1. if (sandboxCircuitBreaker.isOpen()) throw new McpConnectionException(...)
+      // 2. ProcessBuilder pb = new ProcessBuilder(
+      //         "podman","run","--rm","-i","--network=none",
+      //         <envVars as --env K=V args>,
+      //         config.podmanImage());
       //    pb.redirectErrorStream(false);
       // 3. Process process = pb.start();
-      //    Store process, wrap stdout in BufferedReader, stdin in BufferedWriter
-      // 4. Write JSON-RPC "initialize" request + '\n', flush()
-      //    Read response line with BufferedReader.readLine()
-      // 5. Write JSON-RPC "tools/list" request + '\n', flush()
-      //    Read response, parse tools array
-      // 6. For each tool: create DynamicToolCapability, register()
+      //    Store in activeProcesses; wrap stdout with BufferedReader(InputStreamReader),
+      //    stdin with BufferedWriter(OutputStreamWriter); store in readers/writers maps.
+      // 4. Build initialize JSON-RPC 2.0 request:
+      //    {"jsonrpc":"2.0","id":1,"method":"initialize",
+      //     "params":{"protocolVersion":"2025-03-26","capabilities":{},
+      //               "clientInfo":{"name":"arcclaw","version":"1.0"}}}
+      //    Write + '\n' + flush(). Read response line.
+	  // 4b. Send initialized notification (no response expected — one-way):
+      //     {"jsonrpc":"2.0","method":"notifications/initialized"}
+      //     Write + '\n' + flush()
+      //     Do NOT call reader.readLine() — notifications have no response.
+      // 5. Build tools/list request:
+      //    {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+      //    Write + '\n' + flush(). Read response line.
+      //    Parse tools array from response.
+      // 6. For each tool: create DynamicToolCapability(name, desc, config.serverName(),
+      //    McpTransportType.STDIO, false, inputSchema), call registry.register(cap).
       // 7. sandboxCircuitBreaker.recordSuccess()
-      // 8. Return Uni.createFrom().voidItem()
-      // On IOException: sandboxCircuitBreaker.recordFailure(), throw
+      // 8. return Uni.createFrom().voidItem()
+      // On IOException: sandboxCircuitBreaker.recordFailure(); throw McpConnectionException
   }
 
   public Uni<String> invoke(String serverName, String toolName, String paramsJson) {
-      // 1. Look up writer + reader for serverName
-      // 2. Construct JSON-RPC "tools/call" payload, append '\n', flush writer
-      // 3. Read response line with reader.readLine()
-      // 4. Parse and return result text
-      // Wrap in Uni for consistent API (called via await() from ExternalMcpToolAdapter)
+      // 1. Look up writer and reader for serverName
+      // 2. Build tools/call payload:
+      //    {"jsonrpc":"2.0","id":<N>,"method":"tools/call",
+      //     "params":{"name":"<toolName>","arguments":<paramsJson>}}
+      //    Write + '\n' + flush()
+      // 3. reader.readLine() — get exactly one response line
+      // 4. Parse result from response; return as String
   }
 
   public Uni<Void> disconnect(String serverName) {
-      // Destroy process, close streams, remove from maps
+      // Destroy process, close streams, remove from all three maps
   }
 
-  JSON-RPC 2.0 message construction (use Jackson ObjectMapper, no external lib):
-    Request:  {"jsonrpc":"2.0","id":<N>,"method":"tools/call",
-               "params":{"name":"<toolName>","arguments":<paramsJson>}}
-    Each request and response is exactly ONE line (delimited by '\n').
-
-  initialize request format:
-    {"jsonrpc":"2.0","id":1,"method":"initialize",
-     "params":{"protocolVersion":"2024-11-05","capabilities":{},
-               "clientInfo":{"name":"arcclaw","version":"1.0"}}}
+  Use Jackson ObjectMapper (already in BOM) for all JSON construction and parsing.
 
 TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/transport/PodmanMcpTransportTest.java
 
-  Use a simple test-double echo process rather than Mockito for ProcessBuilder.
-  Create a helper that launches "cat" (Unix) or an echo script as the fake server,
-  or provide a pre-canned response string via a test fixture Process.
+  Use a test-double subprocess rather than mocking ProcessBuilder. The simplest
+  approach: launch a real subprocess running a short script or Java main that
+  reads a line and writes a pre-canned JSON-RPC response. Alternatively, use
+  a pair of PipedInputStream/PipedOutputStream injected via a test constructor.
 
-- Test 1: connect() calls sandboxCircuitBreaker, Uni completes successfully
-- Test 2: connect() when circuit OPEN throws McpConnectionException immediately
-  (no Podman invoked)
-- Test 3: invoke() writes JSON ending with '\n' to process stdin, returns
-  parsed result from stdout
-- Test 4: disconnect() removes all entries from the three maps
-- Test 5: IOException during process.start() calls sandboxCircuitBreaker.recordFailure()
+- Test 1: connect() calls sandboxCircuitBreaker.isOpen() before launching process
+- Test 2: connect() when circuit OPEN → McpConnectionException thrown immediately,
+  no ProcessBuilder invoked
+- Test 3: invoke() appends '\n' to the JSON payload and calls flush() — verify
+  by reading what was written to the input pipe in the test double
+- Test 4: disconnect() removes all entries from all three state maps
+- Test 5: IOException during process launch → sandboxCircuitBreaker.recordFailure()
+  called
 
 
 ---
@@ -3094,8 +3148,8 @@ TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/transport/PodmanMcpTransportTest
 File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/bridge/McpToolBridge.java
 
 Current Problem:
-Does not exist. ArcClaw's internal tools (GithubTool, MemorySearchTool) need to
-be exposed as MCP-compatible descriptors to external clients.
+Does not exist. ArcClaw's internal tools need to be exposed as MCP-compatible
+descriptors to external clients.
 
 Required Changes:
 - @ApplicationScoped
@@ -3111,13 +3165,13 @@ Required Changes:
       return allowlist.exposedTools().stream()
           .map(toolNameStr -> {
               // toolNameStr is a toolName() value (lowercase): "github", "memorysearch"
-              // Find the matching ToolCapability by comparing toolName()
+              // Match against ToolCapability by comparing toolName()
               return Arrays.stream(ToolCapability.values())
                   .filter(cap -> cap.toolName().equals(toolNameStr))
                   .findFirst()
                   .map(cap -> new McpToolDescriptor(
                       cap.toolName(),
-                      cap.name(),      // use enum constant name as description for now
+                      cap.name(),            // enum constant name as description
                       buildInputSchema(cap)
                   ))
                   .orElseGet(() -> {
@@ -3131,32 +3185,33 @@ Required Changes:
   }
 
   public String invoke(String toolName, String paramsJson) {
-      boolean allowed = allowlist.exposedTools().contains(toolName);
-      if (!allowed) throw new McpToolNotAllowedException(
-          "Tool '" + toolName + "' not in MCP allowlist");
+      if (!allowlist.exposedTools().contains(toolName))
+          throw new McpToolNotAllowedException("Tool '" + toolName + "' not in allowlist");
       return toolRegistry.invokeTool(toolName, paramsJson);
   }
 
-  buildInputSchema(ToolCapability cap): static map for MVP:
-    GITHUB       → {"type":"object","properties":{"operation":{"type":"string"},
-                    "params":{"type":"object"}},"required":["operation"]}
+  buildInputSchema(ToolCapability cap) — static map for MVP:
+    GITHUB        → {"type":"object","properties":{"operation":{"type":"string"},
+                     "params":{"type":"object"}},"required":["operation"]}
     MEMORY_SEARCH → {"type":"object","properties":{"query":{"type":"string"}},
-                    "required":["query"]}
-    default      → {"type":"object"}
+                     "required":["query"]}
+    default       → {"type":"object"}
 
-  Create McpToolNotAllowedException:
+  Create McpToolNotAllowedException (top-level class):
   File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/bridge/McpToolNotAllowedException.java
     public class McpToolNotAllowedException extends RuntimeException {
         public McpToolNotAllowedException(String message) { super(message); }
     }
 
 TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/bridge/McpToolBridgeTest.java
-  Mock ToolRegistry, McpToolAllowlist (return List.of("github","memorysearch"))
+  Mock ToolRegistry; mock McpToolAllowlist returning List.of("github","memorysearch")
 - Test 1: getExposedTools() returns exactly the tools in the allowlist
-- Test 2: allowlist entry with no matching toolName() logs WARN and is skipped
+- Test 2: allowlist entry with no matching toolName() → WARN logged, entry skipped
 - Test 3: invoke() for allowlisted tool delegates to ToolRegistry.invokeTool()
 - Test 4: invoke() for non-allowlisted tool throws McpToolNotAllowedException
-- Test 5: invoke() toolName matches via toolName() not enum constant name
+- Test 5: getExposedTools() matching uses toolName() (lowercase), not enum
+  constant name — mock a ToolCapability whose name() ≠ toolName() and verify
+  the lookup uses toolName()
 
 
 ---
@@ -3181,27 +3236,22 @@ Required Changes:
       return switch (cap.transport()) {
           case STDIO    -> podmanMcpTransport
                                .invoke(cap.mcpServerName(), toolName, paramsJson)
-                               // 30s timeout — prevents permanent virtual thread block
+                               // 30s cap — prevents permanent virtual thread block
                                // if Podman MCP process hangs on stdout
                                .await().atMost(Duration.ofSeconds(30));
           case HTTP_SSE -> mcpClientService
                                .invoke(cap.mcpServerName(), toolName, paramsJson);
       };
+      // Wrap io.smallrye.mutiny.TimeoutException as McpConnectionException
   }
 
-  Create McpToolNotFoundException:
+  Create McpToolNotFoundException (top-level class):
   File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/bridge/McpToolNotFoundException.java
     public class McpToolNotFoundException extends RuntimeException {
         public McpToolNotFoundException(String message) { super(message); }
     }
 
-  NOTE: .await().atMost(Duration.ofSeconds(30)) replaces await().indefinitely().
-  Wrap io.smallrye.mutiny.TimeoutException as McpConnectionException if it fires.
-  This prevents permanent virtual thread starvation when a Podman MCP process
-  hangs without writing to stdout.
-
 TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/bridge/ExternalMcpToolAdapterTest.java
-  Mock PodmanMcpTransport, McpClientService, DynamicToolCapabilityRegistry
 - Test 1: STDIO tool → PodmanMcpTransport.invoke() called, result returned
 - Test 2: HTTP_SSE tool → McpClientService.invoke() called, result returned
 - Test 3: unregistered toolName → McpToolNotFoundException thrown
@@ -3213,13 +3263,12 @@ TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/bridge/ExternalMcpToolAdapterTes
 File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/McpClientService.java
 
 Current Problem:
-Does not exist. Hosted/cloud MCP servers (HTTP/SSE transport) need a resilient
-outbound client. SmallRye FT handles resilience — NOT SandboxCircuitBreaker.
+Does not exist. Hosted/cloud MCP servers need a resilient HTTP outbound client.
 
 Required Changes:
 - @ApplicationScoped
-- Uses SmallRye FT annotations (in Quarkus BOM — no new dependency)
-- Uses Quarkus REST Client Reactive for HTTP calls
+- SmallRye FT annotations (in Quarkus BOM — no new dependency needed)
+- Do NOT annotate with @RunOnVirtualThread (uses reactive HTTP client)
 
   private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
 
@@ -3228,8 +3277,7 @@ Required Changes:
   @CircuitBreaker(requestVolumeThreshold = 5, failureRatio = 0.6, delay = 30000)
   public void connect(String serverName, String serverUrl) {
       // POST {serverUrl}/rpc {"jsonrpc":"2.0","method":"initialize","id":1,...}
-      // GET  {serverUrl}/tools/list
-      // Register each tool into DynamicToolCapabilityRegistry with HTTP_SSE transport
+      // GET  {serverUrl}/tools/list → register tools into DynamicToolCapabilityRegistry
       serverUrls.put(serverName, serverUrl);
   }
 
@@ -3243,136 +3291,198 @@ Required Changes:
       // Return result content text
   }
 
-  NOTE: Do NOT annotate McpClientService with @RunOnVirtualThread — it uses the
-  reactive REST client stack (non-blocking). Only JAX-RS resource classes with
-  blocking side effects need @RunOnVirtualThread.
-
 TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/transport/McpClientServiceTest.java
 
-  Do NOT use WireMock (not in the project's test dependencies). Instead, use a
-  Quarkus @QuarkusTestResourceLifecycleManager to start a simple mock HTTP server
-  using the built-in com.sun.net.httpserver.HttpServer (JDK built-in, no dep):
+  Do NOT use WireMock — not in the project's test dependencies. Use a
+  QuarkusTestResourceLifecycleManager backed by JDK built-in HttpServer
+  (com.sun.net.httpserver.HttpServer — no additional dependency):
 
   public class MockMcpServerResource implements QuarkusTestResourceLifecycleManager {
       private HttpServer server;
-      @Override public Map<String, String> start() {
+      @Override public Map<String, String> start() throws Exception {
           server = HttpServer.create(new InetSocketAddress(0), 0);
+          server.createContext("/rpc", exchange -> {
+              String resp = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":" +
+                  "{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{}}}";
+              exchange.sendResponseHeaders(200, resp.length());
+              exchange.getResponseBody().write(resp.getBytes());
+              exchange.close();
+          });
           server.createContext("/tools/list", exchange -> {
-              String response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"tools\":[]}}";
-              exchange.sendResponseHeaders(200, response.length());
-              exchange.getResponseBody().write(response.getBytes());
+              String resp = "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}";
+              exchange.sendResponseHeaders(200, resp.length());
+              exchange.getResponseBody().write(resp.getBytes());
               exchange.close();
           });
           server.createContext("/tools/call", exchange -> {
-              String response = "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"content\":" +
+              String resp = "{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":" +
                   "[{\"text\":\"mock-result\"}]}}";
-              exchange.sendResponseHeaders(200, response.length());
-              exchange.getResponseBody().write(response.getBytes());
+              exchange.sendResponseHeaders(200, resp.length());
+              exchange.getResponseBody().write(resp.getBytes());
               exchange.close();
           });
           server.start();
-          return Map.of("test.mcp.mock.url",
-              "http://localhost:" + server.getAddress().getPort());
+          int port = server.getAddress().getPort();
+          return Map.of("test.mcp.mock.url", "http://localhost:" + port);
       }
       @Override public void stop() { if (server != null) server.stop(0); }
   }
 
-- Test 1: connect() to mock server → tools registered in DynamicToolCapabilityRegistry
-- Test 2: invoke() sends correct JSON-RPC, returns parsed result ("mock-result")
-- Test 3: invoke() with server returning HTTP 500 → SmallRye FT retries, then
-  propagates exception after maxRetries exhausted
+- Test 1: connect() to mock server completes without error
+- Test 2: invoke() sends JSON-RPC to /tools/call, returns "mock-result"
+- Test 3: invoke() with server returning 500 → SmallRye FT retries, then throws
 
 
 ---
 
-### Component 9 — McpServerResource (JAX-RS)
-File: arcclaw-app/src/main/java/com/arcclaw/app/mcp/McpServerResource.java
+### Component 9A — McpToolsBean (Quarkiverse @Tool declarations)
+File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/server/McpToolsBean.java
 
 Current Problem:
-Does not exist. External MCP clients need a JSON-RPC 2.0 endpoint to discover
-and invoke ArcClaw's exposed tools.
+The Quarkiverse gate PASSED. The extension owns the MCP protocol endpoint at
+POST /mcp. Tool exposure must use the extension's declarative @Tool annotation
+approach — NOT a hand-rolled handleRpc() dispatcher. Any @Path("/mcp") resource
+would conflict with the extension's auto-registered route and cause a duplicate
+route exception at startup.
 
-IMPLEMENTATION PATH: If Quarkiverse gate PASSED, delegate to the extension for
-tool registration but keep this resource for the audit layer. If gate FAILED,
-implement hand-rolled JSON-RPC 2.0 handler using standard quarkus-rest — same
-external API either way.
+Required Changes:
+- Package: com.arcclaw.mcp.server
+- @ApplicationScoped
+- Uses io.quarkiverse.mcp.server.Tool and io.quarkiverse.mcp.server.TextContent
+
+  @ApplicationScoped
+  public class McpToolsBean {
+      @Inject McpToolBridge bridge;
+      @Inject AsyncPersistenceEngine asyncPersistenceEngine;
+
+      @Tool(description = "Invoke GitHub operations (read-only): search repos, " +
+          "list PRs, get file contents")
+      TextContent github(String operation, String params) {
+          submitAudit("github");
+          return new TextContent(bridge.invoke("github", params));
+      }
+
+      @Tool(description = "Search agent memory for relevant past context")
+      TextContent memorySearch(String query) {
+          submitAudit("memorysearch");
+          return new TextContent(bridge.invoke("memorysearch", query));
+      }
+
+      private void submitAudit(String toolName) {
+          asyncPersistenceEngine.submitCritical(
+              new AuditEvent(null, null, "mcp-server",
+                  SecurityEventType.MCP_TOOL_INVOKED,
+                  "MCP tool invoked: " + toolName));
+      }
+  }
+
+NOTE: The tool method names become the MCP tool names as seen by external clients.
+The @Tool description is what appears in the tools/list response. Parameters are
+automatically extracted from method signatures by the extension.
+
+NOTE on allowlist: McpToolsBean exposes exactly the two MVP tools (github,
+memorysearch). Adding or removing tools requires adding/removing @Tool methods
+here — McpToolAllowlist still governs what is shown in the ops listing endpoint
+(Component 9B), but the extension's CDI discovery of McpToolsBean is the actual
+enforcement mechanism for Quarkiverse clients.
+
+Inject: McpToolBridge, AsyncPersistenceEngine
+
+TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/server/McpToolsBeanTest.java
+- Mock McpToolBridge, AsyncPersistenceEngine
+- Test 1: github() invokes bridge.invoke("github", params) and submits audit event
+- Test 2: memorySearch() invokes bridge.invoke("memorysearch", query) and submits audit event
+
+
+---
+
+### Component 9B — McpAdminResource (ops/debug listing only)
+File: arcclaw-app/src/main/java/com/arcclaw/app/mcp/McpAdminResource.java
+
+Current Problem:
+The extension owns /mcp. We still need an operator-facing endpoint to list what
+tools are exposed and what dynamic tools are connected — but it must NOT conflict
+with the extension's /mcp path.
 
 Required Changes:
 - Package: com.arcclaw.app.mcp
-- @Path("/mcp")
-- @RunOnVirtualThread ← MANDATORY (Nuance #16: async audit submitCritical)
-- NO @Transactional at any level — this resource has no JPA writes
+- @Path("/api/v1/mcp")   ← NOT /mcp — that path belongs to the Quarkiverse extension
+- @RunOnVirtualThread ← MANDATORY (Nuance #16: audit submitCritical path)
+- NO @Transactional — no JPA writes
 - Protected by existing ApiKeyAuthFilter
-
-  @POST
-  @Path("/rpc")
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
-  public Response handleRpc(String jsonRpcBody) {
-      if (!allowlist.serverEnabled()) {
-          return Response.status(503).entity(
-              Map.of("error","MCP server disabled")).build();
-      }
-      // 1. Parse JSON-RPC 2.0: extract method, id, params
-      // 2. Dispatch:
-      //    "initialize"  → return {protocolVersion:"2024-11-05", capabilities:{tools:{}}}
-      //    "tools/list"  → return {tools: mcpToolBridge.getExposedTools()}
-      //    "tools/call"  → invoke via mcpToolBridge.invoke(name, paramsJson)
-      //                    emit MCP_TOOL_INVOKED via asyncPersistenceEngine.submitCritical()
-      //                    return JSON-RPC success result
-      //    unknown method → JSON-RPC error: {"code":-32601,"message":"Method not found"}
-      // 3. Wrap all results in JSON-RPC 2.0 response envelope:
-      //    {"jsonrpc":"2.0","id":<same id as request>,"result":{...}}
-  }
-
-  MCP_TOOL_INVOKED audit write (mandatory — submitCritical, NOT submitTelemetry):
-      asyncPersistenceEngine.submitCritical(
-          new AuditEvent(sessionId, userId, "mcp-server",
-              SecurityEventType.MCP_TOOL_INVOKED,
-              "MCP tool invoked: " + toolName));
 
   @GET
   @Path("/tools")
   @Produces(MediaType.APPLICATION_JSON)
   public Response listTools() {
-      // Human-readable tool inventory for ops/debug (not JSON-RPC)
-      List<Object> internal = List.copyOf(mcpToolBridge.getExposedTools());
-      Collection<DynamicToolCapability> dynamic = dynamicRegistry.getAll();
-      return Response.ok(Map.of("internal", internal, "dynamic", dynamic)).build();
+      // Human-readable ops/debug listing — NOT JSON-RPC
+      return Response.ok(Map.of(
+          "internal", mcpToolBridge.getExposedTools(),
+          "dynamic",  dynamicRegistry.getAll()
+      )).build();
   }
 
-Inject: McpToolBridge, DynamicToolCapabilityRegistry, McpToolAllowlist,
-        AsyncPersistenceEngine
+  @GET
+  @Path("/status")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response status() {
+      return Response.ok(Map.of(
+          "serverEnabled", allowlist.serverEnabled(),
+          "exposedTools",  allowlist.exposedTools(),
+          "dynamicTools",  dynamicRegistry.getAll().size()
+      )).build();
+  }
 
-TEST: arcclaw-app/src/test/java/com/arcclaw/app/mcp/McpServerResourceTest.java
+Inject: McpToolBridge, DynamicToolCapabilityRegistry, McpToolAllowlist
 
-@QuarkusTest
-@io.quarkus.test.junit.TestProfile(McpServerResourceTest.McpEnabledProfile.class)
-class McpServerResourceTest {
+TEST: McpAdminResource tests fold into McpServerResourceTest class (renamed
+McpAdminResourceTest). The test profile + split-class approach still applies:
 
-    public static class McpEnabledProfile implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of("arcclaw.mcp.server-enabled", "true");
-        }
-    }
-    // ...
-}
+File: arcclaw-app/src/test/java/com/arcclaw/app/mcp/McpAdminResourceTest.java
 
-- @QuarkusTest
-- @BeforeEach: no DB writes in this test class (no new entities this phase)
+  @QuarkusTest
+  @io.quarkus.test.junit.TestProfile(McpAdminResourceTest.McpEnabledProfile.class)
+  class McpAdminResourceTest {
+
+      public static class McpEnabledProfile implements QuarkusTestProfile {
+          @Override
+          public Map<String, String> getConfigOverrides() {
+              return Map.of("arcclaw.mcp.server-enabled", "true");
+          }
+      }
+  }
+
 - Every given() includes .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-  (Nuance #19 — mandatory, without this all requests return 401)
 
 Test cases:
-- Test 1: POST /mcp/rpc "initialize" → 200, response contains protocolVersion
-- Test 2: POST /mcp/rpc "tools/list" → 200, response contains tools array
-- Test 3: POST /mcp/rpc "tools/call" allowlisted tool → 200 success result
-- Test 4: POST /mcp/rpc "tools/call" non-allowlisted tool → 200 JSON-RPC error
-- Test 5: POST /mcp/rpc unknown method → 200 JSON-RPC error code -32601
-- Test 6: POST /mcp/rpc without API key → 401 (no X-ArcClaw-API-Key header)
-- Test 7: GET /mcp/tools → 200 with internal + dynamic sections
-- Test 8: POST /mcp/rpc when server-enabled=false → 503
+- Test 1: GET /api/v1/mcp/tools → 200, returns internal + dynamic sections
+- Test 2: GET /api/v1/mcp/status → 200, serverEnabled=true, exposedTools list present
+- Test 3: GET /api/v1/mcp/tools without API key → 401
+
+File: arcclaw-app/src/test/java/com/arcclaw/app/mcp/McpAdminDisabledTest.java
+  @QuarkusTest  // default %test profile has server-enabled=false
+- Test 4: GET /api/v1/mcp/status → 200, serverEnabled=false
+
+NOTE: The Quarkiverse extension's /mcp endpoint itself is tested via the
+extension's built-in test utilities — do NOT use RestAssured POST /mcp/rpc
+style tests. The protocol is Streamable HTTP, not plain REST:
+  - POST /mcp with Accept: application/json, text/event-stream
+  - initialize returns Mcp-Session-Id header; all subsequent requests need it
+  If writing integration tests against the extension endpoint, use the pattern:
+
+  Response initResp = given()
+      .accept("application/json, text/event-stream")
+      .contentType("application/json")
+      .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+      .body("""
+          {"jsonrpc":"2.0","id":1,"method":"initialize",
+           "params":{"protocolVersion":"2025-03-26","capabilities":{},
+                     "clientInfo":{"name":"test","version":"1.0"}}}
+          """)
+      .post("/mcp")
+      .then().statusCode(200).extract().response();
+  String sessionId = initResp.getHeader("Mcp-Session-Id");
+  // All subsequent calls add .header("Mcp-Session-Id", sessionId)
 
 
 ---
@@ -3381,8 +3491,7 @@ Test cases:
 File: arcclaw-deployment/src/main/java/com/arcclaw/deployment/McpBuildStep.java
 
 Current Problem:
-Does not exist. arcclaw-mcp records need GraalVM reflection registration for
-Jackson serialization in native image.
+Does not exist. arcclaw-mcp records need GraalVM reflection registration.
 
 Required Changes:
 - Package: com.arcclaw.deployment
@@ -3392,32 +3501,31 @@ Required Changes:
   public void registerMcpReflection(
       BuildProducer<ReflectiveClassBuildItem> reflectiveClasses
   ) {
-      // Use fully-qualified STRING names only — no Class.forName(), no loadClass().
-      // McpServerConfig is a TOP-LEVEL class (no $ sign in the FQN).
+      // String FQNs only — no Class.forName(), no ClassLoader, no file I/O.
+      // McpServerConfig is a TOP-LEVEL class → no $ in its FQN.
       reflectiveClasses.produce(ReflectiveClassBuildItem
           .builder(
               "com.arcclaw.mcp.tool.DynamicToolCapability",
               "com.arcclaw.mcp.tool.McpTransportType",
-              "com.arcclaw.mcp.transport.McpServerConfig",     // top-level, no $
+              "com.arcclaw.mcp.transport.McpServerConfig",       // top-level, no $
               "com.arcclaw.mcp.bridge.McpToolDescriptor",
               "com.arcclaw.mcp.bridge.McpToolNotAllowedException",
-              "com.arcclaw.mcp.bridge.McpToolNotFoundException"
+              "com.arcclaw.mcp.bridge.McpToolNotFoundException",
+              "com.arcclaw.mcp.server.McpToolsBean"              // Quarkiverse @Tool bean
           )
           .methods(true)
           .fields(true)
           .build());
   }
 
-NOTE: This BuildStep only emits ReflectiveClassBuildItem using string class names.
-It does NOT write any files to the classpath. It does NOT call Class.forName() or
-any ClassLoader methods on runtime application classes. This is the safe and
-correct Quarkus BuildStep pattern for cross-module reflection registration.
+CRITICAL: This BuildStep only emits ReflectiveClassBuildItem. It does NOT write
+files, call Class.forName(), or use ClassLoader on runtime classes. This is the
+correct and safe Quarkus BuildStep pattern for cross-module registration.
 
-NOTE: There is NO corresponding change to ReflectionConfig.java in arcclaw-core.
-This BuildStep is the sole and sufficient mechanism for arcclaw-mcp GraalVM
-reflection registration. Do NOT add arcclaw-mcp imports to ReflectionConfig.java.
+This BuildStep is the SOLE mechanism for arcclaw-mcp GraalVM registration.
+ReflectionConfig.java in arcclaw-core is NOT touched in this phase.
 
-TEST: No unit test for BuildStep — validated by native image build in CI.
+TEST: No unit test — validated by native image build in CI.
 
 
 ---
@@ -3426,14 +3534,12 @@ TEST: No unit test for BuildStep — validated by native image build in CI.
 File: arcclaw-mcp/src/main/java/com/arcclaw/mcp/reflex/McpReflex.java
 
 Current Problem:
-Does not exist. Users have no way to inspect connected MCP servers and available
-dynamic tools via the Telegram/chat interface.
+Does not exist. Users have no way to inspect connected MCP servers via chat.
 
 Required Changes:
 - @ApplicationScoped
-- Implements AgentReflex (from arcclaw-channel-api)
-- CDI-discovered by ReflexRegistry's Instance<AgentReflex> scan
-- DO NOT modify ReflexRegistry.java
+- Implements AgentReflex (arcclaw-channel-api)
+- CDI-discovered by ReflexRegistry's Instance<AgentReflex> — DO NOT modify ReflexRegistry
 
   private static final Pattern MCP_CMD =
       Pattern.compile("^\\s*/mcp\\s*$", Pattern.CASE_INSENSITIVE);
@@ -3470,8 +3576,8 @@ TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/reflex/McpReflexTest.java
 - Test 1: matches("/mcp") → true
 - Test 2: matches("/MCP") → true (case-insensitive)
 - Test 3: matches("/status") → false
-- Test 4: execute() with empty dynamic registry shows internal tools only message
-- Test 5: execute() with 2 registered dynamic tools shows both sections
+- Test 4: execute() with empty dynamic registry shows internal tools only
+- Test 5: execute() with 2 registered dynamic tools shows both sections populated
 
 
 ---
@@ -3480,8 +3586,8 @@ TEST: arcclaw-mcp/src/test/java/com/arcclaw/mcp/reflex/McpReflexTest.java
 File: arcclaw-core/src/main/java/com/arcclaw/core/audit/SecurityEventType.java
 
 Current Problem:
-MCP tool invocations are cross-boundary security events. Invisible to WORM audit
-chain = compliance hole identical to uninstrumented TOOL_INVOKED.
+MCP tool invocations are cross-boundary security events invisible to the WORM
+audit chain.
 
 Required Changes:
 ADD to enum body, after SKILL_REFRESHED (last P60 entry), before isMandatory():
@@ -3492,9 +3598,9 @@ UPDATE isMandatory() switch — ADD:
     case MCP_TOOL_INVOKED -> true;
 
 The semicolon moves from SKILL_REFRESHED to MCP_TOOL_INVOKED.
-Existing entries are unchanged. Verify SecurityEventTypeTest still compiles.
+Existing entries are unchanged.
 
-TEST addition to existing SecurityEventTypeTest.java:
+TEST addition to SecurityEventTypeTest.java:
 - Test NEW: MCP_TOOL_INVOKED.isMandatory() == true
 
 
@@ -3502,33 +3608,32 @@ TEST addition to existing SecurityEventTypeTest.java:
 
 ### Testing Requirements
 
-Current baseline: 535/535 tests (403 core + 132 app).
-App test baseline = 132. Do NOT reference 122 anywhere.
-Target after P59: 535 + ~28 new tests minimum.
+Current baseline: 535/535 tests (403 core + 132 app). App baseline = 132.
+Target after P59: 535 + 46 new minimum = 581+.
 
-New test files to create:
-  arcclaw-mcp/src/test/.../tool/DynamicToolCapabilityTest.java          (5 tests)
-  arcclaw-mcp/src/test/.../tool/DynamicToolCapabilityRegistryTest.java  (5 tests)
-  arcclaw-mcp/src/test/.../tool/DynamicToolLookupImplTest.java          (3 tests)
-  arcclaw-core/src/test/.../tool/ToolInvocationGuardDynamicTest.java    (3 tests)
-  arcclaw-mcp/src/test/.../transport/PodmanMcpTransportTest.java        (5 tests)
-  arcclaw-mcp/src/test/.../bridge/McpToolBridgeTest.java                (5 tests)
-  arcclaw-mcp/src/test/.../bridge/ExternalMcpToolAdapterTest.java       (3 tests)
-  arcclaw-mcp/src/test/.../transport/McpClientServiceTest.java          (3 tests)
-  arcclaw-mcp/src/test/.../reflex/McpReflexTest.java                    (5 tests)
-  arcclaw-app/src/test/.../mcp/McpServerResourceTest.java               (8 tests)
-  arcclaw-core/src/test/.../audit/SecurityEventTypeTest.java            (ADD 1 test)
-  ─────────────────────────────────────────────────────────────────────────────────
-  Total new minimum: 46 tests → target 535 + 46 = 581+ passing
+New test files:
+  arcclaw-mcp/src/test/.../tool/DynamicToolCapabilityTest.java          (5)
+  arcclaw-mcp/src/test/.../tool/DynamicToolCapabilityRegistryTest.java  (5)
+  arcclaw-mcp/src/test/.../tool/DynamicToolLookupImplTest.java          (3)
+  arcclaw-core/src/test/.../tool/ToolInvocationGuardDynamicTest.java    (3)
+  arcclaw-mcp/src/test/.../transport/PodmanMcpTransportTest.java        (5)
+  arcclaw-mcp/src/test/.../bridge/McpToolBridgeTest.java                (5)
+  arcclaw-mcp/src/test/.../bridge/ExternalMcpToolAdapterTest.java       (3)
+  arcclaw-mcp/src/test/.../transport/McpClientServiceTest.java          (3)
+  arcclaw-mcp/src/test/.../reflex/McpReflexTest.java                    (5)
+  arcclaw-mcp/src/test/.../server/McpToolsBeanTest.java                 (2)  ← NEW: 9A
+  arcclaw-app/src/test/.../mcp/McpAdminResourceTest.java                (3)  ← was McpServerResourceTest
+  arcclaw-app/src/test/.../mcp/McpAdminDisabledTest.java                (1)  ← was McpServerDisabledTest
+  arcclaw-core/src/test/.../audit/SecurityEventTypeTest.java            (ADD 1)
+  ─────────────────────────────────────────────────────────────────────────
+  Total new: 44 tests → target 535 + 44 = 579+ passing
 
-Test run commands:
-./mvnw clean test -pl arcclaw-mcp -am "-Dtest=DynamicToolCapabilityTest" \
-  "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl arcclaw-mcp -am "-Dtest=McpToolBridgeTest" \
-  "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl arcclaw-app -am "-Dtest=McpServerResourceTest" \
-  "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl arcclaw-core,arcclaw-mcp,arcclaw-app -am   ← full regression
+Test run commands (Windows):
+.\mvnw.cmd clean test -pl arcclaw-mcp -am "-Dtest=DynamicToolCapabilityTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+.\mvnw.cmd clean test -pl arcclaw-mcp -am "-Dtest=McpToolBridgeTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+.\mvnw.cmd clean test -pl arcclaw-mcp -am "-Dtest=McpToolsBeanTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+.\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=McpAdminResourceTest+McpAdminDisabledTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+.\mvnw.cmd clean test -pl arcclaw-core,arcclaw-mcp,arcclaw-app -am   ← full regression
 ```
 
 ---
@@ -3541,35 +3646,38 @@ Test run commands:
 All tests in P2 have been implemented. Run in this order:
 
 Step 1 — Core unit tests (fast, no Quarkus boot):
-./mvnw clean test -pl arcclaw-core -am
+.\mvnw.cmd clean test -pl arcclaw-core -am
 Expected: All 403 core tests pass. ToolInvocationGuardDynamicTest and
 SecurityEventTypeTest addition pass. Zero skipped.
 
 Step 2 — MCP module unit tests:
-./mvnw clean test -pl arcclaw-mcp -am
+.\mvnw.cmd clean test -pl arcclaw-mcp -am
 Expected: All new arcclaw-mcp tests pass. PodmanMcpTransportTest uses a
-mock/echo subprocess — does NOT require a live Podman daemon.
+subprocess test double — does NOT require a live Podman daemon.
+McpClientServiceTest uses the JDK HttpServer mock — no WireMock needed.
 
 Step 3 — App integration tests:
-./mvnw clean test -pl arcclaw-app -am
-Expected: All 132 existing app tests pass. McpServerResourceTest (8 tests) passes.
-Total app count should be 140+.
+.\mvnw.cmd clean test -pl arcclaw-app -am
+Expected: All 132 existing app tests pass. McpAdminResourceTest (3 tests) +
+McpAdminDisabledTest (1 test) = 4 new app tests. Total app count = 136+.
 
 Step 4 — Full project build:
-./mvnw clean package -DskipTests
-Expected: BUILD SUCCESS. arcclaw-mcp JAR included. No CDI ambiguity. No
-missing native image entries.
+.\mvnw.cmd clean package -DskipTests
+Expected: BUILD SUCCESS. arcclaw-mcp JAR included. No CDI ambiguity warnings.
+No duplicate route exception for /mcp (Quarkiverse extension owns that path;
+McpAdminResource is at /api/v1/mcp — no conflict).
+No missing native image registrations.
 
-Step 5 — Targeted regression checks:
-a) P60 unaffected: ./mvnw clean test -pl arcclaw-app -am "-Dtest=SkillApiTest"
+Step 5 — Targeted regression:
+a) P60 unaffected: .\mvnw.cmd clean test -pl arcclaw-app -am "-Dtest=SkillApiTest"
 b) Static guard path unaffected: run existing ToolInvocationGuardTest
-c) SandboxCircuitBreaker tests pass: no breaking changes to that API
+c) SandboxCircuitBreaker API unchanged: existing circuit breaker tests pass
 
 Step 6 — CDI sanity check:
 DynamicToolLookupImpl (arcclaw-mcp) implements DynamicToolLookup (arcclaw-core).
-If McpServerResourceTest throws UnsatisfiedResolutionException, arcclaw-mcp is
-not on arcclaw-app's compile classpath. Check arcclaw-app/pom.xml — the dependency
-must be compile scope (no <scope> tag), not runtime.
+UnsatisfiedResolutionException in McpServerResourceTest means arcclaw-mcp is
+missing from arcclaw-app/pom.xml or has runtime scope. It must be compile scope
+(default, no <scope> tag).
 
 Report final test count before proceeding to P4.
 ```
@@ -3587,120 +3695,700 @@ Add Phase 59 entry:
   PodmanMcpTransport (stdio, Newline-Delimited JSON-RPC, SandboxCircuitBreaker-guarded).
   McpClientService (HTTP/SSE, SmallRye FT — NOT SandboxCircuitBreaker).
   DynamicToolCapabilityRegistry + DynamicToolLookup bridge (orthogonal to McpToolAllowlist).
-  McpToolBridge exposes GITHUB + MEMORY_SEARCH internally via JSON-RPC 2.0 at /mcp/rpc.
+  McpToolBridge exposes GITHUB + MEMORY_SEARCH via JSON-RPC 2.0 at /mcp/rpc.
   McpReflex (/mcp command). MCP_TOOL_INVOKED mandatory audit. McpBuildStep in
-  arcclaw-deployment for GraalVM registration. Quarkiverse gate outcome documented.
+  arcclaw-deployment. Quarkiverse gate outcome documented.
 
 ### TASKS.md
 Tick off Phase 59 tasks:
   [x] arcclaw-mcp Maven module + pom.xml (compile scope in arcclaw-app)
-  [x] Quarkiverse version gate — result documented (pass/fail path taken)
+  [x] Quarkiverse version gate — result documented
   [x] DynamicToolCapability record + McpTransportType enum (both top-level)
-  [x] McpServerConfig record (top-level in com.arcclaw.mcp.transport)
+  [x] McpServerConfig record (top-level in com.arcclaw.mcp.transport — no $)
   [x] DynamicToolCapabilityRegistry (@ApplicationScoped, ConcurrentHashMap)
   [x] DynamicToolLookup interface (arcclaw-core) + DynamicToolLookupImpl (arcclaw-mcp)
+  [x] DynamicToolLookupImpl — registry-only authorization, no McpToolAllowlist
   [x] ToolInvocationGuard: Instance<DynamicToolLookup> optional second-lookup
   [x] McpToolAllowlist (@ConfigMapping interface, lowercase toolName() values)
   [x] PodmanMcpTransport (stdio, BufferedReader.readLine, '\n'+flush, SandboxCB)
-  [x] McpToolBridge (toolName() matching, allowlist enforcement, McpToolNotAllowedException)
-  [x] ExternalMcpToolAdapter (transport routing, .await().atMost(30s))
-  [x] McpClientService (@Timeout+@Retry+@CircuitBreaker, NOT SandboxCircuitBreaker)
-  [x] McpServerResource (@RunOnVirtualThread, NO @Transactional, /mcp/rpc + /mcp/tools)
-  [x] McpReflex (/mcp command, CDI-discovered, two-pass chain additive)
-  [x] McpBuildStep (existing arcclaw-deployment, string FQNs only, no Class.forName)
-  [x] SecurityEventType: MCP_TOOL_INVOKED (isMandatory=true, submitCritical)
+  [x] McpToolBridge (toolName() matching, McpToolNotAllowedException)
+  [x] ExternalMcpToolAdapter (.await().atMost(30s), McpToolNotFoundException)
+  [x] McpClientService (@Timeout+@Retry+@CircuitBreaker, JDK HttpServer mock test)
+  [x] McpServerResource (@RunOnVirtualThread, NO @Transactional, audit submitCritical)
+  [x] McpReflex (/mcp command, CDI-discovered)
+  [x] McpBuildStep (existing arcclaw-deployment, string FQNs, no Class.forName)
+  [x] SecurityEventType: MCP_TOOL_INVOKED (isMandatory=true)
   [x] native-image.properties for arcclaw-mcp
-  [x] application.yaml: arcclaw.mcp.* config + %test server-enabled=false
+  [x] application.yaml: arcclaw.mcp.* + %test server-enabled=false
   [x] 46+ new tests, 581+ total passing
 
 ### WALKTHROUGH.md
-Add Phase 59 architecture section covering:
-1. Transport split — stdio (PodmanMcpTransport) for 90% of ecosystem vs HTTP/SSE
-   (McpClientService). Why SandboxCircuitBreaker is Podman-only: it guards
-   process launches; SmallRye FT guards HTTP network calls. These are different
-   failure domains.
-2. Newline-Delimited JSON-RPC (Nuance #20) — why '\n'+flush is non-negotiable.
-   MCP stdio servers block on readLine() until the terminator arrives. Missing
-   '\n' causes a permanent hang with no error.
-3. DynamicToolLookup bridge pattern — why the gateway interface in arcclaw-core
-   avoids a circular Maven dependency while still allowing optional CDI injection.
-4. DynamicToolCapabilityRegistry vs McpToolAllowlist — these are orthogonal:
-   allowlist = which internal tools ArcClaw exposes OUT (matches toolName() values);
-   registry = which external tools have connected IN (arbitrary server names).
-   DynamicToolLookupImpl consults ONLY the registry.
-5. @RunOnVirtualThread on McpServerResource — async submitCritical() write is a
-   blocking JPA operation internally. Without @RunOnVirtualThread the REST thread
-   is a Vert.x event loop → BlockingOperationNotAllowedException.
-6. No @Transactional on McpServerResource — AsyncPersistenceEngine.submitCritical()
-   manages its own transaction. An outer transaction boundary on the resource
-   removes the isolation guarantee that makes the async engine safe.
-7. McpBuildStep uses string FQNs only — no ClassLoader, no Class.forName().
-   ReflectionConfig.java in arcclaw-core is NOT touched in this phase.
-8. Quarkiverse gate decision and which implementation path was taken.
+Add Phase 59 architecture section:
+1. Transport split — stdio (PodmanMcpTransport) for 90% of ecosystem vs HTTP/SSE.
+   SandboxCircuitBreaker is Podman-only (process lifecycle); SmallRye FT is
+   HTTP-only (network calls). Different failure domains, different guards.
+2. Newline-Delimited JSON-RPC (Nuance #20) — '\n'+flush is non-negotiable.
+   MCP stdio servers block on readLine() until the newline arrives. Missing it
+   causes a permanent hang with no error or timeout.
+3. DynamicToolLookup bridge pattern — gateway interface in arcclaw-core avoids
+   circular Maven dependency while enabling optional CDI injection.
+4. DynamicToolCapabilityRegistry vs McpToolAllowlist — orthogonal:
+   Allowlist = internal tools exposed OUT (uses toolName() lowercase values).
+   Registry = external tools connected IN (arbitrary names from remote servers).
+   DynamicToolLookupImpl consults ONLY the registry — never the allowlist.
+5. @RunOnVirtualThread on McpServerResource — submitCritical() is a blocking
+   JPA operation internally. Missing this → BlockingOperationNotAllowedException.
+6. No @Transactional on McpServerResource — AsyncPersistenceEngine manages its
+   own transactions. An outer boundary removes the isolation guarantee.
+7. McpBuildStep uses string FQNs only — no ClassLoader, no Class.forName(),
+   no file I/O. ReflectionConfig.java is NOT touched in this phase.
+8. Quarkiverse gate outcome and implementation path taken.
 
 ### TROUBLESHOOTING.md
 Add Phase 59 troubleshooting section:
-- "MCP stdio server hangs forever after connecting" — PodmanMcpTransport is not
-  appending '\n' to outbound messages. Every write must end with '\n' + flush().
-  Verify with a local echo process first.
-- "BlockingOperationNotAllowedException on /mcp/rpc" — McpServerResource is
-  missing @RunOnVirtualThread. Add at class level only. Do NOT add @Transactional.
-- "DynamicToolLookup CDI UnsatisfiedResolutionException" — arcclaw-mcp is missing
-  from arcclaw-app/pom.xml or has runtime scope. Must be compile scope (no <scope>).
-- "MCP_TOOL_INVOKED missing from audit log" — McpServerResource is calling
-  submitTelemetry() instead of submitCritical(). Check SecurityEventType
-  .MCP_TOOL_INVOKED.isMandatory() == true.
+- "MCP stdio server hangs after connect" — PodmanMcpTransport not appending '\n'
+  or not calling flush(). Every write must be: write(json) + write('\n') + flush().
+- "BlockingOperationNotAllowedException on /mcp/rpc" — McpServerResource missing
+  @RunOnVirtualThread. Add at class level. Do NOT add @Transactional.
+- "DynamicToolLookup CDI UnsatisfiedResolutionException" — arcclaw-mcp missing
+  from arcclaw-app/pom.xml or has <scope>runtime</scope>. Must be compile scope.
+- "MCP_TOOL_INVOKED missing from audit log" — McpServerResource calling
+  submitTelemetry() instead of submitCritical(). Verify MCP_TOOL_INVOKED
+  .isMandatory() returns true.
 - "McpToolBridge returns empty tools list" — McpToolAllowlist.exposedTools()
-  returns uppercase entries (e.g. "GITHUB") but matching is against
-  ToolCapability.toolName() (lowercase "github"). Verify application.yaml uses
-  lowercase: exposed-tools: github,memorysearch.
-- "DynamicToolLookupImpl always returns false for registered tools" — Check that
-  DynamicToolLookupImpl only consults DynamicToolCapabilityRegistry.isRegistered()
-  and does NOT also check McpToolAllowlist. The allowlist is for outbound exposure,
-  not inbound authorization.
-- "SandboxCircuitBreaker OPEN — PodmanMcpTransport refuses all connections" —
-  SandboxCircuitBreaker tripped (same breaker as PodmanContainerExecutor). Check
-  Podman daemon health. The circuit resets after the configured failure window.
-- "McpClientService HTTP CircuitBreaker open" — SmallRye FT circuit tripped after
-  5 failures. Remote MCP server may be down. Circuit resets after 30s by default.
+  has uppercase entries but matching is against toolName() (lowercase). Verify
+  application.yaml uses: exposed-tools: github,memorysearch (lowercase).
+- "DynamicToolLookupImpl always returns false for registered tools" — Verify
+  the impl consults ONLY DynamicToolCapabilityRegistry.isRegistered(), NOT
+  McpToolAllowlist. These are orthogonal concerns.
+- "SandboxCircuitBreaker OPEN" — same breaker as PodmanContainerExecutor.
+  Check Podman daemon health.
+- "McpClientService circuit breaker open" — SmallRye FT tripped after 5 HTTP
+  failures. Remote MCP server may be down. Resets after 30s.
 
 ### FAQ.md
 Add "Connecting an MCP Server to ArcClaw" section:
-1. stdio-based server (GitHub MCP, filesystem MCP, etc.):
-   - Ensure the Podman image is pullable from your registry
-   - Call PodmanMcpTransport.connect(new McpServerConfig("name","image",envVars,Map.of()))
-   - On success, tools auto-register into DynamicToolCapabilityRegistry
+1. stdio server (GitHub MCP, filesystem MCP, etc.):
+   - Ensure Podman image is pullable from your registry
+   - Call PodmanMcpTransport.connect(new McpServerConfig(name, image, envVars, Map.of()))
+   - Tools auto-register into DynamicToolCapabilityRegistry
    - Verify: GET /mcp/tools or Telegram /mcp
-2. HTTP/SSE-based server:
-   - Call McpClientService.connect(serverName, serverUrl)
-   - Same auto-registration flow
-3. Checking connected tools: /mcp command in Telegram, or GET /api/v1/mcp/tools
-4. MVP allowlist: only "github" and "memorysearch" (toolName() values) are exposed.
-   To add other tools update arcclaw.mcp.exposed-tools in application.yaml with care.
+2. HTTP/SSE server: McpClientService.connect(serverName, serverUrl)
+3. MVP allowlist: "github" and "memorysearch" only. Update arcclaw.mcp.exposed-tools
+   (lowercase toolName() values) to add more — SCHEDULE_TASK requires HITL-over-MCP.
 ```
 
 ---
 
-## Adjudication Summary (applied to this version)
+## Adjudication Summary
 
-| ID | Source | Decision | Applied Change |
+| ID | Source | Decision | Change Applied |
 |---|---|---|---|
-| Gemini-1 | Gemini | REJECT | Our McpBuildStep emits ReflectiveClassBuildItem with string names only — no file I/O, no ClassLoader. Not applicable. |
-| Gemini-2 | Gemini | REJECT | Our BuildStep uses string FQNs, not Class.forName(). ClassLoader trap not applicable. |
-| Gemini-3 | Gemini | ACCEPT | Added as Architecture Nuance #20. '\n'+flush+BufferedReader.readLine() mandated in Component 5. Added to TROUBLESHOOTING. |
-| Gemini-SSE | Gemini | REJECT | McpServerResource uses JSON-RPC 2.0 POST. No SSE streaming in MVP. @RestStreamElementType not needed. |
+| Gemini-1 | Gemini | REJECT | McpBuildStep emits ReflectiveClassBuildItem with string names only — no file I/O, no ClassLoader. Not applicable. |
+| Gemini-2 | Gemini | REJECT | BuildStep uses string FQNs, not Class.forName(). ClassLoader trap not applicable. |
+| Gemini-3 | Gemini | ACCEPT | Architecture Nuance #20 added. '\n'+flush+BufferedReader.readLine() mandated in Component 5 spec and TROUBLESHOOTING. |
+| Gemini-SSE | Gemini | REJECT | McpServerResource uses JSON-RPC 2.0 POST. No SSE streaming in MVP. |
 | C1 | Perplexity | RETRACTED | Phase 60 source confirms ToolCapability.MEMORY_SEARCH with underscore is correct. |
-| C2 | Perplexity | ACCEPT | Component 13 (ReflectionConfig additions) deleted entirely. McpBuildStep handles this. Added explicit prohibition in Global Req #11. |
-| C3 | Perplexity | ACCEPT | arcclaw-mcp dependency is compile scope (default, no tag) in Component 0. |
-| H1 | Perplexity | ACCEPT | McpServerConfig declared as explicit top-level class in Component 5. BuildStep uses "com.arcclaw.mcp.transport.McpServerConfig" (no $). |
-| H2 | Perplexity | ACCEPT | @Transactional removed from McpServerResource entirely. Documented rationale in WALKTHROUGH. |
-| H3 | Perplexity | ACCEPT | DynamicToolLookupImpl consults ONLY DynamicToolCapabilityRegistry.isRegistered(). McpToolAllowlist removed from impl. Nuance added to Component 3. |
-| M1 | Perplexity | DEFERRED | Phase numbering unchanged — same numbers ran 535/535 in P60 without IDE confusion. No functional impact. |
-| M2 | Perplexity | ACCEPT | .await().atMost(Duration.ofSeconds(30)) in Component 7. Rationale documented inline. |
-| M3 | Perplexity | ACCEPT | DynamicToolLookupImplTest (3 tests) added to Component 3 test spec and test count table. |
-| M4 | Perplexity | ACCEPT | McpClientServiceTest uses JDK built-in HttpServer via QuarkusTestResourceLifecycleManager. No WireMock dependency. |
+| C2 | Perplexity | ACCEPT | No component touches ReflectionConfig.java. Prohibition added to Global Req #11 and Common Requirements. McpBuildStep is sole registration mechanism. |
+| C3 | Perplexity | ACCEPT | arcclaw-mcp dependency is compile scope (default, no tag) in Component 0. Explicit comment added. |
+| H1 | Perplexity | ACCEPT | McpServerConfig declared as explicit top-level class in Component 5. BuildStep FQN = "com.arcclaw.mcp.transport.McpServerConfig" (no $). |
+| H2 | Perplexity | ACCEPT | @Transactional removed from McpServerResource entirely. Rationale in Global Req #9 and WALKTHROUGH. |
+| H3 | Perplexity | ACCEPT | DynamicToolLookupImpl checks ONLY registry.isRegistered(). McpToolAllowlist entirely absent from the impl. Critical design rule in Component 3 and Common Req #8. |
+| M1 | Perplexity | DEFERRED | Phase numbering unchanged — same numbers ran 535/535 in P60 without confusion. |
+| M2 | Perplexity | ACCEPT | .await().atMost(Duration.ofSeconds(30)) in Component 7. Rationale in inline comment. |
+| M3 | Perplexity | ACCEPT | DynamicToolLookupImplTest (3 tests) added to Component 3. Test 3 explicitly verifies McpToolAllowlist is NOT consulted. |
+| M4 | Perplexity | ACCEPT | McpClientServiceTest uses JDK built-in HttpServer via QuarkusTestResourceLifecycleManager. No WireMock. Full mock server code provided inline. |
 
-*Generated from 3-AI review cycle: Claude → Gemini → Perplexity/Claude (2 rounds).
-App test baseline: 132. Phase order: P60 ✅ → P59 → P61 → P62 → P63.*
+*Generated from 3-AI review cycle: Claude original → Gemini → Perplexity/Claude (2 rounds).
+App test baseline: 132. Phase order: P60 ✅ → P60.1 → P59 → P61 → P62 → P63.*
 
+---
 
+# Phase 59 Extension: HTTP Client Completion + MCP E2E Tests
+## Post-Review Corrected Prompt (Gemini + Self-Review + Perplexity v2 Applied)
+
+---
+
+## PRE-FLIGHT CHECKS (Both Signatures Confirmed — No Action Needed)
+
+Both mock signatures have been verified against the existing codebase and are
+already correct in this prompt. Documented here for reference only.
+
+CHECK 1 — ApiKeyRegistry.isAllowed() signature:
+  CONFIRMED 1-arg: apiKeyRegistry.isAllowed(anyString())
+  No action needed.
+
+CHECK 2 — ToolRegistry.invokeTool() signature:
+  CONFIRMED 3-arg: invokeTool(String toolName, String paramsJson, String callerId)
+  Confirmed from McpToolBridgeTest and McpToolBridge.invoke() which passes "mcp-server"
+  as the callerId. No action needed — the mock and verify() below already use 3 args.
+
+---
+
+## IMPLEMENTATION PROMPT (Send to Antigravity after pre-flight)
+
+```
+## Phase 59 Extension: HTTP Client Completion + MCP E2E Tests
+
+Complete the P59-HTTP TODO and add end-to-end coverage for both the outbound
+HTTP MCP client and the inbound Quarkiverse /mcp server endpoint.
+
+---
+
+### IMPORTANT PATH NOTE
+The Quarkiverse quarkus-mcp-server-http extension registers a Vert.x route at
+/mcp — this is NOT a JAX-RS resource and is NOT affected by
+quarkus.resteasy-reactive.path=/api/v1
+All E2E tests calling the MCP protocol must POST to /mcp (no /api/v1 prefix).
+The admin resource at /api/v1/mcp/tools and /api/v1/mcp/status is separate.
+
+---
+
+### SUB-FIX A — McpToolsBean: Align @Tool name and audit to memory_search
+FILE: arcclaw-mcp/src/main/java/com/arcclaw/mcp/server/McpToolsBean.java
+
+CHANGE:
+  @Tool(name = "memorysearch", description = "Search long-term episodic and semantic memory")
+TO:
+  @Tool(name = "memory_search", description = "Search long-term episodic and semantic memory")
+
+CHANGE (in the memorySearch body):
+  audit("memorysearch", query);
+TO:
+  audit("memory_search", query);
+
+This must be applied FIRST. The E2E test asserts "memory_search" in tools/list.
+If the @Tool name is still "memorysearch", testMcpToolsListContainsConfiguredTools
+will fail even if everything else is correct.
+
+---
+
+### NEW 1 — McpConnectionException
+FILE: arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/McpConnectionException.java
+
+package com.arcclaw.mcp.transport;
+
+public class McpConnectionException extends RuntimeException {
+    public McpConnectionException(String message) { super(message); }
+    public McpConnectionException(String message, Throwable cause) { super(message, cause); }
+}
+
+---
+
+### MODIFY 1 — McpClientService: Complete HTTP implementation
+FILE: arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/McpClientService.java
+
+Replace the entire class body. Keep all existing imports and add:
+  import com.arcclaw.mcp.tool.DynamicToolCapability;
+  import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+  import com.arcclaw.mcp.tool.McpTransportType;
+  import com.fasterxml.jackson.databind.JsonNode;
+  import com.fasterxml.jackson.databind.ObjectMapper;
+  import com.fasterxml.jackson.databind.node.ObjectNode;
+  import jakarta.inject.Inject;
+  import java.net.URI;
+  import java.net.http.HttpClient;
+  import java.net.http.HttpRequest;
+  import java.net.http.HttpResponse;
+  import java.time.Duration;
+  import java.util.concurrent.atomic.AtomicInteger;
+
+New class body:
+
+@ApplicationScoped
+public class McpClientService {
+
+    private static final Logger log = Logger.getLogger(McpClientService.class);
+
+    @Inject DynamicToolCapabilityRegistry registry;
+    @Inject ObjectMapper objectMapper;
+
+    private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> sessionIds = new ConcurrentHashMap<>();
+    private final AtomicInteger requestIdGen = new AtomicInteger(1);
+    private final HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .build();
+
+    @Timeout(10000)
+    @Retry(maxRetries = 2, delay = 500)
+    @CircuitBreaker(requestVolumeThreshold = 5, failureRatio = 0.6, delay = 30000)
+    public void connect(String serverName, String serverUrl) {
+        serverUrls.put(serverName, serverUrl);
+        try {
+            ObjectNode initParams = objectMapper.createObjectNode();
+            initParams.put("protocolVersion", "2025-03-26");
+            initParams.set("capabilities", objectMapper.createObjectNode());
+            ObjectNode clientInfo = objectMapper.createObjectNode();
+            clientInfo.put("name", "arcclaw");
+            clientInfo.put("version", "1.0");
+            initParams.set("clientInfo", clientInfo);
+
+            HttpResponse<String> initResp = postJsonRpc(serverUrl, "initialize", initParams, null);
+            if (initResp.statusCode() != 200) {
+                throw new McpConnectionException(
+                    "MCP initialize failed [" + initResp.statusCode() + "] for: " + serverName);
+            }
+            initResp.headers().firstValue("Mcp-Session-Id")
+                .ifPresent(sid -> sessionIds.put(serverName, sid));
+
+            String sessionId = sessionIds.get(serverName);
+            postNotification(serverUrl, "notifications/initialized", sessionId);
+
+            HttpResponse<String> toolsResp = postJsonRpc(
+                serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId);
+            if (toolsResp.statusCode() != 200) {
+                throw new McpConnectionException(
+                    "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
+            }
+            JsonNode payload = objectMapper.readTree(toolsResp.body());
+            registerTools(serverName, payload.path("result"));
+
+            log.infof("Connected to HTTP/SSE MCP server '%s', registered tools: %d",
+                serverName, registry.getAll().stream()
+                    .filter(t -> t.mcpServerName().equals(serverName)).count());
+
+        } catch (McpConnectionException e) {
+            throw e;
+        } catch (Exception e) {
+            // IMPORTANT: restore interrupt flag if this was an InterruptedException
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new McpConnectionException(
+                "Failed to connect to HTTP MCP server: " + serverName, e);
+        }
+    }
+
+    @Timeout(5000)
+    @Retry(maxRetries = 2, delay = 200)
+    public String invoke(String serverName, String toolName, String paramsJson) {
+        String url = serverUrls.get(serverName);
+        if (url == null) {
+            throw new McpConnectionException(
+                "No URL registered for HTTP MCP server: " + serverName);
+        }
+        try {
+            ObjectNode callParams = objectMapper.createObjectNode();
+            callParams.put("name", toolName);
+            callParams.set("arguments",
+                (paramsJson != null && !paramsJson.isBlank())
+                    ? objectMapper.readTree(paramsJson)
+                    : objectMapper.createObjectNode());
+
+            HttpResponse<String> resp = postJsonRpc(
+                url, "tools/call", callParams, sessionIds.get(serverName));
+            if (resp.statusCode() != 200) {
+                throw new RuntimeException(
+                    "tools/call failed [" + resp.statusCode() + "] for: " + toolName);
+            }
+            JsonNode result = objectMapper.readTree(resp.body()).path("result");
+            JsonNode content = result.path("content");
+            if (content.isArray() && !content.isEmpty()) {
+                return content.get(0).path("text").asText();
+            }
+            return result.toString();
+        } catch (McpConnectionException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            // IMPORTANT: restore interrupt flag if this was an InterruptedException
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new RuntimeException(
+                "Failed to invoke tool '" + toolName + "' on server: " + serverName, e);
+        }
+    }
+
+    private HttpResponse<String> postJsonRpc(String baseUrl, String method,
+            ObjectNode params, String sessionId) throws Exception {
+        ObjectNode rpc = objectMapper.createObjectNode();
+        rpc.put("jsonrpc", "2.0");
+        rpc.put("id", requestIdGen.getAndIncrement());
+        rpc.put("method", method);
+        rpc.set("params", params);
+
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(
+                objectMapper.writeValueAsString(rpc)));
+        if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
+        return httpClient.send(req.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void postNotification(String baseUrl, String method,
+            String sessionId) throws Exception {
+        ObjectNode notification = objectMapper.createObjectNode();
+        notification.put("jsonrpc", "2.0");
+        notification.put("method", method);
+        notification.set("params", objectMapper.createObjectNode());
+
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(
+                objectMapper.writeValueAsString(notification)));
+        if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
+        httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
+    }
+
+    private void registerTools(String serverName, JsonNode result) {
+        JsonNode tools = result.path("tools");
+        if (!tools.isArray()) return;
+        for (JsonNode tool : tools) {
+            String name   = tool.path("name").asText();
+            String desc   = tool.path("description").asText("");
+            String schema = tool.has("inputSchema")
+                ? tool.path("inputSchema").toString() : "{}";
+            registry.register(new DynamicToolCapability(
+                name, desc, serverName, McpTransportType.HTTP_SSE, false, schema));
+        }
+    }
+}
+
+---
+
+### MODIFY 2 — arcclaw-mcp/pom.xml: Add WireMock for unit tests
+FILE: arcclaw-mcp/pom.xml
+
+Add inside <dependencies> (test scope only — does NOT affect production JAR
+or GraalVM native build):
+    <dependency>
+        <groupId>org.wiremock</groupId>
+        <artifactId>wiremock</artifactId>
+        <version>3.9.2</version>
+        <scope>test</scope>
+    </dependency>
+
+---
+
+### NEW 2 — McpClientServiceTest: WireMock unit tests
+FILE: arcclaw-mcp/src/test/java/com/arcclaw/mcp/transport/McpClientServiceTest.java
+
+package com.arcclaw.mcp.transport;
+
+import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.arcclaw.mcp.tool.McpTransportType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.junit.jupiter.api.Assertions.*;
+
+class McpClientServiceTest {
+
+    @RegisterExtension
+    static WireMockExtension wireMock = WireMockExtension.newInstance()
+        .options(wireMockConfig().dynamicPort())
+        .build();
+
+    private McpClientService service;
+    private DynamicToolCapabilityRegistry registry;
+
+    @BeforeEach
+    void setUp() {
+        service          = new McpClientService();
+        registry         = new DynamicToolCapabilityRegistry();
+        service.registry = registry;
+        service.objectMapper = new ObjectMapper();
+    }
+
+    private void stubFullConnect(String sessionId) {
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"initialize\""))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withHeader("Mcp-Session-Id", sessionId)
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{" +
+                    "\"protocolVersion\":\"2025-03-26\",\"capabilities\":{}," +
+                    "\"serverInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"notifications/initialized\""))
+            .willReturn(aResponse().withStatus(200).withBody("")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"tools/list\""))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[" +
+                    "{\"name\":\"external_search\"," +
+                    " \"description\":\"Search the web\"," +
+                    " \"inputSchema\":{\"type\":\"object\"}}]}}")));
+    }
+
+    @Test
+    void testConnectRegistersToolsFromServer() {
+        stubFullConnect("session-abc");
+        service.connect("test-server", wireMock.baseUrl());
+
+        assertTrue(registry.isRegistered("external_search"));
+        var cap = registry.find("external_search").orElseThrow();
+        assertEquals("test-server", cap.mcpServerName());
+        assertEquals(McpTransportType.HTTP_SSE, cap.transport());
+        assertEquals("Search the web", cap.description());
+    }
+
+    @Test
+    void testConnectStoresSessionIdAndSendsItOnToolsCall() {
+        stubFullConnect("my-session-id-xyz");
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"tools/call\""))
+            .withHeader("Mcp-Session-Id", equalTo("my-session-id-xyz"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":" +
+                    "[{\"type\":\"text\",\"text\":\"search results here\"}]}}")));
+
+        service.connect("test-server", wireMock.baseUrl());
+        String result = service.invoke("test-server", "external_search", "{\"query\":\"hello\"}");
+        assertEquals("search results here", result);
+    }
+
+    @Test
+    void testInvokeThrowsWhenNoUrlRegistered() {
+        assertThrows(McpConnectionException.class,
+            () -> service.invoke("ghost-server", "some_tool", "{}"));
+    }
+
+    @Test
+    void testConnectThrowsMcpConnectionExceptionOnServerError() {
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"initialize\""))
+            .willReturn(aResponse().withStatus(500).withBody("Internal Server Error")));
+
+        assertThrows(McpConnectionException.class,
+            () -> service.connect("test-server", wireMock.baseUrl()));
+    }
+
+    @Test
+    void testConnectWithEmptyToolsListRegistersNothing() {
+        stubFullConnect("session-empty");
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"tools/list\""))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}")));
+
+        service.connect("empty-server", wireMock.baseUrl());
+        assertTrue(registry.getAll().isEmpty());
+    }
+}
+
+---
+
+### NEW 3 — McpServerE2ETest: Quarkiverse /mcp endpoint E2E tests
+FILE: arcclaw-app/src/test/java/com/arcclaw/app/mcp/McpServerE2ETest.java
+
+NOTE: This tests the Quarkiverse /mcp Vert.x route, NOT the JAX-RS admin resource.
+The @Tool(name) values in McpToolsBean (github, memory_search after SUB-FIX A)
+must match the assertions in testMcpToolsListContainsConfiguredTools.
+
+*** CRITICAL — AUTH HEADER REQUIRED ON ALL REQUESTS ***
+ApiKeyAuthFilter evaluates the X-ArcClaw-API-Key header BEFORE any mock is
+consulted. If the header is absent, the filter returns 401 immediately and the
+mock on apiKeyRegistry.isValidKey() is never reached. Every RestAssured
+given() block in this class MUST include:
+  .header("X-ArcClaw-API-Key", "test-key")
+Missing this header = 401 on all three tests, even with the mock in place.
+
+package com.arcclaw.app.mcp;
+
+import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import io.restassured.RestAssured;
+import io.restassured.response.Response;
+import org.junit.jupiter.api.*;
+import org.mockito.Mockito;
+
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+
+@QuarkusTest
+@TestProfile(McpServerE2ETest.McpE2EProfile.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class McpServerE2ETest {
+
+    public static class McpE2EProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of("arcclaw.mcp.server-enabled", "true");
+        }
+    }
+
+    private static String mcpSessionId;
+
+    @InjectMock ApiKeyRegistry apiKeyRegistry;
+    @InjectMock AsyncPersistenceEngine persistenceEngine;
+    @InjectMock ToolRegistry toolRegistry;
+
+    @BeforeEach
+    void setup() {
+        Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);  // 1-arg confirmed
+        Mockito.doNothing().when(persistenceEngine).submitCritical(any());
+        // 3-arg confirmed from McpToolBridgeTest — callerId is "mcp-server"
+        Mockito.when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
+            .thenReturn(ToolResponse.success("mock-tool-result"));
+    }
+
+    @Test
+    @Order(1)
+    void testMcpInitialize() {
+        String body = """
+            {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "initialize",
+              "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0"}
+              }
+            }
+            """;
+
+        Response resp = RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY — filter checks this first
+            .contentType("application/json")
+            .accept("application/json")
+            .body(body)
+            .when().post("/mcp")
+            .then()
+            .statusCode(200)
+            .extract().response();
+
+        mcpSessionId = resp.header("Mcp-Session-Id");
+        assertNotNull(mcpSessionId, "Server must return Mcp-Session-Id header on initialize");
+
+        String jsonResp = resp.body().asString();
+        String json = jsonResp.startsWith("data:") ? jsonResp.substring(5).trim() : jsonResp;
+        assertTrue(json.contains("\"protocolVersion\""),
+            "Initialize result must contain protocolVersion");
+    }
+
+    @Test
+    @Order(2)
+    void testMcpToolsListContainsConfiguredTools() {
+        assertNotNull(mcpSessionId, "Depends on testMcpInitialize running first");
+
+        RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY
+            .contentType("application/json")
+            .accept("application/json")
+            .header("Mcp-Session-Id", mcpSessionId)
+            .body("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}")
+            .when().post("/mcp");
+
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}";
+
+        String raw = RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY
+            .contentType("application/json")
+            .accept("application/json")
+            .header("Mcp-Session-Id", mcpSessionId)
+            .body(body)
+            .when().post("/mcp")
+            .then()
+            .statusCode(200)
+            .extract().body().asString();
+
+        String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
+        assertTrue(json.contains("\"github\""),
+            "tools/list must contain 'github'. Got: " + json);
+        assertTrue(json.contains("\"memory_search\""),
+            "tools/list must contain 'memory_search'. Got: " + json);
+    }
+
+    @Test
+    @Order(3)
+    void testMcpToolsCallMemorySearch() {
+        assertNotNull(mcpSessionId, "Depends on testMcpInitialize running first");
+
+        String body = """
+            {
+              "jsonrpc": "2.0",
+              "id": 3,
+              "method": "tools/call",
+              "params": {
+                "name": "memory_search",
+                "arguments": {"query": "test query"}
+              }
+            }
+            """;
+
+        String raw = RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY
+            .contentType("application/json")
+            .accept("application/json")
+            .header("Mcp-Session-Id", mcpSessionId)
+            .body(body)
+            .when().post("/mcp")
+            .then()
+            .statusCode(200)
+            .extract().body().asString();
+
+        String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
+        assertTrue(json.contains("\"content\"") || json.contains("mock-tool-result"),
+            "tools/call result must contain content. Got: " + json);
+
+        // 3-arg verify confirmed: McpToolBridge.invoke() passes "mcp-server" as callerId
+        Mockito.verify(toolRegistry)
+            .invokeTool(eq("memory_search"), anyString(), eq("mcp-server"));
+    }
+
+    // TROUBLESHOOTING:
+    // - All tests 401: X-ArcClaw-API-Key header missing — it is in every given() above
+    // - All tests 404 on /mcp: quarkus.mcp.server.root-path may be overriding the default
+    // - testMcpToolsListContainsConfiguredTools fails on "memory_search": SUB-FIX A
+    //   in McpToolsBean was not applied first
+    // - MissingMethodInvocationException at startup: both signatures are confirmed correct.
+    //   If still firing, check that @InjectMock beans match the exact CDI type in context.
+}
+
+---
+
+### Verification
+
+.\mvnw.cmd clean test -pl arcclaw-mcp -am ^
+  "-Dtest=McpClientServiceTest" ^
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+.\mvnw.cmd clean test -pl arcclaw-app -am ^
+  "-Dtest=McpServerE2ETest" ^
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+.\mvnw.cmd clean test -pl arcclaw-core,arcclaw-mcp,arcclaw-app -am
+
+Expected: all prior tests green + 9 new (5 McpClientServiceTest + 3 McpServerE2ETest
++ 1 McpConnectionException construction).
+```
+
+---
+
+## Adjudication Summary
+
+| ID | Source | Decision | Change Applied |
+|---|---|---|---|
+| 401 auth header missing on all E2E requests | Gemini | **ACCEPT — CRITICAL** | `.header("X-ArcClaw-API-Key", "test-key")` added to all 4 given() chains. |
+| WireMock reversal (test scope only) | Gemini | ACCEPT | Test-scoped — doesn't touch production JAR or native build. |
+| InterruptedException handling in catch blocks | Gemini | ACCEPT | `Thread.currentThread().interrupt()` added to both connect() and invoke(). |
+| ApiKeyRegistry.isAllowed() arg count | Self pre-flight | CONFIRMED 1-arg | Verified and applied. |
+| ToolRegistry.invokeTool() arg count | Self pre-flight | **Was ambiguous — fixed** | Default was 2-arg placeholder. Perplexity v2 confirmed 3-arg from McpToolBridgeTest. |
+| **invokeTool() default mock wrong (2-arg)** | **Perplexity v2** | **ACCEPT — BUG FIX** | **Mock updated to 3-arg `invokeTool(anyString(), anyString(), anyString())`. verify() updated to `eq("mcp-server")` as callerId. Confirmed from McpToolBridgeTest.** |
+| SUB-FIX A must precede E2E tests | Self | NEW | Ordering note added. |
+
+*Send only after completing pre-flight checks. The two signature items take 30 seconds to verify and prevent a confusing startup crash.*
+
+---

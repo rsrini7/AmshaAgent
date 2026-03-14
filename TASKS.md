@@ -953,6 +953,24 @@
 
 ---
 
+## Phase 59 — MCP Server + Client Setup ✅
+- [x] Create `arcclaw-mcp` module with `quarkus-mcp-server-http` and `quarkus-mcp-server-stdio` <!-- id: 410 -->
+- [x] Implement `PodmanMcpTransport` for stdio isolation via `SandboxCircuitBreaker` <!-- id: 411 -->
+- [x] Implement `McpClientService` for HTTP/SSE with SmallRye FT guards <!-- id: 412 -->
+- [x] Create `McpAdminResource` with Tool listing and status endpoints <!-- id: 413 -->
+- [x] Expose MVP tools: `GITHUB` and `MEMORY_SEARCH` <!-- id: 414 -->
+- [x] Implement `MCP_TOOL_INVOKED` audit event (isMandatory=true) <!-- id: 415 -->
+- [x] Verify: `McpAdminResourceTest` passes with `@InjectMock ApiKeyRegistry` and `@TestProfile` <!-- id: 416 -->
+- [x] Verify: `McpAdminDisabledTest` passes with explicit `arcclaw.mcp.server-enabled=false` <!-- id: 417 -->
+- [x] **Phase 59 Extension: HTTP E2E & Protocol Hardening**
+  - [x] Implement `McpServerE2ETest` for handshake & tool flow <!-- id: 418 -->
+  - [x] Fix: Mandatory dual `Accept` header in `McpClientService` <!-- id: 419 -->
+  - [x] Fix: Handle `202 Accepted` for initialization notifications <!-- id: 420 -->
+  - [x] Verify: Full project regression (535/535 tests pass) <!-- id: 421 -->
+
+
+---
+
 ## Phase 60 — Dual-Tier Skill Registry
 - [x] Create `CompiledSkillEntry` JPA Entity for persistence <!-- id: 400 -->
 - [x] Implement `AgentSkillRepository` with pure `EntityManager` <!-- id: 401 -->

@@ -74,8 +74,10 @@
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 | 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
 | 55.2 | ScopedValue & Constructor Injection | 121/121 tests | Migrated CliAgentObserver to ScopedValue and 10 beans to Constructor Injection |
+| 59 | MCP Server + Client Setup | 15/15 tests | Post-review fixes + REST Testing Mandate |
 | 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
-| 65 | Quarkus LTS Migration | 535/535 tests | Hibernate 7 + LangChain4j 1.x + Native Hardening |
+| 60 | Dual-Tier Skill Registry | 173/173 tests | Persistent registry with JTA management |
+| 60.1 | Quarkus LTS & Hibernate 7 | 535/535 tests | LangChain4j 1.x + Native Image Hardening |
 
 ---
 
@@ -2048,6 +2050,63 @@ Implemented a central registry for application metadata and exposed it via manag
 - ✅ `ApiKeyAuthFilterTest`: Verified `/info` bypasses authentication.
 - ✅ Audit integrity: `AuditEvent` now contains `app_version` for all new security events.
 - ✅ Full suite regression count: **122 tests**.
+
+---
+
+## Phase 59: MCP Server + Client Setup ✅
+
+Implemented the Model Context Protocol (MCP) server and client, enabling standardized tool interoperability and remote execution with multi-transport support.
+
+| File | Purpose |
+|------|---------|
+| [arcclaw-mcp/pom.xml](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/pom.xml) | New runtime module with dual-transport MCP dependencies. |
+| [PodmanMcpTransport.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/PodmanMcpTransport.java) | Stdio transport for isolated tool execution via Podman. |
+| [McpClientService.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-mcp/src/main/java/com/arcclaw/mcp/client/McpClientService.java) | HTTP/SSE client with SmallRye Fault Tolerance guards. |
+| [McpAdminResource.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/main/java/com/arcclaw/app/mcp/McpAdminResource.java) | Admin REST endpoints for tool discovery and status. |
+
+### Key Architectural Decisions:
+1. **Transport Isolation**: Strictly separated `PodmanMcpTransport` (stdio) from `McpClientService` (HTTP/SSE), ensuring stdio tools are guarded by `SandboxCircuitBreaker` while HTTP clients use SmallRye Fault Tolerance.
+2. **MVP Tool Exposure**: Focused initial implementation on `GITHUB` and `MEMORY_SEARCH` tools to establish the protocol foundation before expanding to orchestration-heavy tools.
+3. **Security Integration**: Integrated with the existing `ApiKeyAuthFilter` and implemented `MCP_TOOL_INVOKED` mandatory audit events for all remote tool executions.
+
+### Phase 59 Post-Review Fixes ✅
+
+Applied 8 technical corrections to consolidate the MCP foundation and enforce project-wide testing standards.
+
+| Fix | Component | Change |
+|-----|-----------|--------|
+| FIX 1/2 | Tools & Config | Standardized tool name to `memory_search` globally. |
+| FIX 3 | Bridge | Ensured `McpToolDescriptor` uses `description()` instead of `name()`. |
+| FIX 4 | build | Switched to `quarkus-rest-client-reactive-jackson` for better Mutiny integration. |
+| FIX 5 | Reflex | Enhanced `/mcp` output to list both internal and dynamic tools. |
+| FIX 6 | Transport | Added TODO for deferred HTTP tool initialization. |
+| FIX 7 | Bridge Test | Added `testMatchingUsesToolNameNotEnumName` to guard case sensitivity. |
+| FIX 8 | Podman Test | Implemented safe circuit breaker tests (no real subprocess). |
+| FIX 9 | Core Test | Fixed `NullPointerException` in `ToolInvocationGuardDynamicTest`. |
+
+### Global REST Testing Mandate Enforcement:
+- **Authentication**: `McpAdminResourceTest` and `McpAdminDisabledTest` now use `@InjectMock ApiKeyRegistry` with standardized `test-key` headers.
+- **Pathing**: Verified base path `/api/v1` is correctly handled via global configuration while keeping resource `@Path` relative.
+
+### Final Verification Results:
+- ✅ **Core Logic**: `arcclaw-core` passes (including dynamic tool guard fixes).
+- ✅ **MCP Module**: `arcclaw-mcp` passes (including refined bridge and transport tests).
+- ✅ **App Integration**: `arcclaw-app` passes (under strict authentication mandate).
+- ✅ **Full Regression**: **BUILD SUCCESS** across all 6 modules. Total tests confirmed pass.
+
+### Phase 59 Extension: HTTP E2ETest & Protocol Compliance ✅
+
+Completed the E2E verification suite for the inbound MCP server and hardened the HTTP client for full spec compliance.
+
+1.  **Protocol Compliance**: Resolved "400 Bad Request" errors by implementing the mandatory dual `Accept: application/json, text/event-stream` header in `McpClientService`.
+2.  **Notification Handling**: Adjusted `McpServerE2ETest` to correctly handle `202 Accepted` status codes for protocol notifications, aligning with the Quarkiverse reactor-based handler.
+3.  **End-to-End Verification**: Successfully verified the complete handshake flow (`initialize` -> `initialized` -> `tools/list`) against the live `/mcp` route.
+
+**Final Verification**:
+- ✅ `McpServerE2ETest`: Full handshake and tool discovery verified.
+- ✅ `McpClientServiceTest`: Compliance with SSE dual-accept header confirmed.
+- ✅ **Standard Regression**: Full 535-test suite passed successfully.
+
 
 ---
 

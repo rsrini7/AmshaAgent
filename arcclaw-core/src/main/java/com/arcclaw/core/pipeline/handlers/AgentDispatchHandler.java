@@ -11,6 +11,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.util.CronResultFormatter;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,16 +19,27 @@ import jakarta.inject.Inject;
 
 /**
  * Dispatches the enriched request to the Agent State Machine.
+ * <p>
+ * When the resolved role is a skill role (e.g. {@code "skill:code-reviewer"}),
+ * the skill's {@code maxIterations} from its frontmatter definition is used
+ * instead of the hardcoded default. This ensures skills configured with higher
+ * iteration counts (e.g. researcher at 7) actually get those iterations.
  */
 @ApplicationScoped
 public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
 
-    @Inject 
+    private static final String SKILL_PREFIX = "skill:";
+    private static final int DEFAULT_MAX_ITERATIONS = 5;
+
+    @Inject
     AgentLoop agentLoop;
-    
-    @Inject 
+
+    @Inject
     ReasoningEngine reasoningEngine;
+
+    @Inject
+    SkillRegistry skillRegistry;
 
     @Override
     public int priority() {
@@ -42,9 +54,22 @@ public class AgentDispatchHandler implements MessageHandler {
                 .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
         String goal = context.getMessage() != null ? context.getMessage().text() : "";
 
-        log.infof("Dispatching message for session %s to agent %s", sessionId, role);
+        // Resolve maxIterations: use the skill's configured value when routing to a skill,
+        // otherwise fall back to the default of 5.
+        int maxIterations = DEFAULT_MAX_ITERATIONS;
+        if (role.startsWith(SKILL_PREFIX)) {
+            String skillName = role.substring(SKILL_PREFIX.length());
+            maxIterations = skillRegistry.findByName(skillName)
+                    .map(entry -> entry.definition().maxIterations())
+                    .orElse(DEFAULT_MAX_ITERATIONS);
+            log.infof("Dispatching message for session %s to skill '%s' (maxIterations=%d)",
+                      sessionId, skillName, maxIterations);
+        } else {
+            log.infof("Dispatching message for session %s to agent %s", sessionId, role);
+        }
 
-        AgentResult result = null;
+        final int resolvedMaxIterations = maxIterations;
+        AgentResult result;
         try {
             result = WorkspaceContext.run(
                 sessionId,
@@ -57,7 +82,7 @@ public class AgentDispatchHandler implements MessageHandler {
                     role,
                     goal,
                     reasoningEngine,
-                    5
+                    resolvedMaxIterations
                 )
             );
         } catch (Exception e) {
@@ -65,7 +90,6 @@ public class AgentDispatchHandler implements MessageHandler {
             throw new RuntimeException(e.getMessage(), e);
         }
 
-        // Render result back to user (placeholder until ReplyRenderer is fully integrated)
         String output = CronResultFormatter.format(result);
         context.getSender().sendRaw(context.getUser(), output);
 

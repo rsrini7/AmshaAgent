@@ -241,6 +241,10 @@ arcclaw:
     rate-limit:
       requests-per-minute: 20
 
+  mcp:
+    exposed-tools: github,memory_search
+    server-enabled: true
+
   cron:
     poll-interval: 30s
     max-concurrent: 10
@@ -454,6 +458,9 @@ mp:
       strategy: NONE
     vault:
       pepper: "test-pepper-00000000000000000000000000000000"
+
+    mcp:
+      server-enabled: false
 
 "%staging":
   quarkus:

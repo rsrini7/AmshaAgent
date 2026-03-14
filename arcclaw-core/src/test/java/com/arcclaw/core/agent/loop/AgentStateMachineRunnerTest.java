@@ -7,6 +7,7 @@ import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -228,6 +229,30 @@ class AgentStateMachineRunnerTest {
         assertInstanceOf(AgentResult.Failed.class, result);
         assertEquals(AgentResult.FailureCategory.RATE_LIMIT, ((AgentResult.Failed) result).category());
         assertTrue(((AgentResult.Failed) result).reason().contains("⏳")); // Sanitizer adds this
+    }
+
+    @Test
+    void testReactKeywordDoesNotPersistToHistory() {
+        ReasoningStep reactStep = ReasoningStep.pending(
+                "I will observe the result", "OBSERVE", Map.of(), 0, 0);
+        ReasoningStep finishStep = ReasoningStep.pending(
+                "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 0, 0);
+
+        when(engine.nextStep(any(), any(), any(), anyList()))
+                .thenReturn(reactStep)
+                .thenReturn(finishStep);
+        when(toolRegistry.findTool("OBSERVE")).thenReturn(Optional.empty());
+        when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search"));
+
+        AgentResult result = runner.run(createCtx(), engine, List.of());
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertEquals("fixed", ((AgentResult.Finished) result).answer());
+        // CRITICAL: OBSERVE step must NOT appear in final history
+        boolean observeInHistory = result.steps().stream()
+                .anyMatch(s -> "OBSERVE".equals(s.action()));
+        assertFalse(observeInHistory,
+                "OBSERVE ReAct keyword must NOT be persisted to reasoning history");
     }
 
 }
