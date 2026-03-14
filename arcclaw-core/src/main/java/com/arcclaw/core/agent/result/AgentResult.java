@@ -1,8 +1,8 @@
 package com.arcclaw.core.agent.result;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
 import com.arcclaw.core.agent.loop.AgentLoop;
+import io.quarkus.qute.TemplateData;
 
 import java.util.List;
 
@@ -28,6 +28,7 @@ public sealed interface AgentResult
         RATE_LIMIT
     }
 
+    @TemplateData
     record Finished(
             String answer,
             List<ReasoningStep> steps,
@@ -35,6 +36,7 @@ public sealed interface AgentResult
             int totalOutputTokens
     ) implements AgentResult {}
 
+    @TemplateData
     record AwaitingApproval(
             String toolName,
             String paramsJson,
@@ -44,6 +46,7 @@ public sealed interface AgentResult
             int totalOutputTokens
     ) implements AgentResult {}
 
+    @TemplateData
     record LoopExceeded(
             int maxIterations,
             List<ReasoningStep> steps,
@@ -51,6 +54,7 @@ public sealed interface AgentResult
             int totalOutputTokens
     ) implements AgentResult {}
 
+    @TemplateData
     record Failed(
             String reason,
             FailureCategory category,
