@@ -7,8 +7,7 @@
 ###
 # Expect 200: {"serverEnabled":true,"dynamicToolCount":0}
 # If 404 → arcclaw.mcp.server-enabled=false in your config
-# dynamicToolCount > 0 means McpClientService has connected to
-# a remote server and registered its tools
+# dynamicToolCount grows after FLOW D connect calls
 GET {{adminBase}}/mcp/status
 Accept: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -19,10 +18,8 @@ X-ArcClaw-API-Key: {{validKey}}
 #     {"name":"github",        "description":"...","inputSchema":"{...}"},
 #     {"name":"memory_search", "description":"...","inputSchema":"{...}"}
 #   ],
-#   "registeredDynamicTools": []   ← empty until McpClientService connects
+#   "registeredDynamicTools": []   ← empty until FLOW D runs
 # }
-# exposedInternalTools: from McpToolBridge (McpToolAllowlist config)
-# registeredDynamicTools: grows when McpClientService.connect(name, url) runs
 GET {{adminBase}}/mcp/tools
 Accept: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -69,7 +66,7 @@ client.test("protocolVersion in response", function() {
 %}
 ###
 # Expect 202: empty body (notification — no JSON-RPC response per spec)
-# MUST be sent before tools/list or tools/call — server tracks session state
+# MUST be sent before tools/list or tools/call
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -89,7 +86,6 @@ client.test("notifications/initialized returns 202", function() {
 %}
 ###
 # Expect 200: tools array containing "github" and "memory_search"
-# These come from arcclaw.mcp.exposed-tools via McpToolBridge
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -120,7 +116,7 @@ client.test("memory_search tool present", function() {
 %}
 ###
 # Expect 200: result.content[0].text = actual memory search output
-# Flow: McpToolsBean.memorySearch() → McpToolBridge.invoke("memory_search", ...)
+# Flow: McpToolsBean.memorySearch() → McpToolBridge.invoke()
 #       → ToolRegistry.invokeTool() → memory search impl
 # Audit event MCP_TOOL_INVOKED is persisted for every tool call
 POST {{mcpBase}}/mcp
@@ -148,15 +144,12 @@ client.test("tools/call memory_search returns 200", function() {
 client.test("result contains content block", function() {
   var body = response.body;
   var json = body.startsWith("data:") ? body.substring(5).trim() : body;
-  client.assert(json.includes('"content"'), "content block missing from result");
+  client.assert(json.includes('"content"'), "content block missing");
 });
 %}
 ###
-# Expect 200: result.content[0].text = github tool output
-# Flow: McpToolsBean.github() → McpToolBridge.invoke("github", ...)
-#       → ToolRegistry.invokeTool() → github impl (needs GH_TOKEN in vault)
-# Note: returns an error string inside content if GH_TOKEN not seeded —
-# that is still HTTP 200 at the MCP protocol level. Check the content text.
+# Expect 200: result.content[0].text = github output
+# Returns error string inside content if GH_TOKEN not seeded — still HTTP 200
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -182,9 +175,9 @@ client.test("tools/call github returns 200", function() {
 });
 %}
 ###
-# Expect 200 HTTP with JSON-RPC error body (per JSON-RPC spec, errors are
-# still HTTP 200). McpToolBridge throws McpToolNotAllowedException which
-# Quarkiverse wraps into: {"jsonrpc":"2.0","id":5,"error":{"code":...,"message":"Tool 'sandbox_exec' not in allowlist"}}
+# Expect 200 HTTP with JSON-RPC error body (errors are HTTP 200 per JSON-RPC spec)
+# McpToolBridge throws McpToolNotAllowedException →
+# {"jsonrpc":"2.0","id":5,"error":{"code":...,"message":"Tool 'sandbox_exec' not in allowlist"}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -201,8 +194,7 @@ Mcp-Session-Id: {{mcpSessionId}}
   }
 }
 ###
-# Quarkiverse MCP session validation rejects missing Mcp-Session-Id header
-# when the server has already been initialized with sessions
+# Quarkiverse MCP session validation rejects missing Mcp-Session-Id
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -215,9 +207,100 @@ X-ArcClaw-API-Key: {{validKey}}
   "params": {}
 }
 ###
-# Only relevant if you toggle arcclaw.mcp.server-enabled=false
-# McpAdminResource.checkEnabled() throws NotFoundException → 404
-# (Leave commented out unless you want to test the disabled path)
-# GET {{adminBase}}/mcp/status
-# Accept: application/json
+# Expect 200: {"name":"self","url":"...","toolsRegistered":2,"status":"connected"}
+# Proves the full outbound client stack:
+#   McpConnectResource → McpClientService.connect() →
+#   MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "name": "self",
+  "url": "http://localhost:8080/mcp"
+}
+
+> {%
+client.test("self-connect returns 200", function() {
+  client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+client.test("status is connected", function() {
+  client.assert(response.body.includes('"connected"'), "status not connected");
+});
+client.test("tools registered", function() {
+  client.assert(response.body.includes('"toolsRegistered"'), "toolsRegistered field missing");
+});
+%}
+###
+# Expect 200: registeredDynamicTools contains github + memory_search
+# both with mcpServerName="self" and transport="HTTP_SSE"
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+###
+# Expect 200: {"connectedServers":[{"name":"self","toolCount":2}],"totalDynamicTools":2}
+GET {{adminBase}}/mcp/connect
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+###
+# After connecting, the agent can invoke its tools naturally via Telegram.
+# The LLM selects them when relevant — same as built-in tools.
+# POST {{adminBase}}/mcp/connect
+# Content-Type: application/json
 # X-ArcClaw-API-Key: {{validKey}}
+#
+# {
+#   "name": "remote",
+#   "url": "http://your-mcp-server:3000/mcp"
+# }
+###
+# Expect 200: {"name":"self","deregistered":true,"toolsRemoved":2}
+# After this: MCP-ADMIN-2 shows registeredDynamicTools:[]
+# /mcp in Telegram → "Dynamic MCP tools: none connected"
+DELETE {{adminBase}}/mcp/connect/self
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+> {%
+client.test("disconnect returns 200", function() {
+  client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+client.test("toolsRemoved present", function() {
+  client.assert(response.body.includes('"toolsRemoved"'), "toolsRemoved missing");
+});
+%}
+###
+# Expect 200: registeredDynamicTools: []
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+###
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "name": "no-url"
+}
+###
+# McpClientService throws McpConnectionException → McpConnectResource returns 502
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "name": "dead",
+  "url": "http://localhost:9999/mcp"
+}
+###
+DELETE {{adminBase}}/mcp/connect/never-connected
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+###
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+
+{
+  "name": "unauth",
+  "url": "http://localhost:8080/mcp"
+}

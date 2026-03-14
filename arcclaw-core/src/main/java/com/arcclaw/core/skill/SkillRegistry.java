@@ -22,7 +22,7 @@ public class SkillRegistry {
 
     /**
      * Atomically replaces the current registry state with a newly compiled list.
-     * 
+     *
      * @param newEntries An immutable list of compiled skills.
      */
     public void reload(List<CompiledSkillEntry> newEntries) {
@@ -48,15 +48,31 @@ public class SkillRegistry {
     }
 
     /**
+     * Looks up a skill entry by its exact canonical name (e.g. "code-reviewer").
+     * <p>
+     * Used by {@code SystemPromptBuilder} and {@code AgentDispatchHandler} to
+     * resolve the custom system prompt and maxIterations for {@code skill:X} roles.
+     *
+     * @param name The skill name as stored in its frontmatter (slug, no "skill:" prefix).
+     * @return Optional containing the entry if found, empty otherwise.
+     */
+    public Optional<CompiledSkillEntry> findByName(String name) {
+        if (name == null || name.isBlank()) return Optional.empty();
+        return registryRef.get().stream()
+                .filter(e -> e.definition().name().equals(name))
+                .findFirst();
+    }
+
+    /**
      * Scans the active registry to find the first skill whose pre-compiled
      * regex paths trigger a match for the given user input.
-     * 
+     *
      * @param input the raw user message text
      * @return An Optional containing the first matching skill entry, or empty if none match.
      */
     public Optional<CompiledSkillEntry> findMatch(String input) {
         if (input == null || input.isBlank()) return Optional.empty();
-        
+
         for (CompiledSkillEntry entry : registryRef.get()) {
             if (entry.matches(input)) {
                 return Optional.of(entry);

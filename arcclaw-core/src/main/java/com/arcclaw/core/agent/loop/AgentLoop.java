@@ -2,7 +2,6 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -16,7 +15,6 @@ import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -45,6 +43,7 @@ public class AgentLoop {
 
     private static final Logger log = Logger.getLogger(AgentLoop.class);
     private static final int DEFAULT_MAX_ITERATIONS = 5;
+    private static final String SKILL_PREFIX = "skill:";
 
     @Inject
     ToolRegistry toolRegistry;
@@ -68,8 +67,7 @@ public class AgentLoop {
     CheckpointResumeHandler checkpointResumeHandler;
 
     /**
-     * Execute the reasoning loop with default iteration limit (no lifecycle
-     * context).
+     * Execute the reasoning loop with default iteration limit (no lifecycle context).
      */
     public AgentResult run(String goal, ReasoningEngine engine) {
         return run(goal, engine, DEFAULT_MAX_ITERATIONS);
@@ -78,24 +76,23 @@ public class AgentLoop {
     /**
      * Lifecycle-aware entry point — sets up context, resumes from checkpoint,
      * and tears down on completion.
-     * <p>
-     * Context setup (try):
-     * <ol>
-     * <li>{@code WorkspaceScopeHolder.set(sessionId)} — activates CDI scope</li>
-     * <li>MDC: pushes {@code sessionId} for structured logging</li>
-     * <li>OTel: starts a session root span</li>
-     * <li>Checkpoint: loads existing history from {@code StatefulAgentStore}</li>
-     * </ol>
-     * <p>
-     * Context teardown (finally):
-     * <ol>
-     * <li>Clear MDC</li>
-     * <li>Clear {@code WorkspaceScopeHolder}</li>
-     * <li>End OTel session span</li>
-     * </ol>
+     *
+     * <p>Role resolution rules:
+     * <ul>
+     * <li>Standard roles (e.g. "coordinator", "researcher") resolve via
+     *     {@link AgentRoleEnum#fromString} and use the canonical name for
+     *     checkpoint storage, MDC, and system prompt building.</li>
+     * <li>Skill roles (e.g. "skill:code-reviewer") preserve the full
+     *     {@code skill:X} string as {@code canonicalRole}. This is intentional:
+     *     {@link com.arcclaw.core.agent.reasoning.SystemPromptBuilder} detects the
+     *     prefix and injects the skill's custom system prompt from
+     *     {@link com.arcclaw.core.skill.SkillRegistry}. The checkpoint row uses
+     *     the full {@code skill:X} key, giving each skill its own independent
+     *     checkpoint and conversation history — correct and desired.</li>
+     * </ul>
      *
      * @param sessionId     The workspace session ID.
-     * @param agentRole     The agent role identifier.
+     * @param agentRole     The agent role identifier (e.g. "coordinator" or "skill:code-reviewer").
      * @param goal          The user's goal / task description.
      * @param engine        The reasoning engine (LLM abstraction).
      * @param maxIterations Maximum loop iterations before forced termination.
@@ -104,15 +101,45 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
-        // --- Resolve agentRole string to enum at API boundary ---
-        AgentRoleEnum resolvedRole;
+
+        // --- Resolve agentRole at the API boundary ---
+        //
+        // For skill roles (e.g. "skill:code-reviewer"):
+        //   - AgentRoleEnum.fromString() returns RESEARCHER (no IAE) — correct tool set.
+        //   - BUT we MUST NOT call resolvedRole.toScopedName() ("researcher") as the
+        //     canonicalRole — that would strip the "skill:" prefix and prevent
+        //     SystemPromptBuilder from injecting the skill's custom system prompt.
+        //   - Solution: preserve the original agentRole string as canonicalRole.
+        //
+        // For standard roles (e.g. "coordinator", "researcher"):
+        //   - Behaves exactly as before: resolve enum, use toScopedName().
+        //
+        final String canonicalRole;
         try {
-            resolvedRole = AgentRoleEnum.fromString(agentRole);
+            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
+            // Preserve skill: prefix so SystemPromptBuilder sees it intact.
+            // For standard roles, normalize via toScopedName() as before.
+            canonicalRole = (agentRole != null && agentRole.startsWith(SKILL_PREFIX))
+                    ? agentRole
+                    : resolvedRole.toScopedName();
         } catch (IllegalArgumentException e) {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
-            resolvedRole = AgentRoleEnum.COORDINATOR;
+            // Fall through with coordinator as safe default
+            return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
+                               goal, engine, maxIterations);
         }
-        final String canonicalRole = resolvedRole.toScopedName();
+
+        return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations);
+    }
+
+    /**
+     * Internal execution path — called after role resolution is complete.
+     * Extracted to avoid duplicating the try/finally lifecycle block.
+     * Package-private (not private) so @ActivateRequestContext can be proxied by Quarkus ARC.
+     */
+    @ActivateRequestContext
+    AgentResult runWithRole(String sessionId, String canonicalRole, String goal,
+            ReasoningEngine engine, int maxIterations) {
 
         // --- CONTEXT SETUP ---
         MDC.put(MdcKeys.SESSION_ID, sessionId);
@@ -127,9 +154,6 @@ public class AgentLoop {
                 var checkpoint = existingCheckpoint.get();
                 CheckpointStatus status = checkpoint.getStatus();
 
-                // Only resume history if the turn is actively pending or interrupted.
-                // If status is COMPLETED or FAILED (which happens after a /reset), 
-                // we MUST ignore old ReAct steps and start a fresh turn.
                 if (status == CheckpointStatus.IN_PROGRESS || status == CheckpointStatus.AWAITING_APPROVAL) {
                     List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
                     if (loadedSteps != null) {
@@ -137,15 +161,10 @@ public class AgentLoop {
                     }
                     log.infof("Resumed %d steps from active checkpoint (status=%s)", resumedHistory.size(), status);
                 } else {
-                    // This log line will now appear after you /reset and then say "hi"
                     log.debugf("Ignoring terminal checkpoint (status=%s). Starting fresh turn.", status);
                 }
             }
 
-            // resumedHistory is mutable (from deserializeSteps) when status == AWAITING_APPROVAL —
-            // the L134 condition guarantees this. On a fresh turn, resumedHistory = List.of()
-            // (immutable) but handleResumeHook returns early (goal doesn't start with AgentSentinels.RESUME_GOAL_PREFIX),
-            // so history.add() inside the hook is never reached on an immutable list. Safe.
             AgentResult resumeResult = checkpointResumeHandler.handle(
                     sessionId, canonicalRole, goal, resumedHistory);
             if (resumeResult != null) {
@@ -180,20 +199,20 @@ public class AgentLoop {
 
             return result;
         } catch (ComplianceViolationException cve) {
-            // FAIL-CLOSED: mandatory audit write failed — agent MUST halt immediately.
-            // No further LLM calls or tool executions permitted with a broken audit trail.
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",
                     sessionId, cve.getEventType());
-            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + cve.getMessage(), AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
+            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + cve.getMessage(),
+                    AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
                     cp.setStatus(CheckpointStatus.COMPROMISED);
                     agentStore.save(cp);
                 });
             } catch (Exception ignored) {}
-            throw cve; // re-throw to physically halt the call stack
+            throw cve;
         } catch (Exception e) {
-            result = AgentResult.failed("SYSTEM_ERROR: " + e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+            result = AgentResult.failed("SYSTEM_ERROR: " + e.getMessage(),
+                    AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
                     agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + e.getMessage())
@@ -214,40 +233,8 @@ public class AgentLoop {
         }
     }
 
-    /**
-     * Execute the Thought-Plan-Act-Observe reasoning loop.
-     * <p>
-     * Each iteration:
-     * <ol>
-     * <li>Ask the {@link ReasoningEngine} for the next step (thought + action)</li>
-     * <li>If action = {@code "FINISH"} → return the final answer</li>
-     * <li>Validate the action (tool exists, params valid)</li>
-     * <li>Execute via {@link ToolRegistry#invokeTool(String, Map)}</li>
-     * <li>Record the observation and continue</li>
-     * </ol>
-     *
-     * @param goal          The user's goal / task description.
-     * @param engine        The reasoning engine (LLM abstraction).
-     * @param maxIterations Maximum loop iterations before forced termination.
-     * @return The final result with reasoning trace.
-     */
+    // Keep the two-arg overload for callers that don't need session lifecycle.
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
-        String role = WorkspaceContext.agentRole();
-        if (role == null) {
-            role = AgentRoleEnum.COORDINATOR.toScopedName();
-        }
-        AgentExecutionContext context = new AgentExecutionContext(
-                WorkspaceScopeHolder.getRequired(),
-                WorkspaceContext.userId(),
-                WorkspaceContext.chatId(),
-                role,
-                goal,
-                WorkspaceContext.autonomy(),
-                maxIterations
-        );
-        return stateMachineRunner.run(context, engine, List.of());
+        return run(null, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);
     }
-
-
-
 }

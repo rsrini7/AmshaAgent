@@ -10,6 +10,11 @@
 GET {{baseUrl}}/skills
 Accept: application/json
 X-ArcClaw-API-Key: {{validKey}}
+
+HTTP/1.1 200  - OK
+content-length: 491
+connection: close
+content-type: application/json;charset=UTF-8
 ###
 # Expect 201: {"message":"Skill saved and registry reloaded: code-reviewer"}
 # Telegram test: "review my code for security issues"
@@ -37,6 +42,11 @@ When reviewing code:
 2. Flag security vulnerabilities (injection, null deref, resource leaks)
 3. Suggest idiomatic improvements without over-engineering
 4. Be direct and specific — cite line numbers when possible
+
+HTTP/1.1 201  - Created
+content-type: application/json;charset=UTF-8
+content-length: 62
+connection: close
 ###
 # Expect 201: {"message":"Skill saved and registry reloaded: researcher"}
 # Telegram test: "how does the sort algorithm work"
@@ -58,6 +68,11 @@ tool-capabilities:
 max-iterations: 7
 ---
 You are Saraswati, the knowledge agent. Your role is to research technical topics thoroughly, synthesise information from multiple sources, and present clear, accurate summaries with concrete examples.
+
+HTTP/1.1 201  - Created
+content-type: application/json;charset=UTF-8
+content-length: 59
+connection: close
 ###
 # Expect 201: {"message":"Skill saved and registry reloaded: code-reviewer"}
 # Note: SkillResource always returns 201 for both create and update.

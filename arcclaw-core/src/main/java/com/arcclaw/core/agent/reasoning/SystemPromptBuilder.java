@@ -4,34 +4,50 @@ import java.time.Instant;
 
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import org.jboss.logging.Logger;
+
 /**
  * Builds the system prompt for ArcClaw agents.
+ * <p>
+ * When {@code agentRole} starts with {@code "skill:"}, the persona section of the
+ * system prompt is replaced with the skill's own {@code systemPrompt} from
+ * {@link SkillRegistry}. The STRICT TOOL BINDING CONTRACT section is built from
+ * the base {@link AgentRoleEnum} (RESEARCHER), which provides the correct tool
+ * schema (GITHUB + MEMORY_SEARCH) for all current skill definitions.
  */
 @ApplicationScoped
 public class SystemPromptBuilder {
 
+    private static final Logger log = Logger.getLogger(SystemPromptBuilder.class);
+    private static final String SKILL_PREFIX = "skill:";
+
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
     private final CompactionSummaryRepository compactionSummaryRepository;
+    private final SkillRegistry skillRegistry;
 
     protected SystemPromptBuilder() {
         this.agentPersonaRegistry = null;
         this.promptTemplateEngine = null;
         this.compactionSummaryRepository = null;
+        this.skillRegistry = null;
     }
 
     @Inject
     public SystemPromptBuilder(AgentPersonaRegistry agentPersonaRegistry,
                                PromptTemplateEngine promptTemplateEngine,
-                               CompactionSummaryRepository compactionSummaryRepository) {
+                               CompactionSummaryRepository compactionSummaryRepository,
+                               SkillRegistry skillRegistry) {
         this.agentPersonaRegistry = agentPersonaRegistry;
         this.promptTemplateEngine = promptTemplateEngine;
         this.compactionSummaryRepository = compactionSummaryRepository;
+        this.skillRegistry = skillRegistry;
     }
 
     private static final String SECURITY_RULES_PROMPT = """
@@ -164,16 +180,39 @@ public class SystemPromptBuilder {
             """;
 
     public String build(String agentRole, String sessionId) {
-        AgentRoleEnum roleEnum = AgentRoleEnum.fromString(agentRole);
-        String personaPrompt = agentPersonaRegistry.getPersonaPrompt(roleEnum);
+        // --- Skill persona resolution ---
+        // When SkillAwareIntentClassifier routes to "skill:code-reviewer", we replace
+        // the persona section with the skill's own system prompt. The base AgentRoleEnum
+        // (RESEARCHER) governs the tool-binding section only.
+        final String personaPrompt;
+        final AgentRoleEnum roleEnum;
 
-        // 1. ArcClaw prefix + agentPersonaRegistry.getPersonaPrompt()
+        if (agentRole != null && agentRole.startsWith(SKILL_PREFIX)) {
+            String skillName = agentRole.substring(SKILL_PREFIX.length());
+            roleEnum = AgentRoleEnum.fromString(agentRole); // returns RESEARCHER — correct tool set
+
+            personaPrompt = skillRegistry.findByName(skillName)
+                    .map(entry -> entry.definition().systemPrompt())
+                    .orElseGet(() -> {
+                        log.warnf("[SystemPromptBuilder] Skill '%s' not found in registry " +
+                                  "— falling back to coordinator persona", skillName);
+                        return agentPersonaRegistry.getPersonaPrompt(AgentRoleEnum.COORDINATOR);
+                    });
+
+            log.debugf("[SystemPromptBuilder] Building prompt for skill '%s' (base role: %s)",
+                       skillName, roleEnum.toScopedName());
+        } else {
+            roleEnum = AgentRoleEnum.fromString(agentRole);
+            personaPrompt = agentPersonaRegistry.getPersonaPrompt(roleEnum);
+        }
+
+        // 1. ArcClaw prefix + persona prompt
         String baseSystemPrompt = "You are ArcClaw. Your active persona is described below.\n\n" +
                 personaPrompt +
                 "\n\n";
 
-        // 2. Coordinator trimurti block (COORDINATOR role only)
-        if (roleEnum == AgentRoleEnum.COORDINATOR) {
+        // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
+        if (roleEnum == AgentRoleEnum.COORDINATOR && !agentRole.startsWith(SKILL_PREFIX)) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main
@@ -183,7 +222,7 @@ public class SystemPromptBuilder {
                     - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs.
                     - 'Saraswati' (The Goddess of Knowledge): Information retrieval, documentation.
                     - 'Brihaspati' (The Architect): System design, architectural decisions, ADR authoring.
-                    - 'Dattatreya' (The Synthesizer): Integrates multi-agent outputs, resolves 
+                    - 'Dattatreya' (The Synthesizer): Integrates multi-agent outputs, resolves \s
                       contradictions across all domains. Use when a task spans code + debug +
                       research + architecture simultaneously.
                     After the first message in a session, skip the "I'll have [agent] perform..."
@@ -191,7 +230,7 @@ public class SystemPromptBuilder {
                     \n""";
         }
 
-        // 3. SECURITY_RULES_PROMPT verbatim
+        // 3. Security rules
         baseSystemPrompt += SECURITY_RULES_PROMPT;
 
         // Build compaction summary for template injection
@@ -200,11 +239,11 @@ public class SystemPromptBuilder {
                 .map(s -> s.summary).orElse(null)
                 : null;
 
-        // 4. STRICT TOOL BINDING CONTRACT block
+        // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)
+        //    so the tool list reflects what the skill's capabilities actually permit.
         String strictBinding = "**STRICT TOOL BINDING CONTRACT**\n"
                 + "ACTIVE PERSONA: " + agentRole + "\n"
-                + promptTemplateEngine.buildSystemPrompt(
-                        AgentRoleEnum.fromString(agentRole), compactionSummary, Instant.now())
+                + promptTemplateEngine.buildSystemPrompt(roleEnum, compactionSummary, Instant.now())
                 + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
                 + "When in doubt, output text only.";

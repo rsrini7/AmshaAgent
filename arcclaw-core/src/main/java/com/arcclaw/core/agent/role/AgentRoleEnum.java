@@ -92,6 +92,14 @@ public enum AgentRoleEnum {
     /**
      * Resolves an AgentRoleEnum from a string, handling both canonical names and
      * the system's Hindu deity aliases.
+     * <p>
+     * The {@code skill:} prefix (produced by {@code SkillAwareIntentClassifier}) is
+     * handled here to prevent {@link IllegalArgumentException} and the silent
+     * COORDINATOR fallback in {@code AgentLoop}. Skills use RESEARCHER as their base
+     * role because it provides GITHUB + MEMORY_SEARCH — the capabilities required by
+     * all current skill definitions. The actual LLM persona and system prompt are
+     * overridden by {@code SystemPromptBuilder} using the skill's own definition;
+     * this enum value only governs the tool-binding layer.
      *
      * @param roleStr the string identifier from Telegram or existing checkpoints
      * @return the resolved AgentRoleEnum
@@ -103,6 +111,14 @@ public enum AgentRoleEnum {
         }
 
         String normalized = roleStr.trim().toLowerCase();
+
+        // Skill roles produced by SkillAwareIntentClassifier (e.g. "skill:code-reviewer").
+        // Use RESEARCHER as the base role — provides GITHUB + MEMORY_SEARCH which matches
+        // current skill tool-capability declarations. SystemPromptBuilder replaces the
+        // persona prompt with the skill's own system prompt before the LLM call.
+        if (normalized.startsWith("skill:")) {
+            return RESEARCHER;
+        }
 
         return switch (normalized) {
             case "architect", "brihaspati", "brahaspati" -> ARCHITECT;

@@ -13,6 +13,7 @@ import org.mockito.MockitoAnnotations;
 
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 
 class SystemPromptBuilderTest {
@@ -26,13 +27,16 @@ class SystemPromptBuilderTest {
     @Mock
     CompactionSummaryRepository compactionSummaryRepository;
 
+    @Mock
+    SkillRegistry skillRegistry;
+
     SystemPromptBuilder builder;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         builder = new SystemPromptBuilder(agentPersonaRegistry, promptTemplateEngine,
-                compactionSummaryRepository);
+                compactionSummaryRepository, skillRegistry);
     }
 
     @Test
