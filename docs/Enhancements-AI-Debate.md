@@ -2419,7 +2419,7 @@ Task: Phase 59 — MCP Server + Client (Dual-Transport: stdio/Podman + HTTP/SSE)
 
 Architecture Context:
 A production-grade, enterprise AI Agent Kernel built with:
-  - Java 25 + Quarkus 3.23 + LangChain4J 0.26.1
+  - Java 25 + Quarkus 3.27.2 + LangChain4J (quarkiverse BOM-managed)
   - GraalVM Native Image (Podman container build)
   - SQLite WAL (single-node, strict singleton topology)
   - Apache Camel (Telegram channel via camel-quarkus-telegram)
@@ -2429,7 +2429,7 @@ A production-grade, enterprise AI Agent Kernel built with:
   - GovernanceLayer (USD budget cap, AutonomyLevel: FULL/SUPERVISED/READONLY)
   - Multi-agent Trimurti model: Vishnu(coordinator), Brahma(coder),
     Shiva(debugger), Saraswati(researcher), DattatreyaAgent(meta-synthesizer)
-  - IntentClassifierService (llama-3.1-8b-instant via Groq, routes to agent role)
+  - IntentClassifierService (llama-3.1-8b-instant via Groq OpenAI-compatible API)
   - Multi-module Maven: arcclaw-parent → arcclaw-channel-api, arcclaw-core,
     arcclaw-deployment, arcclaw-app
   - Dependency chain: arcclaw-channel-api ← arcclaw-core ← arcclaw-app (no reverse).
@@ -2505,6 +2505,10 @@ A production-grade, enterprise AI Agent Kernel built with:
   SkillSystemPrompt.html Qute wrapper, REST CRUD /api/v1/skills + /refresh + /delete,
   SecurityEventType: SKILL_LOADED / SKILL_REFRESHED (telemetry tier).
   App test baseline after P60 = 132.
+- Phase 60.1: Qute Native Reflection Fixes (Gate) — @TemplateData added to
+  RoleDefinition, AgentRoleEnum, ReasoningStep, ToolCapability,
+  AgentResult nested records (Finished, AwaitingApproval, LoopExceeded, Failed).
+  Zero new tests. Baseline unchanged at 535/535.  
 
 ## Known Architecture Nuances — ALWAYS APPLY (all 20, including P60 additions)
 
@@ -2535,7 +2539,11 @@ A production-grade, enterprise AI Agent Kernel built with:
     the enum constant names, because it is matched against external MCP server
     tool names which are always lowercase.
 13. maxBudgetUsd is EXPLICITLY EXCLUDED from skill frontmatter.
-14. %test.arcclaw.skills.hot-reload=false in application.yaml test profile.
+14. In application.yaml test profile. 
+    %test:
+	  arcclaw:
+	    skills:
+		  hot-reload=false 
 15. Dynamic skills use pre-compiled Qute wrapper SkillSystemPrompt.html only.
 16. *** P60-DISCOVERED: ALL REST resource classes that touch JPA/Hibernate or
     trigger async audit writes MUST be annotated @RunOnVirtualThread at class
@@ -2561,6 +2569,16 @@ A production-grade, enterprise AI Agent Kernel built with:
     - Read inbound messages line-by-line using BufferedReader.readLine()
     Failure to frame with '\n' causes the remote MCP server to hang forever
     waiting for message termination. This is not optional. ***
+21. *** P60.1-DISCOVERED: In native image, EVERY class, record, or enum passed
+    as data to a Qute template via .data("key", object) MUST be annotated
+    @TemplateData (io.quarkus.qute.TemplateData). Without it, ANY property
+    access {var.field} throws TemplateException at runtime — NOT at build time.
+    This is silent in JVM mode and only surfaces in native. @TemplateData is
+    SEPARATE from @RegisterForReflection — both may be needed for the same
+    class but serve different purposes.
+    P59 scope: McpReflex uses StringBuilder (no Qute), McpToolDescriptor is
+    Jackson-serialized only. No new @TemplateData needed in P59. But any
+    future class passed to a .txt template must have it. ***	
 
 ## JDK Feature Policy (CRITICAL)
 
@@ -2635,18 +2653,24 @@ arcclaw-mcp/pom.xml:
   - artifactId: arcclaw-mcp
   - packaging: jar
   - minimal dependency: arcclaw-core (compile)
-  - one profile: mcp-smoke-test (adds quarkus-mcp-server)
+  - one profile: mcp-smoke-test (adds quarkus-mcp-server-http & quarkus-mcp-server-sse)
 
 Create the mcp-smoke-test Maven profile:
 <profiles>
   <profile>
     <id>mcp-smoke-test</id>
     <dependencies>
-      <dependency>
-        <groupId>io.quarkiverse.mcp</groupId>
-        <artifactId>quarkus-mcp-server</artifactId>
-        <version>1.1.0</version>
-      </dependency>
+		<dependency>
+		  <groupId>io.quarkiverse.mcp</groupId>
+		  <artifactId>quarkus-mcp-server-stdio</artifactId>
+		  <version>1.10.3</version>
+		</dependency>
+
+		<dependency>
+		  <groupId>io.quarkiverse.mcp</groupId>
+		  <artifactId>quarkus-mcp-server-http</artifactId>
+		  <version>1.10.3</version>
+		</dependency>
     </dependencies>
   </profile>
 </profiles>
@@ -2982,6 +3006,11 @@ arcclaw:
 TEST: Behavior validated via McpToolBridgeTest (Component 6) and
 McpServerResourceTest (Component 9). No standalone test for the config interface.
 
+NOTE: The existing quarkus.otel.resource.attributes is now flat format:
+  attributes: "deployment.environment=${ARCCLAW_ENV:development}"
+Do NOT revert it to the dot-quoted YAML key format — that was a bug fixed in
+the low-priority warning cleanup (today). Any edits to application.yaml in this
+phase must preserve the flat format.
 
 ---
 
@@ -2997,7 +3026,7 @@ mechanism to connect to GitHub MCP, filesystem MCP, PostgreSQL MCP, etc.
 Required Changes:
 
 File 1 — McpServerConfig (MUST be a top-level record, NOT a nested class):
-  public record MccServerConfig(
+  public record McpServerConfig(
       String serverName,          // e.g. "github-mcp"
       String podmanImage,         // e.g. "ghcr.io/github/github-mcp-server:latest"
       List<String> envVars,       // e.g. ["GITHUB_PERSONAL_ACCESS_TOKEN=..."]
@@ -3701,6 +3730,4 @@ Add "Connecting an MCP Server to ArcClaw" section:
 | M4 | Perplexity | ACCEPT | McpClientServiceTest uses JDK built-in HttpServer via QuarkusTestResourceLifecycleManager. No WireMock dependency. |
 
 *Generated from 3-AI review cycle: Claude → Gemini → Perplexity/Claude (2 rounds).
-App test baseline: 132. Phase order: P60 ✅ → P59 → P61 → P62 → P63.*
-
-
+App test baseline: 132. Phase order: P60 ✅ → P60.1 → P59 → P61 → P62 → P63.*
