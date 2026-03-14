@@ -1,6 +1,8 @@
 package com.arcclaw.core.audit;
 
 import com.arcclaw.core.security.CryptoConstants;
+
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -20,16 +22,13 @@ public class AuditEventRepository {
     @Inject
     EntityManager em;
 
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     void warmupQueryCache() {
         // Force HQL compilation at startup (on the main thread, before first transaction)
         // This prevents ANTLR cold-start under Narayana transaction timeout in native mode
         try {
-            em.createQuery(
-                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid",
-                AuditEvent.class)
+            em.createNamedQuery("AuditEvent.recordInsert", AuditEvent.class)
                 .setMaxResults(1);
-            // Do NOT execute — just parse and cache the query plan
         } catch (Exception ignored) {
             // Best-effort warmup; real queries will still work
         }
