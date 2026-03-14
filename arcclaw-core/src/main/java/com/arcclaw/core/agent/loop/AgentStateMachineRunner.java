@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -40,6 +41,10 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 @ApplicationScoped
 public class AgentStateMachineRunner {
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
+
+    private static final Set<String> REACT_KEYWORDS = Set.of(
+            "OBSERVE", "THINK", "ACT", "PLAN", "REASON", "THOUGHT"
+    );
 
     @Inject ToolRegistry toolRegistry;
     @Inject StatefulAgentStore agentStore;
@@ -256,11 +261,31 @@ public class AgentStateMachineRunner {
         String toolName = step.action();
         var toolOpt = toolRegistry.findTool(toolName);
         if (toolOpt.isEmpty()) {
+            boolean isReactKeyword = REACT_KEYWORDS.contains(toolName.toUpperCase());
+
+            if (isReactKeyword) {
+                // ReAct reasoning keyword leaked as a tool name.
+                // Inject ephemeral correction but do NOT persist to history or memory.
+                // Persisting this poisons subsequent turns — the LLM sees "OBSERVE
+                // not found" in chat history and repeats the pattern endlessly.
+                log.warnf("[AgentStateMachineRunner] ReAct keyword '%s' used as tool name " +
+                        "— injecting ephemeral correction (NOT persisted to memory)", toolName);
+                String reactCorrection = String.format(
+                        "System: '%s' is a ReAct reasoning keyword, not a tool name. " +
+                        "Do not use reasoning keywords as tool names. " +
+                        "Available tools: %s. Use FINISH to provide your final answer.",
+                        toolName, toolRegistry.listTools());
+                // Return as transientError — injected into next LLM call as a
+                // system message without being written to chat memory.
+                return StepDecision.retryEngine(reactCorrection, 0);
+            }
+
+            // Normal hallucinated tool — persist correction to history as before.
             String errorObs = String.format(
                     "Tool '%s' does not exist. Available tools: %s. " +
                             "Please choose a valid tool or use FINISH to complete.",
                     toolName, toolRegistry.listTools());
-            log.warnf("Hallucination intercepted: tool '%s' not found", toolName);
+            log.warnf("[AgentStateMachineRunner] Hallucination intercepted tool '%s' not found", toolName);
             final ReasoningStep completedStep = step.withObservation(errorObs);
             history.add(completedStep);
             observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));

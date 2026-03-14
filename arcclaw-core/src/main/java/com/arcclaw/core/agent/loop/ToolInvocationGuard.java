@@ -6,11 +6,14 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
@@ -30,7 +33,8 @@ public class ToolInvocationGuard {
     @Inject public RoleRegistry roleRegistry;
     @Inject public ObjectMapper objectMapper;
     @Inject public StatefulAgentStore agentStore;
-    @Inject public jakarta.enterprise.inject.Instance<com.arcclaw.core.tool.DynamicToolLookup> dynamicToolLookup;
+    @Inject public ToolRegistry toolRegistry;
+    @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
     private static final Pattern GITHUB_TRIGGER_PATTERN =
@@ -88,9 +92,15 @@ public class ToolInvocationGuard {
         }
 
         // 1.5 DYNAMIC TOOL FALLBACK
-        if (dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
+        // Only bypass for tools that are NOT registered as internal tools.
+        // Internal tools (github, memory_search) MUST still go through HITL.
+        // The self-MCP connection re-exposes internal tools as dynamic tools,
+        // so without this guard, isDynamicToolAllowed("github") bypasses HITL.
+        boolean isInternalTool = toolRegistry.findTool(toolName).isPresent();
+        if (!isInternalTool
+                && dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
-            return new GuardDecision.Allow(); // permitted via dynamic MCP registry
+            return new GuardDecision.Allow(); // permitted via dynamic MCP registry (external only)
         }
 
         // 2. GITHUB INTENT GUARD

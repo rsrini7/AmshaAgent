@@ -29,6 +29,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
 
+    private boolean isSchemaValidationError(String message) {
+        if (message == null) return false;
+        return message.contains("tool call validation failed")
+                || message.contains("did not match schema")
+                || message.contains("value must be one of")
+                || message.contains("errors:");
+    }
+
     @Inject
     ChatModel chatModel;
 
@@ -85,8 +93,22 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             response = chatModel.chat(request);
         } catch (InvalidRequestException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
+
+            // Schema validation error (e.g. Groq rejects bad parameter values).
+            // Re-throw so AgentStateMachineRunner.processEngineStep handles it
+            // via llmSchemaErrorCount + retryEngine — which already injects the
+            // correct transient correction. Do NOT catch it here.
+            if (isSchemaValidationError(msg)) {
+                log.warnf("[LangChainReasoningEngine] Schema validation error — " +
+                        "re-throwing to state machine for retry handling: %s", msg);
+                throw e;
+            }
+
+            // Tool truly absent from request.tools (different condition).
+            // Return an inline correction — this is the original intended path.
             if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {
-                log.warnf("LLM called unavailable tool — injecting correction: %s", msg);
+                log.warnf("[LangChainReasoningEngine] LLM called unavailable tool — " +
+                        "injecting inline correction: %s", msg);
                 return ReasoningStep.pending(
                         "Attempted to call a tool not available in this context",
                         "OBSERVE",

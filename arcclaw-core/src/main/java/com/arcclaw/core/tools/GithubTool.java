@@ -124,7 +124,9 @@ public class GithubTool implements AgentTool {
             .addEnumProperty("action",  List.of("repo", "gist"),
                 "Action to perform")
             .addEnumProperty("command", List.of("view", "list"),
-                "Command to run.")
+                "Command to run. Use 'view' to get description and details. " +
+                "Use 'list' to enumerate items. NEVER use 'desc', 'info', " +
+                "or any other value — ONLY 'view' and 'list' are valid.")
             .addStringProperty("target",
                 "For 'repo view', use 'owner/repo'. " +
                 "For 'repo list', use 'owner'. " +
