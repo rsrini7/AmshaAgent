@@ -45,6 +45,7 @@ public class SystemMetadataRegistry {
             case DEVELOPMENT -> "dev";
             case TEST -> "test";
             case NORMAL -> "prod";
+            default -> "unknown";
         };
     }
 
