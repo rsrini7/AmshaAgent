@@ -1,3 +1,31 @@
+ARCCLAW_TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=<token from @BotFather>
+ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
+ARCCLAW_TELEGRAM_ALLOWED_USERS=<your @username without @>
+ARCCLAW_API_KEY_INTERNAL=key-internal-changeme   # or your custom key
+GROQ_API_KEY=<your groq key>
+ARCCLAW_VAULT_PEPPER=<32+ char string>
+ARCCLAW_AUDIT_HMAC_KEY=<32+ char string>
+
+
+---
+
+**`11_skill.http`** — pure skills, self-contained, `@baseUrl = http://localhost:8080/api/v1`
+- Flow A: List
+- Flow B: Add/Upsert (code-reviewer, researcher, upsert)
+- Flow C: Refresh
+- Flow D: Delete + verify
+- Flow E: Error cases (bad YAML, unknown capability, 404, 401×2)
+
+**`12_mcp.http`** — pure MCP, two variable bases (`@adminBase` and `@mcpBase` since the protocol lives at `/mcp` not `/api/v1/mcp`)
+- Flow A: Admin health check (`/api/v1/mcp/status` + `/api/v1/mcp/tools`) — **run these first**
+- Flow B: Full protocol sequence MCP-1→5, with IntelliJ response handler on MCP-1 that auto-captures `Mcp-Session-Id` into `{{mcpSessionId}}` for all subsequent calls
+- Flow C: Error cases (disallowed tool, missing session ID, disabled server)
+
+One thing to be mindful of: always run `MCP-ADMIN-1` before the protocol flows to confirm `serverEnabled=true`, otherwise MCP-1 will 404 and you'll have no session ID to work with for the rest.
+
+---
+
 ## Test Skills
 
 | # | What to run | What to check |
