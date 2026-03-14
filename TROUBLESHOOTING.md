@@ -3264,3 +3264,57 @@ arcclaw:
 *   **Root Cause**: SQLite in Write-Ahead Logging (WAL) mode provides snapshot isolation. If the reload logic starts its own transaction/read-operation immediately after the delete transaction commits, it may occasionally run against a stale snapshot if the commit hasn't fully propagated to the shared cache in every thread context.
 *   **Resolution**: Wrapped the REST endpoints (`upsertSkill`, `deleteSkill`) with **`@Transactional`**. This forces the modification AND the subsequent `skillLoader.reloadAll()` call into the **same JTA transaction**. This ensures that the registry reload is guaranteed to see the effects of the modification before the transaction commits and releases the locks.
 
+---
+
+## 26. Quarkus 3.23.0 to 3.27.2 Migration Troubleshooting
+
+### 🔴 Failure: `ClassNotFoundException: GlobalDevServicesConfig$Enabled`
+**Symptom:** Tests or package failing due to stale LangChain4j version pins.
+**Root Cause:** Using explicit `<version>` tags for `io.quarkiverse.langchain4j` artifacts overrides the `io.quarkus.platform:quarkus-langchain4j-bom` properties, loading old extensions into newer Quarkus internals.
+**Resolution:** Delete all explicit `<version>` tags for `io.quarkiverse.langchain4j` dependencies in `arcclaw-core` and `arcclaw-app` `pom.xml` files, and let the platform BOM manage the version.
+
+### 🔴 Failure: LangChain4j 0.26.x -> 1.x API breaking changes
+**Symptom:** Compilation failures complaining about missing `.from()` methods on `AiMessage`, `UserMessage`, etc., or `ChatLanguageModel` not found.
+**Root Cause:** LangChain4j API breaking changes. `ChatLanguageModel` was renamed to `ChatModel`, and constructors like `.from()` were renamed to static factory methods like `.aiMessage()`, `.userMessage()`.
+**Resolution:** Sweep the codebase to replace `.from()` with `.aiMessage()`, `.userMessage()`, `.systemMessage()`, etc., and replace `ChatLanguageModel` with `ChatModel`.
+
+### 🔴 Failure: Hibernate ORM 7 `OptimisticLockException` or NPEs during Entity Merge
+**Symptom:** Agent Checkpoint tests fail with NPEs (e.g. `checkpoint.getVersion()`) or `OptimisticLockException: Unexpected row count`.
+**Root Cause:** Hibernate ORM 7 enforces strict versioning checks for `@Version` attributes. Calling `em.merge()` on a completely detached entity or using primitives with strict nullability causes immediate exceptions or 0 row updates.
+**Resolution:** Initialize `@Version` to `0` properly (e.g. `private Integer version = 0;`). For detached merges, replace `em.merge(detached)` with a load-then-copy pattern (find the managed entity by ID inside the transaction, copy mutable fields over, and let automatic dirty checking persist the update). Ensure you do not call `em.merge()` on already managed entities or detached ones inside a loop unnecessarily.
+
+### 🔴 Failure: Hibernate ORM 7 Programmatic Transaction Scoping Bug
+**Symptom:** Queries inside a `QuarkusTransaction.requiringNew().run(...)` lambda return detached or unexpected results when using a class-level `@Inject EntityManager em` field, leading to `NullPointerException` due to empty/stale result lists.
+**Root Cause:** In Quarkus 3.27 / Hibernate ORM 7, the proxy `EntityManager` does not correctly bind to the new transaction context inside a lambda created programmatically via `QuarkusTransaction`. It remains associated with the outer or nonexistent transaction.
+**Resolution:** Extract the lambda execution body into a dedicated method annotated with `@Transactional(TxType.REQUIRES_NEW)`. This allows ArC to correctly construct a fresh transaction-scoped `EntityManager` tailored for that method execution.
+
+### 🔴 Failure: Hibernate ORM 7 Test-Only: `em.merge()` on Managed Entity is No-op
+**Symptom:** During tests, a flushed entity is updated via `em.merge()` followed by `em.flush()`, but fails with `OptimisticLockException: Unexpected row count 0`.
+**Root Cause:** The entity was already managed within the persistence context after `em.persist()`. In ORM 7, calling `em.merge()` on a managed entity acts as a no-op and does not cascade the intended dirty updates. The `UPDATE` statement is omitted, resulting in the 0 row count error.
+**Resolution:** Remove the redundant `em.merge()` call. Native dirty checking will automatically pick up the modifications to the managed entity on flush.
+
+### 🔴 Failure: Hibernate ORM 7 Test-Only: `em.find()` outside transaction returns null
+**Symptom:** Operations like `em.find()` return `null` when called outside of a `@Transactional` boundary in Quarkus 3.27 tests.
+**Root Cause:** `em.find()` on a transaction-scoped `EntityManager` proxy requires an active persistence context. When called outside a transaction, it returns `null` because no context is active.
+**Resolution:** Ensure that `em.find()` calls in tests are encapsulated within appropriately scoped transactions (`@Transactional`). If mimicking detached entity behavior is required for testing, configure a new transaction boundary to load and then explicitly call `em.detach()` before returning the entity outside the transaction scope.
+
+### 🔴 Failure: Hibernate ORM 7 + SQLite: Null Primary Keys in Result Sets
+**Symptom:** Queries (HQL or Native SQL) for `AgentCheckpoint` return result sets where rows exist (count is correct), but the primary key column (`id`) is `null`. This triggers `NullPointerException` or `DetachedEntity` errors downstream because the application cannot identify the record.
+**Root Cause (Unconfirmed):** Potential incompatibility between Hibernate ORM 7's result set mapping and the SQLite JDBC driver, especially during transactional retries or under specific bytecode enhancement conditions.
+**Attempted Mitigations:**
+1.  **Transactional Extraction:** Moved lambdas inside `QuarkusTransaction.requiringNew()` to dedicated `@Transactional` methods to ensure proper `EntityManager` proxy binding.
+2.  **ID Projection:** Changed queries to `SELECT id FROM ...` (Long) then `em.find()`. Still returned `null` for the ID.
+3.  **Native SQL:** Bypassed HQL with raw SQL. Still returned `null` for the ID.
+4.  **`em.clear()`:** Forcefully cleared the `EntityManager` at the start of retry loops to eliminate stale state.
+5.  **Column Renaming:** Renamed `id` to `checkpoint_id` to avoid potential clashes with SQLite internal `rowid` or reserved keywords.
+**Current Status:** Unresolved. Suspected deep integration bug in the Hibernate 7 SQLite Dialect.
+
+### 🔴 Failure: Hibernate ORM 7 + SQLite: Null Primary Keys (DDL Mismatch)
+**Symptom:** Queries return correct row counts but `null` primary keys. This causes `NPE`s and `StaleStateException` (unexpected row count 0) during updates/loads.
+**Root Cause:** Hibernate ORM 7 + Community Dialect generates invalid DDL for `IDENTITY` columns on SQLite. Despite `@Column(columnDefinition = "INTEGER")`, the generated DDL omits the type (e.g., `checkpoint_id,` instead of `checkpoint_id integer,`). SQLite without explicit `INTEGER` does not activate the `rowid` alias for auto-increment.
+**Attempted Mitigations:**
+1.  **Transactional Extraction:** Moved lambdas to `@Transactional(REQUIRES_NEW)` methods.
+2.  **DDL Overrides:** Applied `columnDefinition = "INTEGER"` and `"integer"`. Both ignored by the Hibernate DDL exporter for `IDENTITY` strategy.
+3.  **Native Query Workarounds:** Projecting IDs via Native SQL. Failed because row values themselves were stored as `NULL` in the DB.
+**Current Status:** Blocked on Hibernate 7 DDL generation bug. Investigating `GenerationType.AUTO` or forcing `INTEGER PRIMARY KEY` in DDL.
+

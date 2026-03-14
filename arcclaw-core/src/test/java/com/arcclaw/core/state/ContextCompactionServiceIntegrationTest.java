@@ -5,7 +5,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
@@ -59,7 +59,7 @@ class ContextCompactionServiceIntegrationTest {
 
     @InjectMock
     @Identifier("compaction")
-    ChatLanguageModel compactionModel;
+    ChatModel compactionModel;
 
     @Inject
     AuditService auditService;
@@ -83,13 +83,15 @@ class ContextCompactionServiceIntegrationTest {
 
             List<ChatMessage> seedMessages = new ArrayList<>();
             for (int i = 0; i < 4; i++) {
-                seedMessages.add(UserMessage.from("User msg " + i));
+                // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                seedMessages.add(UserMessage.userMessage("User msg " + i));
             }
             chatMemoryStore.updateMessages(TEST_SESSION_ID, seedMessages);
 
             when(compactionModel.chat(any(dev.langchain4j.data.message.UserMessage.class)))
                     .thenReturn(ChatResponse.builder()
-                            .aiMessage(AiMessage.from("Prior session: user asked about X..."))
+                            // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                            .aiMessage(AiMessage.aiMessage("Prior session: user asked about X..."))
                             .build());
 
             // Act

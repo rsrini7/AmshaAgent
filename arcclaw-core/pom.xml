@@ -101,17 +101,14 @@
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-core</artifactId>
-      <version>${langchain4j.quarkus.version}</version>
     </dependency>
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-ollama</artifactId>
-      <version>${langchain4j.quarkus.version}</version>
     </dependency>
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-openai</artifactId>
-      <version>${langchain4j.quarkus.version}</version>
     </dependency>
 
     <!-- BouncyCastle — Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->

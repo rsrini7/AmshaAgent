@@ -117,7 +117,8 @@ public class ChatHistoryAssembler {
                         .arguments(argsJson)
                         .build();
 
-                messages.add(AiMessage.from(step.thought() != null ? step.thought() : "",
+                // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                messages.add(AiMessage.aiMessage(step.thought() != null ? step.thought() : "",
                         Collections.singletonList(request)));
 
                 if (step.observation() != null) {
@@ -125,18 +126,21 @@ public class ChatHistoryAssembler {
                     if (safeObs.length() > 4000) {
                         safeObs = safeObs.substring(0, 4000) + "... [TRUNCATED FOR LENGTH]";
                     }
-                    messages.add(ToolExecutionResultMessage.from(callId, step.action(), safeObs));
+                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                    messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
                 }
             } else {
                 if (step.thought() != null && !step.thought().isEmpty()) {
-                    messages.add(AiMessage.from(step.thought()));
+                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+                    messages.add(AiMessage.aiMessage(step.thought()));
                 }
             }
         }
 
         // STEP C — special goal injection
         if (goal != null && goal.startsWith("The tool execution")) {
-            messages.add(UserMessage.from(goal));
+            // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+            messages.add(UserMessage.userMessage(goal));
         } else if (goal != null && goal.contains("System: Your previous tool call")) {
             String correctionHint = goal.substring(goal.indexOf("System: Your previous tool call"));
             messages.add(SystemMessage.from(

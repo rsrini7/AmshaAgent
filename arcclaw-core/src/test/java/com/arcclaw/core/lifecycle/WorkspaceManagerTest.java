@@ -1,22 +1,26 @@
 package com.arcclaw.core.lifecycle;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Integration tests for {@link WorkspaceManager}.
@@ -46,13 +50,14 @@ class WorkspaceManagerTest {
     EntityManager em;
 
     @BeforeEach
-    @Transactional
     void cleanup() {
         // Wait for any background audit writes to finish to avoid lock contention
         auditService.waitForIdle();
 
         // Clear all checkpoints between tests
-        em.createQuery("DELETE FROM AgentCheckpoint").executeUpdate();
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            em.createQuery("DELETE FROM AgentCheckpoint").executeUpdate();
+        });
         heartbeatTracker.clearAll();
     }
 
@@ -71,7 +76,7 @@ class WorkspaceManagerTest {
 
         // Verify it's IN_PROGRESS
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
-            var loaded = agentStore.load("zombie-session-1", "coordinator");
+            var loaded = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load("zombie-session-1", "coordinator"));
             assertTrue(loaded.isPresent(), "Checkpoint should exist");
             assertEquals(CheckpointStatus.IN_PROGRESS, loaded.get().getStatus());
         });
@@ -81,7 +86,7 @@ class WorkspaceManagerTest {
 
         // Assert: checkpoint should now be FAILED
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
-            var afterRecovery = agentStore.load("zombie-session-1", "coordinator");
+            var afterRecovery = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load("zombie-session-1", "coordinator"));
             assertTrue(afterRecovery.isPresent(), "Checkpoint should still exist");
             assertEquals(CheckpointStatus.FAILED, afterRecovery.get().getStatus());
             assertNotNull(afterRecovery.get().getFailedAt(), "failedAt should be set");
@@ -117,7 +122,7 @@ class WorkspaceManagerTest {
 
         // Assert: checkpoint should be marked FAILED
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var cp = agentStore.load(sessionId, "debugger");
+            var cp = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "debugger"));
             assertTrue(cp.isPresent());
             assertEquals(CheckpointStatus.FAILED, cp.get().getStatus());
             assertTrue(cp.get().getFailReason().contains("WorkspaceManager"));
@@ -145,8 +150,8 @@ class WorkspaceManagerTest {
 
         // Assert: both checkpoints should be FAILED
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var coordinatorCp = agentStore.load(sessionId, "coordinator");
-            var debuggerCp = agentStore.load(sessionId, "debugger");
+            var coordinatorCp = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "coordinator"));
+            var debuggerCp = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "debugger"));
             assertTrue(coordinatorCp.isPresent());
             assertTrue(debuggerCp.isPresent());
             assertEquals(CheckpointStatus.FAILED, coordinatorCp.get().getStatus());
@@ -181,7 +186,7 @@ class WorkspaceManagerTest {
             // This is actually correct behavior — when a session is terminated, ALL
             // checkpoints
             // should be invalidated, even completed ones.
-            var cp = agentStore.load(sessionId, "researcher");
+            var cp = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "researcher"));
             assertTrue(cp.isPresent());
             assertEquals(CheckpointStatus.FAILED, cp.get().getStatus(),
                     "Terminated sessions should mark ALL non-FAILED checkpoints as FAILED");
@@ -201,10 +206,12 @@ class WorkspaceManagerTest {
             auditService.waitForIdle();
 
             // Manually set to AWAITING_APPROVAL in a separate transaction
-            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
-                AgentCheckpoint managedCp = em.find(AgentCheckpoint.class, cp.getId());
-                managedCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-                em.merge(managedCp);
+            AgentCheckpoint detachedCp = QuarkusTransaction.requiringNew().call(() -> {
+                return em.find(AgentCheckpoint.class, cp.getId());
+            });
+            detachedCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            QuarkusTransaction.requiringNew().run(() -> {
+                em.merge(detachedCp);
             });
         });
 
@@ -216,7 +223,7 @@ class WorkspaceManagerTest {
 
         // Assert
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var loaded = agentStore.load(sessionId, "coordinator");
+            var loaded = io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "coordinator"));
             assertTrue(loaded.isPresent());
             assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
             assertTrue(loaded.get().getFailReason().contains("approval was pending at shutdown"));

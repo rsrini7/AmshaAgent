@@ -6,7 +6,7 @@ import java.util.List;
  * Abstraction over LLM reasoning — produces the next {@link ReasoningStep}
  * given a goal and the current reasoning history.
  * <p>
- * In production, this wraps a {@code ChatLanguageModel} call. In tests,
+ * In production, this wraps a {@code ChatModel} call. In tests,
  * a mock implementation returns scripted responses for deterministic
  * verification of loop behavior.
  */

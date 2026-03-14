@@ -39,7 +39,8 @@ class ReasoningStepParserTest {
                 .name("github")
                 .arguments("{\"repo\":\"arcclaw\"}")
                 .build();
-        AiMessage aiMessage = AiMessage.from("Thinking", Collections.singletonList(toolReq));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
                 .tokenUsage(new TokenUsage(100, 50))
@@ -58,7 +59,8 @@ class ReasoningStepParserTest {
     @Test
     void testParse_textResponse() {
         // Arrange
-        AiMessage aiMessage = AiMessage.from("Final Answer");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage aiMessage = AiMessage.aiMessage("Final Answer");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
                 .build();
@@ -79,7 +81,8 @@ class ReasoningStepParserTest {
                 .name("github")
                 .arguments("invalid json")
                 .build();
-        AiMessage aiMessage = AiMessage.from("Thinking", Collections.singletonList(toolReq));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
                 .build();
@@ -96,7 +99,8 @@ class ReasoningStepParserTest {
     @Test
     void testParse_tokenUsagePopulated() {
         // Arrange
-        AiMessage aiMessage = AiMessage.from("OK");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage aiMessage = AiMessage.aiMessage("OK");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
                 .tokenUsage(new TokenUsage(10, 20))
@@ -113,7 +117,8 @@ class ReasoningStepParserTest {
     @Test
     void testParse_nullTokenUsageDefaultsToZero() {
         // Arrange
-        AiMessage aiMessage = AiMessage.from("OK");
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        AiMessage aiMessage = AiMessage.aiMessage("OK");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
                 .tokenUsage(null)

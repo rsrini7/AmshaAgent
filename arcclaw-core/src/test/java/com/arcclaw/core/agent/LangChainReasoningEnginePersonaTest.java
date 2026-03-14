@@ -20,7 +20,7 @@ import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
 class LangChainReasoningEnginePersonaTest {
 
     private LangChainReasoningEngine engine;
-    private ChatLanguageModel mockChatLanguageModel;
+    private ChatModel mockChatLanguageModel;
     private SystemPromptBuilder mockPromptBuilder;
     private ChatHistoryAssembler mockHistoryAssembler;
     private ReasoningStepParser mockStepParser;
@@ -45,7 +45,7 @@ class LangChainReasoningEnginePersonaTest {
         engine = new LangChainReasoningEngine();
 
         // 1. Create mocks
-        mockChatLanguageModel = mock(ChatLanguageModel.class);
+        mockChatLanguageModel = mock(ChatModel.class);
         ToolRegistry mockToolRegistry = mock(ToolRegistry.class);
         RoleRegistry mockRoleRegistry = mock(RoleRegistry.class);
         mockPromptBuilder = mock(SystemPromptBuilder.class);
@@ -58,14 +58,15 @@ class LangChainReasoningEnginePersonaTest {
         when(mockHistoryAssembler.assemble(any(), any(), any())).thenReturn(Collections.emptyList());
 
         ChatResponse mockResponse = mock(ChatResponse.class);
-        when(mockResponse.aiMessage()).thenReturn(AiMessage.from("mock response"));
+        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
+        when(mockResponse.aiMessage()).thenReturn(AiMessage.aiMessage("mock response"));
         when(mockChatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
 
         ReasoningStep expectedStep = ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
         when(mockStepParser.parse(any(), any(), any())).thenReturn(expectedStep);
 
         // 3. Inject mocks via reflection
-        injectField(engine, "chatLanguageModel", mockChatLanguageModel);
+        injectField(engine, "ChatModel", mockChatLanguageModel);
         injectField(engine, "toolRegistry", mockToolRegistry);
         injectField(engine, "roleRegistry", mockRoleRegistry);
         injectField(engine, "promptBuilder", mockPromptBuilder);

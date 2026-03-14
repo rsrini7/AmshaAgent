@@ -1,30 +1,31 @@
 package com.arcclaw.core.lifecycle;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.List;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-
-import io.quarkus.arc.Arc;
-import io.quarkus.narayana.jta.QuarkusTransaction;
-
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-
 import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.persistence.SqliteErrorStrings;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.persistence.SqliteErrorStrings;
+
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import io.quarkus.arc.Arc;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 
 /**
  * Lifecycle orchestrator for workspace session termination and disk management.
@@ -42,6 +43,9 @@ public class WorkspaceManager {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    WorkspaceManager self;
 
     @Inject
     GovernanceLayer governanceLayer;
@@ -135,6 +139,27 @@ public class WorkspaceManager {
         }
     }
 
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkCheckpointsFailedRequiresNew(String sessionId) {
+        em.clear();
+        List<AgentCheckpoint> checkpoints = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status != :failed",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("failed", CheckpointStatus.FAILED)
+                .getResultList();
+
+        Instant now = Instant.now();
+        for (var checkpoint : checkpoints) {
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            checkpoint.setFailedAt(now);
+            checkpoint.setFailReason("Session terminated by WorkspaceManager");
+        }
+        if (!checkpoints.isEmpty()) {
+            log.infof("Marked %d checkpoint(s) FAILED for session=%s", checkpoints.size(), sessionId);
+        }
+    }
+
     void markCheckpointsFailed(String sessionId) {
         int maxRetries = 5;
         long backoffMs = 50;
@@ -142,25 +167,7 @@ public class WorkspaceManager {
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                QuarkusTransaction.requiringNew().run(() -> {
-                    List<AgentCheckpoint> checkpoints = em.createQuery(
-                            "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status != :failed",
-                            AgentCheckpoint.class)
-                            .setParameter("sid", sessionId)
-                            .setParameter("failed", CheckpointStatus.FAILED)
-                            .getResultList();
-
-                    Instant now = Instant.now();
-                    for (var checkpoint : checkpoints) {
-                        checkpoint.setStatus(CheckpointStatus.FAILED);
-                        checkpoint.setFailedAt(now);
-                        checkpoint.setFailReason("Session terminated by WorkspaceManager");
-                        em.merge(checkpoint);
-                    }
-                    if (!checkpoints.isEmpty()) {
-                        log.infof("Marked %d checkpoint(s) FAILED for session=%s", checkpoints.size(), sessionId);
-                    }
-                });
+                self.doMarkCheckpointsFailedRequiresNew(sessionId);
                 return; // success
             } catch (Exception e) {
                 lastEx = e;

@@ -19,11 +19,11 @@ import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 
 class AgentLoopTest {
 
-    private ChatLanguageModel model;
+    private ChatModel model;
     private ToolRegistry toolRegistry;
     private RoleRegistry roleRegistry;
     private SystemPromptBuilder promptBuilder;
@@ -33,7 +33,7 @@ class AgentLoopTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        model = mock(ChatLanguageModel.class);
+        model = mock(ChatModel.class);
         toolRegistry = mock(ToolRegistry.class);
         roleRegistry = mock(RoleRegistry.class);
         promptBuilder = mock(SystemPromptBuilder.class);
@@ -45,7 +45,7 @@ class AgentLoopTest {
         engine = new LangChainReasoningEngine();
         
         // Use reflection to set private fields
-        setField(engine, "chatLanguageModel", model);
+        setField(engine, "ChatModel", model);
         setField(engine, "toolRegistry", toolRegistry);
         setField(engine, "roleRegistry", roleRegistry);
         setField(engine, "promptBuilder", promptBuilder);

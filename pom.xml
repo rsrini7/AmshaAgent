@@ -22,8 +22,7 @@
     <maven.compiler.source>25</maven.compiler.source>
     <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <quarkus.version>3.23.0</quarkus.version>
-    <langchain4j.quarkus.version>0.26.1</langchain4j.quarkus.version>
+    <quarkus.version>3.27.2</quarkus.version>
     <bouncycastle.version>1.83</bouncycastle.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -40,9 +39,9 @@
         <scope>import</scope>
       </dependency>
       <dependency>
-        <groupId>io.quarkiverse.langchain4j</groupId>
+        <groupId>io.quarkus.platform</groupId>
         <artifactId>quarkus-langchain4j-bom</artifactId>
-        <version>${langchain4j.quarkus.version}</version>
+        <version>${quarkus.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

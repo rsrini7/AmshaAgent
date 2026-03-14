@@ -1,7 +1,7 @@
 package com.arcclaw.app.compaction;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
@@ -26,7 +26,7 @@ public class CompactionModelProducer {
     @Produces
     @Identifier("compaction")
     @ApplicationScoped
-    public ChatLanguageModel compactionModel() {
+    public ChatModel compactionModel() {
         return OpenAiChatModel.builder()
             .baseUrl(groqBaseUrl)
             .apiKey(apiKey)

@@ -42,11 +42,12 @@ public class AgentCheckpoint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "checkpoint_id", columnDefinition = "integer")
     private Long id;
 
     @Version
     @Column(nullable = false)
-    private int version;
+    private Integer version = 0;
 
     /** The workspace session ID this checkpoint belongs to. */
     @Column(nullable = false, length = 128)
@@ -116,11 +117,11 @@ public class AgentCheckpoint {
         this.id = id;
     }
 
-    public int getVersion() {
+    public Integer getVersion() {
         return version;
     }
 
-    public void setVersion(int version) {
+    public void setVersion(Integer version) {
         this.version = version;
     }
 

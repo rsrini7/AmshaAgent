@@ -8,7 +8,7 @@ import com.arcclaw.app.security.DestructiveVocabularyFilter;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import jakarta.annotation.PostConstruct;
@@ -21,7 +21,7 @@ public class IntentClassifierService implements IntentClassifier {
 
     @Inject
     @Identifier("intent-classifier")
-    ChatLanguageModel classifierModel;
+    ChatModel classifierModel;
 
     @Inject
     DestructiveVocabularyFilter destructiveFilter;
