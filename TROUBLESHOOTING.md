@@ -3348,3 +3348,22 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Root Cause**: JDK 25 strictly enforces encapsulation for Netty's buffer management.
 **Resolution**: Add `--add-opens java.base/sun.misc=ALL-UNNAMED` to Maven/Surefire JVM args.
 
+
+---
+
+## 21. Model Context Protocol (MCP) Troubleshooting
+
+### 🔴 Failure: HTTP 400 Bad Request during MCP Handshake
+**Symptom:** Remote MCP servers (or the Quarkiverse MCP server) return a 400 error immediately upon connection.
+**Root Cause:** The MCP spec strictly requires the client to send a dual Accept header: application/json, text/event-stream. Sending only application/json causes the server to reject the SSE stream.
+**Resolution:** Ensure McpClientService and any RestAssured E2E tests include .header(\"Accept\", \"application/json, text/event-stream\").
+
+### 🔴 Failure: testMcpToolsList returns 202 instead of 200
+**Symptom:** E2E tests for the notifications/initialized call fail expecting a 200 OK but receiving a 202 Accepted.
+**Root Cause:** The Quarkiverse MCP server handles notifications asynchronously and returns 202 Accepted per the HTTP spec for non-blocking notifications.
+**Resolution:** Update test assertions to expect 202 for notification calls.
+
+### 🔴 Failure: MCP Endpoint 404
+**Symptom:** Calls to /api/v1/mcp fail with 404.
+**Root Cause:** The Quarkiverse MCP server extension registers its route at /mcp directly on the Vert.x router, bypassing JAX-RS path configuration (/api/v1).
+**Resolution:** Call /mcp directly without the /api/v1 prefix for protocol-level requests.
