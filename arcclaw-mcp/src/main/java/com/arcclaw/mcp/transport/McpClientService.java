@@ -24,6 +24,9 @@ public class McpClientService {
         // Implementation for HTTP/SSE initialization
         // For MVP, we'll assume the URL is stored and tools are registered elsewhere or manually
         serverUrls.put(serverName, serverUrl);
+        // TODO P59-HTTP: POST {serverUrl}/initialize then GET {serverUrl}/tools/list
+        // and register each discovered tool into DynamicToolCapabilityRegistry.
+        // Deferred to next phase when a real HTTP/SSE MCP server is available.
     }
 
     @Timeout(5000)

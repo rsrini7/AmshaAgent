@@ -48,7 +48,27 @@ class PodmanMcpTransportTest {
         transport.disconnect("unknown-server").await().indefinitely();
         // verify no exceptions
     }
-    
-    // Complex subprocess tests often require more setup, 
-    // but we'll stick to the core logic verification.
+
+    @Test
+    void testCircuitBreakerBlocksWhenOpenAndNotAttempting() {
+        when(mockCB.getState()).thenReturn(SandboxCircuitBreaker.CircuitBreakerState.OPEN);
+        when(mockCB.shouldAttemptPodman()).thenReturn(false);
+        McpServerConfig config = new McpServerConfig("s", "img", List.of(), Map.of());
+        assertThrows(RuntimeException.class, () ->
+            transport.connect(config).await().indefinitely());
+        verify(mockCB, atLeastOnce()).getState();
+        verify(mockCB).shouldAttemptPodman();
+    }
+
+    @Test
+    void testRecordFailureCalledOnIOException() {
+        // state=OPEN + shouldAttemptPodman()=true → passes guard, hits ProcessBuilder,
+        // fails with IOException ("podman" not found), → recordFailure() must be called.
+        when(mockCB.getState()).thenReturn(SandboxCircuitBreaker.CircuitBreakerState.OPEN);
+        when(mockCB.shouldAttemptPodman()).thenReturn(true);
+        McpServerConfig config = new McpServerConfig("test", "nonexistent-image-xyz-404", List.of(), Map.of());
+        assertThrows(RuntimeException.class, () ->
+            transport.connect(config).await().indefinitely());
+        verify(mockCB).recordFailure(any());
+    }
 }

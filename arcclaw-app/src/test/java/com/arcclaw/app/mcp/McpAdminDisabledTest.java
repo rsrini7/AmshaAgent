@@ -36,13 +36,13 @@ class McpAdminDisabledTest {
     @Test
     void testEndpointsShouldBeDisabled() {
         io.restassured.RestAssured.given()
-            .header("X-ArcClaw-API-Key", "valid-key")
+            .header("X-ArcClaw-API-Key", "test-key")
             .when().get("/api/v1/mcp/tools")
             .then()
             .statusCode(404);
 
         io.restassured.RestAssured.given()
-            .header("X-ArcClaw-API-Key", "valid-key")
+            .header("X-ArcClaw-API-Key", "test-key")
             .when().get("/api/v1/mcp/status")
             .then()
             .statusCode(404);

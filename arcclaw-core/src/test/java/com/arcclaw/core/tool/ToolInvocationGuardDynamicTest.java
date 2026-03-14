@@ -25,7 +25,8 @@ class ToolInvocationGuardDynamicTest {
         guard = new ToolInvocationGuard();
         mockLookup = mock(DynamicToolLookup.class);
         @SuppressWarnings("unchecked")
-        Instance<DynamicToolLookup> mockInstance = mock(Instance.class);
+        Instance<DynamicToolLookup> mocked = mock(Instance.class);
+        this.mockInstance = mocked;
         
         // Manual injection for unit test
         guard.dynamicToolLookup = mockInstance;

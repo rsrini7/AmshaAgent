@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 public class McpReflex implements AgentReflex {
 
     @Inject DynamicToolCapabilityRegistry registry;
+    @Inject com.arcclaw.mcp.bridge.McpToolBridge mcpToolBridge;
 
     @Override
     public boolean matches(String input) {
@@ -17,7 +18,17 @@ public class McpReflex implements AgentReflex {
 
     @Override
     public String execute(String sessionId, String userId, String chatId, String input) {
-        int count = registry.getAll().size();
-        return String.format("🤖 MCP Status: %d dynamic tools registered from connected servers.", count);
+        StringBuilder sb = new StringBuilder("🔌 *MCP Status*\n\n");
+        sb.append("*Exposed internal tools* (").append(mcpToolBridge.getExposedTools().size()).append("):\n");
+        mcpToolBridge.getExposedTools().forEach(t -> sb.append("• ").append(t.name()).append("\n"));
+        if (registry.getAll().isEmpty()) {
+            sb.append("\n*Dynamic MCP tools*: none connected\n");
+        } else {
+            sb.append("\n*Dynamic MCP tools* (").append(registry.getAll().size()).append("):\n");
+            registry.getAll().forEach(t -> sb.append("• ")
+                .append(t.toolName()).append(" [").append(t.mcpServerName())
+                .append(", ").append(t.transport()).append("]\n"));
+        }
+        return sb.toString();
     }
 }

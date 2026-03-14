@@ -74,7 +74,7 @@
 | 53.6 | AgentLoop & AuditService Split | 100% success | Extracted ResumeHandler and split AuditService into Telemetry/Compliance tiers |
 | 55.1 | JDK Modernization Sweep | 471/471 tests | Unnamed variables, Sequenced Collections, Pattern extraction, Sync removal |
 | 55.2 | ScopedValue & Constructor Injection | 121/121 tests | Migrated CliAgentObserver to ScopedValue and 10 beans to Constructor Injection |
-| 59 | MCP Server + Client Setup | 7/7 tests | Mocked `ApiKeyRegistry` + `@TestProfile` for 404 fix |
+| 59 | MCP Server + Client Setup | 15/15 tests | Post-review fixes + REST Testing Mandate |
 | 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
 | 60 | Dual-Tier Skill Registry | 173/173 tests | Persistent registry with JTA management |
 | 60.1 | Quarkus LTS & Hibernate 7 | 535/535 tests | LangChain4j 1.x + Native Image Hardening |
@@ -2069,11 +2069,30 @@ Implemented the Model Context Protocol (MCP) server and client, enabling standar
 2. **MVP Tool Exposure**: Focused initial implementation on `GITHUB` and `MEMORY_SEARCH` tools to establish the protocol foundation before expanding to orchestration-heavy tools.
 3. **Security Integration**: Integrated with the existing `ApiKeyAuthFilter` and implemented `MCP_TOOL_INVOKED` mandatory audit events for all remote tool executions.
 
-### Verification Results:
-- ✅ **Tool Listing**: Verified `GET /api/v1/mcp/tools` returns correct MVP tool definitions.
-- ✅ **Status Monitoring**: Verified `GET /api/v1/mcp/status` correctly reports transport health.
-- ✅ **Testing Hardening**: Resolved 404/401 testing bottlenecks by implementing `EnabledMcpProfile` and mocking `ApiKeyRegistry`.
-- ✅ **Regression**: 7/7 MCP-specific tests and full system verification (173+ tests) pass.
+### Phase 59 Post-Review Fixes ✅
+
+Applied 8 technical corrections to consolidate the MCP foundation and enforce project-wide testing standards.
+
+| Fix | Component | Change |
+|-----|-----------|--------|
+| FIX 1/2 | Tools & Config | Standardized tool name to `memory_search` globally. |
+| FIX 3 | Bridge | Ensured `McpToolDescriptor` uses `description()` instead of `name()`. |
+| FIX 4 | build | Switched to `quarkus-rest-client-reactive-jackson` for better Mutiny integration. |
+| FIX 5 | Reflex | Enhanced `/mcp` output to list both internal and dynamic tools. |
+| FIX 6 | Transport | Added TODO for deferred HTTP tool initialization. |
+| FIX 7 | Bridge Test | Added `testMatchingUsesToolNameNotEnumName` to guard case sensitivity. |
+| FIX 8 | Podman Test | Implemented safe circuit breaker tests (no real subprocess). |
+| FIX 9 | Core Test | Fixed `NullPointerException` in `ToolInvocationGuardDynamicTest`. |
+
+### Global REST Testing Mandate Enforcement:
+- **Authentication**: `McpAdminResourceTest` and `McpAdminDisabledTest` now use `@InjectMock ApiKeyRegistry` with standardized `test-key` headers.
+- **Pathing**: Verified base path `/api/v1` is correctly handled via global configuration while keeping resource `@Path` relative.
+
+### Final Verification Results:
+- ✅ **Core Logic**: `arcclaw-core` passes (including dynamic tool guard fixes).
+- ✅ **MCP Module**: `arcclaw-mcp` passes (including refined bridge and transport tests).
+- ✅ **App Integration**: `arcclaw-app` passes (under strict authentication mandate).
+- ✅ **Full Regression**: **BUILD SUCCESS** across all 6 modules. Total tests confirmed pass.
 
 ---
 

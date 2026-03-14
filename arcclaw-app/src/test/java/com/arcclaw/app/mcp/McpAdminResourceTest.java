@@ -39,7 +39,7 @@ class McpAdminResourceTest {
     @Test
     void testListToolsEndpoint() {
         given()
-          .header("X-ArcClaw-API-Key", "valid-key")
+          .header("X-ArcClaw-API-Key", "test-key")
           .when().get("/api/v1/mcp/tools")
           .then()
              .statusCode(200)
@@ -50,7 +50,7 @@ class McpAdminResourceTest {
     @Test
     void testStatusEndpoint() {
         given()
-          .header("X-ArcClaw-API-Key", "valid-key")
+          .header("X-ArcClaw-API-Key", "test-key")
           .when().get("/api/v1/mcp/status")
           .then()
              .statusCode(200)
