@@ -1,0 +1,223 @@
+### ═══════════════════════════════════════════════════════════════
+###
+
+@adminBase = http://localhost:8080/api/v1
+@mcpBase   = http://localhost:8080
+@validKey  = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+###
+# Expect 200: {"serverEnabled":true,"dynamicToolCount":0}
+# If 404 → arcclaw.mcp.server-enabled=false in your config
+# dynamicToolCount > 0 means McpClientService has connected to
+# a remote server and registered its tools
+GET {{adminBase}}/mcp/status
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+###
+# Expect 200:
+# {
+#   "exposedInternalTools": [
+#     {"name":"github",        "description":"...","inputSchema":"{...}"},
+#     {"name":"memory_search", "description":"...","inputSchema":"{...}"}
+#   ],
+#   "registeredDynamicTools": []   ← empty until McpClientService connects
+# }
+# exposedInternalTools: from McpToolBridge (McpToolAllowlist config)
+# registeredDynamicTools: grows when McpClientService.connect(name, url) runs
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+###
+# Expect 200: JSON-RPC result containing protocolVersion + capabilities
+# The Mcp-Session-Id response header is captured into {{mcpSessionId}}.
+# Body may be prefixed with "data: " (SSE envelope) — both formats are valid.
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "http-client-test",
+      "version": "1.0"
+    }
+  }
+}
+
+> {%
+client.global.set("mcpSessionId", response.headers.valuesOf("Mcp-Session-Id")[0]);
+client.test("MCP initialize returns 200", function() {
+  client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+client.test("Mcp-Session-Id header captured", function() {
+  client.assert(
+    client.global.get("mcpSessionId") !== undefined &&
+    client.global.get("mcpSessionId") !== "",
+    "Mcp-Session-Id header missing — all subsequent calls will fail"
+  );
+});
+client.test("protocolVersion in response", function() {
+  var body = response.body;
+  var json = body.startsWith("data:") ? body.substring(5).trim() : body;
+  client.assert(json.includes("protocolVersion"), "protocolVersion missing");
+});
+%}
+###
+# Expect 202: empty body (notification — no JSON-RPC response per spec)
+# MUST be sent before tools/list or tools/call — server tracks session state
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/initialized",
+  "params": {}
+}
+
+> {%
+client.test("notifications/initialized returns 202", function() {
+  client.assert(response.status === 202, "Expected 202, got " + response.status);
+});
+%}
+###
+# Expect 200: tools array containing "github" and "memory_search"
+# These come from arcclaw.mcp.exposed-tools via McpToolBridge
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list",
+  "params": {}
+}
+
+> {%
+client.test("tools/list returns 200", function() {
+  client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+client.test("github tool present", function() {
+  var body = response.body;
+  var json = body.startsWith("data:") ? body.substring(5).trim() : body;
+  client.assert(json.includes('"github"'), "github missing from tools/list");
+});
+client.test("memory_search tool present", function() {
+  var body = response.body;
+  var json = body.startsWith("data:") ? body.substring(5).trim() : body;
+  client.assert(json.includes('"memory_search"'), "memory_search missing from tools/list");
+});
+%}
+###
+# Expect 200: result.content[0].text = actual memory search output
+# Flow: McpToolsBean.memorySearch() → McpToolBridge.invoke("memory_search", ...)
+#       → ToolRegistry.invokeTool() → memory search impl
+# Audit event MCP_TOOL_INVOKED is persisted for every tool call
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "memory_search",
+    "arguments": {
+      "query": "ArcClaw architecture overview"
+    }
+  }
+}
+
+> {%
+client.test("tools/call memory_search returns 200", function() {
+  client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+client.test("result contains content block", function() {
+  var body = response.body;
+  var json = body.startsWith("data:") ? body.substring(5).trim() : body;
+  client.assert(json.includes('"content"'), "content block missing from result");
+});
+%}
+###
+# Expect 200: result.content[0].text = github tool output
+# Flow: McpToolsBean.github() → McpToolBridge.invoke("github", ...)
+#       → ToolRegistry.invokeTool() → github impl (needs GH_TOKEN in vault)
+# Note: returns an error string inside content if GH_TOKEN not seeded —
+# that is still HTTP 200 at the MCP protocol level. Check the content text.
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "github",
+    "arguments": {
+      "operation": "list_repos",
+      "paramsJson": "{}"
+    }
+  }
+}
+
+> {%
+client.test("tools/call github returns 200", function() {
+  client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+%}
+###
+# Expect 200 HTTP with JSON-RPC error body (per JSON-RPC spec, errors are
+# still HTTP 200). McpToolBridge throws McpToolNotAllowedException which
+# Quarkiverse wraps into: {"jsonrpc":"2.0","id":5,"error":{"code":...,"message":"Tool 'sandbox_exec' not in allowlist"}}
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+Mcp-Session-Id: {{mcpSessionId}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "sandbox_exec",
+    "arguments": {}
+  }
+}
+###
+# Quarkiverse MCP session validation rejects missing Mcp-Session-Id header
+# when the server has already been initialized with sessions
+POST {{mcpBase}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/list",
+  "params": {}
+}
+###
+# Only relevant if you toggle arcclaw.mcp.server-enabled=false
+# McpAdminResource.checkEnabled() throws NotFoundException → 404
+# (Leave commented out unless you want to test the disabled path)
+# GET {{adminBase}}/mcp/status
+# Accept: application/json
+# X-ArcClaw-API-Key: {{validKey}}
