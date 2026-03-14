@@ -8,6 +8,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+ import com.arcclaw.core.scope.WorkspaceContext;
+    import com.arcclaw.core.security.AutonomyLevel;
+    import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -41,11 +45,23 @@ public class McpToolBridge {
         if (!allowlist.exposedTools().contains(toolName)) {
             throw new McpToolNotAllowedException("Tool '" + toolName + "' not in allowlist");
         }
-        
-        // Use the String-based overload in ToolRegistry (Component requirement bridge)
-        // Note: toolName is matched against cap.toolName()
-        ToolResponse response = toolRegistry.invokeTool(toolName, paramsJson, "mcp-server");
-        return response.success() ? response.output() : "Error: " + response.output();
+
+        try {
+            return WorkspaceContext.run(
+                "mcp-external",
+                "mcp-client",
+                "mcp-channel",
+                AutonomyLevel.SUPERVISED,
+                AgentRoleEnum.COORDINATOR.toScopedName(),
+                () -> {
+                    ToolResponse response = toolRegistry.invokeTool(toolName, paramsJson, "mcp-server");
+                    return response.success() ? response.output() : "Error: " + response.output();
+                }
+            );
+        } catch (Exception e) {
+            log.errorf("Error invoking tool '%s': %s", toolName, e.getMessage());
+            return "Error: " + e.getMessage();
+        }
     }
 
     private String buildInputSchema(ToolCapability cap) {
