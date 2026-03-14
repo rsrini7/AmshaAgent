@@ -3801,3 +3801,592 @@ Add "Connecting an MCP Server to ArcClaw" section:
 
 *Generated from 3-AI review cycle: Claude original → Gemini → Perplexity/Claude (2 rounds).
 App test baseline: 132. Phase order: P60 ✅ → P60.1 → P59 → P61 → P62 → P63.*
+
+---
+
+# Phase 59 Extension: HTTP Client Completion + MCP E2E Tests
+## Post-Review Corrected Prompt (Gemini + Self-Review + Perplexity v2 Applied)
+
+---
+
+## PRE-FLIGHT CHECKS (Both Signatures Confirmed — No Action Needed)
+
+Both mock signatures have been verified against the existing codebase and are
+already correct in this prompt. Documented here for reference only.
+
+CHECK 1 — ApiKeyRegistry.isAllowed() signature:
+  CONFIRMED 1-arg: apiKeyRegistry.isAllowed(anyString())
+  No action needed.
+
+CHECK 2 — ToolRegistry.invokeTool() signature:
+  CONFIRMED 3-arg: invokeTool(String toolName, String paramsJson, String callerId)
+  Confirmed from McpToolBridgeTest and McpToolBridge.invoke() which passes "mcp-server"
+  as the callerId. No action needed — the mock and verify() below already use 3 args.
+
+---
+
+## IMPLEMENTATION PROMPT (Send to Antigravity after pre-flight)
+
+```
+## Phase 59 Extension: HTTP Client Completion + MCP E2E Tests
+
+Complete the P59-HTTP TODO and add end-to-end coverage for both the outbound
+HTTP MCP client and the inbound Quarkiverse /mcp server endpoint.
+
+---
+
+### IMPORTANT PATH NOTE
+The Quarkiverse quarkus-mcp-server-http extension registers a Vert.x route at
+/mcp — this is NOT a JAX-RS resource and is NOT affected by
+quarkus.resteasy-reactive.path=/api/v1
+All E2E tests calling the MCP protocol must POST to /mcp (no /api/v1 prefix).
+The admin resource at /api/v1/mcp/tools and /api/v1/mcp/status is separate.
+
+---
+
+### SUB-FIX A — McpToolsBean: Align @Tool name and audit to memory_search
+FILE: arcclaw-mcp/src/main/java/com/arcclaw/mcp/server/McpToolsBean.java
+
+CHANGE:
+  @Tool(name = "memorysearch", description = "Search long-term episodic and semantic memory")
+TO:
+  @Tool(name = "memory_search", description = "Search long-term episodic and semantic memory")
+
+CHANGE (in the memorySearch body):
+  audit("memorysearch", query);
+TO:
+  audit("memory_search", query);
+
+This must be applied FIRST. The E2E test asserts "memory_search" in tools/list.
+If the @Tool name is still "memorysearch", testMcpToolsListContainsConfiguredTools
+will fail even if everything else is correct.
+
+---
+
+### NEW 1 — McpConnectionException
+FILE: arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/McpConnectionException.java
+
+package com.arcclaw.mcp.transport;
+
+public class McpConnectionException extends RuntimeException {
+    public McpConnectionException(String message) { super(message); }
+    public McpConnectionException(String message, Throwable cause) { super(message, cause); }
+}
+
+---
+
+### MODIFY 1 — McpClientService: Complete HTTP implementation
+FILE: arcclaw-mcp/src/main/java/com/arcclaw/mcp/transport/McpClientService.java
+
+Replace the entire class body. Keep all existing imports and add:
+  import com.arcclaw.mcp.tool.DynamicToolCapability;
+  import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+  import com.arcclaw.mcp.tool.McpTransportType;
+  import com.fasterxml.jackson.databind.JsonNode;
+  import com.fasterxml.jackson.databind.ObjectMapper;
+  import com.fasterxml.jackson.databind.node.ObjectNode;
+  import jakarta.inject.Inject;
+  import java.net.URI;
+  import java.net.http.HttpClient;
+  import java.net.http.HttpRequest;
+  import java.net.http.HttpResponse;
+  import java.time.Duration;
+  import java.util.concurrent.atomic.AtomicInteger;
+
+New class body:
+
+@ApplicationScoped
+public class McpClientService {
+
+    private static final Logger log = Logger.getLogger(McpClientService.class);
+
+    @Inject DynamicToolCapabilityRegistry registry;
+    @Inject ObjectMapper objectMapper;
+
+    private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> sessionIds = new ConcurrentHashMap<>();
+    private final AtomicInteger requestIdGen = new AtomicInteger(1);
+    private final HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .build();
+
+    @Timeout(10000)
+    @Retry(maxRetries = 2, delay = 500)
+    @CircuitBreaker(requestVolumeThreshold = 5, failureRatio = 0.6, delay = 30000)
+    public void connect(String serverName, String serverUrl) {
+        serverUrls.put(serverName, serverUrl);
+        try {
+            ObjectNode initParams = objectMapper.createObjectNode();
+            initParams.put("protocolVersion", "2025-03-26");
+            initParams.set("capabilities", objectMapper.createObjectNode());
+            ObjectNode clientInfo = objectMapper.createObjectNode();
+            clientInfo.put("name", "arcclaw");
+            clientInfo.put("version", "1.0");
+            initParams.set("clientInfo", clientInfo);
+
+            HttpResponse<String> initResp = postJsonRpc(serverUrl, "initialize", initParams, null);
+            if (initResp.statusCode() != 200) {
+                throw new McpConnectionException(
+                    "MCP initialize failed [" + initResp.statusCode() + "] for: " + serverName);
+            }
+            initResp.headers().firstValue("Mcp-Session-Id")
+                .ifPresent(sid -> sessionIds.put(serverName, sid));
+
+            String sessionId = sessionIds.get(serverName);
+            postNotification(serverUrl, "notifications/initialized", sessionId);
+
+            HttpResponse<String> toolsResp = postJsonRpc(
+                serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId);
+            if (toolsResp.statusCode() != 200) {
+                throw new McpConnectionException(
+                    "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
+            }
+            JsonNode payload = objectMapper.readTree(toolsResp.body());
+            registerTools(serverName, payload.path("result"));
+
+            log.infof("Connected to HTTP/SSE MCP server '%s', registered tools: %d",
+                serverName, registry.getAll().stream()
+                    .filter(t -> t.mcpServerName().equals(serverName)).count());
+
+        } catch (McpConnectionException e) {
+            throw e;
+        } catch (Exception e) {
+            // IMPORTANT: restore interrupt flag if this was an InterruptedException
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new McpConnectionException(
+                "Failed to connect to HTTP MCP server: " + serverName, e);
+        }
+    }
+
+    @Timeout(5000)
+    @Retry(maxRetries = 2, delay = 200)
+    public String invoke(String serverName, String toolName, String paramsJson) {
+        String url = serverUrls.get(serverName);
+        if (url == null) {
+            throw new McpConnectionException(
+                "No URL registered for HTTP MCP server: " + serverName);
+        }
+        try {
+            ObjectNode callParams = objectMapper.createObjectNode();
+            callParams.put("name", toolName);
+            callParams.set("arguments",
+                (paramsJson != null && !paramsJson.isBlank())
+                    ? objectMapper.readTree(paramsJson)
+                    : objectMapper.createObjectNode());
+
+            HttpResponse<String> resp = postJsonRpc(
+                url, "tools/call", callParams, sessionIds.get(serverName));
+            if (resp.statusCode() != 200) {
+                throw new RuntimeException(
+                    "tools/call failed [" + resp.statusCode() + "] for: " + toolName);
+            }
+            JsonNode result = objectMapper.readTree(resp.body()).path("result");
+            JsonNode content = result.path("content");
+            if (content.isArray() && !content.isEmpty()) {
+                return content.get(0).path("text").asText();
+            }
+            return result.toString();
+        } catch (McpConnectionException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            // IMPORTANT: restore interrupt flag if this was an InterruptedException
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new RuntimeException(
+                "Failed to invoke tool '" + toolName + "' on server: " + serverName, e);
+        }
+    }
+
+    private HttpResponse<String> postJsonRpc(String baseUrl, String method,
+            ObjectNode params, String sessionId) throws Exception {
+        ObjectNode rpc = objectMapper.createObjectNode();
+        rpc.put("jsonrpc", "2.0");
+        rpc.put("id", requestIdGen.getAndIncrement());
+        rpc.put("method", method);
+        rpc.set("params", params);
+
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(
+                objectMapper.writeValueAsString(rpc)));
+        if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
+        return httpClient.send(req.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void postNotification(String baseUrl, String method,
+            String sessionId) throws Exception {
+        ObjectNode notification = objectMapper.createObjectNode();
+        notification.put("jsonrpc", "2.0");
+        notification.put("method", method);
+        notification.set("params", objectMapper.createObjectNode());
+
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(
+                objectMapper.writeValueAsString(notification)));
+        if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
+        httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
+    }
+
+    private void registerTools(String serverName, JsonNode result) {
+        JsonNode tools = result.path("tools");
+        if (!tools.isArray()) return;
+        for (JsonNode tool : tools) {
+            String name   = tool.path("name").asText();
+            String desc   = tool.path("description").asText("");
+            String schema = tool.has("inputSchema")
+                ? tool.path("inputSchema").toString() : "{}";
+            registry.register(new DynamicToolCapability(
+                name, desc, serverName, McpTransportType.HTTP_SSE, false, schema));
+        }
+    }
+}
+
+---
+
+### MODIFY 2 — arcclaw-mcp/pom.xml: Add WireMock for unit tests
+FILE: arcclaw-mcp/pom.xml
+
+Add inside <dependencies> (test scope only — does NOT affect production JAR
+or GraalVM native build):
+    <dependency>
+        <groupId>org.wiremock</groupId>
+        <artifactId>wiremock</artifactId>
+        <version>3.9.2</version>
+        <scope>test</scope>
+    </dependency>
+
+---
+
+### NEW 2 — McpClientServiceTest: WireMock unit tests
+FILE: arcclaw-mcp/src/test/java/com/arcclaw/mcp/transport/McpClientServiceTest.java
+
+package com.arcclaw.mcp.transport;
+
+import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.arcclaw.mcp.tool.McpTransportType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.junit.jupiter.api.Assertions.*;
+
+class McpClientServiceTest {
+
+    @RegisterExtension
+    static WireMockExtension wireMock = WireMockExtension.newInstance()
+        .options(wireMockConfig().dynamicPort())
+        .build();
+
+    private McpClientService service;
+    private DynamicToolCapabilityRegistry registry;
+
+    @BeforeEach
+    void setUp() {
+        service          = new McpClientService();
+        registry         = new DynamicToolCapabilityRegistry();
+        service.registry = registry;
+        service.objectMapper = new ObjectMapper();
+    }
+
+    private void stubFullConnect(String sessionId) {
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"initialize\""))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withHeader("Mcp-Session-Id", sessionId)
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{" +
+                    "\"protocolVersion\":\"2025-03-26\",\"capabilities\":{}," +
+                    "\"serverInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"notifications/initialized\""))
+            .willReturn(aResponse().withStatus(200).withBody("")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"tools/list\""))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[" +
+                    "{\"name\":\"external_search\"," +
+                    " \"description\":\"Search the web\"," +
+                    " \"inputSchema\":{\"type\":\"object\"}}]}}")));
+    }
+
+    @Test
+    void testConnectRegistersToolsFromServer() {
+        stubFullConnect("session-abc");
+        service.connect("test-server", wireMock.baseUrl());
+
+        assertTrue(registry.isRegistered("external_search"));
+        var cap = registry.find("external_search").orElseThrow();
+        assertEquals("test-server", cap.mcpServerName());
+        assertEquals(McpTransportType.HTTP_SSE, cap.transport());
+        assertEquals("Search the web", cap.description());
+    }
+
+    @Test
+    void testConnectStoresSessionIdAndSendsItOnToolsCall() {
+        stubFullConnect("my-session-id-xyz");
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"tools/call\""))
+            .withHeader("Mcp-Session-Id", equalTo("my-session-id-xyz"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":" +
+                    "[{\"type\":\"text\",\"text\":\"search results here\"}]}}")));
+
+        service.connect("test-server", wireMock.baseUrl());
+        String result = service.invoke("test-server", "external_search", "{\"query\":\"hello\"}");
+        assertEquals("search results here", result);
+    }
+
+    @Test
+    void testInvokeThrowsWhenNoUrlRegistered() {
+        assertThrows(McpConnectionException.class,
+            () -> service.invoke("ghost-server", "some_tool", "{}"));
+    }
+
+    @Test
+    void testConnectThrowsMcpConnectionExceptionOnServerError() {
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"initialize\""))
+            .willReturn(aResponse().withStatus(500).withBody("Internal Server Error")));
+
+        assertThrows(McpConnectionException.class,
+            () -> service.connect("test-server", wireMock.baseUrl()));
+    }
+
+    @Test
+    void testConnectWithEmptyToolsListRegistersNothing() {
+        stubFullConnect("session-empty");
+        wireMock.stubFor(post(urlEqualTo("/"))
+            .withRequestBody(containing("\"tools/list\""))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}")));
+
+        service.connect("empty-server", wireMock.baseUrl());
+        assertTrue(registry.getAll().isEmpty());
+    }
+}
+
+---
+
+### NEW 3 — McpServerE2ETest: Quarkiverse /mcp endpoint E2E tests
+FILE: arcclaw-app/src/test/java/com/arcclaw/app/mcp/McpServerE2ETest.java
+
+NOTE: This tests the Quarkiverse /mcp Vert.x route, NOT the JAX-RS admin resource.
+The @Tool(name) values in McpToolsBean (github, memory_search after SUB-FIX A)
+must match the assertions in testMcpToolsListContainsConfiguredTools.
+
+*** CRITICAL — AUTH HEADER REQUIRED ON ALL REQUESTS ***
+ApiKeyAuthFilter evaluates the X-ArcClaw-API-Key header BEFORE any mock is
+consulted. If the header is absent, the filter returns 401 immediately and the
+mock on apiKeyRegistry.isValidKey() is never reached. Every RestAssured
+given() block in this class MUST include:
+  .header("X-ArcClaw-API-Key", "test-key")
+Missing this header = 401 on all three tests, even with the mock in place.
+
+package com.arcclaw.app.mcp;
+
+import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import io.restassured.RestAssured;
+import io.restassured.response.Response;
+import org.junit.jupiter.api.*;
+import org.mockito.Mockito;
+
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+
+@QuarkusTest
+@TestProfile(McpServerE2ETest.McpE2EProfile.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class McpServerE2ETest {
+
+    public static class McpE2EProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of("arcclaw.mcp.server-enabled", "true");
+        }
+    }
+
+    private static String mcpSessionId;
+
+    @InjectMock ApiKeyRegistry apiKeyRegistry;
+    @InjectMock AsyncPersistenceEngine persistenceEngine;
+    @InjectMock ToolRegistry toolRegistry;
+
+    @BeforeEach
+    void setup() {
+        Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);  // 1-arg confirmed
+        Mockito.doNothing().when(persistenceEngine).submitCritical(any());
+        // 3-arg confirmed from McpToolBridgeTest — callerId is "mcp-server"
+        Mockito.when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
+            .thenReturn(ToolResponse.success("mock-tool-result"));
+    }
+
+    @Test
+    @Order(1)
+    void testMcpInitialize() {
+        String body = """
+            {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "initialize",
+              "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0"}
+              }
+            }
+            """;
+
+        Response resp = RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY — filter checks this first
+            .contentType("application/json")
+            .accept("application/json")
+            .body(body)
+            .when().post("/mcp")
+            .then()
+            .statusCode(200)
+            .extract().response();
+
+        mcpSessionId = resp.header("Mcp-Session-Id");
+        assertNotNull(mcpSessionId, "Server must return Mcp-Session-Id header on initialize");
+
+        String jsonResp = resp.body().asString();
+        String json = jsonResp.startsWith("data:") ? jsonResp.substring(5).trim() : jsonResp;
+        assertTrue(json.contains("\"protocolVersion\""),
+            "Initialize result must contain protocolVersion");
+    }
+
+    @Test
+    @Order(2)
+    void testMcpToolsListContainsConfiguredTools() {
+        assertNotNull(mcpSessionId, "Depends on testMcpInitialize running first");
+
+        RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY
+            .contentType("application/json")
+            .accept("application/json")
+            .header("Mcp-Session-Id", mcpSessionId)
+            .body("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}")
+            .when().post("/mcp");
+
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}";
+
+        String raw = RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY
+            .contentType("application/json")
+            .accept("application/json")
+            .header("Mcp-Session-Id", mcpSessionId)
+            .body(body)
+            .when().post("/mcp")
+            .then()
+            .statusCode(200)
+            .extract().body().asString();
+
+        String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
+        assertTrue(json.contains("\"github\""),
+            "tools/list must contain 'github'. Got: " + json);
+        assertTrue(json.contains("\"memory_search\""),
+            "tools/list must contain 'memory_search'. Got: " + json);
+    }
+
+    @Test
+    @Order(3)
+    void testMcpToolsCallMemorySearch() {
+        assertNotNull(mcpSessionId, "Depends on testMcpInitialize running first");
+
+        String body = """
+            {
+              "jsonrpc": "2.0",
+              "id": 3,
+              "method": "tools/call",
+              "params": {
+                "name": "memory_search",
+                "arguments": {"query": "test query"}
+              }
+            }
+            """;
+
+        String raw = RestAssured.given()
+            .header("X-ArcClaw-API-Key", "test-key")  // MANDATORY
+            .contentType("application/json")
+            .accept("application/json")
+            .header("Mcp-Session-Id", mcpSessionId)
+            .body(body)
+            .when().post("/mcp")
+            .then()
+            .statusCode(200)
+            .extract().body().asString();
+
+        String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
+        assertTrue(json.contains("\"content\"") || json.contains("mock-tool-result"),
+            "tools/call result must contain content. Got: " + json);
+
+        // 3-arg verify confirmed: McpToolBridge.invoke() passes "mcp-server" as callerId
+        Mockito.verify(toolRegistry)
+            .invokeTool(eq("memory_search"), anyString(), eq("mcp-server"));
+    }
+
+    // TROUBLESHOOTING:
+    // - All tests 401: X-ArcClaw-API-Key header missing — it is in every given() above
+    // - All tests 404 on /mcp: quarkus.mcp.server.root-path may be overriding the default
+    // - testMcpToolsListContainsConfiguredTools fails on "memory_search": SUB-FIX A
+    //   in McpToolsBean was not applied first
+    // - MissingMethodInvocationException at startup: both signatures are confirmed correct.
+    //   If still firing, check that @InjectMock beans match the exact CDI type in context.
+}
+
+---
+
+### Verification
+
+.\mvnw.cmd clean test -pl arcclaw-mcp -am ^
+  "-Dtest=McpClientServiceTest" ^
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+.\mvnw.cmd clean test -pl arcclaw-app -am ^
+  "-Dtest=McpServerE2ETest" ^
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+.\mvnw.cmd clean test -pl arcclaw-core,arcclaw-mcp,arcclaw-app -am
+
+Expected: all prior tests green + 9 new (5 McpClientServiceTest + 3 McpServerE2ETest
++ 1 McpConnectionException construction).
+```
+
+---
+
+## Adjudication Summary
+
+| ID | Source | Decision | Change Applied |
+|---|---|---|---|
+| 401 auth header missing on all E2E requests | Gemini | **ACCEPT — CRITICAL** | `.header("X-ArcClaw-API-Key", "test-key")` added to all 4 given() chains. |
+| WireMock reversal (test scope only) | Gemini | ACCEPT | Test-scoped — doesn't touch production JAR or native build. |
+| InterruptedException handling in catch blocks | Gemini | ACCEPT | `Thread.currentThread().interrupt()` added to both connect() and invoke(). |
+| ApiKeyRegistry.isAllowed() arg count | Self pre-flight | CONFIRMED 1-arg | Verified and applied. |
+| ToolRegistry.invokeTool() arg count | Self pre-flight | **Was ambiguous — fixed** | Default was 2-arg placeholder. Perplexity v2 confirmed 3-arg from McpToolBridgeTest. |
+| **invokeTool() default mock wrong (2-arg)** | **Perplexity v2** | **ACCEPT — BUG FIX** | **Mock updated to 3-arg `invokeTool(anyString(), anyString(), anyString())`. verify() updated to `eq("mcp-server")` as callerId. Confirmed from McpToolBridgeTest.** |
+| SUB-FIX A must precede E2E tests | Self | NEW | Ordering note added. |
+
+*Send only after completing pre-flight checks. The two signature items take 30 seconds to verify and prevent a confusing startup crash.*
