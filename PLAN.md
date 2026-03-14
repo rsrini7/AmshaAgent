@@ -3595,3 +3595,13 @@ Successfully migrated ArcClaw to Hibernate ORM 7.1.14.Final, addressing signific
 - ✅ All 535 tests passing (`arcclaw-core` and `arcclaw-app`).
 - ✅ Native Image build successful for `arcclaw-app`.
 - ✅ Standardized `@Version` and `@Id` definitions across all entities.
+
+### Native Image Startup Fixes & Config Modernization (Gate 6)
+
+#### Status: COMPLETED
+#### Changes:
+- Added quarkus-caffeine extension for native reflection metadata.
+- Standardized application.yaml properties (Hibernate strategy, OpenAI completion tokens).
+- Fixed %test profile nesting in arcclaw-app.
+- Increased transaction timeout to 300s for cold-start stability.
+- Verified successful native build (3m 13s).

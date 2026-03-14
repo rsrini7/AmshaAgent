@@ -978,3 +978,7 @@
 - [x] Resolve JDK 25 ByteBuddy and `sun.misc.Unsafe` encapsulation issues
 - [x] Verify: 535/535 tests pass
 - [x] Verify: Native image build succeeds
+- [x] **Native Image Startup Fix (Gate 6)**
+    - [x] Add quarkus-caffeine extension
+    - [x] Modernize YAML property keys
+    - [x] Verify native build success
