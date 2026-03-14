@@ -1,20 +1,21 @@
 package com.arcclaw.mcp.transport;
 
-import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
-import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
+import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class PodmanMcpTransportTest {
 

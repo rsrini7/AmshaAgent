@@ -4391,38 +4391,4 @@ Expected: all prior tests green + 9 new (5 McpClientServiceTest + 3 McpServerE2E
 
 *Send only after completing pre-flight checks. The two signature items take 30 seconds to verify and prevent a confusing startup crash.*
 
-
 ---
-
-TODO: test mcp and skills.. later
-
-## ✅ What's Proven Complete
-
-**Inbound MCP server (ArcClaw as a server)** — fully working:
-- External clients (Claude Desktop, Cursor, any MCP client) can connect to your `/mcp` endpoint
-- MCP protocol handshake works: `initialize` → `notifications/initialized` → `tools/list` → `tools/call`
-- `github` and `memory_search` are correctly discovered and callable via the protocol
-- Tool invocation routes correctly through `McpToolBridge` → `ToolRegistry`
-- Audit events fire on every tool call (`MCPTOOLINVOKED`)
-
-**Outbound HTTP client (`McpClientService`)** — logic proven by 5 WireMock unit tests:
-- `initialize` handshake + session ID capture ✅
-- `tools/list` → `DynamicToolCapabilityRegistry` registration ✅
-- `tools/call` with session header propagation ✅
-- Error handling → `McpConnectionException` ✅
-
-***
-
-## ⏳ What Remains Deferred (By Design)
-
-| Item | Status |
-|---|---|
-| Outbound HTTP real integration | Needs a live remote HTTP/SSE MCP server — the TODO comment marks this for the next phase |
-| Outbound stdio/Podman real integration | Code complete, circuit breaker tested — needs a real Podman MCP image to test against |
-| External client smoke test (e.g. Claude Desktop → ArcClaw) | Manual test, not automated — your server is ready to receive it |
-
-***
-
-## Bottom Line
-
-**Phase 59 MCP is complete as scoped.** ArcClaw is now a functioning MCP server. The outbound client code is production-ready but integration-testing it requires a real remote MCP server, which is correctly deferred to the phase when one is available. You can now move to Phase 60.

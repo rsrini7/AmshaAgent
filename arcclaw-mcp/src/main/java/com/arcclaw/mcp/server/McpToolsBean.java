@@ -5,14 +5,14 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.mcp.bridge.McpToolBridge;
+
 import io.quarkiverse.mcp.server.Tool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class McpToolsBean {
-    private static final Logger log = Logger.getLogger(McpToolsBean.class);
+    // private static final Logger log = Logger.getLogger(McpToolsBean.class);
 
     @Inject McpToolBridge bridge;
     @Inject AsyncPersistenceEngine persistenceEngine;
