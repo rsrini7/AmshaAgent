@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -133,7 +134,12 @@ public class AgentStateMachineRunner {
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
 
         if ("synthesizer".equals(agentRole)) {
-            return dattatreyaAgent.synthesize(sessionId, answer, history);
+            String combinedContext = history.stream()
+                .filter(s -> s.observation() != null && !s.observation().isBlank())
+                .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
+                .collect(Collectors.joining("\n\n"));
+                
+            return dattatreyaAgent.synthesize(sessionId, combinedContext, history);
         }
 
         return AgentResult.finished(answer, List.copyOf(history));

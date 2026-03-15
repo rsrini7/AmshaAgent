@@ -49,6 +49,7 @@ public class PermissiveJsonExtractor {
         }
 
         String cleaned = stripFences(rawResponse);
+        cleaned = unwrapSchemaEnvelope(cleaned);  // add this line
         try {
             return objectMapper.readValue(cleaned, targetType);
         } catch (Exception e) {
@@ -59,6 +60,26 @@ public class PermissiveJsonExtractor {
         }
     }
 
+    /**
+     * Unwraps a JSON Schema envelope that the LLM sometimes echoes back
+     * instead of returning a flat instance.
+     *
+     * LLM incorrectly returns: {"type":"object","properties":{"contributions":[...],"finalResolution":"..."}}
+     * This method extracts the "properties" value, giving Jackson a flat instance to deserialize.
+     */
+    private String unwrapSchemaEnvelope(String json) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
+            if (root.has("type") && root.has("properties")
+                    && "object".equals(root.get("type").asText())) {
+                return objectMapper.writeValueAsString(root.get("properties"));
+            }
+        } catch (Exception ignored) {
+            // Not a schema envelope — return original
+        }
+        return json;
+    }
+    
     private String stripFences(String input) {
         var matcher = JSON_FENCE_PATTERN.matcher(input);
         if (matcher.find()) {
@@ -66,4 +87,5 @@ public class PermissiveJsonExtractor {
         }
         return input.trim();
     }
+
 }

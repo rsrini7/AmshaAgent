@@ -33,16 +33,19 @@ public class StructuredOutputEngine {
     public <T> T invoke(String sessionId, String agentRole, String combinedContext, String functionName, Class<T> targetType) {
         String schema = loadSchema(functionName);
         String schemaPrompt = String.format("""
-                CONTEXT TO PROCESS:
-                %s
+            CONTEXT TO PROCESS:
+            %s
 
-                STRICT OUTPUT FORMAT:
-                You must return your response as a JSON object matching the following schema:
-                %s
-                
-                Do not include any thought process, markdown text, or explanations outside the JSON block.
-                Return ONLY the JSON.
-                """, combinedContext, schema);
+            STRICT OUTPUT FORMAT:
+            You must return your response as a JSON object matching the following schema:
+            %s
+            
+            Return a JSON INSTANCE with actual data values.
+            Do NOT wrap your response in schema keys like "type" or "properties".
+            Do NOT return the schema itself — return the DATA that matches the schema.
+            Do not include any thought process, markdown text, or explanations outside the JSON block.
+            Return ONLY the JSON.
+            """, combinedContext, schema);
 
         return retryLoop.execute(sessionId, agentRole, "structured_output:" + functionName, () -> {
             String rawResponse = reasoningEngine.chatForStructuredOutput(sessionId, agentRole, schemaPrompt);
