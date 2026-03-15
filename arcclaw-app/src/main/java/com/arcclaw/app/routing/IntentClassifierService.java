@@ -37,8 +37,10 @@ public class IntentClassifierService implements IntentClassifier {
     private static final Pattern COORDINATOR_FORCE_PATTERN =
                         Pattern.compile(
                             "(?i)^\\s*(ingest|store this|add to (knowledge|rag|memory|kb)|" +
-                            "remember this|save this (doc|document|text|info|information)|" +
-                            "learn this|index this)",
+                            "remember this|save this|learn this|index this|" +
+                            // Compound fetch+ingest patterns
+                            ".*(and\\s+ingest|then\\s+ingest|and\\s+store|then\\s+store|" +
+                            "and\\s+remember|and\\s+save\\s+that|and\\s+add\\s+that))",
                             Pattern.CASE_INSENSITIVE
                         );
 
