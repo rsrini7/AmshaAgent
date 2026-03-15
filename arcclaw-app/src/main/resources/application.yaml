@@ -67,6 +67,9 @@ quarkus:
   # LANGCHAIN4J
   # ---------------------------------------------------------------------------
   langchain4j:
+    http:
+      client:
+        provider: jax-rs
     chat-model:
       provider: openai
     ollama:
