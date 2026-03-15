@@ -8,12 +8,15 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class RagContextEnricher implements ContextEnricher {
 
     private static final Logger log = Logger.getLogger(RagContextEnricher.class);
+
+    private final AtomicBoolean ollamaAvailable = new AtomicBoolean(true);
 
     @Inject TwoTierMemoryService memoryService;
 
@@ -22,6 +25,7 @@ public class RagContextEnricher implements ContextEnricher {
 
     @Override
     public String enrich(String sessionId, String goal, String basePrompt) {
+        if (!ollamaAvailable.get()) return basePrompt;  // fast-path skip
         if (goal == null || goal.isBlank()) return basePrompt;
 
         // Use WorkspaceScopeHolder.USER_ID (ScopedValue)
@@ -43,6 +47,7 @@ public class RagContextEnricher implements ContextEnricher {
             return "## Retrieved Context\n" + context + "\n\n---\n\n" + basePrompt;
 
         } catch (Exception e) {
+            ollamaAvailable.set(false);  // stop trying for this session
             log.warnf("RagContextEnricher enrichment failed for session %s: %s",
                 sessionId, e.getMessage());
             return basePrompt; // Always fail open — never crash the agent loop

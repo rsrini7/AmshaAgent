@@ -25,7 +25,7 @@ public class EmbeddingModelProducer {
         return OllamaEmbeddingModel.builder()
             .baseUrl(baseUrl)
             .modelName(modelName)
-            .timeout(Duration.ofSeconds(60))
+            .timeout(Duration.ofSeconds(3))
             .build();
     }
 }
