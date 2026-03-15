@@ -20,6 +20,9 @@ quarkus:
       group-id: com.arcclaw
       artifact-id: arcclaw-rag
 
+  devservices:
+    enabled: false
+  
   swagger-ui:
     path: /q/swagger-ui
     always-include: true
@@ -222,6 +225,12 @@ quarkus:
         level: INFO
       "com.arcclaw.app.scheduler.CronResultHandler":
         level: ERROR   # suppress WARN during tests        
+      "com.arcclaw.core.agent.loop.ToolInvoker":
+        level: ERROR
+      "com.arcclaw.core.pipeline.MessagePipeline":
+        level: ERROR
+      "com.arcclaw.core.tools.MemorySearchTool":
+        level: ERROR
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
@@ -422,13 +431,9 @@ mp:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
       strategy: PODMAN        # no Podman in local dev
-    channel:
-      telegram:
-        bot-token: ${TELEGRAM_BOT_TOKEN:mock-token}
-        allowed-users: ""
     governance:
-      budget-usd: 999.99
-      approval-timeout-minutes: 60
+      budget-usd: 9.99
+      approval-timeout-minutes: 10
     vault:
       pepper: "dev-pepper-not-for-production-0000000000000000000000000000"
     debug:
