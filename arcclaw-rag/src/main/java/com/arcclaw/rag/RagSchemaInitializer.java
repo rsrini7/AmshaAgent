@@ -10,6 +10,8 @@ import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+
 import java.sql.Connection;
 
 @ApplicationScoped
@@ -24,7 +26,7 @@ public class RagSchemaInitializer {
     AgroalDataSource dataSource;
 
     @Inject
-    com.arcclaw.core.persistence.FtsConnectionInterceptor ftsInterceptor;
+    FtsConnectionInterceptor ftsInterceptor;
 
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
@@ -48,6 +50,14 @@ public class RagSchemaInitializer {
                 "https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6");
             return;
         }
+
+        boolean vecLoaded = ftsInterceptor.isVectorSearchEnabled();
+        log.infof("═══ RAG STATUS ═══ vec0=%s | FTS5=enabled | dims=%d | path=%s",
+            vecLoaded ? "✓ LOADED" : "✗ degraded (FTS5-only)",
+            embedDimensions,
+            vecLoaded ? "active" : "check SQLITE_VEC_PATH");
+
+        if (!vecLoaded) return;
 
         createVecGlobal();
     }

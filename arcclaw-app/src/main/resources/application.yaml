@@ -184,6 +184,12 @@ quarkus:
         level: DEBUG
       "io.quarkus":
         level: INFO
+      "org.apache.camel.component.telegram":
+        level: INFO
+      "jdk.event.security":
+        level: INFO
+      "io.netty.handler.ssl":
+        level: INFO
       "org.hibernate":
         level: WARN
       "jdk.event.security":
@@ -394,15 +400,6 @@ mp:
     hibernate-orm:
       log:
         sql: false
-    log:
-      level: DEBUG
-      category:
-        "org.apache.camel.component.telegram":
-          level: DEBUG
-        "jdk.event.security":
-          level: INFO
-        "io.netty.handler.ssl":
-          level: INFO
 
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
