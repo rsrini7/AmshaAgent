@@ -366,13 +366,11 @@ public class AgentStateMachineRunner {
         String observation = response.output();
         boolean stepFailed = !response.success();
 
-        // hard infra/tool failure → final answer, no further LLM call
+        // Hard infra/tool failure → final answer, no further LLM call
         if (stepFailed
                 && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                 && observation != null
-                && (observation.contains("GitHub integration is not available")
-                    || observation.contains("cannot run GitHub commands here")
-                    || observation.contains("secure sandbox for GitHub commands is unavailable"))) {
+                && observation.contains("GitHub integration is not available")) {
 
             final ReasoningStep completedStep = step.withObservation(observation);
             history.add(completedStep);
@@ -424,4 +422,5 @@ public class AgentStateMachineRunner {
 
         return StepDecision.proceedWithFailures(completedStep, consecutiveFailures);
     }
+
 }

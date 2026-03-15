@@ -14,6 +14,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.RequiresApprovalException;
@@ -175,17 +176,11 @@ public class ToolRegistry {
                 String raw = e.getMessage() != null ? e.getMessage() : "";
 
                 String friendly;
-                if (toolName.equalsIgnoreCase(GithubTool.NAME)
+                if (toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                         && raw.contains("Cannot run program \"gh\"")) {
                     friendly = "GitHub integration is not available in this environment. "
                             + "The `gh` CLI is not installed, so I cannot run GitHub commands here. "
                             + "Please run the equivalent `gh` command locally on your own machine.";
-                } else if (toolName.equalsIgnoreCase(GithubTool.NAME)
-                        && (raw.contains("Podman engine failure")
-                            || raw.contains("unable to connect to Podman"))) {
-                    friendly = "The secure sandbox for GitHub commands is unavailable in this environment. "
-                            + "I cannot safely execute `gh` here. "
-                            + "Please run the GitHub command directly on your machine.";
                 } else {
                     friendly = "Tool '" + toolName + "' failed: " + raw;
                 }
@@ -199,6 +194,7 @@ public class ToolRegistry {
 
                 return ToolResponse.failure(1, friendly);
             }
+
         }
 
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
