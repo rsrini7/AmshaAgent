@@ -88,6 +88,10 @@ quarkus:
       api-key: "${GROQ_API_KEY}"
       timeout: 120s
       max-retries: 3
+      embedding-model:
+        timeout: 30s
+        log-requests: false
+        log-responses: false
       chat-model:
         #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
         #model-name: "llama-3.3-70b-versatile"

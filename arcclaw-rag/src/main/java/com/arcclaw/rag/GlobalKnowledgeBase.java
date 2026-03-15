@@ -44,7 +44,7 @@ public class GlobalKnowledgeBase {
             float[] vector = embedding.vector();
 
             em.createNativeQuery(
-                "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
+                "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?1, ?2)")
                 .setParameter(1, chunkId)
                 .setParameter(2, Arrays.toString(vector))
                 .executeUpdate();
@@ -76,11 +76,11 @@ public class GlobalKnowledgeBase {
 
             @SuppressWarnings("unchecked")
             List<Object[]> rows = em.createNativeQuery(
-                "SELECT chunk_id, vec_distance_cosine(embedding, ?) AS distance " +
+                "SELECT chunk_id, vec_distance_cosine(embedding, ?1) AS distance " +
                 "FROM fts.vec_global " +
                 "ORDER BY distance ASC " +
-                "LIMIT ?")
-                .setParameter(2, Arrays.toString(vector))
+                "LIMIT ?2")
+                .setParameter(1, Arrays.toString(vector))
                 .setParameter(2, topN)
                 .getResultList();
 
