@@ -223,14 +223,6 @@ quarkus:
         level: INFO
       "io.netty.handler.ssl":
         level: INFO
-      "com.arcclaw.app.scheduler.CronResultHandler":
-        level: ERROR   # suppress WARN during tests        
-      "com.arcclaw.core.agent.loop.ToolInvoker":
-        level: ERROR
-      "com.arcclaw.core.pipeline.MessagePipeline":
-        level: ERROR
-      "com.arcclaw.core.tools.MemorySearchTool":
-        level: ERROR
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
