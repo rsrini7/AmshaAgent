@@ -1,22 +1,19 @@
 package com.arcclaw.rag;
 
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.scope.WorkspaceContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class RagContextEnricher implements ContextEnricher {
 
     private static final Logger log = Logger.getLogger(RagContextEnricher.class);
-
-    private final AtomicBoolean ollamaAvailable = new AtomicBoolean(true);
 
     @Inject TwoTierMemoryService memoryService;
 
@@ -25,13 +22,16 @@ public class RagContextEnricher implements ContextEnricher {
 
     @Override
     public String enrich(String sessionId, String goal, String basePrompt) {
-        if (!ollamaAvailable.get()) return basePrompt;  // fast-path skip
         if (goal == null || goal.isBlank()) return basePrompt;
 
-        // Use WorkspaceScopeHolder.USER_ID (ScopedValue)
-        String userId = WorkspaceScopeHolder.USER_ID.isBound()
-            ? WorkspaceScopeHolder.USER_ID.get() : null;
-        if (userId == null) return basePrompt;
+        // WorkspaceContext.userId() returns "" when unbound — never null.
+        // ArcClaw is single-tenant via Telegram; userId is the chatId string.
+        // Fall back to sessionId so FTS5 and vec searches still execute even
+        // when userId is not explicitly propagated into the scope.
+        String userId = WorkspaceContext.userId();
+        if (userId == null || userId.isBlank()) {
+            userId = sessionId;
+        }
 
         try {
             List<ScoredChunk> chunks = memoryService.search(userId, goal, contextChunks);
@@ -44,13 +44,18 @@ public class RagContextEnricher implements ContextEnricher {
 
             if (context.isBlank()) return basePrompt;
 
+            log.debugf("RagContextEnricher: injecting %d chunks for session %s",
+                chunks.size(), sessionId);
+
             return "## Retrieved Context\n" + context + "\n\n---\n\n" + basePrompt;
 
         } catch (Exception e) {
-            ollamaAvailable.set(false);  // stop trying for this session
+            // Always fail open — a RAG failure must never crash the agent loop.
+            // No permanent disable flag — transient Jina/network failures are
+            // retried on the next message automatically.
             log.warnf("RagContextEnricher enrichment failed for session %s: %s",
                 sessionId, e.getMessage());
-            return basePrompt; // Always fail open — never crash the agent loop
+            return basePrompt;
         }
     }
 }
