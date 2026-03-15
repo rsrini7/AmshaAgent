@@ -172,15 +172,41 @@ public class ToolRegistry {
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
             } catch (Exception e) {
-                // Catch sandbox failures so the LLM can see the error and retry
-                log.errorf(e, "Tool '%s' execution failed: %s", toolName, e.getMessage());
-                
+                // Friendly message for common GitHub / sandbox failures
+                String raw = e.getMessage() != null ? e.getMessage() : "";
+
+                String friendly;
+                if (toolName.equalsIgnoreCase(GithubTool.NAME)
+                        && raw.contains("Cannot run program \"gh\"")) {
+                    friendly = """
+                        GitHub integration is not fully configured on this server.
+                        The GitHub CLI (`gh`) is not installed in this environment, \
+                        so I cannot run GitHub commands for you.
+
+                        You can run the equivalent `gh` command locally on your own machine instead.
+                        """;
+                } else if (toolName.equalsIgnoreCase(GithubTool.NAME)
+                        && (raw.contains("Podman engine failure")
+                            || raw.contains("unable to connect to Podman"))) {
+                    friendly = """
+                        The secure sandbox for GitHub commands is unavailable on this environment.
+                        I cannot safely execute `gh` here right now.
+
+                        Please try again later or run the GitHub command directly on your machine.
+                        """;
+                } else {
+                    // default behaviour for other tools
+                    friendly = "Tool '" + toolName + "' failed: " + raw;
+                }
+
+                log.errorf(e, "Tool '%s' execution failed: %s", toolName, raw);
+
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
+                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
-                    
-                return ToolResponse.failure(1, e.getMessage());
+
+                return ToolResponse.failure(1, friendly);
             }
         }
 
