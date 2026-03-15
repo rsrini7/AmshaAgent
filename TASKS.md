@@ -1013,3 +1013,10 @@
 - [x] Verify: `TwoTierMemoryServiceRrfTest` passes math validation <!-- id: 470 -->
 - [x] Verify: Manual test with `vec0.dll` confirm semantic search is active <!-- id: 471 -->
 - [x] Documentation: Update `PLAN.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md` <!-- id: 472 -->
+
+---
+
+## Phase 61 Bug Fixes — RAG Persistence & Merging ✅
+- [x] Fix Bug 2A: Persist raw text in `GlobalKnowledgeBase` using `CompactionSummaryEntity` <!-- id: 503 -->
+- [x] Fix Bug 2B: Update `TwoTierMemoryService` to merge non-empty text during RRF <!-- id: 504 -->
+- [x] Verify: Run `TwoTierMemoryServiceRrfTest` for fusion integrity <!-- id: 505 -->

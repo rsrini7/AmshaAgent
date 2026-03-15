@@ -1,17 +1,23 @@
 package com.arcclaw.rag;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 @ApplicationScoped
 public class GlobalKnowledgeBase {
@@ -20,7 +26,8 @@ public class GlobalKnowledgeBase {
 
     @Inject EntityManager em;
     @Inject EmbeddingModel embeddingModel;
-    @Inject com.arcclaw.core.persistence.FtsConnectionInterceptor ftsInterceptor;
+    @Inject FtsConnectionInterceptor ftsInterceptor;
+    @Inject CompactionSummaryRepository compactionRepo;
 
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
@@ -39,8 +46,18 @@ public class GlobalKnowledgeBase {
             em.createNativeQuery(
                 "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
                 .setParameter(1, chunkId)
-                .setParameter(2, vector)
+                .setParameter(2, Arrays.toString(vector))
                 .executeUpdate();
+
+            // Persist raw text for hydration at search time.
+            // "rag:" prefix avoids PK collision with real session IDs.
+            var ragChunk = new com.arcclaw.core.state.CompactionSummaryEntity();
+            ragChunk.sessionId = "rag:" + chunkId;
+            ragChunk.summary = text;
+            ragChunk.createdAt = Instant.now();
+            ragChunk.compactedAt = Instant.now();
+            ragChunk.messagesCompacted = 0;
+            em.persist(ragChunk);
 
             return chunkId;
         } catch (Exception e) {
@@ -63,7 +80,7 @@ public class GlobalKnowledgeBase {
                 "FROM fts.vec_global " +
                 "ORDER BY distance ASC " +
                 "LIMIT ?")
-                .setParameter(1, vector)
+                .setParameter(2, Arrays.toString(vector))
                 .setParameter(2, topN)
                 .getResultList();
 
@@ -71,7 +88,10 @@ public class GlobalKnowledgeBase {
             for (Object[] row : rows) {
                 String chunkId = (String) row[0];
                 double score = 1.0 - ((Number) row[1]).doubleValue(); // cosine distance → similarity
-                results.add(new ScoredChunk(chunkId, "", score));
+                String text = compactionRepo.findLatestBySessionId("rag:" + chunkId)
+                    .map(e -> e.summary)
+                    .orElse("");
+                results.add(new ScoredChunk(chunkId, text, score));
             }
             return results;
         } catch (Exception e) {

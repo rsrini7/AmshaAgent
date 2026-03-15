@@ -1,12 +1,17 @@
 package com.arcclaw.rag;
 
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.jboss.logging.Logger;
 
-import java.util.*;
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Merges FTS5 keyword results and sqlite-vec vector results using
@@ -65,7 +70,8 @@ public class TwoTierMemoryService {
                 int rank = i + 1; // 1-based
                 double contribution = 1.0 / (RRF_K + rank);
                 rrfScores.merge(chunk.chunkId(), contribution, Double::sum);
-                chunkById.putIfAbsent(chunk.chunkId(), chunk);
+                chunkById.merge(chunk.chunkId(), chunk, (existing, incoming) ->
+                    (existing.text() == null || existing.text().isBlank()) ? incoming : existing);
             }
         }
 
