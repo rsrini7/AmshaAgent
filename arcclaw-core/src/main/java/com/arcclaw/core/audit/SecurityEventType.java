@@ -47,7 +47,8 @@ public enum SecurityEventType {
     // Skills lifecycle (Phase 60) — telemetry tier
     SKILL_LOADED,       // SkillLoader completed a full load cycle
     SKILL_REFRESHED,    // Manual refresh via GET /api/v1/skills/refresh
-    MCP_TOOL_INVOKED;   // External call to an internal tool via MCP server
+    MCP_TOOL_INVOKED,   // External call to an internal tool via MCP server
+    STRUCTURED_OUTPUT_RETRY; // Single-retry path for schema-correction
 
     /**
      * Returns true if a write failure for this event type must HALT the agent

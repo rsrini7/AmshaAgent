@@ -18,6 +18,14 @@
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-core</artifactId>
     </dependency>
+
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-channel-api</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    
     <!-- CRITICAL: deployment deps must be "provided" — build-time only, NOT in runtime fat-jar -->
     <dependency>
       <groupId>io.quarkus</groupId>

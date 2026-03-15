@@ -67,9 +67,6 @@
       <version>4.13.2</version>
       <scope>test</scope>
     </dependency>
-
-
-
     <!-- Force local deployment module onto test classpath -->
     <dependency>
       <groupId>com.arcclaw</groupId>
@@ -101,7 +98,7 @@
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-core</artifactId>
     </dependency>
-    <dependency>
+    <!-- <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-ollama</artifactId>
       <exclusions>
@@ -110,7 +107,7 @@
           <artifactId>langchain4j-http-client-jdk</artifactId>
         </exclusion>
       </exclusions>      
-    </dependency>
+    </dependency> -->
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-openai</artifactId>

@@ -17,10 +17,15 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.exception.InvalidRequestException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.TokenUsage;
+import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.observability.AgentOtelContext;
+import io.opentelemetry.api.trace.Span;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -54,6 +59,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     @Inject
     ReasoningStepParser stepParser;
+
+    @Inject
+    GovernanceLayer governanceLayer;
+
+    @Inject
+    AgentOtelContext otelContext;
 
     @Override
     public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
@@ -128,5 +139,46 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 6. Parse response
         return stepParser.parse(sessionId, agentRole, response);
+    }
+
+    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+        Span span = otelContext.childSpan(sessionId, "structured_output_generation");
+        try {
+            // 1. Build system prompt with empty goal to avoid ReAct contamination
+            String systemPrompt = promptBuilder.build(agentRole, sessionId, "");
+
+            // 2. Build message list: SystemPrompt + UserMessage(schemaPrompt)
+            List<ChatMessage> messages = new ArrayList<>();
+            messages.add(SystemMessage.systemMessage(systemPrompt));
+            messages.add(UserMessage.userMessage(schemaPrompt));
+
+            // 3. Build ChatRequest and call LLM (JSON MODE is NOT set globally)
+            ChatRequest request = ChatRequest.builder()
+                    .messages(messages)
+                    .build();
+
+            ChatResponse response = chatModel.chat(request);
+
+            // 4. Record consumption
+            TokenUsage usage = response.tokenUsage();
+            if (usage != null) {
+                try {
+                    governanceLayer.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
+                    otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
+                } catch (com.arcclaw.core.governance.BudgetWarningException w) {
+                    log.warnf("Budget warning for session %s structured call: %s", sessionId, w.getMessage());
+                    // LLM call succeeded — absorb soft warning and return normally
+                }
+            }
+
+            return response.aiMessage().text();
+        } catch (Exception e) {
+            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+            throw new RuntimeException("Structured output LLM call failed: " + clean, e);
+        } finally {
+            if (span != null) {
+                span.end();
+            }
+        }
     }
 }

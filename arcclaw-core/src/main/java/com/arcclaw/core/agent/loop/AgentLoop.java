@@ -19,6 +19,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.MdcKeys;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -147,9 +148,9 @@ public class AgentLoop {
         MDC.put(MdcKeys.AGENT_ROLE, canonicalRole);
 
         AgentResult result = null;
+        List<ReasoningStep> resumedHistory = new ArrayList<>();
         try {
             // --- CHECKPOINT RESUME ---
-            List<ReasoningStep> resumedHistory = new ArrayList<>();
             var existingCheckpoint = agentStore.load(sessionId, canonicalRole);
             if (existingCheckpoint.isPresent()) {
                 var checkpoint = existingCheckpoint.get();
@@ -198,6 +199,11 @@ public class AgentLoop {
                 }
             }
 
+            return result;
+        } catch (StructuredOutputException e) {
+            log.errorf("Structured output failure for session %s: %s", sessionId, e.getMessage());
+            result = AgentResult.failed(e.getMessage(), 
+                    AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
         } catch (ComplianceViolationException cve) {
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",

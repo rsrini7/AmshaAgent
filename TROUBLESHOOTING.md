@@ -3386,3 +3386,17 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Symptom:** Agent loop fails with authentication errors when generating responses.
 **Root Cause:** `RagContextEnricher` triggers embedding calls via `OpenAiEmbeddingModel`. If the `QUARKUS_LANGCHAIN4J_OPENAI_API_KEY` is missing or invalid, the enrichment phase fails.
 **Resolution:** Verify your API keys in `.env`. The system requires a valid key even for context enrichment if an external embedding provider is used.
+
+---
+
+## 23. Phase 62 - Build-Time Schema Troubleshooting
+
+### ?? Failure: FileNotFoundException for Generated Schema Files
+**Symptom:** `StructuredOutputEngine` throws an exception complaining that JSON schemas (e.g., `SynthesisFunction.json`) cannot be found, despite `AgentFunctionProcessor` seemingly generating them.
+**Root Cause:** During test execution, Quarkus generates files in memory, which are not written to the physical disk. `getClass().getResourceAsStream` frequently fails to resolve these in a multi-module environment.
+**Resolution:** Use `Thread.currentThread().getContextClassLoader().getResourceAsStream()` to reliably load dynamically generated classpath resources.
+
+### ?? Failure: ContextNotActiveException and AssertionFailedError in Scope Tests
+**Symptom:** Tests involving `@WorkspaceScoped`, such as `WorkspaceScopeTest`, consistently fail during maven builds, indicating CDI contexts are not active.
+**Root Cause:** A duplicate `WorkspaceScopeTest.java` test file existed in the `arcclaw-app` module while also existing in another module, causing a split-package CDI resolution error during the test augmentation phase.
+**Resolution:** Delete the duplicate test file. Ensure test classes for custom CDI scopes are uniquely located.

@@ -38,6 +38,11 @@ public class SaraswatiAgent implements Agent {
             - You MUST NOT fabricate data or hallucinate repository contents.
             - If you cannot find the requested information, say so honestly.
             - Always cite the source of your findings.
+            - If the github tool fails because the environment cannot run the gh CLI,
+              you MUST tell the user that GitHub integration is unavailable and show
+              the exact gh command they can run locally instead.
+            - You MUST NOT say "I don't have access to GitHub" when the failure is
+              due to missing gh CLI; instead, explain the environment limitation.
 
             AVAILABLE TOOLS: github, memorysearch
             """;

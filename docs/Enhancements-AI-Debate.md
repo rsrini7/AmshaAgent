@@ -5553,3 +5553,1489 @@ Expected:
 - If sqlite-vec native load fails on CI: WARN logs appear, vector path is
   disabled, FTS5-only path keeps all tests green
 
+---
+
+# ArcClaw — Phase 62: BAML-Style Structured Outputs
+## v6 — Final Definitive (5 blockers resolved)
+## FINAL Implementation Prompt — v6 (Definitive — all 5 blockers patched)
+## Incorporates v4 + Gemini + combined Perplexity/Claude/Gemini + final blocker review
+
+---
+
+## COMPLETE DELTA TABLE — ALL VERSIONS
+
+Every change tracked from v3 → v4 → v5 → v6. Read before touching any code.
+
+| ID | Source | Issue | v3 | v4 | v5 | v6 |
+|----|--------|-------|----|----|-----|----|
+| B1 | v4 | `AtomicBoolean` + threshold-first CAS order in `assertWithinBudget` | ❌ | ✅ | ✅ | ✅ keep |
+| B2 | v4 | `StructuredOutputException extends RuntimeException` | ❌ | ✅ | ✅ | ✅ keep |
+| B3 | v4 | `FAIL_ON_MISSING_CREATOR_PROPERTIES` breaks `@Nullable` fields | ❌ | ❌ | ✅ | ✅ keep |
+| B4 | v4 | Audit event written AFTER retry succeeds | ❌ | ✅ | ✅ | ✅ keep |
+| B5 | v4 | `isMandatory=true` contradicts `TelemetryAuditService` contract | ❌ | ❌ | ✅ | ✅ keep |
+| B6 | v4 | `extract()` returns `T` not `Optional<T>` | ❌ | ✅ | ✅ | ✅ keep |
+| B7 | v4 | **WRONG** — Added `SCHEMA_ERROR`; existing `SCHEMA_ERROR` already in codebase | ❌ | ❌ wrong | ❌ wrong | ✅ Task 0 deleted; use existing `SCHEMA_ERROR` |
+| B8 | v4 | No try-catch wrapping in `DattatreyaAgent` | ❌ | ✅ | ✅ | ✅ keep |
+| G1 | Gemini | `registerNestedTypes()` depth-1 only | ❌ | partial | ✅ | ✅ keep |
+| G2 | Gemini | `FAIL_ON_MISSING_CREATOR_PROPERTIES` breaks `@Nullable` | ❌ | ❌ | ✅ | ✅ keep |
+| G3 | Gemini | `BudgetWarningException` propagation kills retry | ❌ | ❌ | ✅ | ✅ keep |
+| G4 | Gemini | `AuditService.record()` 5-arg compile error | ❌ | ❌ | ✅ | ✅ keep |
+| G5 | Gemini | `DattatreyaAgent` must return `result.resolution()` | ❌ | ❌ | ✅ | ✅ keep |
+| A | Combined | `isMandatory=true` orphaned flag | ❌ | ❌ | ✅ | ✅ keep |
+| B | Combined | `callLlm()` discards `SystemPromptBuilder` persona | ❌ | ❌ | ✅ | ✅ keep |
+| C | Combined | `getChatModel()` exposes internal `ChatModel` | ❌ | ❌ | ✅ | ✅ keep |
+| D | Combined | `StructuredRetryLoop` missing `userId`/`agentRole` | ❌ | ❌ | ✅ | ✅ keep |
+| E | Combined | `ci.fields()` misses record components in Jandex 3.5.3 | ❌ | ❌ | ✅ | ✅ keep |
+| F | Combined | Direct OTel SDK import constraint | ❌ | partial | ✅ | ✅ clarified — see non-blocking #7 |
+| **P1** | **v6** | **`ToolSpecifications.toolSpecificationFrom()` generates INPUT schema, not OUTPUT — 100% runtime failure** | ❌ | ❌ | ❌ | **✅ Jackson `SchemaFactoryWrapper` on return type** |
+| **P2** | **v6** | **`SCHEMA_ERROR` duplicate/unmapped; existing `SCHEMA_ERROR` already present** | ❌ | ❌ | ❌ | **✅ Task 0 deleted; use `SCHEMA_ERROR`** |
+| **P3** | **v6** | **`AgentResult.failed()` args reversed — compile error** | ❌ | ❌ | ❌ | **✅ correct `(String, FailureCategory, List)` order** |
+| **P4** | **v6** | **`import java.lang.reflect.Modifier` missing — compile error** | ❌ | ❌ | ❌ | **✅ import added** |
+| **P5** | **v6** | **`WorkspaceScopeHolder.getUserIdOrUnknown()` does not exist — compile error** | ❌ | ❌ | ❌ | **✅ Task 9.5 added** |
+
+---
+
+## PROJECT CONTEXT
+
+**Stack:** Quarkus 3.27.2 + Java 21/JDK 25, GraalVM Mandrel native image.
+
+**Module layout:**
+- `arcclaw-core`       — domain kernel, CDI beans, governance, agent loop, audit
+- `arcclaw-deployment` — Quarkus `@BuildStep` processors (build-time only, `provided` scope)
+- `arcclaw-rag`        — RAG / embedding
+- `arcclaw-mcp`        — MCP transport
+- `arcclaw-app`        — runnable app, Telegram, REST, CLI
+
+**Read these before writing any code:**
+
+### `AuditService` (arcclaw-core/.../audit/)
+Two tiers exist — verify correct class name from actual source:
+- `TelemetryAuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)`
+  → fire-and-forget; **swallows all exceptions**
+- `ComplianceAuditService.recordMandatory(sessionId, userId, agentRole, SecurityEventType, detail)`
+  → fail-closed; throws `ComplianceViolationException`
+
+`isMandatory()` on `SecurityEventType` is enforced only by **which method you call**.
+Nothing in the codebase reads `isMandatory()` at runtime. Use `TelemetryAuditService.record()`
+for `STRUCTURED_OUTPUT_RETRY`. Set `isMandatory() = false` to match reality.
+
+### `GovernanceLayer` (arcclaw-core/.../governance/GovernanceLayer.java)
+- `@ApplicationScoped`
+- `ConcurrentHashMap<String, SessionBudget> budgets`
+- `SessionBudget` inner class: currently `volatile boolean warningSent` → **must become `AtomicBoolean`**
+- `recordLlmCall(sessionId, inputTokens, outputTokens)` → throws `BudgetWarningException` at 80%, `BudgetExceededException` at 100%
+- `WARNING_THRESHOLD = 0.80` static final
+- `budgetUsd` from `arcclaw.governance.budget-usd`
+- `assertWithinBudget(String sessionId)` → **does not exist yet; add in Phase 62**
+
+### `LangChainReasoningEngine` (arcclaw-core/.../reasoning/LangChainReasoningEngine.java)
+- `@ApplicationScoped`, implements `ReasoningEngine`
+- `nextStep(sessionId, agentRole, goal, history)` → internally uses `SystemPromptBuilder`, calls `chatModel.chat(request)`, records tokens, creates OTel spans
+- Current `chatModel` is Groq via `quarkus-langchain4j-openai`
+- **Add in Phase 62:** `chatForStructuredOutput(sessionId, agentRole, prompt)` — see Task 9
+
+### `SystemPromptBuilder` (arcclaw-core/.../reasoning/SystemPromptBuilder.java)
+- Used by `nextStep()` to build the full system prompt including persona, anti-hallucination rules, tool schema
+- **Must also be used** for `chatForStructuredOutput()` so persona context is preserved
+
+### `AgentOtelContext` (arcclaw-core/.../observability/AgentOtelContext.java)
+- `childSpan(sessionId, operationName)` → returns `Span`
+- `endSessionSpan(sessionId)` → ends the session root span
+- Use **only these methods** — never import OpenTelemetry SDK classes directly or call
+  `span.setAttribute()`, `Tracer.spanBuilder()` etc. outside of `AgentOtelContext`
+
+### `SecurityEventType` (arcclaw-core/.../audit/SecurityEventType.java)
+- Last entry before semicolon: `MCP_TOOL_INVOKED`
+- `isMandatory()` has `default -> false` in switch
+- Add `STRUCTURED_OUTPUT_RETRY` — `isMandatory()` defaults to `false` via existing switch; no override needed
+
+### `AgentStateMachineRunner` (arcclaw-core/.../loop/AgentStateMachineRunner.java)
+- `processEngineStep(...)` handles `BudgetExceededException`, `BudgetWarningException`, `InvalidRequestException`
+- **Add catch for `StructuredOutputException` → `AgentResult.failed(reason, FailureCategory.SCHEMA_ERROR, history)`**
+
+### `DattatreyaAgent` (arcclaw-core/.../persona/DattatreyaAgent.java)
+- `@ApplicationScoped`, `@AgentRole("synthesizer")`
+- Currently produces untyped `String` synthesis output
+- Phase 62 replaces with typed `SynthesisResult`
+- **Must return `AgentResult.finished(result.resolution(), history)`** — never `result.toString()`
+  `contributions()` and `conflicts()` are for logging/A2A only, not the channel answer
+
+### `McpBuildStep` + `WorkspaceScopeProcessor` (arcclaw-deployment)
+- Reference patterns for `@BuildStep` implementation
+- Jandex version: **3.5.3** — `ClassInfo.recordComponents()` is available
+
+---
+
+## DELIVERABLES
+
+### New package: `arcclaw-core/src/main/java/com/arcclaw/core/structured/`
+
+---
+
+### FILE 1: `AgentFunction.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import java.lang.annotation.*;
+
+/**
+ * Marks an interface as a BAML-style agent function boundary.
+ *
+ * Contract:
+ *   1. Must be applied to an interface only.
+ *   2. The interface must declare exactly ONE abstract method (SAM).
+ *   3. The SAM return type must be a Jackson-serializable record.
+ *   4. Do NOT use Optional<T> in the return record — use @Nullable fields.
+ *
+ * At build time, AgentFunctionProcessor (arcclaw-deployment) generates:
+ *   - JSON Schema resource: schemas/functions/{SimpleName}.json
+ *   - GraalVM ReflectiveClassBuildItem for return type + nested types (recursive)
+ *
+ * @since Phase 62
+ */
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Documented
+public @interface AgentFunction {
+    /**
+     * Description injected into the generated JSON Schema.
+     * Defaults to the interface simple name if blank.
+     */
+    String description() default "";
+}
+```
+
+---
+
+### FILE 2: `AgentContribution.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import io.quarkus.qute.TemplateData;
+
+/**
+ * One specialist agent's contribution to a synthesis.
+ * @since Phase 62
+ */
+@TemplateData
+public record AgentContribution(
+    String agentRole,
+    String finding,
+    double confidence
+) {}
+```
+
+---
+
+### FILE 3: `ConflictSummary.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import io.quarkus.qute.TemplateData;
+import java.util.List;
+
+/**
+ * Conflict detected between specialist agent findings.
+ * @since Phase 62
+ */
+@TemplateData
+public record ConflictSummary(
+    String description,
+    List<String> conflictingRoles
+) {}
+```
+
+---
+
+### FILE 4: `SynthesisResult.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import io.quarkus.qute.TemplateData;
+import jakarta.annotation.Nullable;
+import java.util.List;
+
+/**
+ * Typed output of DattatreyaAgent synthesis.
+ *
+ * DESIGN NOTE — Required vs nullable fields:
+ *
+ *   @JsonProperty(required = true) on contributions and resolution:
+ *     Jackson throws MismatchedInputException if these are absent from the LLM
+ *     response. This triggers JsonExtractionException → StructuredRetryLoop retry.
+ *
+ *   conflicts has NO required=true:
+ *     The LLM legitimately omits this field when there are no conflicts.
+ *     DO NOT add FAIL_ON_MISSING_CREATOR_PROPERTIES to the ObjectMapper — that
+ *     feature treats ALL record constructor parameters as required, including
+ *     @Nullable ones, causing false retries on every successful "no conflict" response.
+ *
+ *   @JsonInclude(NON_NULL):
+ *     When serializing SynthesisResult (for A2A, logging), null conflicts is omitted.
+ *
+ * @since Phase 62
+ */
+@TemplateData
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record SynthesisResult(
+    @JsonProperty(required = true) List<AgentContribution> contributions,
+    @JsonProperty(required = true) String resolution,
+    @Nullable ConflictSummary conflicts
+) {}
+```
+
+---
+
+### FILE 5: `SynthesisFunction.java`
+
+```java
+package com.arcclaw.core.structured;
+
+/**
+ * BAML-style SAM interface for DattatreyaAgent synthesis.
+ * AgentFunctionProcessor generates schemas/functions/SynthesisFunction.json
+ * from this interface at build time.
+ *
+ * @since Phase 62
+ */
+@AgentFunction(description = "Synthesise findings from all specialist agents into a coherent typed result")
+public interface SynthesisFunction {
+    SynthesisResult synthesize(String combinedContext);
+}
+```
+
+---
+
+### FILE 6: `JsonExtractionException.java`
+
+```java
+package com.arcclaw.core.structured;
+
+/**
+ * Thrown by PermissiveJsonExtractor when Jackson cannot deserialize the LLM
+ * response into the target type after fence-stripping.
+ *
+ * Carries the Jackson failure path so StructuredRetryLoop can embed it in
+ * the schema-correction retry prompt, directing the LLM to the failing field.
+ *
+ * Unchecked — propagates out of PermissiveJsonExtractor and is caught
+ * explicitly by StructuredRetryLoop only.
+ *
+ * @since Phase 62
+ */
+public final class JsonExtractionException extends RuntimeException {
+
+    private final String rawResponse;
+    private final Class<?> targetType;
+    private final String jacksonPath;
+
+    public JsonExtractionException(
+            String rawResponse,
+            Class<?> targetType,
+            String jacksonPath,
+            Throwable cause) {
+        super("Failed to extract " + targetType.getSimpleName() +
+              ". Jackson path: " + jacksonPath, cause);
+        this.rawResponse = rawResponse;
+        this.targetType  = targetType;
+        this.jacksonPath = jacksonPath;
+    }
+
+    /** First 200 characters of the raw response for diagnostic logging. */
+    public String rawResponseExcerpt() {
+        return rawResponse == null ? "<null>"
+            : rawResponse.substring(0, Math.min(200, rawResponse.length()));
+    }
+
+    public Class<?> targetType() { return targetType; }
+    public String jacksonPath()   { return jacksonPath; }
+}
+```
+
+---
+
+### FILE 7: `StructuredOutputException.java`
+
+```java
+package com.arcclaw.core.structured;
+
+/**
+ * Thrown by StructuredRetryLoop when BOTH the initial call AND the single
+ * schema-correction retry fail structural validation.
+ *
+ * AgentStateMachineRunner catches this and maps it to:
+ *   AgentResult.Failed(FailureCategory.SCHEMA_ERROR)
+ *
+ * UNCHECKED (extends RuntimeException). Rationale:
+ *   - AgentStateMachineRunner.processEngineStep() already has 3+ exception branches.
+ *     A checked exception cascades `throws` through DattatreyaAgent → processEngineStep()
+ *     → the entire loop call stack.
+ *   - BudgetExceededException and BudgetWarningException are also unchecked.
+ *     StructuredOutputException follows the same contract.
+ *
+ * @since Phase 62
+ */
+public final class StructuredOutputException extends RuntimeException {
+
+    private final String targetTypeSimpleName;
+    private final String rawResponseExcerpt;
+
+    public StructuredOutputException(String targetTypeSimpleName, String rawResponse) {
+        super("Structured output extraction failed after 1 retry for type: " +
+              targetTypeSimpleName);
+        this.targetTypeSimpleName = targetTypeSimpleName;
+        this.rawResponseExcerpt   = rawResponse == null ? "<null>"
+            : rawResponse.substring(0, Math.min(200, rawResponse.length()));
+    }
+
+    public String targetTypeSimpleName() { return targetTypeSimpleName; }
+    public String rawResponseExcerpt()   { return rawResponseExcerpt; }
+}
+```
+
+---
+
+### FILE 8: `PermissiveJsonExtractor.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Lenient, fail-fast parser for LLM JSON responses.
+ *
+ * Pipeline (stops at first success):
+ *   1. Strip markdown code fences (```json ... ``` or ``` ... ```)
+ *   2. Parse with lenient Jackson:
+ *      - Trailing commas: ALLOW_TRAILING_COMMA at TOKEN level
+ *        NOT via regex — regex would corrupt commas inside string values
+ *      - Single-quoted fields, unquoted field names tolerated
+ *
+ * Required-field validation strategy:
+ *   FAIL_ON_MISSING_CREATOR_PROPERTIES is intentionally NOT enabled here.
+ *   Reason: Java records pass ALL constructor parameters through Jackson's
+ *   "Creator" mechanism. Enabling this feature treats @Nullable record fields
+ *   as required, causing false retries whenever the LLM correctly omits a
+ *   nullable field (e.g., SynthesisResult.conflicts when there are no conflicts).
+ *   Instead, required-field enforcement is done via @JsonProperty(required=true)
+ *   on the record components themselves (see SynthesisResult.java).
+ *
+ * THREAD SAFETY: lenientMapper is immutable after @PostConstruct.
+ *
+ * @since Phase 62
+ */
+@ApplicationScoped
+public class PermissiveJsonExtractor {
+
+    private static final Logger log = Logger.getLogger(PermissiveJsonExtractor.class);
+
+    // Pre-compiled: matches ```json...``` or ```...``` fences.
+    private static final Pattern FENCE_PATTERN =
+        Pattern.compile("(?s)```(?:json)?\\s*(.*?)```");
+
+    @Inject
+    ObjectMapper baseMapper;
+
+    private ObjectMapper lenientMapper;
+
+    @PostConstruct
+    void init() {
+        // Use copy() — never mutate the Quarkus-managed shared ObjectMapper.
+        // Single unbroken builder chain — a semicolon mid-chain terminates it.
+        //
+        // Jackson enum names — correct:
+        //   JsonReadFeature.ALLOW_SINGLE_QUOTED_STRINGS  ← correct
+        //   JsonReadFeature.ALLOW_SINGLE_QUOTES          ← does NOT exist
+        //   JsonParser.Feature.ALLOW_SINGLE_QUOTES       ← deprecated
+        lenientMapper = baseMapper.copy()
+            .enable(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.mappedFeature())
+            .enable(JsonReadFeature.ALLOW_SINGLE_QUOTED_STRINGS.mappedFeature())
+            // CRITICAL: token-level trailing comma handling.
+            // Do NOT use regex to strip commas — it corrupts string values
+            // containing comma patterns: {"msg": "He left, she stayed,"}
+            .enable(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature())
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
+            // NOTE: FAIL_ON_MISSING_CREATOR_PROPERTIES is intentionally absent.
+            // See class javadoc for rationale.
+    }
+
+    /**
+     * Deserialize rawLlmResponse into targetType.
+     *
+     * @return Deserialized instance of targetType.
+     * @throws NullPointerException       if rawLlmResponse is null — propagates unmodified.
+     * @throws JsonExtractionException    on structural failure (missing @JsonProperty(required=true)
+     *                                    fields, wrong types, malformed JSON). Carries Jackson path.
+     */
+    public <T> T extract(String rawLlmResponse, Class<T> targetType) {
+        Objects.requireNonNull(rawLlmResponse, "rawLlmResponse must not be null");
+
+        String cleaned = stripFences(rawLlmResponse).strip();
+        log.tracef("PermissiveJsonExtractor: parsing to %s (%d chars after fence-strip)",
+            targetType.getSimpleName(), cleaned.length());
+
+        try {
+            return lenientMapper.readValue(cleaned, targetType);
+        } catch (MismatchedInputException e) {
+            // Structural failure: missing @JsonProperty(required=true) field, wrong type.
+            String path = e.getPath() != null ? e.getPath().toString() : "<unknown>";
+            log.debugf("Structural parse failure for %s at '%s': %s",
+                targetType.getSimpleName(), path, e.getOriginalMessage());
+            throw new JsonExtractionException(rawLlmResponse, targetType, path, e);
+        } catch (JsonProcessingException e) {
+            // Malformed JSON the lenient parser cannot recover.
+            throw new JsonExtractionException(rawLlmResponse, targetType, "<parse>", e);
+        }
+    }
+
+    private String stripFences(String raw) {
+        Matcher m = FENCE_PATTERN.matcher(raw);
+        return m.find() ? m.group(1) : raw;
+    }
+}
+```
+
+---
+
+### FILE 9: `StructuredRetryLoop.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.audit.TelemetryAuditService;   // verify actual class name
+import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.observability.AgentOtelContext;
+import io.opentelemetry.api.trace.Span;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.function.Supplier;
+
+/**
+ * Executes a structured LLM call with at most ONE schema-correction retry.
+ * Stateless between calls — no mutable instance fields.
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * BUDGET GATE SEMANTICS:
+ * ═══════════════════════════════════════════════════════════════
+ *   BudgetExceededException → ABORT retry; propagate to caller (hard limit).
+ *   BudgetWarningException  → LOG warning; PROCEED with retry (soft signal).
+ *
+ * A session at 81% budget that encounters a schema failure must still get
+ * its correction retry. Propagating BudgetWarningException would kill the
+ * retry before it fires — wrong behavior. Only BudgetExceededException (100%)
+ * justifies refusing the retry.
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * AUDIT WRITE ORDER:
+ * ═══════════════════════════════════════════════════════════════
+ * STRUCTURED_OUTPUT_RETRY event is written AFTER retry call SUCCEEDS.
+ * Writing before the call would leave misleading WORM records for failed retries.
+ * If both attempts fail, StructuredOutputException propagates to
+ * AgentStateMachineRunner which writes AGENT_FAILURE — no orphaned retry record.
+ *
+ * @since Phase 62
+ */
+@ApplicationScoped
+public class StructuredRetryLoop {
+
+    private static final Logger log = Logger.getLogger(StructuredRetryLoop.class);
+
+    @Inject GovernanceLayer       governanceLayer;
+    @Inject PermissiveJsonExtractor extractor;
+    @Inject TelemetryAuditService  auditService;    // adapt to actual class name
+    @Inject AgentOtelContext        otelContext;
+
+    /**
+     * Execute with at most one schema-correction retry.
+     *
+     * @param sessionId     Active workspace session ID.
+     * @param userId        Active user ID for audit attribution.
+     *                      Pass WorkspaceScopeHolder.getUserIdOrUnknown() from caller.
+     * @param agentRole     Active persona role for audit record.
+     * @param rawResponse   Initial LLM response string (already obtained by caller).
+     * @param retrySupplier Lazy supplier for the retry LLM call. Called at most once.
+     * @param targetType    Jackson target type.
+     * @return Deserialized typed result.
+     * @throws StructuredOutputException (unchecked) if both extraction attempts fail.
+     * @throws BudgetExceededException   (unchecked) propagated — hard limit, no retry.
+     */
+    public <T> T executeWithRetry(
+            String sessionId,
+            String userId,
+            String agentRole,
+            String rawResponse,
+            Supplier<String> retrySupplier,
+            Class<T> targetType) {
+
+        // Attempt 1 — zero additional token cost if successful.
+        try {
+            T result = extractor.extract(rawResponse, targetType);
+            log.debugf("StructuredRetryLoop: attempt 1 succeeded for %s",
+                targetType.getSimpleName());
+            return result;
+        } catch (JsonExtractionException firstFailure) {
+            log.debugf("StructuredRetryLoop: attempt 1 failed for %s at path '%s'",
+                targetType.getSimpleName(), firstFailure.jacksonPath());
+        }
+
+        // Budget gate before retry.
+        // BudgetExceededException propagates — hard limit.
+        // BudgetWarningException is caught below — soft signal, proceed.
+        try {
+            governanceLayer.assertWithinBudget(sessionId);
+        } catch (BudgetWarningException warning) {
+            // Soft signal: at 80%+ budget. Log and continue — do NOT abort retry.
+            // Aborting here would kill valid correction attempts at high-utilisation sessions.
+            log.warnf("Session %s is at budget warning threshold before schema retry: %s. " +
+                      "Proceeding with retry.", sessionId, warning.getMessage());
+            // Do not rethrow.
+        }
+        // BudgetExceededException is NOT caught — propagates to AgentStateMachineRunner.
+
+        // OTel child span for retry observability.
+        // Use only AgentOtelContext methods — no direct OTel SDK calls.
+        Span span = otelContext.childSpan(sessionId, "arcclaw.structured_output.retry");
+        try {
+            String retryResponse = retrySupplier.get();
+
+            try {
+                T result = extractor.extract(retryResponse, targetType);
+
+                // SUCCESS on retry — write audit event HERE, after confirmed success.
+                writeRetryAuditEvent(sessionId, userId, agentRole,
+                                     targetType.getSimpleName());
+                log.infof("StructuredRetryLoop: retry succeeded for %s",
+                    targetType.getSimpleName());
+                return result;
+
+            } catch (JsonExtractionException secondFailure) {
+                log.warnf("StructuredRetryLoop: retry ALSO failed for %s at path '%s'",
+                    targetType.getSimpleName(), secondFailure.jacksonPath());
+                throw new StructuredOutputException(
+                    targetType.getSimpleName(),
+                    secondFailure.rawResponseExcerpt());
+            }
+        } finally {
+            span.end(); // Always close OTel span — even on exception.
+        }
+    }
+
+    private void writeRetryAuditEvent(String sessionId, String userId,
+                                       String agentRole, String targetTypeName) {
+        // TELEMETRY tier — non-mandatory (isMandatory = false on the enum).
+        // TelemetryAuditService.record() swallows all exceptions by contract.
+        // Adapt method signature to actual TelemetryAuditService.record() overload.
+        auditService.record(
+            sessionId,
+            userId,
+            agentRole,
+            SecurityEventType.STRUCTURED_OUTPUT_RETRY,
+            "Schema correction retry succeeded for type: " + targetTypeName
+        );
+    }
+}
+```
+
+---
+
+### FILE 10: `StructuredOutputEngine.java`
+
+```java
+package com.arcclaw.core.structured;
+
+import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.core.workspace.WorkspaceScopeHolder;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.util.function.Supplier;
+
+/**
+ * Single entry point for all @AgentFunction structured output calls (Phase 62).
+ *
+ * Responsibilities:
+ *   1. Load build-time JSON Schema from classpath resource.
+ *   2. Build schema-embedded prompt with JSON directive (Groq API guard).
+ *   3. Execute initial LLM call via LangChainReasoningEngine.chatForStructuredOutput().
+ *   4. Delegate to StructuredRetryLoop for extraction + optional retry.
+ *
+ * DattatreyaAgent calls invoke() in place of reasoningEngine.nextStep() for synthesis.
+ *
+ * @since Phase 62
+ */
+@ApplicationScoped
+public class StructuredOutputEngine {
+
+    private static final Logger log = Logger.getLogger(StructuredOutputEngine.class);
+
+    // Appended to every schema prompt.
+    // Required by Groq API: response_format=json_object returns HTTP 400 if the
+    // word "JSON" is absent from the combined system+user prompt.
+    // Harmless on non-Groq providers.
+    private static final String JSON_DIRECTIVE =
+        "\n\n[SYSTEM CONSTRAINT: Return ONLY valid JSON. " +
+        "No prose, no explanation, no markdown fences. " +
+        "Your response must be a JSON object only.]";
+
+    @Inject LangChainReasoningEngine reasoningEngine;
+    @Inject StructuredRetryLoop       retryLoop;
+
+    @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
+    String llmProvider;
+
+    /**
+     * Invoke a @AgentFunction SAM with structured output guarantees.
+     *
+     * @param sessionId       Active workspace session ID.
+     * @param agentRole       Active persona role.
+     * @param goalContext     Combined context from the caller (findings, goal, etc.)
+     * @param interfaceName   Simple name of the @AgentFunction interface.
+     *                        Used to load: schemas/functions/{interfaceName}.json
+     * @param targetType      Jackson target type (e.g., SynthesisResult.class).
+     * @return Deserialized typed result.
+     * @throws StructuredOutputException (unchecked) if both extraction attempts fail.
+     */
+    public <T> T invoke(
+            String sessionId,
+            String agentRole,
+            String goalContext,
+            String interfaceName,
+            Class<T> targetType) {
+
+        String userId     = WorkspaceScopeHolder.getUserIdOrUnknown();
+        String schemaJson = loadSchemaResource(interfaceName);
+        String prompt     = buildSchemaPrompt(goalContext, schemaJson);
+
+        // Initial LLM call via the narrow structured-output method.
+        // This uses SystemPromptBuilder to preserve persona context (see Task 9).
+        String rawResponse = reasoningEngine.chatForStructuredOutput(
+            sessionId, agentRole, prompt);
+
+        // Lazy retry supplier — only invoked by StructuredRetryLoop on failure.
+        Supplier<String> retryCall = () -> {
+            String retryPrompt = buildSchemaPrompt(goalContext, schemaJson) +
+                "\n\nIMPORTANT: Your previous response did not match the required " +
+                "JSON schema for " + targetType.getSimpleName() + ". " +
+                "Return ONLY a valid JSON object. No prose, no explanation.";
+            return reasoningEngine.chatForStructuredOutput(sessionId, agentRole, retryPrompt);
+        };
+
+        return retryLoop.executeWithRetry(
+            sessionId, userId, agentRole, rawResponse, retryCall, targetType);
+    }
+
+    private String buildSchemaPrompt(String goalContext, String schemaJson) {
+        return goalContext +
+            "\n\nYou MUST respond with a JSON object matching this schema:\n" +
+            schemaJson +
+            JSON_DIRECTIVE;
+    }
+
+    private String loadSchemaResource(String interfaceSimpleName) {
+        String path = "schemas/functions/" + interfaceSimpleName + ".json";
+        try (InputStream is = Thread.currentThread()
+                .getContextClassLoader().getResourceAsStream(path)) {
+            if (is == null) {
+                throw new IllegalStateException(
+                    "Schema resource not found: " + path + ". " +
+                    "Run: mvn compile -pl arcclaw-deployment -am to regenerate. " +
+                    "In tests: ensure arcclaw-deployment is a test classpath dependency.");
+            }
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read schema resource: " + path, e);
+        }
+    }
+}
+```
+
+---
+
+## MODIFICATIONS TO EXISTING FILES
+
+---
+
+### TASK 9.5 — Add `WorkspaceScopeHolder.getUserIdOrUnknown()` (BLOCKER P5 FIX)
+
+**Module:** `arcclaw-core`
+**File:** `com/arcclaw/core/workspace/WorkspaceScopeHolder.java` (MODIFY)
+
+`StructuredOutputEngine` calls `WorkspaceScopeHolder.getUserIdOrUnknown()`.
+This method **does not exist** in the current codebase. The existing API has
+`WorkspaceScopeHolder.getIfActive()` (returns sessionId) and `WorkspaceContext.userId`
+(a `ScopedValue`). Add the method before implementing `StructuredOutputEngine`.
+
+Read how `WorkspaceContext.userId` is accessed elsewhere in the codebase
+(check usages of `WorkspaceContext` in `AgentStateMachineRunner` and auth filters)
+then mirror that exact pattern below. The `ScopedValue.get()` / `orElse()` API
+varies slightly between JDK 21 preview and JDK 21 GA — use whichever is already
+in use in the codebase.
+
+```java
+/**
+ * Returns the active user ID from the current workspace scope,
+ * or the literal string "unknown" if no scope is active or the
+ * scope has no userId bound (background/cron tasks).
+ *
+ * Used by StructuredOutputEngine to populate audit records.
+ * Mirrors the safe-access pattern used elsewhere for WorkspaceContext values.
+ *
+ * @since Phase 62
+ */
+public static String getUserIdOrUnknown() {
+    try {
+        // Adapt to the actual ScopedValue / ThreadLocal API in use.
+        // If WorkspaceContext.userId is a ScopedValue<String>:
+        //   return WorkspaceContext.userId.orElse("unknown");
+        // If it is accessed via getIfActive():
+        //   WorkspaceContext ctx = WorkspaceScopeHolder.getIfActive();
+        //   return ctx != null ? ctx.userId() : "unknown";
+        // Use whichever pattern the existing codebase already follows.
+        WorkspaceContext ctx = getIfActive();
+        return (ctx != null && ctx.userId() != null) ? ctx.userId() : "unknown";
+    } catch (Exception e) {
+        return "unknown";
+    }
+}
+```
+
+---
+
+### MODIFY: `LangChainReasoningEngine.java` — Add `chatForStructuredOutput()`
+
+**DO NOT modify `nextStep()` or any existing method.**
+
+Add ONE new method. Read the existing `nextStep()` implementation first — this
+method reuses all of its infrastructure (same `chatModel`, same `SystemPromptBuilder`,
+same token recording pattern, same OTel span pattern).
+
+```java
+/**
+ * Execute a single LLM call for a structured output request.
+ *
+ * Uses SystemPromptBuilder to build the system message — preserves the full
+ * persona context (anti-hallucination rules, role description, tool schema)
+ * that nextStep() uses. The JSON schema + directive are passed in `schemaPrompt`
+ * as the user turn on top of the existing persona.
+ *
+ * Handles OTel span creation, token recording, and model invocation
+ * identically to nextStep() — do NOT inline a raw ChatModel.chat() call
+ * anywhere else.
+ *
+ * NEVER set JSON mode (responseFormat="json_object") globally here — it
+ * would break nextStep()'s ReAct loop which produces free-form
+ * Thought/Action/FINISH text. JSON constraint is enforced via prompt only.
+ *
+ * NON-BLOCKING FIX #8: This must be a REAL IMPLEMENTATION — not pseudocode
+ * comments. Read nextStep() in full and produce working Java code that compiles.
+ * The comment outline below is the specification; replace it with actual code.
+ *
+ * @param sessionId     Active workspace session ID.
+ * @param agentRole     Persona role string (e.g., "synthesizer").
+ * @param schemaPrompt  Full user prompt including embedded JSON schema and
+ *                      JSON_DIRECTIVE from StructuredOutputEngine.
+ * @return Raw LLM response string.
+ * @since Phase 62
+ */
+public String chatForStructuredOutput(String sessionId, String agentRole,
+                                       String schemaPrompt) {
+    // READ nextStep() FIRST. Then write a real implementation below.
+    // Do not leave this as comments — the method must compile and run.
+    //
+    // 1. String systemPrompt = systemPromptBuilder.build(agentRole);
+    //    (Preserves persona context — not a bare "You are X. Return JSON." string)
+    //
+    // 2. Span span = agentOtelContext.childSpan(sessionId, "arcclaw.structured_output.call");
+    //
+    // 3. try {
+    //        ChatRequest request = ChatRequest.builder()
+    //            .messages(List.of(
+    //                SystemMessage.systemMessage(systemPrompt),
+    //                UserMessage.from(schemaPrompt)))
+    //            .build();
+    //        // Adapt builder to exact pattern in nextStep()
+    //
+    //        ChatResponse response = chatModel.chat(request);
+    //
+    //        int in  = response.tokenUsage() != null ? response.tokenUsage().inputTokenCount()  : 0;
+    //        int out = response.tokenUsage() != null ? response.tokenUsage().outputTokenCount() : 0;
+    //        governanceLayer.recordLlmCall(sessionId, in, out);
+    //
+    //        return response.aiMessage().text();
+    //    } finally {
+    //        span.end();
+    //    }
+    throw new UnsupportedOperationException(
+        "chatForStructuredOutput() not yet implemented — replace this with " +
+        "the actual implementation mirroring nextStep()");
+}
+```
+
+---
+
+### MODIFY: `GovernanceLayer.java`
+
+**Step A — Refactor `warningSent` to `AtomicBoolean`:**
+
+```java
+// BEFORE (race condition under virtual threads):
+volatile boolean warningSent = false;
+
+// AFTER:
+final AtomicBoolean warningSent = new AtomicBoolean(false);
+```
+
+Update ALL existing usages in `recordLlmCall()`:
+
+```java
+// BEFORE:
+if (!budget.warningSent && currentCost >= budgetUsd * WARNING_THRESHOLD) {
+    budget.warningSent = true;
+    throw new BudgetWarningException(...);
+}
+
+// AFTER:
+// Threshold check MUST precede compareAndSet.
+// If CAS fires first at 79% budget, warningSent is permanently true and
+// the real 80% boundary warning is forever suppressed.
+if (currentCost >= budgetUsd * WARNING_THRESHOLD
+        && budget.warningSent.compareAndSet(false, true)) {
+    throw new BudgetWarningException(...);
+}
+```
+
+**Step B — Add `assertWithinBudget()` (does NOT exist yet):**
+
+```java
+/**
+ * Asserts the session has not exceeded its USD budget.
+ * Called by StructuredRetryLoop BEFORE submitting the schema-correction retry.
+ *
+ * Semantics:
+ *   - No SessionBudget for sessionId → no-op.
+ *   - totalCost >= budgetUsd → throw BudgetExceededException (hard limit).
+ *   - totalCost >= WARNING_THRESHOLD AND warningSent not yet set →
+ *       CAS warningSent to true, throw BudgetWarningException (soft signal).
+ *       StructuredRetryLoop catches BudgetWarningException, logs, and proceeds.
+ *   - Otherwise → no-op.
+ *
+ * NOT @Transactional — reads in-memory budgets map only.
+ *
+ * @since Phase 62
+ */
+public void assertWithinBudget(String sessionId) {
+    SessionBudget b = budgets.get(sessionId);
+    if (b == null) return;
+
+    double currentCost = b.getTotalCost();
+
+    if (currentCost >= budgetUsd) {
+        throw new BudgetExceededException(
+            "Session " + sessionId + " budget exhausted ($" +
+            String.format("%.4f", currentCost) + " of $" +
+            String.format("%.2f", budgetUsd) + "). Schema retry aborted.");
+    }
+
+    // CRITICAL: threshold check before compareAndSet.
+    if (currentCost >= budgetUsd * WARNING_THRESHOLD
+            && b.warningSent.compareAndSet(false, true)) {
+        throw new BudgetWarningException(
+            "Session " + sessionId + " at " +
+            String.format("%.0f%%", (currentCost / budgetUsd) * 100) +
+            " of budget before schema retry.");
+    }
+}
+```
+
+---
+
+### MODIFY: `SecurityEventType.java`
+
+```java
+// Change last entry from:
+MCP_TOOL_INVOKED;
+
+// To:
+MCP_TOOL_INVOKED,
+
+/**
+ * A schema correction retry was triggered for a structured LLM output call.
+ * Written via TelemetryAuditService.record() AFTER the retry call succeeds.
+ *
+ * isMandatory() = false (via default switch fall-through).
+ * Rationale: TelemetryAuditService.record() swallows all exceptions by contract.
+ * Setting isMandatory=true here would be misleading — the flag is only enforced
+ * by which audit service method you call (record() vs recordMandatory()).
+ * This event mirrors the CONTEXT_COMPACTED pattern (also isMandatory=false).
+ *
+ * @since Phase 62
+ */
+STRUCTURED_OUTPUT_RETRY;
+// No isMandatory() override — existing default -> false covers this.
+```
+
+---
+
+### MODIFY: `AgentStateMachineRunner.java`
+
+Add catch for `StructuredOutputException` alongside the existing `InvalidRequestException` handler:
+
+```java
+} catch (StructuredOutputException e) {
+    log.warnf("Structured output extraction failed for session %s after max retries. " +
+              "Type: %s. Excerpt: %s",
+              context.sessionId(), e.targetTypeSimpleName(), e.rawResponseExcerpt());
+    // BLOCKER P2 FIX: Use existing SCHEMA_ERROR (no underscore) — not SCHEMA_ERROR.
+    // BLOCKER P3 FIX: AgentResult.failed() signature is (String reason, FailureCategory, List).
+    // Confirmed from CronResultHandlerTest and AgentStateMachineRunner source.
+    return StepDecision.terminal(
+        AgentResult.failed(
+            "Structured output failed after 1 retry for " +
+            e.targetTypeSimpleName() + ": " + e.getMessage(),
+            FailureCategory.SCHEMA_ERROR,
+            List.copyOf(history)
+        )
+    );
+}
+```
+
+Adapt `AgentResult.failed()` factory to match the actual signature in the existing code.
+
+---
+
+### MODIFY: `DattatreyaAgent.java`
+
+```java
+// ADD injection:
+@Inject StructuredOutputEngine structuredOutputEngine;
+
+// REPLACE the existing rawSynthesis String path entirely.
+// StructuredOutputException is unchecked — NO try-catch needed.
+// It propagates naturally to AgentStateMachineRunner.processEngineStep().
+
+SynthesisResult result = structuredOutputEngine.invoke(
+    sessionId,
+    agentRole,
+    combinedContext,        // the existing combined context string
+    "SynthesisFunction",    // interface simple name → schema resource path
+    SynthesisResult.class
+);
+
+// CRITICAL: Return result.resolution() as the channel answer.
+// NEVER return result.toString() — that exposes raw Java record syntax to users.
+// contributions() and conflicts() are for A2A and audit only.
+return AgentResult.finished(result.resolution(), history);
+// Adapt AgentResult.finished() factory to match actual signature.
+
+// Log structured fields for observability:
+log.infof("Synthesis complete for session %s: %d contributions, conflicts=%s",
+    sessionId, result.contributions().size(),
+    result.conflicts() != null ? result.conflicts().description() : "none");
+```
+
+Remove the `String rawSynthesis` variable entirely.
+
+---
+
+### NEW FILE: `arcclaw-deployment`: `AgentFunctionProcessor.java`
+
+```java
+package com.arcclaw.deployment;
+
+import com.arcclaw.core.structured.AgentFunction;
+import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jboss.jandex.*;
+
+import java.lang.reflect.Modifier;     // BLOCKER P4 FIX: required by findSam() — was missing
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Build-time processor for @AgentFunction interfaces.
+ *
+ * For each @AgentFunction interface found via Jandex:
+ *   1. Validates exactly one abstract method (SAM) — fails at build time, not runtime.
+ *   2. Generates JSON Schema via LangChain4J ToolSpecifications.
+ *   3. Yields GeneratedResourceBuildItem: schemas/functions/{SimpleName}.json
+ *      NEVER writes to filesystem — that breaks repeatable builds and dev-mode.
+ *   4. Dynamically registers return type AND all nested arcclaw types for GraalVM
+ *      reflection — RECURSIVE traversal with cycle guard using Set<String> visited.
+ *      Uses ci.recordComponents() for records (Jandex 3.5.3+), ci.fields() fallback.
+ *
+ * @since Phase 62
+ */
+public class AgentFunctionProcessor {
+
+    private static final DotName AGENT_FUNCTION =
+        DotName.createSimple(AgentFunction.class.getName());
+
+    @BuildStep
+    void processAgentFunctions(
+            CombinedIndexBuildItem index,
+            BuildProducer<GeneratedResourceBuildItem> resources,
+            BuildProducer<NativeImageResourceBuildItem> nativeResources,
+            BuildProducer<ReflectiveClassBuildItem> reflections) {
+
+        // Standalone ObjectMapper — CDI is NOT running during @BuildStep.
+        ObjectMapper buildTimeMapper = new ObjectMapper();
+
+        for (AnnotationInstance ann :
+                index.getIndex().getAnnotations(AGENT_FUNCTION)) {
+
+            if (ann.target().kind() != AnnotationTarget.Kind.CLASS) continue;
+            ClassInfo iface = ann.target().asClass();
+
+            if (!iface.isInterface()) {
+                throw new IllegalStateException(
+                    "@AgentFunction must be applied to interfaces only. Found on: "
+                    + iface.name());
+            }
+
+            MethodInfo sam = findSam(iface); // throws on 0 or >1 abstract methods
+
+            try {
+                Class<?> ifaceClass = Thread.currentThread()
+                    .getContextClassLoader()
+                    .loadClass(iface.name().toString());
+
+                // BLOCKER P1 FIX: ToolSpecifications.toolSpecificationFrom() generates
+                // the INPUT parameter schema for synthesize(String combinedContext),
+                // NOT the OUTPUT schema for SynthesisResult. Using it produces a schema
+                // the LLM reads as {"combinedContext":"..."}, causing 100% deserialization
+                // failure. We must generate the schema from the SAM's RETURN TYPE.
+                //
+                // Uses jackson-module-jsonschema 2.17.2 (add to arcclaw-deployment/pom.xml,
+                // compile/provided scope — it is already transitively available via
+                // jackson-databind in Quarkus; verify with mvn dependency:tree first).
+                // If jackson-module-jsonschema is not on the augmentation classpath,
+                // use the deprecated buildTimeMapper.generateJsonSchema(returnTypeClass)
+                // which requires no extra dependency.
+                String returnTypeName = sam.returnType().name().toString();
+                Class<?> returnTypeClass = Thread.currentThread()
+                    .getContextClassLoader().loadClass(returnTypeName);
+
+                com.fasterxml.jackson.module.jsonSchema.factories.SchemaFactoryWrapper visitor =
+                    new com.fasterxml.jackson.module.jsonSchema.factories.SchemaFactoryWrapper();
+                buildTimeMapper.acceptJsonFormatVisitor(returnTypeClass, visitor);
+                String schemaJson = buildTimeMapper
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(visitor.finalSchema());
+
+                // CRITICAL: GeneratedResourceBuildItem — NEVER write to src/ or disk.
+                String resourcePath = "schemas/functions/" + iface.simpleName() + ".json";
+                resources.produce(new GeneratedResourceBuildItem(
+                    resourcePath, schemaJson.getBytes(StandardCharsets.UTF_8)));
+                nativeResources.produce(
+                    new NativeImageResourceBuildItem(resourcePath));
+
+                // Dynamic + recursive reflection registration.
+                // Set<String> visited prevents infinite loops for circular type graphs.
+                Set<String> visited = new HashSet<>();
+                registerTypeRecursively(
+                    index.getIndex(), returnTypeName, visited, reflections);
+
+            } catch (Exception e) {
+                throw new IllegalStateException(
+                    "AgentFunctionProcessor failed for " + iface.name(), e);
+            }
+        }
+    }
+
+    /**
+     * Recursively registers a type and all nested arcclaw types for GraalVM reflection.
+     *
+     * Uses ci.recordComponents() for record types (Jandex 3.5.3 API) to correctly
+     * access record component types. Falls back to ci.fields() for non-record types.
+     * Handles List<T> and other parameterized types by extracting type arguments.
+     *
+     * Set<String> visited prevents infinite loops on circular references.
+     */
+    private void registerTypeRecursively(
+            IndexView index,
+            String typeName,
+            Set<String> visited,
+            BuildProducer<ReflectiveClassBuildItem> reflections) {
+
+        // Cycle guard — also prevents duplicate registration.
+        if (!visited.add(typeName)) return;
+
+        // Register the type itself.
+        reflections.produce(
+            ReflectiveClassBuildItem.builder(typeName)
+                .methods(true).fields(true).constructors(true).build());
+
+        ClassInfo ci = index.getClassByName(DotName.createSimple(typeName));
+        if (ci == null) return;
+
+        // Collect field types to traverse.
+        // For records: use recordComponents() (Jandex 3.5.3+) to get component types.
+        // For non-records: use fields().
+        if (ci.isRecord()) {
+            for (RecordComponentInfo rc : ci.recordComponents()) {
+                traverseType(index, rc.type(), visited, reflections);
+            }
+        } else {
+            for (FieldInfo field : ci.fields()) {
+                traverseType(index, field.type(), visited, reflections);
+            }
+        }
+    }
+
+    /** Traverses a single Type, handling parameterized types (List<T>, etc.). */
+    private void traverseType(
+            IndexView index,
+            Type type,
+            Set<String> visited,
+            BuildProducer<ReflectiveClassBuildItem> reflections) {
+
+        String typeName = type.name().toString();
+
+        // Direct arcclaw type — register recursively.
+        if (typeName.startsWith("com.arcclaw.")) {
+            registerTypeRecursively(index, typeName, visited, reflections);
+        }
+
+        // Parameterized type: List<AgentContribution>, Map<String, Foo>, etc.
+        if (type.kind() == Type.Kind.PARAMETERIZED_TYPE) {
+            for (Type arg : type.asParameterizedType().arguments()) {
+                if (arg.name().toString().startsWith("com.arcclaw.")) {
+                    registerTypeRecursively(
+                        index, arg.name().toString(), visited, reflections);
+                }
+            }
+        }
+    }
+
+    /**
+     * Finds the single abstract method (SAM) of the interface.
+     * Fails fast at BUILD TIME if the contract is violated.
+     * Uses MethodInfo.isDefault() — the correct Jandex API for default methods.
+     */
+    private MethodInfo findSam(ClassInfo iface) {
+        List<MethodInfo> abstractMethods = iface.methods().stream()
+            .filter(m -> !Modifier.isStatic(m.flags()))
+            .filter(m -> !m.isDefault())
+            .filter(m -> !m.name().startsWith("<"))
+            .toList();
+
+        if (abstractMethods.isEmpty()) {
+            throw new IllegalStateException(
+                "@AgentFunction interface " + iface.name() +
+                " has no abstract methods. Must declare exactly one SAM.");
+        }
+        if (abstractMethods.size() > 1) {
+            throw new IllegalStateException(
+                "@AgentFunction interface " + iface.name() + " has " +
+                abstractMethods.size() + " abstract methods: " +
+                abstractMethods.stream().map(MethodInfo::name).toList() +
+                ". Must declare exactly one SAM.");
+        }
+        return abstractMethods.get(0);
+    }
+}
+```
+
+---
+
+## TEST REQUIREMENTS
+
+### `PermissiveJsonExtractorTest` (plain JUnit5, no Quarkus)
+
+Instantiate `PermissiveJsonExtractor` in `@BeforeEach` with a real `ObjectMapper`. Call `init()` manually.
+
+```
+testCleanJsonSuccess
+  Input:  {"contributions":[],"resolution":"ok","conflicts":null}
+  Assert: result.resolution() == "ok"
+
+testFencedJsonStripped
+  Input:  ```json\n{"contributions":[],"resolution":"ok"}\n```
+  Assert: parses; result.resolution() == "ok"
+
+testFencedWithoutLangTag
+  Input:  ```\n{"contributions":[],"resolution":"ok"}\n```
+  Assert: parses correctly
+
+testTrailingCommaHandledByJacksonNotRegex
+  Input:  {"contributions":[],"resolution":"ok","conflicts":null,}
+  Assert: parses correctly
+  WHY: If this fails, ALLOW_TRAILING_COMMA is misconfigured. Fix is Jackson config only.
+
+testTrailingCommaInsideStringPreserved
+  Input:  {"contributions":[],"resolution":"He left, she stayed,"}
+  Assert: result.resolution() == "He left, she stayed,"
+  WHY: Validates ALLOW_TRAILING_COMMA does not corrupt string values.
+
+testSingleQuotedFields
+  Input:  {'resolution': 'ok', 'contributions': []}
+  Assert: result.resolution() == "ok"
+
+testUnquotedFieldNames
+  Input:  {resolution: "ok", contributions: []}
+  Assert: parses correctly
+
+testMissingRequiredFieldThrows
+  Input:  {"contributions":[],"conflicts":null}  (missing "resolution")
+  Assert: throws JsonExtractionException
+  WHY: Validates @JsonProperty(required=true) on SynthesisResult.resolution.
+  If it SUCCEEDS instead of throwing, the @JsonProperty annotation is not working.
+
+testMissingNullableFieldSucceeds
+  Input:  {"contributions":[],"resolution":"ok"}  (missing "conflicts" — nullable)
+  Assert: parses successfully; result.conflicts() == null
+  WHY: Validates that @Nullable fields CAN be absent.
+  CRITICAL: This is the test that exposes the FAIL_ON_MISSING_CREATOR_PROPERTIES trap.
+  If this test THROWS, the feature was re-added — remove it.
+
+testNullInputThrowsNullPointerException
+  Input:  null
+  Assert: assertThrows(NullPointerException.class, ...)
+  CRITICAL: Must NOT be caught and converted to JsonExtractionException.
+```
+
+---
+
+### `StructuredRetryLoopTest` (Mockito, no Quarkus)
+
+```
+testNoRetryOnSuccess
+  Mock extractor.extract() → returns result on first call
+  Assert: retrySupplier.get() NEVER called
+
+testRetryCalledOnStructuralFailure
+  Mock first extract() → throws JsonExtractionException
+  Mock retry extract() → returns result
+  Assert: retrySupplier.get() called exactly once
+
+testBudgetExceededBeforeRetryPropagates
+  Mock first extract() → throws JsonExtractionException
+  Mock governanceLayer.assertWithinBudget() → throws BudgetExceededException
+  Assert: BudgetExceededException propagates to caller
+  Assert: retrySupplier.get() NEVER called
+
+testBudgetWarningCaughtAndRetryProceeds   ← RENAMED from v4's wrong test
+  Mock first extract() → throws JsonExtractionException
+  Mock governanceLayer.assertWithinBudget() → throws BudgetWarningException
+  Assert: BudgetWarningException is NOT propagated (caught internally)
+  Assert: retrySupplier.get() IS called (retry proceeds despite warning)
+  Assert: final result is returned successfully
+  WHY: BudgetWarningException is a soft signal. A session at 81% budget must
+       still receive its correction retry. Propagating it here aborts the retry.
+
+testAuditEventWrittenAfterSuccessfulRetry
+  Mock first extract() → throws JsonExtractionException
+  Mock retry extract() → returns result
+  Use Mockito InOrder to verify:
+    retrySupplier.get() called BEFORE auditService.record(...)
+  Assert: both called in correct order
+
+testOtelSpanAlwaysClosedInFinally
+  Mock first extract() → throws JsonExtractionException
+  Mock retry extract() → throws JsonExtractionException (both fail)
+  Assert: StructuredOutputException thrown
+  Assert: span.end() called (verify via otelContext mock)
+
+testThrowsStructuredOutputExceptionAfterTwoFailures
+  Mock both extract() calls → throw JsonExtractionException
+  Assert: StructuredOutputException thrown (unchecked — no throws declaration)
+  Assert: exception.targetTypeSimpleName() == "SynthesisResult"
+```
+
+---
+
+### `GovernanceLayerAssertBudgetTest` (plain JUnit5)
+
+```
+testNullBudgetIsNoop
+  No prior spend registered → no exception thrown
+
+testUnder80PercentNoop
+  Session at 79% → no exception
+
+testAt80PercentThrowsBudgetWarning
+  Session at 80% → BudgetWarningException thrown
+
+testAt80PercentSecondCallNoop
+  Session at 80%, warningSent already true → no exception (warning fires once)
+
+testAt100PercentThrowsBudgetExceeded
+  Session at 100% → BudgetExceededException thrown
+
+testConcurrentWarningExactlyOnce
+  10 threads simultaneously call assertWithinBudget() at 80% cost
+  Assert: exactly 1 BudgetWarningException thrown across all threads
+  WHY: Validates AtomicBoolean.compareAndSet(false, true).
+  With a plain volatile boolean, multiple threads win — test would catch > 1 exception.
+```
+
+---
+
+## IMPLEMENTATION ORDER
+
+```
+Task 0: FailureCategory.SCHEMA_ERROR                — verify-only (no underscore; already exists)
+     1: AgentFunction.java                          — annotation
+     2: AgentContribution.java                      — record
+     3: ConflictSummary.java                        — record
+     4: SynthesisResult.java                        — record with @JsonProperty(required=true)
+     5: SynthesisFunction.java                      — interface
+     6: JsonExtractionException.java                — unchecked exception
+     7: StructuredOutputException.java              — unchecked exception
+     8: PermissiveJsonExtractor.java                — depends on 6
+     9: PermissiveJsonExtractorTest.java
+        RUN ALL. testMissingNullableFieldSucceeds must PASS (no throw on absent conflicts).
+        testMissingRequiredFieldThrows must PASS (throw on absent resolution).
+   9.5: WorkspaceScopeHolder.java (modify)          — BLOCKER P5: add getUserIdOrUnknown()
+        Read WorkspaceContext ScopedValue access pattern before implementing.
+    10: GovernanceLayer.java (modify)               — AtomicBoolean + assertWithinBudget
+    11: GovernanceLayerAssertBudgetTest.java
+        RUN ALL. testConcurrentWarningExactlyOnce must pass.
+    12: SecurityEventType.java (modify)             — add STRUCTURED_OUTPUT_RETRY (isMandatory=false)
+    13: StructuredRetryLoop.java                    — depends on 6, 7, 8, 10, 12
+    14: StructuredRetryLoopTest.java
+        RUN ALL. testBudgetWarningCaughtAndRetryProceeds must PASS.
+    15: LangChainReasoningEngine.java (modify)      — add chatForStructuredOutput() REAL IMPL
+        Not pseudocode — write working Java mirroring nextStep(). Must compile.
+    16: StructuredOutputEngine.java                 — depends on 9.5, 13, 15
+    17: AgentStateMachineRunner.java (modify)       — StructuredOutputException → SCHEMA_ERROR
+                                                      arg order: (String, FailureCategory, List)
+    18: DattatreyaAgent.java (modify)               — wire StructuredOutputEngine
+                                                      return AgentResult.finished(result.resolution(), history)
+    19: arcclaw-deployment/pom.xml (modify)         — BLOCKER P1: add jackson-module-jsonschema
+                                                      (compile/provided scope; verify first with
+                                                       mvn dependency:tree — may already be transitive)
+    20: AgentFunctionProcessor.java (new)           — arcclaw-deployment; uses SchemaFactoryWrapper
+        Schema generated from SAM RETURN TYPE, not from input parameters.
+    21: mvn clean compile -pl arcclaw-deployment -am
+        → schemas/functions/SynthesisFunction.json must appear in
+          arcclaw-app/target/classes/schemas/functions/
+          Open the file — it must contain SynthesisResult field names
+          (resolution, contributions, conflicts), NOT synthesize parameter names.
+          If it contains "combinedContext", BLOCKER P1 fix was not applied.
+    22: mvn test -pl arcclaw-core                   — all new unit tests pass
+    23: mvn clean install -pl arcclaw-app -am       — full build
+    24: Grep checks (see Acceptance Criteria)
+    25: Regression: AgentResilienceTest, AgentStateMachineRunnerTest must stay green
+```
+
+---
+
+## ACCEPTANCE CRITERIA
+
+**Jackson configuration:**
+- [ ] `ALLOW_SINGLE_QUOTED_STRINGS` used — NOT `ALLOW_SINGLE_QUOTES`
+- [ ] `ALLOW_TRAILING_COMMA` used — NO regex comma stripping anywhere
+- [ ] `FAIL_ON_MISSING_CREATOR_PROPERTIES` is ABSENT from `PermissiveJsonExtractor.init()`
+- [ ] `SynthesisResult.resolution` and `SynthesisResult.contributions` carry `@JsonProperty(required = true)`
+- [ ] `SynthesisResult.conflicts` has NO `required = true`
+- [ ] `extract()` returns `T` directly — NOT `Optional<T>`
+
+**Exception hierarchy:**
+- [ ] `StructuredOutputException extends RuntimeException` — NOT `Exception`
+- [ ] `executeWithRetry()` has NO `throws` declaration
+- [ ] `invoke()` has NO `throws` declaration
+- [ ] `DattatreyaAgent` has NO `catch (StructuredOutputException)` block
+
+**Budget handling:**
+- [ ] `BudgetWarningException` is CAUGHT in `StructuredRetryLoop` — retry proceeds
+- [ ] `BudgetExceededException` is NOT caught in `StructuredRetryLoop` — propagates
+- [ ] `assertWithinBudget()` threshold check precedes `compareAndSet()`
+- [ ] `SessionBudget.warningSent` is `AtomicBoolean`
+
+**Audit:**
+- [ ] `STRUCTURED_OUTPUT_RETRY.isMandatory()` returns `false` (via default switch — no explicit override)
+- [ ] `TelemetryAuditService.record()` called with 5 args: `(sessionId, userId, agentRole, type, detail)`
+- [ ] Audit written AFTER retry call succeeds — not before
+
+**Architecture:**
+- [ ] `LangChainReasoningEngine.chatForStructuredOutput()` uses `SystemPromptBuilder` — persona preserved
+- [ ] `getChatModel()` is NOT added/exposed — use `chatForStructuredOutput()` instead
+- [ ] `StructuredOutputEngine.invoke()` does NOT build `ChatRequest` directly
+- [ ] `DattatreyaAgent` returns `AgentResult.finished(result.resolution(), history)`
+- [ ] `DattatreyaAgent` has ZERO references to `String rawSynthesis`
+- [ ] `AgentResult.failed()` called as `(String reason, FailureCategory.SCHEMA_ERROR, List)` — args in this exact order
+- [ ] `FailureCategory.SCHEMA_ERROR` (with underscore) does NOT exist — use `SCHEMA_ERROR`
+
+**Build step:**
+- [ ] `GeneratedResourceBuildItem` only — no filesystem writes from `AgentFunctionProcessor`
+- [ ] Schema generated from SAM **return type** (`SchemaFactoryWrapper` / `acceptJsonFormatVisitor`) — NOT from `ToolSpecifications.toolSpecificationFrom()`
+- [ ] Generated `SynthesisFunction.json` contains field names `resolution`, `contributions`, `conflicts` — NOT `combinedContext`
+- [ ] `jackson-module-jsonschema` dependency verified in `arcclaw-deployment/pom.xml` (or transitive)
+- [ ] `registerTypeRecursively()` uses `Set<String> visited` cycle guard
+- [ ] `ci.recordComponents()` used for record types; `ci.fields()` for non-record types
+- [ ] `MethodInfo.isDefault()` used for SAM detection
+
+**OTel:**
+- [ ] No direct OpenTelemetry SDK **entrypoint** calls (`Tracer.spanBuilder()`, `OpenTelemetry.get()`, etc.) — use only `AgentOtelContext` methods to CREATE spans
+- [ ] Calling `span.end()` on a `Span` object returned by `otelContext.childSpan()` is acceptable — it is not a direct SDK entrypoint call
+- [ ] `span.end()` called in `finally` block in both `StructuredRetryLoop` and `chatForStructuredOutput()`
+
+**Grep verifications (zero results):**
+```bash
+grep -r "Optional<ConflictSummary>"             . --include="*.java"   # → 0
+grep -r "ALLOW_SINGLE_QUOTES[^_]"              . --include="*.java"   # → 0
+grep -r "extends Exception$"                    . --include="Structured*.java"  # → 0
+grep -r "FAIL_ON_MISSING_CREATOR_PROPERTIES"    . --include="*.java"   # → 0
+grep -r "getChatModel"                          . --include="*.java"   # → 0
+grep -r "rawSynthesis"                          . --include="*.java"   # → 0
+grep -r "warningSent = true"                    . --include="*.java"   # → 0 (use compareAndSet)
+grep -r "Optional.empty()"                      . --include="PermissiveJsonExtractor.java"  # → 0
+grep -r "new File"                              . --include="AgentFunctionProcessor.java"  # → 0
+grep -r "BudgetWarningException" StructuredRetryLoop.java | grep "throw"  # → 0 (caught, not rethrown)
+grep -r "SCHEMA_ERROR"                          . --include="*.java"   # → 0 (use SCHEMA_ERROR)
+grep -r "ToolSpecifications.toolSpecificationFrom" . --include="*.java" # → 0 (wrong schema direction)
+grep -r "combinedContext" schemas/              # → 0 (schema must NOT contain input param names)
+```
+
+---
+
+## DEFERRED TECH DEBT
+
+| ID | Item | When |
+|----|------|------|
+| TD-62-1 | Schema versioning: no version/hash on `SynthesisFunction.json`. In-flight sessions after schema change use stale prompts. Stamp SHA-256 `schemaHash` at build time; validate at session start. | Phase 63 |
+| TD-62-2 | `loadSchemaResource()` fails mid-request. Better: `@Named @Produces` CDI factory reads once at startup; startup failure preferred to mid-request crash. | Phase 63 |
+| TD-62-3 | Semantic LLM caching may return stale responses after schema change. Append `schemaHash` to prompt to bust provider-side caching. | Phase 63 |
+| TD-62-4 | Groq `responseFormat("json_object")` API-level JSON mode not activated. Schema-in-prompt + JSON_DIRECTIVE is primary enforcement. API-level mode is belt-and-suspenders. | Phase 64 |
+| TD-62-5 | `WorkspaceScopeContext` synchronized block spans bean instantiation (pre-existing). Not Phase 62 scope. | Backlog |
+| TD-62-6 | `registerTypeRecursively()` traverses com.arcclaw types only. A future `@AgentFunction` with a return type containing non-arcclaw types that need GraalVM registration (e.g., a third-party value type) will silently fail at native image runtime. If such types are added, extend the traversal or register them explicitly. | Per-use |

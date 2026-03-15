@@ -1020,3 +1020,13 @@
 - [x] Fix Bug 2A: Persist raw text in `GlobalKnowledgeBase` using `CompactionSummaryEntity` <!-- id: 503 -->
 - [x] Fix Bug 2B: Update `TwoTierMemoryService` to merge non-empty text during RRF <!-- id: 504 -->
 - [x] Verify: Run `TwoTierMemoryServiceRrfTest` for fusion integrity <!-- id: 505 -->
+
+---
+
+## Phase 62 - Build-Time BAML Schema Generation ?
+- [x] Diagnose schema generation failure in `arcclaw-deployment`
+- [x] Update `StructuredOutputEngine` to use Thread Context ClassLoader for loading resources
+- [x] Fix Bug 1: Resolve Maven test failures due to split-package / duplicate tests (`WorkspaceScopeTest`)
+- [x] Verify: `StructuredOutputEngineSchemaTest` passes, proving schema gets loaded correctly
+- [x] Verify: Run full project tests with `mvn test`
+- [x] Documentation: Update `PLAN.md`, `TASKS.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md`
