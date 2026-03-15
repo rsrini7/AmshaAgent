@@ -173,26 +173,15 @@ public class ToolRegistry {
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
             } catch (Exception e) {
-                String raw = e.getMessage() != null ? e.getMessage() : "";
-
-                String friendly;
-                if (toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
-                        && raw.contains("Cannot run program \"gh\"")) {
-                    friendly = "GitHub integration is not available in this environment. "
-                            + "The `gh` CLI is not installed, so I cannot run GitHub commands here. "
-                            + "Please run the equivalent `gh` command locally on your own machine.";
-                } else {
-                    friendly = "Tool '" + toolName + "' failed: " + raw;
-                }
-
-                log.errorf(e, "Tool '%s' execution failed: %s", toolName, raw);
+                // Catch sandbox failures so the LLM can see the error and retry
+                log.errorf(e, "Tool '%s' execution failed: %s", toolName, e.getMessage());
 
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
                 auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
 
-                return ToolResponse.failure(1, friendly);
+                return ToolResponse.failure(1, e.getMessage());
             }
 
         }
