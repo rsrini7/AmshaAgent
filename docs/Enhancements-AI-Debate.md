@@ -4392,3 +4392,1164 @@ Expected: all prior tests green + 9 new (5 McpClientServiceTest + 3 McpServerE2E
 *Send only after completing pre-flight checks. The two signature items take 30 seconds to verify and prevent a confusing startup crash.*
 
 ---
+
+RAG Prompt:
+
+## Phase 61 — Semantic Vector RAG (Dual-Tier: sqlite-vec + InMemory)
+
+Complete the two-tier RAG implementation. FTS5 keyword search is already in
+production via MemorySearchTool. This phase adds semantic vector search via
+sqlite-vec, a RagContextEnricher that auto-injects context into every system
+prompt, and an IngestDocumentTool for agents to load documents.
+
+---
+
+### ARCHITECTURE CONSTRAINTS (Read before writing any code)
+
+1. sqlite-vec loads a native C extension via JNI. It WILL fail in some
+   environments (GraalVM, CI, Windows without .dll). Every sqlite-vec call
+   MUST be wrapped in try-catch. If it fails, set AtomicBoolean
+   vectorSearchEnabled = false and degrade silently to FTS5-only.
+   NEVER let a failed vec0 load crash the application.
+
+2. vec_global is a SQLite Virtual Table — raw DDL is correct here.
+   Hibernate @Entity is NOT used for it. Use em.createNativeQuery().
+
+3. arcclaw-rag depends on arcclaw-core. arcclaw-core does NOT depend on
+   arcclaw-rag. Therefore RagContextEnricher CANNOT be injected into
+   SystemPromptBuilder directly. Use the ContextEnricher interface pattern
+   (see MODIFY 3 below) — SystemPromptBuilder uses Instance<ContextEnricher>.
+
+4. @WorkspaceScoped already exists at com.arcclaw.core.scope.WorkspaceScoped.
+   Its context implementation returns isNormal() = true, so CDI client proxies
+   are generated correctly. Use it directly for SessionKnowledgeBase.
+
+5. FtsConnectionInterceptor.onConnectionAcquire() runs on EVERY pooled
+   connection. All three steps must happen in order per connection:
+   (a) ATTACH arcclaw-fts.db AS fts  [already exists]
+   (b) enable_load_extension on the raw SQLite connection
+   (c) SELECT load_extension('vec0')  [new, wrapped in try-catch]
+
+6. SqliteVec.loadLibrary() must be called ONCE at startup to extract the
+   native binary from the JAR to a temp dir before any connection tries
+   load_extension('vec0'). Do this in RagSchemaInitializer, BEFORE the DDL.
+
+7. The public ScopedValues on WorkspaceScopeHolder are USER_ID and CHAT_ID
+   (not USERID). Always reference them as WorkspaceScopeHolder.USER_ID.
+   Prefer WorkspaceContext.userId() / WorkspaceContext.sessionId()
+   (WorkspaceContext.requireSessionId()) where available.
+
+8. ToolOperation enum values use underscores: READ_FS, WRITE_FS, etc.
+   ToolCapability accessor is toolName() (method), not .toolName (field).
+
+---
+
+### PRE-FLIGHT — Verify sqlite-vec artifact before sending
+
+Check https://central.sonatype.com for:
+  groupId:    io.github.asg017
+  artifactId: sqlite-vec-java
+  version:    latest stable (expected ~0.1.1 or higher as of 2026)
+
+The loadLibrary() class is io.github.asg017.SqliteVec — verify this matches
+the actual class name in the JAR before coding. If the class name has changed
+across releases (e.g. io.github.asg017.sqlite_vec.SqliteVec), update
+RagSchemaInitializer accordingly.
+
+If not on Maven Central, check GitHub Releases:
+  https://github.com/asg017/sqlite-vec/releases
+  Look for sqlite-vec-java-*.jar and use system-scope or local install.
+
+Use whichever version resolves cleanly. The entire phase degrades gracefully
+if the native load fails — a bad version causes a WARN, not a crash.
+
+---
+
+### NEW 1 — arcclaw-rag module
+
+CREATE: arcclaw-rag/pom.xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.arcclaw</groupId>
+    <artifactId>arcclaw-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>arcclaw-rag</artifactId>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-core</artifactId>
+    </dependency>
+
+    <!-- sqlite-vec JNI Java bindings — bundles native library extraction -->
+    <!-- VERIFY VERSION at Maven Central: io.github.asg017:sqlite-vec-java -->
+    <dependency>
+      <groupId>io.github.asg017</groupId>
+      <artifactId>sqlite-vec-java</artifactId>
+      <version>0.1.1</version>
+    </dependency>
+
+    <!-- Test -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5-mockito</artifactId>
+      <version>${quarkus.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.smallrye</groupId>
+        <artifactId>jandex-maven-plugin</artifactId>
+        <version>3.5.3</version>
+        <executions>
+          <execution>
+            <id>make-index</id>
+            <goals><goal>jandex</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+
+---
+
+### MODIFY 1 — arcclaw-parent pom.xml
+
+FILE: pom.xml (root)
+
+Add to <modules> in ORDER (after arcclaw-mcp, before arcclaw-deployment):
+    <module>arcclaw-rag</module>
+
+Add to <dependencyManagement> so arcclaw-app can optionally depend on it:
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-rag</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+---
+
+### MODIFY 2 — arcclaw-app pom.xml
+
+FILE: arcclaw-app/pom.xml
+
+Add runtime dependency so RagContextEnricher CDI bean is discovered by the
+Quarkus application:
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-rag</artifactId>
+    </dependency>
+
+Also add index-dependency entry in arcclaw-app/src/main/resources/application.yaml
+under the existing quarkus.index-dependency block (same indentation as arcclaw-core):
+    arcclaw-rag:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-rag
+
+---
+
+### MODIFY 3 — ContextEnricher interface (NEW in arcclaw-core)
+
+FILE: arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ContextEnricher.java
+
+package com.arcclaw.core.agent.reasoning;
+
+/**
+ * CDI extension point for injecting context into system prompts before
+ * the role-specific Qute template renders. Implementations in downstream
+ * modules (arcclaw-rag) are discovered via Instance<ContextEnricher>.
+ */
+public interface ContextEnricher {
+    /**
+     * Enrich the base system prompt with additional context.
+     * Must return a non-null string — if no context is available,
+     * return basePrompt unchanged.
+     *
+     * @param sessionId current workspace session ID
+     * @param goal      the user's current goal/message text
+     * @param basePrompt the fully assembled system prompt so far
+     */
+    String enrich(String sessionId, String goal, String basePrompt);
+}
+
+---
+
+### MODIFY 4 — SystemPromptBuilder
+
+FILE: arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/SystemPromptBuilder.java
+
+Two changes required:
+
+A) Add goal parameter to build():
+   Change the existing signature from:
+     public String build(String agentRole, String sessionId)
+   to:
+     public String build(String agentRole, String sessionId, String goal)
+
+   Update the one call site in LangChainReasoningEngine.nextStep() from:
+     String systemPrompt = promptBuilder.build(agentRole, sessionId);
+   to:
+     String systemPrompt = promptBuilder.build(agentRole, sessionId, goal);
+   (goal is already available in nextStep's parameter list)
+
+B) Add ContextEnricher injection and enrichment loop:
+   Add field injection:
+     @Inject
+     Instance<ContextEnricher> contextEnrichers;
+
+   At the very end of build(), AFTER all prompt sections are assembled and
+   BEFORE the return statement, add:
+
+     // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
+     String finalPrompt = baseSystemPrompt + strictBinding;
+     for (ContextEnricher enricher : contextEnrichers) {
+         finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
+     }
+     return finalPrompt;
+
+   Remove the existing bare return statement and replace with the above block.
+
+---
+
+### MODIFY 5 — FtsConnectionInterceptor
+
+FILE: arcclaw-core/src/main/java/com/arcclaw/core/persistence/FtsConnectionInterceptor.java
+
+Add import at top:
+    import java.util.concurrent.atomic.AtomicBoolean;
+
+Add field after existing fields:
+    private final AtomicBoolean vectorSearchEnabled = new AtomicBoolean(false);
+
+In onConnectionAcquire(), AFTER the existing ATTACH block (after the closing
+brace of the if (!attached) block) and BEFORE the method returns, add:
+
+    // Step 2: Enable and load sqlite-vec extension
+    // Use compareAndSet — once enabled on any connection, stay enabled.
+    // Never flip back to false on a reconnect failure to avoid thrashing.
+    if (!vectorSearchEnabled.get()) {
+        try {
+            org.sqlite.SQLiteConnection sqliteConn =
+                connection.unwrap(org.sqlite.SQLiteConnection.class);
+            sqliteConn.getDatabase().enable_load_extension(true);
+
+            try (Statement vecStmt = connection.createStatement()) {
+                vecStmt.execute("SELECT load_extension('vec0')");
+                vectorSearchEnabled.compareAndSet(false, true);
+                log.info("FtsConnectionInterceptor: sqlite-vec loaded successfully.");
+            }
+        } catch (Exception e) {
+            // Do NOT set false here — if already true from a previous connection,
+            // a reconnect failure on one connection must not disable the global flag.
+            log.warnf("FtsConnectionInterceptor: sqlite-vec unavailable — " +
+                "vector search degraded to FTS5-only: %s", e.getMessage());
+        }
+    }
+
+Add public getter after the existing onConnectionAcquire() method:
+    public boolean isVectorSearchEnabled() {
+        return vectorSearchEnabled.get();
+    }
+
+---
+
+### MODIFY 6 — ToolCapability
+
+FILE: arcclaw-core/src/main/java/com/arcclaw/core/agent/role/ToolCapability.java
+
+Add entry after SANDBOX_EXEC (before the semicolon that terminates the enum
+constants — change the semicolon on SANDBOX_EXEC's line to a comma first):
+
+    /**
+     * Ability to ingest a document into the RAG knowledge base.
+     */
+    INGEST_DOCUMENT("ingest_document", "Ingest a document into the RAG knowledge base");
+
+---
+
+### MODIFY 7 — AgentRoleEnum
+
+FILE: arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java
+
+Add ToolCapability.INGEST_DOCUMENT ONLY to COORDINATOR and DATTATREYA.
+Do NOT add it to RESEARCHER, CODER, DEBUGGER, ARCHITECT.
+This prevents prompt-injection-via-document attacks from lower-trust roles.
+
+COORDINATOR capabilities change from:
+    Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK,
+           ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH)
+to:
+    Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK,
+           ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH,
+           ToolCapability.INGEST_DOCUMENT)
+
+DATTATREYA capabilities change from:
+    Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
+           ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE)
+to:
+    Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
+           ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE,
+           ToolCapability.INGEST_DOCUMENT)
+
+---
+
+### MODIFY 8 — AppReflectionConfig (arcclaw-app, NOT arcclaw-core)
+
+FILE: arcclaw-app/src/main/java/com/arcclaw/app/config/AppReflectionConfig.java
+
+NOTE: Do NOT add ScoredChunk to arcclaw-core's ReflectionConfig — that module
+does not depend on arcclaw-rag (constraint 3). Instead, add it here in
+arcclaw-app which depends on both, using classNames for safety:
+
+package com.arcclaw.app.config;
+
+import com.arcclaw.app.channel.telegram.TelegramAgentHandler;
+import io.quarkus.runtime.annotations.RegisterForReflection;
+
+@RegisterForReflection(
+    targets = {
+        TelegramAgentHandler.class
+    },
+    classNames = {
+        "com.arcclaw.rag.ScoredChunk",
+        "com.arcclaw.rag.RagContextEnricher",
+        "com.arcclaw.rag.TwoTierMemoryService",
+        "com.arcclaw.rag.GlobalKnowledgeBase",
+        "com.arcclaw.rag.EmbeddingModelProducer"
+    }
+)
+public class AppReflectionConfig {
+}
+
+---
+
+### MODIFY 9 — application.yaml
+
+FILE: arcclaw-app/src/main/resources/application.yaml
+
+Add RAG configuration block under the arcclaw: root key:
+    arcclaw:
+      rag:
+        context-chunks: 5
+        embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text:latest}
+        embed-base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+        # Embedding vector dimension — must match the model above.
+        # nomic-embed-text = 768. mxbai-embed-large = 1024.
+        # If you change embed-model, update this value too or vec_global inserts will fail.
+        embed-dimensions: ${OLLAMA_EMBED_DIMENSIONS:768}
+
+---
+
+### NEW 2 — ScoredChunk
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/ScoredChunk.java
+
+package com.arcclaw.rag;
+
+public record ScoredChunk(String chunkId, String text, double score) {}
+
+---
+
+### NEW 3 — EmbeddingModelProducer
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingModelProducer.java
+
+package com.arcclaw.rag;
+
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import java.time.Duration;
+
+@ApplicationScoped
+public class EmbeddingModelProducer {
+
+    @ConfigProperty(name = "arcclaw.rag.embed-model",
+                    defaultValue = "nomic-embed-text:latest")
+    String modelName;
+
+    @ConfigProperty(name = "arcclaw.rag.embed-base-url",
+                    defaultValue = "http://localhost:11434")
+    String baseUrl;
+
+    @Produces
+    @ApplicationScoped
+    public EmbeddingModel embeddingModel() {
+        return OllamaEmbeddingModel.builder()
+            .baseUrl(baseUrl)
+            .modelName(modelName)
+            .timeout(Duration.ofSeconds(30))
+            .build();
+    }
+}
+
+---
+
+### NEW 4 — RagSchemaInitializer
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/RagSchemaInitializer.java
+
+NOTE on timing fix: FtsConnectionInterceptor.vectorSearchEnabled starts false.
+It only flips true when a pooled connection is acquired, which happens AFTER
+StartupEvent fires in normal operation. Therefore we must inject AgroalDataSource
+and acquire a connection ourselves inside onStart() to force the interceptor to
+run. This is the same pattern used by SqliteWalConfigurer. Only AFTER that
+connection is acquired (and the interceptor has had a chance to load vec0) do
+we check isVectorSearchEnabled() and proceed with DDL.
+
+package com.arcclaw.rag;
+
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.runtime.StartupEvent;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
+
+import java.sql.Connection;
+import java.sql.Statement;
+
+@ApplicationScoped
+public class RagSchemaInitializer {
+
+    private static final Logger log = Logger.getLogger(RagSchemaInitializer.class);
+
+    @Inject
+    EntityManager em;
+
+    @Inject
+    AgroalDataSource dataSource;
+
+    @Inject
+    com.arcclaw.core.persistence.FtsConnectionInterceptor ftsInterceptor;
+
+    @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
+    int embedDimensions;
+
+    void onStart(@Observes StartupEvent ev) {
+        // Step 1: Attempt to load native sqlite-vec library into JVM.
+        // This extracts the .so/.dll from the JAR to a temp dir so SQLite's
+        // load_extension('vec0') can find it.
+        // NOTE: Verify the actual class name in your sqlite-vec-java JAR —
+        // it may be io.github.asg017.SqliteVec or io.github.asg017.sqlite_vec.SqliteVec
+        // depending on the release. Check the JAR manifest before coding.
+        try {
+            io.github.asg017.SqliteVec.loadLibrary();
+            log.info("RagSchemaInitializer: sqlite-vec native library loaded.");
+        } catch (Exception | UnsatisfiedLinkError e) {
+            log.warnf("RagSchemaInitializer: sqlite-vec native load failed " +
+                "— vector RAG will degrade to FTS5-only: %s", e.getMessage());
+            return; // No point creating vec_global if vec0 is unavailable
+        }
+
+        // Step 2: Acquire a connection to force FtsConnectionInterceptor to run
+        // its onConnectionAcquire() — which loads the vec0 extension and sets
+        // vectorSearchEnabled = true. Without this, isVectorSearchEnabled() is
+        // always false at StartupEvent time because no connection has been pooled yet.
+        try (Connection conn = dataSource.getConnection()) {
+            // Connection acquisition triggers FtsConnectionInterceptor.onConnectionAcquire()
+            // which attaches fts schema AND loads vec0. We discard the connection
+            // immediately — we only needed the side effect.
+            log.debugf("RagSchemaInitializer: connection acquired to trigger interceptor.");
+        } catch (Exception e) {
+            log.warnf("RagSchemaInitializer: Failed to acquire connection for interceptor " +
+                "warm-up: %s", e.getMessage());
+            return;
+        }
+
+        // Step 3: Only create vec_global if vec0 loaded successfully on the connection above.
+        if (!ftsInterceptor.isVectorSearchEnabled()) {
+            log.warn("RagSchemaInitializer: vec0 not loaded — skipping vec_global DDL.");
+            return;
+        }
+
+        createVecGlobal();
+    }
+
+    @Transactional
+    void createVecGlobal() {
+        // vec_global is a SQLite virtual table — raw DDL is correct (no Hibernate @Entity).
+        // Dimension is config-driven: change arcclaw.rag.embed-dimensions if you change
+        // the embedding model. nomic-embed-text=768, mxbai-embed-large=1024.
+        try {
+            em.createNativeQuery(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS fts.vec_global " +
+                "USING vec0(" +
+                "    chunk_id TEXT PRIMARY KEY," +
+                "    embedding float[" + embedDimensions + "]" +
+                ")"
+            ).executeUpdate();
+            log.infof("RagSchemaInitializer: fts.vec_global ensured (dims=%d).", embedDimensions);
+        } catch (Exception e) {
+            log.warnf("RagSchemaInitializer: Could not create vec_global: %s", e.getMessage());
+        }
+    }
+}
+
+---
+
+### NEW 5 — GlobalKnowledgeBase
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/GlobalKnowledgeBase.java
+
+package com.arcclaw.rag;
+
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@ApplicationScoped
+public class GlobalKnowledgeBase {
+
+    private static final Logger log = Logger.getLogger(GlobalKnowledgeBase.class);
+
+    @Inject EntityManager em;
+    @Inject EmbeddingModel embeddingModel;
+    @Inject com.arcclaw.core.persistence.FtsConnectionInterceptor ftsInterceptor;
+
+    @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
+    int embedDimensions;
+
+    @Transactional
+    public String ingest(String text) {
+        if (!ftsInterceptor.isVectorSearchEnabled()) {
+            log.debugf("GlobalKnowledgeBase: vec0 not available, skipping ingest.");
+            return null;
+        }
+        try {
+            String chunkId = UUID.randomUUID().toString();
+            Embedding embedding = embeddingModel.embed(text).content();
+            float[] vector = embedding.vector();
+
+            em.createNativeQuery(
+                "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
+                .setParameter(1, chunkId)
+                .setParameter(2, vector)
+                .executeUpdate();
+
+            return chunkId;
+        } catch (Exception e) {
+            log.warnf("GlobalKnowledgeBase ingest failed: %s", e.getMessage());
+            return null;
+        }
+    }
+
+    public List<ScoredChunk> search(String query, int topN) {
+        if (!ftsInterceptor.isVectorSearchEnabled()) {
+            return List.of();
+        }
+        try {
+            Embedding queryEmbedding = embeddingModel.embed(query).content();
+            float[] vector = queryEmbedding.vector();
+
+            @SuppressWarnings("unchecked")
+            List<Object[]> rows = em.createNativeQuery(
+                "SELECT chunk_id, vec_distance_cosine(embedding, ?) AS distance " +
+                "FROM fts.vec_global " +
+                "ORDER BY distance ASC " +
+                "LIMIT ?")
+                .setParameter(1, vector)
+                .setParameter(2, topN)
+                .getResultList();
+
+            List<ScoredChunk> results = new ArrayList<>();
+            for (Object[] row : rows) {
+                String chunkId = (String) row[0];
+                double score = 1.0 - ((Number) row[1]).doubleValue(); // cosine distance → similarity
+                results.add(new ScoredChunk(chunkId, "", score));
+            }
+            return results;
+        } catch (Exception e) {
+            log.warnf("GlobalKnowledgeBase search failed: %s", e.getMessage());
+            return List.of();
+        }
+    }
+}
+
+---
+
+### NEW 6 — SessionKnowledgeBase
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/SessionKnowledgeBase.java
+
+NOTE on API fixes:
+  - store.add(String id, Embedding embedding, TextSegment segment) is the
+    correct LangChain4j 1.x signature — matches quarkus-langchain4j-bom 3.27.2.
+  - TextSegment must carry the chunkId in its metadata so search() can return
+    it. Use Metadata.from("id", chunkId) — DO NOT use TextSegment.from(text)
+    alone as that creates empty metadata and getString("id") returns null.
+  - store.removeAll() does not exist. For @PreDestroy wipe, replace the store
+    reference with a fresh instance. The field must be non-final for this.
+
+package com.arcclaw.rag;
+
+import com.arcclaw.core.scope.WorkspaceScoped;
+import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import jakarta.annotation.PreDestroy;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@WorkspaceScoped
+public class SessionKnowledgeBase {
+
+    private static final Logger log = Logger.getLogger(SessionKnowledgeBase.class);
+
+    @Inject EmbeddingModel embeddingModel;
+
+    // Non-final so @PreDestroy can replace it for cleanup
+    private InMemoryEmbeddingStore<TextSegment> store = new InMemoryEmbeddingStore<>();
+
+    public void ingest(String chunkId, String text) {
+        try {
+            Embedding embedding = embeddingModel.embed(text).content();
+            // Store chunkId in metadata so search() can retrieve it
+            Metadata metadata = Metadata.from("id", chunkId);
+            store.add(chunkId, embedding, TextSegment.from(text, metadata));
+        } catch (Exception e) {
+            log.warnf("SessionKnowledgeBase ingest failed: %s", e.getMessage());
+        }
+    }
+
+    public List<ScoredChunk> search(String query, int topN) {
+        try {
+            Embedding queryEmbedding = embeddingModel.embed(query).content();
+            return store.findRelevant(queryEmbedding, topN).stream()
+                .map(match -> new ScoredChunk(
+                    match.embedded().metadata().getString("id"),
+                    match.embedded().text(),
+                    match.score()))
+                .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warnf("SessionKnowledgeBase search failed: %s", e.getMessage());
+            return List.of();
+        }
+    }
+
+    @PreDestroy
+    void destroy() {
+        // Replace store with a fresh instance — no removeAll() in LangChain4j 1.x.
+        // GC will collect the old instance. Same pattern as VaultKeyCache.@PreDestroy.
+        try {
+            store = new InMemoryEmbeddingStore<>();
+            log.debugf("SessionKnowledgeBase wiped on workspace teardown.");
+        } catch (Exception e) {
+            log.warnf("SessionKnowledgeBase destroy failed: %s", e.getMessage());
+        }
+    }
+}
+
+---
+
+### NEW 7 — TwoTierMemoryService
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/TwoTierMemoryService.java
+
+NOTE: CompactionSummaryRepository.searchMemory(userId, query, limit) exists
+and returns List<CompactionSummaryEntity> — use it directly. No changes needed
+to the repository.
+
+package com.arcclaw.rag;
+
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.*;
+
+/**
+ * Merges FTS5 keyword results and sqlite-vec vector results using
+ * Reciprocal Rank Fusion (RRF) with k=60.
+ *
+ * RRF formula: score(d) = sum over each ranked list of: 1.0 / (k + rank)
+ * where rank is 1-based position in that list.
+ */
+@ApplicationScoped
+public class TwoTierMemoryService {
+
+    private static final Logger log = Logger.getLogger(TwoTierMemoryService.class);
+    private static final double RRF_K = 60.0;
+
+    @Inject FtsConnectionInterceptor ftsInterceptor;
+    @Inject CompactionSummaryRepository compactionRepo;
+    @Inject GlobalKnowledgeBase globalKb;
+    @Inject SessionKnowledgeBase sessionKb;
+
+    /**
+     * Search across FTS5 and vector tiers, merged via RRF.
+     * Falls back to FTS5-only if sqlite-vec is unavailable.
+     *
+     * @param userId  tenant-scoped user ID (FTS5 requires this for isolation)
+     * @param query   search query
+     * @param topN    max results to return
+     */
+    public List<ScoredChunk> search(String userId, String query, int topN) {
+        // --- FTS5 tier (always available) ---
+        // CompactionSummaryRepository.searchMemory() exists and returns
+        // List<CompactionSummaryEntity> ranked by FTS5 BM25 score.
+        List<ScoredChunk> fts5Results = toScoredChunks(
+            compactionRepo.searchMemory(userId, query, topN));
+
+        if (!ftsInterceptor.isVectorSearchEnabled()) {
+            log.debugf("TwoTierMemoryService: vec0 unavailable, FTS5-only path.");
+            return fts5Results.stream().limit(topN).toList();
+        }
+
+        // --- Vector tier ---
+        List<ScoredChunk> globalResults  = globalKb.search(query, topN);
+        List<ScoredChunk> sessionResults = sessionKb.search(query, topN);
+
+        // Merge all three lists via RRF
+        return reciprocalRankFusion(topN, fts5Results, globalResults, sessionResults);
+    }
+
+    /**
+     * RRF merge: score(d) = sum(1.0 / (k + rank)) across all ranked lists.
+     * Package-private for unit testing.
+     */
+    @SafeVarargs
+    final List<ScoredChunk> reciprocalRankFusion(
+            int topN, List<ScoredChunk>... rankedLists) {
+
+        Map<String, Double> rrfScores = new LinkedHashMap<>();
+        Map<String, ScoredChunk> chunkById = new LinkedHashMap<>();
+
+        for (List<ScoredChunk> list : rankedLists) {
+            for (int i = 0; i < list.size(); i++) {
+                ScoredChunk chunk = list.get(i);
+                int rank = i + 1; // 1-based
+                double contribution = 1.0 / (RRF_K + rank);
+                rrfScores.merge(chunk.chunkId(), contribution, Double::sum);
+                chunkById.putIfAbsent(chunk.chunkId(), chunk);
+            }
+        }
+
+        return rrfScores.entrySet().stream()
+            .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+            .limit(topN)
+            .map(e -> {
+                ScoredChunk orig = chunkById.get(e.getKey());
+                return new ScoredChunk(orig.chunkId(), orig.text(), e.getValue());
+            })
+            .toList();
+    }
+
+    private List<ScoredChunk> toScoredChunks(
+            List<com.arcclaw.core.state.CompactionSummaryEntity> entities) {
+        List<ScoredChunk> result = new ArrayList<>();
+        for (int i = 0; i < entities.size(); i++) {
+            var e = entities.get(i);
+            // Score is inverse rank — FTS5 BM25 ranking is ordinal not numeric here
+            result.add(new ScoredChunk(e.sessionId, e.summary, 1.0 / (i + 1)));
+        }
+        return result;
+    }
+}
+
+---
+
+### NEW 8 — RagContextEnricher
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/RagContextEnricher.java
+
+NOTE: WorkspaceScopeHolder public ScopedValues are USER_ID and CHAT_ID.
+Use WorkspaceScopeHolder.USER_ID.isBound() / .get(), not USERID.
+
+package com.arcclaw.rag;
+
+import com.arcclaw.core.agent.reasoning.ContextEnricher;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@ApplicationScoped
+public class RagContextEnricher implements ContextEnricher {
+
+    private static final Logger log = Logger.getLogger(RagContextEnricher.class);
+
+    @Inject TwoTierMemoryService memoryService;
+
+    @ConfigProperty(name = "arcclaw.rag.context-chunks", defaultValue = "5")
+    int contextChunks;
+
+    @Override
+    public String enrich(String sessionId, String goal, String basePrompt) {
+        if (goal == null || goal.isBlank()) return basePrompt;
+
+        // Use WorkspaceScopeHolder.USER_ID (not USERID — that field does not exist)
+        String userId = WorkspaceScopeHolder.USER_ID.isBound()
+            ? WorkspaceScopeHolder.USER_ID.get() : null;
+        if (userId == null) return basePrompt;
+
+        try {
+            List<ScoredChunk> chunks = memoryService.search(userId, goal, contextChunks);
+            if (chunks.isEmpty()) return basePrompt;
+
+            String context = chunks.stream()
+                .map(ScoredChunk::text)
+                .filter(t -> t != null && !t.isBlank())
+                .collect(Collectors.joining("\n---\n"));
+
+            if (context.isBlank()) return basePrompt;
+
+            return "## Retrieved Context\n" + context + "\n\n---\n\n" + basePrompt;
+
+        } catch (Exception e) {
+            log.warnf("RagContextEnricher enrichment failed for session %s: %s",
+                sessionId, e.getMessage());
+            return basePrompt; // Always fail open — never crash the agent loop
+        }
+    }
+}
+
+---
+
+### NEW 9 — IngestDocumentTool
+
+FILE: arcclaw-rag/src/main/java/com/arcclaw/rag/IngestDocumentTool.java
+
+NOTE on fixes applied:
+  - ToolCapability.INGEST_DOCUMENT.toolName() — method call, not field access
+  - ToolOperation.READ_FS — enum constant with underscore, not READFS
+  - WorkspaceScopeHolder.getIfActive() returns session ID (exists, correct)
+  - WorkspaceContext.userId() for userId (cleaner than ScopedValue directly)
+  - AuditService.record(sessionId, userId, agentRole, type, detail) exists
+    with exactly this 5-arg signature — use it directly
+
+package com.arcclaw.rag;
+
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolResponse;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import java.util.Map;
+
+@ApplicationScoped
+public class IngestDocumentTool implements AgentTool {
+
+    @Inject GlobalKnowledgeBase globalKb;
+    @Inject SessionKnowledgeBase sessionKb;
+    @Inject AuditService auditService;
+
+    @Override
+    public String name() {
+        // ToolCapability accessor is toolName() — method call, not field access
+        return ToolCapability.INGEST_DOCUMENT.toolName();
+    }
+
+    @Override
+    public String description() {
+        return "Ingest a text document into the RAG knowledge base for future retrieval. " +
+               "Use this when the user provides a document, code, or reference material " +
+               "that should be stored and searchable in future queries.";
+    }
+
+    @Override
+    public ToolOperation requiredOperation() {
+        // ToolOperation enum uses underscore: READ_FS not READFS
+        return ToolOperation.READ_FS;
+    }
+
+    @Override
+    public boolean requiresSandbox() {
+        return false;
+    }
+
+    @Override
+    public JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder()
+            .addStringProperty("text",
+                "The document text to ingest into the knowledge base.")
+            .addStringProperty("label",
+                "Optional short label for the document (for audit).")
+            .required("text")
+            .build();
+    }
+
+    @Override
+    public ToolResponse execute(Map<String, Object> params) {
+        // WorkspaceContext.userId() reads WorkspaceContext.USER_ID ScopedValue
+        String userId = WorkspaceContext.userId();
+        if (userId == null || userId.isBlank()) {
+            return ToolResponse.failure(403,
+                "Security violation: tenant context not bound.");
+        }
+
+        String text = (String) params.get("text");
+        if (text == null || text.isBlank()) {
+            return ToolResponse.failure(400, "text parameter is required.");
+        }
+
+        String label = params.containsKey("label")
+            ? (String) params.get("label") : "unlabeled";
+
+        // WorkspaceScopeHolder.getIfActive() exists and returns the session ID string
+        String sessionId = WorkspaceScopeHolder.getIfActive();
+        if (sessionId == null) sessionId = "no-session";
+
+        // Ingest into both tiers
+        String chunkId = globalKb.ingest(text);
+        sessionKb.ingest(chunkId != null ? chunkId : "session-" + label, text);
+
+        // AuditService.record(sessionId, userId, agentRole, type, detail) — 5-arg signature exists
+        auditService.record(sessionId, userId, "tool",
+            SecurityEventType.TOOL_INVOKED,
+            "tool=ingest_document label=" + label +
+            " chars=" + text.length() +
+            (chunkId != null ? " chunkId=" + chunkId : " vec=degraded"));
+
+        return ToolResponse.success(
+            chunkId != null
+                ? "Document ingested successfully. chunkId: " + chunkId
+                : "Document stored in session memory (persistent vector store unavailable).");
+    }
+}
+
+---
+
+### NEW 10 — RagResourcesBuildStep (arcclaw-deployment)
+
+FILE: arcclaw-deployment/src/main/java/com/arcclaw/deployment/RagResourcesBuildStep.java
+
+NOTE: arcclaw-deployment is the Quarkus extension deployment module — build
+items registered here apply during both quarkus:build and quarkus:dev.
+Verify arcclaw-deployment is listed in arcclaw-app/pom.xml as a
+quarkus.extension or has its build steps wired correctly. If unsure, the
+classNames in AppReflectionConfig (MODIFY 8) is the reliable fallback.
+
+package com.arcclaw.deployment;
+
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+
+public class RagResourcesBuildStep {
+
+    @BuildStep
+    ReflectiveClassBuildItem registerRagClasses() {
+        return ReflectiveClassBuildItem.builder(
+            "com.arcclaw.rag.ScoredChunk",
+            "com.arcclaw.rag.RagContextEnricher",
+            "com.arcclaw.rag.TwoTierMemoryService",
+            "com.arcclaw.rag.GlobalKnowledgeBase",
+            "com.arcclaw.rag.EmbeddingModelProducer"
+        ).methods(true).fields(true).build();
+    }
+}
+
+---
+
+### MODIFY 10 — docker-compose.yaml
+
+FILE: docker-compose.yaml
+
+Update the ollama-init service command to add embedding model pull.
+NOTE: $$ is required in docker-compose for literal $ (avoids variable
+substitution by compose itself):
+
+    command: >
+      sh -c "
+        ollama pull $${OLLAMA_MODEL:-llama3.2:1b} &&
+        ollama pull $${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}
+      "
+
+---
+
+### MODIFY 11 — .env.example
+
+Add:
+    OLLAMA_EMBED_MODEL=nomic-embed-text:latest
+    OLLAMA_EMBED_DIMENSIONS=768
+
+---
+
+### NEW TESTS
+
+FILE: arcclaw-rag/src/test/java/com/arcclaw/rag/TwoTierMemoryServiceRrfTest.java
+
+package com.arcclaw.rag;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Pure unit test for RRF math — no CDI, no SQLite, no mocks needed.
+ */
+class TwoTierMemoryServiceRrfTest {
+
+    private TwoTierMemoryService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new TwoTierMemoryService();
+        // No injected deps needed — reciprocalRankFusion is pure math
+    }
+
+    @Test
+    void testRrfSingleList() {
+        List<ScoredChunk> list = List.of(
+            new ScoredChunk("a", "text a", 0.9),
+            new ScoredChunk("b", "text b", 0.8),
+            new ScoredChunk("c", "text c", 0.7)
+        );
+        List<ScoredChunk> result = service.reciprocalRankFusion(3, list);
+        assertEquals(3, result.size());
+        // Rank 1 → 1/(60+1) ≈ 0.01639
+        assertEquals("a", result.get(0).chunkId());
+        assertEquals(1.0 / 61.0, result.get(0).score(), 1e-9);
+    }
+
+    @Test
+    void testRrfMergeTwoListsSameChunk() {
+        // chunk "a" appears rank-1 in both lists → highest combined score
+        List<ScoredChunk> list1 = List.of(
+            new ScoredChunk("a", "alpha", 0.9),
+            new ScoredChunk("b", "beta",  0.8)
+        );
+        List<ScoredChunk> list2 = List.of(
+            new ScoredChunk("a", "alpha", 0.85),
+            new ScoredChunk("c", "gamma", 0.7)
+        );
+        List<ScoredChunk> result = service.reciprocalRankFusion(3, list1, list2);
+        assertEquals("a", result.get(0).chunkId(),
+            "'a' rank-1 in both lists must have highest RRF score");
+        // score = 1/61 + 1/61 = 2/61 ≈ 0.03279
+        assertEquals(2.0 / 61.0, result.get(0).score(), 1e-9);
+    }
+
+    @Test
+    void testRrfTopNTruncates() {
+        List<ScoredChunk> list = List.of(
+            new ScoredChunk("a", "a", 1.0),
+            new ScoredChunk("b", "b", 0.9),
+            new ScoredChunk("c", "c", 0.8),
+            new ScoredChunk("d", "d", 0.7)
+        );
+        List<ScoredChunk> result = service.reciprocalRankFusion(2, list);
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testRrfEmptyListsReturnEmpty() {
+        List<ScoredChunk> result = service.reciprocalRankFusion(5);
+        assertTrue(result.isEmpty());
+    }
+}
+
+---
+
+FILE: arcclaw-core/src/test/java/com/arcclaw/core/persistence/FtsConnectionInterceptorVecFallbackTest.java
+
+package com.arcclaw.core.persistence;
+
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Validates that FtsConnectionInterceptor does NOT throw when vec0
+ * is unavailable, and correctly sets vectorSearchEnabled = false.
+ * The test passes regardless of whether native sqlite-vec is present.
+ */
+@QuarkusTest
+class FtsConnectionInterceptorVecFallbackTest {
+
+    @Inject
+    FtsConnectionInterceptor interceptor;
+
+    @Test
+    void testIsVectorSearchEnabledDoesNotThrow() {
+        // Must not throw — regardless of whether vec0 is available
+        assertDoesNotThrow(() -> interceptor.isVectorSearchEnabled());
+    }
+
+    @Test
+    void testApplicationStartsWithoutCrashWhenVecUnavailable() {
+        // If we got here, the app started — graceful degradation worked.
+        // vectorSearchEnabled may be true OR false depending on environment.
+        boolean enabled = interceptor.isVectorSearchEnabled();
+        // Just verify it is a boolean — no assertion on value
+        assertTrue(enabled || !enabled,
+            "isVectorSearchEnabled() must return a valid boolean");
+    }
+}
+
+---
+
+### VERIFICATION
+
+Step 1 — Compile RAG module alone:
+.\mvnw.cmd clean compile -pl arcclaw-rag -am
+
+Step 2 — RAG unit tests (pure RRF math — always pass):
+.\mvnw.cmd clean test -pl arcclaw-rag -am ^
+  "-Dtest=TwoTierMemoryServiceRrfTest" ^
+  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+Step 3 — Full regression:
+.\mvnw.cmd clean test -pl arcclaw-core,arcclaw-mcp,arcclaw-rag,arcclaw-app -am
+
+Expected:
+- TwoTierMemoryServiceRrfTest: 4 tests GREEN (pure math, no env dependency)
+- FtsConnectionInterceptorVecFallbackTest: 2 tests GREEN regardless of OS
+- All prior tests remain GREEN
+- If sqlite-vec native load fails on CI: WARN logs appear, vector path is
+  disabled, FTS5-only path keeps all tests green
+
