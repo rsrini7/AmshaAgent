@@ -151,7 +151,7 @@ class CheckpointResumeHandlerTest {
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         ReasoningStepParser stepParser = mock(ReasoningStepParser.class);
         
-        when(promptBuilder.build(any(), any())).thenReturn("MOCK SYSTEM PROMPT");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
 
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         

@@ -61,11 +61,12 @@ services:
       - arcclaw-net
     command: >
       sh -c "
-      echo 'Waiting for Ollama API...' &&
-      until curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done &&
-      echo 'Ollama is up, pulling model ${OLLAMA_MODEL:-llama3.2:1b}...' &&
-      curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-llama3.2:1b}\"}' &&
-      echo '\nModel pull complete!'
+        echo 'Waiting for Ollama API...' &&
+        until curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done &&
+        echo 'Ollama is up, pulling models...' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-llama3.2:1b}\"}' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_EMBED_MODEL:-nomic-embed-text:v1.5}\"}' &&
+        echo '\nModel pull complete!'
       "
     # deploy:
     #   resources:

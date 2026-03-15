@@ -16,6 +16,9 @@ quarkus:
     arcclaw-channel-api:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-api
+    arcclaw-rag:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-rag
 
   swagger-ui:
     path: /q/swagger-ui
@@ -219,6 +222,13 @@ quarkus:
 # =============================================================================
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
+  rag:
+    context-chunks: 5
+    embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text:1.5}
+    embed-base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
+    embed-dimensions: ${OLLAMA_EMBED_DIMENSIONS:768}
+    vec-extension-path: "${SQLITE_VEC_PATH:./lib/vec0}"
   auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true

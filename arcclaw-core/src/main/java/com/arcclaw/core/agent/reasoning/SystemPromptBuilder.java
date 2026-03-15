@@ -10,6 +10,7 @@ import com.arcclaw.core.state.CompactionSummaryRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import jakarta.enterprise.inject.Instance;
 import org.jboss.logging.Logger;
 
 /**
@@ -38,6 +39,9 @@ public class SystemPromptBuilder {
         this.compactionSummaryRepository = null;
         this.skillRegistry = null;
     }
+
+    @Inject
+    Instance<ContextEnricher> contextEnrichers;
 
     @Inject
     public SystemPromptBuilder(AgentPersonaRegistry agentPersonaRegistry,
@@ -179,7 +183,7 @@ public class SystemPromptBuilder {
             but I cannot execute it. Please run it in your own environment."
             """;
 
-    public String build(String agentRole, String sessionId) {
+    public String build(String agentRole, String sessionId, String goal) {
         // --- Skill persona resolution ---
         // When SkillAwareIntentClassifier routes to "skill:code-reviewer", we replace
         // the persona section with the skill's own system prompt. The base AgentRoleEnum
@@ -248,6 +252,13 @@ public class SystemPromptBuilder {
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
                 + "When in doubt, output text only.";
 
-        return baseSystemPrompt + strictBinding;
+        // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
+        String finalPrompt = baseSystemPrompt + strictBinding;
+        if (contextEnrichers != null) {
+            for (ContextEnricher enricher : contextEnrichers) {
+                finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
+            }
+        }
+        return finalPrompt;
     }
 }

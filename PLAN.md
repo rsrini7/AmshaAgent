@@ -3700,3 +3700,45 @@ Comprehensive upgrade to the Quarkus LTS branch (3.27.x), encompassing Hibernate
 - ✅ 535/535 tests pass across all profiles (`arcclaw-core` and `arcclaw-app`).
 - ✅ Native image build successful (exit code 0, 3m 13s).
 - ✅ Clean JVM and Native startup with zero unrecognized configuration warnings or heap leakage.
+
+---
+
+# Phase 61 — Semantic Vector RAG (Dual-Tier) ✅
+
+Implement a hybrid RAG system combining FTS5 keyword search with native `sqlite-vec` semantic vector search, utilizing Reciprocal Rank Fusion (RRF) for result merging.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Native sqlite-vec Integration**:
+> - Since `sqlite-vec-java` does not exist in standard repos, the native `vec0` binary is loaded directly via SQLite's `load_extension()`.
+> - **Graceful Degradation**: All vector operations are guarded by a `vectorSearchEnabled` flag. If the native `.dll/.so` is missing or fails to load, the system silently falls back to FTS5-only search.
+
+> [!NOTE]
+> **Search Merging (RRF)**:
+> - Uses Reciprocal Rank Fusion (k=60) to merge ranked lists from InMemory embeddings and SQLite FTS/Vector tiers. This ensures that relevant documents surfacing in any tier are preserved in the final context.
+
+> [!CAUTION]
+> **Architecture Purity**:
+> - `arcclaw-rag` depends on `arcclaw-core`, but `arcclaw-core` remains agnostic of RAG. `RagContextEnricher` is injected via CDI into the reasoning engine, ensuring no circular dependencies.
+
+## Completed Changes
+
+### Core & RAG Module
+
+#### [NEW] [TwoTierMemoryService.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/TwoTierMemoryService.java)
+- Orchestrates semantic search vs. keyword search.
+- Implements RRF logic for result merging.
+
+#### [MODIFY] [FtsConnectionInterceptor.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/FtsConnectionInterceptor.java)
+- Added native extension loading logic for `sqlite-vec`.
+- Manages the `vectorSearchEnabled` atomic state.
+
+#### [NEW] [RagSchemaInitializer.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/RagSchemaInitializer.java)
+- Initializes the `vec_global` virtual table using raw JDBC DDL.
+
+## Verification
+
+- ✅ `TwoTierMemoryServiceRrfTest`: Validated rank fusion math.
+- ✅ `RagContextEnricherTest`: Verified context injection into system prompts.
+- ✅ Manual Verification: Semantic search confirmed working when `vec0.dll` is present in `./lib/`.

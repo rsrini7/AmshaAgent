@@ -30,6 +30,11 @@
       <artifactId>arcclaw-core</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-rag</artifactId>
+    </dependency>
+
     <!-- Test -->
     <dependency>
       <groupId>io.quarkus</groupId>

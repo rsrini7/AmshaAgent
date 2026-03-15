@@ -40,7 +40,7 @@ class AgentLoopTest {
         historyAssembler = mock(ChatHistoryAssembler.class);
         stepParser = mock(ReasoningStepParser.class);
         
-        when(promptBuilder.build(any(), any())).thenReturn("MOCK SYSTEM PROMPT");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
 
         engine = new LangChainReasoningEngine();
         

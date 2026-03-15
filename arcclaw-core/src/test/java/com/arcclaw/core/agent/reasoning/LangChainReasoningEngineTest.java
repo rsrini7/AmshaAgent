@@ -85,7 +85,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I have finished the task", ReasoningStep.FINISH, Map.of("answer", "I have finished the task"), 10, 20));
 
@@ -117,7 +117,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", Map.of("repo", "test/repo"), 15, 25));
 
@@ -162,7 +162,7 @@ class LangChainReasoningEngineTest {
             // Capture the request to verify filtered messages
             org.mockito.ArgumentCaptor<ChatRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(ChatRequest.class);
             when(chatModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
-                when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+                when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
             // For the filter test, we need the assembler to actually return the filtered messages if it were the real one,
             // but here we are mocking the engine's call to assembler. 
             // Wait, the engine calls historyAssembler.assemble(). 
@@ -220,7 +220,7 @@ class LangChainReasoningEngineTest {
                 ArgumentCaptor.forClass(ChatRequest.class);
             when(chatModel.chat(requestCaptor.capture()))
                 .thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
-                when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+                when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
             // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
             // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
             // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
@@ -261,7 +261,7 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(chatModel.chat(captor.capture())).thenReturn(response);
-        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
@@ -285,7 +285,7 @@ class LangChainReasoningEngineTest {
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(roleRegistry.permittedTools(any())).thenReturn(Set.of());                
         when(chatModel.chat(captor.capture())).thenReturn(response);
-        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
@@ -325,7 +325,7 @@ class LangChainReasoningEngineTest {
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the ChatModel anyway. Let's make sure the tool is available.
-        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
@@ -375,7 +375,7 @@ class LangChainReasoningEngineTest {
         when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(sched));
         when(toolRegistry.findTool("manageschedule")).thenReturn(Optional.of(manage));
 
-        when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 0, 0));
 
@@ -414,7 +414,7 @@ class LangChainReasoningEngineTest {
                 .thenReturn(ChatResponse.builder()
                     .aiMessage(new AiMessage("Here is the sort function"))
                     .build());
-            when(promptBuilder.build(any(), any())).thenReturn("System Prompt");
+            when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
             // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
             // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
             // This test only verifies that the engine correctly uses the assembled list from historyAssembler.

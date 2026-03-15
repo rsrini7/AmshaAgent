@@ -25,7 +25,7 @@ public enum AgentRoleEnum {
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
             7,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT)
     )),
 
     RESEARCHER("researcher", new RoleDefinition(
@@ -64,7 +64,8 @@ public enum AgentRoleEnum {
             10,
             true,
             Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
-                             ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE)
+                             ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE,
+                             ToolCapability.INGEST_DOCUMENT)
     ));
 
     private final String canonicalName;
