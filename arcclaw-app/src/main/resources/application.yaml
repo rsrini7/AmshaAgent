@@ -237,6 +237,7 @@ arcclaw:
     embed-provider: ${EMBED_PROVIDER:ollama}
     embed-model: ${EMBED_MODEL:nomic-embed-text:v1.5}
     embed-base-url: ${EMBED_BASE_URL:http://localhost:11434}
+    embed-api-key: ${EMBED_API_KEY:}
     # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
     embed-dimensions: ${EMBED_DIMENSIONS:768}
     vec-extension-path: "${SQLITE_VEC_PATH:./lib/vec0}"
