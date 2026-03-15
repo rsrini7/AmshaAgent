@@ -70,13 +70,11 @@ quarkus:
     chat-model:
       provider: openai
     ollama:
-      log-requests: false
-      log-responses: false
       chat-model:
+        log-requests: false
+        log-responses: false
         enabled: false
     openai:
-      log-requests: false
-      log-responses: false
       # Ollama provides native OpenAI compatibility on /v1
       # base-url: "${OLLAMA_BASE_URL:http://localhost:11434}/v1"
       # api-key: "${OPENAI_API_KEY:ollama-key-can-be-anything}"
@@ -93,6 +91,8 @@ quarkus:
         model-name: "meta-llama/llama-4-scout-17b-16e-instruct"
         temperature: 0.1
         max-completion-tokens: 768
+        log-requests: false
+        log-responses: false
 
   # ---------------------------------------------------------------------------
   # OBSERVABILITY
@@ -392,11 +392,13 @@ mp:
         disabled: true
     langchain4j:
       ollama:
-        log-requests: "${arcclaw.debug.llm:false}"
-        log-responses: "${arcclaw.debug.llm:false}"
+        chat-model:
+          log-requests: "${arcclaw.debug.llm:false}"
+          log-responses: "${arcclaw.debug.llm:false}"
       openai:
-        log-requests: "${arcclaw.debug.llm:false}"
-        log-responses: "${arcclaw.debug.llm:false}"
+        chat-model:
+          log-requests: "${arcclaw.debug.llm:false}"
+          log-responses: "${arcclaw.debug.llm:false}"
     hibernate-orm:
       log:
         sql: false
@@ -434,11 +436,13 @@ mp:
           level: DEBUG
     langchain4j:
       ollama:
-        log-requests: false
-        log-responses: false
+        chat-model:
+          log-requests: false
+          log-responses: false
       openai:
-        log-requests: false
-        log-responses: false
+        chat-model:
+          log-requests: false
+          log-responses: false
 
   arcclaw:
     skills:
@@ -473,11 +477,13 @@ mp:
   quarkus:
     langchain4j:
       ollama:
-        log-requests: false
-        log-responses: false
+        chat-model:
+          log-requests: false
+          log-responses: false
       openai:
-        log-requests: false
-        log-responses: false
+        chat-model:
+          log-requests: false
+          log-responses: false
 
   arcclaw:
     governance:
@@ -491,11 +497,13 @@ mp:
   quarkus:
     langchain4j:
       ollama:
-        log-requests: false
-        log-responses: false
+        chat-model:
+          log-requests: false
+          log-responses: false
       openai:
-        log-requests: false
-        log-responses: false
+        chat-model:
+          log-requests: false
+          log-responses: false
     log:
       level: INFO
       console:

@@ -8,6 +8,7 @@ import java.util.Map;
 import org.jboss.logging.Logger;
 
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,7 +45,14 @@ public class TwoTierMemoryService {
 
         // --- Vector tier ---
         List<ScoredChunk> globalResults  = globalKb.search(query, topN);
-        List<ScoredChunk> sessionResults = sessionKb.search(query, topN);
+        List<ScoredChunk> sessionResults = List.of();
+        try {
+            if (WorkspaceScopeHolder.isActive()) {
+                sessionResults = sessionKb.search(query, topN);
+            }
+        } catch (Exception e) {
+            log.warnf("SessionKnowledgeBase unavailable: %s", e.getMessage());
+        }
 
         // Merge all three lists via RRF
         return reciprocalRankFusion(topN, fts5Results, globalResults, sessionResults);
