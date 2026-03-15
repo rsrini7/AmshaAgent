@@ -65,7 +65,9 @@ services:
         until curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done &&
         echo 'Ollama is up, pulling models...' &&
         curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-llama3.2:1b}\"}' &&
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_EMBED_MODEL:-nomic-embed-text:v1.5}\"}' &&
+        if [ \"${EMBED_PROVIDER:-ollama}\" = \"ollama\" ]; then
+          curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${EMBED_MODEL:-nomic-embed-text:v1.5}\"}';
+        fi &&
         echo '\nModel pull complete!'
       "
     # deploy:

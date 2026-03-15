@@ -743,7 +743,7 @@ The synthesis proposes Ed25519 JWTs using BouncyCastle 1.83 (already present) an
 The BouncyCastle `Ed25519Signer` handles signing, but JWT wrapping (headers, claims, serialization) still needs a library. Nimbus is the lower-friction choice for machine-to-machine tokens.
 
 ### 🟡 Issue 8 — Ollama `nomic-embed-text` Pull Is Missing from `docker-compose.yaml`
-`docker-compose.yaml` has an `ollama-init` service that pulls `OLLAMA_MODEL` (defaults to `llama3.2:1b`). `nomic-embed-text` is a **separate model** that must also be pulled. It will NOT be auto-pulled by the existing init script. The `ollama-init` command block needs a second `curl -X POST http://ollama:11434/api/pull -d '{"name": "${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}"}'` call. Missing this causes a silent 404 from Ollama when `EmbeddingModelProducer` first calls `embed()` — with no clear error message since Ollama returns `{"error":"model not found"}` as a 200 response. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
+`docker-compose.yaml` has an `ollama-init` service that pulls `OLLAMA_MODEL` (defaults to `llama3.2:1b`). `nomic-embed-text` is a **separate model** that must also be pulled. It will NOT be auto-pulled by the existing init script. The `ollama-init` command block needs a second `curl -X POST http://ollama:11434/api/pull -d '{"name": "${EMBED_MODEL:-nomic-embed-text:latest}"}'` call. Missing this causes a silent 404 from Ollama when `EmbeddingModelProducer` first calls `embed()` — with no clear error message since Ollama returns `{"error":"model not found"}` as a 200 response. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/ea647acb-a050-424b-9454-1b4e63a9d482/rsrini7-arcclawinternal-8a5edab282632443.txt)
 
 ***
 
@@ -829,7 +829,7 @@ JWT: use `nimbus-jose-jwt:9.37.3` in `arcclaw-a2a/pom.xml`. BouncyCastle handles
 | 5 | P62 | Add `GovernanceLayer.assertWithinBudget(sessionId)` — `checkBudget()` does not exist |
 | 6 | P59–P63 | New persistence: admin CRUD → regular `@Transactional`; new audit events → `AsyncPersistenceEngine` |
 | 7 | P63 | Use `nimbus-jose-jwt` (not SmallRye JWT) for A2A Ed25519 machine-to-machine tokens |
-| 8 | P61 | `docker-compose.yaml` `ollama-init`: add pull of `${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}` |
+| 8 | P61 | `docker-compose.yaml` `ollama-init`: add pull of `${EMBED_MODEL:-nomic-embed-text:latest}` |
 | 9 | All | `StructuredTaskScope` forbidden; `ManagedExecutor` for all parallel dispatch |
 | 10 | All | `%test.*` profile guard on all new `@Scheduled` beans; `scheduler.enabled=false` in test profile already set |
 
@@ -886,7 +886,7 @@ New persistence operations must be explicitly routed. Admin-tier CRUD (skills, c
 SmallRye JWT is opinionated around MicroProfile JWT `@RolesAllowed` annotation-driven server-side validation. For machine-to-machine Ed25519 instance tokens, `nimbus-jose-jwt` is lower friction: no `mp.jwt.*` config surface, native `OctetKeyPair` support, BouncyCastle already in BOM for key generation.
 
 **Gap 8 — `nomic-embed-text` Ollama pull missing from `docker-compose.yaml`: ACCEPT — silent 404 failure.**
-Ollama returns `{"error":"model not found"}` as a 200 OK response. Without a second pull in `ollama-init`, `EmbeddingModelProducer` will silently receive empty embeddings with no clear error. The `docker-compose.yaml` `ollama-init` command block needs a second pull for `${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}`.
+Ollama returns `{"error":"model not found"}` as a 200 OK response. Without a second pull in `ollama-init`, `EmbeddingModelProducer` will silently receive empty embeddings with no clear error. The `docker-compose.yaml` `ollama-init` command block needs a second pull for `${EMBED_MODEL:-nomic-embed-text:latest}`.
 
 ---
 
@@ -1058,7 +1058,7 @@ This is a virtual table, so raw DDL is correct per Architecture Nuance #11. Regu
 command: >
   sh -c "
     ollama pull ${OLLAMA_MODEL:-llama3.2:1b} &&
-    ollama pull ${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}
+    ollama pull ${EMBED_MODEL:-nomic-embed-text:latest}
   "
 ```
 
@@ -1240,7 +1240,7 @@ List<Future<AgentResult>> futures = tasks.stream()
 | 7 | P61 | sqlite-vec graceful degradation via `AtomicBoolean vectorSearchEnabled`; FTS5-only fallback if JNI fails | Gemini Blind Spot 1 |
 | 8 | P63 | `A2ASuspendedCorrelationEntity` (`@Entity`, Hibernate-managed) references existing `AgentCheckpoint` by FK | Gemini Blind Spot 3 + Perplexity |
 | 9 | P63 | `nimbus-jose-jwt:9.37.3` for JWT wrapping; BouncyCastle for Ed25519 key gen; `quarkus-smallrye-jwt` excluded | Perplexity Gap 7 |
-| 10 | P61 | `docker-compose.yaml` ollama-init: add pull of `${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}` | Perplexity Gap 8 |
+| 10 | P61 | `docker-compose.yaml` ollama-init: add pull of `${EMBED_MODEL:-nomic-embed-text:latest}` | Perplexity Gap 8 |
 | + | All | `StructuredTaskScope` forbidden. `ManagedExecutor` + virtual threads for all parallel dispatch | All reviews unanimous |
 | + | All | 100% test green before any phase completion. `%test.*` profile guard on all `@Scheduled` beans | All reviews unanimous |
 
@@ -4747,12 +4747,12 @@ Add RAG configuration block under the arcclaw: root key:
     arcclaw:
       rag:
         context-chunks: 5
-        embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text:latest}
+        embed-model: ${EMBED_MODEL:nomic-embed-text:latest}
         embed-base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
         # Embedding vector dimension — must match the model above.
         # nomic-embed-text = 768. mxbai-embed-large = 1024.
         # If you change embed-model, update this value too or vec_global inserts will fail.
-        embed-dimensions: ${OLLAMA_EMBED_DIMENSIONS:768}
+        embed-dimensions: ${EMBED_DIMENSIONS:768}
 
 ---
 
@@ -5400,7 +5400,7 @@ substitution by compose itself):
     command: >
       sh -c "
         ollama pull $${OLLAMA_MODEL:-llama3.2:1b} &&
-        ollama pull $${OLLAMA_EMBED_MODEL:-nomic-embed-text:latest}
+        ollama pull $${EMBED_MODEL:-nomic-embed-text:latest}
       "
 
 ---
@@ -5408,8 +5408,8 @@ substitution by compose itself):
 ### MODIFY 11 — .env.example
 
 Add:
-    OLLAMA_EMBED_MODEL=nomic-embed-text:latest
-    OLLAMA_EMBED_DIMENSIONS=768
+    EMBED_MODEL=nomic-embed-text:latest
+    EMBED_DIMENSIONS=768
 
 ---
 
