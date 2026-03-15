@@ -12,7 +12,7 @@ import java.time.Duration;
 public class EmbeddingModelProducer {
 
     @ConfigProperty(name = "arcclaw.rag.embed-model",
-                    defaultValue = "nomic-embed-text:1.5")
+                    defaultValue = "nomic-embed-text:v1.5")
     String modelName;
 
     @ConfigProperty(name = "arcclaw.rag.embed-base-url",
