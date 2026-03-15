@@ -8,6 +8,7 @@ import org.jboss.logging.Logger;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Hardens SQLite FTS5 connection pooling by verifying/attaching the fts schema
@@ -21,6 +22,11 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
     String dataDir;
+
+    @ConfigProperty(name = "arcclaw.rag.vec-extension-path", defaultValue = "./lib/vec0")
+    String vecExtensionPath;
+
+    private final AtomicBoolean vectorSearchEnabled = new AtomicBoolean(false);
 
     @Override
     public void onConnectionAcquire(Connection connection) {
@@ -45,8 +51,30 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                     stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                 }
             }
+
+            // Step 2: Enable and load sqlite-vec extension
+            if (!vectorSearchEnabled.get()) {
+                try {
+                    org.sqlite.SQLiteConnection sqliteConn =
+                        connection.unwrap(org.sqlite.SQLiteConnection.class);
+                    sqliteConn.getDatabase().enable_load_extension(true);
+
+                    try (Statement vecStmt = connection.createStatement()) {
+                        vecStmt.execute("SELECT load_extension('" + vecExtensionPath + "')");
+                        vectorSearchEnabled.compareAndSet(false, true);
+                        log.info("FtsConnectionInterceptor: sqlite-vec loaded successfully.");
+                    }
+                } catch (Exception e) {
+                    log.warnf("FtsConnectionInterceptor: sqlite-vec unavailable — " +
+                        "vector search degraded to FTS5-only: %s", e.getMessage());
+                }
+            }
         } catch (Exception e) {
             log.warnf("FtsConnectionInterceptor: Failed to verify/attach fts schema: %s", e.getMessage());
         }
+    }
+
+    public boolean isVectorSearchEnabled() {
+        return vectorSearchEnabled.get();
     }
 }

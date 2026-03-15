@@ -58,7 +58,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Override
     public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
         // 1. Build system prompt
-        String systemPrompt = promptBuilder.build(agentRole, sessionId);
+        String systemPrompt = promptBuilder.build(agentRole, sessionId, goal);
 
         // 2. Assemble chat history (WITHOUT SystemMessage)
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);

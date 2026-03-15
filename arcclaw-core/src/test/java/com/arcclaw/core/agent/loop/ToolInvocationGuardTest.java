@@ -8,6 +8,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ class ToolInvocationGuardTest {
     private RoleRegistry roleRegistry;
     private ObjectMapper objectMapper;
     private StatefulAgentStore agentStore;
+    private ToolRegistry mockToolRegistry;
 
     @BeforeEach
     void setUp() {
@@ -36,10 +38,12 @@ class ToolInvocationGuardTest {
         roleRegistry = mock(RoleRegistry.class);
         objectMapper = new ObjectMapper();
         agentStore = mock(StatefulAgentStore.class);
+        mockToolRegistry = mock(ToolRegistry.class);
 
         guard.roleRegistry = roleRegistry;
         guard.objectMapper = objectMapper;
         guard.agentStore = agentStore;
+        guard.toolRegistry = mockToolRegistry;
     }
 
     @Test
@@ -57,6 +61,7 @@ class ToolInvocationGuardTest {
 
     @Test
     void testFailedToolObservationIsNotCached() {
+        when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
         ReasoningStep past = ReasoningStep.pending("thought", "tool", Map.of("arg", 1), 0, 0);
         // observation is null by default
         List<ReasoningStep> history = List.of(past);
@@ -70,6 +75,7 @@ class ToolInvocationGuardTest {
     @Test
     void testGithubBlockedWhenGoalHasNoKeywords() {
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
                 "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?");
@@ -84,6 +90,7 @@ class ToolInvocationGuardTest {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(GithubTool.NAME);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
+        when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
         // Wrap in scope — after GitHub guard passes, evaluate() reaches HITL step
         // which calls WorkspaceContext.autonomy() (ScopedValue — must be bound)
@@ -98,6 +105,7 @@ class ToolInvocationGuardTest {
     void testHitlPauseForApproval() {
         workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
+            when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal");
@@ -110,6 +118,7 @@ class ToolInvocationGuardTest {
     void testFullAutonomySkipsHitl() {
         workspaceRun("s1", AutonomyLevel.FULL, () -> {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
+            when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal");

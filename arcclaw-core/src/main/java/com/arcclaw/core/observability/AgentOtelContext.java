@@ -34,6 +34,7 @@ public class AgentOtelContext implements AgentObserver {
      * @return The active root {@link Span}.
      */
     public Span startSessionSpan(String sessionId) {
+        if (sessionId == null) return null;
         Span span = tracer.spanBuilder("arcclaw.session")
                 .setAttribute("sessionId", sessionId)
                 .startSpan();
@@ -48,6 +49,7 @@ public class AgentOtelContext implements AgentObserver {
      * @param sessionId The workspace session ID.
      */
     public void endSessionSpan(String sessionId) {
+        if (sessionId == null) return;
         Span span = rootSpans.remove(sessionId);
         if (span != null) {
             span.end();
@@ -68,6 +70,7 @@ public class AgentOtelContext implements AgentObserver {
      * @return The child {@link Span}.
      */
     public Span childSpan(String sessionId, String operationName) {
+        if (sessionId == null) return null;
         Span parent = rootSpans.get(sessionId);
         Context parentContext = parent != null
                 ? Context.current().with(parent)
@@ -79,6 +82,7 @@ public class AgentOtelContext implements AgentObserver {
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
+        if (sessionId == null) return;
         Span rootSpan = rootSpans.get(sessionId);
         if (rootSpan != null) {
             long totalIn = totalInputTokens

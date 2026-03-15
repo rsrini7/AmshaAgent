@@ -2155,3 +2155,28 @@ Comprehensive migration to the Quarkus 3.27.x LTS stream, resolving major breaki
 
 **Final Status**: All systems verified green. 535 tests pass. Clean Native image production-ready binary built successfully.
 
+---
+
+## Phase 61 — Semantic Vector RAG ✅
+
+Successfully integrated semantic vector search via `sqlite-vec` with a robust fallback mechanism for heterogeneous environments.
+
+### Key Features & Implementation:
+
+1. **Hybrid Search Architecture**:
+   - **Dual-Tier**: Combines fast SQLite FTS5 keyword indexing with semantic vector embeddings.
+   - **Native Loading**: `sqlite-vec` is loaded as a runtime C extension. If the JNI load fails (e.g., missing library), `FtsConnectionInterceptor` marks vector search as disabled, and the app continues with keyword-only RAG.
+
+2. **Result Ranking (RRF)**:
+   - Implemented Reciprocal Rank Fusion to merge results from different search strategies without requiring score normalization.
+   - Verified that high-confidence semantic matches correctly outrank noisy keyword matches.
+
+3. **Agent Integration**:
+   - **RagContextEnricher**: Automatically pulls relevant context for every agent turn based on the current goal and chat history.
+   - **IngestDocumentTool**: Empowered agents to proactively ingest new knowledge into the system during a session.
+
+**Final Verification**:
+- ✅ Semantic search verified via `TwoTierMemoryServiceRrfTest`.
+- ✅ Graceful degradation verified by starting the app without the native binary.
+- ✅ Full system regression passed with the new `arcclaw-rag` module active.
+

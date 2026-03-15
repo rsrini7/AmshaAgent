@@ -30,6 +30,11 @@
       <artifactId>arcclaw-core</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-rag</artifactId>
+    </dependency>
+
     <!-- Test -->
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -99,10 +104,22 @@
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-ollama</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+      </exclusions>      
     </dependency>
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-openai</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+      </exclusions>            
     </dependency>
 
     <!-- Explicit Jackson dependency for LangChain4J guardrails -->
@@ -187,13 +204,10 @@
           </execution>
         </executions>
         <configuration>
-            <systemProperties>
-              <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
-            </systemProperties>
             <!-- Netty requires sun.misc.Unsafe Memory Access which is restricted default in JDK 22/25 (JEP 471) -->
             <!-- JBoss Threads requires java.lang opens for thread-local-reset in JDK 24+ -->
             <!-- ByteBuddy requires experimental flag for JDK 25 bytecode proxy generation -->
-            <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</jvmArgs>
+            <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Dnet.bytebuddy.experimental=true</jvmArgs>
         </configuration>
       </plugin>
       <plugin>
@@ -201,11 +215,17 @@
         <version>3.5.5</version>
         <configuration>
           <useManifestOnlyJar>false</useManifestOnlyJar>
+          
+          <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow -Djava.util.logging.manager=org.jboss.logmanager.LogManager</argLine>
+          <!-- Kill the forked JVM immediately after System.exit instead of waiting 30s -->
+          <shutdown>kill</shutdown>
+          <!-- Ensure each test module gets a fresh JVM -->
+          <forkCount>1</forkCount>
+          <reuseForks>true</reuseForks>
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <maven.home>${maven.home}</maven.home>
           </systemPropertyVariables>
-          <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow</argLine>
         </configuration>
       </plugin>
       <plugin>
@@ -259,15 +279,11 @@
           quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
         </quarkus.native.builder-image>
         <!--
-          CORRECTED (Fix C6 + Pending P1):
           - Broad initialize-at-build-time=org.bouncycastle REMOVED from here.
             It now lives in native-image.properties with fine-grained class-level control.
-          - -H:+InlineBeforeAnalysis: inlines LangChain4J reflection paths before points-to
-            analysis, reducing cold-start by ~10-15 ms.
           - -J-Xmx8g: prevents OOM during GraalVM analysis phase.
         -->
         <quarkus.native.additional-build-args>
-          -H:+InlineBeforeAnalysis,
           -H:+ReportExceptionStackTraces,
           -J-Xmx8g,
           --initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder,
@@ -280,7 +296,8 @@
       <id>jvm</id>
       <activation><activeByDefault>true</activeByDefault></activation>
       <properties>
-        <quarkus.package.type>fast-jar</quarkus.package.type>
+        <quarkus.package.jar.type>fast-jar</quarkus.package.jar.type>
+        <quarkus.package.jar.enabled>true</quarkus.package.jar.enabled>
       </properties>
     </profile>
   </profiles>

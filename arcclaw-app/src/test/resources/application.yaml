@@ -79,3 +79,15 @@ quarkus:
         level: "OFF"
       "com.arcclaw.core.scope":
         level: "OFF"
+      "com.arcclaw.core.agent.loop.AgentStateMachineRunner":
+        level: "OFF"
+      "com.arcclaw.core.agent.loop.ToolInvoker":
+        level: "OFF"
+      "com.arcclaw.core.pipeline.MessagePipeline":
+        level: "OFF"
+      "com.arcclaw.core.tools.MemorySearchTool":
+        level: "OFF"
+      "com.arcclaw.app.scheduler.CronResultHandler":
+        level: "OFF"
+      "org.jboss.threads.errors":
+        level: "OFF"

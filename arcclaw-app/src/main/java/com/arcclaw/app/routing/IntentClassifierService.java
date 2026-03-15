@@ -1,6 +1,7 @@
 package com.arcclaw.app.routing;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
@@ -32,6 +33,16 @@ public class IntentClassifierService implements IntentClassifier {
     static final String DELIM_CLOSE = "<<<USER_INPUT_END>>>";
 
     private String dynamicClassifierPrompt;
+
+    private static final Pattern COORDINATOR_FORCE_PATTERN =
+                        Pattern.compile(
+                            "(?i)^\\s*(ingest|store this|add to (knowledge|rag|memory|kb)|" +
+                            "remember this|save this|learn this|index this|" +
+                            // Compound fetch+ingest patterns
+                            ".*(and\\s+ingest|then\\s+ingest|and\\s+store|then\\s+store|" +
+                            "and\\s+remember|and\\s+save\\s+that|and\\s+add\\s+that))",
+                            Pattern.CASE_INSENSITIVE
+                        );
 
     @PostConstruct
     void init() {
@@ -83,6 +94,10 @@ public class IntentClassifierService implements IntentClassifier {
                    scheduling signals. Only route to coordinator for scheduling if the
                    user explicitly uses time words like "in 5 mins", "at 3pm",
                    "every day", "after 2 hours", "remind me", "schedule".
+                6. If the message starts with 'ingest', 'store this', 'remember this',
+                   'add to knowledge', or similar document storage commands -> coordinator only.
+                   These require the ingest_document tool which only coordinator has.
+                   That's the complete fix — one file, three small additions. The regex fires before the LLM call
                 """);
 
         for (int i = 0; i < roles.size(); i++) {
@@ -104,6 +119,15 @@ public class IntentClassifierService implements IntentClassifier {
     }
 
     public String classify(String userMessage) {
+
+        // Force coordinator for ingest/store commands — these require
+        // INGEST_DOCUMENT tool which only COORDINATOR and DATTATREYA hold.
+        // LLM classifier reliably misroutes these to architect.
+        if (COORDINATOR_FORCE_PATTERN.matcher(userMessage).find()) {
+            Log.debugf("CLASSIFIER fast-path: ingest/store keyword → coordinator");
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
         String sanitized = userMessage
                 .replace(DELIM_OPEN, "")
                 .replace(DELIM_CLOSE, "");

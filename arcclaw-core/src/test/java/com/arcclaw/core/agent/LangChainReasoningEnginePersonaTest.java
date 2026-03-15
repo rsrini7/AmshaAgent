@@ -84,7 +84,7 @@ class LangChainReasoningEnginePersonaTest {
     void testDebuggerRoleDoesNotSayCoordinator() {
         // Arrange
         String persona = "You are Shiva, the Debugger and Code Analyst.";
-        when(mockPromptBuilder.build(anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(anyString(), anyString(), anyString())).thenReturn(persona);
 
         // Act
         engine.nextStep("sess-1", "debugger", "fix this bug", Collections.emptyList());
@@ -107,7 +107,7 @@ class LangChainReasoningEnginePersonaTest {
     void testCoordinatorRoleContainsTrimurtiContext() {
         // Arrange
         String persona = "You are Vishnu, the Coordinator. THE TRIMURTI";
-        when(mockPromptBuilder.build(anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(anyString(), anyString(), anyString())).thenReturn(persona);
 
         // Act
         engine.nextStep("sess-2", "coordinator", "plan tasks", Collections.emptyList());

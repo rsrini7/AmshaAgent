@@ -997,3 +997,26 @@
 - [x] Annotate Qute template data records (`AgentResult`, `RoleDefinition`, `AgentRoleEnum`, `ReasoningStep`) with `@TemplateData` <!-- id: 458 -->
 - [x] Clean up `application.yaml`: drop unsupported `langchain4j.groq` keys, remove duplicate `schema-management`, fix `%test` nesting, and increase tx timeout to 300s <!-- id: 459 -->
 - [x] Verify: 535/535 tests pass and native build succeeds <!-- id: 460 -->
+
+---
+
+## Phase 61 — Semantic Vector RAG (Dual-Tier: sqlite-vec + InMemory) ✅
+- [x] Create `arcclaw-rag` module with `langchain4j-core` and `embedding-model-openai` <!-- id: 461 -->
+- [x] Configure `FtsConnectionInterceptor` for native `sqlite-vec` extension loading <!-- id: 462 -->
+- [x] Implement `RagSchemaInitializer` for `vec_global` virtual table (Raw DDL) <!-- id: 463 -->
+- [x] Implement Native Graceful Degradation: AtomicBoolean check for `vec0` availability <!-- id: 464 -->
+- [x] Create `TwoTierMemoryService` with Reciprocal Rank Fusion (RRF) logic <!-- id: 465 -->
+- [x] Integrate `RagContextEnricher` into `LangChainReasoningEngine` <!-- id: 466 -->
+- [x] Register RAG classes for reflection in `AppReflectionConfig` <!-- id: 467 -->
+- [x] Add `SQLITE_VEC_PATH` to `.env.example` and `application.yaml` <!-- id: 468 -->
+- [x] Implement `IngestDocumentTool` for agent-driven ingestion <!-- id: 469 -->
+- [x] Verify: `TwoTierMemoryServiceRrfTest` passes math validation <!-- id: 470 -->
+- [x] Verify: Manual test with `vec0.dll` confirm semantic search is active <!-- id: 471 -->
+- [x] Documentation: Update `PLAN.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md` <!-- id: 472 -->
+
+---
+
+## Phase 61 Bug Fixes — RAG Persistence & Merging ✅
+- [x] Fix Bug 2A: Persist raw text in `GlobalKnowledgeBase` using `CompactionSummaryEntity` <!-- id: 503 -->
+- [x] Fix Bug 2B: Update `TwoTierMemoryService` to merge non-empty text during RRF <!-- id: 504 -->
+- [x] Verify: Run `TwoTierMemoryServiceRrfTest` for fusion integrity <!-- id: 505 -->

@@ -49,8 +49,31 @@ quarkus:
       - com.arcclaw.core.audit
       - com.arcclaw.core.skill
   log:
+    level: INFO
     category:
       "org.hibernate.SQL":
         level: WARN
+      "dev.langchain4j.model.chat.listener.ListenersUtil":
+        level: ERROR
+      "com.arcclaw.core.agent":
+        level: "OFF"
+      "com.arcclaw.core.tools":
+        level: "OFF"
+      "com.arcclaw.core.governance":
+        level: "OFF"
+      "com.arcclaw.core.scope":
+        level: "OFF"
+      "com.arcclaw.core.agent.loop.AgentStateMachineRunner":
+        level: "OFF"
+      "com.arcclaw.core.agent.loop.ToolInvoker":
+        level: "OFF"
+      "com.arcclaw.core.pipeline.MessagePipeline":
+        level: "OFF"
+      "com.arcclaw.core.tools.MemorySearchTool":
+        level: "OFF"
+      "com.arcclaw.app.scheduler.CronResultHandler":
+        level: "OFF"
+      "org.jboss.threads.errors":
+        level: "OFF"
   native:
     additional-build-args: --enable-native-access=ALL-UNNAMED

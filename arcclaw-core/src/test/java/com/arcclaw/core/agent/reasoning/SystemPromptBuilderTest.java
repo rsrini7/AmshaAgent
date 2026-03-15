@@ -47,7 +47,7 @@ class SystemPromptBuilderTest {
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
 
         // Act
-        String result = builder.build("coordinator", "s1");
+        String result = builder.build("coordinator", "s1", "some goal");
 
         // Assert
         int arcClawIdx = result.indexOf("You are ArcClaw");
@@ -66,10 +66,10 @@ class SystemPromptBuilderTest {
         when(agentPersonaRegistry.getPersonaPrompt(any())).thenReturn("MOCK_PERSONA");
 
         // Act & Assert
-        String resultCoord = builder.build("coordinator", "s1");
+        String resultCoord = builder.build("coordinator", "s1", null);
         assertTrue(resultCoord.contains("YOUR INTERNAL ARCHITECTURE"), "Coordinator should have trimurti block");
 
-        String resultDebugger = builder.build("debugger", "s2");
+        String resultDebugger = builder.build("debugger", "s2", null);
         assertTrue(!resultDebugger.contains("YOUR INTERNAL ARCHITECTURE"), "Debugger should NOT have trimurti block");
     }
 }

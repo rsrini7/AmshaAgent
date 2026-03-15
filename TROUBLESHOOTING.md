@@ -3367,3 +3367,22 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Symptom:** Calls to /api/v1/mcp fail with 404.
 **Root Cause:** The Quarkiverse MCP server extension registers its route at /mcp directly on the Vert.x router, bypassing JAX-RS path configuration (/api/v1).
 **Resolution:** Call /mcp directly without the /api/v1 prefix for protocol-level requests.
+
+---
+
+## 22. Phase 61 - Semantic RAG Troubleshooting
+
+### 🔴 Failure: sqlite-vec native library not found
+**Symptom:** Logs show `[ERROR] Failed to load sqlite-vec extension: [details]`. `isVectorSearchEnabled()` returns `false`, and `vec_global` table is missing.
+**Root Cause:** The `vec0` native binary (e.g., `vec0.dll` on Windows) is missing from the configured `arcclaw.rag.vec-extension-path`.
+**Resolution:** Download the correct binary for your OS and place it in the `./lib/` directory. Ensure the path in `application.yaml` or `.env` matches the absolute or relative path to the binary (without the extension suffix like `.dll` if using SQLite's `load_extension`).
+
+### 🔴 Failure: Reciprocal Rank Fusion (RRF) returning empty results
+**Symptom:** `TwoTierMemoryService.search()` returns no results even when documents are ingested.
+**Root Cause:** If one tier (e.g., Vector) fails or is disabled, and the other tier (FTS) has no matches, the merged list will be empty.
+**Resolution:** Check logs to see if `vectorSearchEnabled` is `true`. Use `IngestDocumentTool` to ensure documents are present in both the FTS and Vector tables.
+
+### 🔴 Failure: RagContextEnricher causing 401/403 on LLM calls
+**Symptom:** Agent loop fails with authentication errors when generating responses.
+**Root Cause:** `RagContextEnricher` triggers embedding calls via `OpenAiEmbeddingModel`. If the `QUARKUS_LANGCHAIN4J_OPENAI_API_KEY` is missing or invalid, the enrichment phase fails.
+**Resolution:** Verify your API keys in `.env`. The system requires a valid key even for context enrichment if an external embedding provider is used.

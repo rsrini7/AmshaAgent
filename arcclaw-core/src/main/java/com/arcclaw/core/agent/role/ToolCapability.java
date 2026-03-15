@@ -37,7 +37,12 @@ public enum ToolCapability {
      * <b>Note:</b> Deferred component; presence in schema does not imply
      * execution support until Phase 48 container integration is complete.
      */
-    SANDBOX_EXEC("sandboxexec", "Execute code within an isolated Podman sandbox");
+    SANDBOX_EXEC("sandboxexec", "Execute code within an isolated Podman sandbox"),
+
+    /**
+     * Ability to ingest a document into the RAG knowledge base.
+     */
+    INGEST_DOCUMENT("ingest_document", "Ingest a document into the RAG knowledge base");
 
     private final String toolName;
     private final String description;
