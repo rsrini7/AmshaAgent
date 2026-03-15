@@ -17,6 +17,10 @@
   <description>Zero-dependency channel-agnostic API contracts (interfaces, sealed types, enums). No framework dependencies.</description>
 
   <dependencies>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+    </dependency>
     <!-- Test only -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>

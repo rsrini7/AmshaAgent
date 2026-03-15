@@ -24,4 +24,13 @@ public interface ReasoningEngine {
      * @return The next reasoning step.
      */
     ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history);
+
+    /**
+     * Optional method for structured (non-ReAct) LLM calls.
+     * Default implementation throws UnsupportedOperationException to preserve
+     * the interface as a Functional Interface for tests.
+     */
+    default String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+        throw new UnsupportedOperationException("Structured output not supported by this engine");
+    }
 }

@@ -1,8 +1,14 @@
 package com.arcclaw.core.agent.persona;
 
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.structured.StructuredOutputEngine;
+import com.arcclaw.channel.api.structured.SynthesisResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 import java.util.List;
 
 /**
@@ -22,6 +28,11 @@ import java.util.List;
 @ApplicationScoped
 @AgentRole("synthesizer")
 public class DattatreyaAgent implements Agent {
+
+    private static final Logger log = Logger.getLogger(DattatreyaAgent.class);
+
+    @Inject
+    StructuredOutputEngine structuredOutputEngine;
 
     private static final String SYSTEM_PROMPT = """
             You are Dattatreya, the Synthesizer and Avadhuta of the ArcClaw team.
@@ -64,5 +75,19 @@ public class DattatreyaAgent implements Agent {
     @Override
     public List<String> allowedTools() {
         return List.copyOf(AgentRoleEnum.DATTATREYA.definition().toolNames());
+    }
+
+    /**
+     * Synthesizes multi-agent findings into a final resolution using structured output.
+     */
+    public AgentResult synthesize(String sessionId, String combinedContext, List<ReasoningStep> history) {
+        SynthesisResult result = structuredOutputEngine.invoke(
+                sessionId, role(), combinedContext, "SynthesisFunction", SynthesisResult.class);
+
+        log.infof("[Dattatreya] Synthesis complete: %d contributions integrated. conflicts=%s",
+                result.contributions() != null ? result.contributions().size() : 0,
+                (result.conflictSummary() != null && !result.conflictSummary().isEmpty()) ? "YES" : "NONE");
+
+        return AgentResult.finished(result.finalResolution(), List.copyOf(history));
     }
 }

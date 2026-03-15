@@ -147,4 +147,12 @@ public final class WorkspaceScopeHolder {
             throw new IllegalArgumentException("sessionId must not be null or blank");
         }
     }
+
+    /**
+     * Safely retrieves the user ID from ScopedValue or returns "unknown".
+     * Follows the pattern in WorkspaceContext.userId().
+     */
+    public static String getUserIdOrUnknown() {
+        return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "unknown";
+    }
 }

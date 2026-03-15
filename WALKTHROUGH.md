@@ -2180,3 +2180,24 @@ Successfully integrated semantic vector search via `sqlite-vec` with a robust fa
 - ✅ Graceful degradation verified by starting the app without the native binary.
 - ✅ Full system regression passed with the new `arcclaw-rag` module active.
 
+---
+
+## Phase 62 - Build-Time BAML Schema Generation ✅
+
+Successfully implemented and debugged build-time JSON schema generation for `@AgentFunction` tools in Quarkus.
+
+### Key Features & Implementation:
+
+1. **Schema Loading Mechanism**:
+   - Switched from class-level to Thread Context ClassLoader in `StructuredOutputEngine`.
+   - This prevents `FileNotFoundException` when attempting to load schemas that are generated in-memory by Quarkus during the test and build augmentation phases.
+
+2. **Testing Pipeline Resiliency**:
+   - Diagnosed and fixed a split-package issue caused by a duplicate `WorkspaceScopeTest.java` file in `arcclaw-app`.
+   - The duplicate test was causing severe `AssertionFailedError` and `ContextNotActiveException` instances which blocked the CI pipeline.
+
+**Final Verification**:
+- ✅ `StructuredOutputEngineSchemaTest` verified the dynamic schema generation.
+- ✅ Pipeline green: 100% test pass rate across all modules.
+
+

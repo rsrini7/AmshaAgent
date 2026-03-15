@@ -3742,3 +3742,36 @@ Implement a hybrid RAG system combining FTS5 keyword search with native `sqlite-
 - ✅ `TwoTierMemoryServiceRrfTest`: Validated rank fusion math.
 - ✅ `RagContextEnricherTest`: Verified context injection into system prompts.
 - ✅ Manual Verification: Semantic search confirmed working when `vec0.dll` is present in `./lib/`.
+
+---
+
+## Phase 62 - Build-Time BAML Schema Generation ✅
+
+### Goal
+Implement build-time generation of JSON schemas from `@AgentFunction` annotated SAM interfaces. This allows tools to be resolved natively without relying on reflection at runtime.
+
+### Design Decisions
+
+> [!IMPORTANT]
+> **Thread Context ClassLoader for Resource Loading**:
+> - Replaced `getClass().getResourceAsStream` with `Thread.currentThread().getContextClassLoader().getResourceAsStream` inside `StructuredOutputEngine.java`.
+> - Dynamic memory-generated resources (like `SynthesisFunction.json` generated during Quarkus Test Augmentation) require the context classloader, especially in complex multi-module setups.
+
+> [!NOTE]
+> **WorkspaceScope Thread Safety**:
+> - Prevented `ContextNotActiveException` and split-package CDI resolution errors by maintaining precise scope definitions and eliminating duplicate test classes (`WorkspaceScopeTest.java`).
+
+### Completed Changes
+
+#### Core & Deployment Modules
+
+- **`arcclaw-deployment`**: Ensured `AgentFunctionProcessor` correctly generates `ReflectiveClassBuildItem` and writes generated schemas.
+- **`arcclaw-core`**: Updated `StructuredOutputEngine` to reliably load these schemas from the classpath.
+- **`arcclaw-app`**: Removed duplicate `WorkspaceScopeTest.java` causing CDI split-package errors. Added specific schema loading integration tests.
+
+### Verification
+
+- ✅ `StructuredOutputEngineSchemaTest`: Verified that in-memory schema files can be loaded and parsed successfully.
+- ✅ `WorkspaceScopeTest`: Corrected tests pass, validating thread safety of `@WorkspaceScoped`.
+- ✅ Compilation: Clean `mvn install` and complete test suite passes.
+
