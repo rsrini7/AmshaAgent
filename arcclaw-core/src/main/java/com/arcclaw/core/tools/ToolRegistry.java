@@ -173,17 +173,18 @@ public class ToolRegistry {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
             } catch (Exception e) {
                 String raw = e.getMessage() != null ? e.getMessage() : "";
+
                 String friendly;
                 if (toolName.equalsIgnoreCase(GithubTool.NAME)
                         && raw.contains("Cannot run program \"gh\"")) {
                     friendly = "GitHub integration is not available in this environment. "
                             + "The `gh` CLI is not installed, so I cannot run GitHub commands here. "
-                            + "Please run the equivalent `gh` command locally on your machine.";
+                            + "Please run the equivalent `gh` command locally on your own machine.";
                 } else if (toolName.equalsIgnoreCase(GithubTool.NAME)
                         && (raw.contains("Podman engine failure")
                             || raw.contains("unable to connect to Podman"))) {
-                    friendly = "The secure sandbox for GitHub commands is disabled or unreachable "
-                            + "in this environment. I cannot safely execute `gh` here. "
+                    friendly = "The secure sandbox for GitHub commands is unavailable in this environment. "
+                            + "I cannot safely execute `gh` here. "
                             + "Please run the GitHub command directly on your machine.";
                 } else {
                     friendly = "Tool '" + toolName + "' failed: " + raw;
@@ -196,7 +197,6 @@ public class ToolRegistry {
                 auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
                     SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
 
-                // Important: return the friendly message as-is
                 return ToolResponse.failure(1, friendly);
             }
         }
