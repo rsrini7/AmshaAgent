@@ -5574,7 +5574,7 @@ Every change tracked from v3 → v4 → v5 → v6. Read before touching any code
 | B4 | v4 | Audit event written AFTER retry succeeds | ❌ | ✅ | ✅ | ✅ keep |
 | B5 | v4 | `isMandatory=true` contradicts `TelemetryAuditService` contract | ❌ | ❌ | ✅ | ✅ keep |
 | B6 | v4 | `extract()` returns `T` not `Optional<T>` | ❌ | ✅ | ✅ | ✅ keep |
-| B7 | v4 | **WRONG** — Added `SCHEMA_ERROR`; existing `SCHEMAERROR` already in codebase | ❌ | ❌ wrong | ❌ wrong | ✅ Task 0 deleted; use existing `SCHEMAERROR` |
+| B7 | v4 | **WRONG** — Added `SCHEMA_ERROR`; existing `SCHEMA_ERROR` already in codebase | ❌ | ❌ wrong | ❌ wrong | ✅ Task 0 deleted; use existing `SCHEMA_ERROR` |
 | B8 | v4 | No try-catch wrapping in `DattatreyaAgent` | ❌ | ✅ | ✅ | ✅ keep |
 | G1 | Gemini | `registerNestedTypes()` depth-1 only | ❌ | partial | ✅ | ✅ keep |
 | G2 | Gemini | `FAIL_ON_MISSING_CREATOR_PROPERTIES` breaks `@Nullable` | ❌ | ❌ | ✅ | ✅ keep |
@@ -5588,7 +5588,7 @@ Every change tracked from v3 → v4 → v5 → v6. Read before touching any code
 | E | Combined | `ci.fields()` misses record components in Jandex 3.5.3 | ❌ | ❌ | ✅ | ✅ keep |
 | F | Combined | Direct OTel SDK import constraint | ❌ | partial | ✅ | ✅ clarified — see non-blocking #7 |
 | **P1** | **v6** | **`ToolSpecifications.toolSpecificationFrom()` generates INPUT schema, not OUTPUT — 100% runtime failure** | ❌ | ❌ | ❌ | **✅ Jackson `SchemaFactoryWrapper` on return type** |
-| **P2** | **v6** | **`SCHEMA_ERROR` duplicate/unmapped; existing `SCHEMAERROR` already present** | ❌ | ❌ | ❌ | **✅ Task 0 deleted; use `SCHEMAERROR`** |
+| **P2** | **v6** | **`SCHEMA_ERROR` duplicate/unmapped; existing `SCHEMA_ERROR` already present** | ❌ | ❌ | ❌ | **✅ Task 0 deleted; use `SCHEMA_ERROR`** |
 | **P3** | **v6** | **`AgentResult.failed()` args reversed — compile error** | ❌ | ❌ | ❌ | **✅ correct `(String, FailureCategory, List)` order** |
 | **P4** | **v6** | **`import java.lang.reflect.Modifier` missing — compile error** | ❌ | ❌ | ❌ | **✅ import added** |
 | **P5** | **v6** | **`WorkspaceScopeHolder.getUserIdOrUnknown()` does not exist — compile error** | ❌ | ❌ | ❌ | **✅ Task 9.5 added** |
@@ -5651,7 +5651,7 @@ for `STRUCTURED_OUTPUT_RETRY`. Set `isMandatory() = false` to match reality.
 
 ### `AgentStateMachineRunner` (arcclaw-core/.../loop/AgentStateMachineRunner.java)
 - `processEngineStep(...)` handles `BudgetExceededException`, `BudgetWarningException`, `InvalidRequestException`
-- **Add catch for `StructuredOutputException` → `AgentResult.failed(reason, FailureCategory.SCHEMAERROR, history)`**
+- **Add catch for `StructuredOutputException` → `AgentResult.failed(reason, FailureCategory.SCHEMA_ERROR, history)`**
 
 ### `DattatreyaAgent` (arcclaw-core/.../persona/DattatreyaAgent.java)
 - `@ApplicationScoped`, `@AgentRole("synthesizer")`
@@ -5663,22 +5663,6 @@ for `STRUCTURED_OUTPUT_RETRY`. Set `isMandatory() = false` to match reality.
 ### `McpBuildStep` + `WorkspaceScopeProcessor` (arcclaw-deployment)
 - Reference patterns for `@BuildStep` implementation
 - Jandex version: **3.5.3** — `ClassInfo.recordComponents()` is available
-
----
-
-## PRE-FLIGHT: TASK 0 — Verify `FailureCategory.SCHEMAERROR` (NO new enum value)
-
-**BLOCKER P2 FIX:** `FailureCategory.SCHEMAERROR` (no underscore) already exists in the
-codebase, confirmed by `AgentStateMachineRunner` and `AgentResponseMapperTest`. It maps
-to HTTP 422 with code `"SCHEMA"` in `AgentResponseMapper`.
-
-**Do NOT add `SCHEMA_ERROR`** (with underscore). That creates an unmapped duplicate that
-falls through `AgentResponseMapper`'s switch to `default`, returning HTTP 500 instead of 422.
-
-**Task 0 action:** Read `FailureCategory.java`. Confirm `SCHEMAERROR` is present.
-Read `AgentResponseMapper`. Confirm it maps `SCHEMAERROR` → HTTP 422.
-If both exist, no file change is required. Every reference to `FailureCategory.SCHEMA_ERROR`
-in the rest of this prompt must be treated as `FailureCategory.SCHEMAERROR`.
 
 ---
 
@@ -5886,7 +5870,7 @@ package com.arcclaw.core.structured;
  * schema-correction retry fail structural validation.
  *
  * AgentStateMachineRunner catches this and maps it to:
- *   AgentResult.Failed(FailureCategory.SCHEMAERROR)
+ *   AgentResult.Failed(FailureCategory.SCHEMA_ERROR)
  *
  * UNCHECKED (extends RuntimeException). Rationale:
  *   - AgentStateMachineRunner.processEngineStep() already has 3+ exception branches.
@@ -6532,14 +6516,14 @@ Add catch for `StructuredOutputException` alongside the existing `InvalidRequest
     log.warnf("Structured output extraction failed for session %s after max retries. " +
               "Type: %s. Excerpt: %s",
               context.sessionId(), e.targetTypeSimpleName(), e.rawResponseExcerpt());
-    // BLOCKER P2 FIX: Use existing SCHEMAERROR (no underscore) — not SCHEMA_ERROR.
+    // BLOCKER P2 FIX: Use existing SCHEMA_ERROR (no underscore) — not SCHEMA_ERROR.
     // BLOCKER P3 FIX: AgentResult.failed() signature is (String reason, FailureCategory, List).
     // Confirmed from CronResultHandlerTest and AgentStateMachineRunner source.
     return StepDecision.terminal(
         AgentResult.failed(
             "Structured output failed after 1 retry for " +
             e.targetTypeSimpleName() + ": " + e.getMessage(),
-            FailureCategory.SCHEMAERROR,
+            FailureCategory.SCHEMA_ERROR,
             List.copyOf(history)
         )
     );
@@ -6929,7 +6913,7 @@ testConcurrentWarningExactlyOnce
 ## IMPLEMENTATION ORDER
 
 ```
-Task 0: FailureCategory.SCHEMAERROR                — verify-only (no underscore; already exists)
+Task 0: FailureCategory.SCHEMA_ERROR                — verify-only (no underscore; already exists)
      1: AgentFunction.java                          — annotation
      2: AgentContribution.java                      — record
      3: ConflictSummary.java                        — record
@@ -6953,7 +6937,7 @@ Task 0: FailureCategory.SCHEMAERROR                — verify-only (no underscor
     15: LangChainReasoningEngine.java (modify)      — add chatForStructuredOutput() REAL IMPL
         Not pseudocode — write working Java mirroring nextStep(). Must compile.
     16: StructuredOutputEngine.java                 — depends on 9.5, 13, 15
-    17: AgentStateMachineRunner.java (modify)       — StructuredOutputException → SCHEMAERROR
+    17: AgentStateMachineRunner.java (modify)       — StructuredOutputException → SCHEMA_ERROR
                                                       arg order: (String, FailureCategory, List)
     18: DattatreyaAgent.java (modify)               — wire StructuredOutputEngine
                                                       return AgentResult.finished(result.resolution(), history)
@@ -7009,8 +6993,8 @@ Task 0: FailureCategory.SCHEMAERROR                — verify-only (no underscor
 - [ ] `StructuredOutputEngine.invoke()` does NOT build `ChatRequest` directly
 - [ ] `DattatreyaAgent` returns `AgentResult.finished(result.resolution(), history)`
 - [ ] `DattatreyaAgent` has ZERO references to `String rawSynthesis`
-- [ ] `AgentResult.failed()` called as `(String reason, FailureCategory.SCHEMAERROR, List)` — args in this exact order
-- [ ] `FailureCategory.SCHEMA_ERROR` (with underscore) does NOT exist — use `SCHEMAERROR`
+- [ ] `AgentResult.failed()` called as `(String reason, FailureCategory.SCHEMA_ERROR, List)` — args in this exact order
+- [ ] `FailureCategory.SCHEMA_ERROR` (with underscore) does NOT exist — use `SCHEMA_ERROR`
 
 **Build step:**
 - [ ] `GeneratedResourceBuildItem` only — no filesystem writes from `AgentFunctionProcessor`
@@ -7038,7 +7022,7 @@ grep -r "warningSent = true"                    . --include="*.java"   # → 0 (
 grep -r "Optional.empty()"                      . --include="PermissiveJsonExtractor.java"  # → 0
 grep -r "new File"                              . --include="AgentFunctionProcessor.java"  # → 0
 grep -r "BudgetWarningException" StructuredRetryLoop.java | grep "throw"  # → 0 (caught, not rethrown)
-grep -r "SCHEMA_ERROR"                          . --include="*.java"   # → 0 (use SCHEMAERROR)
+grep -r "SCHEMA_ERROR"                          . --include="*.java"   # → 0 (use SCHEMA_ERROR)
 grep -r "ToolSpecifications.toolSpecificationFrom" . --include="*.java" # → 0 (wrong schema direction)
 grep -r "combinedContext" schemas/              # → 0 (schema must NOT contain input param names)
 ```
