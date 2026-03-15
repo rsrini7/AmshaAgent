@@ -15,6 +15,7 @@ import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -235,6 +236,7 @@ public class AgentLoop {
 
     // Keep the two-arg overload for callers that don't need session lifecycle.
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
-        return run(null, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);
+        String sessionId = WorkspaceScopeHolder.getIfActive();
+        return run(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);
     }
 }
