@@ -2,8 +2,11 @@
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
 
 # Install Podman and dependencies for rootless storage (shadow-utils for userns)
+# Also install glibc for libm.so.6 — required by vec0.so (sqlite-vec) which calls
+# sqrtf at runtime. GraalVM native-image does not link libm statically, so it must
+# be preloaded via LD_PRELOAD before the process starts.
 RUN microdnf update -y && \
-    microdnf install -y podman shadow-utils slirp4netns fuse-overlayfs iptables && \
+    microdnf install -y podman shadow-utils slirp4netns fuse-overlayfs iptables glibc && \
     microdnf clean all
 
 # Create 'arcclaw' user for rootless podman
@@ -19,7 +22,8 @@ RUN echo "arcclaw:100000:65536" > /etc/subuid && \
 WORKDIR /app
 
 # Create internal mount points and assign ownership before dropping privileges
-RUN mkdir -p /home/arcclaw/.config/containers /home/arcclaw/.local/share/containers /app/data && \
+RUN mkdir -p /home/arcclaw/.config/containers /home/arcclaw/.local/share/containers \
+             /app/data /app/lib && \
     chown -R arcclaw:arcclaw /app /home/arcclaw
 
 # Switch to standard user
@@ -28,10 +32,27 @@ USER arcclaw
 # Copy the Quarkus native binary
 COPY arcclaw-app/target/*-runner /app/application
 
+# Copy the sqlite-vec native extension (Linux x86_64 .so only — the .dll and
+# .dylib are for Windows/macOS and have no use inside this Linux container)
+COPY lib/vec0.so /app/lib/vec0.so
+
 # Ensure execution permission
 USER root
-RUN chmod +x /app/application
+RUN chmod +x /app/application && \
+    chmod 755 /app/lib/vec0.so
 USER arcclaw
+
+# Preload libm so that dlopen(vec0.so) can resolve sqrtf and other math symbols.
+# GraalVM native-image statically links only reachable Java code — libm is excluded.
+# Without LD_PRELOAD, SQLite's load_extension('vec0') fails with:
+#   undefined symbol: sqrtf
+# Vector search degrades silently to FTS5-only without this line.
+ENV LD_PRELOAD=/lib64/libm.so.6
+
+# Absolute path to the vec0 extension — no extension suffix needed, SQLite
+# appends .so automatically on Linux.
+# Must be absolute so it resolves correctly regardless of working directory.
+ENV SQLITE_VEC_PATH=/app/lib/vec0
 
 EXPOSE 8080
 
