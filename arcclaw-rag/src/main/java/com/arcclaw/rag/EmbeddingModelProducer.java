@@ -1,7 +1,7 @@
 package com.arcclaw.rag;
 
 import dev.langchain4j.model.embedding.EmbeddingModel;
-// import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
@@ -79,15 +79,15 @@ public class EmbeddingModelProducer {
                     .build();
             }
 
-            // case "ollama" -> {
-            //     log.infof("EmbeddingModelProducer: provider=ollama model=%s url=%s",
-            //         modelName, baseUrl);
-            //     yield OllamaEmbeddingModel.builder()
-            //         .baseUrl(baseUrl)
-            //         .modelName(modelName)
-            //         .timeout(Duration.ofSeconds(timeoutSeconds))
-            //         .build();
-            // }
+            case "ollama" -> {
+                log.infof("EmbeddingModelProducer: provider=ollama model=%s url=%s",
+                    modelName, baseUrl);
+                yield OllamaEmbeddingModel.builder()
+                    .baseUrl(baseUrl)
+                    .modelName(modelName)
+                    .timeout(Duration.ofSeconds(timeoutSeconds))
+                    .build();
+            }
 
             default -> throw new IllegalArgumentException(
                 "Unknown arcclaw.rag.embed-provider: '" + provider + "'. " +
