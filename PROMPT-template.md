@@ -1,4 +1,4 @@
-Please go through my entire project end to end as a Senior Java Architect, Security Reviewer, Refactoring Expert & Senior Java Developer. My plan is the share your reviews with Claude/Gemini and its review with you to debate and solve. Make sure to deep dive and not just high level and only positive side. Not looking for any Constructive Feedback and Roadmap. 
+Please go through my entire project end to end as a Senior Java Architect, Security Reviewer, Refactoring Expert & Senior Java Developer. My plan is the share your reviews with Claude/Gemini and its review with you to debate and solve. Make sure to deep dive and not just high level and not just only positive side. Not looking for any Constructive Feedback or Roadmap.
 
 ----
 
@@ -16,17 +16,27 @@ A production-grade, enterprise AI Agent Kernel built with:
   - Podman process isolation (sandbox strategy, network=none) — PodmanContainerExecutor
   - AES-GCM-SIV SecretVault (Argon2id key derivation)
   - GovernanceLayer (USD budget cap, AutonomyLevel: FULL/SUPERVISED/READONLY)
-  - Multi-agent Trimurti model: Vishnu(coordinator), Brahma(coder),
-    Shiva(debugger), Saraswati(researcher), DattatreyaAgent(meta-synthesizer)
+  - Multi-agent Trimurti model:
+      Vishnu (coordinator)       → AgentRoleEnum.COORDINATOR
+      Brahma (coder)             → AgentRoleEnum.CODER
+      Shiva (debugger)           → AgentRoleEnum.DEBUGGER
+      Saraswati (researcher)     → AgentRoleEnum.RESEARCHER
+      Brihaspati (architect)     → AgentRoleEnum.ARCHITECT  [display: "Brihaspati (System Designer)"]
+      Dattatreya (synthesizer)   → AgentRoleEnum.SYNTHESIZER [display: "Dattatreya (Synthesizer)"]
+    RULE: Enum CONSTANT = role name. Display name = deity + role in parens.
+    RULE: NEVER use DATTATREYA as an enum constant. The constant is SYNTHESIZER.
+    RULE: NEVER use BRIHASPATI as an enum constant. The constant is ARCHITECT.
   - IntentClassifierService (llama-3.1-8b-instant via Groq OpenAI-compatible API,
     accessed via quarkus.langchain4j.openai.* namespace — quarkus.langchain4j.groq.*
     namespace was removed during migration. CompactionModelProducer reads
     quarkus.langchain4j.openai.base-url and quarkus.langchain4j.openai.api-key.)
   - Multi-module Maven: arcclaw-parent → arcclaw-channel-api, arcclaw-core,
-    arcclaw-deployment, arcclaw-app
-  - Dependency chain: arcclaw-channel-api ← arcclaw-core ← arcclaw-app (no reverse).
-    arcclaw-mcp (new this phase) sits alongside arcclaw-core: both depend on
-    arcclaw-core, neither depends on the other.
+    arcclaw-rag, arcclaw-deployment, arcclaw-mcp, arcclaw-app
+  - Dependency chain:
+      arcclaw-channel-api ← arcclaw-core ← arcclaw-rag ← arcclaw-app (no reverse).
+      arcclaw-mcp sits alongside arcclaw-core: both depend on arcclaw-core,
+      neither depends on the other.
+      arcclaw-deployment is Quarkus build-time augmentation ONLY — zero runtime logic.
   - AgentReflex interface: matches(), execute(), default sanitize()
   - ZERO external API dependencies for reflex/security — pure java.util.regex only
   - All Pattern objects MUST be static final (compile once, never per-message)
@@ -35,6 +45,9 @@ A production-grade, enterprise AI Agent Kernel built with:
   - TelemetryAuditService for audit events (submitTelemetry / submitCritical paths)
   - AsyncPersistenceEngine for hot-path audit writes (two-tier: critical vs telemetry)
   - FtsConnectionInterceptor: AgroalPoolInterceptor, fires on every onConnectionAcquire()
+    Loads sqlite-vec via SQLite load_extension(). Uses OS loader — NOT java.library.path.
+    Path resolved via Path.of(vecExtensionPath).toAbsolutePath().normalize().toString()
+    BEFORE passing to load_extension(). Relative path in config = %dev: ../lib/vec0
   - ReflexRegistry: two-pass chain (first-pass sanitize, second-pass execute),
     CDI Instance<AgentReflex>
   - RoleRegistry: @ApplicationScoped, delegates to AgentRoleEnum.definition()
@@ -52,11 +65,41 @@ A production-grade, enterprise AI Agent Kernel built with:
     Applies to PodmanContainerExecutor and PodmanMcpTransport ONLY.
     Does NOT apply to McpClientService (HTTP transport — SmallRye FT handles that).
   - InstantToTextConverter: AttributeConverter<Instant,String> for all Instant columns
-  - ReflectionConfig.java: @RegisterForReflection(targets={...}) in arcclaw-core.
-    This file ONLY imports from arcclaw-core. NEVER from arcclaw-mcp.
+  - AppReflectionConfig.java: @RegisterForReflection(targets={...}) in arcclaw-app.
+    This file imports from arcclaw-app and arcclaw-rag. NEVER from arcclaw-mcp.
   - SmallRye Fault Tolerance in Quarkus 3.27.2 BOM — @Timeout, @Retry, @CircuitBreaker
   - Quarkus REST Client Reactive available (quarkus-rest-client-reactive-jackson)
   - ManagedExecutor available via CDI (@Inject ManagedExecutor)
+  - Hybrid RAG: arcclaw-rag module — TwoTierMemoryService (FTS5 + sqlite-vec),
+    RagContextEnricher, GlobalKnowledgeBase, SessionKnowledgeBase (@WorkspaceScoped),
+    EmbeddingModelProducer, ScoredChunk record, RRF (k=60) result merging.
+    sqlite-vec graceful degradation: AtomicBoolean vectorSearchEnabled guards ALL
+    vector operations. If vec0 binary missing → FTS5-only, no crash.
+  - StructuredOutputEngine (arcclaw-core): loads schema resources via
+    Thread.currentThread().getContextClassLoader().getResourceAsStream() ONLY.
+    NEVER getClass().getResourceAsStream() — fails for in-memory generated resources
+    in multi-module Quarkus test augmentation.
+  - AgentFunctionProcessor (arcclaw-deployment): build-time Jandex processor.
+    Generates JSON schemas from @AgentFunction SAM RETURN TYPE via SchemaFactoryWrapper.
+    NEVER from ToolSpecifications.toolSpecificationFrom() — that generates INPUT schema.
+    Output: GeneratedResourceBuildItem only. NEVER writes to filesystem.
+  - PermissiveJsonExtractor: Jackson lenient parser for LLM JSON responses.
+    Uses JsonReadFeature.ALLOW_SINGLE_QUOTED_STRINGS (NOT ALLOW_SINGLE_QUOTES — does not exist).
+    Uses JsonReadFeature.ALLOW_TRAILING_COMMA at token level — NOT via regex.
+    FAIL_ON_MISSING_CREATOR_PROPERTIES intentionally ABSENT — allows Nullable record
+    fields to be omitted from JSON without throwing.
+  - StructuredRetryLoop: single retry on JsonExtractionException.
+    BudgetWarningException is CAUGHT — retry proceeds.
+    BudgetExceededException is NOT CAUGHT — propagates to caller.
+    STRUCTURED_OUTPUT_RETRY audit written AFTER retry succeeds, never before.
+  - ArcClawSQLiteDialect extends SQLiteDialect: overrides getIdentityColumnSupport()
+    with hasDataTypeInIdentityColumn() = true. Fixes Hibernate ORM 7 DDL omitting
+    type for identity columns on SQLite.
+  - Apache Camel TelegramChannelRoute (Quarkus dev mode critical nuance):
+    camelContext.disableJMX() is guarded by isNew() in AbstractCamelContext.
+    In dev mode, StartupEvent fires AFTER INITIALIZED state — disableJMX() is a
+    SILENT NO-OP. Fix: use getLifecycleStrategies().removeIf(s -> s.getClass()
+    .getName().contains("JmxManagement")) BEFORE camelContext.start().
 
 ## Completed Phases (DO NOT re-suggest or re-implement)
 
@@ -89,6 +132,9 @@ A production-grade, enterprise AI Agent Kernel built with:
 - Phase 48–58: (tool sandboxing, FTS5 semantic search, multi-agent Trimurti model,
   Dattatreya meta-synthesizer, OTel span enrichment, WORM audit hardening, WAL
   checkpoint tuning, Agroal pool interceptor, WorkspaceScoped CDI scope)
+- Phase 59: MCP Server + Client — arcclaw-mcp module, PodmanMcpTransport (stdio),
+  McpClientService (HTTP/SSE), McpAdminResource, DynamicToolCapabilityRegistry,
+  dual Accept header compliance, McpToolBridge, ExternalMcpToolAdapter.
 - Phase 60: Skills.md Runtime — AgentSkillEntity (@Entity, raw EntityManager),
   AgentSkillRepository (raw EntityManager, NOT Panache), SkillDefinition record,
   CompiledSkillEntry record (pure in-memory, NOT a JPA entity), SkillRegistry
@@ -96,10 +142,31 @@ A production-grade, enterprise AI Agent Kernel built with:
   .registerDynamic(), SkillReflex (/skills command), SkillAwareIntentClassifier,
   SkillSystemPrompt.html Qute wrapper, REST CRUD /api/v1/skills + /refresh + /delete,
   SecurityEventType: SKILL_LOADED / SKILL_REFRESHED (telemetry tier).
-- Phase 60.1: Qute Native Reflection Fixes (Gate) — @TemplateData added to
-  RoleDefinition, AgentRoleEnum, ReasoningStep, ToolCapability,
-  AgentResult nested records (Finished, AwaitingApproval, LoopExceeded, Failed).
-  Zero new tests. Baseline unchanged at 535/535.
+- Phase 60.1: Quarkus 3.23.0 → 3.27.2 LTS migration. ArcClawSQLiteDialect
+  (hasDataTypeInIdentityColumn=true), LangChain4j 1.x API rename (ChatLanguageModel
+  → ChatModel, .from() → static factories), Qute @TemplateData gates for native image,
+  ThreadLocalRandom replacing static Random, 535/535 tests green.
+- Phase 61: Semantic Vector RAG (Dual-Tier: sqlite-vec + InMemory).
+  arcclaw-rag module: TwoTierMemoryService (RRF k=60), FtsConnectionInterceptor
+  (vec0 native extension loading, AtomicBoolean graceful degradation),
+  RagSchemaInitializer (vec_global virtual table DDL), RagContextEnricher,
+  GlobalKnowledgeBase (CompactionSummaryEntity persistence), SessionKnowledgeBase
+  (@WorkspaceScoped in-memory), IngestDocumentTool, EmbeddingModelProducer.
+  Bug fix: GlobalKnowledgeBase persists raw text via CompactionSummaryEntity.
+  Bug fix: TwoTierMemoryService merges non-empty text during RRF.
+  Registered in AppReflectionConfig. SQLITE_VEC_PATH in .env + application.yaml.
+- Phase 62: Build-Time BAML Schema Generation.
+  AgentFunctionProcessor (arcclaw-deployment): Jandex build-step, generates JSON
+  schema from @AgentFunction SAM RETURN TYPE via SchemaFactoryWrapper.
+  StructuredOutputEngine: Thread Context ClassLoader for resource loading.
+  PermissiveJsonExtractor, StructuredRetryLoop, StructuredOutputException (unchecked),
+  JsonExtractionException (unchecked), SynthesisFunction, SynthesisResult,
+  AgentContribution, ConflictSummary records. DattatreyaAgent wired to
+  StructuredOutputEngine. GovernanceLayer.assertWithinBudget() added.
+  SessionBudget.warningSent refactored to AtomicBoolean (CAS thread safety).
+  SecurityEventType.STRUCTURED_OUTPUT_RETRY added (isMandatory=false).
+  AgentStateMachineRunner catches StructuredOutputException → FailureCategory.SCHEMA_ERROR.
+  Split-package fix: duplicate WorkspaceScopeTest.java removed from arcclaw-app.
 
 ## Known Architecture Nuances — ALWAYS APPLY
 
@@ -110,7 +177,7 @@ A production-grade, enterprise AI Agent Kernel built with:
    constructors, or per-message.
 4. ToolRegistry.invokeTool() uses String keys — any typed ToolCapability enum
    must bridge via .toolName() accessor.
-5. arcclaw-deployment module is Quarkus build-time only — never add runtime logic there.
+5. arcclaw-deployment module is Quarkus build-time ONLY — never add runtime logic there.
 6. SQLite WAL mode — keep all @Transactional boundaries short and tight.
 7. The existing ReflexRegistry two-pass chain must NOT be broken or reordered.
    New reflexes are additive: CDI Instance<AgentReflex> discovers them automatically.
@@ -130,46 +197,98 @@ A production-grade, enterprise AI Agent Kernel built with:
     the enum constant names, because it is matched against external MCP server
     tool names which are always lowercase.
 13. maxBudgetUsd is EXPLICITLY EXCLUDED from skill frontmatter.
-14. In application.yaml test profile. 
-    %test:
-	  arcclaw:
-	    skills:
-		  hot-reload=false 
+14. In application.yaml test profile:
+      %test:
+        arcclaw:
+          skills:
+            hot-reload: false
 15. Dynamic skills use pre-compiled Qute wrapper SkillSystemPrompt.html only.
-16. *** ALL REST resource classes that touch JPA/Hibernate or
-    trigger async audit writes MUST be annotated @RunOnVirtualThread at class
-    level. Missing → BlockingOperationNotAllowedException immediately on any
-    request. McpAdminResource MUST have @RunOnVirtualThread. ***
-17. *** Repository pattern in arcclaw-core ALWAYS uses raw
-    EntityManager (@Inject EntityManager em). NEVER PanacheRepositoryBase or
-    PanacheEntity — Panache bytecode enhancement is module-scoped and fails in
-    cross-module arcclaw-app tests. AgentSkillRepository is the exact precedent. ***
+16. *** ALL REST resource classes that touch JPA/Hibernate or trigger async audit
+    writes MUST be annotated @RunOnVirtualThread at class level.
+    Missing → BlockingOperationNotAllowedException immediately on any request.
+    McpAdminResource MUST have @RunOnVirtualThread. ***
+17. *** Repository pattern in arcclaw-core ALWAYS uses raw EntityManager
+    (@Inject EntityManager em). NEVER PanacheRepositoryBase or PanacheEntity —
+    Panache bytecode enhancement is module-scoped and fails in cross-module
+    arcclaw-app tests. AgentSkillRepository is the exact precedent. ***
 18. *** SQLite test isolation @BeforeEach rules:
     (a) All writes must be in a committed transaction BEFORE the first RestAssured
         call. (b) Read-only repository methods use @Transactional(TxType.SUPPORTS).
     (c) Use deleteAll() + GET /refresh in @BeforeEach for clean baseline.
     Violating (a) → snapshot isolation anomalies. ***
-19. *** @QuarkusTest REST tests — every given() block for a
-    protected endpoint MUST include:
-      .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+19. *** @QuarkusTest REST tests — every given() block for a protected endpoint MUST
+    include: .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
     Missing → 401 and test passes for the wrong reason. ***
 20. *** MCP stdio transport uses Newline-Delimited JSON-RPC 2.0.
     PodmanMcpTransport MUST:
     - Append '\n' to EVERY outbound message written to the process OutputStream
     - Call flush() after every write
     - Read inbound messages line-by-line using BufferedReader.readLine()
-    Failure to frame with '\n' causes the remote MCP server to hang forever
-    waiting for message termination. This is not optional. ***
-21. *** In native image, EVERY class, record, or enum passed
-    as data to a Qute template via .data("key", object) MUST be annotated
-    @TemplateData (io.quarkus.qute.TemplateData). Without it, ANY property
-    access {var.field} throws TemplateException at runtime — NOT at build time.
-    This is silent in JVM mode and only surfaces in native. @TemplateData is
-    SEPARATE from @RegisterForReflection — both may be needed for the same class
-    but serve different purposes.
-    McpReflex uses StringBuilder (no Qute), McpToolDescriptor is
-    Jackson-serialized only. No new @TemplateData needed in P59. But any future
-    class passed to a .txt/.html template must have it. ***
+    Failure to frame with '\n' causes the remote MCP server to hang forever. ***
+21. *** In native image, EVERY class, record, or enum passed as data to a Qute
+    template via .data("key", object) MUST be annotated @TemplateData
+    (io.quarkus.qute.TemplateData). Without it, ANY property access {var.field}
+    throws TemplateException at runtime — NOT at build time. This is silent in
+    JVM mode and only surfaces in native. @TemplateData is SEPARATE from
+    @RegisterForReflection — both may be needed. ***
+22. *** AgentRoleEnum constants are ROLE NAMES not deity names.
+    COORDINATOR, RESEARCHER, CODER, DEBUGGER, ARCHITECT, SYNTHESIZER.
+    Display names carry deity: "Brihaspati (System Designer)", "Dattatreya (Synthesizer)".
+    The old DATTATREYA constant no longer exists — it is SYNTHESIZER.
+    fromString() aliases: "dattatreya", "datta", "synthesizer" all → SYNTHESIZER.
+    PromptTemplateEngine.templateFor() switch MUST be exhaustive across all 6 roles. ***
+23. *** sqlite-vec load_extension() uses the OS dynamic linker (Windows LoadLibrary /
+    Linux dlopen). It IGNORES java.library.path entirely.
+    Relative paths are resolved against the JVM working directory — which differs
+    between dev mode (arcclaw-app/) and JAR mode (project root/).
+    ALWAYS resolve via Path.of(vecExtensionPath).toAbsolutePath().normalize().toString()
+    in FtsConnectionInterceptor before passing to load_extension().
+    %dev profile config: arcclaw.rag.vec-extension-path: "../lib/vec0" ***
+24. *** Apache Camel dev mode lifecycle — CRITICAL:
+    camelContext.disableJMX() is guarded by isNew() check in AbstractCamelContext.
+    In Quarkus dev mode, StartupEvent fires AFTER the INITIALIZED state.
+    disableJMX() becomes a SILENT NO-OP — JmxManagementLifecycleStrategy remains
+    registered. Calling camelContext.start() then NPEs in onContextStarting():189.
+    Neither CamelContextStartedEvent nor polling for isStarted() are reliable in dev.
+    CORRECT FIX before camelContext.start():
+      camelContext.getLifecycleStrategies()
+          .removeIf(s -> s.getClass().getName().contains("JmxManagement"));
+    This bypasses the isNew() guard and removes the strategy directly.
+    JAR/native unaffected — camelContext.getStatus().isStopped() is false there. ***
+25. *** StructuredOutputEngine resource loading:
+    ALWAYS use Thread.currentThread().getContextClassLoader().getResourceAsStream()
+    NEVER use getClass().getResourceAsStream() — fails for in-memory resources
+    generated by Quarkus augmentation in multi-module test execution. ***
+26. *** AgentFunctionProcessor schema generation:
+    Schema must be generated from the SAM RETURN TYPE using SchemaFactoryWrapper
+    .acceptJsonFormatVisitor(returnTypeClass, visitor).
+    NEVER use ToolSpecifications.toolSpecificationFrom() — that generates INPUT
+    parameter schema (combinedContext field), not the OUTPUT schema (SynthesisResult).
+    Generated resource path: schemas/functions/{InterfaceSimpleName}.json
+    Emit GeneratedResourceBuildItem ONLY — never write to filesystem. ***
+27. *** PermissiveJsonExtractor Jackson configuration:
+    CORRECT: JsonReadFeature.ALLOW_SINGLE_QUOTED_STRINGS
+    WRONG:   JsonReadFeature.ALLOW_SINGLE_QUOTES (does not exist — compile error)
+    CORRECT: JsonReadFeature.ALLOW_TRAILING_COMMA (token-level, preserves commas in strings)
+    WRONG:   regex comma stripping (corrupts "He left, she stayed" → "He left")
+    ABSENT (intentional): FAIL_ON_MISSING_CREATOR_PROPERTIES — allows @Nullable fields
+    to be absent from JSON without throwing. ***
+28. *** StructuredRetryLoop budget handling:
+    BudgetWarningException → CATCH internally, log, proceed with retry (soft signal).
+    BudgetExceededException → DO NOT CATCH, propagate to AgentStateMachineRunner.
+    assertWithinBudget() threshold check MUST precede compareAndSet CAS —
+    if CAS fires at 79% budget, warningSent is permanently true and the real
+    80% boundary warning is forever suppressed. ***
+29. *** Hibernate ORM 7 + QuarkusTransaction lambda scope:
+    EntityManager proxy does NOT correctly bind to a new transaction inside a
+    QuarkusTransaction.requiringNew().run(lambda). Extract lambda bodies into
+    dedicated @Transactional(TxType.REQUIRES_NEW) methods for correct proxy binding.
+    em.merge() on an already-managed entity is a NO-OP in ORM 7 — rely on dirty
+    checking instead. em.find() outside @Transactional returns null. ***
+30. *** Hibernate ORM 7 + SQLite DDL identity columns:
+    Without ArcClawSQLiteDialect.hasDataTypeInIdentityColumn()=true, Hibernate ORM 7
+    emits DDL like "checkpoint_id," (no type), breaking SQLite auto-increment rowid.
+    ArcClawSQLiteDialect is mandatory for all entity tables with @GeneratedValue. ***
 
 ## JDK Feature Policy (CRITICAL)
 
@@ -204,15 +323,17 @@ StructuredTaskScope is FORBIDDEN. Use ManagedExecutor + virtual threads instead.
 7. Config keys follow established arcclaw.* namespace conventions.
 8. All new @Scheduled beans (if any) guarded with %test.* profile disable flag.
 9. Every REST resource class that triggers async audit writes MUST have
-   @RunOnVirtualThread at class level (Nuance #16). McpServerResource has NO
-   direct JPA writes — @Transactional is NOT needed anywhere on this class.
+   @RunOnVirtualThread at class level (Nuance #16).
 10. No Panache anywhere in arcclaw-core or arcclaw-mcp repositories. Raw
     EntityManager only. Follow AgentSkillRepository as the exact precedent.
-11. ReflectionConfig.java in arcclaw-core ONLY imports from arcclaw-core.
-    NEVER add arcclaw-mcp imports to ReflectionConfig.java. GraalVM registration
-    for arcclaw-mcp classes is handled exclusively by McpBuildStep in
-    arcclaw-deployment using string-based ReflectiveClassBuildItem. No
-    component in this phase touches ReflectionConfig.java.
+11. AppReflectionConfig.java in arcclaw-app ONLY imports from arcclaw-app/arcclaw-rag.
+    NEVER add arcclaw-mcp imports. GraalVM registration for arcclaw-mcp classes is
+    handled exclusively by McpBuildStep in arcclaw-deployment via string-based
+    ReflectiveClassBuildItem.
+12. Any new AgentRoleEnum constant must be added to ALL switch expressions:
+    PromptTemplateEngine.templateFor(), AgentStateMachineRunner routing,
+    IntentClassifierService roles list, and sanitize() fallback map.
+    Exhaustive switch = compile error on missing case. Use this as the safety net.
 
 ## Execution Order
 
@@ -236,7 +357,7 @@ Common Requirements:
 1. 
 2.
 
-Compoenent  1 - <title>
+Component 1 - <title>
 File: <file full path>
 
 Current Problem:
@@ -256,4 +377,4 @@ Sample command to execute Junit:
 
 ## Once all done, review update below md files based on the ask and implementation
 
-TROUBLESHOOTING.md — add challanges in this phase troubleshooting section
+TROUBLESHOOTING.md — add challenges in this phase troubleshooting section
