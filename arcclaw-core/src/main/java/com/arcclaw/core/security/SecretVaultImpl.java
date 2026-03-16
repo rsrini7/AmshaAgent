@@ -101,7 +101,61 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional
     public void rotateSecrets(String sessionId, String oldPepper, String newPepper) {
-        // Not implemented in Phase 2 iteration 1
-        throw new UnsupportedOperationException("Key rotation not yet implemented in Phase 2");
+        // Key rotation is tracked for Phase 64.
+        // All documentation references to "24-hour automatic rotation" are incorrect
+        // and have been removed in Phase 63.
+        // Do not call this method — it will always throw until Phase 64 ships.
+        throw new UnsupportedOperationException(
+            "Vault key rotation is not yet implemented. " +
+            "Tracked in Phase 64 backlog. " +
+            "Remove all callers until Phase 64 is complete.");
+    }
+
+    @Override
+    public Optional<VaultKey> retrieveSystemKey(String keyName) {
+        String sessionId = "SYSTEM";
+
+        EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+        if (entity == null) {
+            return Optional.empty();
+        }
+
+        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
+        try {
+            byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
+            return Optional.of(new VaultKey(plaintext));
+        } catch (SecurityException e) {
+            throw e;
+        }
+    }
+
+    @Override
+    public boolean systemKeyExists(String keyName) {
+        return repository.findByKey("SYSTEM", keyName) != null;
+    }
+
+    @Override
+    @Transactional
+    public void storeSystemKey(String keyName, byte[] secret) {
+        String sessionId = "SYSTEM";
+
+        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
+        try {
+            AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
+
+            EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+            if (entity == null) {
+                entity = new EncryptedSecret();
+                entity.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
+            }
+            entity.ciphertext = result.ciphertext();
+            entity.nonce = result.nonce();
+            entity.setEncryptionKeyVersion(1);
+
+            repository.persist(entity);
+            
+        } catch (Exception e) {
+            throw e;
+        }
     }
 }

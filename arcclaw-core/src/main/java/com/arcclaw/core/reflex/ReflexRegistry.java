@@ -24,6 +24,9 @@ public class ReflexRegistry {
     @Inject
     AuditService auditService;
 
+    @Inject
+    AuditHashUtil hashUtil;
+
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId, String input, MessageContext context) {
         // Guard: if input starts with "store " treat as vault command — skip PII entirely
         if (input == null || input.isBlank() || input.trim().toLowerCase().startsWith("store ")) {
@@ -42,7 +45,7 @@ public class ReflexRegistry {
                     if (reflex instanceof PromptInjectionReflex) {
                         auditType = SecurityEventType.PROMPT_INJECTION_BLOCKED;
                         auditService.record(sessionId, userId, "reflex", auditType,
-                            "inputHash=" + AuditHashUtil.sha256hex(
+                            "inputHash=" + hashUtil.sha256hex(
                                 input.substring(0, Math.min(200, input.length()))));
                     } else if (reflex.getClass().getSimpleName().equals("ApproveReflex")) {
                         auditType = SecurityEventType.APPROVAL_GRANTED;

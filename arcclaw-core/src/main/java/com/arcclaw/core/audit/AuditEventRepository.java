@@ -34,9 +34,8 @@ public class AuditEventRepository {
         }
     }
 
-    @ConfigProperty(name = "arcclaw.audit.hmac-key", 
-                defaultValue = "dev-audit-hmac-key-min-32-bytes-00000")
-    String hmacKey;
+    @Inject
+    AuditHashUtil hashUtil;
 
     /**
      * Persists an AuditEvent and computes its HMAC chain fields.
@@ -56,12 +55,12 @@ public class AuditEventRepository {
         // Step 2: chain to previous hash
         String prevHash = findLatestHash(event.sessionId);
         if (prevHash == null) {
-            prevHash = AuditHashUtil.sha256hex("GENESIS:" + event.sessionId);
+            prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
         }
         event.prevHash = prevHash;
         
         String payload = event.computePayloadStr();
-        event.hmacHash = computeHmac(prevHash + "|" + payload);
+        event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
         
         em.persist(event);
     }
@@ -91,15 +90,4 @@ public class AuditEventRepository {
                 .getResultList();
     }
 
-    private String computeHmac(String data) {
-        try {
-            Mac mac = Mac.getInstance(CryptoConstants.HMAC_SHA256);
-            SecretKeySpec secretKeySpec = new SecretKeySpec(hmacKey.getBytes(StandardCharsets.UTF_8), CryptoConstants.HMAC_SHA256);
-            mac.init(secretKeySpec);
-            byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to compute HMAC", e);
-        }
-    }
 }

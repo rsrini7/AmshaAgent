@@ -197,7 +197,7 @@ Extracted the resume checkpoint logic out of `AgentLoop` and split the `AuditSer
 | [AesGcmSivCipher.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/AesGcmSivCipher.java) | AEAD Encryption (SIV mode) |
 | [SecretVaultImpl.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java) | Vault Implementation |
 
-**Verification**: `SecretVaultImplTest` (encrypt, decrypt, rotation, isolation) ✅
+**Verification**: `SecretVaultImplTest` (encrypt, decrypt, error on rotation, isolation) ✅
 
 ---
 

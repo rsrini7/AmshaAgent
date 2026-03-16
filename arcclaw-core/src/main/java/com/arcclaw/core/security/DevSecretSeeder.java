@@ -7,7 +7,11 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Arrays;
+
+import io.quarkus.runtime.StartupEvent;
+import jakarta.enterprise.event.Observes;
 
 /**
  * Seeds host OS environment variables into the SecretVault when a workspace
@@ -35,19 +39,48 @@ public class DevSecretSeeder {
     boolean autoSeedEnabled;
 
     /**
-     * Call this AFTER {@code WorkspaceContext.run()} is active.
-     * Seeds known tool tokens from the host environment into the
-     * encrypted vault for the current session.
-     * <p>
-     * No-op if {@code arcclaw.auto-seed-secrets=false}.
+     * Seeds host OS environment variables into the SecretVault at startup.
      */
-    public void seedDevSecrets() {
+    public void onStart(@Observes StartupEvent ev) {
         if (!autoSeedEnabled) {
             log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). Skipping.");
             return;
         }
+
+        // 1. Seed system keys (profile-independent logic but only if auto-seed enabled)
+        seedAuditHmacKey();
+
+        // 2. Seed tool tokens (requires active WorkspaceContext/SessionId if called later, 
+        // but here it might fail if session is null. Re-checking original code.)
+        // The original code said "Call this AFTER WorkspaceContext.run() is active."
+        // So I should keep the public seedDevSecrets() for those, 
+        // but the audit HMAC key is a SYSTEM key and doesn't need a session.
+    }
+
+    private void seedAuditHmacKey() {
+        String keyName = "arcclaw-audit-hmac-key";
+        if (!secretVault.systemKeyExists(keyName)) {
+            byte[] hmacKeyBytes = new byte[32];
+            new SecureRandom().nextBytes(hmacKeyBytes);
+            try {
+                secretVault.storeSystemKey(keyName, hmacKeyBytes);
+                log.info("DevSecretSeeder: seeded arcclaw-audit-hmac-key (system key)");
+            } catch (Exception e) {
+                log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, e.getMessage());
+            } finally {
+                Arrays.fill(hmacKeyBytes, (byte) 0);
+            }
+        }
+    }
+
+    /**
+     * Call this AFTER {@code WorkspaceContext.run()} is active.
+     */
+    public void seedDevSecrets() {
+        if (!autoSeedEnabled) {
+            return;
+        }
         seedFromHostEnv("GITHUB_TOKEN");
-        // Add other tool env vars here as needed
     }
 
     private void seedFromHostEnv(String vaultKeyName) {

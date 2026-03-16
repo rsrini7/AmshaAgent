@@ -204,4 +204,32 @@ public class SecretVaultImplTest {
             assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
         });
     }
+
+    @Test
+    void testRotateSecrets_ThrowsException() {
+        assertThrows(UnsupportedOperationException.class, () -> 
+            vault.rotateSecrets(TEST_SESSION_ID, "old", "new"));
+    }
+
+    @Test
+    void testSystemKeyLifeCycle() {
+        String sysKey = "test-system-key";
+        byte[] payload = "test-payload".getBytes(StandardCharsets.UTF_8);
+
+        // 1. Initial State
+        assertFalse(vault.systemKeyExists(sysKey), "System key should not exist initially");
+
+        // 2. Store
+        vault.storeSystemKey(sysKey, payload);
+
+        // 3. Exists
+        assertTrue(vault.systemKeyExists(sysKey), "System key should exist after storage");
+
+        // 4. Retrieve
+        Optional<VaultKey> retrieved = vault.retrieveSystemKey(sysKey);
+        assertTrue(retrieved.isPresent(), "System key should be retrievable");
+        try (VaultKey key = retrieved.get()) {
+            assertArrayEquals(payload, key.get(), "System key payload must match");
+        }
+    }
 }

@@ -69,6 +69,9 @@ public class AgentLoop {
     @Inject
     CheckpointResumeHandler checkpointResumeHandler;
 
+    @Inject
+    AuditHashUtil hashUtil;
+
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
      */
@@ -237,7 +240,7 @@ public class AgentLoop {
             throw e;
         } finally {
             if (result != null) {
-                String goalHash = AuditHashUtil.sha256hex(goal);
+                String goalHash = hashUtil.sha256hex(goal);
                 String userId = MDC.get(MdcKeys.USER_ID) != null ? (String) MDC.get(MdcKeys.USER_ID) : "unknown";
                 final AgentResult finalResult = result;
                 observers.forEach(o -> o.onLoopComplete(sessionId, userId, canonicalRole, goalHash, finalResult));
