@@ -27,6 +27,9 @@ public class TelegramChannelRoute extends RouteBuilder {
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
 
+    @ConfigProperty(name = "quarkus.profile")
+    String profile;
+
     @Override
     public void configure() throws Exception {
         log.infof("Telegram Route configuring (enabled=%b, tokenPresent=%b)", enabled, botToken != null && !botToken.isBlank());
@@ -74,6 +77,9 @@ public class TelegramChannelRoute extends RouteBuilder {
         try {
             // Ensure context is started so we can add and start routes effectively
             if (camelContext.getStatus().isStopped()) {
+                if ("dev".equals(profile)) {
+                    camelContext.disableJMX();  // ← kills JmxManagementLifecycleStrategy entirely
+                }
                 log.info("Starting CamelContext manually in onStart...");
                 camelContext.start();
             }

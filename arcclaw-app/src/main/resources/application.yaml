@@ -421,7 +421,12 @@ mp:
         sql: false # Forces SQL logging off even if global dev is true
 
 "%dev":
+  camel:
+    main:
+      jmx-enabled: false
   quarkus:
+    # jvm:
+    #   additional-args: "-Djava.library.path=${project.basedir}/../lib"
     console:
       enabled: false
     live-reload:
