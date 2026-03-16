@@ -447,8 +447,6 @@ mp:
 
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
-    rag:
-      vec-extension-path: "../lib/vec0"
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
