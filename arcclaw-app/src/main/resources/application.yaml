@@ -448,7 +448,7 @@ mp:
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
     rag:
-      vec-extension-path: "${SQLITE_VEC_PATH:./lib/vec0}"
+      vec-extension-path: "C:\\Users\\Srini\\ws\\ArcClawInternal\\lib\\vec0"
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
