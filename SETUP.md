@@ -473,15 +473,16 @@ Uses the `%dev` profile (strategy: `NONE`, no container isolation, live code rel
 
 ```bash
 # macOS / WSL2
-./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Darcclaw.rag.vec-extension-path=../lib/vec0"
 
 # Windows PowerShell
-.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Darcclaw.rag.vec-extension-path=../lib/vec0"
 
 # Suppress Dev UI and console if they cause NPE errors
 .\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" `
   "-Dquarkus.console.enabled=false" `
   "-Dquarkus.devui.enabled=false"
+  "-Darcclaw.rag.vec-extension-path=../lib/vec0"
 ```
 
 > In `%dev`, tools execute directly on the host. The `gh` CLI must be installed and authenticated (`gh auth login`) for the GitHub tool to work.
