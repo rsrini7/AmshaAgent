@@ -12,7 +12,7 @@ import io.quarkus.qute.TemplateData;
 public enum AgentRoleEnum {
     ARCHITECT("architect", new RoleDefinition(
             "architect",
-            "Architect (System Designer)",
+            "Brihaspati (System Designer)",
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
             7,
             true,

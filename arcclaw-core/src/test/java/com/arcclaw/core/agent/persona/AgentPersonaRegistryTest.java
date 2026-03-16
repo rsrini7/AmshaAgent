@@ -18,7 +18,7 @@ class AgentPersonaRegistryTest {
     void setUp() {
         // Build synthetic Iterable<Agent> for pure JUnit5 setup
         List<Agent> agents = Arrays.asList(
-                new ArchitectAgent(),
+                new BrihaspatiAgent(),
                 new BrahmaAgent(),
                 new DattatreyaAgent(),
                 new SaraswatiAgent(),

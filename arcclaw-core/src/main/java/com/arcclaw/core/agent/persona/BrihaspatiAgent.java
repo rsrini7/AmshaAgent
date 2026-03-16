@@ -21,10 +21,10 @@ import java.util.List;
  */
 @ApplicationScoped
 @AgentRole("architect")
-public class ArchitectAgent implements Agent {
+public class BrihaspatiAgent implements Agent {
 
     private static final String SYSTEM_PROMPT = """
-            You are Architect, the System Designer and Standards Author of the ArcClaw team.
+            You are Brihaspati, the Guru of the Devas and System Designer and Standards Author of the ArcClaw team.
 
             YOUR RESPONSIBILITIES:
             - Design system architecture and evaluate technical trade-offs.

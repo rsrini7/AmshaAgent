@@ -374,6 +374,12 @@ arcclaw:
       - name: debugger
         class: com.arcclaw.core.agent.ShivaAgent
         description: "Creative, Transformer and Balance Expert — blind-spot detection"
+      - name: architect
+        class: com.arcclaw.core.agent.persona.BrihaspatiAgent
+        description: "Brihaspati — Guru of the Devas, System Designer and Standards Author  — ADRs and architectural trade-offs"
+      - name: synthesizer
+        class: com.arcclaw.core.agent.persona.DattatreyaAgent
+        description: "Synthesizer and Avadhuta — multi-agent conflict resolution and integration"        
 
 # =============================================================================
 # MICROPROFILE CONTEXT PROPAGATION

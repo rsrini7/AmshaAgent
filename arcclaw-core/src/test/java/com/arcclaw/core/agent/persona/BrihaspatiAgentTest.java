@@ -9,17 +9,17 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class ArchitectAgentTest {
+public class BrihaspatiAgentTest {
 
     @Test
     void testRoleCorrectness() {
-        ArchitectAgent agent = new ArchitectAgent();
+        BrihaspatiAgent agent = new BrihaspatiAgent();
         assertEquals("architect", agent.role());
     }
 
     @Test
     void testSystemPromptDefined() {
-        ArchitectAgent agent = new ArchitectAgent();
+        BrihaspatiAgent agent = new BrihaspatiAgent();
         assertNotNull(agent.systemPrompt());
         assertFalse(agent.systemPrompt().isBlank());
         assertTrue(agent.systemPrompt().contains("write production code"));
@@ -27,7 +27,7 @@ public class ArchitectAgentTest {
 
     @Test
     void testAllowedToolsDelegatesToEnumDefinition() {
-        ArchitectAgent agent = new ArchitectAgent();
+        BrihaspatiAgent agent = new BrihaspatiAgent();
         List<String> tools = agent.allowedTools();
         
         Set<String> expectedTools = AgentRoleEnum.ARCHITECT.definition().toolNames();
