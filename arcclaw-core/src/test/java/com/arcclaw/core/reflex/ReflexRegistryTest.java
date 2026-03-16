@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import com.arcclaw.core.audit.AuditHashUtil;
 
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +49,9 @@ class ReflexRegistryTest {
 
     @InjectMock
     GovernanceLayer governanceLayer;
+
+    @InjectMock
+    AuditHashUtil hashUtil;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
     

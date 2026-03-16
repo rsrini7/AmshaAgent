@@ -1,13 +1,14 @@
 package com.arcclaw.core.security;
 
-import jakarta.enterprise.context.ApplicationScoped;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.CharBuffer;
-import java.util.Arrays;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Handles key derivation using the Argon2id algorithm (winner of the Password
@@ -52,10 +53,10 @@ public class Argon2idKeyDerivation {
             throw new IllegalArgumentException("Session ID cannot be null or empty during key derivation");
         }
 
-        // Convert char[] to bytes — do NOT call new String(pepperChars)
-        byte[] passwordBytes = StandardCharsets.UTF_8.encode(
-            CharBuffer.wrap(pepperChars)
-        ).array();
+        // Properly extract bytes from ByteBuffer without assuming it's fully packed
+        java.nio.ByteBuffer bb = StandardCharsets.UTF_8.encode(java.nio.CharBuffer.wrap(pepperChars));
+        byte[] passwordBytes = new byte[bb.remaining()];
+        bb.get(passwordBytes);
         byte[] saltBytes = sessionId.getBytes(StandardCharsets.UTF_8);
 
         try {
@@ -78,10 +79,14 @@ public class Argon2idKeyDerivation {
             // Return wrapped key (caller is responsible for closing)
             return new VaultKey(resultKey);
         } finally {
-            // Zero both arrays immediately after use
+            // Zero local byte array immediately after use
             Arrays.fill(passwordBytes, (byte) 0);
-            // Note: pepperChars is the config-injected field — zeroing it is intentional.
-            // MicroProfile injects it once at startup; the field is destroyed after first use.
+        }
+    }
+
+    @PreDestroy
+    void cleanup() {
+        if (pepperChars != null) {
             Arrays.fill(pepperChars, '\0');
         }
     }

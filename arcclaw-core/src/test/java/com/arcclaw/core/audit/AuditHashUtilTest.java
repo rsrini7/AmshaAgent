@@ -2,6 +2,9 @@ package com.arcclaw.core.audit;
 
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
+
+import jakarta.enterprise.inject.Instance;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -19,19 +22,28 @@ public class AuditHashUtilTest {
         SecretVault vault = Mockito.mock(SecretVault.class);
         byte[] keyBytes = new byte[32];
         VaultKey vaultKey = new VaultKey(keyBytes);
-        
+
         when(vault.retrieveSystemKey("arcclaw-audit-hmac-key")).thenReturn(Optional.of(vaultKey));
-        
-        AuditHashUtil util = new AuditHashUtil(vault);
+
+        @SuppressWarnings("unchecked")
+        Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
+        when(vaultInstance.get()).thenReturn(vault);
+
+        AuditHashUtil util = new AuditHashUtil(vaultInstance);
         assertNotNull(util);
     }
 
     @Test
-    void testConstructor_MissingKey_ThrowsException() {
+    void testMissingKey_ReturnsPlaceholder() {
         SecretVault vault = Mockito.mock(SecretVault.class);
         when(vault.retrieveSystemKey(anyString())).thenReturn(Optional.empty());
-        
-        assertThrows(IllegalStateException.class, () -> new AuditHashUtil(vault));
+
+        @SuppressWarnings("unchecked")
+        Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
+        when(vaultInstance.get()).thenReturn(vault);
+
+        AuditHashUtil util = new AuditHashUtil(vaultInstance);
+        assertEquals("error-missing-hmac-key", util.hmacHex("test"));
     }
 
     @Test
@@ -39,15 +51,19 @@ public class AuditHashUtilTest {
         SecretVault vault = Mockito.mock(SecretVault.class);
         byte[] keyBytes = "fixed-test-key-32-bytes-long-123".getBytes(StandardCharsets.UTF_8);
         VaultKey vaultKey = new VaultKey(keyBytes);
-        
+
         when(vault.retrieveSystemKey("arcclaw-audit-hmac-key")).thenReturn(Optional.of(vaultKey));
-        
-        AuditHashUtil util = new AuditHashUtil(vault);
-        
+
+        @SuppressWarnings("unchecked")
+        Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
+        when(vaultInstance.get()).thenReturn(vault);
+
+        AuditHashUtil util = new AuditHashUtil(vaultInstance);
+
         String input = "test-data";
         String hmac1 = util.hmacHex(input);
         String hmac2 = util.hmacHex(input);
-        
+
         assertEquals(hmac1, hmac2, "HMAC should be deterministic for same input");
     }
 
@@ -56,22 +72,31 @@ public class AuditHashUtilTest {
         SecretVault vault = Mockito.mock(SecretVault.class);
         byte[] keyBytes = "fixed-test-key-32-bytes-long-123".getBytes(StandardCharsets.UTF_8);
         VaultKey vaultKey = new VaultKey(keyBytes);
-        
+
         when(vault.retrieveSystemKey("arcclaw-audit-hmac-key")).thenReturn(Optional.of(vaultKey));
-        
-        AuditHashUtil util = new AuditHashUtil(vault);
-        
+
+        @SuppressWarnings("unchecked")
+        Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
+        when(vaultInstance.get()).thenReturn(vault);
+
+        AuditHashUtil util = new AuditHashUtil(vaultInstance);
+
         String hmac1 = util.hmacHex("input-1");
         String hmac2 = util.hmacHex("input-2");
-        
+
         assertNotEquals(hmac1, hmac2, "HMAC should change when input changes");
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void testSha256Hex() {
         SecretVault vault = Mockito.mock(SecretVault.class);
         when(vault.retrieveSystemKey(anyString())).thenReturn(Optional.of(new VaultKey(new byte[32])));
-        AuditHashUtil util = new AuditHashUtil(vault);
+
+        Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
+        when(vaultInstance.get()).thenReturn(vault);
+
+        AuditHashUtil util = new AuditHashUtil(vaultInstance);
 
         String input = "hello";
         // SHA-256 of "hello" (UTF-8)
