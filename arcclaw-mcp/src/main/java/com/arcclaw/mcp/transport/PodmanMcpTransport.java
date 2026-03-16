@@ -22,7 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import jakarta.annotation.PreDestroy;
 
 @ApplicationScoped
 public class PodmanMcpTransport {
@@ -199,5 +202,25 @@ public class PodmanMcpTransport {
         String line = reader.readLine();
         if (line == null) throw new IOException("MCP server closed connection unexpectedly");
         return objectMapper.readTree(line);
+    }
+
+    @PreDestroy
+    void cleanup() {
+        log.info("PodmanMcpTransport shutting down — terminating active MCP processes");
+        activeProcesses.forEach((sessionId, process) -> {
+            log.infof("Destroying MCP process for session: %s", sessionId);
+            process.destroy();
+            try {
+                if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                    log.warnf("Process for session %s did not exit in 3s — forcibly killing", sessionId);
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
+        });
+        activeProcesses.clear();
+        log.info("PodmanMcpTransport cleanup complete");
     }
 }

@@ -18,6 +18,7 @@ public class ToolInvoker {
     private static final Logger log = Logger.getLogger(ToolInvoker.class);
 
     @Inject ToolRegistry toolRegistry;
+    @Inject ToolObservationSanitizer observationSanitizer;
 
     /**
      * Invokes a tool and wraps exceptions into a {@link ToolResponse}.
@@ -33,7 +34,10 @@ public class ToolInvoker {
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
         try {
             // Call the 2-arg overload as per spec
-            return toolRegistry.invokeTool(toolName, params);
+            ToolResponse response = toolRegistry.invokeTool(toolName, params);
+            String rawObservation = response.output();
+            String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
+            return new ToolResponse(response.exitCode(), sanitizedObservation, response.success());
         } catch (RequiresApprovalException e) {
             // Re-throw for runner checkpoint persistence
             throw e;

@@ -1062,3 +1062,35 @@
 - [x] Write `testConcurrentStore_NoConflictWithHibernateVersion` in `SecretVaultImplTest` using `CountDownLatch` and Virtual Threads
 - [x] Remove `data-dir` configuration from `application.yaml` and update dev `sandbox.strategy` to `NONE`
 - [x] Verify all core and app tests pass with 0 regressions
+
+---
+
+## Phase 63-D — PodmanMcpTransport: @PreDestroy Process Cleanup ✅
+- [x] Add `@PreDestroy void cleanup()` to `PodmanMcpTransport`
+- [x] Ensure cleanup handles process termination gracefully with `destroy()` and `destroyForcibly()`
+- [x] Create test `testPreDestroyCleanup` in `PodmanMcpTransportTest` validating cleanup behavior
+
+---
+
+## Phase 63-E — Config Ordinal & System.nanoTime SLA Measurement ✅
+- [x] Update `DotenvConfigSourceProvider` to ordinal `296` ensuring it beats SmallRye's default
+- [x] Replace `System.currentTimeMillis()` with `System.nanoTime()` in `IntentClassifierService` for SLA accuracy
+- [x] Add verification test `testOrdinalIsExplicitly296` to `DotenvConfigSourceProviderTest`
+
+---
+
+## Phase 63-F — ToolObservationSanitizer: Injection & PII Sanitization ✅
+- [x] Add pure `redactPii(String)` method to `PiiScanReflex` matching all PII rules independent of `piiMode` config
+- [x] Create `ToolObservationSanitizer` defining hard 16KiB truncation, prompt injection sanitization, and PII redaction
+- [x] Inject `ToolObservationSanitizer` into `ToolInvoker` tracking and sanitizing raw `ToolResponse.output()`
+- [x] Test rigorous failure structures with mocked sanitization via `ToolInvokerTest` and `ToolObservationSanitizerTest`
+
+---
+
+## Phase 63-G — Pepper as char[]: Zero-on-Use Secret Handling ✅
+- [x] Build `@Priority(200)` `CharArrayConverter` supporting `@ConfigProperty char[] pepperChars` conversion
+- [x] Register `CharArrayConverter` as a MicroProfile SPI Service within `META-INF/services/org.eclipse.microprofile.config.spi.Converter`
+- [x] Update `Argon2idKeyDerivation` to unpack config injected `pepperChars` array securely inside `deriveSessionKey()`
+- [x] Ensure both local byte/char arrays and component scoped property `pepperChars` are securely wiped using `Arrays.fill(..., 0)` inside a strong `finally` block
+- [x] Configure GraalVM Native Image to support runtime reflection on `CharArrayConverter.class`
+- [x] Adjust unit tests mapping Java reflection validations parsing `char[]` buffer memory state

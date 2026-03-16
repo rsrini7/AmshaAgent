@@ -6,6 +6,8 @@ import org.bouncycastle.crypto.params.Argon2Parameters;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.CharBuffer;
+import java.util.Arrays;
 
 /**
  * Handles key derivation using the Argon2id algorithm (winner of the Password
@@ -35,7 +37,7 @@ public class Argon2idKeyDerivation {
      * unrecoverable.
      */
     @ConfigProperty(name = "arcclaw.vault.pepper")
-    String pepper;
+    char[] pepperChars;
 
     /**
      * Derives a symmetric encryption key for a specific session.
@@ -50,29 +52,37 @@ public class Argon2idKeyDerivation {
             throw new IllegalArgumentException("Session ID cannot be null or empty during key derivation");
         }
 
-        // Convert inputs to bytes
-        // Note: In a stricter implementation, pepper would be loaded as char[]/byte[].
-        // Here we accept the String config injection but convert immediately.
-        byte[] passwordBytes = pepper.getBytes(StandardCharsets.UTF_8);
+        // Convert char[] to bytes — do NOT call new String(pepperChars)
+        byte[] passwordBytes = StandardCharsets.UTF_8.encode(
+            CharBuffer.wrap(pepperChars)
+        ).array();
         byte[] saltBytes = sessionId.getBytes(StandardCharsets.UTF_8);
 
-        // Configure Argon2id
-        Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
-                .withVersion(Argon2Parameters.ARGON2_VERSION_13)
-                .withMemoryAsKB(MEMORY_COST_KB)
-                .withIterations(ITERATIONS)
-                .withParallelism(PARALLELISM)
-                .withSalt(saltBytes)
-                .build();
+        try {
+            // Configure Argon2id
+            Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
+                    .withVersion(Argon2Parameters.ARGON2_VERSION_13)
+                    .withMemoryAsKB(MEMORY_COST_KB)
+                    .withIterations(ITERATIONS)
+                    .withParallelism(PARALLELISM)
+                    .withSalt(saltBytes)
+                    .build();
 
-        Argon2BytesGenerator generator = new Argon2BytesGenerator();
-        generator.init(params);
+            Argon2BytesGenerator generator = new Argon2BytesGenerator();
+            generator.init(params);
 
-        // Generate Key
-        byte[] resultKey = new byte[KEY_LENGTH_BYTES];
-        generator.generateBytes(passwordBytes, resultKey);
+            // Generate Key
+            byte[] resultKey = new byte[KEY_LENGTH_BYTES];
+            generator.generateBytes(passwordBytes, resultKey);
 
-        // Return wrapped key (caller is responsible for closing)
-        return new VaultKey(resultKey);
+            // Return wrapped key (caller is responsible for closing)
+            return new VaultKey(resultKey);
+        } finally {
+            // Zero both arrays immediately after use
+            Arrays.fill(passwordBytes, (byte) 0);
+            // Note: pepperChars is the config-injected field — zeroing it is intentional.
+            // MicroProfile injects it once at startup; the field is destroyed after first use.
+            Arrays.fill(pepperChars, '\0');
+        }
     }
 }

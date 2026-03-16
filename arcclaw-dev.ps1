@@ -1,2 +1,2 @@
 $env:JDK_JAVA_OPTIONS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
-.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+.\mvnw.cmd quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve" "-Darcclaw.rag.vec-extension-path=../lib/vec0" "-Darcclaw.data-dir=../data"

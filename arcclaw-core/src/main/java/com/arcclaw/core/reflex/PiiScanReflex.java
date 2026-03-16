@@ -126,4 +126,20 @@ public class PiiScanReflex implements AgentReflex {
         return false;
     }
 
+    /**
+     * Pure PII redaction — always redacts regardless of piiMode configuration.
+     * Used by ToolObservationSanitizer to sanitize tool outputs before they
+     * enter agent history.
+     *
+     * @param input raw text (may be tool observation, repo content, etc.)
+     * @return text with PII patterns replaced with [REDACTED]
+     */
+    public String redactPii(String input) {
+        if (input == null || input.isBlank()) return input;
+        String result = input;
+        for (PiiRule rule : RULES) {
+            result = rule.pattern().matcher(result).replaceAll(rule.replacement());
+        }
+        return result;
+    }
 }

@@ -21,12 +21,16 @@ class ToolInvokerTest {
 
     private ToolInvoker invoker;
     private ToolRegistry toolRegistry;
+    private ToolObservationSanitizer observationSanitizer;
 
     @BeforeEach
     void setUp() {
         invoker = new ToolInvoker();
         toolRegistry = mock(ToolRegistry.class);
+        observationSanitizer = mock(ToolObservationSanitizer.class);
         invoker.toolRegistry = toolRegistry;
+        invoker.observationSanitizer = observationSanitizer;
+        when(observationSanitizer.sanitize(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(1));
     }
 
     @Test

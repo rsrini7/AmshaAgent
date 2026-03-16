@@ -1,6 +1,7 @@
 package com.arcclaw.app.routing;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
@@ -135,22 +136,20 @@ public class IntentClassifierService implements IntentClassifier {
         String safePrompt = dynamicClassifierPrompt.formatted(wrapped);
 
         String raw;
-        long start = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         try {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
             Log.warnf(e, "Intent classifier failed for session, defaulting to coordinator");
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 3_000) {
-            Log.warnf("CLASSIFIER SLA exceeded: %dms (target: 3000ms). " +
-                      "Check Groq latency or reduce classifier prompt length.", elapsed);
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+        if (elapsedMs > 3_000L) {
+            Log.warnf("IntentClassifier SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
         }
 
         String result = sanitize(raw.trim().toLowerCase());
-        Log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsed, result);
+        Log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
         return destructiveFilter.filter(result, userMessage);
     }
 

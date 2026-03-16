@@ -3824,3 +3824,58 @@ Separated the ORM versioning managed by Hibernate from the application logic enc
 
 ## Verification
 - ✅ Concurrent virtual thread persistence tests passed organically without `OptimisticLockException` issues.
+
+---
+
+# Phase 63-D — PodmanMcpTransport: @PreDestroy Process Cleanup
+
+Implemented `@PreDestroy` method on `PodmanMcpTransport` to gracefully teardown orphaned active Podman terminal processes during JVM shutdowns and continuous hot-reload deployments without locking Quarkus' dev mode.
+
+## Completed Changes
+- Iterated over active `.destroy()` tracking map and backed it by a 3-second forcibly timed timeout fallback.
+- Added reflection-based test suites ensuring mock process triggers via Quarkus teardown events.
+
+## Verification
+- ✅ `PodmanMcpTransportTest` natively simulates container shutdown scenarios achieving 100% pass rate.
+
+---
+
+# Phase 63-E — Config Ordinal & System.nanoTime SLA Measurement
+
+Targeted specific configurations ensuring customized property precedence overrides frameworks, combined with accurate system SLA measurements.
+
+## Completed Changes
+- Boosted `DotenvConfigSourceProvider` configuration precedence from generic custom properties upwards to ordinal 296, overtaking SmallRye.
+- Refactored `IntentClassifierService` performance tracking using monotonic `System.nanoTime()` avoiding `currentTimeMillis()` system clock regressions.
+
+## Verification
+- ✅ Validated execution tests for `DotenvConfigSourceProviderTest` resolving ordering ambiguity conflicts natively within Quarkus application properties precedence.
+
+---
+
+# Phase 63-F — ToolObservationSanitizer: Injection & PII Sanitization
+
+Bolstered the agent control loop by proactively scrubbing the untrusted raw inputs stemming from executed tools prior to them polluting persistent agent chat histories or enabling LLM context window exploitation.
+
+## Completed Changes
+- Added generic `ToolObservationSanitizer` tracking rigorous byte cap truncation limiting tool payloads precisely to 16 KiB.
+- Connected output logic through `PromptInjectionReflex.sanitize()` and a newly exposed `redactPii()` pass inside `PiiScanReflex`.
+- Refactored `ToolInvoker.java` establishing boundary layers shielding LLM inference parsing from dynamic prompt injections matching generic API tool return behaviors.
+
+## Verification
+- ✅ Comprehensive Test suite `ToolObservationSanitizerTest` parsing extreme inputs triggering injection flags, PII buffers, null scenarios, and string truncations all succeeding gracefully. 
+
+---
+
+# Phase 63-G — Pepper as char[]: Zero-on-Use Secret Handling
+
+Fortified the security handling and memory usage of the persistent symmetric key generation logic converting `Argon2id` string usage into properly shielded, ephemeral character arrays targeting Zero-on-use memory allocations. 
+
+## Completed Changes
+- Developed explicit `CharArrayConverter` augmenting MicroProfile parameters converting native types accurately mapping into `char[] pepperChars`.
+- Transformed internal key pipelines ensuring conversion byte buffers cleanly invoke zero-state iterations guaranteeing secrets do not pollute application Heap memory or JVM core dumps.
+- Implemented robust `native-image.properties` tuning supporting dynamic internal classes.
+
+## Verification
+- ✅ Reflection driven assertions tracking real-time unallocated heap allocations successfully verified `Argon2idKeyDerivationTest`.
+

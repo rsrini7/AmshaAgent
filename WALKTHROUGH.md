@@ -2248,3 +2248,28 @@ Successfully isolated the Hibernate ORM version locking loop from internal encry
 
 **Final Verification**:
 - ✅ Virtual thread stress tests in `SecretVaultImplTest` proven successful against race conditions.
+
+---
+
+## Phase 63-D — PodmanMcpTransport Shutdown Resilience ✅
+
+Added `@PreDestroy` handlers to `PodmanMcpTransport` preventing runaway dangling Podman processes. When Quarkus executes hot reloads, previous container sockets could remain engaged causing resource locks. A graceul `destroy()` wait buffer resolves these loops automatically without risking container bleed.
+
+---
+
+## Phase 63-E — SLA NanoTime and Custom Config Overrides ✅
+
+Overrode underlying ordinal rules dictating `DotenvConfigSourceProvider` guaranteeing the engine properly binds against internal custom properties rather than falling back to default SmallRye mappings. Transitioned standard `IntentClassifierService` SLAs from standard GMT clocks to relative `System.nanoTime()` mitigating clock-sync drifts causing skewed logic bounds.
+
+---
+
+## Phase 63-F — Tool Observation Sanitization Guardrails ✅
+
+Added `ToolObservationSanitizer` explicitly intercepting raw tool payload responses via the `ToolInvoker`. Imposed a rigorous internal truncation of payload limits protecting against string stuffing, while inherently wrapping output layers through `PromptInjectionReflex` and pure `PiiScanReflex.redactPii()` scans explicitly stripping API generated contexts from passing raw injections back to the foundational loops.
+
+---
+
+## Phase 63-G — Native Pepper Array Initialization ✅
+
+Enforced stringent Zero-on-Use guarantees spanning root secrets utilized via `Argon2idKeyDerivation`. Registered custom native MicroProfile Service converters generating `char[]` structs avoiding permanent variable interning within memory heaps, combined with specific runtime bindings configuring `native-image.properties` tracking GraalVM constraints safely zero-filling buffers on completion callbacks.
+

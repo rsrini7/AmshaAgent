@@ -1,11 +1,15 @@
 package com.arcclaw.mcp.transport;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.lang.reflect.Field;
+import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.List;
 import java.util.Map;
@@ -71,5 +75,22 @@ class PodmanMcpTransportTest {
         assertThrows(RuntimeException.class, () ->
             transport.connect(config).await().indefinitely());
         verify(mockCB).recordFailure(any());
+    }
+
+    @Test
+    void testPreDestroyCleanup() throws Exception {
+        Process mockProcess = mock(Process.class);
+        when(mockProcess.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        
+        Field activeProcessesField = PodmanMcpTransport.class.getDeclaredField("activeProcesses");
+        activeProcessesField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ConcurrentHashMap<String, Process> activeProcesses = (ConcurrentHashMap<String, Process>) activeProcessesField.get(transport);
+        activeProcesses.put("test-session", mockProcess);
+
+        transport.cleanup();
+
+        verify(mockProcess).destroy();
+        assertTrue(activeProcesses.isEmpty());
     }
 }

@@ -32,6 +32,12 @@ class TelegramChannelRouteStartupTest {
 
     @BeforeEach
     void stopPolling() throws Exception {
+        // Wait up to 2 seconds for route to register asynchronously
+        long start = System.currentTimeMillis();
+        while (camelContext.getRoute("telegram-bot") == null && System.currentTimeMillis() - start < 2000) {
+            Thread.sleep(50);
+        }
+
         // Stop the route immediately after startup to prevent real API polling
         // We only need to verify registration, not actual polling
         if (camelContext.getRouteController()

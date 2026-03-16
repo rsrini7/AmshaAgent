@@ -3401,3 +3401,12 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Symptom:** Tests involving `@WorkspaceScoped`, such as `WorkspaceScopeTest`, consistently fail during maven builds, indicating CDI contexts are not active.
 **Root Cause:** A duplicate `WorkspaceScopeTest.java` test file existed in the `arcclaw-app` module while also existing in another module, causing a split-package CDI resolution error during the test augmentation phase.
 **Resolution:** Delete the duplicate test file. Ensure test classes for custom CDI scopes are uniquely located.
+
+---
+
+## 24. Phase 63 — Refactoring and Hardening Troubleshooting
+
+### 🔴 Failure: Async Route Registration Tests Returning Null (TelegramChannelRoute)
+**Symptom**: Integration tests assessing Camel integrations failing fast assuming routes don't exist when evaluating `camelContext.getRoute("telegram-bot")`.
+**Root Cause**: The `onStart` hooks invoke the primary registration within standard async `@VirtualThreads` preventing testing contexts running via `@BeforeEach` bindings from detecting full registration before assertion checks evaluate. 
+**Resolution**: Implemented localized 2000ms delay evaluation loops manually polling for route bindings tracking contextual initialization gracefully prior to performing teardown scenarios avoiding explicit thread deadlocks.

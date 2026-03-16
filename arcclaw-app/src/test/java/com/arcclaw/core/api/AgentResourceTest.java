@@ -48,7 +48,7 @@ class AgentResourceTest {
                                 Map.of("response", "42"), null, 0, 0);
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
 
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.Finished("42", List.of(), 10, 5));
 
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
@@ -170,7 +170,7 @@ class AgentResourceTest {
 
         @Test
         void testComplianceViolationReturns451() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.Failed(
                                                 "Blocked by policy", AgentResult.FailureCategory.COMPLIANCE_VIOLATION,
                                                 List.of(), 0, 0));
@@ -187,7 +187,7 @@ class AgentResourceTest {
 
         @Test
         void testBudgetExceededReturns429() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.Failed(
                                                 "Token limit", AgentResult.FailureCategory.BUDGET_EXCEEDED,
                                                 List.of(), 0, 0));
@@ -204,7 +204,7 @@ class AgentResourceTest {
 
         @Test
         void testUserDeniedReturns422() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.Failed(
                                                 "User said no", AgentResult.FailureCategory.USER_DENIED,
                                                 List.of(), 0, 0));
@@ -221,7 +221,7 @@ class AgentResourceTest {
 
         @Test
         void testSchemaErrorReturns422() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.Failed(
                                                 "Bad tool params", AgentResult.FailureCategory.SCHEMA_ERROR,
                                                 List.of(), 0, 0));
@@ -238,7 +238,7 @@ class AgentResourceTest {
 
         @Test
         void testSystemErrorReturns500() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.Failed(
                                                 "Internal crash", AgentResult.FailureCategory.SYSTEM_ERROR,
                                                 List.of(), 0, 0));
@@ -255,7 +255,7 @@ class AgentResourceTest {
 
         @Test
         void testLoopExceededReturns408() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.LoopExceeded(5, List.of(), 0, 0));
 
                 given()
@@ -270,7 +270,7 @@ class AgentResourceTest {
 
         @Test
         void testApprovalRequiredReturns202WithShape() {
-                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt()))
+                Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(new AgentResult.AwaitingApproval(
                                                 "gh-tool", "{}", "sess-123", List.of(), 0, 0));
 
