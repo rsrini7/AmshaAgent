@@ -1,9 +1,14 @@
+Please go through my entire project end to end as a Senior Java Architect, Security Reviewer, Refactoring Expert & Senior Java Developer. My plan is the share your reviews with Claude/Gemini and its review with you to debate and solve. Make sure to deep dive and not just high level and only positive side. Not looking for any Constructive Feedback and Roadmap. 
+
+----
+
 Role: Senior Java Architect, Bug Fixer, Refactoring Expert & Senior Java Developer
-Task: Phase X — Full-Spectrum Refactoring for Bug fixes, Maintainability, and JDK 25 Modernization for the ArcClaw ecosystem.
+Task: Phase X - ..... to be filled.
 
 Architecture Context:
 A production-grade, enterprise AI Agent Kernel built with:
-  - Java 25 + Quarkus 3.23 + LangChain4J 0.26.1
+  - Java 25 + Quarkus 3.27.2 + LangChain4j core 1.5
+    (via io.quarkus.platform:quarkus-langchain4j-bom:3.27.2, extension 1.2.0)
   - GraalVM Native Image (Podman container build)
   - SQLite WAL (single-node, strict singleton topology)
   - Apache Camel (Telegram channel via camel-quarkus-telegram)
@@ -13,7 +18,10 @@ A production-grade, enterprise AI Agent Kernel built with:
   - GovernanceLayer (USD budget cap, AutonomyLevel: FULL/SUPERVISED/READONLY)
   - Multi-agent Trimurti model: Vishnu(coordinator), Brahma(coder),
     Shiva(debugger), Saraswati(researcher), DattatreyaAgent(meta-synthesizer)
-  - IntentClassifierService (llama-3.1-8b-instant via Groq, routes to agent role)
+  - IntentClassifierService (llama-3.1-8b-instant via Groq OpenAI-compatible API,
+    accessed via quarkus.langchain4j.openai.* namespace — quarkus.langchain4j.groq.*
+    namespace was removed during migration. CompactionModelProducer reads
+    quarkus.langchain4j.openai.base-url and quarkus.langchain4j.openai.api-key.)
   - Multi-module Maven: arcclaw-parent → arcclaw-channel-api, arcclaw-core,
     arcclaw-deployment, arcclaw-app
   - Dependency chain: arcclaw-channel-api ← arcclaw-core ← arcclaw-app (no reverse).
@@ -46,7 +54,7 @@ A production-grade, enterprise AI Agent Kernel built with:
   - InstantToTextConverter: AttributeConverter<Instant,String> for all Instant columns
   - ReflectionConfig.java: @RegisterForReflection(targets={...}) in arcclaw-core.
     This file ONLY imports from arcclaw-core. NEVER from arcclaw-mcp.
-  - SmallRye Fault Tolerance in Quarkus 3.23 BOM — @Timeout, @Retry, @CircuitBreaker
+  - SmallRye Fault Tolerance in Quarkus 3.27.2 BOM — @Timeout, @Retry, @CircuitBreaker
   - Quarkus REST Client Reactive available (quarkus-rest-client-reactive-jackson)
   - ManagedExecutor available via CDI (@Inject ManagedExecutor)
 
@@ -88,9 +96,12 @@ A production-grade, enterprise AI Agent Kernel built with:
   .registerDynamic(), SkillReflex (/skills command), SkillAwareIntentClassifier,
   SkillSystemPrompt.html Qute wrapper, REST CRUD /api/v1/skills + /refresh + /delete,
   SecurityEventType: SKILL_LOADED / SKILL_REFRESHED (telemetry tier).
-  App test baseline after P60 = 132.
+- Phase 60.1: Qute Native Reflection Fixes (Gate) — @TemplateData added to
+  RoleDefinition, AgentRoleEnum, ReasoningStep, ToolCapability,
+  AgentResult nested records (Finished, AwaitingApproval, LoopExceeded, Failed).
+  Zero new tests. Baseline unchanged at 535/535.
 
-## Known Architecture Nuances — ALWAYS APPLY (all 20, including P60 additions)
+## Known Architecture Nuances — ALWAYS APPLY
 
 1. SystemMessages are NEVER stored in SQLite ChatMemoryStore.
 2. All CDI beans touching per-session context must use ScopedValue — never
@@ -115,36 +126,50 @@ A production-grade, enterprise AI Agent Kernel built with:
 12. ToolCapability enum constants use underscores: GITHUB, MEMORY_SEARCH,
     SCHEDULE_TASK, MANAGE_SCHEDULE, SANDBOX_EXEC. ToolCapability.toolName()
     returns the lowercase no-underscore form: "github", "memorysearch", etc.
-    The McpToolAllowlist @WithDefault uses toolName() values (lowercase), NOT
+    McpToolAllowlist @WithDefault uses toolName() values (lowercase), NOT
     the enum constant names, because it is matched against external MCP server
     tool names which are always lowercase.
 13. maxBudgetUsd is EXPLICITLY EXCLUDED from skill frontmatter.
-14. %test.arcclaw.skills.hot-reload=false in application.yaml test profile.
+14. In application.yaml test profile. 
+    %test:
+	  arcclaw:
+	    skills:
+		  hot-reload=false 
 15. Dynamic skills use pre-compiled Qute wrapper SkillSystemPrompt.html only.
-16. *** P60-DISCOVERED: ALL REST resource classes that touch JPA/Hibernate or
+16. *** ALL REST resource classes that touch JPA/Hibernate or
     trigger async audit writes MUST be annotated @RunOnVirtualThread at class
     level. Missing → BlockingOperationNotAllowedException immediately on any
-    request. McpServerResource MUST have @RunOnVirtualThread. ***
-17. *** P60-DISCOVERED: Repository pattern in arcclaw-core ALWAYS uses raw
+    request. McpAdminResource MUST have @RunOnVirtualThread. ***
+17. *** Repository pattern in arcclaw-core ALWAYS uses raw
     EntityManager (@Inject EntityManager em). NEVER PanacheRepositoryBase or
     PanacheEntity — Panache bytecode enhancement is module-scoped and fails in
     cross-module arcclaw-app tests. AgentSkillRepository is the exact precedent. ***
-18. *** P60-DISCOVERED: SQLite test isolation @BeforeEach rules:
+18. *** SQLite test isolation @BeforeEach rules:
     (a) All writes must be in a committed transaction BEFORE the first RestAssured
         call. (b) Read-only repository methods use @Transactional(TxType.SUPPORTS).
     (c) Use deleteAll() + GET /refresh in @BeforeEach for clean baseline.
     Violating (a) → snapshot isolation anomalies. ***
-19. *** P60-DISCOVERED: @QuarkusTest REST tests — every given() block for a
+19. *** @QuarkusTest REST tests — every given() block for a
     protected endpoint MUST include:
       .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
     Missing → 401 and test passes for the wrong reason. ***
-20. *** P59-PROTOCOL: MCP stdio transport uses Newline-Delimited JSON-RPC 2.0.
+20. *** MCP stdio transport uses Newline-Delimited JSON-RPC 2.0.
     PodmanMcpTransport MUST:
     - Append '\n' to EVERY outbound message written to the process OutputStream
     - Call flush() after every write
     - Read inbound messages line-by-line using BufferedReader.readLine()
     Failure to frame with '\n' causes the remote MCP server to hang forever
     waiting for message termination. This is not optional. ***
+21. *** In native image, EVERY class, record, or enum passed
+    as data to a Qute template via .data("key", object) MUST be annotated
+    @TemplateData (io.quarkus.qute.TemplateData). Without it, ANY property
+    access {var.field} throws TemplateException at runtime — NOT at build time.
+    This is silent in JVM mode and only surfaces in native. @TemplateData is
+    SEPARATE from @RegisterForReflection — both may be needed for the same class
+    but serve different purposes.
+    McpReflex uses StringBuilder (no Qute), McpToolDescriptor is
+    Jackson-serialized only. No new @TemplateData needed in P59. But any future
+    class passed to a .txt/.html template must have it. ***
 
 ## JDK Feature Policy (CRITICAL)
 
@@ -187,7 +212,7 @@ StructuredTaskScope is FORBIDDEN. Use ManagedExecutor + virtual threads instead.
     NEVER add arcclaw-mcp imports to ReflectionConfig.java. GraalVM registration
     for arcclaw-mcp classes is handled exclusively by McpBuildStep in
     arcclaw-deployment using string-based ReflectiveClassBuildItem. No
-    Component in this phase touches ReflectionConfig.java.
+    component in this phase touches ReflectionConfig.java.
 
 ## Execution Order
 
