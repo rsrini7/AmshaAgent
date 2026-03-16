@@ -2273,3 +2273,37 @@ Added `ToolObservationSanitizer` explicitly intercepting raw tool payload respon
 
 Enforced stringent Zero-on-Use guarantees spanning root secrets utilized via `Argon2idKeyDerivation`. Registered custom native MicroProfile Service converters generating `char[]` structs avoiding permanent variable interning within memory heaps, combined with specific runtime bindings configuring `native-image.properties` tracking GraalVM constraints safely zero-filling buffers on completion callbacks.
 
+---
+
+## Phase 63-H — Security & Audit Hardening ✅
+
+Hardened the security bootstrap process and audit hashing mechanism by integrating deterministic HMAC key management within the `SecretVault` and resolving startup context conflicts.
+
+### Changes Made
+
+#### [SecretVaultImpl.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
+- **Scope Promotion**: Changed from `@Dependent` to `@ApplicationScoped` to ensure stability and mockability across test suites.
+- **Context Bypass**: Refactored `retrieveSystemKey` and `storeSystemKey` to use a dedicated "SYSTEM" identifier that bypasses the `@WorkspaceScoped` `VaultKeyCache`. This allows the application to access security keys during the `StartupEvent` when no user session/context is active.
+- **Selective Auditing**: Updated the `store` method to exclude "SYSTEM" writes from recursive audit hashing, preventing startup deadlocks.
+
+#### [DevSecretSeeder.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/DevSecretSeeder.java)
+- **Automatic Provisioning**: Added logic to automatically seed the `arcclaw-audit-hmac-key` in the `SecretVault` during startup if it doesn't exist (restricted to `dev` and `test` profiles).
+
+#### [AuditHashUtil.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- **Persistence**: Replaced transient key generation with a mandatory pull from `SecretVault` using the standard `arcclaw-audit-hmac-key` alias.
+
+### Verification Results
+
+| Test Class | Core Feature | Status |
+|------------|--------------|--------|
+| `AuditHashUtilTest` | Deterministic HMAC Generation | ✅ PASS |
+| `DevSecretSeederTest` | Automatic Key Seeding (Test Profile) | ✅ PASS |
+| `SecretVaultImplTest` | System Key Lifecycle (Context Bypass) | ✅ PASS |
+| `StartupSecurityValidatorTest` | Production Sentinel Logic | ✅ PASS |
+
+**Key Evidence**:
+- Verified that `StartupSecurityValidator` correctly blocks deployment if the HMAC key is missing in production-like environments.
+- Confirmed `ContextNotActiveException` is resolved during boot-time key retrieval.
+- Integrated all test suites into a unified regression run: `mvn clean test -pl arcclaw-app,arcclaw-core`.
+
+

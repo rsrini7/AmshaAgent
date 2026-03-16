@@ -1,15 +1,9 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.security.CryptoConstants;
+import java.util.List;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.HexFormat;
-import java.util.List;
 
 @ApplicationScoped
 public class AuditVerifier {

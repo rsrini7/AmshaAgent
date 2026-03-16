@@ -1,16 +1,20 @@
 package com.arcclaw.app.security;
 
 import io.quarkus.runtime.StartupEvent;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
+import com.arcclaw.core.security.SecretVault;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @QuarkusTest
@@ -32,6 +36,12 @@ class StartupSecurityValidatorProdUnsafeTest {
     }
 
     @Inject StartupSecurityValidator validator;
+    @InjectMock SecretVault vault;
+
+    @BeforeEach
+    void setup() {
+        when(vault.systemKeyExists("arcclaw-audit-hmac-key")).thenReturn(true);
+    }
 
     @Test
     void testProdWithUnsafePepperThrows() {
@@ -42,7 +52,6 @@ class StartupSecurityValidatorProdUnsafeTest {
         // Override fields to simulate unsafe prod config
         real.profile = "prod";
         real.pepper  = "dev-pepper-insecure";
-        real.hmacKey = "prod-secure-hmac-key-0000000000000";
         real.allowedUserIds = Optional.of(List.of(123L));
         real.allowedUsers   = Optional.empty();
 

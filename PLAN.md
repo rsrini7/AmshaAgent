@@ -3879,3 +3879,44 @@ Fortified the security handling and memory usage of the persistent symmetric key
 ## Verification
 - ✅ Reflection driven assertions tracking real-time unallocated heap allocations successfully verified `Argon2idKeyDerivationTest`.
 
+---
+
+# Phase 63-H — Security & Audit Hardening ✅
+
+Hardened the security bootstrap process and audit hashing mechanism by integrating deterministic HMAC key management within the `SecretVault`.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Deterministic Audit Hashing**: Transitioned `AuditHashUtil` to use a persistent HMAC key stored in the `SecretVault` (`arcclaw-audit-hmac-key`) instead of transient or ad-hoc keys. This ensures audit hashes remain consistent across server restarts and allows for future audit log verification.
+
+> [!CAUTION]
+> **Context-Free System Keys**: Refactored `SecretVaultImpl` to bypass the `@WorkspaceScoped` `VaultKeyCache` when accessing "SYSTEM" level keys. This resolves `ContextNotActiveException` errors during the Quarkus `StartupEvent` phase when no workspace session is active.
+
+> [!NOTE]
+> **Production Safety**: `StartupSecurityValidator` now enforces the presence of the `arcclaw-audit-hmac-key` in the vault for all production-like profiles, preventing deployment without initialized security parameters.
+
+## Completed Changes
+
+#### [MODIFY] [SecretVaultImpl.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
+- Promoted to `@ApplicationScoped` to support unit testing with `@InjectMock`.
+- Implemented `systemKeyExists()` and `storeSystemKey()`/`retrieveSystemKey()` logic that bypasses session-scoped caching for the "SYSTEM" identifier.
+- Suppressed audit logging for "SYSTEM" session writes to ensure stable boot.
+
+#### [MODIFY] [DevSecretSeeder.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/DevSecretSeeder.java)
+- Added automatic seeding of `arcclaw-audit-hmac-key` inside the `onStart` observer for `dev` and `test` profiles.
+
+#### [MODIFY] [AuditHashUtil.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- Switched constructor to pull the HMAC key directly from `SecretVault`.
+
+#### [FIX] [StartupSecurityValidatorTest.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/test/java/com/arcclaw/app/security/StartupSecurityValidatorTest.java)
+- Updated multiple test suites (`ProdSafe`, `ProdUnsafe`, `StringOnlyAllowlist`, `UnknownProfile`) to use `@InjectMock SecretVault` instead of attempting to set internal HMAC key fields via reflection.
+
+## Verification
+- ✅ `AuditHashUtilTest`: Confirms deterministic HMAC generation.
+- ✅ `DevSecretSeederTest`: Verifies automatic key seeding in the test profile.
+- ✅ `SecretVaultImplTest`: Verifies system key lifecycle and persistence.
+- ✅ `StartupSecurityValidator*`: All 6 validation suites pass, ensuring secure boot logic.
+- ✅ Build: `mvn clean test -pl arcclaw-app,arcclaw-core` successful with 0 regressions.
+
+

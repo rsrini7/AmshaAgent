@@ -42,6 +42,7 @@ public class SecretVaultImplTest {
         // Wait for background audit writes to finish
         auditService.waitForIdle();
         repository.deleteBySessionId(TEST_SESSION_ID);
+        repository.deleteBySessionId("SYSTEM");
     }
 
     @Test
@@ -208,11 +209,12 @@ public class SecretVaultImplTest {
     @Test
     void testRotateSecrets_ThrowsException() {
         assertThrows(UnsupportedOperationException.class, () -> 
-            vault.rotateSecrets(TEST_SESSION_ID, "old", "new"));
+            vault.rotateSecrets(TEST_SESSION_ID));
     }
 
     @Test
     void testSystemKeyLifeCycle() {
+        cleanDb();
         String sysKey = "test-system-key";
         byte[] payload = "test-payload".getBytes(StandardCharsets.UTF_8);
 

@@ -1,20 +1,12 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.security.CryptoConstants;
+import java.util.List;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.HexFormat;
-import java.util.List;
 
 @ApplicationScoped
 public class AuditEventRepository {

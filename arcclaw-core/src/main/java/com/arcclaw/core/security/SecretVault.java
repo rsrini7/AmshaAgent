@@ -31,7 +31,7 @@ public interface SecretVault {
      * This is an expensive operation: decrypt all -> re-encrypt with new pepper ->
      * save.
      */
-    void rotateSecrets(String sessionId, String oldPepper, String newPepper);
+    void rotateSecrets(String sessionId);
 
     /**
      * Retrieves a system-level key (not tied to any specific workspace session).

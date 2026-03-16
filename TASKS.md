@@ -1094,3 +1094,14 @@
 - [x] Ensure both local byte/char arrays and component scoped property `pepperChars` are securely wiped using `Arrays.fill(..., 0)` inside a strong `finally` block
 - [x] Configure GraalVM Native Image to support runtime reflection on `CharArrayConverter.class`
 - [x] Adjust unit tests mapping Java reflection validations parsing `char[]` buffer memory state
+
+---
+
+## Phase 63-H — Security & Audit Hardening ✅
+- [x] Implement deterministic HMAC key retrieval in `AuditHashUtil` from `SecretVault`. <!-- id: 512 -->
+- [x] Bypass `VaultKeyCache` for "SYSTEM" session in `SecretVaultImpl` to support boot-time access. <!-- id: 513 -->
+- [x] Seed `arcclaw-audit-hmac-key` in `DevSecretSeeder` for `dev` and `test` profiles. <!-- id: 514 -->
+- [x] Validate `arcclaw-audit-hmac-key` presence in `StartupSecurityValidator` for non-dev profiles. <!-- id: 515 -->
+- [x] Update `StartupSecurityValidator*Test` suites to use `@InjectMock SecretVault`. <!-- id: 516 -->
+- [x] Verify: `AuditHashUtilTest`, `DevSecretSeederTest`, and `SecretVaultImplTest` pass. <!-- id: 517 -->
+

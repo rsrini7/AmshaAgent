@@ -1,18 +1,19 @@
 package com.arcclaw.core.security;
 
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import jakarta.enterprise.context.Dependent;
-import jakarta.inject.Inject;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.util.MdcKeys;
-import org.jboss.logging.MDC;
-
-import jakarta.transaction.Transactional;
-
 import java.util.Optional;
 
-@Dependent
+import org.jboss.logging.MDC;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.util.MdcKeys;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+
+@ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
 
     @Inject
@@ -61,10 +62,14 @@ public class SecretVaultImpl implements SecretVault {
             entity.setEncryptionKeyVersion(1);
 
             repository.persist(entity);
-            
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
-            
+
+            // Only record audit for non-system sessions to avoid infinite recursion or
+            // missing context
+            if (!"SYSTEM".equals(sessionId)) {
+                String userId = (String) MDC.get(MdcKeys.USER_ID);
+                auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
+            }
+
         } catch (Exception e) {
             throw e;
         }
@@ -78,9 +83,10 @@ public class SecretVaultImpl implements SecretVault {
         // 1. Fetch
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);
         String userId = (String) MDC.get(MdcKeys.USER_ID);
-        
+
         if (entity == null) {
-            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE_MISS, "keyName=" + keyName);
+            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE_MISS,
+                    "keyName=" + keyName);
             return Optional.empty();
         }
 
@@ -99,16 +105,15 @@ public class SecretVaultImpl implements SecretVault {
     }
 
     @Override
-    @Transactional
-    public void rotateSecrets(String sessionId, String oldPepper, String newPepper) {
+    public void rotateSecrets(String sessionId) {
         // Key rotation is tracked for Phase 64.
         // All documentation references to "24-hour automatic rotation" are incorrect
         // and have been removed in Phase 63.
         // Do not call this method — it will always throw until Phase 64 ships.
         throw new UnsupportedOperationException(
-            "Vault key rotation is not yet implemented. " +
-            "Tracked in Phase 64 backlog. " +
-            "Remove all callers until Phase 64 is complete.");
+                "Vault key rotation is not yet implemented. " +
+                        "Tracked in Phase 64 backlog. " +
+                        "Remove all callers until Phase 64 is complete.");
     }
 
     @Override
@@ -120,9 +125,10 @@ public class SecretVaultImpl implements SecretVault {
             return Optional.empty();
         }
 
-        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
-        try {
-            byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
+        // SYSTEM keys bypass the WorkspaceScoped cache to avoid
+        // ContextNotActiveException during startup/boot
+        try (VaultKey systemKey = keyDerivation.deriveSessionKey(sessionId)) {
+            byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, systemKey, keyName);
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
             throw e;
@@ -139,9 +145,10 @@ public class SecretVaultImpl implements SecretVault {
     public void storeSystemKey(String keyName, byte[] secret) {
         String sessionId = "SYSTEM";
 
-        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
-        try {
-            AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
+        // SYSTEM keys bypass the WorkspaceScoped cache to avoid
+        // ContextNotActiveException during startup/boot
+        try (VaultKey systemKey = keyDerivation.deriveSessionKey(sessionId)) {
+            AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, systemKey, keyName);
 
             EncryptedSecret entity = repository.findByKey(sessionId, keyName);
             if (entity == null) {
@@ -153,7 +160,6 @@ public class SecretVaultImpl implements SecretVault {
             entity.setEncryptionKeyVersion(1);
 
             repository.persist(entity);
-            
         } catch (Exception e) {
             throw e;
         }

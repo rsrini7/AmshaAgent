@@ -1,22 +1,23 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.security.SecretVault;
-import com.arcclaw.core.security.VaultKey;
-import com.arcclaw.core.security.CryptoConstants;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import com.arcclaw.core.security.CryptoConstants;
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultKey;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 @ApplicationScoped
 public class AuditHashUtil {
 
-    private static final Logger LOG = Logger.getLogger(AuditHashUtil.class);
+    // private static final Logger LOG = Logger.getLogger(AuditHashUtil.class);
     private static final String AUDIT_HMAC_KEY_NAME = "arcclaw-audit-hmac-key";
 
     private final byte[] hmacKey;

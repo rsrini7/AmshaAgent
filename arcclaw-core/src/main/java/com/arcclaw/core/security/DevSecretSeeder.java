@@ -38,23 +38,24 @@ public class DevSecretSeeder {
     @ConfigProperty(name = "arcclaw.auto-seed-secrets", defaultValue = "false")
     boolean autoSeedEnabled;
 
+    @ConfigProperty(name = "quarkus.profile")
+    String profile;
+
     /**
      * Seeds host OS environment variables into the SecretVault at startup.
      */
     public void onStart(@Observes StartupEvent ev) {
+        // 1. Mandatory system key seeding for dev/test
+        if ("dev".equals(profile) || "test".equals(profile)) {
+            seedAuditHmacKey();
+        }
+
         if (!autoSeedEnabled) {
-            log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). Skipping.");
+            log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). Skipping tool secret seeding.");
             return;
         }
 
-        // 1. Seed system keys (profile-independent logic but only if auto-seed enabled)
-        seedAuditHmacKey();
-
-        // 2. Seed tool tokens (requires active WorkspaceContext/SessionId if called later, 
-        // but here it might fail if session is null. Re-checking original code.)
-        // The original code said "Call this AFTER WorkspaceContext.run() is active."
-        // So I should keep the public seedDevSecrets() for those, 
-        // but the audit HMAC key is a SYSTEM key and doesn't need a session.
+        // 2. Seed tool tokens (requires active WorkspaceContext/SessionId if called later)
     }
 
     private void seedAuditHmacKey() {
