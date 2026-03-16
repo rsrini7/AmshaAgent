@@ -61,25 +61,22 @@ public class TelegramChannelRoute extends RouteBuilder {
 
     void onStart(@Observes StartupEvent ev) {
         log.infof("Telegram Route onStart (enabled=%b, contextStatus=%s)", enabled, camelContext.getStatus());
-        if (!enabled) {
-            log.info("Telegram channel disabled — skipping self-registration.");
-            return;
-        }
-        if (botToken == null || botToken.isBlank()
-                || botToken.startsWith("mock")
-                || botToken.equals("mock-telegram-token")) {
+        if (!enabled) return;
+        if (isPlaceholderToken()) {
             log.warn("Telegram bot token is a placeholder — skipping self-registration.");
             return;
         }
+
         Thread.ofVirtual().name("telegram-route-registrar").start(() -> {
             try {
-                // Ensure context is started so we can add and start routes effectively
                 if (camelContext.getStatus().isStopped()) {
-                    // Must disable JMX before manual start in Quarkus 3.27.x —
-                    // ManagementNameStrategy is not wired when StartupEvent fires,
-                    // causing NPE in JmxManagementLifecycleStrategy.onContextStarting()
-                    camelContext.disableJMX();
-                    log.info("Starting CamelContext manually in onStart...");
+                    // disableJMX() silently no-ops after INITIALIZED state
+                    // Remove the strategy directly — bypasses the isNew() guard
+                    camelContext.getLifecycleStrategies()
+                        .removeIf(s -> s.getClass().getName()
+                            .contains("JmxManagement"));
+
+                    log.info("Starting CamelContext manually...");
                     camelContext.start();
                 }
 
@@ -87,15 +84,21 @@ public class TelegramChannelRoute extends RouteBuilder {
                     log.info("Registering Telegram route...");
                     camelContext.addRoutes(this);
                     camelContext.getRouteController().startRoute("telegram-bot");
-                    log.infof("Telegram route self-registered and started via StartupEvent. Route count: %d, routeStatus=%s",
-                        camelContext.getRoutes().size(),
-                        camelContext.getRouteController().getRouteStatus("telegram-bot"));
+                    log.infof("Telegram route started. Status=%s",
+                        camelContext.getRouteController()
+                            .getRouteStatus("telegram-bot"));
                 } else {
                     log.info("Telegram route already registered — skipping.");
                 }
             } catch (Exception e) {
-                log.error("Telegram route self-registration failed", e);
+                log.error("Telegram route registration failed", e);
             }
         });
+    }
+    
+    private boolean isPlaceholderToken() {
+        return botToken == null || botToken.isBlank()
+            || botToken.startsWith("mock")
+            || botToken.equals("mock-telegram-token");
     }
 }
