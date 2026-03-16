@@ -104,7 +104,7 @@
               <!-- JBoss Threads requires java.lang opens for thread-local-reset in JDK 24+ -->
               <!-- ByteBuddy requires experimental flag for JDK 25 bytecode proxy generation -->
               <!-- -Dsmallrye.config.locations=file:${project.basedir}/../.env -->
-              <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Dnet.bytebuddy.experimental=true</jvmArgs>
+              <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</jvmArgs>
               <warnIfBuildGoalMissing>false</warnIfBuildGoalMissing>
           </configuration>
         </plugin>
