@@ -3414,14 +3414,30 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 
 ## 20. Phase 63 â€” Vault & Audit Hardening
 
-### í´´ Failure: `rotateSecrets()` Throws Exception
+### ï¿½ï¿½ï¿½ Failure: `rotateSecrets()` Throws Exception
 **Symptom:** Application logic calling `rotateSecrets()` results in `UnsupportedOperationException`.
 **Root Cause:** Phase 63 architecture mandates "honest deferral" of rotation logic until Phase 64. Documentation references suggesting 24-hour automatic rotation were incorrect and have been removed.
 **Resolution:** Remove any application-level timers or logic attempting to trigger rotation. Full automated key rotation is scheduled for the Phase 64 roadmap.
 
-### í´´ Failure: `AuditHashUtil` Missing HMAC Key at Startup
+### ï¿½ï¿½ï¿½ Failure: `AuditHashUtil` Missing HMAC Key at Startup
 **Symptom:** `AuditHashUtil` constructor throws `IllegalStateException: Audit HMAC key 'arcclaw-audit-hmac-key' is missing from SecretVault`.
 **Root Cause:** The mandatory system secret for audit chaining was not seeded or provisioned.
 **Resolution:** 
 1. **Dev/Test**: Ensure `DevSecretSeeder` is enabled (`ARCCLAW_AUTO_SEED_SECRETS=true`). It will automatically generate a 32-byte key if missing.
 2. **Prod**: The deployment pipeline must provision `arcclaw-audit-hmac-key` into the `SecretVault` system keyspace before the application starts. `StartupSecurityValidator` will halt the JVM if this key is absent.
+
+### ðŸ”´ Failure: Huge Stacktraces in Background Persistence
+**Symptom**: Logs flooded with 500+ line stacktraces for `AuditHashUtil.hmacHex` every few seconds.
+**Root Cause**: `AsyncPersistenceEngine` retries failed telemetry writes 5 times. If `AuditHashUtil` throws an exception for a missing key, every retry logs the full stack trace, creating massive log noise.
+**Resolution**: Refactored `AuditHashUtil` to log the missing key detail once at the error level and return a placeholder string (`error-missing-hmac-key`) instead of throwing. This preserves log hygiene while still indicating an issue.
+
+### ðŸ”´ Failure: Circular Dependency / Startup Race with SecretVault
+**Symptom**: `ContextNotActiveException` or `UnsatisfiedDependencyException` involving `SecretVault`, `AuditHashUtil`, and `PersistenceEngine` during boot.
+**Root Cause**: `AuditHashUtil` required `SecretVault` in its constructor, forming a circular injection chain with the persistence and auditing layers before the CDI container was fully ready.
+**Resolution**: Converted `AuditHashUtil` to use `Instance<SecretVault>` for lazy retrieval and added `@Priority(100)` to `DevSecretSeeder` to guarantee security keys are provisioned early in the `StartupEvent` sequence.
+
+### ðŸ”´ Failure: Decryption Errors (AAD Binding Mismatch)
+**Symptom**: `Security Decryption failed: Integrity check or AAD binding mismatch` when retrieving secrets.
+**Root Cause**: `Argon2idKeyDerivation` used `ByteBuffer.array()` on the output of `Charset.encode()`, which can return an internal backing array larger than the actual data (containing trailing nulls). This lead to inconsistent key derivation.
+**Resolution**: Switched to explicit byte extraction using `bb.get(passwordBytes)` to ensure only the correctly encoded bytes are used for HMAC-key and session-key derivation.
+

@@ -69,7 +69,8 @@ public class ReflexRegistry {
                         : input;
                     log.errorf("[REFLEX-FAILURE] reflex=%s session=%s user=%s input=%s error=%s",
                         reflex.getClass().getSimpleName(), sessionId, userId,
-                        sanitizedInput, e.getMessage(), e);
+                        sanitizedInput, e.getMessage());
+                    log.debugf(e, "Full stacktrace for reflex failure: %s", reflex.getClass().getSimpleName());
                     return ReflexResult.respond("⚠️ System Error during reflex execution: " + e.getMessage(), context);
                 }
             }

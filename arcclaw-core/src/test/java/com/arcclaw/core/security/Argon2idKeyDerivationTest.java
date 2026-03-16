@@ -4,7 +4,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,7 +29,7 @@ class Argon2idKeyDerivationTest {
     }
 
     @Test
-    void testPepperIsZeroedAfterUse() throws Exception {
+    void testPepperIsNotZeroedImmediatelyButIsZeroedOnCleanup() throws Exception {
         VaultKey key = keyDerivation.deriveSessionKey("test-session");
         assertNotNull(key);
 
@@ -38,9 +37,14 @@ class Argon2idKeyDerivationTest {
         pepperField.setAccessible(true);
         char[] pepperChars = (char[]) pepperField.get(keyDerivation);
         
-        char[] expectedZeroed = new char["secret-pepper".length()];
-        Arrays.fill(expectedZeroed, '\0');
+        char[] originalPepper = "secret-pepper".toCharArray();
+        assertArrayEquals(originalPepper, pepperChars, "Pepper must persist for multiple sessions in ApplicationScoped bean");
+
+        // Now trigger cleanup manually
+        keyDerivation.cleanup();
         
-        assertArrayEquals(expectedZeroed, pepperChars, "Pepper characters must be securely wiped after use");
+        char[] expectedZeroed = new char[originalPepper.length];
+        java.util.Arrays.fill(expectedZeroed, '\0');
+        assertArrayEquals(expectedZeroed, pepperChars, "Pepper characters must be securely wiped on bean destruction");
     }
 }
