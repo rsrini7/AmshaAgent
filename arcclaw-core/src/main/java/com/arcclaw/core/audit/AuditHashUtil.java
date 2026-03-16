@@ -108,11 +108,20 @@ public class AuditHashUtil {
             mac.init(secretKeySpec);
             byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
-        } catch (IllegalStateException e) {
-            // Specific handling for missing key to avoid huge stack traces in logs.
-            // Detail already logged once in getHmacKey().
+        } catch (IllegalStateException | SecurityException e) {
+            // Specific handling for missing/invalid key to avoid huge stack traces in logs.
+            // For SecurityException (e.g. decryption failed), we log it once at warn level
+            // but return placeholder to prevent log flooding during background retries.
+            if (e instanceof SecurityException) {
+                log.warnf("Audit HMAC key decryption failed (Integrity check failed). " +
+                          "Audit logs for this session will be degraded. Error: %s", e.getMessage());
+            }
             return "error-missing-hmac-key";
         } catch (Exception e) {
+            // Check if it's a shutdown race
+            if (io.quarkus.arc.Arc.container() == null) {
+                return "error-shutdown";
+            }
             throw new RuntimeException("Failed to compute HMAC", e);
         }
     }

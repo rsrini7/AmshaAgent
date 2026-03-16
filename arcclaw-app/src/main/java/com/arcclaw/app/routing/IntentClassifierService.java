@@ -140,7 +140,8 @@ public class IntentClassifierService implements IntentClassifier {
         try {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
-            Log.warnf(e, "Intent classifier failed for session, defaulting to coordinator");
+            Log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", e.getMessage());
+            Log.debugf(e, "Full stacktrace for intent classifier failure");
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);

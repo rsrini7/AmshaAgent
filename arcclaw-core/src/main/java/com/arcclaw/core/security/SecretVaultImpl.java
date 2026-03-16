@@ -10,8 +10,10 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.util.MdcKeys;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import java.util.concurrent.locks.ReentrantLock;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
@@ -30,6 +32,40 @@ public class SecretVaultImpl implements SecretVault {
 
     @Inject
     AuditService auditService;
+
+    private final ReentrantLock systemKeyLock = new ReentrantLock();
+    private volatile VaultKey cachedSystemMasterKey;
+
+    @PreDestroy
+    void cleanup() {
+        systemKeyLock.lock();
+        try {
+            if (cachedSystemMasterKey != null) {
+                cachedSystemMasterKey.close();
+                cachedSystemMasterKey = null;
+            }
+        } finally {
+            systemKeyLock.unlock();
+        }
+    }
+
+    private VaultKey getSystemMasterKey() {
+        VaultKey current = cachedSystemMasterKey;
+        if (current != null && !current.isDestroyed()) {
+            return current;
+        }
+        systemKeyLock.lock();
+        try {
+            current = cachedSystemMasterKey;
+            if (current == null || current.isDestroyed()) {
+                cachedSystemMasterKey = keyDerivation.deriveSessionKey("SYSTEM");
+                current = cachedSystemMasterKey;
+            }
+            return current;
+        } finally {
+            systemKeyLock.unlock();
+        }
+    }
 
     @Override
     public void init(String sessionId) {
@@ -126,8 +162,11 @@ public class SecretVaultImpl implements SecretVault {
         }
 
         // SYSTEM keys bypass the WorkspaceScoped cache to avoid
-        // ContextNotActiveException during startup/boot
-        try (VaultKey systemKey = keyDerivation.deriveSessionKey(sessionId)) {
+        // ContextNotActiveException during startup/boot.
+        // We use a local application-scoped cache for the "SYSTEM" master key
+        // to avoid expensive re-derivation (Argon2id) which can cause transaction timeouts.
+        VaultKey systemKey = getSystemMasterKey();
+        try {
             byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, systemKey, keyName);
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
@@ -147,7 +186,8 @@ public class SecretVaultImpl implements SecretVault {
 
         // SYSTEM keys bypass the WorkspaceScoped cache to avoid
         // ContextNotActiveException during startup/boot
-        try (VaultKey systemKey = keyDerivation.deriveSessionKey(sessionId)) {
+        VaultKey systemKey = getSystemMasterKey();
+        try {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, systemKey, keyName);
 
             EncryptedSecret entity = repository.findByKey(sessionId, keyName);

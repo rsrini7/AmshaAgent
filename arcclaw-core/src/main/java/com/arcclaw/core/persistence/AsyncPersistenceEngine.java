@@ -161,8 +161,9 @@ public class AsyncPersistenceEngine {
                 Thread.currentThread().interrupt();
                 log.warn("[AsyncPersistenceEngine] Consumer interrupted — shutting down.");
             } catch (Exception e) {
-                if (running) {
-                    log.errorf(e, "[AsyncPersistenceEngine] Unexpected error in consumer loop");
+                if (running && io.quarkus.arc.Arc.container() != null) {
+                    log.errorf("[AsyncPersistenceEngine] Unexpected error in consumer loop: %s", e.getMessage());
+                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for consumer loop error");
                 }
             }
         }
