@@ -5,7 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Map;
 
+import org.apache.camel.Route;
 import org.apache.camel.builder.AdviceWith;
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.telegram.TelegramComponent;
 import org.apache.camel.quarkus.test.CamelQuarkusTestSupport;
 import org.junit.jupiter.api.Test;
 
@@ -33,13 +36,13 @@ public class TelegramChannelRouteTest extends CamelQuarkusTestSupport {
 
     @Override
     protected void bindToRegistry(org.apache.camel.spi.Registry registry) throws Exception {
-        org.apache.camel.component.telegram.TelegramComponent telegram = new org.apache.camel.component.telegram.TelegramComponent();
+        TelegramComponent telegram = new TelegramComponent();
         telegram.setAuthorizationToken("mock-token-for-test");
         registry.bind("telegram", telegram);
     }
 
     @Override
-    protected org.apache.camel.builder.RouteBuilder createRouteBuilder() {
+    protected RouteBuilder createRouteBuilder() {
         return route;
     }
 
@@ -70,7 +73,7 @@ public class TelegramChannelRouteTest extends CamelQuarkusTestSupport {
         });
         context.start();
 
-        org.apache.camel.Route route = context.getRoute("telegram-bot");
+        Route route = context.getRoute("telegram-bot");
         assertNotNull(route, "Route 'telegram-bot' must be registered");
         String uri = route.getEndpoint().getEndpointUri();
         assertFalse(uri.contains("authorizationToken"),
