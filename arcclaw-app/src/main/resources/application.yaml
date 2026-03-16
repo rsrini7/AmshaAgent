@@ -74,10 +74,7 @@ quarkus:
       provider: openai
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      timeout: 120s
-      max-retries: 3
       embedding-model:
-        timeout: 30s
         log-requests: false
         log-responses: false
       chat-model:
@@ -99,7 +96,6 @@ quarkus:
       timeout: 120s
       max-retries: 3
       embedding-model:
-        timeout: 30s
         log-requests: false
         log-responses: false
       chat-model:
@@ -204,16 +200,8 @@ quarkus:
         level: INFO
       "org.apache.camel.component.telegram":
         level: INFO
-      "jdk.event.security":
-        level: INFO
-      "io.netty.handler.ssl":
-        level: INFO
       "org.hibernate":
         level: WARN
-      "jdk.event.security":
-        level: INFO
-      "io.netty.handler.ssl":
-        level: INFO
       "io.sm.op.ru.util":
         level: INFO
       "ja.la.ProcessBuilder":
@@ -237,7 +225,7 @@ quarkus:
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
-      color: true
+      darken: 0
     file:
       enabled: "${ARCCLAW_LOG_FILE_ENABLE:false}"
       path: "${ARCCLAW_LOG_DIR:./logs}/arcclaw.log"
