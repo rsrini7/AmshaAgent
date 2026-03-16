@@ -1,6 +1,9 @@
 package com.arcclaw.core.audit;
 
 import java.util.List;
+import java.util.UUID;
+
+import org.jboss.logging.Logger;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -54,6 +57,12 @@ public class AuditEventRepository {
         String payload = event.computePayloadStr();
         event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
         
+        if (event.hmacHash == null) {
+            Logger.getLogger(AuditEventRepository.class)
+                .errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.", event.sessionId);
+            event.hmacHash = "error-null-fallback-" + UUID.randomUUID();
+        }
+
         em.persist(event);
     }
 

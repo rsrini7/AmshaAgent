@@ -291,15 +291,23 @@ public class AsyncPersistenceEngine {
         Throwable current = e;
         while (current != null) {
             String className = current.getClass().getSimpleName();
-            if (className.equals("LockAcquisitionException") || 
-                className.equals("OptimisticLockException") ||
-                className.equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
+            
+            // Check for known "busy" exception types first
+            if (className.equals(SqliteErrorStrings.LOCK_ACQUISITION_EXCEPTION) || 
+                className.equals(SqliteErrorStrings.OPTIMISTIC_LOCK_EXCEPTION)) {
                 return true;
             }
 
             String msg = current.getMessage();
             if (msg != null) {
                 String lower = msg.toLowerCase();
+                
+                // If it's a constraint violation, it is NEVER a "busy" retryable error.
+                // We must exit immediately to avoid infinite retry loops on bad data.
+                if (lower.contains("constraint") || lower.contains("not null")) {
+                    return false;
+                }
+
                 if (lower.contains(SqliteErrorStrings.BUSY) || 
                     lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
                     lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
@@ -307,6 +315,13 @@ public class AsyncPersistenceEngine {
                     return true;
                 }
             }
+            
+            // For generic SQLiteException, we MUST check the message for "busy"
+            // specifically, because SQLiteException is also used for NOT NULL and other HARD errors.
+            if (className.equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
+                return msg != null && msg.toLowerCase().contains(SqliteErrorStrings.BUSY);
+            }
+
             current = current.getCause();
         }
         return false;

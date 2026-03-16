@@ -107,6 +107,7 @@ public class AuditHashUtil {
             SecretKeySpec secretKeySpec = new SecretKeySpec(key, CryptoConstants.HMAC_SHA256);
             mac.init(secretKeySpec);
             byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+            if (hash == null) return "error-null-mac-result";
             return HexFormat.of().formatHex(hash);
         } catch (IllegalStateException | SecurityException e) {
             // Specific handling for missing/invalid key to avoid huge stack traces in logs.
