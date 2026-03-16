@@ -1,15 +1,22 @@
-package com.arcclaw.core.scope;
+package com.arcclaw.app.scope;
 
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.arcclaw.core.scope.ScopedCounter;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.scope.WorkspaceScoped;
+
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.inject.Inject;
 
 /**
  * Verifies {@link WorkspaceScoped} CDI scope behavior:

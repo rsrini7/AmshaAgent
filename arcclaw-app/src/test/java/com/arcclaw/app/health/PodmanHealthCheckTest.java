@@ -1,4 +1,4 @@
-package com.arcclaw.core.health;
+package com.arcclaw.app.health;
 
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;

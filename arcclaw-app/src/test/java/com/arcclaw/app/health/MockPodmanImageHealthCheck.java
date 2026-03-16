@@ -1,4 +1,4 @@
-package com.arcclaw.core.health;
+package com.arcclaw.app.health;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;

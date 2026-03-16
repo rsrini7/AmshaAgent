@@ -1,19 +1,32 @@
-package com.arcclaw.core.security;
+package com.arcclaw.app.security;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.AesGcmSivCipher;
+import com.arcclaw.core.security.EncryptedSecret;
+import com.arcclaw.core.security.EncryptedSecretRepository;
+import com.arcclaw.core.security.SecretVaultImpl;
+import com.arcclaw.core.security.VaultKey;
+
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 
 @QuarkusTest
 public class SecretVaultImplTest {
