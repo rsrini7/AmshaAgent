@@ -1052,3 +1052,13 @@
 - [x] Update `ChatMemoryWriter.java` and `ChatHistoryAssembler.java` to use `AgentSentinels` constants
 - [x] Refactor API usage for `ChannelUser`, `ChannelMessage`, and `ChannelSender` across codebase
 - [x] Verify all core and app integration tests pass with 0 regressions
+
+---
+
+## Phase 63-C — EncryptedSecret Version Split & Concurrency Fixes ✅
+- [x] Separate `version` field in `EncryptedSecret.java` into `ormVersion` (managed by Hibernate) and `encryptionKeyVersion` (application logic)
+- [x] Update `SecretVaultImpl.java` to explicitly manage `encryptionKeyVersion` without conflicting with Hibernate optimistic locking
+- [x] Update `EncryptedSecretVersionTest` to point to `getOrmVersion()`
+- [x] Write `testConcurrentStore_NoConflictWithHibernateVersion` in `SecretVaultImplTest` using `CountDownLatch` and Virtual Threads
+- [x] Remove `data-dir` configuration from `application.yaml` and update dev `sandbox.strategy` to `NONE`
+- [x] Verify all core and app tests pass with 0 regressions

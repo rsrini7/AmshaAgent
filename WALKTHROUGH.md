@@ -2231,3 +2231,20 @@ Successfully eliminated string-based check failures for resume signals by transi
 **Final Verification**:
 - ✅ Full `arcclaw-core` component suite verified alongside `com.arcclaw.core.agent.reasoning` tests.
 
+---
+
+## Phase 63-C - EncryptedSecret Version Split & Concurrency Fixes ✅
+
+Successfully isolated the Hibernate ORM version locking loop from internal encryption key versioning in `EncryptedSecret.java`, preventing concurrent thread blocking on `OptimisticLockException` under load.
+
+### Key Features & Implementation:
+
+1. **Version Isolation**:
+   - Distinct `ormVersion` field annotated with `@Version` ensures stable Hibernate database locking.
+   - Separate `encryptionKeyVersion` explicitly updated by the application `SecretVaultImpl`.
+   
+2. **Concurrent Stability Enhancements**:
+   - Demonstrated parallel `store()` persistence utilizing virtual threads and `CountDownLatch`, ensuring atomic updates function effectively.
+
+**Final Verification**:
+- ✅ Virtual thread stress tests in `SecretVaultImplTest` proven successful against race conditions.

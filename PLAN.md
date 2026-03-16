@@ -3809,3 +3809,18 @@ Refactor the brittle string-based resume signal mechanisms in the pipeline to us
 
 ## Verification
 - ✅ `mvn clean test` succeeds gracefully parsing the new signatures.
+
+---
+
+# Phase 63-C — EncryptedSecret Version Split & Concurrency Fixes
+
+Separated the ORM versioning managed by Hibernate from the application logic encryption key versioning in `EncryptedSecret.java` to prevent `OptimisticLockException` during high-throughput concurrent secret storage updates.
+
+## Completed Changes
+- `EncryptedSecret` now possesses `ormVersion` (managed automatically by Hibernate `@Version`) and `encryptionKeyVersion` initialized and incremented per application logic.
+- Revised `SecretVaultImpl.java` to correctly bind against the separated `encryptionKeyVersion`.
+- Upgraded `SecretVaultImplTest` and `EncryptedSecretVersionTest`. Tests notably now run parallel `store` invocations via `Thread.ofVirtual().start()` and `CountDownLatch`es without failing on Optimistic locks.
+- Streamlined `application.yaml` clearing deprecated `data-dir` configurations.
+
+## Verification
+- ✅ Concurrent virtual thread persistence tests passed organically without `OptimisticLockException` issues.

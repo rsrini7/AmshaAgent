@@ -58,7 +58,7 @@ public class SecretVaultImpl implements SecretVault {
             }
             entity.ciphertext = result.ciphertext();
             entity.nonce = result.nonce();
-            entity.version = 1;
+            entity.setEncryptionKeyVersion(1);
 
             repository.persist(entity);
             

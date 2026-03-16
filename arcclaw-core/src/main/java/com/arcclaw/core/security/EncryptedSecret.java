@@ -18,14 +18,29 @@ public class EncryptedSecret {
     public EncryptedSecretId id;
 
     @Version
-    @Column(nullable = false)
-    public int version;
+    @Column(name = "orm_version", nullable = false, columnDefinition = "integer default 0")
+    private int ormVersion;
+
+    @Column(name = "encryption_key_version", nullable = false, columnDefinition = "integer default 1")
+    private int encryptionKeyVersion = 1;
 
     @Column(nullable = false)
     public byte[] ciphertext;
 
     @Column(nullable = false)
     public byte[] nonce;
+
+    public int getOrmVersion() {
+        return ormVersion;
+    }
+
+    public int getEncryptionKeyVersion() {
+        return encryptionKeyVersion;
+    }
+
+    public void setEncryptionKeyVersion(int encryptionKeyVersion) {
+        this.encryptionKeyVersion = encryptionKeyVersion;
+    }
 
     // Composite Key Class
     @Embeddable

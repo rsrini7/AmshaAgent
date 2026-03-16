@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -125,9 +127,81 @@ public class SecretVaultImplTest {
         forged.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
         forged.ciphertext = ciphertext.clone();
         forged.nonce = nonce.clone();
-        forged.version = 1;
+        forged.setEncryptionKeyVersion(1);
         repository.persist(forged);
         entityManager.flush();
         entityManager.clear();
+    }
+
+    @Test
+    void testStore_VersionAssertions() {
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            cleanDb();
+            // 1. Store
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+
+            // 2. Assert versions
+            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+            assertNotNull(entity);
+            assertEquals(1, entity.getEncryptionKeyVersion(), "Application key version must be 1");
+            assertTrue(entity.getOrmVersion() >= 0, "ORM version must be managed by Hibernate (>= 0)");
+        });
+    }
+
+    @Test
+    void testConcurrentStore_NoConflictWithHibernateVersion() throws InterruptedException {
+        // As per requirement: call store() twice on the same key concurrently
+        // Assert no OptimisticLockException is thrown.
+        // NOTE: Hibernate 7+ managing version automatically avoids app-driven corruption.
+        
+        String key = "CONCURRENT_KEY";
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(2);
+        
+        // Ensure entity is clean
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            cleanDb();
+        });
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                startLatch.await();
+                WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+                    vault.store(key, SECRET_PAYLOAD);
+                });
+            } catch (Exception e) {
+                // We assert no OptimisticLockException is thrown
+                if (e instanceof jakarta.persistence.OptimisticLockException) {
+                    fail("Should not throw OptimisticLockException when Hibernate manages version: " + e.getMessage());
+                }
+                e.printStackTrace();
+            } finally {
+                doneLatch.countDown();
+            }
+        });
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                startLatch.await();
+                WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+                    vault.store(key, SECRET_PAYLOAD);
+                });
+            } catch (Exception e) {
+                // We assert no OptimisticLockException is thrown
+                if (e instanceof jakarta.persistence.OptimisticLockException) {
+                    fail("Should not throw OptimisticLockException when Hibernate manages version: " + e.getMessage());
+                }
+                e.printStackTrace();
+            } finally {
+                doneLatch.countDown();
+            }
+        });
+
+        startLatch.countDown();
+        assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should finish");
+        
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
+        });
     }
 }

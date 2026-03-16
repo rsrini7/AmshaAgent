@@ -26,7 +26,7 @@ class EncryptedSecretVersionTest {
         em.persist(secret);
         em.flush();
 
-        assertEquals(0, secret.version, "Version should be 0 on first persist");
+        assertEquals(0, secret.getOrmVersion(), "Version should be 0 on first persist");
     }
 
     @Test
@@ -40,13 +40,13 @@ class EncryptedSecretVersionTest {
 
         em.persist(secret);
         em.flush();
-        int v0 = secret.version;
+        int v0 = secret.getOrmVersion();
 
         secret.ciphertext = "new-cipher".getBytes();
         em.merge(secret);
         em.flush();
 
-        assertEquals(v0 + 1, secret.version, "Version should increment on update");
+        assertEquals(v0 + 1, secret.getOrmVersion(), "Version should increment on update");
     }
 
     @Test
@@ -59,8 +59,8 @@ class EncryptedSecretVersionTest {
         // 2. Load two copies
         EncryptedSecret copy1 = em.find(EncryptedSecret.class, id);
         EncryptedSecret copy2 = em.find(EncryptedSecret.class, id);
-        assertEquals(0, copy1.version);
-        assertEquals(0, copy2.version);
+        assertEquals(0, copy1.getOrmVersion());
+        assertEquals(0, copy2.getOrmVersion());
 
         // 3. Update copy1
         updateCiphertextInNewTransaction(id, "updated-1");
