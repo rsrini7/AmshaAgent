@@ -45,7 +45,8 @@ public class ToolInvoker {
             log.warnf("Tool '%s' blocked by governance in session %s: %s", toolName, sessionId, e.getMessage());
             return ToolResponse.failure(1, "Security violation: " + e.getMessage());
         } catch (Exception e) {
-            log.errorf(e, "Tool '%s' threw unexpected exception in session %s", toolName, sessionId);
+            log.errorf("Tool '%s' threw unexpected exception in session %s: %s", toolName, sessionId, e.getMessage());
+            log.debugf(e, "Full stacktrace for tool failure: %s", toolName);
             return ToolResponse.failure(1, "Tool execution error: " + e.getMessage());
         }
     }

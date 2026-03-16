@@ -14,8 +14,10 @@ import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 public class AuditHashUtil {
@@ -30,6 +32,22 @@ public class AuditHashUtil {
     @Inject
     public AuditHashUtil(Instance<SecretVault> vaultInstance) {
         this.vaultInstance = vaultInstance;
+    }
+
+    /**
+     * Eagerly primer the HMAC key during startup.
+     * This moves the expensive Argon2id derivation out of the first
+     * per-session auditing transaction to avoid transaction timeouts.
+     */
+    void onStart(@Observes @jakarta.annotation.Priority(500) StartupEvent ev) {
+        try {
+            log.debug("Priming Audit HMAC key...");
+            getHmacKey();
+            log.info("AuditHashUtil: HMAC key primed successfully.");
+        } catch (Exception e) {
+            log.warnf("AuditHashUtil: Failed to primer HMAC key at startup: %s. " +
+                      "It will be lazily initialized on first use.", e.getMessage());
+        }
     }
 
     private byte[] getHmacKey() {

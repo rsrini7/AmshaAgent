@@ -266,7 +266,8 @@ public class AgentStateMachineRunner {
                         List.copyOf(history)));
             }
 
-            log.errorf(e, "ReasoningEngine failed at iteration %d", iteration);
+            log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
+            log.debugf(e, "Full stacktrace for ReasoningEngine failure at iteration %d in session %s", iteration, sessionId);
             return StepDecision.terminal(AgentResult.failed(
                     "ReasoningEngine error: " + e.getMessage(),
                     AgentResult.FailureCategory.SYSTEM_ERROR,

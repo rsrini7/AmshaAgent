@@ -176,12 +176,15 @@ public class WorkspaceManager {
                             attempt, maxRetries, sessionId, backoffMs * attempt);
                     try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
                 } else {
-                    log.errorf(e, "Non-retryable error marking checkpoints FAILED for session=%s", sessionId);
+                    log.errorf("Non-retryable error marking checkpoints FAILED for session=%s: %s", sessionId, e.getMessage());
+                    log.debugf(e, "Full stacktrace for non-retryable error in markCheckpointsFailed for session=%s", sessionId);
                     throw e;
                 }
             }
         }
-        log.errorf(lastEx, "Failed to mark checkpoints FAILED after %d retries for session=%s", maxRetries, sessionId);
+        log.errorf("Failed to mark checkpoints FAILED after %d retries for session=%s: %s", maxRetries, sessionId, 
+                lastEx != null ? lastEx.getMessage() : "unknown");
+        log.debugf(lastEx, "Full stacktrace for retry exhaustion in markCheckpointsFailed for session=%s", sessionId);
         if (lastEx != null) throw new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, lastEx);
     }
 

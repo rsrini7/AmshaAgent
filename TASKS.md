@@ -1103,5 +1103,9 @@
 - [x] Seed `arcclaw-audit-hmac-key` in `DevSecretSeeder` for `dev` and `test` profiles. <!-- id: 514 -->
 - [x] Validate `arcclaw-audit-hmac-key` presence in `StartupSecurityValidator` for non-dev profiles. <!-- id: 515 -->
 - [x] Update `StartupSecurityValidator*Test` suites to use `@InjectMock SecretVault`. <!-- id: 516 -->
-- [x] Verify: `AuditHashUtilTest`, `DevSecretSeederTest`, and `SecretVaultImplTest` pass. <!-- id: 517 -->
+- [x] Refactor `AuditHashUtil` to use `Instance<SecretVault>` for lazy initialization, breaking circular dependency with `SecretVault`.
+- [x] Suppress excessive 500-line stacktraces in logs by moving full traces to DEBUG level in `AuditHashUtil`, `MemorySearchTool`, `MessagePipeline`, `ReflexRegistry`, and `ToolInvoker`.
+- [x] Fix data integrity bug in `Argon2idKeyDerivation` by switching from `.array()` to explicit byte extraction.
+- [x] Add `@Priority(100)` to `DevSecretSeeder` to ensure early seeding of security keys during startup.
+- [x] Verify: All related hardening tests pass with clean logs and 0 regressions. <!-- id: 517 -->
 

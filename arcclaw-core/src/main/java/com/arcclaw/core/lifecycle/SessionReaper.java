@@ -76,12 +76,15 @@ public class SessionReaper {
                             attempt, maxRetries, backoffMs * attempt);
                     try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
                 } else {
-                    log.errorf(e, "Non-retryable error during onStartup zombie recovery");
+                    log.errorf("Non-retryable error during onStartup zombie recovery: %s", e.getMessage());
+                    log.debugf(e, "Full stacktrace for non-retryable error in onStartup zombie recovery");
                     return;
                 }
             }
         }
-        log.errorf(lastEx, "Failed onStartup zombie recovery after %d retries", maxRetries);
+        log.errorf("Failed onStartup zombie recovery after %d retries: %s", maxRetries, 
+                lastEx != null ? lastEx.getMessage() : "unknown");
+        log.debugf(lastEx, "Full stacktrace for retry exhaustion in onStartup zombie recovery");
     }
 
     private void doRecoverZombies() {

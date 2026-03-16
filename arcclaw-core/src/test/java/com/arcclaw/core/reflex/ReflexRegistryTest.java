@@ -52,6 +52,12 @@ class ReflexRegistryTest {
 
     @InjectMock
     AuditHashUtil hashUtil;
+    
+    @org.junit.jupiter.api.BeforeEach
+    void setupMocks() {
+        when(hashUtil.sha256hex(anyString())).thenReturn("mock-sha256");
+        when(hashUtil.hmacHex(anyString())).thenReturn("mock-hmac");
+    }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
     

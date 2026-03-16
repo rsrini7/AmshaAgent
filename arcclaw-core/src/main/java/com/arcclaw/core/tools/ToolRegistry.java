@@ -185,7 +185,8 @@ public class ToolRegistry {
                     friendly = "Tool '" + toolName + "' failed: " + raw;
                 }
 
-                log.errorf(e, "Tool '%s' execution failed: %s (friendly='%s')", toolName, raw, friendly);
+                log.errorf("Tool '%s' execution failed: %s (friendly='%s')", toolName, raw, friendly);
+                log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName, WorkspaceContext.requireSessionId());
 
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);

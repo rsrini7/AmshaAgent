@@ -137,7 +137,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize stateJson for checkpoint id=%d", checkpoint.getId());
+            log.errorf("Failed to deserialize stateJson for checkpoint id=%d: %s", checkpoint.getId(), e.getMessage());
+            log.debugf(e, "Full stacktrace for deserialization failure of checkpoint id=%d", checkpoint.getId());
             return List.of();
         }
     }

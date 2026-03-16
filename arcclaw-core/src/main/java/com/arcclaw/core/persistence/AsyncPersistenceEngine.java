@@ -251,8 +251,9 @@ public class AsyncPersistenceEngine {
                         return;  // do NOT call handleExhausted — this is expected during teardown
                     }
                     // Genuine non-retryable error during normal operation
-                    log.errorf(e, "[AsyncPersistenceEngine] Non-retryable error for session=%s eventType=%s. Class: %s",
-                            event.getSessionId(), event.getEventType(), e.getClass().getName());
+                    log.errorf("[AsyncPersistenceEngine] Non-retryable error for session=%s eventType=%s: %s",
+                            event.getSessionId(), event.getEventType(), e.getMessage());
+                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for non-retryable error for session=%s", event.getSessionId());
                     break;
                 }
             }
