@@ -70,6 +70,7 @@
 | **Security** | Regex Boundary Failure | `\b` fails on `rm -rf` due to space/dash. | Split pattern into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN` (`(?i)rm\s*-rf`). |
 | **Testing** | `TestInstantiationException` | `@InjectMock` on `@Singleton` / Field Injection incompatibility. | Migrate to **Constructor Injection** and use `MockitoExtension` for manual instantiation. |
 | **Config** | Missing Telegram Config | `arcclaw.telegram.*` properties ignored. | Ensure all Telegram properties use the `arcclaw.channel.telegram.*` namespace. |
+| **Persistence** | `EncryptedSecret` Migration | `@Version` field rename from `version` to `orm_version`. | **Manual Migration Required**: Rename `version` column to `orm_version` and add `encryption_key_version` (INT, default 1) in existing databases. |
  
 ---
 
