@@ -9,11 +9,18 @@ import java.util.concurrent.ExecutorService;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -96,7 +103,8 @@ public class AgentSessionService {
                 return WorkspaceContext.run(
                         sessionId, "rest:sync", null, AutonomyLevel.SUPERVISED, request.agentRole(),
                         () -> {
-                            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations);
+                            MessageContext context = createRestContext(sessionId, request.goal());
+                            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations, context);
                             return responseMapper.mapResult(result, false);
                         }
                 );
@@ -140,8 +148,12 @@ public class AgentSessionService {
                 AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
 
                 WorkspaceContext.run(sessionId, "rest:async", null, runLevel, request.agentRole(), () -> {
+                    MessageContext context = createRestContext(sessionId, request.goal());
+                    if (isApproval) {
+                        context.setResumeSignal(true);
+                    }
                     AgentResult result = agentLoop.run(sessionId, request.agentRole(),
-                            request.goal(), reasoningEngine, maxIterations);
+                            request.goal(), reasoningEngine, maxIterations, context);
                     response.resume(responseMapper.mapResult(result, true));
                 });
 
@@ -169,7 +181,9 @@ public class AgentSessionService {
 
                 MDC.put(MdcKeys.USER_ID, "rest:approve");
                 return WorkspaceContext.run(sessionId, "rest:approve", null, AutonomyLevel.FULL, canonicalRole, () -> {
-                    AgentResult result = agentLoop.run(sessionId, agentRole, "approve", reasoningEngine, 1);
+                    MessageContext context = createRestContext(sessionId, AgentSentinels.GOAL_RESUME_APPROVED);
+                    context.setResumeSignal(true);
+                    AgentResult result = agentLoop.run(sessionId, agentRole, AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 1, context);
                     return responseMapper.mapResult(result, false);
                 });
             });
@@ -225,5 +239,20 @@ public class AgentSessionService {
         log.infof("Terminating session: {}", sessionId);
         workspaceManager.terminateSession(sessionId);
         return Response.noContent().build();
+    }
+
+    private MessageContext createRestContext(String sessionId, String goal) {
+        ChannelUser user = new ChannelUser("rest:api", "REST API User", ChannelType.REST_API);
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "rest-api-" + sessionId, Instant.now());
+        ChannelSender noOpSender = new ChannelSender() {
+            @Override public ChannelType supports() { return ChannelType.REST_API; }
+            @Override public void send(ChannelUser recipient, List<ReplyNode> nodes) {
+                log.infof("[REST-SENDER] Sent %d nodes to %s", nodes.size(), recipient.platformId());
+            }
+            @Override public void sendRaw(ChannelUser recipient, String text) {
+                log.infof("[REST-SENDER] Sent raw message to %s: %s", recipient.platformId(), text);
+            }
+        };
+        return new MessageContext("rest-chat-" + sessionId, user, msg, noOpSender);
     }
 }

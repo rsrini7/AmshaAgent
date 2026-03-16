@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -45,7 +46,7 @@ public class ResetReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
         
         // 1. Wipe the workspace scope (clears IN_PROGRESS / AWAITING_APPROVAL state)
@@ -72,7 +73,8 @@ public class ResetReflex implements AgentReflex {
         log.infof("[ResetReflex] Session %s fully reset — workspace, checkpoints, chat memory, compacted memory, and %d cron jobs cleared", 
                 sessionId, deletedCrons);
 
-        return "🧹 Conversation history, memory, checkpoints, and " + deletedCrons 
+        String output = "🧹 Conversation history, memory, checkpoints, and " + deletedCrons 
             + " scheduled task(s) have been completely wiped. We are starting fresh.";
+        return ReflexResult.respond(output, context);
     }
 }

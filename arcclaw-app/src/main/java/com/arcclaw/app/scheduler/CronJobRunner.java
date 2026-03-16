@@ -8,6 +8,12 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
@@ -66,13 +72,17 @@ public class CronJobRunner {
                 job.chatId, 
                 AutonomyLevel.BACKGROUND, 
                 AgentRoleEnum.COORDINATOR.toScopedName(), 
-                () -> agentLoop.run(
-                    cronSessionId,
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
-                    effectiveGoal,
-                    engine,
-                    cronMaxIterations
-                )
+                () -> {
+                    MessageContext context = createCronContext(job, cronSessionId, executionId, effectiveGoal);
+                    return agentLoop.run(
+                        cronSessionId,
+                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        effectiveGoal,
+                        engine,
+                        cronMaxIterations,
+                        context
+                    );
+                }
             );
 
             resultHandler.handleSuccess(job, cronSessionId, executionId, result);
@@ -80,5 +90,16 @@ public class CronJobRunner {
         } catch (Throwable t) {
             resultHandler.handleFailure(job, cronSessionId, executionId, t);
         }
+    }
+
+    private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal) {
+        ChannelUser user = new ChannelUser(job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, java.time.Instant.now());
+        ChannelSender noOpSender = new ChannelSender() {
+            @Override public ChannelType supports() { return ChannelType.REST_API; }
+            @Override public void send(ChannelUser recipient, java.util.List<ReplyNode> nodes) { }
+            @Override public void sendRaw(ChannelUser recipient, String text) { }
+        };
+        return new MessageContext(job.chatId, user, msg, noOpSender);
     }
 }

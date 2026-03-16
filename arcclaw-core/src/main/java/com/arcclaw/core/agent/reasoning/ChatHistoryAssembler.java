@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -78,9 +79,9 @@ public class ChatHistoryAssembler {
                         } else if (aiText != null && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
                             skip = true;
                         }
-                    } else if (msg instanceof UserMessage && msgString.contains("The tool execution has been approved and completed")) {
+                    } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {
                         skip = true;
-                    } else if (msg instanceof UserMessage && msgString.contains("Resuming task after approval")) {
+                    } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_RESUME_APPROVED)) {
                         skip = true;
                     }
 
@@ -138,7 +139,7 @@ public class ChatHistoryAssembler {
         }
 
         // STEP C — special goal injection
-        if (goal != null && goal.startsWith("The tool execution")) {
+        if (goal != null && goal.equals(AgentSentinels.GOAL_TOOL_APPROVED)) {
             // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
             messages.add(UserMessage.userMessage(goal));
         } else if (goal != null && goal.contains("System: Your previous tool call")) {

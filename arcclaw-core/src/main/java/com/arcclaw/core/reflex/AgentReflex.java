@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import com.arcclaw.core.pipeline.MessageContext;
+
 public interface AgentReflex {
     /**
      * Evaluates if the input triggers this reflex.
@@ -7,9 +9,9 @@ public interface AgentReflex {
     boolean matches(String input);
 
     /**
-     * Executes the deterministic logic and returns the response string to send directly to the user.
+     * Executes the deterministic logic and returns the structured result.
      */
-    String execute(String sessionId, String userId, String chatId, String input);
+    ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context);
 
     /**
      * Sanitizes the input (e.g., PII redaction) before it reaches the LLM.
@@ -19,3 +21,4 @@ public interface AgentReflex {
         return input;
     }
 }
+

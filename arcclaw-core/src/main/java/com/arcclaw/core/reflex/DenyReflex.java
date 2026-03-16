@@ -26,6 +26,7 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.CronResultFormatter;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.pipeline.MessageContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -61,18 +62,18 @@ public class DenyReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         ChannelCommand.Deny deny = (ChannelCommand.Deny) ChannelCommand.parse(input);
         Optional<String> cronId = deny.cronId();
 
         try {
-            return WorkspaceScopeHolder.call(sessionId, () -> {
+            String response = WorkspaceScopeHolder.call(sessionId, () -> {
                 // Seed secrets strictly INSIDE the isolated cron session
                 devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
                 // 1. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {
-                    return handleCronDenial(cronId.get(), userId, chatId);
+                    return handleCronDenial(cronId.get(), userId, chatId, context);
                 }
 
                 // 2. Session checkpoint — interactive approval
@@ -112,13 +113,14 @@ public class DenyReflex implements AgentReflex {
                 // 4. Nothing pending anywhere
                 return "No pending tool executions require approval for this session.";
             });
+            return ReflexResult.respond(response, context);
         } catch (Exception e) {
             log.errorf("Failed to process denial for session %s: %s", sessionId, e.getMessage(), e);
-            return "❌ **Denial Error**: An internal fault occurred while terminating the task.";
+            return ReflexResult.respond("❌ **Denial Error**: An internal fault occurred while terminating the task.", context);
         }
     }
 
-    private String handleCronDenial(String cronId, String userId, String chatId) throws Exception {
+    private String handleCronDenial(String cronId, String userId, String chatId, MessageContext context) throws Exception {
         AgentCronEntity cron = cronRepository.findByUserId(userId).stream()
                 .filter(c -> c.id.equals(cronId))
                 .findFirst()
@@ -134,14 +136,18 @@ public class DenyReflex implements AgentReflex {
 
         String cronSessionId = "cron-" + cron.id + "-" + cron.lastDeliveryId;
 
-        // "denial" keyword triggers isDenial branch in handleResumeHook
+        context.setResumeSignal(true);
+        context.setGoal(AgentSentinels.GOAL_RESUME_DENIED);
+
+        // "denial" keyword no longer needed as trigger, we use resumeSignal
         AgentResult result = WorkspaceContext.run(
                 cronSessionId, cron.userId, cron.chatId,
                 AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> agentLoop.run(
                         cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        "Resuming task after denial.",  // triggers isDenial in handleResumeHook
-                        reasoningEngine, 1) // maxIterations=1 — denial returns immediately
+                        AgentSentinels.GOAL_RESUME_DENIED,
+                        reasoningEngine, 1, context) // maxIterations=1 — denial returns immediately
+
         );
 
         cronRepository.markFailed(cron.id, "User denied tool execution.");

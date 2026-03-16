@@ -2200,4 +2200,34 @@ Successfully implemented and debugged build-time JSON schema generation for `@Ag
 - ✅ `StructuredOutputEngineSchemaTest` verified the dynamic schema generation.
 - ✅ Pipeline green: 100% test pass rate across all modules.
 
+---
+
+## Phase 63-A - VaultKeyCache: ReentrantLock Refactor ✅
+
+Converted the internal locking approach of `VaultKeyCache.java` from blocking `synchronized(this)` usage to faster `tryLock()` mechanics utilizing an instance `ReentrantLock`.
+
+### Key Features & Implementation:
+1. **Concurrency Support via ReentrantLock**: Ensures high availability alongside `Double-Checked Locking` patterns with `volatile` cache. Ensures proper unlocking mechanics in a `finally` block for resilience.
+2. **Complete Test Suite Overhaul**: Updated `VaultKeyCacheTest.java` utilizing CountDownLatches to mimic Virtual Thread stress testing, alongside idempotency tracking.
+
+**Final Verification**: 
+- ✅ Zero deadlocks observed across 100% successful test suites.
+
+---
+
+## Phase 63-B - Resume Signal Refactor ✅
+
+Successfully eliminated string-based check failures for resume signals by transitioning toward boolean context flags.
+
+### Key Features & Implementation:
+
+1. **Context Flag Integration**:
+   - `MessageContext.isResumeSignal` dictates pipeline behaviour instead of substring prefix checking.
+   
+2. **Standardized Responses**:
+   - Moved completely to `ReflexResult` instead of returning unwieldy optionals for improved type safety and structural clarity across `ApproveReflex` and `DenyReflex`.
+   - `ChatMemoryWriter.java` and `ChatHistoryAssembler.java` effectively handle these explicitly via constant enums globally available in `AgentSentinels.java`.
+
+**Final Verification**:
+- ✅ Full `arcclaw-core` component suite verified alongside `com.arcclaw.core.agent.reasoning` tests.
 

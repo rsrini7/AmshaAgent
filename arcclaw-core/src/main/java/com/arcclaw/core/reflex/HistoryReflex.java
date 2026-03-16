@@ -1,5 +1,6 @@
 package com.arcclaw.core.reflex;
 
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -15,7 +16,7 @@ import java.util.regex.Pattern;
 @ApplicationScoped
 public class HistoryReflex implements AgentReflex {
 
-    private static final Pattern MATCHES_PATTERN =
+    private static final Pattern MATCHES_PATTERN = 
         Pattern.compile("(?i)^/history$");
 
     @Inject
@@ -30,7 +31,7 @@ public class HistoryReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         StringBuilder sb = new StringBuilder();
 
         // Use findLatestBySessionId for consistency
@@ -45,9 +46,9 @@ public class HistoryReflex implements AgentReflex {
         List<ChatMessage> messages = chatMemoryStore.getMessages(sessionId);
         if (messages == null || messages.isEmpty()) {
             if (sb.isEmpty()) {
-                return "📭 No conversation history found for this session.";
+                return ReflexResult.respond("📭 No conversation history found for this session.", context);
             }
-            return sb.toString().trim();
+            return ReflexResult.respond(sb.toString().trim(), context);
         }
 
         sb.append("💬 *Active Window* (")
@@ -71,7 +72,7 @@ public class HistoryReflex implements AgentReflex {
             }
         }
 
-        return sb.toString().trim();
+        return ReflexResult.respond(sb.toString().trim(), context);
     }
 
     private String truncate(String text, int maxLen) {

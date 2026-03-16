@@ -3,6 +3,14 @@ package com.arcclaw.core.skill;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.reflex.ReflexResult;
 
 import java.util.List;
 import java.util.regex.Pattern;
@@ -20,6 +28,12 @@ class SkillReflexTest {
         mockRegistry = new SkillRegistry();
         reflex = new SkillReflex();
         reflex.registry = mockRegistry;
+    }
+
+    private MessageContext createContext(String input) {
+        ChannelUser user = new ChannelUser("user1", "user1", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "session1", java.time.Instant.now());
+        return new MessageContext("chat1", user, msg, mock(ChannelSender.class));
     }
 
     @Test
@@ -44,8 +58,8 @@ class SkillReflexTest {
     @Test
     void testEmptyRegistryOutput() {
         mockRegistry.reload(List.of());
-        String result = reflex.execute("session1", "user1", "chat1", "/skills");
-        assertEquals("No skills are currently loaded.", result);
+        ReflexResult result = reflex.execute("session1", "user1", "chat1", "/skills", createContext("/skills"));
+        assertEquals("No skills are currently loaded.", result.commandResponse().orElse(""));
     }
 
     @Test
@@ -57,9 +71,10 @@ class SkillReflexTest {
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[]{Pattern.compile("pattern")}, role1, "db");
 
         mockRegistry.reload(List.of(e1));
-        String result = reflex.execute("session1", "user1", "chat1", "/skills");
-        assertTrue(result.contains("### Active Skills"));
-        assertTrue(result.contains("- **reviewer**: Reviews PRs (Routes: 1)"));
+        ReflexResult result = reflex.execute("session1", "user1", "chat1", "/skills", createContext("/skills"));
+        String resp = result.commandResponse().orElse("");
+        assertTrue(resp.contains("### Active Skills"));
+        assertTrue(resp.contains("- **reviewer**: Reviews PRs (Routes: 1)"));
     }
 
     @Test
@@ -71,7 +86,8 @@ class SkillReflexTest {
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[0], role1, "db");
 
         mockRegistry.reload(List.of(e1));
-        String result = reflex.execute("session1", "user1", "chat1", "/skills");
-        assertTrue(result.contains("- **minimal**: No description (Routes: 0)"));
+        ReflexResult result = reflex.execute("session1", "user1", "chat1", "/skills", createContext("/skills"));
+        String resp = result.commandResponse().orElse("");
+        assertTrue(resp.contains("- **minimal**: No description (Routes: 0)"));
     }
 }

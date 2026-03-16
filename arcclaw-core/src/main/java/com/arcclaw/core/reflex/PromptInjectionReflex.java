@@ -1,5 +1,6 @@
 package com.arcclaw.core.reflex;
 
+import com.arcclaw.core.pipeline.MessageContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -82,7 +83,7 @@ public class PromptInjectionReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         String matchedCategory = "UNKNOWN";
         if (input != null && !input.isBlank()) {
             matchedCategory = RULES.stream()
@@ -96,8 +97,9 @@ public class PromptInjectionReflex implements AgentReflex {
         log.warnf("[INJECTION-BLOCKED] session=%s user=%s category=%s input_length=%d",
                 sessionId, userId, matchedCategory, inputLength);
 
-        return "⛔ Message blocked: adversarial instruction pattern detected. " +
+        String output = "⛔ Message blocked: adversarial instruction pattern detected. " +
                "If you believe this is a false positive, rephrase your request.";
+        return ReflexResult.respond(output, context);
     }
 
     @Override

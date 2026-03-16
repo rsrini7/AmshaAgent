@@ -20,6 +20,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.MdcKeys;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -103,6 +104,12 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
+        return run(sessionId, agentRole, goal, engine, maxIterations, null);
+    }
+
+    @ActivateRequestContext
+    public AgentResult run(String sessionId, String agentRole, String goal,
+            ReasoningEngine engine, int maxIterations, MessageContext context) {
 
         // --- Resolve agentRole at the API boundary ---
         //
@@ -128,11 +135,13 @@ public class AgentLoop {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
             // Fall through with coordinator as safe default
             return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                               goal, engine, maxIterations);
+                               goal, engine, maxIterations, context);
         }
 
-        return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations);
+
+        return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations, context);
     }
+
 
     /**
      * Internal execution path — called after role resolution is complete.
@@ -141,7 +150,7 @@ public class AgentLoop {
      */
     @ActivateRequestContext
     AgentResult runWithRole(String sessionId, String canonicalRole, String goal,
-            ReasoningEngine engine, int maxIterations) {
+            ReasoningEngine engine, int maxIterations, MessageContext context) {
 
         // --- CONTEXT SETUP ---
         MDC.put(MdcKeys.SESSION_ID, sessionId);
@@ -168,11 +177,11 @@ public class AgentLoop {
             }
 
             AgentResult resumeResult = checkpointResumeHandler.handle(
-                    sessionId, canonicalRole, goal, resumedHistory);
+                    sessionId, canonicalRole, goal, resumedHistory, context);
             if (resumeResult != null) {
                 result = resumeResult;
             } else {
-                AgentExecutionContext context = new AgentExecutionContext(
+                AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                         sessionId,
                         WorkspaceContext.userId(),
                         WorkspaceContext.chatId(),
@@ -181,7 +190,7 @@ public class AgentLoop {
                         WorkspaceContext.autonomy(),
                         maxIterations
                 );
-                result = stateMachineRunner.run(context, engine, resumedHistory);
+                result = stateMachineRunner.run(agentExecutionContext, engine, resumedHistory);
             }
 
             // --- CHECKPOINT FINAL STATE ---

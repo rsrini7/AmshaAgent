@@ -81,7 +81,7 @@ public class CommandDispatchHandler implements MessageHandler {
                         result = WorkspaceContext.run(
                             sessionId, userId, chatId, 
                             AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
-                            () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw())
+                            () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
                         );
                     } catch (Exception e) {
                         log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage(), e);
@@ -119,7 +119,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 chatId,
                 AutonomyLevel.FULL, 
                 AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input)
+                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context)
             );
         } catch (Exception e) {
             log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage(), e);

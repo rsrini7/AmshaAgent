@@ -60,7 +60,7 @@ public class DenyPipelineTest {
     @Test
     void testDenyRoutesToReflexRegistryNotDirectly() {
         // Setup mock response
-        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString()))
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), eq(context)))
                 .thenReturn(new com.arcclaw.core.reflex.ReflexResult(
                         java.util.Optional.of("🚫 Execution denied."),
                         "/deny"
@@ -74,7 +74,8 @@ public class DenyPipelineTest {
                 anyString(), // Session resolution handler might change this
                 eq("user-123"), 
                 eq("chat-789"), 
-                eq("/deny")
+                eq("/deny"),
+                eq(context)
         );
         
         // Verify sender was called with the response
@@ -84,7 +85,7 @@ public class DenyPipelineTest {
     @Test
     void testDenyAuditEventFires() {
         // To follow requirements strictly:
-        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString()))
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), eq(context)))
             .thenAnswer(invocation -> {
                 auditService.record(
                     (String)invocation.getArgument(0), 

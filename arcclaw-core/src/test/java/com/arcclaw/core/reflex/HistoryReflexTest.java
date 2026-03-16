@@ -16,7 +16,14 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.pipeline.MessageContext;
 
 @QuarkusTest
 public class HistoryReflexTest {
@@ -29,6 +36,12 @@ public class HistoryReflexTest {
 
     @InjectMock
     CompactionSummaryRepository compactionSummaryRepository;
+
+    private MessageContext createContext(String input) {
+        ChannelUser user = new ChannelUser("user1", "user1", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "test-session", java.time.Instant.now());
+        return new MessageContext("chat1", user, msg, mock(ChannelSender.class));
+    }
 
     @Test
     void testMatches() {
@@ -55,7 +68,8 @@ public class HistoryReflexTest {
         );
         when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
         
-        String result = historyReflex.execute(sessionId, "user1", "", "/history");
+        ReflexResult reflexResult = historyReflex.execute(sessionId, "user1", "", "/history", createContext("/history"));
+        String result = reflexResult.commandResponse().orElse("");
         
         Assertions.assertTrue(result.contains("Prior history summarized."));
         Assertions.assertTrue(result.contains("User prompt"));
@@ -69,7 +83,8 @@ public class HistoryReflexTest {
             .thenReturn(Optional.empty());
         when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
         
-        String result = historyReflex.execute("s1", "u1","", "/history");
+        ReflexResult reflexResult = historyReflex.execute("s1", "u1","", "/history", createContext("/history"));
+        String result = reflexResult.commandResponse().orElse("");
         Assertions.assertEquals("📭 No conversation history found for this session.", result);
     }
 }

@@ -2,6 +2,7 @@ package com.arcclaw.core.security;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
 import jakarta.annotation.PreDestroy;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Caches the derived session key for the duration of a Workspace session.
@@ -11,40 +12,48 @@ import jakarta.annotation.PreDestroy;
 @WorkspaceScoped
 public class VaultKeyCache {
 
+    // volatile: ensures cross-thread visibility of the reference; lock guards the derivation block
     private volatile VaultKey cachedKey;
+
+    // ReentrantLock is instantiated on the BEAN INSTANCE, not on the proxy.
+    // synchronized(this) would lock the proxy — this does not.
+    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Returns the cached key for this session, deriving it on first access.
-     * Thread-safe via double-checked locking — WorkspaceScoped beans are
-     * per-session, so contention only exists within one session's threads.
+     * Fast path — volatile read, no lock acquisition.
      */
     public VaultKey getOrDerive(String sessionId, Argon2idKeyDerivation derivation) {
-        // Safety: if wipe() was somehow skipped and the key was destroyed by another path,
-        // treat stale key as absent.
-        if (cachedKey != null && cachedKey.isDestroyed()) {
-            cachedKey = null;
+        VaultKey current = cachedKey;
+        if (current != null && !current.isDestroyed()) {
+            return current;
         }
 
-        if (cachedKey != null) return cachedKey;
-
-        synchronized (this) {
-            // Re-check after acquiring lock
-            if (cachedKey != null && cachedKey.isDestroyed()) {
-                cachedKey = null;
-            }
-
-            if (cachedKey == null) {
+        lock.lock();
+        try {
+            // Re-check inside lock — another thread may have derived while we waited
+            current = cachedKey;
+            if (current == null || current.isDestroyed()) {
                 cachedKey = derivation.deriveSessionKey(sessionId);
+                current = cachedKey;
             }
+            return current;
+        } finally {
+            lock.unlock();
         }
-        return cachedKey;
     }
 
     @PreDestroy
     void wipe() {
-        if (cachedKey != null) {
-            cachedKey.close(); // VaultKey implements AutoCloseable — zeroes key bytes
-            cachedKey = null;
+        lock.lock();
+        try {
+            if (cachedKey != null) {
+                cachedKey.close(); // VaultKey implements AutoCloseable — zeroes key bytes
+                cachedKey = null;
+            }
+        } finally {
+            lock.unlock();
         }
     }
 }
+

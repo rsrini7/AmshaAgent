@@ -1030,3 +1030,25 @@
 - [x] Verify: `StructuredOutputEngineSchemaTest` passes, proving schema gets loaded correctly
 - [x] Verify: Run full project tests with `mvn test`
 - [x] Documentation: Update `PLAN.md`, `TASKS.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md`
+
+---
+
+## Phase 63-A — VaultKeyCache: ReentrantLock Refactor ✅
+- [x] Refactor `VaultKeyCache.java`: Replace `synchronized(this)` with instance-field `ReentrantLock` for virtual thread safety <!-- id: 506 -->
+- [x] Implement double-checked locking with `volatile` cachedKey for optimal performance <!-- id: 507 -->
+- [x] Update `VaultKeyCacheTest.java`: Add `testConcurrencyWithVirtualThreads` using `CountDownLatch` <!-- id: 508 -->
+- [x] Add `testIdempotency` and `testSafetyFallbackIfKeyDestroyedExternally` to the test suite <!-- id: 509 -->
+- [x] Verify: Run `VaultKeyCacheTest` and confirm `BUILD SUCCESS` <!-- id: 510 -->
+- [x] Documentation: Update `PLAN.md`, `TASKS.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md` <!-- id: 511 -->
+
+---
+
+## Phase 63-B — Resume Signal Mechanism Refactor ✅
+- [x] Replace string-based resume checks with structured boolean `isResumeSignal` in `MessageContext`
+- [x] Delete `RESUME_GOAL_PREFIX` from `AgentSentinels.java`
+- [x] Introduce new constants `GOAL_TOOL_APPROVED`, `GOAL_RESUME_APPROVED`, and `GOAL_RESUME_DENIED` in `AgentSentinels`
+- [x] Update `ReflexResult` factory methods to incorporate `MessageContext`
+- [x] Update all `Reflex` implementations to handle new `ReflexResult` and `MessageContext` signatures
+- [x] Update `ChatMemoryWriter.java` and `ChatHistoryAssembler.java` to use `AgentSentinels` constants
+- [x] Refactor API usage for `ChannelUser`, `ChannelMessage`, and `ChannelSender` across codebase
+- [x] Verify all core and app integration tests pass with 0 regressions

@@ -22,6 +22,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -29,6 +34,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -59,9 +65,18 @@ class CheckpointResumeHandlerTest {
         handler = new CheckpointResumeHandler(agentStore, toolRegistry);
     }
 
+    private MessageContext createContext(String input, boolean resume) {
+        ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", java.time.Instant.now());
+        MessageContext ctx = new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
+        ctx.setResumeSignal(resume);
+        return ctx;
+    }
+
     @Test
     void testReturnsNullOnNonResumptionGoal() {
-        AgentResult result = handler.handle("session", "coordinator", "some normal goal", new ArrayList<>());
+        MessageContext ctx = createContext("some normal goal", false);
+        AgentResult result = handler.handle("session", "coordinator", "some normal goal", new ArrayList<>(), ctx);
         assertNull(result);
     }
 
@@ -76,7 +91,8 @@ class CheckpointResumeHandlerTest {
 
         when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
 
-        AgentResult result = handler.handle("session", "coordinator", "resuming task with denial", new ArrayList<>());
+        MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_DENIED, true);
+        AgentResult result = handler.handle("session", "coordinator", AgentSentinels.GOAL_RESUME_DENIED, new ArrayList<>(), ctx);
 
         assertNotNull(result);
         assertEquals("❌ Tool execution was denied and the task has been cancelled.", ((AgentResult.Finished) result).answer());
@@ -102,7 +118,8 @@ class CheckpointResumeHandlerTest {
                 .thenReturn(ToolResponse.success("tool done"));
 
             List<ReasoningStep> history = new ArrayList<>();
-            AgentResult result = handler.handle("session", "coordinator", "resuming task - approved", history);
+            MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
+            AgentResult result = handler.handle("session", "coordinator", AgentSentinels.GOAL_RESUME_APPROVED, history, ctx);
 
             assertNull(result); // Null means continue loop
             assertEquals(1, history.size());
@@ -130,7 +147,8 @@ class CheckpointResumeHandlerTest {
                 .thenThrow(new RuntimeException("boom"));
 
             List<ReasoningStep> history = new ArrayList<>();
-            AgentResult result = handler.handle("session", "coordinator", "resuming task - approved", history);
+            MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
+            AgentResult result = handler.handle("session", "coordinator", AgentSentinels.GOAL_RESUME_APPROVED, history, ctx);
 
             assertNotNull(result);
             assertTrue(result instanceof AgentResult.Failed);

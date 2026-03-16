@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CompactionSummaryRepository;
@@ -30,7 +31,7 @@ public class StatusReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         List<AgentCheckpoint> checkpoints = new ArrayList<>();
         
         for (String role : List.of(
@@ -48,7 +49,7 @@ public class StatusReflex implements AgentReflex {
             checkpoints.sort((c1, c2) -> {
                 if (c1.getUpdatedAt() == null) return 1;
                 if (c2.getUpdatedAt() == null) return -1;
-                return c2.getUpdatedAt().compareTo(c1.getUpdatedAt()); // Descending (newest first)
+                return c2.getUpdatedAt().compareTo(c1.getUpdatedAt()); // Descending (newest first) Sort descending (newest first)
             });
             
             status = checkpoints.getFirst().getStatus().name();
@@ -79,7 +80,7 @@ public class StatusReflex implements AgentReflex {
 
         String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;
 
-        return String.format(
+        String output = String.format(
             "📊 *Status:* %s\n" +
             "💰 *Cost:* $%.4f / $%.2f (%.1f%%)\n" +
             "🔢 *Tokens:* %d prompt + %d completion = %d total\n" +
@@ -88,5 +89,7 @@ public class StatusReflex implements AgentReflex {
             status, cost, budgetUsd, pct,
             inputTokens, outputTokens, totalTokens,
             memoryLine, shortId);
+
+        return ReflexResult.respond(output, context);
     }
 }

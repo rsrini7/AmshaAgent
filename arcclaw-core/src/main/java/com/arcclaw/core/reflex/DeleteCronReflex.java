@@ -3,6 +3,7 @@ package com.arcclaw.core.reflex;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCronRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -23,19 +24,19 @@ public class DeleteCronReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        return input != null
+        return input != null 
                 && input.trim().toLowerCase().startsWith("deletecron");
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         if (!WorkspaceScopeHolder.USER_ID.isBound()) {
-            return "Cannot delete schedule — user context not available.";
+            return ReflexResult.respond("Cannot delete schedule — user context not available.", context);
         }
         String uid = WorkspaceScopeHolder.USER_ID.get();
         String cronId = input.trim().substring("deletecron".length()).trim();
         if (cronId.isBlank()) {
-            return "Usage: deletecron <id>";
+            return ReflexResult.respond("Usage: deletecron <id>", context);
         }
 
         cronRepository.deleteByIdAndUserId(cronId, uid);
@@ -45,7 +46,7 @@ public class DeleteCronReflex implements AgentReflex {
                 SecurityEventType.CRONDELETED,
                 "cronId=" + cronId + " via=reflex");
 
-        return "Cron job " + cronId + " deleted.";
+        return ReflexResult.respond("Cron job " + cronId + " deleted.", context);
     }
 
     @Override

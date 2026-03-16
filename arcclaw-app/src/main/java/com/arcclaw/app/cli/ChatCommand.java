@@ -15,6 +15,12 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
@@ -110,8 +116,9 @@ public class ChatCommand implements Runnable {
 
             heartbeatTracker.recordHeartbeat(sessionId);
 
+            MessageContext context = createCliContext(sessionId, input);
             ReflexResult reflexResult = reflexRegistry.processIfReflex(
-                sessionId, "cli-user", "cli-chat", input);
+                sessionId, "cli-user", "cli-chat", input, context);
 
             if (reflexResult.commandResponse().isPresent()) {
                 String response = reflexResult.commandResponse().get();
@@ -121,15 +128,15 @@ public class ChatCommand implements Runnable {
                 continue;
             }
 
-            dispatchToAgent(sessionId, reflexResult.sanitizedInput());
+            dispatchToAgent(sessionId, reflexResult.sanitizedInput(), context);
         }
     }
 
-    private void dispatchToAgent(String sessionId, String input) {
+    private void dispatchToAgent(String sessionId, String input, MessageContext context) {
         try {
             System.out.println("⚡ Thinking...");
             AgentResult result = agentLoop.run(
-                sessionId, role, input, reasoningEngine, maxIterations);
+                sessionId, role, input, reasoningEngine, maxIterations, context);
 
             String output = switch (result) {
                 case AgentResult.Finished f      -> f.answer();
@@ -154,4 +161,20 @@ public class ChatCommand implements Runnable {
             System.err.println("❌ Error: " + e.getMessage());
         }
     }
+
+    private MessageContext createCliContext(String sessionId, String input) {
+        ChannelUser user = new ChannelUser("cli-user", "CLI User", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, java.time.Instant.now());
+        ChannelSender noOpSender = new ChannelSender() {
+            @Override public ChannelType supports() { return ChannelType.CLI; }
+            @Override public void send(ChannelUser recipient, java.util.List<ReplyNode> nodes) {
+                System.out.println("\n[CLI] " + nodes);
+            }
+            @Override public void sendRaw(ChannelUser recipient, String text) {
+                System.out.println("\n[CLI] " + text);
+            }
+        };
+        return new MessageContext("cli-chat", user, msg, noOpSender);
+    }
 }
+

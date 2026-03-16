@@ -2,10 +2,16 @@ package com.arcclaw.app;
 
 import java.util.UUID;
 
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.DevSecretSeeder;
 
@@ -59,8 +65,9 @@ public class AskCommand implements Runnable {
                     // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
                     devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
+                    MessageContext context = createCliContext(sessionId, goal);
                     AgentResult result = agentLoop.run(sessionId, role, goal,
-                            reasoningEngine, 5);
+                            reasoningEngine, 5, context);
 
                     String output = switch (result) {
                         case AgentResult.Finished f -> f.answer();
@@ -75,5 +82,19 @@ public class AskCommand implements Runnable {
             workspaceManager.terminateSession(sessionId);
         }
     }
-
+    
+    private MessageContext createCliContext(String sessionId, String goal) {
+        ChannelUser user = new ChannelUser("cli-user", "CLI User", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, goal, sessionId, java.time.Instant.now());
+        ChannelSender noOpSender = new ChannelSender() {
+            @Override public ChannelType supports() { return ChannelType.CLI; }
+            @Override public void send(ChannelUser recipient, java.util.List<ReplyNode> nodes) {
+                System.out.println("\n[SENDER] " + nodes);
+            }
+            @Override public void sendRaw(ChannelUser recipient, String text) {
+                System.out.println("\n[SENDER] " + text);
+            }
+        };
+        return new MessageContext("cli-chat", user, msg, noOpSender);
+    }
 }

@@ -108,7 +108,7 @@ class AgentSessionServiceTest {
     void testRunSync_finished_returns200() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Finished.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenReturn(result);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
         when(responseMapper.mapResult(result, false)).thenReturn(Response.ok().build());
 
         Response response = service.runSync("sess1", request);
@@ -119,7 +119,7 @@ class AgentSessionServiceTest {
     void testRunSync_complianceViolation_returns451() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Failed.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenReturn(result);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
         when(responseMapper.mapResult(result, false)).thenReturn(Response.status(451).build());
 
         Response response = service.runSync("sess1", request);

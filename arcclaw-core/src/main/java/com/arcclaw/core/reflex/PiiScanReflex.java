@@ -1,5 +1,6 @@
 package com.arcclaw.core.reflex;
 
+import com.arcclaw.core.pipeline.MessageContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -76,9 +77,9 @@ public class PiiScanReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         // Only reached in BLOCK_AND_NOTIFY mode
-        return "⚠️ PII detected. Message has been sanitized and blocked.";
+        return ReflexResult.respond("⚠️ PII detected. Message has been sanitized and blocked.", context);
     }
 
     @Override

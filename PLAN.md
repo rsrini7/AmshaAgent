@@ -3775,3 +3775,37 @@ Implement build-time generation of JSON schemas from `@AgentFunction` annotated 
 - ✅ `WorkspaceScopeTest`: Corrected tests pass, validating thread safety of `@WorkspaceScoped`.
 - ✅ Compilation: Clean `mvn install` and complete test suite passes.
 
+---
+
+# Phase 63-A — VaultKeyCache: ReentrantLock Refactor
+
+Refactored `VaultKeyCache.java` to use an instance-field `ReentrantLock` replacing the legacy `synchronized(this)` mechanism, increasing concurrency performance and thread safety, especially on virtual threads.
+
+## Completed Changes
+- Removed blocking lock structures targeting current object instance.
+- Expanded concurrent execution suite in `VaultKeyCacheTest.java` evaluating Double-Checked Lock efficacy via `CountDownLatch`.
+- Validated thread safety.
+
+## Verification
+- ✅ `VaultKeyCacheTest` builds and passes without concurrency exceptions.
+
+---
+
+# Phase 63-B — Resume Signal Mechanism Refactor
+
+Refactor the brittle string-based resume signal mechanisms in the pipeline to use a structured boolean approach, enhancing code maintainability and type safety.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Structured context variables**: `isResumeSignal` introduced into `MessageContext` tracking the explicitly requested resume states.
+> **API Consolidation**: Eliminated `RESUME_GOAL_PREFIX`, replacing ad-hoc string matching with centralized `AgentSentinels` constants to govern control flow.
+
+## Completed Changes
+
+- Updates across `AgentReflex`, `DenyReflex`, `ApproveReflex`, `ChatCommand`
+- Modification of `ChatMemoryWriter` and `ChatHistoryAssembler` for goal-ignoring logic using new constants
+- Full coverage for all tests, ensuring API consistency across components like `ChannelUser` and `ChannelSender`.
+
+## Verification
+- ✅ `mvn clean test` succeeds gracefully parsing the new signatures.

@@ -7,8 +7,10 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Persists goals and answers to the ChatMemoryStore.
@@ -18,14 +20,18 @@ public class ChatMemoryWriter {
 
     @Inject ChatMemoryStore chatMemoryStore;
 
+    private static final Set<String> SKIP_GOALS = Set.of(
+        AgentSentinels.GOAL_TOOL_APPROVED,
+        AgentSentinels.GOAL_RESUME_APPROVED,
+        AgentSentinels.GOAL_RESUME_DENIED
+    );
+
     /**
      * Saves the initial goal to chat memory with deduplication.
      */
     public void saveGoal(String sessionId, String goal) {
         if (sessionId != null && goal != null && !goal.isEmpty()) {
-            if (!"The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.".equals(goal)
-                    && !"Resuming task after approval".equals(goal)
-                    && !("Resuming task after denial").equals(goal)) {
+            if (!SKIP_GOALS.contains(goal)) {
 
                 List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
                 if (currentHistory == null) currentHistory = new ArrayList<>();

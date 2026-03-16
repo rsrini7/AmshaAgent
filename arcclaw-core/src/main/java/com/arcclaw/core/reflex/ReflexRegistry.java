@@ -8,6 +8,7 @@ import org.jboss.logging.Logger;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.pipeline.MessageContext;
 
 import java.util.Optional;
 
@@ -23,7 +24,7 @@ public class ReflexRegistry {
     @Inject
     AuditService auditService;
 
-    public ReflexResult processIfReflex(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult processIfReflex(String sessionId, String userId, String chatId, String input, MessageContext context) {
         // Guard: if input starts with "store " treat as vault command — skip PII entirely
         if (input == null || input.isBlank() || input.trim().toLowerCase().startsWith("store ")) {
             // Route directly to vault handler — do not sanitize
@@ -35,7 +36,7 @@ public class ReflexRegistry {
         for (AgentReflex reflex : reflexes) {
             if (reflex.matches(input)) {
                 try {
-                    String response = reflex.execute(sessionId, userId, chatId, input);  // ← chatId added
+                    ReflexResult result = reflex.execute(sessionId, userId, chatId, input, context);
 
                     SecurityEventType auditType;
                     if (reflex instanceof PromptInjectionReflex) {
@@ -58,7 +59,7 @@ public class ReflexRegistry {
                     }
 
                     // Pass 1: Command short-circuit — sanitizedInput is unused since LLM is bypassed
-                    return new ReflexResult(Optional.ofNullable(response), input);
+                    return result;
                 } catch (Exception e) {
                     String sanitizedInput = input.length() > 200
                         ? input.substring(0, 200) + "...[truncated]"
@@ -66,9 +67,7 @@ public class ReflexRegistry {
                     log.errorf("[REFLEX-FAILURE] reflex=%s session=%s user=%s input=%s error=%s",
                         reflex.getClass().getSimpleName(), sessionId, userId,
                         sanitizedInput, e.getMessage(), e);
-                    return new ReflexResult(
-                        Optional.of("⚠️ System Error during reflex execution: " + e.getMessage()),
-                        input);
+                    return ReflexResult.respond("⚠️ System Error during reflex execution: " + e.getMessage(), context);
                 }
             }
         }
@@ -94,3 +93,4 @@ public class ReflexRegistry {
         return new ReflexResult(Optional.empty(), sanitized);
     }
 }
+
