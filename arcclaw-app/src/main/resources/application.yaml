@@ -455,6 +455,8 @@ mp:
       dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
     log:
       category:
+        "com.arcclaw":
+          level: INFO
         "org.hibernate.SQL":
           level: DEBUG
     langchain4j:

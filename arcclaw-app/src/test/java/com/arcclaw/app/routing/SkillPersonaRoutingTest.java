@@ -8,12 +8,15 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
 
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 
@@ -26,7 +29,10 @@ class SkillPersonaRoutingTest {
     @Inject
     IntentClassifier classifier;
 
-    @io.quarkus.test.InjectMock
+    @InjectMock
+    IntentClassifierService intentClassifierService;
+
+    @InjectMock
     com.arcclaw.core.audit.TelemetryAuditService telemetryAuditService;
 
     @BeforeEach
@@ -45,6 +51,10 @@ class SkillPersonaRoutingTest {
                 """;
         AgentSkillEntity entity = new AgentSkillEntity("u1", "code-reviewer", yaml, Instant.now(), Instant.now());
         repository.saveOrUpdate(entity);
+
+        // Mock the LLM fallback to avoid log noise and real network calls
+        Mockito.when(intentClassifierService.classify(ArgumentMatchers.anyString()))
+            .thenReturn("coordinator");
 
         // Force reload so the registry sees the new DB skill
         given()

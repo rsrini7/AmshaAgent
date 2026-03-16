@@ -1109,3 +1109,20 @@
 - [x] Add `@Priority(100)` to `DevSecretSeeder` to ensure early seeding of security keys during startup.
 - [x] Verify: All related hardening tests pass with clean logs and 0 regressions. <!-- id: 517 -->
 
+---
+
+## Phase 63-H Extended — Log Noise Reduction & Startup Resilience ✅
+- [x] Refactor Error Logging: Move full stack traces from ERROR to DEBUG level for `AgentStateMachineRunner`, `AsyncPersistenceEngine`, `ToolRegistry`, `StatefulAgentStoreImpl`, `WorkspaceManager`, and `SessionReaper`. <!-- id: 518 -->
+- [x] Implement Eager Initialization in `AuditHashUtil`: Use `@StartupEvent` to prime HMAC keys during boot, preventing expensive Argon2id derivation from blocking the first transactional audit record. <!-- id: 519 -->
+- [x] Implement SYSTEM Master Key Caching in `SecretVaultImpl`: Use `ReentrantLock` and volatile caching to avoid redundant, high-CPU key derivations during parallel execution. <!-- id: 520 -->
+- [x] Harden Shutdown Logic: Add guards in `AsyncPersistenceEngine` and `AuditHashUtil` to detect `Arc.container() == null` shutdown races and suppress related `NullPointerException` logs. <!-- id: 521 -->
+- [x] Refactor `IntentClassifierService`: Move LLM authentication/timeout stack traces to DEBUG while keeping WARN logs concise. <!-- id: 522 -->
+
+---
+
+## Phase 63-J — Split-Package Cleanup (Quarkus Optimization) ✅
+- [x] Resolve Split-Package Warnings: Relocate all `arcclaw-app` test classes from `com.arcclaw.core.*` namespace to `com.arcclaw.app.*`. <!-- id: 523 -->
+- [x] Fixed Packages: `com.arcclaw.core.api`, `com.arcclaw.core.audit`, `com.arcclaw.core.health`, `com.arcclaw.core.scope`, `com.arcclaw.core.security`, `com.arcclaw.core.structured`. <!-- id: 524 -->
+- [x] Verify: `mvn clean test` succeeds with 28+ app-layer tests passed and zero `SplitPackageProcessor` warnings. <!-- id: 525 -->
+- [x] Result: Faster Quarkus augmentation and unambiguous classpath resolution for all test contexts. <!-- id: 526 -->
+

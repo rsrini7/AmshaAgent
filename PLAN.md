@@ -3919,4 +3919,74 @@ Hardened the security bootstrap process and audit hashing mechanism by integrati
 - ✅ `StartupSecurityValidator*`: All 6 validation suites pass, ensuring secure boot logic.
 - ✅ Build: `mvn clean test -pl arcclaw-app,arcclaw-core` successful with 0 regressions.
 
+---
+
+# Phase 63-H Extened — Log Noise Reduction & Startup Resilience ✅
+
+Implemented critical optimizations to suppress non-actionable error noise and accelerate application bootstrap by pruning computationally expensive operations from the startup path.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **SYSTEM Master Key Caching**: Introduced a `ReentrantLock` protected cache for the "SYSTEM" master key in `SecretVaultImpl`. This prevents dozens of parallel virtual threads from simultaneously invoking the expensive Argon2id key derivation during application startup or parallel test execution, effectively resolving transaction timeouts and log flooding.
+
+> [!TIP]
+> **Eager Audit Initialization**: Moved the HMAC key priming logic to a dedicated `@StartupEvent` in `AuditHashUtil`. This ensures the first transactional audit record doesn't face the latency of a cold Argon2id derivation, which was previously causing transactional "Reaper" timeouts in high-load scenarios.
+
+> [!NOTE]
+> **Observability Polish**: Reclassified high-verbosity stack traces (LLM timeouts, non-retryable persistence errors, recovery races) from `ERROR` to `DEBUG`. This keeps the standard console output actionable while retaining deep diagnostic capabilities for core developers.
+
+## Completed Changes
+
+#### [MODIFY] [SecretVaultImpl.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
+- Implemented `cachedSystemMasterKey` volatile field with `ReentrantLock` orchestration.
+- Prevented redundant derivations for system-level operations.
+
+#### [MODIFY] [AuditHashUtil.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- Added `@StartupEvent` observer to eager-load the audit HMAC key.
+- Added guards to handle `Arc.container() == null` shutdown races gracefully.
+
+#### [MODIFY] [AsyncPersistenceEngine.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java)
+- Suppressed full stack traces for consumer loop errors at the primary `ERROR` level.
+
+#### [MODIFY] [IntentClassifierService.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Concise `WARN` logs for LLM authentication failures; detailed traces moved to `DEBUG`.
+
+## Verification
+- ✅ **Startup Performance**: Zero "Transaction Reaper" warnings observed during full parallel test execution.
+- ✅ **Log Integrity**: Console output is significantly cleaner, showing only actionable warnings.
+
+---
+
+# Phase 63-J — Split-Package Cleanup (Quarkus Optimization) ✅
+
+Resolved build-time and runtime performance degradation caused by split-package usage across the `arcclaw-core` and `arcclaw-app` modules.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Namespace Alignment**: Relocated all test classes within `arcclaw-app` that were mistakenly using the `com.arcclaw.core.*` namespace to the `com.arcclaw.app.*` namespace. This adheres to the strict "one package per archive" rule required for optimal Quarkus augmentation and eliminates ambiguous classpath resolution.
+
+> [!TIP]
+> **Build Speed**: Resolving the split-package issue allows the `SplitPackageProcessor` to be bypassed, reducing the CPU and memory overhead during the Quarkus build-time indexing (augmentation) phase.
+
+## Completed Changes
+
+#### [MOVE] [AgentResourceTest.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/test/java/com/arcclaw/app/api/AgentResourceTest.java)
+- Relocated from `com.arcclaw.core.api` to `com.arcclaw.app.api`.
+
+#### [MOVE] [AuditServiceIntegrationTest.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/test/java/com/arcclaw/app/audit/AuditServiceIntegrationTest.java)
+- Relocated from `com.arcclaw.core.audit` to `com.arcclaw.app.audit`.
+
+#### [MOVE] [Health Checks](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/test/java/com/arcclaw/app/health/)
+- Relocated `MockPodmanHealthCheck`, `MockPodmanImageHealthCheck`, and `PodmanHealthCheckTest` to `com.arcclaw.app.health`.
+
+#### [MOVE] [Security & Scope](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-app/src/test/java/com/arcclaw/app/security/)
+- Relocated `DevSecretSeederTest`, `SecretVaultImplTest`, and `WorkspaceScopeTest` to their respective `com.arcclaw.app.*` packages.
+
+## Verification
+- ✅ **Warnings Eliminated**: `SplitPackageProcessor` warnings no longer appear in build/test logs.
+- ✅ **Test Integrity**: All 28 app-layer tests passed successfully after namespace relocation.
+- ✅ **Full Regression**: Verified zero impact on core module tests via `mvn clean test`.
+
 
