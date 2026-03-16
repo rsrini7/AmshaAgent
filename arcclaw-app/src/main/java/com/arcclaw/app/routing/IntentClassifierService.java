@@ -62,7 +62,7 @@ public class IntentClassifierService implements IntentClassifier {
                 AgentRoleEnum.RESEARCHER,
                 AgentRoleEnum.COORDINATOR,
                 AgentRoleEnum.ARCHITECT,
-                AgentRoleEnum.DATTATREYA
+                AgentRoleEnum.SYNTHESIZER
         );
 
         for (AgentRoleEnum role : roles) {
@@ -163,8 +163,8 @@ public class IntentClassifierService implements IntentClassifier {
         if (lowerRaw.contains("saraswati") || lowerRaw.contains(AgentRoleEnum.RESEARCHER.toScopedName())) return AgentRoleEnum.RESEARCHER.toScopedName();
         if (lowerRaw.contains(AgentRoleEnum.ARCHITECT.toScopedName()) || lowerRaw.contains("brihaspati")
                 || lowerRaw.contains("brahaspati")) return AgentRoleEnum.ARCHITECT.toScopedName(); // keep old spelling as fallback
-        if (lowerRaw.contains("synthesizer") || lowerRaw.contains(AgentRoleEnum.DATTATREYA.toScopedName())
-                || lowerRaw.contains("datta")) return AgentRoleEnum.DATTATREYA.toScopedName();
+        if (lowerRaw.contains("synthesizer") || lowerRaw.contains(AgentRoleEnum.SYNTHESIZER.toScopedName())
+                || lowerRaw.contains("datta")) return AgentRoleEnum.SYNTHESIZER.toScopedName();
         return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 }

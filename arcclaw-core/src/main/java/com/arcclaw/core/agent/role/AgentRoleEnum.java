@@ -55,7 +55,7 @@ public enum AgentRoleEnum {
             Set.of(ToolCapability.GITHUB)
     )),
 
-    DATTATREYA("synthesizer", new RoleDefinition(
+    SYNTHESIZER("synthesizer", new RoleDefinition(
             "synthesizer",
             "Dattatreya (Synthesizer)",
             "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
@@ -127,7 +127,7 @@ public enum AgentRoleEnum {
             case "researcher", "saraswati" -> RESEARCHER;
             case "coder", "brahma" -> CODER;
             case "debugger", "shiva" -> DEBUGGER;
-            case "synthesizer", "dattatreya", "datta" -> DATTATREYA;
+            case "synthesizer", "dattatreya", "datta" -> SYNTHESIZER;
             default -> throw new IllegalArgumentException("Unknown AgentRole: " + roleStr);
         };
     }

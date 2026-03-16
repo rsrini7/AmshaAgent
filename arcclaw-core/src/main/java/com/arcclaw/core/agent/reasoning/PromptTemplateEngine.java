@@ -106,7 +106,7 @@ public class PromptTemplateEngine {
             case CODER       -> coderTemplate;
             case DEBUGGER    -> debuggerTemplate;
             case ARCHITECT   -> architectTemplate;
-            case DATTATREYA  -> synthesizerTemplate;
+            case SYNTHESIZER  -> synthesizerTemplate;
         };
     }
 }

@@ -30,7 +30,7 @@ class AgentPersonaRegistryTest {
 
     @Test
     void testSynthesizerPersonaContainsDattatreya() {
-        String prompt = registry.getPersonaPrompt(AgentRoleEnum.DATTATREYA);
+        String prompt = registry.getPersonaPrompt(AgentRoleEnum.SYNTHESIZER);
         assertTrue(prompt.contains("Dattatreya"), "Synthesizer prompt should contain Dattatreya");
     }
 

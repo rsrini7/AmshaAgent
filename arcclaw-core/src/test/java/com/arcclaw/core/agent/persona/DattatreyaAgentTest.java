@@ -31,7 +31,7 @@ class DattatreyaAgentTest {
     @Test
     void testAllowedToolsMatchEnum() {
         assertEquals(
-            AgentRoleEnum.DATTATREYA.definition().toolNames(),
+            AgentRoleEnum.SYNTHESIZER.definition().toolNames(),
             new HashSet<>(new DattatreyaAgent().allowedTools()));
     }
 

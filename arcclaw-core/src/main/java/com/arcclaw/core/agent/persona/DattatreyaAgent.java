@@ -64,7 +64,7 @@ public class DattatreyaAgent implements Agent {
 
     @Override
     public String role() {
-        return AgentRoleEnum.DATTATREYA.toScopedName();
+        return AgentRoleEnum.SYNTHESIZER.toScopedName();
     }
 
     @Override
@@ -74,7 +74,7 @@ public class DattatreyaAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        return List.copyOf(AgentRoleEnum.DATTATREYA.definition().toolNames());
+        return List.copyOf(AgentRoleEnum.SYNTHESIZER.definition().toolNames());
     }
 
     /**
