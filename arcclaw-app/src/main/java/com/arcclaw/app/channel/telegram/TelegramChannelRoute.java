@@ -70,8 +70,14 @@ public class TelegramChannelRoute extends RouteBuilder {
         Thread.ofVirtual().name("telegram-route-registrar").start(() -> {
             try {
                 if (camelContext.getStatus().isStopped()) {
-                    // disableJMX() silently no-ops after INITIALIZED state
-                    // Remove the strategy directly — bypasses the isNew() guard
+                    // WHY removeIf instead of camelContext.disableJMX():
+                    // disableJMX() is guarded by isNew() check in AbstractCamelContext.
+                    // In Quarkus dev mode, StartupEvent fires after INITIALIZED state —
+                    // disableJMX() silently no-ops, leaving JmxManagementLifecycleStrategy
+                    // registered. Calling camelContext.start() then NPEs at
+                    // JmxManagementLifecycleStrategy.onContextStarting():189.
+                    // Direct removeIf bypasses the state guard. JAR/native unaffected
+                    // since camelContext.getStatus().isStopped() is false there.
                     camelContext.getLifecycleStrategies()
                         .removeIf(s -> s.getClass().getName()
                             .contains("JmxManagement"));
