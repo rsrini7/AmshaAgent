@@ -39,6 +39,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.skill.SkillRegistry;
 
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
@@ -54,6 +55,7 @@ class AgentStateMachineRunnerTest {
     private ToolInvocationGuard guard;
     private ToolInvoker invoker;
     private ChatMemoryWriter writer;
+    private SkillRegistry skillRegistry;
 
     @SuppressWarnings("unchecked")
     Instance<AgentObserver> observers = mock(Instance.class);
@@ -68,6 +70,7 @@ class AgentStateMachineRunnerTest {
         guard = mock(ToolInvocationGuard.class);
         invoker = mock(ToolInvoker.class);
         writer = mock(ChatMemoryWriter.class);
+        skillRegistry = mock(SkillRegistry.class);
 
         runner.toolRegistry = toolRegistry;
         runner.agentStore = agentStore;
@@ -76,8 +79,10 @@ class AgentStateMachineRunnerTest {
         runner.guard = guard;
         runner.invoker = invoker;
         runner.writer = writer;
+        runner.skillRegistry = skillRegistry;
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());
+        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
     }
 
     private AgentExecutionContext createCtx() {
