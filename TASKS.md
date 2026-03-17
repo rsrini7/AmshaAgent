@@ -1148,5 +1148,13 @@
 - [x] Prompt 63-S — Build-Time `@RunOnVirtualThread` Enforcement via `@BuildStep` <!-- id: 542 -->
 - [x] Prompt 63-T — `AgentOtelContext`: Instrument Iteration and Tool Spans <!-- id: 543 -->
 
-
-
+## Phase 63-U — Post-Implementation Verification Fixes ✅
+- [x] Implement immediate `pepper` zeroing in `Argon2idKeyDerivation` (finally block). <!-- id: 544 -->
+- [x] Replace `"error-missing-hmac-key"` returning with `IllegalStateException` throw in `AuditHashUtil`. <!-- id: 545 -->
+- [x] Implement 3-retry loop for HMAC boot race in `AsyncPersistenceEngine.persistSynchronously()`. <!-- id: 546 -->
+- [x] Add catch for `ComplianceViolationException` in `drainCritical()` to increment failure counter. <!-- id: 547 -->
+- [x] Centralize magic literals into `VaultConstants.java`. <!-- id: 548 -->
+- [x] Update `StartupSecurityValidator` to use `VaultConstants`. <!-- id: 549 -->
+- [x] Fix visibility of `ChatMemoryWriter.SKIP_GOALS` for pinning tests. <!-- id: 550 -->
+- [x] Resolve `AsyncPersistenceEngineTest` race condition using localized polling. <!-- id: 551 -->
+- [x] Verify: All component tests (Argon2, Audit, Persistence, Vault) pass with zero raw literals. <!-- id: 552 -->

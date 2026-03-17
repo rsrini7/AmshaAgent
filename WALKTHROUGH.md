@@ -2377,3 +2377,41 @@ This phase focused on a comprehensive sweep of the core engine to improve resili
 - ✅ OTel spans verified in `AgentOtelContextTest`.
 - ✅ Build-failure confirmed when introducing an unsafe agent in `VirtualThreadBuildStepTest`.
 - ✅ Memory searches verified for performance and accuracy in both FTS and vector modes.
+
+---
+
+## Phase 63-U — Security & Persistence Hardening ✅
+
+Hardened the security bootstrap and persistence layers by enforcing zero-on-use memory safety and implementing blocking retry guards for HMAC availability.
+
+### Changes Made
+
+#### [arcclaw-core](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core)
+
+#### [Argon2idKeyDerivation.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/Argon2idKeyDerivation.java)
+- **Zero-on-Use**: Integrated a `finally` block to immediately zero out the `char[]` pepper and the `ByteBuffer` used for the password, ensuring no secret material remains in the heap after derivation.
+
+#### [AuditHashUtil.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- **Fail-Closed Auditing**: Transitioned from returning a placeholder string on HMAC failure to throwing an `IllegalStateException`. This prevents the system from persisting unhashed or incorrectly hashed audit records.
+
+#### [AsyncPersistenceEngine.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java)
+- **Startup Protection**: Added a 3-retry loop in `persistSynchronously` to handle the race condition where the audit HMAC key is still being initialized in the `SecretVault` during the very first persistence event.
+- **Audit Failure Tracking**: Explicitly catches `ComplianceViolationException` in the drain thread, logging the failure and incrementing the `auditFailureCount` metric.
+
+#### [VaultConstants.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/VaultConstants.java)
+- **Literal Extraction**: Centralized magic strings like `"SYSTEM"` and `"arcclaw-audit-hmac-key"` into constant fields, ensuring consistency across `SecretVaultImpl`, `DevSecretSeeder`, and `StartupSecurityValidator`.
+
+### Verification Results
+
+| Component | Test Class | Status |
+|-----------|------------|--------|
+| Argon2 Zeroing | `Argon2idKeyDerivationTest` | ✅ PASS |
+| HMAC Retry Loop | `AsyncPersistenceEngineTest` | ✅ PASS |
+| Audit Fail-Closed | `AuditHashUtilTest` | ✅ PASS |
+| Constant Refactor | `SecretVaultImplTest` | ✅ PASS |
+
+**Key Evidence**:
+- Log verification confirms: `Caught CVE in drainCritical. Incrementing counter.`
+- `Argon2idKeyDerivationTest` verified `pepperChars` are all zeros (`\0`) after call.
+- Zero raw literals remain for audit key name across the entire codebase.
+

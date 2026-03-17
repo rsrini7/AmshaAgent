@@ -4168,3 +4168,41 @@ Implement OpenTelemetry tracing for the agent's execution flow, ensuring accurat
 **Verification**:
 - ✅ `AgentOtelContextTest`: Verifies span creation, attribute setting, and parent-child relationships.
 - ✅ `AgentStateMachineRunnerTest` & `ToolInvokerTest`: Verified via mocked OTel context ensuring 100% test coverage for instrumentation paths.
+
+---
+
+# Phase 63-U — Post-Implementation Verification & Fixes ✅
+
+Final hardening of the security and persistence layers based on post-implementation audit findings.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Zero-on-Use Strictness**: Expanded zeroing from just `char[] pepperChars` to also include the `ByteBuffer`'s internal array in `Argon2idKeyDerivation`, ensuring no secret material lingers even if BouncyCastle's `zeroize` call is delayed.
+
+> [!CAUTION]
+> **Audit Fail-Closed Enforcement**: Transitioned `AuditHashUtil` from "fail-open" (placeholder return) to "fail-closed" (exception throw) for HMAC generation. This ensures that no transactional audit record can be created with an invalid hash, protecting the integrity of the audit chain.
+
+## Proposed Changes
+
+#### [MODIFY] [Argon2idKeyDerivation.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/security/Argon2idKeyDerivation.java)
+- Added `finally` block to zero out `pepperChars` and `passwordBB.array()` immediately after use.
+
+#### [MODIFY] [AuditHashUtil.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- Replaced placeholder return with `IllegalStateException` in `hmacHex()`.
+
+#### [MODIFY] [AsyncPersistenceEngine.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java)
+- Implemented HMAC boot-window retry loop (3 attempts) in `persistSynchronously()`.
+- Added counter increment in `drainCritical()` catch block for `ComplianceViolationException`.
+
+#### [NEW] [VaultConstants.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/security/VaultConstants.java)
+- Extracted magic strings `"SYSTEM"` and `"arcclaw-audit-hmac-key"` into static constants.
+
+## Verification Plan
+
+### Automated Tests
+- ✅ `Argon2idKeyDerivationTest`: Verified secret zeroing.
+- ✅ `AsyncPersistenceEngineTest`: Verified HMAC failure counters and retry survivors.
+- ✅ `VaultKeyCacheTest`: Verified `ReentrantLock` placement inside the critical section.
+- ✅ `ChatMemoryWriterTest`: Pinning tests for `SKIP_GOALS`.
+

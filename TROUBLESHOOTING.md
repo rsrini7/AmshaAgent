@@ -3495,3 +3495,22 @@ Notes
 
 -pl arcclaw-app -am builds dependencies and runs their test phases too. In modules without matching tests, Surefire can fail; keeping -Dsurefire.failIfNoSpecifiedTests=false avoids failures in those modules.
 If you want to avoid nested-class escaping, a simple alternative is to refactor the two inner test classes into two top-level test classes. That’s optional and not required for running them.
+
+---
+
+## 25. Phase 63-U — Security & Persistence Hardening Troubleshooting
+
+### 🔴 Failure: `IllegalStateException: Audit HMAC key... is missing` at Boot
+**Symptom**: The application fails to start or the first persistence event crashes with an `IllegalStateException`.
+**Root Cause**: A race condition where `AsyncPersistenceEngine` attempts to persist a very early event (e.g., startup audit) before the `AuditHashUtil` has fully primed the HMAC key from the `SecretVault`.
+**Resolution**: Implemented a localized retry loop in `persistSynchronously` that waits for up to 3 attempts (with 500ms backoff) for the HMAC key to become available, resolving the bootstrap race.
+
+### 🔴 Failure: `VaultConstants` Type Mismatch or Missing Imports
+**Symptom**: Compilation errors after refactoring magic literals to constants.
+**Root Cause**: Missing static imports or incorrect package references for the new `VaultConstants` class.
+**Resolution**: Ensure `com.arcclaw.core.security.VaultConstants` is imported. Use `VaultConstants.SYSTEM_SESSION_ID` and `VaultConstants.AUDIT_HMAC_KEY_NAME` consistently.
+
+### 🔴 Failure: `Argon2idKeyDerivationTest` Zeroing Assertion Failure
+**Symptom**: The test fails asserting that the pepper array is zeroed.
+**Root Cause**: The zeroing logic might be placed before the actual use or the test is checking a copy of the array instead of the original.
+**Resolution**: Ensure the zeroing happens in a `finally` block in `deriveSessionKey`. The test should pass the original array to the method and then verify its contents.
