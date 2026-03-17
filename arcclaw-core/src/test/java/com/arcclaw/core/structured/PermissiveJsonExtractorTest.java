@@ -16,6 +16,44 @@ class PermissiveJsonExtractorTest {
     private final PermissiveJsonExtractor extractor = new PermissiveJsonExtractor();
 
     @Test
+    void testNullInputThrows() {
+        assertThrows(JsonExtractionException.class, () -> extractor.extract(null, SynthesisResult.class));
+    }
+
+    @Test
+    void testBlankInputThrows() {
+        assertThrows(JsonExtractionException.class, () -> extractor.extract("   ", SynthesisResult.class));
+    }
+
+    @Test
+    void testSizeCapExceededThrows() {
+        int max = 512 * 1024;
+        String huge = ".".repeat(max + 1);
+        JsonExtractionException ex = assertThrows(JsonExtractionException.class, 
+            () -> extractor.extract(huge, SynthesisResult.class));
+        assertTrue(ex.getMessage().contains("exceeds"));
+    }
+
+    @Test
+    void testSizeCapAtLimitPassesValidation() {
+        int max = 512 * 1024;
+        String limit = ".".repeat(max);
+        // Should pass size check, then fail parsing because it's just dots
+        JsonExtractionException ex = assertThrows(JsonExtractionException.class, 
+            () -> extractor.extract(limit, SynthesisResult.class));
+        // The message should be about parsing, not the limit
+        assertFalse(ex.getMessage().contains("exceeds"));
+    }
+
+    @Test
+    void testDuplicateKeysThrow() {
+        String json = "{\"finalResolution\": \"ok\", \"finalResolution\": \"error\"}";
+        JsonExtractionException ex = assertThrows(JsonExtractionException.class, 
+            () -> extractor.extract(json, SynthesisResult.class));
+        assertTrue(ex.getMessage().contains("Duplicate field"));
+    }
+
+    @Test
     void testPlainJson() {
         String json = "{\"contributions\": [], \"conflictSummary\": [], \"finalResolution\": \"ok\"}";
         SynthesisResult result = extractor.extract(json, SynthesisResult.class);

@@ -8,6 +8,10 @@ public class JsonExtractionException extends RuntimeException {
     private final Class<?> targetType;
     private final String jacksonPath;
 
+    public JsonExtractionException(String message) {
+        this(message, null, null, null, null);
+    }
+
     public JsonExtractionException(String message, String rawResponse, Class<?> targetType, String jacksonPath, Throwable cause) {
         super(message, cause);
         this.rawResponse = rawResponse;
