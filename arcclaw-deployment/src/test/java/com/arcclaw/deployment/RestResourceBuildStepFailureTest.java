@@ -19,6 +19,8 @@ public class RestResourceBuildStepFailureTest {
             .addClasses(InvalidResource.class, TestProducers.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
+        .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
+        .overrideConfigKey("arcclaw.data-dir", "target/test-data")
         .setExpectedException(RuntimeException.class);
 
     @Test

@@ -18,7 +18,9 @@ public class RestResourceBuildStepSuccessTest {
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
             .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
-        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:");
+        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
+        .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
+        .overrideConfigKey("arcclaw.data-dir", "target/test-data");
 
     @Test
     public void testBuildSucceeds() {
