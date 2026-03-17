@@ -11,6 +11,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
+import com.arcclaw.core.scope.WorkspaceContext;
 
 /**
  * compacts conversation history if necessary before passing to the agent.
@@ -36,6 +37,11 @@ public class CompactionHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
+        if (!WorkspaceContext.SESSION_ID.isBound()) {
+            log.debug("CompactionHandler: WorkspaceScoped context not active, deferring compaction check");
+            return HandleResult.CONTINUE;
+        }
+
         String sessionId = context.getSessionId()
                 .orElseThrow(() -> new IllegalStateException("Session ID must be resolved before compaction."));
         String userId = context.getUser().platformId();
