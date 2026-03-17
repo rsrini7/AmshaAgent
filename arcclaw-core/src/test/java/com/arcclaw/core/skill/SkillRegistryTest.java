@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.Set;
+import com.arcclaw.core.agent.role.RoleDefinition;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -15,8 +17,8 @@ class SkillRegistryTest {
     private CompiledSkillEntry createMockEntry(String name, String regex) {
         SkillDefinition def = new SkillDefinition("id", name, "desc", List.of(), List.of(), 5, "prompt");
         Pattern[] patterns = new Pattern[] { Pattern.compile(regex, Pattern.CASE_INSENSITIVE) };
-        com.arcclaw.core.agent.role.RoleDefinition role = new com.arcclaw.core.agent.role.RoleDefinition(
-                "skill:" + name, name, "desc", 5, false, java.util.Set.of());
+        RoleDefinition role = new RoleDefinition(
+                "skill:" + name, name, "desc", 5, false, Set.of());
         return new CompiledSkillEntry(def, patterns, role, "classpath");
     }
 

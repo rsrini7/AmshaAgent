@@ -3,6 +3,7 @@ package com.arcclaw.rag;
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.CompactionSummaryEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -130,7 +131,7 @@ public class TwoTierMemoryService {
     }
 
     private List<ScoredChunk> toScoredChunks(
-            List<com.arcclaw.core.state.CompactionSummaryEntity> entities) {
+            List<CompactionSummaryEntity> entities) {
         List<ScoredChunk> result = new ArrayList<>();
         for (int i = 0; i < entities.size(); i++) {
             var e = entities.get(i);

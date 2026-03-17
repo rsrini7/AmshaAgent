@@ -4,6 +4,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.arcclaw.mcp.bridge.McpToolBridge;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -11,7 +12,7 @@ import jakarta.inject.Inject;
 public class McpReflex implements AgentReflex {
 
     @Inject DynamicToolCapabilityRegistry registry;
-    @Inject com.arcclaw.mcp.bridge.McpToolBridge mcpToolBridge;
+    @Inject McpToolBridge mcpToolBridge;
 
     @Override
     public boolean matches(String input) {
