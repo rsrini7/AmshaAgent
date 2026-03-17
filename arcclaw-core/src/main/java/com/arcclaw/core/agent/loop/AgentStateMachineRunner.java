@@ -57,6 +57,7 @@ public class AgentStateMachineRunner {
     @Inject ToolInvoker invoker;
     @Inject ChatMemoryWriter writer;
     @Inject @AgentRole("synthesizer") DattatreyaAgent dattatreyaAgent;
+    @Inject com.arcclaw.core.skill.SkillRegistry skillRegistry;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
@@ -73,6 +74,8 @@ public class AgentStateMachineRunner {
         while (iteration < context.maxIterations()) {
             iteration++;
             log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
+
+            List<com.arcclaw.core.skill.CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
 
             StepDecision engineDecision = processEngineStep(
                     context.sessionId(), context.goal(), engine, history,
@@ -104,7 +107,7 @@ public class AgentStateMachineRunner {
 
             StepDecision invocationDecision = invokeToolAndObserve(
                     context.sessionId(), context.agentRole(), history, step,
-                    consecutiveFailures, context.goal());
+                    consecutiveFailures, context.goal(), skillSnapshot);
             if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
             consecutiveFailures = invocationDecision.consecutiveFailures();
         }
@@ -332,13 +335,13 @@ public class AgentStateMachineRunner {
 
     private StepDecision invokeToolAndObserve(String sessionId, String agentRole,
                                           List<ReasoningStep> history, ReasoningStep step,
-                                          int consecutiveFailures, String goal) {
+                                          int consecutiveFailures, String goal, List<com.arcclaw.core.skill.CompiledSkillEntry> skillSnapshot) {
 
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
 
         ToolInvocationGuard.GuardDecision decision =
-                guard.evaluate(sessionId, agentRole, toolName, params, history, goal);
+                guard.evaluate(sessionId, agentRole, toolName, params, history, goal, skillSnapshot);
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());

@@ -101,7 +101,7 @@ class AgentStateMachineRunnerTest {
         ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 0, 0);
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(0, "output", true));
@@ -151,7 +151,7 @@ class AgentStateMachineRunnerTest {
             ReasoningStep toolStep = ReasoningStep.pending("thought", "protected-tool", Map.of(), 0, 0);
             when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(toolStep);
             when(toolRegistry.findTool("protected-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
-            when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+            when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                     .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval("protected-tool", "{}"));
             when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(new AgentCheckpoint()));
 
@@ -172,7 +172,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(toolStep1)
                 .thenReturn(toolStep2);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(1, "error", false));
@@ -205,7 +205,7 @@ class AgentStateMachineRunnerTest {
         ReasoningStep scheduleStep = ReasoningStep.pending("planning", "scheduletask", Map.of("task", "clean"), 0, 0);
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList())).thenReturn(scheduleStep);
         when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString()))
+        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(0, "Scheduled cleaning", true));

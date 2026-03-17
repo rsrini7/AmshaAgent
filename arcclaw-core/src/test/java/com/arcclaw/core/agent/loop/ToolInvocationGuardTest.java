@@ -53,7 +53,7 @@ class ToolInvocationGuardTest {
         List<ReasoningStep> history = List.of(past);
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", "tool", Map.of("arg", 1), history, "goal");
+                "s1", "coordinator", "tool", Map.of("arg", 1), history, "goal", java.util.List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Deduplicate.class, result);
         assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result).cachedObservation().contains("result 1"));
@@ -67,7 +67,7 @@ class ToolInvocationGuardTest {
         List<ReasoningStep> history = List.of(past);
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", "tool", Map.of("arg", 1), history, "goal");
+                "s1", "coordinator", "tool", Map.of("arg", 1), history, "goal", java.util.List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
     }
@@ -78,7 +78,7 @@ class ToolInvocationGuardTest {
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?");
+                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?", java.util.List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
         assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result).observation().contains("blocked by the Tool Intent Guard"));
@@ -96,7 +96,7 @@ class ToolInvocationGuardTest {
         // which calls WorkspaceContext.autonomy() (ScopedValue — must be bound)
         workspaceRun("s1", AutonomyLevel.FULL, () -> {
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?");
+                    "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?", java.util.List.of());
             assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
         });
     }
@@ -108,7 +108,7 @@ class ToolInvocationGuardTest {
             when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal");
+                    "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal", java.util.List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
         });
@@ -121,7 +121,7 @@ class ToolInvocationGuardTest {
             when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal");
+                    "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal", java.util.List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
         });

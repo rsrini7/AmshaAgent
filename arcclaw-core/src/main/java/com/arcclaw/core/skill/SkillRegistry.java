@@ -41,6 +41,15 @@ public class SkillRegistry {
     }
 
     /**
+     * Returns a defensive copy of the current compiled skill list.
+     * Callers receive a stable snapshot for the duration of one agent iteration —
+     * concurrent hot-reloads do not affect an in-flight snapshot.
+     */
+    public List<CompiledSkillEntry> currentSnapshot() {
+        return List.copyOf(registryRef.get());
+    }
+
+    /**
      * @return The number of currently loaded skills.
      */
     public int size() {

@@ -79,4 +79,30 @@ class SkillRegistryTest {
         // result in the last one winning.
         assertEquals(1, registry.size());
     }
+
+    @Test
+    void testCurrentSnapshotProvidesStableList() {
+        CompiledSkillEntry e1 = createMockEntry("code-reviewer", ".*");
+        registry.reload(List.of(e1));
+
+        List<CompiledSkillEntry> internalList = registry.getAll();
+        List<CompiledSkillEntry> snapshot = registry.currentSnapshot();
+
+        // Check it contains the element
+        assertEquals(1, snapshot.size());
+        
+        // Verify that even if List.copyOf returns the same instance, 
+        // the snapshot remains stable across a swap (hot reload).
+        CompiledSkillEntry e2 = createMockEntry("bug-hunter", ".*");
+        registry.reload(List.of(e2)); // Hot reload
+
+        // Snapshot is frozen
+        assertEquals(1, snapshot.size());
+        assertEquals("code-reviewer", snapshot.get(0).definition().name());
+
+        // New snapshot reflects new entries
+        List<CompiledSkillEntry> newSnapshot = registry.currentSnapshot();
+        assertEquals(1, newSnapshot.size());
+        assertEquals("bug-hunter", newSnapshot.get(0).definition().name());
+    }
 }

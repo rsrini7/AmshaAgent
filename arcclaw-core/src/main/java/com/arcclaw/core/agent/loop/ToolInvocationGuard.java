@@ -11,6 +11,7 @@ import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -24,41 +25,53 @@ import java.util.regex.Pattern;
 
 /**
  * Validates tool calls before invocation.
- * Handles deduplication, security intent guards, and pre-invocation human-in-the-loop (HITL) approvals.
+ * Handles deduplication, security intent guards, and pre-invocation
+ * human-in-the-loop (HITL) approvals.
  */
 @ApplicationScoped
 public class ToolInvocationGuard {
     private static final Logger log = Logger.getLogger(ToolInvocationGuard.class);
 
-    @Inject public RoleRegistry roleRegistry;
-    @Inject public ObjectMapper objectMapper;
-    @Inject public StatefulAgentStore agentStore;
-    @Inject public ToolRegistry toolRegistry;
-    @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
+    @Inject
+    public RoleRegistry roleRegistry;
+    @Inject
+    public ObjectMapper objectMapper;
+    @Inject
+    public StatefulAgentStore agentStore;
+    @Inject
+    public ToolRegistry toolRegistry;
+    @Inject
+    public Instance<DynamicToolLookup> dynamicToolLookup;
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
-    private static final Pattern GITHUB_TRIGGER_PATTERN =
-            Pattern.compile(
-                    "(?i)\\b(repo|repository|github|gh|fetch|gist|clone|" +
-                            "pull\\s+request|pr|get|show|describe|description|desc|" +
-                            "star|fork|issue|commit|branch|tag|readme|release)\\b"
-            );
+    private static final Pattern GITHUB_TRIGGER_PATTERN = Pattern.compile(
+            "(?i)\\b(repo|repository|github|gh|fetch|gist|clone|" +
+                    "pull\\s+request|pr|get|show|describe|description|desc|" +
+                    "star|fork|issue|commit|branch|tag|readme|release)\\b");
 
     public sealed interface GuardDecision
             permits GuardDecision.Allow, GuardDecision.Deduplicate,
-                    GuardDecision.PauseForApproval, GuardDecision.Blocked {
-        record Allow() implements GuardDecision {}
-        record Deduplicate(String cachedObservation) implements GuardDecision {}
-        record PauseForApproval(String toolName, String paramsJson) implements GuardDecision {}
-        record Blocked(String observation) implements GuardDecision {}
+            GuardDecision.PauseForApproval, GuardDecision.Blocked {
+        record Allow() implements GuardDecision {
+        }
+
+        record Deduplicate(String cachedObservation) implements GuardDecision {
+        }
+
+        record PauseForApproval(String toolName, String paramsJson) implements GuardDecision {
+        }
+
+        record Blocked(String observation) implements GuardDecision {
+        }
     }
 
     /**
-     * Evaluates whether a tool call should proceed, be blocked, be deduplicated, or pause for approval.
+     * Evaluates whether a tool call should proceed, be blocked, be deduplicated, or
+     * pause for approval.
      */
     public GuardDecision evaluate(String sessionId, String agentRole,
-                                 String toolName, Map<String, Object> params,
-                                 List<ReasoningStep> history, String goal) {
+            String toolName, Map<String, Object> params,
+            List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
         // 1. DEDUPLICATION CHECK
         for (ReasoningStep past : history) {
@@ -69,7 +82,8 @@ public class ToolInvocationGuard {
                 // Primary check: Map equality (fast)
                 boolean argsMatch = Objects.equals(params, past.actionInput());
 
-                // Fallback check: JSON string equality (handles LinkedHashMap ordering differences)
+                // Fallback check: JSON string equality (handles LinkedHashMap ordering
+                // differences)
                 if (!argsMatch) {
                     try {
                         String currentArgs = objectMapper.writeValueAsString(params);
@@ -82,7 +96,8 @@ public class ToolInvocationGuard {
                 }
 
                 if (argsMatch) {
-                    log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — returning cached observation.",
+                    log.warnf(
+                            "[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — returning cached observation.",
                             toolName, sessionId);
                     String cachedObs = past.observation() + "\n\n[NOTE: This result was retrieved from " +
                             "the current session cache. The tool was not re-executed.]";
@@ -124,7 +139,8 @@ public class ToolInvocationGuard {
 
         // 3. HITL PRE-APPROVAL CHECK
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
-        boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName) || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
+        boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
+                || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
         if (roleRegistry.requiresApprovalForTools(resolvedRole)
                 && !isSchedulingTool
