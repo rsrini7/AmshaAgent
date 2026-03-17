@@ -34,7 +34,7 @@ public class RagContextEnricher implements ContextEnricher {
         }
 
         try {
-            List<ScoredChunk> chunks = memoryService.search(userId, goal, contextChunks);
+            List<ScoredChunk> chunks = memoryService.search(goal, userId, contextChunks);
             if (chunks.isEmpty()) return basePrompt;
 
             String context = chunks.stream()

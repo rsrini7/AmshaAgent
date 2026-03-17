@@ -31,38 +31,61 @@ public class TwoTierMemoryService {
      * Search across FTS5 and vector tiers, merged via RRF.
      * Falls back to FTS5-only if sqlite-vec is unavailable.
      *
-     * @param userId  tenant-scoped identifier (chatId or sessionId as fallback)
      * @param query   search query
-     * @param topN    max results to return
+     * @param userId  tenant-scoped identifier (chatId or sessionId as fallback)
+     * @param topK    max results to return
      */
-    public List<ScoredChunk> search(String userId, String query, int topN) {
-        // --- FTS5 tier (always available) ---
-        // compactionRepo.searchMemory filters by userId — if userId is a
-        // sessionId fallback it may return no FTS results, which is fine.
-        // Vector tier below will still contribute.
-        List<ScoredChunk> fts5Results = toScoredChunks(
-            compactionRepo.searchMemory(userId, query, topN));
+    public List<ScoredChunk> search(String query, String userId, int topK) {
+        List<ScoredChunk> ftsResults = ftsSearch(query, userId, topK * 2);
 
+        // Fast path: skip RRF entirely when vector search is disabled.
+        // RRF is a fusion algorithm — running it over a single list adds CPU with zero benefit.
         if (!ftsInterceptor.isVectorSearchEnabled()) {
-            log.debugf("TwoTierMemoryService: vec0 unavailable, FTS5-only path.");
-            return fts5Results.stream().limit(topN).toList();
+            return ftsResults.stream().limit(topK).toList();
         }
 
-        // --- Vector tier ---
-        List<ScoredChunk> globalResults = globalKb.search(query, topN);
+        // Both sources active: use RRF for reciprocal rank fusion
+        List<ScoredChunk> vectorResults = vectorSearch(query, userId, topK * 2);
+        return mergeRrf(ftsResults, vectorResults, topK);
+    }
 
-        // SessionKnowledgeBase is @WorkspaceScoped — guard against inactive scope
+    /**
+     * Performs keyword search via FTS5.
+     */
+    private List<ScoredChunk> ftsSearch(String query, String userId, int topK) {
+        return toScoredChunks(compactionRepo.searchMemory(userId, query, topK));
+    }
+
+    /**
+     * Performs vector search via global and session knowledge bases.
+     */
+    private List<ScoredChunk> vectorSearch(String query, String userId, int topK) {
+        List<ScoredChunk> globalResults = globalKb.search(query, topK);
         List<ScoredChunk> sessionResults = List.of();
         try {
             if (WorkspaceScopeHolder.isActive()) {
-                sessionResults = sessionKb.search(query, topN);
+                sessionResults = sessionKb.search(query, topK);
             }
         } catch (Exception e) {
-            log.warnf("TwoTierMemoryService: SessionKnowledgeBase unavailable: %s",
-                e.getMessage());
+            log.warnf("TwoTierMemoryService: SessionKnowledgeBase unavailable: %s", e.getMessage());
         }
 
-        return reciprocalRankFusion(topN, fts5Results, globalResults, sessionResults);
+        if (sessionResults.isEmpty()) {
+            return globalResults;
+        }
+
+        List<ScoredChunk> combined = new ArrayList<>(globalResults);
+        combined.addAll(sessionResults);
+        // Sort by score to provide a single ranked list for RRF
+        combined.sort(Comparator.comparingDouble(ScoredChunk::score).reversed());
+        return combined;
+    }
+
+    /**
+     * Merges multiple ranked lists using Reciprocal Rank Fusion.
+     */
+    private List<ScoredChunk> mergeRrf(List<ScoredChunk> fts, List<ScoredChunk> vec, int topK) {
+        return reciprocalRankFusion(topK, fts, vec);
     }
 
     /**
@@ -103,7 +126,7 @@ public class TwoTierMemoryService {
      * Helper method exposed for unit tests (merge two lists with default topN).
      */
     List<ScoredChunk> merge(List<ScoredChunk> l1, List<ScoredChunk> l2) {
-        return reciprocalRankFusion(10, l1, l2);
+        return mergeRrf(l1, l2, 10);
     }
 
     private List<ScoredChunk> toScoredChunks(
