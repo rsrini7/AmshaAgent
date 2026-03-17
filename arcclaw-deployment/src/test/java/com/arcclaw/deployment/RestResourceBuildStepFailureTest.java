@@ -19,8 +19,11 @@ public class RestResourceBuildStepFailureTest {
             .addClasses(InvalidResource.class, TestProducers.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
+        .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
+        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", "target/test-data")
+        .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
         .setExpectedException(RuntimeException.class);
 
     @Test
