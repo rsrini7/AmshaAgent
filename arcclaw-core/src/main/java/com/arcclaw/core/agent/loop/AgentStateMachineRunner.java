@@ -37,6 +37,8 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.skill.CompiledSkillEntry;
+import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 /**
@@ -61,7 +63,7 @@ public class AgentStateMachineRunner {
     @Inject ToolInvoker invoker;
     @Inject ChatMemoryWriter writer;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
-    @Inject com.arcclaw.core.skill.SkillRegistry skillRegistry;
+    @Inject SkillRegistry skillRegistry;
     @Inject AgentOtelContext agentOtelContext;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
@@ -83,7 +85,7 @@ public class AgentStateMachineRunner {
             try (Scope scope = iterSpan.makeCurrent()) {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
-                List<com.arcclaw.core.skill.CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
+                List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
 
                 StepDecision engineDecision = processEngineStep(
                         context.sessionId(), context.goal(), engine, history,
@@ -350,7 +352,7 @@ public class AgentStateMachineRunner {
 
     private StepDecision invokeToolAndObserve(String sessionId, String agentRole,
                                           List<ReasoningStep> history, ReasoningStep step,
-                                          int consecutiveFailures, String goal, List<com.arcclaw.core.skill.CompiledSkillEntry> skillSnapshot) {
+                                          int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();

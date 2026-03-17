@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Objects;
 
 import org.hibernate.exception.LockAcquisitionException;
 import org.jboss.logging.Logger;
@@ -416,7 +417,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .findFirst();
     }
 

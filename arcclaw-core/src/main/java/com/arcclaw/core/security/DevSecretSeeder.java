@@ -12,6 +12,7 @@ import java.util.Arrays;
 
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.event.Observes;
+import jakarta.annotation.Priority;
 
 /**
  * Seeds host OS environment variables into the SecretVault when a workspace
@@ -44,7 +45,7 @@ public class DevSecretSeeder {
     /**
      * Seeds host OS environment variables into the SecretVault at startup.
      */
-    public void onStart(@Observes @jakarta.annotation.Priority(100) StartupEvent ev) {
+    public void onStart(@Observes @Priority(100) StartupEvent ev) {
         // 1. Mandatory system key seeding for dev/test
         if ("dev".equals(profile) || "test".equals(profile)) {
             seedAuditHmacKey();

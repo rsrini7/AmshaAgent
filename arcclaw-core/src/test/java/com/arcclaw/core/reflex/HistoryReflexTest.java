@@ -24,6 +24,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
+import java.time.Instant;
 
 @QuarkusTest
 public class HistoryReflexTest {
@@ -39,7 +40,7 @@ public class HistoryReflexTest {
 
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user1", "user1", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "test-session", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "test-session", Instant.now());
         return new MessageContext("chat1", user, msg, mock(ChannelSender.class));
     }
 

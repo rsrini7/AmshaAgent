@@ -17,11 +17,14 @@ import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
+import java.util.Optional;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -51,7 +54,7 @@ public class DenyPipelineTest {
         // Mock allowlist to permit our test user
         when(allowlist.isAllowed(anyString(), anyString())).thenReturn(true);
 
-        user = new ChannelUser("user-123", "alice", com.arcclaw.channel.api.ChannelType.CLI);
+        user = new ChannelUser("user-123", "alice", ChannelType.CLI);
         sender = mock(ChannelSender.class);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "session-456", Instant.now());
         context = new MessageContext("chat-789", user, msg, sender);
@@ -61,8 +64,8 @@ public class DenyPipelineTest {
     void testDenyRoutesToReflexRegistryNotDirectly() {
         // Setup mock response
         when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), eq(context)))
-                .thenReturn(new com.arcclaw.core.reflex.ReflexResult(
-                        java.util.Optional.of("🚫 Execution denied."),
+                .thenReturn(new ReflexResult(
+                        Optional.of("🚫 Execution denied."),
                         "/deny"
                 ));
 
@@ -94,7 +97,7 @@ public class DenyPipelineTest {
                     SecurityEventType.APPROVAL_DENIED, 
                     "action=DENY session=" + invocation.getArgument(0)
                 );
-                return new com.arcclaw.core.reflex.ReflexResult(java.util.Optional.of("🚫"), "/deny");
+                return new ReflexResult(Optional.of("🚫"), "/deny");
             });
 
         pipeline.process(context);

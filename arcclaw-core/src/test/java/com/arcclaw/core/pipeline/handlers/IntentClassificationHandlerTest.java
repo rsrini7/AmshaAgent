@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +40,7 @@ class IntentClassificationHandlerTest {
     @Test
     void testHandle_rateLimit_notifiesUserAndDefaultsToCoordinator() {
         ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 
         when(classifier.classify(anyString())).thenThrow(new HttpException(429, "Too many requests"));
@@ -53,7 +55,7 @@ class IntentClassificationHandlerTest {
     @Test
     void testHandle_success_setsRole() {
         ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 
         when(classifier.classify(anyString())).thenReturn("developer");

@@ -217,7 +217,7 @@ public class AsyncPersistenceEngine {
                 Thread.currentThread().interrupt();
                 log.warn("[AsyncPersistenceEngine] Critical drain interrupted — shutting down.");
             } catch (Exception e) {
-                if (running && io.quarkus.arc.Arc.container() != null) {
+                if (running && Arc.container() != null) {
                     log.errorf(e, "[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
                 }
                 // Safety net: ensure the future is never left hanging
@@ -245,7 +245,7 @@ public class AsyncPersistenceEngine {
                 Thread.currentThread().interrupt();
                 log.warn("[AsyncPersistenceEngine] Telemetry drain interrupted — shutting down.");
             } catch (Exception e) {
-                if (running && io.quarkus.arc.Arc.container() != null) {
+                if (running && Arc.container() != null) {
                     log.errorf("[AsyncPersistenceEngine] Unexpected error in telemetry drain: %s", e.getMessage());
                     log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for telemetry drain error");
                 }

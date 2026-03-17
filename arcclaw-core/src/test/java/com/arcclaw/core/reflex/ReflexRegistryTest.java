@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.Optional;
 import com.arcclaw.core.audit.AuditHashUtil;
 
@@ -63,7 +64,7 @@ class ReflexRegistryTest {
     
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
         return new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
     }
 

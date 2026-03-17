@@ -1,6 +1,8 @@
 package com.arcclaw.app.scheduler;
 
 import java.util.UUID;
+import java.time.Instant;
+import java.util.List;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -94,10 +96,10 @@ public class CronJobRunner {
 
     private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal) {
         ChannelUser user = new ChannelUser(job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.REST_API; }
-            @Override public void send(ChannelUser recipient, java.util.List<ReplyNode> nodes) { }
+            @Override public void send(ChannelUser recipient, List<ReplyNode> nodes) { }
             @Override public void sendRaw(ChannelUser recipient, String text) { }
         };
         return new MessageContext(job.chatId, user, msg, noOpSender);

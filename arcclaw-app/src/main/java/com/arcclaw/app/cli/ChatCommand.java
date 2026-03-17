@@ -3,6 +3,8 @@ package com.arcclaw.app.cli;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
+import java.time.Instant;
+import java.util.List;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -164,10 +166,10 @@ public class ChatCommand implements Runnable {
 
     private MessageContext createCliContext(String sessionId, String input) {
         ChannelUser user = new ChannelUser("cli-user", "CLI User", ChannelType.CLI);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.CLI; }
-            @Override public void send(ChannelUser recipient, java.util.List<ReplyNode> nodes) {
+            @Override public void send(ChannelUser recipient, List<ReplyNode> nodes) {
                 System.out.println("\n[CLI] " + nodes);
             }
             @Override public void sendRaw(ChannelUser recipient, String text) {
@@ -177,4 +179,4 @@ public class ChatCommand implements Runnable {
         return new MessageContext("cli-chat", user, msg, noOpSender);
     }
 }
-
+

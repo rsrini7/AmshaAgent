@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -45,8 +46,8 @@ class SkillAwareIntentClassifierTest {
     @Test
     void testFastPathRoutesToSkillAndBypassesLLM() {
         SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, "p");
-        RoleDefinition roleDefinition = new com.arcclaw.core.agent.role.RoleDefinition(
-                "skill:code-reviewer", "Code Reviewer", "desc", 5, false, java.util.Set.of());
+        RoleDefinition roleDefinition = new RoleDefinition(
+                "skill:code-reviewer", "Code Reviewer", "desc", 5, false, Set.of());
         CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[] { Pattern.compile(".*review.*code.*") },
                 roleDefinition, "db");
 

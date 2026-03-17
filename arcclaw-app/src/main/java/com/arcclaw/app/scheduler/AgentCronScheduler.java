@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.concurrent.Semaphore;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -13,6 +15,8 @@ import org.jboss.logging.MDC;
 
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CronStatus;
+import com.arcclaw.core.util.CronScheduleUtil;
 
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
@@ -92,16 +96,16 @@ public class AgentCronScheduler {
         if (due.isEmpty()) return;
 
         Instant lookbackCutoff = Instant.now().minus(maxLookbackWindow);
-        List<AgentCronEntity> skippedJobs = new java.util.ArrayList<>();
+        List<AgentCronEntity> skippedJobs = new ArrayList<>();
 
-        java.util.Iterator<AgentCronEntity> iter = due.iterator();
+        Iterator<AgentCronEntity> iter = due.iterator();
         while (iter.hasNext()) {
             AgentCronEntity job = iter.next();
             if (job.nextFireTime.isBefore(lookbackCutoff)) {
                 log.warnf("Cron job [%s] missed fire time %s — outside %s lookback window. Marking SKIPPED and rescheduling.",
                     job.id, job.nextFireTime, maxLookbackWindow);
-                job.status = com.arcclaw.core.state.CronStatus.SKIPPED;
-                job.nextFireTime = com.arcclaw.core.util.CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                job.status = CronStatus.SKIPPED;
+                job.nextFireTime = CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
                 skippedJobs.add(job);
                 iter.remove();
             }

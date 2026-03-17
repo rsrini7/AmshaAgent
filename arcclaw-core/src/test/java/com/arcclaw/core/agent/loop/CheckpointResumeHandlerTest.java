@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,7 @@ class CheckpointResumeHandlerTest {
 
     private MessageContext createContext(String input, boolean resume) {
         ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
         MessageContext ctx = new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
         ctx.setResumeSignal(resume);
         return ctx;

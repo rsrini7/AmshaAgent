@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
+import java.time.Instant;
 
 @QuarkusTest
 public class PromptInjectionReflexTest {
@@ -21,7 +22,7 @@ public class PromptInjectionReflexTest {
 
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user", "user", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "sess", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "sess", Instant.now());
         return new MessageContext("chat", user, msg, mock(ChannelSender.class));
     }
 

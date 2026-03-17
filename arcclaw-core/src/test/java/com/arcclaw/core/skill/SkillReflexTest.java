@@ -13,7 +13,10 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexResult;
 
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.time.Instant;
+import com.arcclaw.core.agent.role.RoleDefinition;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +35,7 @@ class SkillReflexTest {
 
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user1", "user1", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "session1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "session1", Instant.now());
         return new MessageContext("chat1", user, msg, mock(ChannelSender.class));
     }
 
@@ -65,8 +68,8 @@ class SkillReflexTest {
     @Test
     void testPopulatedRegistryOutput() {
         SkillDefinition def1 = new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt");
-        com.arcclaw.core.agent.role.RoleDefinition role1 = new com.arcclaw.core.agent.role.RoleDefinition(
-            "skill:reviewer", "Reviewer", "Reviews PRs", 5, false, java.util.Set.of()
+        RoleDefinition role1 = new RoleDefinition(
+            "skill:reviewer", "Reviewer", "Reviews PRs", 5, false, Set.of()
         );
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[]{Pattern.compile("pattern")}, role1, "db");
 
@@ -80,8 +83,8 @@ class SkillReflexTest {
     @Test
     void testBlankDescriptionFallback() {
         SkillDefinition def1 = new SkillDefinition("id1", "minimal", "", List.of(), List.of(), 5, "prompt");
-        com.arcclaw.core.agent.role.RoleDefinition role1 = new com.arcclaw.core.agent.role.RoleDefinition(
-            "skill:minimal", "Minimal", "", 5, false, java.util.Set.of()
+        RoleDefinition role1 = new RoleDefinition(
+            "skill:minimal", "Minimal", "", 5, false, Set.of()
         );
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[0], role1, "db");
 

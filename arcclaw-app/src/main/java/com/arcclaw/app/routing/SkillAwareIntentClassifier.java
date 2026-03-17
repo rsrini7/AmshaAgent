@@ -9,6 +9,7 @@ import com.arcclaw.core.skill.SkillRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
+import jakarta.annotation.Priority;
 
 /**
  * An alternative intent classifier that sits in front of the default
@@ -21,7 +22,7 @@ import jakarta.inject.Inject;
  */
 @ApplicationScoped
 @Alternative
-@jakarta.annotation.Priority(1)
+@Priority(1)
 public class SkillAwareIntentClassifier implements IntentClassifier {
 
     @Inject

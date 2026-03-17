@@ -18,6 +18,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.annotation.Priority;
+import io.quarkus.arc.Arc;
 import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
@@ -38,7 +40,7 @@ public class AuditHashUtil {
      * This moves the expensive Argon2id derivation out of the first
      * per-session auditing transaction to avoid transaction timeouts.
      */
-    void onStart(@Observes @jakarta.annotation.Priority(500) StartupEvent ev) {
+    void onStart(@Observes @Priority(500) StartupEvent ev) {
         try {
             log.debug("Priming Audit HMAC key...");
             getHmacKey();
@@ -109,7 +111,7 @@ public class AuditHashUtil {
                 "Ensure DevSecretSeeder has seeded '" + VaultConstants.AUDIT_HMAC_KEY_NAME + "' before first audit write.", e);
         } catch (Exception e) {
             // Check if it's a shutdown race
-            if (io.quarkus.arc.Arc.container() == null) {
+            if (Arc.container() == null) {
                 return "error-shutdown";
             }
             throw new RuntimeException("Failed to compute HMAC", e);

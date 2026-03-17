@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -181,7 +182,7 @@ public class SkillLoader {
                 LOG.warnf("Skipping unknown ToolCapability '%s' in skill '%s'", str, skillName);
                 return null;
             })
-            .filter(java.util.Objects::nonNull)
+            .filter(Objects::nonNull)
             .collect(Collectors.toUnmodifiableSet());
     }
 }

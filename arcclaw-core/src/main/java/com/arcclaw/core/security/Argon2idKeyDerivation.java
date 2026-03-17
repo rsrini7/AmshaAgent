@@ -1,5 +1,7 @@
 package com.arcclaw.core.security;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -54,7 +56,7 @@ public class Argon2idKeyDerivation {
         }
 
         // Properly extract bytes from ByteBuffer without assuming it's fully packed
-        java.nio.ByteBuffer bb = StandardCharsets.UTF_8.encode(java.nio.CharBuffer.wrap(pepperChars));
+        ByteBuffer bb = StandardCharsets.UTF_8.encode(CharBuffer.wrap(pepperChars));
         byte[] passwordBytes = new byte[bb.remaining()];
         bb.get(passwordBytes);
         byte[] saltBytes = sessionId.getBytes(StandardCharsets.UTF_8);

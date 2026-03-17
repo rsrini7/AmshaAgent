@@ -15,6 +15,9 @@ import org.junit.jupiter.api.Test;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -37,9 +40,9 @@ class ToolInvocationGuardDynamicTest {
 
         // Manual injection for unit test
         guard.dynamicToolLookup = mockInstance;
-        guard.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
-        guard.roleRegistry = mock(com.arcclaw.core.agent.role.RoleRegistry.class);
-        guard.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        guard.agentStore = mock(StatefulAgentStore.class);
+        guard.roleRegistry = mock(RoleRegistry.class);
+        guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = mockToolRegistry;
     }
 
@@ -51,7 +54,7 @@ class ToolInvocationGuardDynamicTest {
         // Should fall through to normal logic (e.g. block github if intent missing)
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 "s1", "coordinator", "github", Map.of("op", "search"),
-                Collections.emptyList(), "just a question", java.util.List.of());
+                Collections.emptyList(), "just a question", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
     }
@@ -80,7 +83,7 @@ class ToolInvocationGuardDynamicTest {
         // Should fall through to GITHUB_TRIGGER_PATTERN and hit intent block
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 "s1", "coordinator", "github", Map.of(),
-                Collections.emptyList(), "just a question", java.util.List.of());
+                Collections.emptyList(), "just a question", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
     }
