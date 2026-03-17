@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.eclipse.microprofile.context.ManagedExecutor;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -27,6 +28,8 @@ class McpClientServiceTest {
         registry         = new DynamicToolCapabilityRegistry();
         service.registry = registry;
         service.objectMapper = new ObjectMapper();
+        service.executor = ManagedExecutor.builder().build();
+        service.init();
     }
 
     private void stubFullConnect(String sessionId) {
