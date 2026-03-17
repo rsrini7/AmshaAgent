@@ -59,13 +59,13 @@ public class DevSecretSeeder {
     }
 
     private void seedAuditHmacKey() {
-        String keyName = "arcclaw-audit-hmac-key";
+        String keyName = VaultConstants.AUDIT_HMAC_KEY_NAME;
         if (!secretVault.systemKeyExists(keyName)) {
             byte[] hmacKeyBytes = new byte[32];
             new SecureRandom().nextBytes(hmacKeyBytes);
             try {
                 secretVault.storeSystemKey(keyName, hmacKeyBytes);
-                log.info("DevSecretSeeder: seeded arcclaw-audit-hmac-key (system key)");
+                log.infof("DevSecretSeeder: seeded %s (system key)", keyName);
             } catch (Exception e) {
                 log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, e.getMessage());
             } finally {

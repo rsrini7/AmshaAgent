@@ -34,16 +34,17 @@ public class AuditHashUtilTest {
     }
 
     @Test
-    void testMissingKey_ReturnsPlaceholder() {
+    void missingHmacKey_ThrowsIllegalStateException_NotPlaceholderString() {
         SecretVault vault = Mockito.mock(SecretVault.class);
-        when(vault.retrieveSystemKey(anyString())).thenReturn(Optional.empty());
+        when(vault.retrieveSystemKey("arcclaw-audit-hmac-key")).thenReturn(Optional.empty());
 
         @SuppressWarnings("unchecked")
         Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
         when(vaultInstance.get()).thenReturn(vault);
 
         AuditHashUtil util = new AuditHashUtil(vaultInstance);
-        assertEquals("error-missing-hmac-key", util.hmacHex("test"));
+        assertThrows(IllegalStateException.class, () -> util.hmacHex("test"),
+            "hmacHex() must throw when HMAC key is unavailable — returning a placeholder silently breaks the WORM audit chain");
     }
 
     @Test

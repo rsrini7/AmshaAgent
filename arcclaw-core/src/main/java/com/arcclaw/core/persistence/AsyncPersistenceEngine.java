@@ -27,21 +27,24 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
  * Asynchronous persistence engine using a single background Virtual Thread
  * to drain a {@link LinkedBlockingQueue} of {@link PersistenceEvent}s.
  *
- * <p><strong>Two tiers:</strong>
+ * <p>
+ * <strong>Two tiers:</strong>
  * <ul>
- *   <li>{@code CRITICAL} — caller blocks on a {@code CompletableFuture} until
- *       the write is confirmed. If all retries fail a
- *       {@link ComplianceViolationException} is propagated to the caller.</li>
- *   <li>{@code TELEMETRY} — fire-and-forget. On retry exhaustion the event is
- *       silently discarded with a WARN log.</li>
+ * <li>{@code CRITICAL} — caller blocks on a {@code CompletableFuture} until
+ * the write is confirmed. If all retries fail a
+ * {@link ComplianceViolationException} is propagated to the caller.</li>
+ * <li>{@code TELEMETRY} — fire-and-forget. On retry exhaustion the event is
+ * silently discarded with a WARN log.</li>
  * </ul>
  *
- * <p><strong>Context propagation rule:</strong> each event carries its own
+ * <p>
+ * <strong>Context propagation rule:</strong> each event carries its own
  * {@code sessionId}. The consumer loop calls
  * {@link WorkspaceScopeHolder#run(String, Runnable)} per-event, never
  * wrapping the entire consumer thread.
  *
- * <p><strong>Transactional boundary:</strong> every DB write uses
+ * <p>
+ * <strong>Transactional boundary:</strong> every DB write uses
  * {@code QuarkusTransaction.requiringNew().run(...)} because the background
  * Virtual Thread is not a CDI-managed bean call chain.
  */
@@ -53,11 +56,13 @@ public class AsyncPersistenceEngine {
     private static final int MAX_RETRIES = 5;
     private static final long BACKOFF_BASE_MS = 50;
 
-    private static final int CRITICAL_QUEUE_CAPACITY  = 500;
+    private static final int CRITICAL_QUEUE_CAPACITY = 500;
     private static final int TELEMETRY_QUEUE_CAPACITY = 5000;
 
-    private final LinkedBlockingQueue<PersistenceEvent> criticalQueue = new LinkedBlockingQueue<>(CRITICAL_QUEUE_CAPACITY);
-    private final LinkedBlockingQueue<PersistenceEvent> telemetryQueue = new LinkedBlockingQueue<>(TELEMETRY_QUEUE_CAPACITY);
+    private final LinkedBlockingQueue<PersistenceEvent> criticalQueue = new LinkedBlockingQueue<>(
+            CRITICAL_QUEUE_CAPACITY);
+    private final LinkedBlockingQueue<PersistenceEvent> telemetryQueue = new LinkedBlockingQueue<>(
+            TELEMETRY_QUEUE_CAPACITY);
 
     @Inject
     MeterRegistry registry;
@@ -75,26 +80,28 @@ public class AsyncPersistenceEngine {
 
     @PostConstruct
     void startDrainThreads() {
-        // Capture the current Thread Context Class Loader to propagate it to the background thread.
-        // This is necessary for ServiceLoader (used by Quarkus Config) to work correctly
+        // Capture the current Thread Context Class Loader to propagate it to the
+        // background thread.
+        // This is necessary for ServiceLoader (used by Quarkus Config) to work
+        // correctly
         // in an unmanaged virtual thread.
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
 
         Thread.ofVirtual()
-              .inheritInheritableThreadLocals(false)
-              .name("arcclaw-audit-critical-drain")
-              .start(() -> {
-                  Thread.currentThread().setContextClassLoader(tccl);
-                  drainCritical();
-              });
+                .inheritInheritableThreadLocals(false)
+                .name("arcclaw-audit-critical-drain")
+                .start(() -> {
+                    Thread.currentThread().setContextClassLoader(tccl);
+                    drainCritical();
+                });
 
         Thread.ofVirtual()
-              .inheritInheritableThreadLocals(false)
-              .name("arcclaw-audit-telemetry-drain")
-              .start(() -> {
-                  Thread.currentThread().setContextClassLoader(tccl);
-                  drainTelemetry();
-              });
+                .inheritInheritableThreadLocals(false)
+                .name("arcclaw-audit-telemetry-drain")
+                .start(() -> {
+                    Thread.currentThread().setContextClassLoader(tccl);
+                    drainTelemetry();
+                });
         log.info("[AsyncPersistenceEngine] Background drain threads started on VirtualThreads with TCCL propagation.");
     }
 
@@ -110,7 +117,7 @@ public class AsyncPersistenceEngine {
         if (event.getTier() != PersistenceEvent.Tier.CRITICAL) {
             throw new IllegalArgumentException("submitCritical requires a CRITICAL event");
         }
-        
+
         if (!criticalQueue.offer(event)) {
             log.warn("Critical audit queue at capacity — persisting synchronously to avoid data loss");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "critical").increment();
@@ -158,7 +165,8 @@ public class AsyncPersistenceEngine {
     public void waitForIdle() {
         // Wait a tiny bit for any work that hasn't hit the queue yet
         sleepQuietly(10);
-        while (!criticalQueue.isEmpty() || !telemetryQueue.isEmpty() || processingCritical.get() || processingTelemetry.get()) {
+        while (!criticalQueue.isEmpty() || !telemetryQueue.isEmpty() || processingCritical.get()
+                || processingTelemetry.get()) {
             sleepQuietly(10);
         }
     }
@@ -174,14 +182,36 @@ public class AsyncPersistenceEngine {
     // -------------------------------------------------------------------------
 
     private void drainCritical() {
+        PersistenceEvent event = null;
         while (running && !Thread.currentThread().isInterrupted()) {
+
             try {
-                // Poll with timeout to check for shutdown
-                PersistenceEvent event = criticalQueue.poll(100, TimeUnit.MILLISECONDS);
+                event = criticalQueue.take();
+
                 if (event != null) {
                     processingCritical.set(true);
                     try {
-                        processEvent(event);
+                        processEvent(event); // retry logic for HMAC is now in persistSynchronously called here
+                    } catch (ComplianceViolationException e) {
+                        log.infof("[AsyncPersistenceEngine] Caught CVE in drainCritical. Cause: %s", 
+                                e.getCause() != null ? e.getCause().getClass().getName() : "null");
+                        // persistSynchronously() or executeWithRetry() exhausted all retries.
+                        // We log and keep the drain thread alive.
+                        Throwable cause = e.getCause();
+                        if (cause instanceof IllegalStateException && cause.getMessage() != null
+                                && cause.getMessage().contains("HMAC key unavailable")) {
+                            log.info("[AsyncPersistenceEngine] Incrementing hmac_failure counter");
+                            registry.counter("arcclaw.audit.drain.hmac_failure").increment();
+                        }
+                        log.errorf(e, "Critical audit event lost — check persistence health. Event type: %s",
+                                event.getEventType());
+                        // Future is already completed exceptionally by handleExhausted()
+                    } catch (Exception e) {
+                        // Catch-all for unexpected errors to keep thread alive
+                        log.errorf(e, "Unexpected error in critical drain thread: %s", e.getMessage());
+                        if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
+                            event.getFuture().completeExceptionally(e);
+                        }
                     } finally {
                         processingCritical.set(false);
                     }
@@ -191,8 +221,11 @@ public class AsyncPersistenceEngine {
                 log.warn("[AsyncPersistenceEngine] Critical drain interrupted — shutting down.");
             } catch (Exception e) {
                 if (running && io.quarkus.arc.Arc.container() != null) {
-                    log.errorf("[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
-                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for critical drain error");
+                    log.errorf(e, "[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
+                }
+                // Safety net: ensure the future is never left hanging
+                if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
+                    event.getFuture().completeExceptionally(e);
                 }
             }
         }
@@ -226,7 +259,7 @@ public class AsyncPersistenceEngine {
     private void processEvent(PersistenceEvent event) {
         // Guard against processing during shutdown when Arc is gone
         if (Arc.container() == null) {
-            log.warnf("[AsyncPersistenceEngine] Arc container is gone. Discarding event %s for session %s", 
+            log.warnf("[AsyncPersistenceEngine] Arc container is gone. Discarding event %s for session %s",
                     event.getEventType(), event.getSessionId());
             if (event.getFuture() != null) {
                 event.getFuture().completeExceptionally(new RuntimeException("Arc container is null"));
@@ -248,7 +281,7 @@ public class AsyncPersistenceEngine {
         } catch (Exception e) {
             if (event.getFuture() != null) {
                 event.getFuture().completeExceptionally(
-                    new ComplianceViolationException(event.getSessionId(), event.getEventType(), e));
+                        new ComplianceViolationException(event.getSessionId(), event.getEventType(), e));
             }
         }
     }
@@ -257,7 +290,8 @@ public class AsyncPersistenceEngine {
      * Attempts the DB write up to {@value #MAX_RETRIES} times.
      * Uses linear back-off: {@code BACKOFF_BASE_MS × attempt}.
      *
-     * <p>SQLite BUSY detection: relies on inspecting the exception message
+     * <p>
+     * SQLite BUSY detection: relies on inspecting the exception message
      * AND the full {@code getCause()} chain rather than a single string check,
      * because the Hibernate SQLite dialect may wrap the error several layers deep.
      */
@@ -266,10 +300,11 @@ public class AsyncPersistenceEngine {
         if (!running || Arc.container() == null) {
             log.debugf("[AsyncPersistenceEngine] Skipping write (shutdown): %s session=%s",
                     event.getEventType(), event.getSessionId());
-            if (event.getFuture() != null) event.getFuture().complete(null);
+            if (event.getFuture() != null)
+                event.getFuture().complete(null);
             return;
         }
-        
+
         int attempt = 0;
         Exception lastException = null;
 
@@ -277,7 +312,8 @@ public class AsyncPersistenceEngine {
             attempt++;
             try {
                 // CRITICAL: every write must create its own transaction
-                // Architecture Nuance #29: EntityManager proxy must bind in @Transactional method
+                // Architecture Nuance #29: EntityManager proxy must bind in @Transactional
+                // method
                 self.persistSynchronously(event);
 
                 // Write succeeded — unblock CRITICAL callers
@@ -290,7 +326,8 @@ public class AsyncPersistenceEngine {
                 lastException = e;
                 if (isSqliteBusy(e)) {
                     long backoff = BACKOFF_BASE_MS * attempt;
-                    log.warnf("[AsyncPersistenceEngine] SQLite BUSY on attempt %d/%d for session=%s — retrying in %dms. Error: %s",
+                    log.warnf(
+                            "[AsyncPersistenceEngine] SQLite BUSY on attempt %d/%d for session=%s — retrying in %dms. Error: %s",
                             attempt, MAX_RETRIES, event.getSessionId(), backoff, e.getMessage());
                     sleepQuietly(backoff);
                 } else {
@@ -301,30 +338,61 @@ public class AsyncPersistenceEngine {
                         if (event.getFuture() != null) {
                             event.getFuture().complete(null); // unblock any waiting callers cleanly
                         }
-                        return;  // do NOT call handleExhausted — this is expected during teardown
+                        return; // do NOT call handleExhausted — this is expected during teardown
                     }
                     // Genuine non-retryable error during normal operation
                     log.errorf("[AsyncPersistenceEngine] Non-retryable error for session=%s eventType=%s: %s",
                             event.getSessionId(), event.getEventType(), e.getMessage());
-                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for non-retryable error for session=%s", event.getSessionId());
+                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for non-retryable error for session=%s",
+                            event.getSessionId());
                     break;
                 }
             }
         }
 
         // All retries exhausted (or non-retryable error)
-        handleExhausted(event, lastException);
+        if (lastException != null) {
+            handleExhausted(event, lastException);
+        } else {
+            // Should not happen if loop logic is correct, but safety net
+            if (event.getFuture() != null && !event.getFuture().isDone()) {
+                 event.getFuture().complete(null);
+            }
+        }
     }
 
     @Transactional(TxType.REQUIRES_NEW)
     public void persistSynchronously(PersistenceEvent event) {
-        event.getDbAction().accept(em);
+        int hmacRetry = 0;
+        while (true) {
+            try {
+                event.getDbAction().accept(em); // HMAC lookup happens here — before any SQLite write
+                return;
+            } catch (IllegalStateException e) {
+                if (e.getMessage() != null
+                        && e.getMessage().contains("HMAC key unavailable")
+                        && hmacRetry < 3) {
+                    hmacRetry++;
+                    log.warnf("Audit HMAC key not yet available (boot-window race), " +
+                            "retry %d/3 in 100ms — no SQLite lock held during sleep", hmacRetry);
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw e;
+                    }
+                } else {
+                    // Real failure or retries exhausted — propagate to drainCritical()
+                    throw e;
+                }
+            }
+        }
     }
 
     private void handleExhausted(PersistenceEvent event, Exception lastException) {
         if (event.getTier() == PersistenceEvent.Tier.CRITICAL) {
-            ComplianceViolationException cve =
-                new ComplianceViolationException(event.getSessionId(), event.getEventType(), lastException);
+            ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(),
+                    event.getEventType(), lastException);
             if (event.getFuture() != null) {
                 event.getFuture().completeExceptionally(cve);
             }
@@ -332,7 +400,7 @@ public class AsyncPersistenceEngine {
         } else {
             // TELEMETRY — discard silently with WARN
             log.warnf("[AsyncPersistenceEngine] TELEMETRY event discarded after %d retries " +
-                      "(session=%s, eventType=%s): %s",
+                    "(session=%s, eventType=%s): %s",
                     MAX_RETRIES, event.getSessionId(), event.getEventType(),
                     lastException != null ? lastException.getMessage() : "unknown");
         }
@@ -348,33 +416,34 @@ public class AsyncPersistenceEngine {
         Throwable current = e;
         while (current != null) {
             String className = current.getClass().getSimpleName();
-            
+
             // Check for known "busy" exception types first
-            if (className.equals(SqliteErrorStrings.LOCK_ACQUISITION_EXCEPTION) || 
-                className.equals(SqliteErrorStrings.OPTIMISTIC_LOCK_EXCEPTION)) {
+            if (className.equals(SqliteErrorStrings.LOCK_ACQUISITION_EXCEPTION) ||
+                    className.equals(SqliteErrorStrings.OPTIMISTIC_LOCK_EXCEPTION)) {
                 return true;
             }
 
             String msg = current.getMessage();
             if (msg != null) {
                 String lower = msg.toLowerCase();
-                
+
                 // If it's a constraint violation, it is NEVER a "busy" retryable error.
                 // We must exit immediately to avoid infinite retry loops on bad data.
                 if (lower.contains("constraint") || lower.contains("not null")) {
                     return false;
                 }
 
-                if (lower.contains(SqliteErrorStrings.BUSY) || 
-                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
-                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
-                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
+                if (lower.contains(SqliteErrorStrings.BUSY) ||
+                        lower.contains(SqliteErrorStrings.DATABASE_LOCKED) ||
+                        lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
+                        lower.contains(SqliteErrorStrings.SNAPSHOT)) {
                     return true;
                 }
             }
-            
+
             // For generic SQLiteException, we MUST check the message for "busy"
-            // specifically, because SQLiteException is also used for NOT NULL and other HARD errors.
+            // specifically, because SQLiteException is also used for NOT NULL and other
+            // HARD errors.
             if (className.equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
                 return msg != null && msg.toLowerCase().contains(SqliteErrorStrings.BUSY);
             }

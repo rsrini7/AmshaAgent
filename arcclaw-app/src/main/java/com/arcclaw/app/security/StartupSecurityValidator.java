@@ -39,9 +39,9 @@ public class StartupSecurityValidator {
                     "Set ARCCLAW_VAULT_PEPPER in your .env before running in prod.");
             }
             // 2. HMAC key check in Vault
-            if (!vault.systemKeyExists("arcclaw-audit-hmac-key")) {
+            if (!vault.systemKeyExists(com.arcclaw.core.security.VaultConstants.AUDIT_HMAC_KEY_NAME)) {
                 throw new IllegalStateException(
-                    "FATAL: arcclaw-audit-hmac-key is not present in SecretVault. " +
+                    "FATAL: " + com.arcclaw.core.security.VaultConstants.AUDIT_HMAC_KEY_NAME + " is not present in SecretVault. " +
                     "Provision this key before deploying to production.");
             }
 

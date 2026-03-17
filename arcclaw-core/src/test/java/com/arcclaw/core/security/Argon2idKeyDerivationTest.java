@@ -29,22 +29,19 @@ class Argon2idKeyDerivationTest {
     }
 
     @Test
-    void testPepperIsNotZeroedImmediatelyButIsZeroedOnCleanup() throws Exception {
-        VaultKey key = keyDerivation.deriveSessionKey("test-session");
-        assertNotNull(key);
+    void pepperCharsAreZeroedInsideDeriveSessionKey() throws Exception {
+        // Call derivation
+        keyDerivation.deriveSessionKey("test-session-id");
 
-        Field pepperField = Argon2idKeyDerivation.class.getDeclaredField("pepperChars");
-        pepperField.setAccessible(true);
-        char[] pepperChars = (char[]) pepperField.get(keyDerivation);
-        
-        char[] originalPepper = "secret-pepper".toCharArray();
-        assertArrayEquals(originalPepper, pepperChars, "Pepper must persist for multiple sessions in ApplicationScoped bean");
+        // Read pepperChars field via reflection — must be all zeros BEFORE @PreDestroy fires
+        Field field = Argon2idKeyDerivation.class.getDeclaredField("pepperChars");
+        field.setAccessible(true);
+        char[] pepper = (char[]) field.get(keyDerivation);
 
-        // Now trigger cleanup manually
-        keyDerivation.cleanup();
-        
-        char[] expectedZeroed = new char[originalPepper.length];
-        java.util.Arrays.fill(expectedZeroed, '\0');
-        assertArrayEquals(expectedZeroed, pepperChars, "Pepper characters must be securely wiped on bean destruction");
+        for (int i = 0; i < pepper.length; i++) {
+            assertEquals('\0', pepper[i],
+                    "pepperChars[" + i + "] must be zeroed after deriveSessionKey() returns, " +
+                    "not only in @PreDestroy");
+        }
     }
 }

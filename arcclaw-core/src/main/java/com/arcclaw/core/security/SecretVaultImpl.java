@@ -58,7 +58,7 @@ public class SecretVaultImpl implements SecretVault {
         try {
             current = cachedSystemMasterKey;
             if (current == null || current.isDestroyed()) {
-                cachedSystemMasterKey = keyDerivation.deriveSessionKey("SYSTEM");
+                cachedSystemMasterKey = keyDerivation.deriveSessionKey(VaultConstants.SYSTEM_SESSION_ID);
                 current = cachedSystemMasterKey;
             }
             return current;
@@ -101,7 +101,7 @@ public class SecretVaultImpl implements SecretVault {
 
             // Only record audit for non-system sessions to avoid infinite recursion or
             // missing context
-            if (!"SYSTEM".equals(sessionId)) {
+            if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
             }
@@ -154,7 +154,7 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public Optional<VaultKey> retrieveSystemKey(String keyName) {
-        String sessionId = "SYSTEM";
+        String sessionId = VaultConstants.SYSTEM_SESSION_ID;
 
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);
         if (entity == null) {
@@ -176,13 +176,13 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public boolean systemKeyExists(String keyName) {
-        return repository.findByKey("SYSTEM", keyName) != null;
+        return repository.findByKey(VaultConstants.SYSTEM_SESSION_ID, keyName) != null;
     }
 
     @Override
     @Transactional
     public void storeSystemKey(String keyName, byte[] secret) {
-        String sessionId = "SYSTEM";
+        String sessionId = VaultConstants.SYSTEM_SESSION_ID;
 
         // SYSTEM keys bypass the WorkspaceScoped cache to avoid
         // ContextNotActiveException during startup/boot

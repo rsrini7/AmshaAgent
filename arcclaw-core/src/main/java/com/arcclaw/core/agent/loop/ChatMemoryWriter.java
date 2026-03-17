@@ -20,7 +20,7 @@ public class ChatMemoryWriter {
 
     @Inject ChatMemoryStore chatMemoryStore;
 
-    private static final Set<String> SKIP_GOALS = Set.of(
+    static final Set<String> SKIP_GOALS = Set.of(
         AgentSentinels.GOAL_TOOL_APPROVED,
         AgentSentinels.GOAL_RESUME_APPROVED,
         AgentSentinels.GOAL_RESUME_DENIED

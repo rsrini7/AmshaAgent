@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 
 /**
  * Unit tests for {@link AsyncPersistenceEngine}.
@@ -239,5 +240,71 @@ class AsyncPersistenceEngineTest {
         assertTrue(latch.await(5, TimeUnit.SECONDS));
         assertTrue(criticalFound.get(), "Critical drain thread not found");
         assertTrue(telemetryFound.get(), "Telemetry drain thread not found");
+    }
+
+    @InjectMock
+    com.arcclaw.core.audit.AuditHashUtil auditHashUtil;
+
+    @Test
+    void drainThread_SurvivesHmacFailure_WhenKeyBecomesAvailableOnSecondAttempt()
+            throws Exception {
+        // First call throws HMAC unavailable, second succeeds
+        org.mockito.Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
+            .doReturn("dummy-hmac")
+            .when(auditHashUtil).hmacHex(anyString());
+
+        CountDownLatch latch = new CountDownLatch(1);
+        PersistenceEvent event = PersistenceEvent.critical("ses-retry", com.arcclaw.core.audit.SecurityEventType.TOOL_INVOKED,
+                em2 -> {
+                    auditHashUtil.hmacHex("test");
+                    latch.countDown();
+                });
+
+        engine.submitCritical(event);
+
+        // Give drain thread time to retry and succeed
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "Event must be persisted after retry succeeds");
+    }
+
+    @Test
+    void drainThread_ContinuesDraining_AfterExhaustingHmacRetries() throws Exception {
+        // All retries fail for first event
+        org.mockito.Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
+            .when(auditHashUtil).hmacHex(anyString());
+
+        CountDownLatch latch = new CountDownLatch(1);
+        PersistenceEvent failingEvent = PersistenceEvent.critical("ses-fail", com.arcclaw.core.audit.SecurityEventType.TOOL_INVOKED,
+                em2 -> {
+                    auditHashUtil.hmacHex("test");
+                });
+        
+        PersistenceEvent nextEvent = PersistenceEvent.critical("ses-next", com.arcclaw.core.audit.SecurityEventType.TOOL_INVOKED,
+                em2 -> {
+                    auditHashUtil.hmacHex("test");
+                    latch.countDown();
+                });
+
+        // First event fails and throws after 3 retries (total 4 attempts).
+        // Since submitCritical blocks until the background thread completes the future,
+        // it should directly throw ComplianceViolationException (translated from CompletionException).
+        assertThrows(ComplianceViolationException.class, () -> engine.submitCritical(failingEvent));
+        
+        // Second event should still be processed if the drain thread is alive
+        // We need to reset the mock to succeed for the second event
+        org.mockito.Mockito.doReturn("dummy-hmac").when(auditHashUtil).hmacHex(anyString());
+        
+        engine.submitCritical(nextEvent);
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS), 
+            "Second event must be persisted — drain thread must not die after first event failure");
+        
+        // Wait up to 1s for the counter to increment in the drain thread (avoid race)
+        long start = System.currentTimeMillis();
+        while (registry.counter("arcclaw.audit.drain.hmac_failure").count() < 1 && (System.currentTimeMillis() - start) < 1000) {
+            Thread.sleep(10);
+        }
+
+        assertEquals(1, (int) registry.counter("arcclaw.audit.drain.hmac_failure").count(), 
+            "Failure counter must be incremented once");
     }
 }

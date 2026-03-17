@@ -11,6 +11,7 @@ import org.jboss.logging.Logger;
 
 import com.arcclaw.core.security.CryptoConstants;
 import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -23,8 +24,6 @@ import io.quarkus.runtime.StartupEvent;
 public class AuditHashUtil {
 
     private static final Logger log = Logger.getLogger(AuditHashUtil.class);
-    private static volatile boolean keyMissingLogged = false;
-    private static final String AUDIT_HMAC_KEY_NAME = "arcclaw-audit-hmac-key";
 
     private volatile byte[] hmacKey;
     private final Instance<SecretVault> vaultInstance;
@@ -57,19 +56,14 @@ public class AuditHashUtil {
                 result = hmacKey;
                 if (result == null) {
                     SecretVault vault = vaultInstance.get();
-                    result = vault.retrieveSystemKey(AUDIT_HMAC_KEY_NAME)
+                    result = vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME)
                             .map(VaultKey::get)
                             .map(byte[]::clone)
                             .orElseThrow(() -> {
-                                String msg = "Audit HMAC key '" + AUDIT_HMAC_KEY_NAME
+                                return new IllegalStateException("Audit HMAC key '" + VaultConstants.AUDIT_HMAC_KEY_NAME
                                         + "' is missing from SecretVault. " +
                                         "Ensure DevSecretSeeder has seeded it in dev/test, " +
-                                        "or StartupSecurityValidator has verified it in prod.";
-                                if (!keyMissingLogged) {
-                                    log.error(msg);
-                                    keyMissingLogged = true;
-                                }
-                                return new IllegalStateException(msg);
+                                        "or StartupSecurityValidator has verified it in prod.");
                             });
                     hmacKey = result;
                 }
@@ -110,14 +104,9 @@ public class AuditHashUtil {
             if (hash == null) return "error-null-mac-result";
             return HexFormat.of().formatHex(hash);
         } catch (IllegalStateException | SecurityException e) {
-            // Specific handling for missing/invalid key to avoid huge stack traces in logs.
-            // For SecurityException (e.g. decryption failed), we log it once at warn level
-            // but return placeholder to prevent log flooding during background retries.
-            if (e instanceof SecurityException) {
-                log.warnf("Audit HMAC key decryption failed (Integrity check failed). " +
-                          "Audit logs for this session will be degraded. Error: %s", e.getMessage());
-            }
-            return "error-missing-hmac-key";
+            throw new IllegalStateException(
+                "Audit HMAC key unavailable. Chain integrity cannot be guaranteed. " +
+                "Ensure DevSecretSeeder has seeded '" + VaultConstants.AUDIT_HMAC_KEY_NAME + "' before first audit write.", e);
         } catch (Exception e) {
             // Check if it's a shutdown race
             if (io.quarkus.arc.Arc.container() == null) {
