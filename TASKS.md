@@ -1135,5 +1135,18 @@
 
 ---
 
+## Phase 63 — Refactoring and Hardening (Prompts J-T) ✅
+- [x] Prompt 63-J — `AsyncPersistenceEngine`: Two Bounded Queues with Synchronous Critical Fallback <!-- id: 533 -->
+- [x] Prompt 63-K — `AgentCronScheduler`: Lookback Window to Prevent Restart Burst <!-- id: 534 -->
+- [x] Prompt 63-L — `McpClientService` HTTP Pool Bound + `CompactionModelProducer` Dedicated Config <!-- id: 535 -->
+- [x] Prompt 63-M — `SkillRegistry` + `AgentStateMachineRunner`: Per-Iteration Skill Snapshot <!-- id: 536 -->
+- [x] Prompt 63-N — `CompactionHandler`: Fire Compaction Asynchronously via CDI Event <!-- id: 537 -->
+- [x] Prompt 63-O — `PermissiveJsonExtractor`: Pre-Parse Size Cap + Duplicate Key Detection <!-- id: 538 -->
+- [x] Prompt 63-P — `AgentStateMachineRunner`: Interface Injection + `isSqliteBusy` Deduplication <!-- id: 539 -->
+- [x] Prompt 63-Q — `TwoTierMemoryService`: Fast Path When Vector Search Disabled <!-- id: 540 -->
+- [x] Prompt 63-R — `NdjsonWriter`: Enforce MCP Newline Framing at the Type Level <!-- id: 541 -->
+- [x] Prompt 63-S — Build-Time `@RunOnVirtualThread` Enforcement via `@BuildStep` <!-- id: 542 -->
+- [x] Prompt 63-T — `AgentOtelContext`: Instrument Iteration and Tool Spans <!-- id: 543 -->
+
 
 

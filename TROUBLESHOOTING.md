@@ -3410,6 +3410,26 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Symptom**: Integration tests assessing Camel integrations failing fast assuming routes don't exist when evaluating `camelContext.getRoute("telegram-bot")`.
 **Root Cause**: The `onStart` hooks invoke the primary registration within standard async `@VirtualThreads` preventing testing contexts running via `@BeforeEach` bindings from detecting full registration before assertion checks evaluate. 
 **Resolution**: Implemented localized 2000ms delay evaluation loops manually polling for route bindings tracking contextual initialization gracefully prior to performing teardown scenarios avoiding explicit thread deadlocks.
+
+### 🔴 Failure: `NullPointerException` in `AgentStateMachineRunnerTest` (OTel Span)
+**Symptom**: `NullPointerException` when calling `agentOtelContext.startIterationSpan()` during unit tests.
+**Root Cause**: Added OpenTelemetry instrumentation requires the `AgentOtelContext` to be present. In non-Quarkus unit tests, the field is `null`.
+**Resolution**: Inject a mocked `AgentOtelContext` into the runner. Configure the mock to return `Span.getInvalid()` by default (e.g., `when(agentOtelContext.startIterationSpan(any(), anyInt(), any())).thenReturn(Span.getInvalid())`) to satisfy the API without requiring a full OTel SDK setup.
+
+### 🔴 Failure: Build Failure: `@RunOnVirtualThread` Missing
+**Symptom**: `BuildException: Agent implementation 'com.foo.MyAgent' is missing @RunOnVirtualThread annotation`.
+**Root Cause**: Phase 63-S introduced a `@BuildStep` that enforces virtual thread execution for all agents to prevent event-loop blocking.
+**Resolution**: Add the `@RunOnVirtualThread` annotation to the class or the entry method of the identified agent.
+
+### 🔴 Failure: `AsyncPersistenceEngine` Queue Overflow
+**Symptom**: `RejectedExecutionException` or dropped telemetry events during heavy agent load.
+**Root Cause**: The telemetry queue is bounded to prevent OOM. If LLM bursts exceed the consumer's write speed to SQLite, the queue fills up.
+**Resolution**: Telemetry drops are expected and safe. Critical security audits are unaffected as they use a separate queue with a synchronous blocking fallback. If telemetry loss is too high, increase the queue capacity in `application.yaml` or optimize SQLite write performance (e.g., WAL mode).
+
+### 🔴 Failure: MCP Handshake `java.io.IOException: Invalid NDJSON framing`
+**Symptom**: MCP clients fail to parse messages from `PodmanMcpTransport`.
+**Root Cause**: MCP stdio transport requires strict newline-terminated JSON strings. Multi-line JSON output or missing trailing newlines break the framing.
+**Resolution**: Use the `NdjsonWriter` to ensure every message is a single-line JSON followed by `\n`. Avoid using raw `System.out.println` for protocol messages.
 ---
 
 ## 20. Phase 63 — Vault & Audit Hardening
