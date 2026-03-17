@@ -17,6 +17,8 @@ public class RestResourceBuildStepFailureTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
             .addClasses(InvalidResource.class))
+        .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
+        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
         .setExpectedException(RuntimeException.class);
 
     @Test

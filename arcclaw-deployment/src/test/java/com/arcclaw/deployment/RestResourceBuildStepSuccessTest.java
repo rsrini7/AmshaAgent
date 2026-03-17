@@ -16,7 +16,9 @@ public class RestResourceBuildStepSuccessTest {
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-            .addClasses(ValidResource.class, NonJpaResource.class));
+            .addClasses(ValidResource.class, NonJpaResource.class))
+        .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
+        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:");
 
     @Test
     public void testBuildSucceeds() {
