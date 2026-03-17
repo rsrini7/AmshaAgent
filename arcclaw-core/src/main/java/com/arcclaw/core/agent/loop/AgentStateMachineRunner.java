@@ -18,7 +18,7 @@ import dev.langchain4j.exception.InvalidRequestException;
 import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.persona.AgentRole;
-import com.arcclaw.core.agent.persona.DattatreyaAgent;
+import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -56,7 +56,7 @@ public class AgentStateMachineRunner {
     @Inject ToolInvocationGuard guard;
     @Inject ToolInvoker invoker;
     @Inject ChatMemoryWriter writer;
-    @Inject @AgentRole("synthesizer") DattatreyaAgent dattatreyaAgent;
+    @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
     @Inject com.arcclaw.core.skill.SkillRegistry skillRegistry;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
@@ -142,7 +142,7 @@ public class AgentStateMachineRunner {
                 .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
                 .collect(Collectors.joining("\n\n"));
                 
-            return dattatreyaAgent.synthesize(sessionId, combinedContext, history);
+            return synthesizerAgent.synthesize(sessionId, combinedContext, history);
         }
 
         return AgentResult.finished(answer, List.copyOf(history));

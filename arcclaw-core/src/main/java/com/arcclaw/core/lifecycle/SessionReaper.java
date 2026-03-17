@@ -71,7 +71,7 @@ public class SessionReaper {
                 return; // success
             } catch (Exception e) {
                 lastEx = e;
-                if (isSqliteBusy(e)) {
+                if (SqliteErrorStrings.isBusy(e)) {
                     log.warnf("SQLite BUSY on onStartup attempt %d/%d — retrying in %dms",
                             attempt, maxRetries, backoffMs * attempt);
                     try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
@@ -192,31 +192,5 @@ public class SessionReaper {
         }
     }
 
-    /** Traverses getCause() chain to detect SQLite BUSY / locked errors. */
-    private static boolean isSqliteBusy(Throwable e) {
-        // Intentional copy — also exists in WorkspaceManager.
-        // Kept private static to avoid extracting a shared utility for one method.
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            String msg = t.getMessage();
-            if (msg != null) {
-                String lower = msg.toLowerCase();
-                if (lower.contains(SqliteErrorStrings.BUSY) || 
-                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
-                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
-                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
-                    return true;
-                }
-            }
-            if (t.getClass().getSimpleName().equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
-                try {
-                    var method = t.getClass().getMethod("getResultCode");
-                    Object code = method.invoke(t);
-                    if (code instanceof Integer rc) {
-                        if (rc == 5 || rc == 6 || rc == 261) return true;
-                    }
-                } catch (Exception ignored) { }
-            }
-        }
-        return false;
-    }
+
 }
