@@ -21,6 +21,9 @@ import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import jakarta.annotation.PostConstruct;
+import org.eclipse.microprofile.context.ManagedExecutor;
+
 @ApplicationScoped
 public class McpClientService {
 
@@ -29,12 +32,20 @@ public class McpClientService {
     @Inject DynamicToolCapabilityRegistry registry;
     @Inject ObjectMapper objectMapper;
 
+    @Inject ManagedExecutor executor;
+
     private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> sessionIds = new ConcurrentHashMap<>();
     private final AtomicInteger requestIdGen = new AtomicInteger(1);
-    private final HttpClient httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
-        .build();
+    private HttpClient httpClient;
+
+    @PostConstruct
+    void init() {
+        this.httpClient = HttpClient.newBuilder()
+            .executor(executor)
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+    }
 
     @Timeout(10000)
     @Retry(maxRetries = 2, delay = 500)

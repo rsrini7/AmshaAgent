@@ -19,13 +19,11 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
-                    defaultValue = "https://api.groq.com/openai/v1/")
-    String openaiBaseUrl;
+    @ConfigProperty(name = "arcclaw.memory.compaction.base-url")
+    String compactionBaseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key",
-                    defaultValue = "mock-key-must-be-overridden")
-    String apiKey;
+    @ConfigProperty(name = "arcclaw.memory.compaction.api-key")
+    String compactionApiKey;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.model",
                     defaultValue = "llama-3.1-8b-instant")
@@ -50,8 +48,8 @@ public class CompactionModelProducer {
         log.infof("CompactionModelProducer: provider=%s model=%s", provider, modelId);
         return switch (provider.toLowerCase()) {
             case "groq" -> OpenAiChatModel.builder()
-                    .baseUrl(openaiBaseUrl)
-                    .apiKey(apiKey)
+                    .baseUrl(compactionBaseUrl)
+                    .apiKey(compactionApiKey)
                     .modelName(modelId)
                     .maxTokens(compactionMaxTokens)
                     .timeout(Duration.ofSeconds(10))
@@ -59,7 +57,8 @@ public class CompactionModelProducer {
                     .logResponses(false)
                     .build();
             case "openai" -> OpenAiChatModel.builder()
-                    .apiKey(apiKey)
+                    .baseUrl(compactionBaseUrl)
+                    .apiKey(compactionApiKey)
                     .modelName(modelId)
                     .maxTokens(compactionMaxTokens)
                     .timeout(Duration.ofSeconds(10))

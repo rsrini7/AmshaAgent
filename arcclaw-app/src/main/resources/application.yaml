@@ -153,6 +153,11 @@ quarkus:
   thread-pool:
     core-threads: 1   # minimize platform threads; virtual threads handle concurrency
 
+smallrye:
+  context-propagation:
+    managed-executor:
+      max-async: 20
+
   transaction-manager:
     default-transaction-timeout: 300
     enable-recovery: false
@@ -265,8 +270,10 @@ arcclaw:
       threshold: 5
       keep-recent: 5
       max-tokens: 1024
-      model: ${COMPACTION_MODEL:llama-3.1-8b-instant}
-      ollama-model: ${COMPACTION_OLLAMA_MODEL:llama3.2}
+      api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
+      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${quarkus.langchain4j.openai.base-url}}"
+      model: "${COMPACTION_MODEL:llama-3.1-8b-instant}"
+      ollama-model: "${COMPACTION_OLLAMA_MODEL:llama3.2}"
   chat-memory:
     max-messages: 20
   api:
