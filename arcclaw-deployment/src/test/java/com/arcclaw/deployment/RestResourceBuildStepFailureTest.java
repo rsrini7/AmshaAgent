@@ -16,13 +16,15 @@ public class RestResourceBuildStepFailureTest {
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-            .addClasses(InvalidResource.class, TestProducers.class))
+            .addClasses(InvalidResource.class, TestProducers.class,
+                com.arcclaw.core.persistence.FtsConnectionInterceptor.class,
+                com.arcclaw.core.audit.AuditSchemaEnforcer.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
         .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
         .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
-        .overrideConfigKey("arcclaw.data-dir", "target/test-data")
+        .overrideConfigKey("arcclaw.data-dir", ":memory:")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
         .setExpectedException(RuntimeException.class);
 
