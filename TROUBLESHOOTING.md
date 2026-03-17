@@ -3434,12 +3434,12 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 
 ## 20. Phase 63 — Vault & Audit Hardening
 
-### ��� Failure: `rotateSecrets()` Throws Exception
+### 🔴 Failure: `rotateSecrets()` Throws Exception
 **Symptom:** Application logic calling `rotateSecrets()` results in `UnsupportedOperationException`.
 **Root Cause:** Phase 63 architecture mandates "honest deferral" of rotation logic until Phase 64. Documentation references suggesting 24-hour automatic rotation were incorrect and have been removed.
 **Resolution:** Remove any application-level timers or logic attempting to trigger rotation. Full automated key rotation is scheduled for the Phase 64 roadmap.
 
-### ��� Failure: `AuditHashUtil` Missing HMAC Key at Startup
+### 🔴 Failure: `AuditHashUtil` Missing HMAC Key at Startup
 **Symptom:** `AuditHashUtil` constructor throws `IllegalStateException: Audit HMAC key 'arcclaw-audit-hmac-key' is missing from SecretVault`.
 **Root Cause:** The mandatory system secret for audit chaining was not seeded or provisioned.
 **Resolution:** 

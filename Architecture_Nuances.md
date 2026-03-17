@@ -76,12 +76,35 @@ This bypasses the `isNew()` guard and removes the strategy directly. JAR/native 
 
 **Nuance #30** — Hibernate ORM 7 + SQLite DDL identity columns: Without `ArcClawSQLiteDialect.hasDataTypeInIdentityColumn()=true`, Hibernate ORM 7 emits DDL like `"checkpoint_id,"` (no type), breaking SQLite auto-increment rowid. `ArcClawSQLiteDialect` is mandatory for all entity tables with `@GeneratedValue`.
 
-**Nuance #31** — `ToolObservationSanitizer.sanitize()` must wrap every tool response before `history` append. Call site: `ToolInvoker.invoke()`. Never bypass for any tool type including GitHub, sandbox, or MCP tools.
+**Nuance #31** — `ToolObservationSanitizer.sanitize()` must wrap every tool response
+before `history` append. Call site: `ToolInvoker.invoke()`. Never bypass for any tool
+type including GitHub, sandbox, or MCP tools.
 
-**Nuance #32** — `AsyncPersistenceEngine.submitCritical()` is bounded at 500. On overflow → synchronous persist on the calling thread. A mandatory event (`isMandatory=true`) is NEVER dropped. `submitTelemetry()` may drop on overflow — increment Micrometer counter.
+**Nuance #32** — `AsyncPersistenceEngine.submitCritical()` is bounded at 500. On
+overflow → synchronous persist on the calling thread. A mandatory event
+(`isMandatory=true`) is NEVER dropped. `submitTelemetry()` may drop on overflow —
+increment Micrometer counter.
 
-**Nuance #33** — `System.nanoTime()` for all elapsed-time measurements. `System.currentTimeMillis()` is wall-clock, goes backward on NTP correction or leap-second, and is FORBIDDEN for duration calculation.
+**Nuance #33** — `System.nanoTime()` for all elapsed-time measurements.
+`System.currentTimeMillis()` is wall-clock, goes backward on NTP correction or
+leap-second, and is FORBIDDEN for duration calculation.
 
-**Nuance #34** — `EncryptedSecret.ormVersion` is Hibernate-managed. `EncryptedSecret.encryptionKeyVersion` is application-managed. Application code sets only `encryptionKeyVersion`. NEVER set or read `ormVersion` from application code.
+**Nuance #34** — `EncryptedSecret.ormVersion` is Hibernate-managed.
+`EncryptedSecret.encryptionKeyVersion` is application-managed. Application code sets
+only `encryptionKeyVersion`. NEVER set or read `ormVersion` from application code.
 
-**Nuance #35** — Vault pepper is `char[]`, zeroed immediately after use via `Arrays.fill(pepperChars, '\0')`. Never store as `String`. `CharArrayConverter` registered in `META-INF/services/org.eclipse.microprofile.config.spi.Converter` handles MicroProfile injection of `char[]` config values.
+**Nuance #35** — Vault pepper is `char[]`, zeroed immediately after use via
+`Arrays.fill(pepperChars, '\0')` inside `deriveSessionKey()`. Never store as `String`.
+`CharArrayConverter` registered in
+`META-INF/services/org.eclipse.microprofile.config.spi.Converter` handles
+MicroProfile injection of `char[]` config values.
+
+**Nuance #36** — System-level SecretVault operations that must execute before any
+WorkspaceScoped session is active use `VaultConstants.SYSTEM_SESSION_ID` as the
+session identifier. This bypasses `VaultKeyCache`. The constant must never be a raw
+inline string literal `"SYSTEM"`.
+
+**Nuance #37** — `DevSecretSeeder` observes `StartupEvent` at `@Priority(100)`.
+All beans that depend on secrets seeded by `DevSecretSeeder` must observe
+`StartupEvent` at a higher number (e.g., no `@Priority` = default APPLICATION 2000,
+or explicit value > 100). Lower number fires first.
