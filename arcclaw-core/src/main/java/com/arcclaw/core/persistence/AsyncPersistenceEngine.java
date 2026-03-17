@@ -193,14 +193,15 @@ public class AsyncPersistenceEngine {
                     try {
                         processEvent(event); // retry logic for HMAC is now in persistSynchronously called here
                     } catch (ComplianceViolationException e) {
-                        log.infof("[AsyncPersistenceEngine] Caught CVE in drainCritical. Cause: %s", 
+                        log.errorf("[AsyncPersistenceEngine] Caught CVE in drainCritical (session=%s). Cause: %s", 
+                                event.getSessionId(),
                                 e.getCause() != null ? e.getCause().getClass().getName() : "null");
                         // persistSynchronously() or executeWithRetry() exhausted all retries.
                         // We log and keep the drain thread alive.
                         Throwable cause = e.getCause();
                         if (cause instanceof IllegalStateException && cause.getMessage() != null
                                 && cause.getMessage().contains("HMAC key unavailable")) {
-                            log.info("[AsyncPersistenceEngine] Incrementing hmac_failure counter");
+                            log.error("[AsyncPersistenceEngine] Incrementing hmac_failure counter");
                             registry.counter("arcclaw.audit.drain.hmac_failure").increment();
                         }
                         log.errorf(e, "Critical audit event lost — check persistence health. Event type: %s",
@@ -278,11 +279,13 @@ public class AsyncPersistenceEngine {
             if (event.getFuture() != null) {
                 event.getFuture().completeExceptionally(cve);
             }
+            throw cve;
         } catch (Exception e) {
+            ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
             if (event.getFuture() != null) {
-                event.getFuture().completeExceptionally(
-                        new ComplianceViolationException(event.getSessionId(), event.getEventType(), e));
+                event.getFuture().completeExceptionally(cve);
             }
+            throw cve;
         }
     }
 
@@ -383,6 +386,7 @@ public class AsyncPersistenceEngine {
                     }
                 } else {
                     // Real failure or retries exhausted — propagate to drainCritical()
+                    log.errorf("[AsyncPersistenceEngine] HMAC retries exhausted or non-retryable ISE: %s", e.getMessage());
                     throw e;
                 }
             }
