@@ -1,18 +1,26 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.security.RequiresSecret;
-import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.agent.role.ToolCapability;
-import jakarta.enterprise.context.ApplicationScoped;
-
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.security.ToolOperation;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.
@@ -28,6 +36,18 @@ public class GithubTool implements AgentTool {
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
     public static final String NAME = ToolCapability.GITHUB.toolName();
+
+    @Inject
+    ProcessIsolationExecutor isolationExecutor;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    ToolRegistry toolRegistry;
+
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
+    String workspaceRootDir;
 
     @Override
     public String name() {
@@ -50,7 +70,7 @@ public class GithubTool implements AgentTool {
 
     @Override
     public boolean requiresSandbox() {
-        return true;
+        return false;
     }
 
     @Override
@@ -101,6 +121,12 @@ public class GithubTool implements AgentTool {
             }
         }
 
+        String ref = (String) params.get("ref");
+        if ("repo".equals(action) && "view".equals(command)
+                && ref != null && !ref.isBlank()) {
+            return List.of("gh", "api", "repos/" + target.trim() + "/readme?ref=" + ref.trim(), "--jq", ".content");
+        }
+
         List<String> cmd = new ArrayList<>();
         cmd.add("gh");
         cmd.add(action);
@@ -110,19 +136,38 @@ public class GithubTool implements AgentTool {
             cmd.add(target);
         }
 
-        String ref = (String) params.get("ref");
-        if ("repo".equals(action) && "view".equals(command)
-                && ref != null && !ref.isBlank()) {
-            cmd.add("--branch");
-            cmd.add(ref.trim());
-        }
-
         return cmd;
     }
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        throw new UnsupportedOperationException("GithubTool requires sandbox execution");
+        List<String> command = sandboxCommand(params);
+        var requiredSecrets = ToolRegistry.extractRequiredSecrets(this.getClass(), "sandboxCommand");
+        String sessionId = WorkspaceContext.requireSessionId();
+        Path workspaceRoot = Path.of(workspaceRootDir, sessionId);
+
+        try {
+            String output = isolationExecutor.executeSandboxed(sessionId, workspaceRoot, command, requiredSecrets);
+
+            // POST-PROCESSING: gh api readme returns base64 content
+            String action = (String) params.getOrDefault("action", "repo");
+            String subMsg = (String) params.getOrDefault("command", "view");
+            String ref = (String) params.get("ref");
+            boolean isApiReadmeCall = "repo".equals(action) && "view".equals(subMsg) && ref != null && !ref.isBlank();
+
+            if (isApiReadmeCall && output != null && !output.isBlank()) {
+                try {
+                    output = new String(Base64.getMimeDecoder().decode(output.trim()), StandardCharsets.UTF_8);
+                } catch (Exception e) {
+                    log.errorf("Failed to decode base64 README output: %s", e.getMessage());
+                }
+            }
+
+            return ToolResponse.success(output);
+        } catch (Exception e) {
+            log.errorf("GithubTool execution failed: %s", e.getMessage());
+            return ToolResponse.failure(1, "GithubTool failed: " + e.getMessage());
+        }
     }
 
     @Override

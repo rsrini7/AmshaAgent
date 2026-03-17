@@ -10,8 +10,8 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -135,11 +135,12 @@ public class PodmanContainerExecutor {
 
                 var pb = new ProcessBuilder(podmanCmd);
 
-                Path workspaceDir = Path.of(workspaceRootDir, sessionId);
-                if (!Files.exists(workspaceDir)) {
-                    throw new IOException("workspace dir not exist");
+                File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
+                if (!workspaceDir.exists()) {
+                    workspaceDir.mkdirs();
+                    log.warn("PIE Workspace dir missing — recreated: " + workspaceDir.getAbsolutePath());
                 }
-                pb.directory(workspaceDir.toFile());
+                pb.directory(workspaceDir);
                 pb.redirectErrorStream(true);
 
                 var process = pb.start();

@@ -3,6 +3,7 @@ package com.arcclaw.core.sandbox;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,13 @@ public class NamespaceExecutor {
             pb = new ProcessBuilder(fullCmd);
         } else {
             pb = new ProcessBuilder(command);
-            pb.directory(workspaceRoot.toFile());
+            File workspaceDir = workspaceRoot.toFile();
+            if (!workspaceDir.exists()) {
+                workspaceDir.mkdirs();
+                // log not available in this simple class, but following user request pattern
+                System.err.println("PIE Workspace dir missing — recreated: " + workspaceDir.getAbsolutePath());
+            }
+            pb.directory(workspaceDir);
         }
         pb.redirectErrorStream(true);
         var process = pb.start();

@@ -14,6 +14,9 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -43,6 +46,8 @@ public class ToolInvocationGuard {
     public ToolRegistry toolRegistry;
     @Inject
     public Instance<DynamicToolLookup> dynamicToolLookup;
+    @Inject
+    public ChatMemoryStore chatMemoryStore;
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
     private static final Pattern GITHUB_TRIGGER_PATTERN = Pattern.compile(
@@ -104,6 +109,28 @@ public class ToolInvocationGuard {
                             "the current session cache. The tool was not re-executed.]";
                     return new GuardDecision.Deduplicate(cachedObs);
                 }
+            }
+        }
+
+        // 1.1 CROSS-LOOP DEDUP (GitHub only)
+        // If ChatMemory already has a github result for the same args in this session,
+        // let the LLM reuse it instead of triggering a new HITL prompt.
+        if (GithubTool.NAME.equals(toolName)) {
+            try {
+                List<ChatMessage> memory = chatMemoryStore.getMessages(sessionId);
+                if (memory != null) {
+                    String currentArgsJson = objectMapper.writeValueAsString(params);
+                    // Match prefix to handle potential JSON field ordering or truncation differences
+                    String matchPrefix = currentArgsJson.substring(0, Math.min(20, currentArgsJson.length()));
+                    for (ChatMessage msg : memory) {
+                        if (msg instanceof AiMessage ai && ai.text() != null && ai.text().contains(matchPrefix)) {
+                            log.debugf("[DEDUP-GUARD] Cross-loop github match for session %s. Allowing reuse.", sessionId);
+                            return new GuardDecision.Allow(); 
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warnf("Cross-loop dedup failed for github in session %s: %s", sessionId, e.getMessage());
             }
         }
 
