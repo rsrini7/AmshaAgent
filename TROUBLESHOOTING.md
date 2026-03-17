@@ -3441,3 +3441,37 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Root Cause**: `Argon2idKeyDerivation` used `ByteBuffer.array()` on the output of `Charset.encode()`, which can return an internal backing array larger than the actual data (containing trailing nulls). This lead to inconsistent key derivation.
 **Resolution**: Switched to explicit byte extraction using `bb.get(passwordBytes)` to ensure only the correctly encoded bytes are used for HMAC-key and session-key derivation.
 
+## “Tests run: 0”
+./mvnw clean test -pl arcclaw-app -am "-Dtest=CompactionModelProducerTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+
+Why You See “Tests run: 0”
+
+You’re filtering with -Dtest=CompactionModelProducerTest, but that outer class has no test methods.
+The actual tests are in two nested classes annotated with @QuarkusTest inside that file:
+DefaultFallbackTest
+OverrideKeyTest
+Maven Surefire’s -Dtest filter matches class names. When you specify only the outer class, JUnit finds no test methods, so it reports 0 tests.
+Code reference:
+
+Nested test classes in CompactionModelProducerTest.java
+Run The Tests Correctly
+
+Target the inner classes by matching the nested names (note the $ in nested class names).
+Git Bash:
+
+Run all nested tests in that file:
+./mvnw clean test -pl arcclaw-app -am -Dtest='com.arcclaw.app.compaction.CompactionModelProducerTest$*' -Dsurefire.failIfNoSpecifiedTests=false
+Or specify both explicitly:
+./mvnw clean test -pl arcclaw-app -am -Dtest='com.arcclaw.app.compaction.CompactionModelProducerTest
+[objectObject]
+DefaultFallbackTest,com.arcclaw.app.compaction.CompactionModelProducerTestOverrideKeyTest' -Dsurefire.failIfNoSpecifiedTests=false
+PowerShell:
+
+Escape $ with a backtick:
+./mvnw clean test -pl arcclaw-app -am "-Dtest=com.arcclaw.app.compaction.CompactionModelProducerTest`$*" -Dsurefire.failIfNoSpecifiedTests=false
+Or list both:
+./mvnw clean test -pl arcclaw-app -am "-Dtest=com.arcclaw.app.compaction.CompactionModelProducerTest$DefaultFallbackTest,com.arcclaw.app.compaction.CompactionModelProducerTest$OverrideKeyTest" -Dsurefire.failIfNoSpecifiedTests=false
+Notes
+
+-pl arcclaw-app -am builds dependencies and runs their test phases too. In modules without matching tests, Surefire can fail; keeping -Dsurefire.failIfNoSpecifiedTests=false avoids failures in those modules.
+If you want to avoid nested-class escaping, a simple alternative is to refactor the two inner test classes into two top-level test classes. That’s optional and not required for running them.
