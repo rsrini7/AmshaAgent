@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -125,7 +126,18 @@ public class ToolInvocationGuard {
                             && toolName.equals(cp.getPendingToolName()))
                     .isPresent();
 
-            if (!isPreApproved && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
+            boolean isSentinelGoal = AgentSentinels.GOAL_TOOL_APPROVED.equals(goal)
+                    || AgentSentinels.GOAL_RESUME_APPROVED.equals(goal);
+
+            boolean hasRecentGithubContext = history.stream()
+                    .anyMatch(s -> GithubTool.NAME.equals(s.action())
+                            && s.observation() != null
+                            && !s.observation().isBlank());
+
+            if (!isPreApproved
+                    && !isSentinelGoal
+                    && !hasRecentGithubContext
+                    && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
                 String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
                         "the user's request does not reference a GitHub resource. " +
                         "Please answer the user's question using your own knowledge " +
