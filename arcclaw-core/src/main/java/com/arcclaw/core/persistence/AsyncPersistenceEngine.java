@@ -1,5 +1,6 @@
 package com.arcclaw.core.persistence;
 
+import java.time.Duration;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +77,9 @@ public class AsyncPersistenceEngine {
     @Inject
     ManagedExecutor managedExecutor;
 
-    private volatile boolean running = true;
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private Thread criticalDrainThread;
+    private Thread telemetryDrainThread;
 
     @PostConstruct
     void startDrainThreads() {
@@ -87,26 +90,46 @@ public class AsyncPersistenceEngine {
         // in an unmanaged virtual thread.
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
 
-        Thread.ofVirtual()
+        criticalDrainThread = Thread.ofVirtual()
                 .inheritInheritableThreadLocals(false)
                 .name("arcclaw-audit-critical-drain")
-                .start(() -> {
+                .unstarted(() -> {
                     Thread.currentThread().setContextClassLoader(tccl);
                     drainCritical();
                 });
 
-        Thread.ofVirtual()
+        telemetryDrainThread = Thread.ofVirtual()
                 .inheritInheritableThreadLocals(false)
                 .name("arcclaw-audit-telemetry-drain")
-                .start(() -> {
+                .unstarted(() -> {
                     Thread.currentThread().setContextClassLoader(tccl);
                     drainTelemetry();
                 });
-        log.info("[AsyncPersistenceEngine] Background drain threads started on VirtualThreads with TCCL propagation.");
+
+        criticalDrainThread.start();
+        telemetryDrainThread.start();
+        log.info("[AsyncPersistenceEngine] Background drain threads started on VirtualThreads.");
     }
 
     void onShutdown(@Observes ShutdownEvent event) {
-        running = false;
+        running.set(false);
+        log.debug("[AsyncPersistenceEngine] Shutdown requested. Signaling drain threads...");
+
+        if (criticalDrainThread != null)
+            criticalDrainThread.interrupt();
+        if (telemetryDrainThread != null)
+            telemetryDrainThread.interrupt();
+
+        try {
+            // Give threads a short window to exit gracefully before Arc is gone
+            if (criticalDrainThread != null)
+                criticalDrainThread.join(Duration.ofMillis(200));
+            if (telemetryDrainThread != null)
+                telemetryDrainThread.join(Duration.ofMillis(200));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        log.debug("[AsyncPersistenceEngine] Shutdown complete.");
     }
 
     /**
@@ -183,7 +206,7 @@ public class AsyncPersistenceEngine {
 
     private void drainCritical() {
         PersistenceEvent event = null;
-        while (running && !Thread.currentThread().isInterrupted()) {
+        while (running.get() && !Thread.currentThread().isInterrupted()) {
 
             try {
                 event = criticalQueue.take();
@@ -200,12 +223,9 @@ public class AsyncPersistenceEngine {
                                 && cause.getMessage().contains("HMAC key unavailable")) {
                             registry.counter("arcclaw.audit.drain.hmac_failure").increment();
                         }
-                        log.errorf(e, "Critical audit event lost — check persistence health. Event type: %s",
-                                event.getEventType());
-                        // Future is already completed exceptionally by handleExhausted()
-                    } catch (Exception e) {
-                        // Catch-all for unexpected errors to keep thread alive
-                        log.errorf(e, "Unexpected error in critical drain thread: %s", e.getMessage());
+                        log.errorf("Critical audit event lost — check persistence health. Event type: %s, Error: %s",
+                                event.getEventType(), e.getMessage());
+                        log.debugf(e, "Full stacktrace for critical audit failure");
                         if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
                             event.getFuture().completeExceptionally(e);
                         }
@@ -217,8 +237,9 @@ public class AsyncPersistenceEngine {
                 Thread.currentThread().interrupt();
                 log.warn("[AsyncPersistenceEngine] Critical drain interrupted — shutting down.");
             } catch (Exception e) {
-                if (running && Arc.container() != null) {
-                    log.errorf(e, "[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
+                if (running.get() && Arc.container() != null) {
+                    log.errorf("[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
+                    log.debugf(e, "Full stacktrace for unexpected critical drain error");
                 }
                 // Safety net: ensure the future is never left hanging
                 if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
@@ -229,7 +250,7 @@ public class AsyncPersistenceEngine {
     }
 
     private void drainTelemetry() {
-        while (running && !Thread.currentThread().isInterrupted()) {
+        while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 // Poll with timeout to check for shutdown
                 PersistenceEvent event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
@@ -245,7 +266,7 @@ public class AsyncPersistenceEngine {
                 Thread.currentThread().interrupt();
                 log.warn("[AsyncPersistenceEngine] Telemetry drain interrupted — shutting down.");
             } catch (Exception e) {
-                if (running && Arc.container() != null) {
+                if (running.get() && Arc.container() != null) {
                     log.errorf("[AsyncPersistenceEngine] Unexpected error in telemetry drain: %s", e.getMessage());
                     log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for telemetry drain error");
                 }
@@ -277,7 +298,8 @@ public class AsyncPersistenceEngine {
             }
             throw cve;
         } catch (Exception e) {
-            ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+            ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(),
+                    event.getEventType(), e);
             if (event.getFuture() != null) {
                 event.getFuture().completeExceptionally(cve);
             }
@@ -296,7 +318,7 @@ public class AsyncPersistenceEngine {
      */
     private void executeWithRetry(PersistenceEvent event) {
         // Second-check: container may have gone since processEvent() passed its guard
-        if (!running || Arc.container() == null) {
+        if (!running.get() || Arc.container() == null) {
             log.debugf("[AsyncPersistenceEngine] Skipping write (shutdown): %s session=%s",
                     event.getEventType(), event.getSessionId());
             if (event.getFuture() != null)
@@ -331,7 +353,7 @@ public class AsyncPersistenceEngine {
                     sleepQuietly(backoff);
                 } else {
                     // Non-BUSY error — check if it's a shutdown race before logging as ERROR
-                    if (!running || Arc.container() == null) {
+                    if (!running.get() || Arc.container() == null) {
                         log.debugf("[AsyncPersistenceEngine] Shutdown race: discarding event %s for session=%s",
                                 event.getEventType(), event.getSessionId());
                         if (event.getFuture() != null) {
@@ -355,7 +377,7 @@ public class AsyncPersistenceEngine {
         } else {
             // Should not happen if loop logic is correct, but safety net
             if (event.getFuture() != null && !event.getFuture().isDone()) {
-                 event.getFuture().complete(null);
+                event.getFuture().complete(null);
             }
         }
     }

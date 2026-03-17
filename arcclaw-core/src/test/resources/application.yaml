@@ -55,7 +55,9 @@ quarkus:
     category:
       "org.hibernate.SQL":
         level: WARN
-      "dev.langchain4j.model.chat.listener.ListenersUtil":
+      "org.hibernate.resource.transaction":
+        level: ERROR
+      "com.arjuna":
         level: ERROR
       "com.arcclaw.core.agent":
         level: "OFF"

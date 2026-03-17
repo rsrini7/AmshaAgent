@@ -467,6 +467,10 @@ mp:
           level: INFO
         "org.hibernate.SQL":
           level: DEBUG
+        "com.arjuna":
+          level: ERROR
+        "org.hibernate.resource.transaction":
+          level: ERROR
     langchain4j:
       ollama:
         chat-model:
