@@ -1,43 +1,49 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Duration;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.ContextCompactionService;
+
 import jakarta.enterprise.event.Event;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.time.Duration;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
+@ExtendWith(MockitoExtension.class)
 class CompactionHandlerTest {
 
-    private CompactionHandler handler;
+    @Mock
     private ContextCompactionService compactionService;
+
+    @Mock
     private Event<CompactionRequest> compactionEvent;
+
+    @Mock
     private CompactionInFlightFlag compactionInFlight;
 
-    @BeforeEach
-    void setUp() {
-        handler = new CompactionHandler();
-        compactionService = mock(ContextCompactionService.class);
-        @SuppressWarnings("unchecked")
-        Event<CompactionRequest> compactionEvent = mock(Event.class);
-        compactionInFlight = mock(CompactionInFlightFlag.class);
-
-        handler.compactionService = compactionService;
-        handler.compactionEvent = compactionEvent;
-        handler.compactionInFlight = compactionInFlight;
-    }
+    @InjectMocks
+    private CompactionHandler handler;
 
     @Test
     void testHandleReturnsProceedImmediately() {
@@ -50,8 +56,8 @@ class CompactionHandlerTest {
         when(compactionService.shouldCompact("session1")).thenReturn(true);
         when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
 
-        // Mock fireAsync to return a future that hasn't completed yet (simulating async
-        // work)
+        // fireAsync returns CompletionStage, CompletableFuture is a valid
+        // implementation
         CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
         when(compactionEvent.fireAsync(any(CompactionRequest.class))).thenReturn(future);
 
@@ -109,15 +115,12 @@ class CompactionHandlerTest {
         when(compactionService.shouldCompact("session1")).thenReturn(true);
         when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
 
-        // Simulate a slow fireAsync delivery (though fireAsync itself should be fast)
+        // Simulate a slightly slow fireAsync delivery call itself (the method call, not
+        // the background work)
         when(compactionEvent.fireAsync(any())).thenAnswer(invocation -> {
-            Thread.sleep(50); // This sleep happens DURING fireAsync call in this mock
+            Thread.sleep(10);
             return CompletableFuture.completedFuture(null);
         });
-
-        // We want to ensure that even if fireAsync is slightly slow or something,
-        // the overall handle call doesn't block on the ACTUAL COMPACTION.
-        // But here we're mocking fireAsync.
 
         assertTimeout(Duration.ofMillis(100), () -> {
             handler.handle(ctx);
