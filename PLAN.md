@@ -3956,9 +3956,7 @@ Implemented critical optimizations to suppress non-actionable error noise and ac
 - ✅ **Startup Performance**: Zero "Transaction Reaper" warnings observed during full parallel test execution.
 - ✅ **Log Integrity**: Console output is significantly cleaner, showing only actionable warnings.
 
----
-
-# Phase 63-J — Split-Package Cleanup (Quarkus Optimization) ✅
+# Phase 63-H Extended — Split-Package Cleanup (Quarkus Optimization) ✅
 
 Resolved build-time and runtime performance degradation caused by split-package usage across the `arcclaw-core` and `arcclaw-app` modules.
 
@@ -3988,5 +3986,39 @@ Resolved build-time and runtime performance degradation caused by split-package 
 - ✅ **Warnings Eliminated**: `SplitPackageProcessor` warnings no longer appear in build/test logs.
 - ✅ **Test Integrity**: All 28 app-layer tests passed successfully after namespace relocation.
 - ✅ **Full Regression**: Verified zero impact on core module tests via `mvn clean test`.
+
+---
+
+# Phase 63-I — TmpfsSecretTransport: @PostConstruct Stale File Sweep ✅
+
+Implement automated cleanup of stale secret files in `/dev/shm` matching the `arcclaw-secrets-` prefix during JVM startup.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Linux-Only Scope**: The sweep specifically targets `/dev/shm`, which is a Linux-specific shared memory segment. On non-Linux systems, the operation is a graceful no-op to prevent startup failures on development machines.
+
+> [!TIP]
+> **Additive Implementation**: The sweep logic is encapsulated in a `@PostConstruct` method, ensuring it runs exactly once during Quarkus initialization, without modifying the core `prepare`/`close` logic of the transport.
+
+## Completed Changes
+
+#### [MODIFY] [TmpfsSecretTransport.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/TmpfsSecretTransport.java)
+- Added `sweepStaleTmpFiles()` annotated with `@PostConstruct`.
+- Implemented directory existence check for `/dev/shm`.
+- Implemented file filtering for `arcclaw-secrets-` prefix and handled `IOException` per file.
+
+#### [MODIFY] [TmpfsSecretTransportTest.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/test/java/com/arcclaw/core/sandbox/TmpfsSecretTransportTest.java)
+- Added `testSweepStaleTmpFiles` (Linux-only) and `testSweepStaleTmpFilesNonExistentDir`.
+- Integrated `EnabledOnOs(OS.LINUX)` for OS-specific test execution.
+
+## Verification
+- ✅ **Linux Sweep**: Verified (mocked via temp dir) that only matching files are deleted.
+- ✅ **Graceful Skipping**: Verified that non-existent directories do not trigger exceptions.
+- ✅ **Quarkus Startup**: Verified that `@PostConstruct` integration is correctly wired.
+
+---
+
+
 
 

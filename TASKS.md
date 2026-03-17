@@ -1118,11 +1118,22 @@
 - [x] Harden Shutdown Logic: Add guards in `AsyncPersistenceEngine` and `AuditHashUtil` to detect `Arc.container() == null` shutdown races and suppress related `NullPointerException` logs. <!-- id: 521 -->
 - [x] Refactor `IntentClassifierService`: Move LLM authentication/timeout stack traces to DEBUG while keeping WARN logs concise. <!-- id: 522 -->
 
----
-
-## Phase 63-J — Split-Package Cleanup (Quarkus Optimization) ✅
+## Phase 63-H Extended — Split-Package Cleanup (Quarkus Optimization) ✅
 - [x] Resolve Split-Package Warnings: Relocate all `arcclaw-app` test classes from `com.arcclaw.core.*` namespace to `com.arcclaw.app.*`. <!-- id: 523 -->
 - [x] Fixed Packages: `com.arcclaw.core.api`, `com.arcclaw.core.audit`, `com.arcclaw.core.health`, `com.arcclaw.core.scope`, `com.arcclaw.core.security`, `com.arcclaw.core.structured`. <!-- id: 524 -->
 - [x] Verify: `mvn clean test` succeeds with 28+ app-layer tests passed and zero `SplitPackageProcessor` warnings. <!-- id: 525 -->
 - [x] Result: Faster Quarkus augmentation and unambiguous classpath resolution for all test contexts. <!-- id: 526 -->
+---
+
+## Phase 63-I — TmpfsSecretTransport: @PostConstruct Stale File Sweep ✅
+- [x] Implement `@PostConstruct void sweepStaleTmpFiles()` in `TmpfsSecretTransport.java` <!-- id: 527 -->
+- [x] Ensure sweep is Linux-only by checking for `/dev/shm` presence <!-- id: 528 -->
+- [x] Filter sweep to only remove files with `arcclaw-secrets-` prefix <!-- id: 529 -->
+- [x] Handle non-Linux and non-existent directories gracefully without failing startup <!-- id: 530 -->
+- [x] Add Linux-specific unit tests in `TmpfsSecretTransportTest.java` (using `@EnabledOnOs(OS.LINUX)`) <!-- id: 531 -->
+- [x] Verify: All tests pass, including directory non-existence and cleanup logic <!-- id: 532 -->
+
+---
+
+
 

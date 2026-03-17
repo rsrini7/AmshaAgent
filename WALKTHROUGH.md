@@ -78,6 +78,18 @@
 | 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
 | 60 | Dual-Tier Skill Registry | 173/173 tests | Persistent registry with JTA management |
 | 60.1 | Quarkus LTS & Hibernate 7 | 535/535 tests | LangChain4j 1.x + Native Image Hardening |
+| 61 | Semantic Vector RAG | 100% success | sqlite-vec native fallback |
+| 62 | Build-Time BAML Schema Generation | 100% success | Thread Context ClassLoader fix |
+| 63-A | VaultKeyCache: ReentrantLock | 100% success | Double-checked locking + volatile |
+| 63-B | Resume Signal Refactor | 100% success | Boolean context flags over string checks |
+| 63-C | EncryptedSecret Version Split | 100% success | Isolated Hibernate version from crypto version |
+| 63-D | PodmanMcpTransport Shutdown | 100% success | @PreDestroy grace period |
+| 63-E | SLA NanoTime and Custom Config | 100% success | System.nanoTime() for SLA drift |
+| 63-F | Tool Observation Sanitization | 100% success | Truncation + PII Redaction in ToolInvoker |
+| 63-G | Native Pepper Array | 100% success | Zero-on-Use char[] converters |
+| 63-H | Security & Audit Hardening | 100% success | SYSTEM session context bypass |
+| 63-I | TmpfsSecretTransport Sweep | 100% success | @PostConstruct Linux-only stale file sweep |
+| 63-J | Split-Package Cleanup | 100% success | Namespace relocation to com.arcclaw.app |
 
 ---
 
@@ -2305,5 +2317,35 @@ Hardened the security bootstrap process and audit hashing mechanism by integrati
 - Verified that `StartupSecurityValidator` correctly blocks deployment if the HMAC key is missing in production-like environments.
 - Confirmed `ContextNotActiveException` is resolved during boot-time key retrieval.
 - Integrated all test suites into a unified regression run: `mvn clean test -pl arcclaw-app,arcclaw-core`.
+
+
+## Phase 63-H Extended — Split-Package Cleanup (Quarkus Optimization) ✅
+
+Relocated all `arcclaw-app` test classes to the `com.arcclaw.app.*` namespace to eliminate split-package warnings and optimize Quarkus augmentation.
+
+**Verification**:
+- ✅ **Zero Warnings**: Confirmed `SplitPackageProcessor` warnings no longer appear during build.
+- ✅ **Performance**: Observed faster Quarkus augmentation during test runs.
+- ✅ **Test Pass Rate**: All 28 app-layer tests passed after relocation.
+
+---
+
+## Phase 63-I — TmpfsSecretTransport: @PostConstruct Stale File Sweep ✅
+
+Implemented automated cleanup of stale secret files in `/dev/shm` matching the `arcclaw-secrets-` prefix during JVM startup.
+
+| File | Purpose |
+|------|---------|
+| [TmpfsSecretTransport.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/TmpfsSecretTransport.java) | Added `@PostConstruct` stale file sweep logic. |
+| [TmpfsSecretTransportTest.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/test/java/com/arcclaw/core/sandbox/TmpfsSecretTransportTest.java) | Added OS-specific testing for sweep logic. |
+
+**Verification**:
+- ✅ **Graceful Skipping**: Verified (via `testSweepStaleTmpFilesNonExistentDir`) that the method completes without exception when `/dev/shm` or requested paths are missing (Dev/Windows).
+- ✅ **Filtered Deletion**: Verified (via `testSweepStaleTmpFiles`) that only files matching the specific prefix are removed.
+- ✅ **Quarkus Integration**: Confirmed `@PostConstruct` wiring ensures no manual invocation is required.
+
+---
+
+
 
 

@@ -1,5 +1,6 @@
 package com.arcclaw.core.sandbox;
 
+import jakarta.annotation.PostConstruct;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
@@ -126,6 +127,32 @@ public class TmpfsSecretTransport implements SecretTransport {
             } catch (Exception e) {
                 log.errorf("Failed secure wipe of tmpfs env-file %s: %s", envFile, e.getMessage());
             }
+        }
+    }
+
+    @PostConstruct
+    void sweepStaleTmpFiles() {
+        sweepStaleTmpFiles(Path.of("/dev/shm"));
+    }
+
+    void sweepStaleTmpFiles(Path shmDir) {
+        if (!Files.exists(shmDir)) {
+            log.debugf("TmpfsSecretTransport: %s not present — skipping stale file sweep (non-Linux?)", shmDir);
+            return;
+        }
+        try (var stream = Files.list(shmDir)) {
+            stream
+                .filter(p -> p.getFileName().toString().startsWith("arcclaw-secrets-"))
+                .forEach(p -> {
+                    try {
+                        Files.delete(p);
+                        log.warnf("TmpfsSecretTransport: swept stale secret file from previous JVM crash: %s", p);
+                    } catch (IOException e) {
+                        log.warnf("TmpfsSecretTransport: could not delete stale file %s: %s", p, e.getMessage());
+                    }
+                });
+        } catch (IOException e) {
+            log.warnf("TmpfsSecretTransport: could not sweep stale tmpfs files: %s", e.getMessage());
         }
     }
 }

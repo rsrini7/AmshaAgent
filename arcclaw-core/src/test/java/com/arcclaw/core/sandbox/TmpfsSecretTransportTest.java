@@ -1,6 +1,8 @@
 package com.arcclaw.core.sandbox;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -69,6 +71,34 @@ public class TmpfsSecretTransportTest {
         try (TmpfsSecretTransport transport = new TmpfsSecretTransport("sessionX", tempDir.toString())) {
             List<String> args = transport.prepare(Map.of());
             assertTrue(args.isEmpty(), "No secrets should yield no podman args");
+        }
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void testSweepStaleTmpFiles(@TempDir Path tempDir) throws IOException {
+        Path staleSecret = tempDir.resolve("arcclaw-secrets-old.env");
+        Path otherFile = tempDir.resolve("other-file.txt");
+        
+        Files.writeString(staleSecret, "stale content");
+        Files.writeString(otherFile, "other content");
+        
+        assertTrue(Files.exists(staleSecret));
+        assertTrue(Files.exists(otherFile));
+        
+        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", tempDir.toString())) {
+            transport.sweepStaleTmpFiles(tempDir);
+        }
+        
+        assertFalse(Files.exists(staleSecret), "Stale secret should be swept");
+        assertTrue(Files.exists(otherFile), "Other file should NOT be swept");
+    }
+
+    @Test
+    void testSweepStaleTmpFilesNonExistentDir() {
+        Path nonExistent = Path.of("/tmp/this-dir-should-not-exist-12345");
+        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", "/dev/shm")) {
+            assertDoesNotThrow(() -> transport.sweepStaleTmpFiles(nonExistent));
         }
     }
 
