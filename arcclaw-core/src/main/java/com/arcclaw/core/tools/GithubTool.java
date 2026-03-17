@@ -109,7 +109,14 @@ public class GithubTool implements AgentTool {
         if (target != null && !target.isBlank()) {
             cmd.add(target);
         }
-        
+
+        String ref = (String) params.get("ref");
+        if ("repo".equals(action) && "view".equals(command)
+                && ref != null && !ref.isBlank()) {
+            cmd.add("--branch");
+            cmd.add(ref.trim());
+        }
+
         return cmd;
     }
 
@@ -121,17 +128,21 @@ public class GithubTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addEnumProperty("action",  List.of("repo", "gist"),
+            .addEnumProperty("action", List.of("repo", "gist"),
                 "Action to perform")
             .addEnumProperty("command", List.of("view", "list"),
-                "Command to run. Use 'view' to get description and details. " +
-                "Use 'list' to enumerate items. NEVER use 'desc', 'info', " +
-                "or any other value — ONLY 'view' and 'list' are valid.")
+                "Command to run. Use 'view' to get description and README " +
+                "(supply 'ref' param to target a specific branch, tag, or commit). " +
+                "Use 'list' to enumerate items. " +
+                "NEVER use desc, info, or any other value — ONLY view and list are valid.")
             .addStringProperty("target",
-                "For 'repo view', use 'owner/repo'. " +
-                "For 'repo list', use 'owner'. " +
-                "For 'gist view', use 'GistID'. " +
-                "For 'gist list', OMIT this parameter (it lists your own gists).")
+                "For repo view, use owner/repo. For repo list, use owner. " +
+                "For gist view, use GistID. For gist list, OMIT this parameter.")
+            .addStringProperty("ref",
+                "Optional branch name, tag, or commit SHA. " +
+                "Pass the value EXACTLY as-is, including hyphens and numbers. " +
+                "Examples: Phase-63, main, v1.0.0, feature/my-branch. " +
+                "Only valid when action=repo and command=view. Omit for list operations.")
             .required("action", "command")
             .build();
     }
