@@ -10,9 +10,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
-import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -51,8 +53,17 @@ public class AsyncPersistenceEngine {
     private static final int MAX_RETRIES = 5;
     private static final long BACKOFF_BASE_MS = 50;
 
-    private static final int QUEUE_CAPACITY = 10000;
-    private final LinkedBlockingQueue<PersistenceEvent> queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
+    private static final int CRITICAL_QUEUE_CAPACITY  = 500;
+    private static final int TELEMETRY_QUEUE_CAPACITY = 5000;
+
+    private final LinkedBlockingQueue<PersistenceEvent> criticalQueue = new LinkedBlockingQueue<>(CRITICAL_QUEUE_CAPACITY);
+    private final LinkedBlockingQueue<PersistenceEvent> telemetryQueue = new LinkedBlockingQueue<>(TELEMETRY_QUEUE_CAPACITY);
+
+    @Inject
+    MeterRegistry registry;
+
+    @Inject
+    AsyncPersistenceEngine self;
 
     @Inject
     EntityManager em;
@@ -63,7 +74,7 @@ public class AsyncPersistenceEngine {
     private volatile boolean running = true;
 
     @PostConstruct
-    void startConsumer() {
+    void startDrainThreads() {
         // Capture the current Thread Context Class Loader to propagate it to the background thread.
         // This is necessary for ServiceLoader (used by Quarkus Config) to work correctly
         // in an unmanaged virtual thread.
@@ -71,12 +82,20 @@ public class AsyncPersistenceEngine {
 
         Thread.ofVirtual()
               .inheritInheritableThreadLocals(false)
-              .name("arcclaw-persistence-consumer")
+              .name("arcclaw-audit-critical-drain")
               .start(() -> {
                   Thread.currentThread().setContextClassLoader(tccl);
-                  consumerLoop();
+                  drainCritical();
               });
-        log.info("[AsyncPersistenceEngine] Background consumer started on VirtualThread with TCCL propagation.");
+
+        Thread.ofVirtual()
+              .inheritInheritableThreadLocals(false)
+              .name("arcclaw-audit-telemetry-drain")
+              .start(() -> {
+                  Thread.currentThread().setContextClassLoader(tccl);
+                  drainTelemetry();
+              });
+        log.info("[AsyncPersistenceEngine] Background drain threads started on VirtualThreads with TCCL propagation.");
     }
 
     void onShutdown(@Observes ShutdownEvent event) {
@@ -92,12 +111,15 @@ public class AsyncPersistenceEngine {
             throw new IllegalArgumentException("submitCritical requires a CRITICAL event");
         }
         
-        try {
-            // put() blocks the caller if the queue is full, providing natural backpressure
-            queue.put(event);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+        if (!criticalQueue.offer(event)) {
+            log.warn("Critical audit queue at capacity — persisting synchronously to avoid data loss");
+            registry.counter("arcclaw.audit.queue.overflow", "tier", "critical").increment();
+            try {
+                processEvent(event);
+            } catch (Exception e) {
+                throw new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+            }
+            return;
         }
 
         // Block the caller until the consumer confirms or fails the future
@@ -120,13 +142,14 @@ public class AsyncPersistenceEngine {
             throw new IllegalArgumentException("submitTelemetry requires a TELEMETRY event");
         }
         // offer() returns false if the queue is full. We drop telemetry under pressure.
-        if (!queue.offer(event)) {
-            log.warnf("[AsyncPersistenceEngine] Telemetry queue full (%d items) — dropping event %s for session %s",
-                    QUEUE_CAPACITY, event.getEventType(), event.getSessionId());
+        if (!telemetryQueue.offer(event)) {
+            log.debug("Telemetry audit queue at capacity — dropping event (acceptable)");
+            registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").increment();
         }
     }
 
-    private final AtomicBoolean processing = new AtomicBoolean(false);
+    private final AtomicBoolean processingCritical = new AtomicBoolean(false);
+    private final AtomicBoolean processingTelemetry = new AtomicBoolean(false);
 
     /**
      * Blocks until all currently queued events are processed.
@@ -135,35 +158,66 @@ public class AsyncPersistenceEngine {
     public void waitForIdle() {
         // Wait a tiny bit for any work that hasn't hit the queue yet
         sleepQuietly(10);
-        while (!queue.isEmpty() || processing.get()) {
+        while (!criticalQueue.isEmpty() || !telemetryQueue.isEmpty() || processingCritical.get() || processingTelemetry.get()) {
             sleepQuietly(10);
         }
     }
 
+    /** For testing only */
+    void clearForTest() {
+        criticalQueue.clear();
+        telemetryQueue.clear();
+    }
+
     // -------------------------------------------------------------------------
-    // Consumer loop — runs on a single daemon VirtualThread
+    // Drain loops — run on Virtual Threads
     // -------------------------------------------------------------------------
 
-    private void consumerLoop() {
+    private void drainCritical() {
         while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 // Poll with timeout to check for shutdown
-                PersistenceEvent event = queue.poll(100, TimeUnit.MILLISECONDS);
+                PersistenceEvent event = criticalQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event != null) {
-                    processing.set(true);
+                    processingCritical.set(true);
                     try {
                         processEvent(event);
                     } finally {
-                        processing.set(false);
+                        processingCritical.set(false);
                     }
                 }
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                log.warn("[AsyncPersistenceEngine] Consumer interrupted — shutting down.");
+                log.warn("[AsyncPersistenceEngine] Critical drain interrupted — shutting down.");
             } catch (Exception e) {
                 if (running && io.quarkus.arc.Arc.container() != null) {
-                    log.errorf("[AsyncPersistenceEngine] Unexpected error in consumer loop: %s", e.getMessage());
-                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for consumer loop error");
+                    log.errorf("[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
+                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for critical drain error");
+                }
+            }
+        }
+    }
+
+    private void drainTelemetry() {
+        while (running && !Thread.currentThread().isInterrupted()) {
+            try {
+                // Poll with timeout to check for shutdown
+                PersistenceEvent event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (event != null) {
+                    processingTelemetry.set(true);
+                    try {
+                        processEvent(event);
+                    } finally {
+                        processingTelemetry.set(false);
+                    }
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("[AsyncPersistenceEngine] Telemetry drain interrupted — shutting down.");
+            } catch (Exception e) {
+                if (running && io.quarkus.arc.Arc.container() != null) {
+                    log.errorf("[AsyncPersistenceEngine] Unexpected error in telemetry drain: %s", e.getMessage());
+                    log.debugf(e, "[AsyncPersistenceEngine] Full stacktrace for telemetry drain error");
                 }
             }
         }
@@ -222,11 +276,9 @@ public class AsyncPersistenceEngine {
         while (attempt < MAX_RETRIES) {
             attempt++;
             try {
-                // CRITICAL: every write must create its own transaction —
-                // the VirtualThread consumer is NOT a CDI-managed proxy.
-                QuarkusTransaction.requiringNew().run(() ->
-                    event.getDbAction().accept(em)
-                );
+                // CRITICAL: every write must create its own transaction
+                // Architecture Nuance #29: EntityManager proxy must bind in @Transactional method
+                self.persistSynchronously(event);
 
                 // Write succeeded — unblock CRITICAL callers
                 if (event.getFuture() != null) {
@@ -262,6 +314,11 @@ public class AsyncPersistenceEngine {
 
         // All retries exhausted (or non-retryable error)
         handleExhausted(event, lastException);
+    }
+
+    @Transactional(TxType.REQUIRES_NEW)
+    public void persistSynchronously(PersistenceEvent event) {
+        event.getDbAction().accept(em);
     }
 
     private void handleExhausted(PersistenceEvent event, Exception lastException) {

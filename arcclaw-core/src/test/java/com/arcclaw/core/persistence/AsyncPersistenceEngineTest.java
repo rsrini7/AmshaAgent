@@ -7,6 +7,7 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -15,6 +16,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,6 +34,14 @@ class AsyncPersistenceEngineTest {
 
     @Inject
     AsyncPersistenceEngine engine;
+
+    @Inject
+    MeterRegistry registry;
+
+    @AfterEach
+    void cleanUp() {
+        engine.clearForTest();
+    }
 
     // -------------------------------------------------------------------------
 
@@ -131,5 +143,101 @@ class AsyncPersistenceEngineTest {
                         new RuntimeException("SQLITE_BUSY: database is locked")));
 
         assertTrue(AsyncPersistenceEngine.isSqliteBusy(outer));
+    }
+
+    @Test
+    void testCriticalQueueFullPersistsSynchronously() throws Exception {
+        CountDownLatch pauseConsumer = new CountDownLatch(1);
+        
+        // 1. Submit the blocking event on a background thread
+        ExecutorService exec = Executors.newFixedThreadPool(550);
+        
+        exec.submit(() -> {
+            engine.submitCritical(PersistenceEvent.critical("blocker", SecurityEventType.TOOL_INVOKED, em -> {
+                try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
+            }));
+        });
+        
+        // Give it a tiny moment to pick it up and block the consumer thread
+        Thread.sleep(100);
+        
+        // 2. Submit 500 items to fill the critical queue
+        for(int i = 0; i < 500; i++) {
+            exec.submit(() -> {
+                engine.submitCritical(PersistenceEvent.critical("filler", SecurityEventType.TOOL_INVOKED, em -> {}));
+            });
+        }
+        
+        // Wait for them to hit the queue
+        Thread.sleep(200);
+        
+        // 3. Submit the 501st from the main test thread
+        // The queue is full (size 500 + 1 processing). This should NOT queue, it should persist synchronously on THIS thread.
+        String expectedThreadName = Thread.currentThread().getName();
+        AtomicBoolean ranSynchronously = new AtomicBoolean(false);
+        
+        engine.submitCritical(PersistenceEvent.critical("overflow", SecurityEventType.TOOL_INVOKED, em -> {
+            if (Thread.currentThread().getName().equals(expectedThreadName)) {
+                ranSynchronously.set(true);
+            }
+        }));
+        
+        assertTrue(ranSynchronously.get(), "501st event (mandatory) should never be dropped and must run synchronously on the test thread under pressure");
+        
+        // Cleanup
+        pauseConsumer.countDown();
+        exec.shutdownNow();
+    }
+
+    @Test
+    void testTelemetryQueueFullDropsEvent() throws Exception {
+        CountDownLatch pauseConsumer = new CountDownLatch(1);
+        
+        // 1. Submit blocker (since it's telemetry, caller does not block)
+        engine.submitTelemetry(PersistenceEvent.telemetry("blocker", SecurityEventType.TOOL_INVOKED, em -> {
+            try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
+        }));
+        
+        Thread.sleep(100);
+        
+        // 2. Fill queue (capacity 5000)
+        for (int i = 0; i < 5000; i++) {
+            engine.submitTelemetry(PersistenceEvent.telemetry("filler", SecurityEventType.TOOL_INVOKED, em -> {}));
+        }
+        
+        // 3. Submit 5001st event
+        double countBefore = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
+        
+        engine.submitTelemetry(PersistenceEvent.telemetry("dropped", SecurityEventType.TOOL_INVOKED, em -> {}));
+        
+        double countAfter = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
+        assertEquals(countBefore + 1.0, countAfter, "Telemetry overflow counter should be incremented when dropping the 5001st event");
+        
+        pauseConsumer.countDown();
+    }
+
+    @Test
+    void testDrainThreadsAreStartedWithExpectedNames() throws Exception {
+        CountDownLatch latch = new CountDownLatch(2);
+        AtomicBoolean criticalFound = new AtomicBoolean(false);
+        AtomicBoolean telemetryFound = new AtomicBoolean(false);
+
+        engine.submitCritical(PersistenceEvent.critical("tname-1", SecurityEventType.TOOL_INVOKED, em -> {
+            if ("arcclaw-audit-critical-drain".equals(Thread.currentThread().getName())) {
+                criticalFound.set(true);
+            }
+            latch.countDown();
+        }));
+
+        engine.submitTelemetry(PersistenceEvent.telemetry("tname-2", SecurityEventType.LOOP_FINISH, em -> {
+            if ("arcclaw-audit-telemetry-drain".equals(Thread.currentThread().getName())) {
+                telemetryFound.set(true);
+            }
+            latch.countDown();
+        }));
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(criticalFound.get(), "Critical drain thread not found");
+        assertTrue(telemetryFound.get(), "Telemetry drain thread not found");
     }
 }
