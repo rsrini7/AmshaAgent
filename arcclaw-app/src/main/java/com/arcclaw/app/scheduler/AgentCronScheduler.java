@@ -1,5 +1,6 @@
 package com.arcclaw.app.scheduler;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -47,6 +48,9 @@ public class AgentCronScheduler {
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
 
+    @ConfigProperty(name = "arcclaw.cron.max-lookback-window", defaultValue = "PT5M")
+    Duration maxLookbackWindow;
+
     Semaphore concurrencyLimiter;
 
     @PostConstruct
@@ -85,6 +89,28 @@ public class AgentCronScheduler {
 
         // Step 1 — Query due rows (read-only transaction)
         List<AgentCronEntity> due = cronRepository.findDueCrons();
+        if (due.isEmpty()) return;
+
+        Instant lookbackCutoff = Instant.now().minus(maxLookbackWindow);
+        List<AgentCronEntity> skippedJobs = new java.util.ArrayList<>();
+
+        java.util.Iterator<AgentCronEntity> iter = due.iterator();
+        while (iter.hasNext()) {
+            AgentCronEntity job = iter.next();
+            if (job.nextFireTime.isBefore(lookbackCutoff)) {
+                log.warnf("Cron job [%s] missed fire time %s — outside %s lookback window. Marking SKIPPED and rescheduling.",
+                    job.id, job.nextFireTime, maxLookbackWindow);
+                job.status = com.arcclaw.core.state.CronStatus.SKIPPED;
+                job.nextFireTime = com.arcclaw.core.util.CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                skippedJobs.add(job);
+                iter.remove();
+            }
+        }
+
+        if (!skippedJobs.isEmpty()) {
+            cronRepository.markSkipped(skippedJobs);
+        }
+
         if (due.isEmpty()) return;
 
         log.infof("CRON-POLL found %d due job(s)", due.size());

@@ -5,7 +5,8 @@ public enum CronStatus {
     RUNNING,
     COMPLETED,
     FAILED,
-    AWAITING_APPROVAL;
+    AWAITING_APPROVAL,
+    SKIPPED;
 
     /** SQLite text representation — stable across renames */
     public String toStorageValue() {
@@ -20,6 +21,7 @@ public enum CronStatus {
             case "COMPLETED"          -> COMPLETED;
             case "FAILED"             -> FAILED;
             case "AWAITING_APPROVAL"  -> AWAITING_APPROVAL;
+            case "SKIPPED"            -> SKIPPED;
             default -> throw new IllegalArgumentException(
                 "Unknown CronStatus: " + value);
         };

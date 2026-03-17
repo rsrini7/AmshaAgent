@@ -284,6 +284,7 @@ arcclaw:
     poll-interval: 30s
     max-concurrent: 10
     max-iterations: 2
+    max-lookback-window: PT5M
 
   channel:
     telegram:
@@ -497,6 +498,9 @@ mp:
 
     mcp:
       server-enabled: false
+
+    cron:
+      max-lookback-window: PT999H
 
 "%staging":
   quarkus:

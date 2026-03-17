@@ -9,6 +9,8 @@ arcclaw:
   channel:
     telegram:
       bot-token: "test-bot-token"
+  cron:
+    max-lookback-window: PT999H
 
 quarkus:
   application:
