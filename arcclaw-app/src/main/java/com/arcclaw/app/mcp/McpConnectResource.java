@@ -3,6 +3,7 @@ package com.arcclaw.app.mcp;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.mcp.transport.McpConnectionException;
+import com.arcclaw.mcp.config.McpToolAllowlist;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -47,7 +48,7 @@ public class McpConnectResource {
     DynamicToolCapabilityRegistry registry;
 
     @Inject
-    com.arcclaw.mcp.config.McpToolAllowlist config;
+    McpToolAllowlist config;
 
     // ── request / response records ────────────────────────────────────────────
 

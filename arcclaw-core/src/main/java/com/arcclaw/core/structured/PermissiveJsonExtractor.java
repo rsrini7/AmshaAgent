@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
@@ -84,7 +85,7 @@ public class PermissiveJsonExtractor {
      */
     private String unwrapSchemaEnvelope(String json, ObjectMapper mapper) {
         try {
-            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(json);
+            JsonNode root = mapper.readTree(json);
             if (root.has("type") && root.has("properties")
                     && "object".equals(root.get("type").asText())) {
                 return mapper.writeValueAsString(root.get("properties"));

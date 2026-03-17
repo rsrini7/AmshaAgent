@@ -4,6 +4,7 @@ import io.agroal.api.AgroalPoolInterceptor;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.sqlite.SQLiteConnection;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -55,8 +56,8 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             // Step 2: Enable and load sqlite-vec extension
             if (!vectorSearchEnabled.get()) {
                 try {
-                    org.sqlite.SQLiteConnection sqliteConn =
-                        connection.unwrap(org.sqlite.SQLiteConnection.class);
+                    SQLiteConnection sqliteConn =
+                        connection.unwrap(SQLiteConnection.class);
                     sqliteConn.getDatabase().enable_load_extension(true);
 
                     try (Statement vecStmt = connection.createStatement()) {
