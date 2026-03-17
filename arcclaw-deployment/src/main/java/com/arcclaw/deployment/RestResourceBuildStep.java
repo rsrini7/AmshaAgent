@@ -33,7 +33,6 @@ public class RestResourceBuildStep {
     void enforceVirtualThreadOnJpaRestResources(
             CombinedIndexBuildItem index,
             BuildProducer<ValidationErrorBuildItem> errors) {
-        System.out.println("RestResourceBuildStep: Running enforcement check...");
 
         for (AnnotationInstance pathAnnotation : index.getIndex().getAnnotations(JAX_RS_PATH)) {
 
