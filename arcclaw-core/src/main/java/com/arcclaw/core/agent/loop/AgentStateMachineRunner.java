@@ -14,6 +14,9 @@ import jakarta.inject.Inject;
 
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
 
 import org.jboss.logging.Logger;
 
@@ -27,6 +30,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -58,6 +62,7 @@ public class AgentStateMachineRunner {
     @Inject ChatMemoryWriter writer;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
     @Inject com.arcclaw.core.skill.SkillRegistry skillRegistry;
+    @Inject AgentOtelContext agentOtelContext;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
@@ -73,43 +78,53 @@ public class AgentStateMachineRunner {
 
         while (iteration < context.maxIterations()) {
             iteration++;
-            log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
+            Span iterSpan = agentOtelContext.startIterationSpan(
+                context.sessionId(), iteration, context.agentRole());
+            try (Scope scope = iterSpan.makeCurrent()) {
+                log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
-            List<com.arcclaw.core.skill.CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
+                List<com.arcclaw.core.skill.CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
 
-            StepDecision engineDecision = processEngineStep(
-                    context.sessionId(), context.goal(), engine, history,
-                    context.agentRole(), transientError, llmSchemaErrorCount, iteration);
+                StepDecision engineDecision = processEngineStep(
+                        context.sessionId(), context.goal(), engine, history,
+                        context.agentRole(), transientError, llmSchemaErrorCount, iteration);
 
-            if (engineDecision.type() == DecisionType.TERMINAL) return engineDecision.result();
-            if (engineDecision.type() == DecisionType.CONTINUE) {
-                transientError = engineDecision.transientError();
-                llmSchemaErrorCount = engineDecision.llmSchemaErrorCount();
-                continue;
+                if (engineDecision.type() == DecisionType.TERMINAL) return engineDecision.result();
+                if (engineDecision.type() == DecisionType.CONTINUE) {
+                    transientError = engineDecision.transientError();
+                    llmSchemaErrorCount = engineDecision.llmSchemaErrorCount();
+                    continue;
+                }
+
+                ReasoningStep step = engineDecision.step();
+                transientError = null;
+
+                if (ReasoningStep.FINISH.equals(step.action()))
+                    return handleFinishAction(context.sessionId(), context.agentRole(),
+                            history, step, iteration);
+
+                StepDecision validationDecision = validateTool(
+                        context.sessionId(), context.agentRole(), history,
+                        step, context.goal(), consecutiveFailures);
+                if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
+                if (validationDecision.type() == DecisionType.CONTINUE) {
+                    consecutiveFailures = validationDecision.consecutiveFailures();
+                    continue;
+                }
+                step = validationDecision.step();
+
+                StepDecision invocationDecision = invokeToolAndObserve(
+                        context.sessionId(), context.agentRole(), history, step,
+                        consecutiveFailures, context.goal(), skillSnapshot);
+                if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
+                consecutiveFailures = invocationDecision.consecutiveFailures();
+            } catch (Exception e) {
+                iterSpan.recordException(e);
+                iterSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                throw e;
+            } finally {
+                iterSpan.end();
             }
-
-            ReasoningStep step = engineDecision.step();
-            transientError = null;
-
-            if (ReasoningStep.FINISH.equals(step.action()))
-                return handleFinishAction(context.sessionId(), context.agentRole(),
-                        history, step, iteration);
-
-            StepDecision validationDecision = validateTool(
-                    context.sessionId(), context.agentRole(), history,
-                    step, context.goal(), consecutiveFailures);
-            if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
-            if (validationDecision.type() == DecisionType.CONTINUE) {
-                consecutiveFailures = validationDecision.consecutiveFailures();
-                continue;
-            }
-            step = validationDecision.step();
-
-            StepDecision invocationDecision = invokeToolAndObserve(
-                    context.sessionId(), context.agentRole(), history, step,
-                    consecutiveFailures, context.goal(), skillSnapshot);
-            if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
-            consecutiveFailures = invocationDecision.consecutiveFailures();
         }
 
         log.warnf("StateMachine exceeded %d iterations for session=%s",

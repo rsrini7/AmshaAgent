@@ -10,8 +10,10 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @QuarkusTest
@@ -35,6 +37,7 @@ class AgentOtelContextTest {
 
         when(tracer.spanBuilder(anyString())).thenReturn(spanBuilder);
         when(spanBuilder.setAttribute(anyString(), anyString())).thenReturn(spanBuilder);
+        when(spanBuilder.setAttribute(anyString(), anyLong())).thenReturn(spanBuilder);
         when(spanBuilder.setParent(any())).thenReturn(spanBuilder);
         when(spanBuilder.startSpan()).thenReturn(span);
         when(span.makeCurrent()).thenReturn(scope);
@@ -100,5 +103,55 @@ class AgentOtelContextTest {
         // don't implement OTel's ImplicitContextKeyed. We verify setParent was called (any arg).
         verify(spanBuilder).setParent((io.opentelemetry.context.Context) any());
         verify(tracer).spanBuilder("test.operation");
+    }
+
+    @Test
+    void testStartIterationSpan() {
+        String sessionId = "iter-session";
+        agentOtelContext.startSessionSpan(sessionId);
+
+        Span iterSpan = agentOtelContext.startIterationSpan(sessionId, 1, "coder");
+        assertNotNull(iterSpan);
+
+        verify(tracer).spanBuilder("agent.iteration");
+        verify(spanBuilder).setAttribute("session.id", sessionId);
+        verify(spanBuilder).setAttribute("agent.role", "coder");
+        verify(spanBuilder).setAttribute("iteration", 1L);
+        verify(spanBuilder).setParent((io.opentelemetry.context.Context) any());
+    }
+
+    @Test
+    void testStartIterationSpanNoRoot() {
+        Span iterSpan = agentOtelContext.startIterationSpan("no-root", 1, "coder");
+        assertEquals(Span.getInvalid(), iterSpan);
+    }
+
+    @Test
+    void testStartToolSpan() {
+        String sessionId = "tool-session";
+        agentOtelContext.startSessionSpan(sessionId);
+
+        Span toolSpan = agentOtelContext.startToolSpan(sessionId, "github", "invoke");
+        assertNotNull(toolSpan);
+
+        verify(tracer).spanBuilder("agent.tool");
+        verify(spanBuilder).setAttribute("session.id", sessionId);
+        verify(spanBuilder).setAttribute("tool.name", "github");
+        verify(spanBuilder).setAttribute("tool.operation", "invoke");
+        verify(spanBuilder).setParent((io.opentelemetry.context.Context) any());
+    }
+
+    @Test
+    void testSpanEndSafety() {
+        String sessionId = "end-safety";
+        agentOtelContext.startSessionSpan(sessionId);
+        Span span = agentOtelContext.startIterationSpan(sessionId, 1, "coder");
+        
+        // Calling end multiple times or on invalid span should be safe
+        span.end();
+        span.end();
+        
+        Span invalid = Span.getInvalid();
+        invalid.end();
     }
 }
