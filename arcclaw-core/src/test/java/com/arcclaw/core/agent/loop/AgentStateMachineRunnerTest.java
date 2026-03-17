@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -56,6 +57,7 @@ class AgentStateMachineRunnerTest {
     private ToolInvoker invoker;
     private ChatMemoryWriter writer;
     private SkillRegistry skillRegistry;
+    private AgentOtelContext agentOtelContext;
 
     @SuppressWarnings("unchecked")
     Instance<AgentObserver> observers = mock(Instance.class);
@@ -80,9 +82,16 @@ class AgentStateMachineRunnerTest {
         runner.invoker = invoker;
         runner.writer = writer;
         runner.skillRegistry = skillRegistry;
+        agentOtelContext = mock(AgentOtelContext.class);
+        runner.agentOtelContext = agentOtelContext;
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());
         when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        
+        // Mock OTel to return invalid (no-op) spans by default
+        io.opentelemetry.api.trace.Span invalidSpan = io.opentelemetry.api.trace.Span.getInvalid();
+        when(agentOtelContext.startIterationSpan(anyString(), anyInt(), anyString())).thenReturn(invalidSpan);
+        when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString())).thenReturn(invalidSpan);
     }
 
     private AgentExecutionContext createCtx() {
