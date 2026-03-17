@@ -32,7 +32,7 @@ public class GithubTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(GithubTool.class);
 
-    private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
+    private static final Set<String> ALLOWED_ACTIONS = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
     public static final String NAME = ToolCapability.GITHUB.toolName();
@@ -83,15 +83,13 @@ public class GithubTool implements AgentTool {
         // ── ALLOWLIST GUARD (Java layer — second line of defence) ──────────
         if (!ALLOWED_ACTIONS.contains(action)) {
             throw new IllegalArgumentException(
-                "Action '" + action + "' is not permitted. " +
-                "Only 'repo' and 'gist' are supported."
-            );
+                    "Action '" + action + "' is not permitted. " +
+                            "Only 'repo' and 'gist' are supported.");
         }
         if (!ALLOWED_COMMANDS.contains(command)) {
             throw new IllegalArgumentException(
-                "Command '" + command + "' is not permitted. " +
-                "Only 'view' and 'list' are supported."
-            );
+                    "Command '" + command + "' is not permitted. " +
+                            "Only 'view' and 'list' are supported.");
         }
         // ── END ALLOWLIST GUARD ────────────────────────────────────────────
 
@@ -99,32 +97,34 @@ public class GithubTool implements AgentTool {
         if ("repo".equals(action)) {
             if ("view".equals(command) && (target == null || !target.contains("/"))) {
                 throw new IllegalArgumentException(
-                    "Invalid target '" + target + "'. To 'view' a repository, you MUST provide the full 'owner/repo' format."
-                );
+                        "Invalid target '" + target
+                                + "'. To 'view' a repository, you MUST provide the full 'owner/repo' format.");
             }
             if ("list".equals(command) && target != null && target.contains("/")) {
                 throw new IllegalArgumentException(
-                    "Invalid target '" + target + "'. To 'list' repositories, provide ONLY the owner name."
-                );
+                        "Invalid target '" + target + "'. To 'list' repositories, provide ONLY the owner name.");
             }
         } else if ("gist".equals(action)) {
             if ("list".equals(command) && target != null && !target.isBlank()) {
                 // gh gist list does not take a username. It lists for the auth user.
                 // We drop the target to avoid "unknown command" errors.
-                log.warnf("Dropping target '%s' for 'gh gist list' as it only supports listing for the authenticated user.", target);
-                target = null; 
+                log.warnf(
+                        "Dropping target '%s' for 'gh gist list' as it only supports listing for the authenticated user.",
+                        target);
+                target = null;
             }
             if ("view".equals(command) && (target == null || target.isBlank())) {
                 throw new IllegalArgumentException(
-                    "To 'view' a gist, you MUST provide the Gist ID or URL as the 'target'."
-                );
+                        "To 'view' a gist, you MUST provide the Gist ID or URL as the 'target'.");
             }
         }
 
         String ref = (String) params.get("ref");
         if ("repo".equals(action) && "view".equals(command)
                 && ref != null && !ref.isBlank()) {
-            return List.of("gh", "api", "repos/" + target.trim() + "/readme?ref=" + ref.trim(), "--jq", ".content");
+            return List.of("gh", "api",
+                    "repos/" + target + "/readme?ref=" + ref.trim().toLowerCase(),
+                    "--jq", ".content");
         }
 
         List<String> cmd = new ArrayList<>();
@@ -173,22 +173,22 @@ public class GithubTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addEnumProperty("action", List.of("repo", "gist"),
-                "Action to perform")
-            .addEnumProperty("command", List.of("view", "list"),
-                "Command to run. Use 'view' to get description and README " +
-                "(supply 'ref' param to target a specific branch, tag, or commit). " +
-                "Use 'list' to enumerate items. " +
-                "NEVER use desc, info, or any other value — ONLY view and list are valid.")
-            .addStringProperty("target",
-                "For repo view, use owner/repo. For repo list, use owner. " +
-                "For gist view, use GistID. For gist list, OMIT this parameter.")
-            .addStringProperty("ref",
-                "Optional branch name, tag, or commit SHA. " +
-                "Pass the value EXACTLY as-is, including hyphens and numbers. " +
-                "Examples: Phase-63, main, v1.0.0, feature/my-branch. " +
-                "Only valid when action=repo and command=view. Omit for list operations.")
-            .required("action", "command")
-            .build();
+                .addEnumProperty("action", List.of("repo", "gist"),
+                        "Action to perform")
+                .addEnumProperty("command", List.of("view", "list"),
+                        "Command to run. Use 'view' to get description and README " +
+                                "(supply 'ref' param to target a specific branch, tag, or commit). " +
+                                "Use 'list' to enumerate items. " +
+                                "NEVER use desc, info, or any other value — ONLY view and list are valid.")
+                .addStringProperty("target",
+                        "For repo view, use owner/repo. For repo list, use owner. " +
+                                "For gist view, use GistID. For gist list, OMIT this parameter.")
+                .addStringProperty("ref",
+                        "Optional branch name, tag, or commit SHA. " +
+                                "Pass the value EXACTLY as-is, including hyphens and numbers. " +
+                                "Examples: Phase-63, main, v1.0.0, feature/my-branch. " +
+                                "Only valid when action=repo and command=view. Omit for list operations.")
+                .required("action", "command")
+                .build();
     }
 }
