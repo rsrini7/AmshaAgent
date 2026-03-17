@@ -49,9 +49,9 @@ class SkillAwareIntentClassifierTest {
         RoleDefinition roleDefinition = new com.arcclaw.core.agent.role.RoleDefinition(
             "skill:code-reviewer", "Code Reviewer", "desc", 5, false, java.util.Set.of()
         );
-        CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[0], roleDefinition, "db");
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[]{Pattern.compile(".*review.*code.*")}, roleDefinition, "db");
         
-        when(skillRegistry.findMatch("review my code")).thenReturn(Optional.of(entry));
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
 
         String role = classifier.classify("review my code");
         
@@ -61,7 +61,7 @@ class SkillAwareIntentClassifierTest {
 
     @Test
     void testNoMatchFallsBackToLLM() {
-        when(skillRegistry.findMatch("what is the weather")).thenReturn(Optional.empty());
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of());
         when(fallbackService.classify("what is the weather")).thenReturn("coordinator");
 
         String role = classifier.classify("what is the weather");
