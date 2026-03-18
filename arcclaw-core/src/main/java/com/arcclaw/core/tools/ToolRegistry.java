@@ -54,7 +54,6 @@ public class ToolRegistry {
     @Inject
     Instance<AgentTool> discoveredTools;
 
-
     @Inject
     ObjectMapper objectMapper;
 
@@ -139,11 +138,11 @@ public class ToolRegistry {
 
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
-            
+
             String userId = (String) MDC.get(MdcKeys.USER_ID);
             String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-            auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
-                SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
+            auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+                    SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
 
             throw new SecurityException(
                     "Operation " + requiredOp + " not permitted at autonomy level " + level);
@@ -161,15 +160,17 @@ public class ToolRegistry {
                     Files.createDirectories(workspaceRoot);
                 }
 
-                String output = isolationExecutor.executeSandboxed(
+                String initialOutput = isolationExecutor.executeSandboxed(
                         WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
-                
+
+                String postProcessedOutput = tool.postProcessOutput(initialOutput, params);
+
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
-                    SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
-                    
-                return ToolResponse.success(output);
+                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+                        SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
+
+                return ToolResponse.success(postProcessedOutput);
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
             } catch (Exception e) {
@@ -186,12 +187,13 @@ public class ToolRegistry {
                 }
 
                 log.errorf("Tool '%s' execution failed: %s (friendly='%s')", toolName, raw, friendly);
-                log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName, WorkspaceContext.requireSessionId());
+                log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName,
+                        WorkspaceContext.requireSessionId());
 
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
                 auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
-                    SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
+                        SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
 
                 return ToolResponse.failure(1, friendly);
             }
@@ -200,12 +202,12 @@ public class ToolRegistry {
 
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         ToolResponse response = tool.execute(params);
-        
+
         String userId = (String) MDC.get(MdcKeys.USER_ID);
         String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-        auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
-            SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
-            
+        auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+                SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
+
         return response;
     }
 
@@ -241,7 +243,7 @@ public class ToolRegistry {
     public static Map<String, String> extractRequiredSecrets(
             Class<? extends AgentTool> toolClass, String methodName) {
         var secrets = new LinkedHashMap<String, String>();
-        
+
         // THE FIX: Unwrap Quarkus CDI Proxies to read annotations from the true class
         Class<?> actualClass = toolClass;
         while (actualClass.getName().contains("_ClientProxy") || actualClass.getName().contains("_Subclass")) {

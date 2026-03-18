@@ -51,7 +51,8 @@ public interface AgentTool {
      * Defaults to {@code true} — opt-OUT is the exception, not the rule.
      * <p>
      * Set to {@code false} only for trusted in-memory tools that do not
-     * require OS-level isolation (e.g., pure computation or local read-only access).
+     * require OS-level isolation (e.g., pure computation or local read-only
+     * access).
      */
     default boolean requiresSandbox() {
         return true;
@@ -72,7 +73,7 @@ public interface AgentTool {
      */
     default List<String> sandboxCommand(Map<String, Object> params) {
         throw new UnsupportedOperationException(
-            name() + " declared requiresSandbox=true but did not implement sandboxCommand()");
+                name() + " declared requiresSandbox=true but did not implement sandboxCommand()");
     }
 
     /**
@@ -90,5 +91,14 @@ public interface AgentTool {
     default JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder().build(); // no-op default for tools without parameters
     }
-}
 
+    /**
+     * Optional post-processing of raw sandbox output before it is returned to the
+     * agent.
+     * Default: identity (return output unchanged).
+     * Override for tool-specific transformations (e.g. base64 decode).
+     */
+    default String postProcessOutput(String rawOutput, Map<String, Object> params) {
+        return rawOutput;
+    }
+}
