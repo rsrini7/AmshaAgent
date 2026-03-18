@@ -1,4 +1,4 @@
-package com.arcclaw.app.security;
+package com.arcclaw.core.security;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,6 +33,17 @@ public class DestructiveVocabularyFilter {
     private static final Set<AgentRoleEnum> EXEMPT_ROLES = Set.of(AgentRoleEnum.DEBUGGER);
 
     /**
+     * Returns true if the message contains destructive vocabulary,
+     * regardless of role. Used by IntentClassificationHandler to
+     * short-circuit before agent dispatch.
+     */
+    public boolean isDestructive(String userMessage) {
+        if (userMessage == null || userMessage.isBlank()) return false;
+        return DESTRUCTIVE_WORDS.matcher(userMessage).find()
+                || RM_RF_PATTERN.matcher(userMessage).find();
+    }
+
+    /**
      * Applies the filter logic.
      *
      * @param role         The role name (e.g., "researcher").
@@ -50,9 +61,8 @@ public class DestructiveVocabularyFilter {
 
         // Rule: if the role has ANY tool capabilities, it must pass the destructive check.
         if (!EXEMPT_ROLES.contains(resolvedRole)
-            && !resolvedRole.definition().capabilities().isEmpty() &&
-                (DESTRUCTIVE_WORDS.matcher(userMessage).find()
-                        || RM_RF_PATTERN.matcher(userMessage).find())) {
+            && !resolvedRole.definition().capabilities().isEmpty()
+                && isDestructive(userMessage)) {
             Log.warnf("Destructive vocabulary detected in message routed to '%s' (%s). " +
                     "Overriding to 'coordinator' with no-tool mode.",
                     role, resolvedRole.toScopedName());

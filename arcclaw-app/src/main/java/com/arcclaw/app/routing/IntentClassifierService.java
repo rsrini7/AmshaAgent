@@ -6,9 +6,9 @@ import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
-import com.arcclaw.app.security.DestructiveVocabularyFilter;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.security.DestructiveVocabularyFilter;
 
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;

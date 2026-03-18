@@ -262,6 +262,24 @@ public class AgentStateMachineRunner {
             if (isSchemaError) {
                 log.warnf("[STATE-MACHINE] LLM API rejected tool call schema for session %s: %s",
                         sessionId, e.getMessage());
+
+                // tool_use_failed means Groq validated the schema server-side and
+                // rejected it. The LLM already knows what it wants to do — retrying
+                // with a hint won't change a destructive intent. Fail fast.
+                boolean isToolUseFailed = e.getMessage() != null
+                        && e.getMessage().contains("tool_use_failed");
+
+                if (isToolUseFailed) {
+                    log.errorf("[STATE-MACHINE] session %s: tool_use_failed is non-recoverable — failing fast",
+                            sessionId);
+                    return StepDecision.terminal(AgentResult.failed(
+                            "The requested operation is not supported. " +
+                            "Only 'view' and 'list' are valid commands for the github tool.",
+                            AgentResult.FailureCategory.SCHEMA_ERROR,
+                            List.copyOf(history)));
+                }
+
+                // For other schema errors (malformed JSON etc.) — one retry is still worthwhile
                 llmSchemaErrorCount++;
                 if (llmSchemaErrorCount >= 2) {
                     log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
@@ -270,10 +288,9 @@ public class AgentStateMachineRunner {
                             AgentResult.FailureCategory.SCHEMA_ERROR,
                             List.copyOf(history)));
                 }
-                String nextTransientError = "System: Your previous tool call was rejected by the API because the " +
-                        "arguments did not match the required schema. Error: " + e.getMessage() +
-                        ". Please review the tool schema and correct your arguments. " +
-                        "Only 'view' and 'list' are valid commands for the github tool.";
+                String nextTransientError = "System: Your previous tool call was rejected. " +
+                        "Error: " + e.getMessage() +
+                        ". Please review the tool schema and correct your arguments.";
                 return StepDecision.retryEngine(nextTransientError, llmSchemaErrorCount);
             }
 

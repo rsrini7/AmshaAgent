@@ -1,4 +1,4 @@
-package com.arcclaw.app.security;
+package com.arcclaw.core.security;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
