@@ -152,7 +152,6 @@ public class ToolRegistry {
 
         if (tool.requiresSandbox()) {
             var requiredSecrets = extractRequiredSecrets(tool.getClass(), "sandboxCommand");
-            var command = tool.sandboxCommand(params);
             var workspaceRoot = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
 
             try {
@@ -160,10 +159,13 @@ public class ToolRegistry {
                     Files.createDirectories(workspaceRoot);
                 }
 
+                // ← MOVED INSIDE: validation errors now return friendly ToolResponse
+                var command = tool.sandboxCommand(params);
+
                 String initialOutput = isolationExecutor.executeSandboxed(
                         WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
 
-                String postProcessedOutput = tool.postProcessOutput(initialOutput, params);
+                String postProcessedOutput = tool.postProcessOutput(initialOutput, params); // if you added the hook
 
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
@@ -171,33 +173,35 @@ public class ToolRegistry {
                         SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
 
                 return ToolResponse.success(postProcessedOutput);
+
+            } catch (IllegalArgumentException e) {
+                // Allowlist / guardrail violations from sandboxCommand() — tell the LLM clearly
+                log.warnf("Tool '%s' parameter validation failed: %s", toolName, e.getMessage());
+                return ToolResponse.failure(1, e.getMessage());
+
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
+
             } catch (Exception e) {
                 String raw = e.getMessage() != null ? e.getMessage() : "";
-
                 String friendly;
                 if (toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                         && raw.contains("Cannot run program \"gh\"")) {
                     friendly = "GitHub integration is not available in this environment. "
-                            + "The `gh` CLI is not installed, so I cannot run GitHub commands here. "
-                            + "Please run the equivalent `gh` command locally on your own machine.";
+                            + "The `gh` CLI is not installed. "
+                            + "Please run the equivalent `gh` command locally.";
                 } else {
                     friendly = "Tool '" + toolName + "' failed: " + raw;
                 }
-
-                log.errorf("Tool '%s' execution failed: %s (friendly='%s')", toolName, raw, friendly);
+                log.errorf("Tool '%s' execution failed: %s", toolName, raw);
                 log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName,
                         WorkspaceContext.requireSessionId());
-
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
                 String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
                 auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
                         SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
-
                 return ToolResponse.failure(1, friendly);
             }
-
         }
 
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
