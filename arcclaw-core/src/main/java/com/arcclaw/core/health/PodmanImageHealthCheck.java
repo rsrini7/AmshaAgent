@@ -5,12 +5,12 @@ import java.util.concurrent.TimeUnit;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
-import org.eclipse.microprofile.health.Liveness;
+import org.eclipse.microprofile.health.Readiness;
 import org.jboss.logging.Logger;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-@Liveness
+@Readiness
 @ApplicationScoped
 public class PodmanImageHealthCheck implements HealthCheck {
 
@@ -26,43 +26,44 @@ public class PodmanImageHealthCheck implements HealthCheck {
     boolean sandboxEnabled;
    
 
-    @Override
+   @Override
     public HealthCheckResponse call() {
         if (!sandboxEnabled) {
-            log.warn("Sandbox is disabled");
             return HealthCheckResponse
                 .named("Podman Image: " + containerImage)
                 .up()
                 .withData("status", "sandbox disabled — skipped")
                 .build();
         }
-
         try {
-            ProcessBuilder pb = new ProcessBuilder(podmanPath, "ps", "--format", "json");
-            pb.redirectErrorStream(true);          // merge stderr → stdout
+            ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "exists", containerImage);
+            pb.redirectErrorStream(true);
             Process process = pb.start();
-            boolean finished = process.waitFor(2, TimeUnit.SECONDS);
-
-            if (finished && process.exitValue() == 0) {
-                return HealthCheckResponse.named("Podman Engine").up().build();
-            }
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
 
             if (!finished) {
                 process.destroyForcibly();
-                return HealthCheckResponse.named("Podman Engine").down()
-                        .withData("error", "Process timed out — machine may be stopped")
-                        .build();
-            }
-
-            String err = new String(process.getInputStream().readAllBytes()).trim();
-            return HealthCheckResponse.named("Podman Engine").down()
-                    .withData("error", err.length() > 200 ? err.substring(0, 200) : err)
+                return HealthCheckResponse.named("Podman Image: " + containerImage)
+                    .down()
+                    .withData("error", "image check timed out")
                     .build();
+            }
+            if (process.exitValue() == 0) {
+                return HealthCheckResponse.named("Podman Image: " + containerImage)
+                    .up()
+                    .withData("image", containerImage)
+                    .build();
+            }
+            return HealthCheckResponse.named("Podman Image: " + containerImage)
+                .down()
+                .withData("error", "image not found — run: podman pull " + containerImage)
+                .build();
 
         } catch (Exception e) {
-            return HealthCheckResponse.named("Podman Engine").down()
-                    .withData("error", e.getMessage())
-                    .build();
+            return HealthCheckResponse.named("Podman Image: " + containerImage)
+                .down()
+                .withData("error", e.getMessage())
+                .build();
         }
     }
 }

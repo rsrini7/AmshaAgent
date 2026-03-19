@@ -1,17 +1,20 @@
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$env:JDK_JAVA_OPTIONS = "--add-opens=java.base/java.nio=ALL-UNNAMED " +
-    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED " +
-    "--add-opens=java.base/java.lang=ALL-UNNAMED " +
-    "--enable-native-access=ALL-UNNAMED " +
-    "-Dsun.misc.unsafe.memory.access=allow " +
-    "-Dquarkus.otel.sdk.disabled=true"
-
 # Default mode is serve; override with first arg e.g. .\arcclaw-dev.ps1 chat
 $mode = if ($args.Count -gt 0) { $args[0] } else { "serve" }
 
 $devArgs = @(
+    "-Dfile.encoding=UTF-8",
+    "-Dstdout.encoding=UTF-8",
+    "-Dsun.stdout.encoding=UTF-8",
+    "-Dsun.stderr.encoding=UTF-8",
+    "-Dsun.misc.unsafe.memory.access=allow",
+    "--add-opens=java.base/java.nio=ALL-UNNAMED",
+    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
+    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+    "--enable-native-access=ALL-UNNAMED",
     "-Dquarkus.args=$mode",
+    "-Dquarkus.profile=dev",
     "-Darcclaw.rag.vec-extension-path=../lib/vec0",
     "-Darcclaw.data-dir=../data"
 )

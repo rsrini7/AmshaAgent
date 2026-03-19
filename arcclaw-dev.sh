@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export JDK_JAVA_OPTIONS="\
---add-opens=java.base/java.nio=ALL-UNNAMED \
---add-opens=java.base/jdk.internal.misc=ALL-UNNAMED \
---add-opens=java.base/java.lang=ALL-UNNAMED \
---enable-native-access=ALL-UNNAMED \
--Dsun.misc.unsafe.memory.access=allow \
--Dquarkus.otel.sdk.disabled=true"
-
 MODE="${1:-serve}"
 
 DEV_ARGS=(
+    "-Dfile.encoding=UTF-8"
+    "-Dstdout.encoding=UTF-8"
+    "-Dsun.stdout.encoding=UTF-8"
+    "-Dsun.stderr.encoding=UTF-8"
+    "-Dsun.misc.unsafe.memory.access=allow"
+    "--add-opens=java.base/java.nio=ALL-UNNAMED"
+    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
+    "--add-opens=java.base/java.lang=ALL-UNNAMED"
+    "--enable-native-access=ALL-UNNAMED"
     "-Dquarkus.args=$MODE"
+    "-Dquarkus.profile=dev"
     "-Darcclaw.rag.vec-extension-path=../lib/vec0"
     "-Darcclaw.data-dir=../data"
 )
