@@ -18,8 +18,8 @@
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl    = http://localhost:8080
-@validKey   = key-internal-changeme
-@ciKey      = key-ci-changeme
+@validKey   = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+@ciKey      = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
 @invalidKey = totally-wrong-key
 
 # ─────────────────────────────────────────────────────────────────
@@ -82,6 +82,12 @@ GET {{baseUrl}}/api/v1/info
 # POSITIVE TESTS — both named keys should be accepted
 # ─────────────────────────────────────────────────────────────────
 
+### [AUTH-10] CI pipeline key accepted → expect 201
+# @name authCiSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{ciKey}}
+
 ### [AUTH-9] Internal key accepted → expect 201 session created
 # @name authInternalSession
 POST {{baseUrl}}/api/v1/sessions
@@ -90,22 +96,12 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTH-10] CI pipeline key accepted → expect 201
-# @name authCiSession
-POST {{baseUrl}}/api/v1/sessions
-Content-Type: application/json
-X-ArcClaw-API-Key: {{ciKey}}
-
-###
-
-### [AUTH-11] Cleanup: terminate the test sessions
-DELETE {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}
+# Step 2 — run agent first (creates the checkpoint)
+POST {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/run
 X-ArcClaw-API-Key: {{validKey}}
+Content-Type: application/json
 
-###
-
-DELETE {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{ciKey}}
+{"goal": "hello", "agentRole": "coordinator"}
 
 ###
 
@@ -125,7 +121,24 @@ X-ArcClaw-API-Key: {{ciKey}}
 
 ### [RATELIMIT-1] Rate limit probe — run this 21 times rapidly
 # Watch for HTTP 429 + Retry-After: 60 on the 21st hit
-GET {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000000/status/coordinator
+GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
+
+### This always returns 200 if the key is valid — good for rate limit testing
+GET {{baseUrl}}/api/v1/sessions
+X-ArcClaw-API-Key: {{validKey}}
+
+
+
+###
+
+### [AUTH-11] Cleanup: terminate the test sessions
+DELETE {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{ciKey}}

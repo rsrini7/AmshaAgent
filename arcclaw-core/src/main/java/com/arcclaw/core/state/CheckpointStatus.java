@@ -4,6 +4,8 @@ package com.arcclaw.core.state;
  * Lifecycle status of an agent checkpoint.
  */
 public enum CheckpointStatus {
+    /** Session created, agent not yet executed. */
+    NOT_STARTED,
     /** Agent loop is actively executing. */
     IN_PROGRESS,
     /** Agent loop is paused, waiting for human approval to execute a tool. */

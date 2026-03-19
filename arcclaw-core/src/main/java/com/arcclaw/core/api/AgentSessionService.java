@@ -226,14 +226,22 @@ public class AgentSessionService {
                 .map(cp -> {
                     try {
                         List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-                        return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
+                        return Response.ok(new SessionStatusResponse(
+                                sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                     } catch (Exception e) {
-                        log.errorf("Failed to load steps for session %s: %s", sessionId, e.getMessage(), e);
+                        log.errorf("Failed to load steps for session %s: %s",
+                                sessionId, e.getMessage(), e);
                         return Response.serverError().entity(e.getMessage()).build();
                     }
                 })
-                .orElseGet(() -> Response.status(Response.Status.NOT_FOUND).build());
+                .orElseGet(() -> Response.ok(Map.of(
+                        "sessionId", sessionId,
+                        "role", canonicalRole,
+                        "status", CheckpointStatus.NOT_STARTED.name(),
+                        "steps", List.of()
+                )).build());
     }
+
 
     public Response terminateSession(String sessionId) {
         log.infof("Terminating session: {}", sessionId);
