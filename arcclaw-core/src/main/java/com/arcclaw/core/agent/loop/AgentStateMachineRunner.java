@@ -36,6 +36,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -145,6 +146,22 @@ public class AgentStateMachineRunner {
             answer = String.valueOf(step.actionInput().get("answer"));
         }
 
+        // Structural guard: researcher and architect must never return code blocks.
+        // LLMs frequently ignore system prompt constraints when user explicitly asks.
+        // This is the enforcement layer — same philosophy as coder's empty tool schema.
+        if (answer != null && isGeneratedCodeBlock(answer)) {
+            if (AgentRoleEnum.RESEARCHER.toScopedName().equals(agentRole)
+                    || AgentRoleEnum.ARCHITECT.toScopedName().equals(agentRole)) {
+                log.warnf("[STATE-MACHINE] %s returned a code block — blocked by structural guard. session=%s",
+                        agentRole, sessionId);
+                String refusal = "I'm " + agentRole + " — I don't generate code. " +
+                    "Please ask Brahma (coder) for code generation tasks.";
+                writer.saveAnswer(sessionId, refusal);
+                history.add(step.withObservation("Blocked: code generation by non-coder role"));
+                return AgentResult.finished(refusal, List.copyOf(history));
+            }
+        }
+
         if (sessionId != null && answer != null && !answer.isBlank()) {
             writer.saveAnswer(sessionId, answer);
         }
@@ -164,6 +181,20 @@ public class AgentStateMachineRunner {
 
         return AgentResult.finished(answer, List.copyOf(history));
     }
+
+    private boolean isGeneratedCodeBlock(String text) {
+        if (text == null) return false;
+        String stripped = text.stripLeading();
+        // Leads with a code block → almost always self-generated
+        if (stripped.startsWith("```")) return true;
+        // "Here's/Here is a <X> program/function/class..." pattern
+        if (stripped.matches("(?si)here[''']?s a .{0,60}(program|function|class|"
+                + "method|algorithm|implementation|snippet|code).*```.*")) return true;
+        if (stripped.matches("(?si)here is a .{0,60}(program|function|class|"
+                + "method|algorithm|implementation|snippet|code).*```.*")) return true;
+        return false;
+    }
+
 
     /**
      * Consolidates logic for pausing the loop for human approval of a tool call.

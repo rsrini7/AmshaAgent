@@ -39,11 +39,19 @@ public class IntentClassifierService implements IntentClassifier {
                         Pattern.compile(
                             "(?i)^\\s*(ingest|store this|add to (knowledge|rag|memory|kb)|" +
                             "remember this|save this|learn this|index this|" +
-                            // Compound fetch+ingest patterns
                             ".*(and\\s+ingest|then\\s+ingest|and\\s+store|then\\s+store|" +
                             "and\\s+remember|and\\s+save\\s+that|and\\s+add\\s+that))",
                             Pattern.CASE_INSENSITIVE
                         );
+
+    private static final Pattern CODER_FORCE_PATTERN =
+        Pattern.compile(
+            "(?i)^\\s*(write|create|generate|implement|code|build|make)\\s+" +
+            ".*(program|function|method|class|algorithm|code|script|snippet|" +
+            "fibonacci|fib|sort|search|binary|linked.?list|tree|graph|" +
+            "hello.?world|factorial|prime|palindrome|anagram)",
+            Pattern.CASE_INSENSITIVE
+        );
 
     @PostConstruct
     void init() {
@@ -120,6 +128,12 @@ public class IntentClassifierService implements IntentClassifier {
     }
 
     public String classify(String userMessage) {
+
+        // Fast-path: explicit code generation request → always coder
+        if (CODER_FORCE_PATTERN.matcher(userMessage).find()) {
+            Log.debugf("CLASSIFIER fast-path: code generation keyword → coder");
+            return AgentRoleEnum.CODER.toScopedName();
+        }
 
         // Force coordinator for ingest/store commands — these require
         // INGEST_DOCUMENT tool which only COORDINATOR and DATTATREYA hold.
