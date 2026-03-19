@@ -38,25 +38,29 @@ public class PodmanImageHealthCheck implements HealthCheck {
         }
 
         try {
-            ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "exists", containerImage);
+            ProcessBuilder pb = new ProcessBuilder(podmanPath, "ps", "--format", "json");
+            pb.redirectErrorStream(true);          // merge stderr → stdout
             Process process = pb.start();
             boolean finished = process.waitFor(2, TimeUnit.SECONDS);
 
             if (finished && process.exitValue() == 0) {
-                return HealthCheckResponse.named("Podman Image: " + containerImage).up().build();
-            } else {
-                if (!finished) {
-                    process.destroyForcibly();
-                    return HealthCheckResponse.named("Podman Image: " + containerImage).down()
-                            .withData("error", "Process timed out after 2 seconds")
-                            .build();
-                }
-                return HealthCheckResponse.named("Podman Image: " + containerImage).down()
-                        .withData("error", "Image not found or process exited with code " + process.exitValue())
+                return HealthCheckResponse.named("Podman Engine").up().build();
+            }
+
+            if (!finished) {
+                process.destroyForcibly();
+                return HealthCheckResponse.named("Podman Engine").down()
+                        .withData("error", "Process timed out — machine may be stopped")
                         .build();
             }
+
+            String err = new String(process.getInputStream().readAllBytes()).trim();
+            return HealthCheckResponse.named("Podman Engine").down()
+                    .withData("error", err.length() > 200 ? err.substring(0, 200) : err)
+                    .build();
+
         } catch (Exception e) {
-            return HealthCheckResponse.named("Podman Image: " + containerImage).down()
+            return HealthCheckResponse.named("Podman Engine").down()
                     .withData("error", e.getMessage())
                     .build();
         }

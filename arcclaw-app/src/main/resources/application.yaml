@@ -459,6 +459,8 @@ mp:
       pepper: "dev-pepper-not-for-production-0000000000000000000000000000"
     debug:
       llm: true
+    metadata:
+      environment: dev
 
 "%test":
   quarkus:
