@@ -1,23 +1,16 @@
 package com.arcclaw.core.agent.loop;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import dev.langchain4j.exception.HttpException;
-import dev.langchain4j.exception.InvalidRequestException;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-
 import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.persona.AgentRole;
@@ -25,49 +18,29 @@ import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.governance.BudgetExceededException;
-import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.GovernanceLayer;
-import com.arcclaw.core.governance.RequiresApprovalException;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 /**
- * High-level runner that executes the Thought-Plan-Act-Observe reasoning loop.
- * <p>
- * Extracted from {@link AgentLoop} in Phase 47 Tier 3 to separate reasoning
- * logic from lifecycle management (MDC, OTel, persistence).
+ * Orchestrates the Thought-Plan-Act-Observe loop.
+ * Step-level processing is delegated to {@link AgentStepProcessor}.
  */
 @ApplicationScoped
 public class AgentStateMachineRunner {
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
 
-    private static final Set<String> REACT_KEYWORDS = Set.of(
-            "OBSERVE", "THINK", "ACT", "PLAN", "REASON", "THOUGHT"
-    );
-
-    @Inject ToolRegistry toolRegistry;
-    @Inject StatefulAgentStore agentStore;
-    @Inject GovernanceLayer governanceLayer;
-    @Inject Instance<AgentObserver> observers;
-    @Inject ToolInvocationGuard guard;
-    @Inject ToolInvoker invoker;
+    @Inject AgentStepProcessor stepProcessor;
     @Inject ChatMemoryWriter writer;
+    @Inject Instance<AgentObserver> observers;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
     @Inject SkillRegistry skillRegistry;
     @Inject AgentOtelContext agentOtelContext;
 
-    public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
+    public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
+                           List<ReasoningStep> resumedHistory) {
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
         int iteration = 0;
         int llmSchemaErrorCount = 0;
@@ -77,18 +50,18 @@ public class AgentStateMachineRunner {
         log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
                 context.sessionId(), context.goal(), context.maxIterations());
 
-        saveGoalToChatMemory(context.sessionId(), context.goal());
+        writer.saveGoal(context.sessionId(), context.goal());
 
         while (iteration < context.maxIterations()) {
             iteration++;
             Span iterSpan = agentOtelContext.startIterationSpan(
-                context.sessionId(), iteration, context.agentRole());
+                    context.sessionId(), iteration, context.agentRole());
             try (Scope scope = iterSpan.makeCurrent()) {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
                 List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
 
-                StepDecision engineDecision = processEngineStep(
+                StepDecision engineDecision = stepProcessor.processEngineStep(
                         context.sessionId(), context.goal(), engine, history,
                         context.agentRole(), transientError, llmSchemaErrorCount, iteration);
 
@@ -106,7 +79,7 @@ public class AgentStateMachineRunner {
                     return handleFinishAction(context.sessionId(), context.agentRole(),
                             history, step, iteration);
 
-                StepDecision validationDecision = validateTool(
+                StepDecision validationDecision = stepProcessor.validateTool(
                         context.sessionId(), context.agentRole(), history,
                         step, context.goal(), consecutiveFailures);
                 if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
@@ -116,11 +89,12 @@ public class AgentStateMachineRunner {
                 }
                 step = validationDecision.step();
 
-                StepDecision invocationDecision = invokeToolAndObserve(
+                StepDecision invocationDecision = stepProcessor.invokeToolAndObserve(
                         context.sessionId(), context.agentRole(), history, step,
                         consecutiveFailures, context.goal(), skillSnapshot);
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
                 consecutiveFailures = invocationDecision.consecutiveFailures();
+
             } catch (Exception e) {
                 iterSpan.recordException(e);
                 iterSpan.setStatus(StatusCode.ERROR, e.getMessage());
@@ -135,27 +109,19 @@ public class AgentStateMachineRunner {
         return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
     }
 
-    private void saveGoalToChatMemory(String sessionId, String goal) {
-        writer.saveGoal(sessionId, goal);
-    }
-
-    private AgentResult handleFinishAction(String sessionId, String agentRole, List<ReasoningStep> history, ReasoningStep step, int iteration) {
+    private AgentResult handleFinishAction(String sessionId, String agentRole,
+            List<ReasoningStep> history, ReasoningStep step, int iteration) {
         log.infof("Agent reached FINISH at iteration %d", iteration);
         String answer = step.thought();
         if (step.actionInput() != null && step.actionInput().containsKey("answer")) {
             answer = String.valueOf(step.actionInput().get("answer"));
         }
 
-        // Structural guard: researcher and architect must never return code blocks.
-        // LLMs frequently ignore system prompt constraints when user explicitly asks.
-        // This is the enforcement layer — same philosophy as coder's empty tool schema.
         if (answer != null && isGeneratedCodeBlock(answer)) {
             if (AgentRoleEnum.RESEARCHER.toScopedName().equals(agentRole)
                     || AgentRoleEnum.ARCHITECT.toScopedName().equals(agentRole)) {
-                log.warnf("[STATE-MACHINE] %s returned a code block — blocked by structural guard. session=%s",
-                        agentRole, sessionId);
                 String refusal = "I'm " + agentRole + " — I don't generate code. " +
-                    "Please ask Brahma (coder) for code generation tasks.";
+                        "Please ask Brahma (coder) for code generation tasks.";
                 writer.saveAnswer(sessionId, refusal);
                 history.add(step.withObservation("Blocked: code generation by non-coder role"));
                 return AgentResult.finished(refusal, List.copyOf(history));
@@ -172,10 +138,9 @@ public class AgentStateMachineRunner {
 
         if ("synthesizer".equals(agentRole)) {
             String combinedContext = history.stream()
-                .filter(s -> s.observation() != null && !s.observation().isBlank())
-                .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
-                .collect(Collectors.joining("\n\n"));
-                
+                    .filter(s -> s.observation() != null && !s.observation().isBlank())
+                    .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
+                    .collect(Collectors.joining("\n\n"));
             return synthesizerAgent.synthesize(sessionId, combinedContext, history);
         }
 
@@ -185,9 +150,7 @@ public class AgentStateMachineRunner {
     private boolean isGeneratedCodeBlock(String text) {
         if (text == null) return false;
         String stripped = text.stripLeading();
-        // Leads with a code block → almost always self-generated
         if (stripped.startsWith("```")) return true;
-        // "Here's/Here is a <X> program/function/class..." pattern
         if (stripped.matches("(?si)here[''']?s a .{0,60}(program|function|class|"
                 + "method|algorithm|implementation|snippet|code).*```.*")) return true;
         if (stripped.matches("(?si)here is a .{0,60}(program|function|class|"
@@ -195,35 +158,13 @@ public class AgentStateMachineRunner {
         return false;
     }
 
+    // ── Shared types ─────────────────────────────────────────────────────────
+    // Package-private so AgentStepProcessor can reference them without a
+    // circular dependency — both live in com.arcclaw.core.agent.loop.
 
-    /**
-     * Consolidates logic for pausing the loop for human approval of a tool call.
-     */
-    private AgentResult persistApprovalCheckpoint(
-            String sessionId, String agentRole,
-            String toolName, String paramsJson,
-            List<ReasoningStep> history) {
-        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
-                .orElseGet(() -> {
-                    AgentCheckpoint c = new AgentCheckpoint();
-                    c.setSessionId(sessionId);
-                    c.setAgentRole(agentRole);
-                    return c;
-                });
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(toolName);
-        cp.setPendingToolParametersJson(paramsJson);
-        cp.setUpdatedAt(LocalDateTime.now());
-        agentStore.save(cp);
-        log.infof("[STATE-MACHINE] Pausing session %s for human approval of tool '%s'",
-                sessionId, toolName);
-        return AgentResult.awaitingApproval(toolName, paramsJson, sessionId,
-                List.copyOf(history));
-    }
+    enum DecisionType { CONTINUE, TERMINAL, PROCEED }
 
-    private enum DecisionType { CONTINUE, TERMINAL, PROCEED }
-
-    private record StepDecision(
+    record StepDecision(
             DecisionType type,
             AgentResult result,
             ReasoningStep step,
@@ -247,276 +188,4 @@ public class AgentStateMachineRunner {
             return new StepDecision(DecisionType.PROCEED, null, step, null, 0, consecutiveFailures);
         }
     }
-
-    private StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
-                                       List<ReasoningStep> history, String agentRole, String transientError,
-                                       int llmSchemaErrorCount, int iteration) {
-        ReasoningStep step;
-        try {
-            String currentGoal = goal;
-            if (transientError != null) {
-                currentGoal = goal + "\n\n" + transientError;
-            }
-            step = engine.nextStep(sessionId, agentRole, currentGoal, Collections.unmodifiableList(history));
-
-            if (step != null) {
-                try {
-                    governanceLayer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
-                    for (var observer : observers) {
-                        observer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
-                    }
-                } catch (BudgetWarningException bw) {
-                    log.warnf("Budget warning for session %s: %s", sessionId, bw.getMessage());
-                    String warningObservation = "⚠️ BUDGET WARNING: " + bw.getMessage() +
-                            " Keep all subsequent responses to 1-2 sentences maximum.";
-                    step = step.withObservation(warningObservation);
-                    history.add(step);
-                } catch (BudgetExceededException be) {
-                    log.warnf("Governance aborted loop iteration %d: %s", iteration, be.getMessage());
-                    String observationMessage = "System Intervention: " + be.getMessage() +
-                            ". Further actions blocked. Ending loop.";
-                    step = step.withObservation(observationMessage);
-                    history.add(step);
-                    String failReason = AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage());
-                    return StepDecision.terminal(AgentResult.failed(
-                            failReason,
-                            AgentResult.FailureCategory.BUDGET_EXCEEDED,
-                            List.copyOf(history)));
-                }
-            }
-        } catch (Exception e) {
-            boolean isSchemaError = e instanceof InvalidRequestException;
-            if (!isSchemaError && e instanceof HttpException) {
-                isSchemaError = ((HttpException) e).statusCode() == 400;
-            }
-
-            if (isSchemaError) {
-                log.warnf("[STATE-MACHINE] LLM API rejected tool call schema for session %s: %s",
-                        sessionId, e.getMessage());
-
-                // tool_use_failed means Groq validated the schema server-side and
-                // rejected it. The LLM already knows what it wants to do — retrying
-                // with a hint won't change a destructive intent. Fail fast.
-                boolean isToolUseFailed = e.getMessage() != null
-                        && e.getMessage().contains("tool_use_failed");
-
-                if (isToolUseFailed) {
-                    log.errorf("[STATE-MACHINE] session %s: tool_use_failed is non-recoverable — failing fast",
-                            sessionId);
-                    return StepDecision.terminal(AgentResult.failed(
-                            "The requested operation is not supported. " +
-                            "Only 'view' and 'list' are valid commands for the github tool.",
-                            AgentResult.FailureCategory.SCHEMA_ERROR,
-                            List.copyOf(history)));
-                }
-
-                // For other schema errors (malformed JSON etc.) — one retry is still worthwhile
-                llmSchemaErrorCount++;
-                if (llmSchemaErrorCount >= 2) {
-                    log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
-                    return StepDecision.terminal(AgentResult.failed(
-                            "SCHEMA_ERROR",
-                            AgentResult.FailureCategory.SCHEMA_ERROR,
-                            List.copyOf(history)));
-                }
-                String nextTransientError = "System: Your previous tool call was rejected. " +
-                        "Error: " + e.getMessage() +
-                        ". Please review the tool schema and correct your arguments.";
-                return StepDecision.retryEngine(nextTransientError, llmSchemaErrorCount);
-            }
-
-            if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
-                String humanMessage = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
-                log.warnf("[STATE-MACHINE] Rate limit hit for session %s: %s", sessionId, humanMessage);
-                return StepDecision.terminal(AgentResult.failed(
-                        humanMessage,
-                        AgentResult.FailureCategory.RATE_LIMIT,
-                        List.copyOf(history)));
-            }
-
-            boolean isNetworkError = e instanceof java.net.ConnectException
-                    || e instanceof java.net.SocketTimeoutException
-                    || e.getCause() instanceof java.net.ConnectException
-                    || e.getCause() instanceof java.net.SocketTimeoutException
-                    || (e.getMessage() != null && (
-                        e.getMessage().contains("ConnectTimeoutException")
-                        || e.getMessage().contains("connection timed out")
-                        || e.getMessage().contains("Connection reset")
-                        || e.getMessage().contains("Connection refused")));
-
-                if (isNetworkError) {
-                    log.errorf("ReasoningEngine network failure at iteration %d: %s",
-                            iteration, e.getMessage());
-                    log.debugf(e, "Full stacktrace for network failure in session %s", sessionId);
-                    return StepDecision.terminal(AgentResult.failed(
-                            "⚠️ Unable to reach the AI service. Please check your internet connection and try again.",
-                            AgentResult.FailureCategory.SYSTEM_ERROR,
-                            List.copyOf(history)));
-                }
-
-                log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
-                log.debugf(e, "Full stacktrace for ReasoningEngine failure...");
-                return StepDecision.terminal(AgentResult.failed(
-                        "ReasoningEngine error: " + e.getMessage(),
-                        AgentResult.FailureCategory.SYSTEM_ERROR,
-                        List.copyOf(history)));
-
-        }
-
-        if (step == null) {
-            log.warn("ReasoningEngine returned null step — terminating");
-            return StepDecision.terminal(AgentResult.failed(
-                    "ReasoningEngine returned null step",
-                    AgentResult.FailureCategory.SYSTEM_ERROR,
-                    List.copyOf(history)));
-        }
-
-        return StepDecision.proceed(step);
-    }
-
-
-    private StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history, ReasoningStep step, String goal, int consecutiveFailures) {
-        String toolName = step.action();
-        var toolOpt = toolRegistry.findTool(toolName);
-        if (toolOpt.isEmpty()) {
-            boolean isReactKeyword = REACT_KEYWORDS.contains(toolName.toUpperCase());
-
-            if (isReactKeyword) {
-                // ReAct reasoning keyword leaked as a tool name.
-                // Inject ephemeral correction but do NOT persist to history or memory.
-                // Persisting this poisons subsequent turns — the LLM sees "OBSERVE
-                // not found" in chat history and repeats the pattern endlessly.
-                log.warnf("[AgentStateMachineRunner] ReAct keyword '%s' used as tool name " +
-                        "— injecting ephemeral correction (NOT persisted to memory)", toolName);
-                String reactCorrection = String.format(
-                        "System: '%s' is a ReAct reasoning keyword, not a tool name. " +
-                        "Do not use reasoning keywords as tool names. " +
-                        "Available tools: %s. Use FINISH to provide your final answer.",
-                        toolName, toolRegistry.listTools());
-                // Return as transientError — injected into next LLM call as a
-                // system message without being written to chat memory.
-                return StepDecision.retryEngine(reactCorrection, 0);
-            }
-
-            // Normal hallucinated tool — persist correction to history as before.
-            String errorObs = String.format(
-                    "Tool '%s' does not exist. Available tools: %s. " +
-                            "Please choose a valid tool or use FINISH to complete.",
-                    toolName, toolRegistry.listTools());
-            log.warnf("[AgentStateMachineRunner] Hallucination intercepted tool '%s' not found", toolName);
-            final ReasoningStep completedStep = step.withObservation(errorObs);
-            history.add(completedStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
-
-            consecutiveFailures++;
-            if (consecutiveFailures >= 2) {
-                    return StepDecision.terminal(AgentResult.finished("❌ I encountered repeated errors trying to execute that task. " +
-                            "Please rephrase your request or check the parameters.", List.copyOf(history)));
-            }
-            return StepDecision.retryValidation(consecutiveFailures);
-        }
-
-        return StepDecision.proceedWithFailures(step, consecutiveFailures);
-    }
-
-    private StepDecision invokeToolAndObserve(String sessionId, String agentRole,
-                                          List<ReasoningStep> history, ReasoningStep step,
-                                          int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot) {
-
-        String toolName = step.action();
-        Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
-
-        ToolInvocationGuard.GuardDecision decision =
-                guard.evaluate(sessionId, agentRole, toolName, params, history, goal, skillSnapshot);
-
-        if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
-            final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
-            history.add(dedupStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
-            return StepDecision.proceedWithFailures(dedupStep, consecutiveFailures);
-        }
-
-        if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
-            final ReasoningStep blockedStep = step.withObservation(b.observation());
-            history.add(blockedStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
-            return StepDecision.retryValidation(consecutiveFailures);
-        }
-
-        if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
-            return StepDecision.terminal(
-                    persistApprovalCheckpoint(sessionId, agentRole,
-                            p.toolName(), p.paramsJson(), history));
-        }
-
-        // Decision is Allow
-        ToolResponse response;
-        try {
-            response = invoker.invoke(toolName, params, sessionId);
-        } catch (RequiresApprovalException e) {
-            return StepDecision.terminal(
-                    persistApprovalCheckpoint(sessionId, agentRole,
-                            e.getToolName(), e.getToolParametersJson(), history));
-        }
-
-        String observation = response.output();
-        boolean stepFailed = !response.success();
-
-        // Hard infra/tool failure → final answer, no further LLM call
-        if (stepFailed
-                && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
-                && observation != null
-                && observation.contains("GitHub integration is not available")) {
-
-            final ReasoningStep completedStep = step.withObservation(observation);
-            history.add(completedStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
-
-            if (sessionId != null && !observation.isBlank()) {
-                writer.saveAnswer(sessionId, observation);
-            }
-
-            return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
-        }
-
-        if (stepFailed && (observation == null || !observation.startsWith("Tool execution failed:"))) {
-            observation = "Tool execution failed: " + observation + " (exit=" + response.exitCode() + ")";
-        }
-
-        final ReasoningStep completedStep = step.withObservation(observation);
-        history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
-        log.debugf("Observation for '%s': %s",
-                toolName,
-                observation != null && observation.length() > 200
-                        ? observation.substring(0, 200) + "..."
-                        : observation);
-
-        if (stepFailed) {
-            consecutiveFailures++;
-            if (consecutiveFailures >= 2) {
-                log.warnf("[STATE-MACHINE] Circuit breaker tripped for session %s. Tool '%s' failed %d times consecutively.",
-                        sessionId, toolName, consecutiveFailures);
-                return StepDecision.terminal(AgentResult.finished(
-                        "❌ I encountered repeated errors trying to execute that task. " +
-                                "Please rephrase your request or check the parameters.",
-                        List.copyOf(history)));
-            }
-        } else {
-            consecutiveFailures = 0;
-
-            if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                    || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
-                log.infof("[STATE-MACHINE] Fast-path exit triggered for tool '%s' to save LLM quota.", toolName);
-                String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
-                String finalFastPathAnswer = "✅ " + cleanOutput;
-                writer.saveAnswer(sessionId, finalFastPathAnswer);
-
-                return StepDecision.terminal(AgentResult.finished(finalFastPathAnswer, List.copyOf(history)));
-            }
-        }
-
-        return StepDecision.proceedWithFailures(completedStep, consecutiveFailures);
-    }
-
 }

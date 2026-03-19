@@ -69,7 +69,11 @@ public class PermissiveJsonExtractor {
         try {
             return mapper.readValue(cleaned, targetType);
         } catch (Exception e) {
-            log.warnf("JSON extraction failed for type %s. Cleaned input: %s", targetType.getSimpleName(), cleaned);
+            log.warnf("JSON extraction failed for type %s. Cleaned input: %s",
+                    targetType.getSimpleName(),
+                    cleaned != null && cleaned.length() > 120
+                        ? cleaned.substring(0, 120) + "...[" + cleaned.length() + " chars]"
+                        : cleaned);
             throw new JsonExtractionException(
                     "Permissive extraction failed: " + e.getMessage(),
                     rawResponse, targetType, cleaned, e);

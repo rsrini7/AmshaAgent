@@ -20,6 +20,7 @@ import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.security.DestructiveVocabularyFilter;
 
 import dev.langchain4j.exception.HttpException;
 
@@ -35,7 +36,14 @@ class IntentClassificationHandlerTest {
         classifier = mock(IntentClassifier.class);
         sender = mock(ChannelSender.class);
         handler.classifier = classifier;
+
+        var destructiveFilter = mock(DestructiveVocabularyFilter.class);
+        when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
+        when(destructiveFilter.filter(anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0)); // ← THIS was missing
+        handler.destructiveVocabularyFilter = destructiveFilter;
     }
+
 
     @Test
     void testHandle_rateLimit_notifiesUserAndDefaultsToCoordinator() {
@@ -58,10 +66,13 @@ class IntentClassificationHandlerTest {
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 
-        when(classifier.classify(anyString())).thenReturn("developer");
+        // "developer" is not a valid AgentRoleEnum — use a real scoped name
+        when(classifier.classify(anyString()))
+                .thenReturn(AgentRoleEnum.CODER.toScopedName());
 
         handler.handle(context);
 
-        assertEquals("developer", context.getAgentRole().get());
+        assertEquals(AgentRoleEnum.CODER.toScopedName(), context.getAgentRole().get());
     }
+
 }
