@@ -53,6 +53,13 @@ public class IntentClassifierService implements IntentClassifier {
             Pattern.CASE_INSENSITIVE
         );
 
+    private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
+        "(?i)\\b(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec)|tomorrow|" +
+        "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|schedule|remind(\\s+me)?|" +
+        "every\\s+(day|week|hour)|once\\s+a\\s+(day|week)|later)\\b"
+    );
+
+
     @PostConstruct
     void init() {
         StringBuilder sb = new StringBuilder();
@@ -128,6 +135,13 @@ public class IntentClassifierService implements IntentClassifier {
     }
 
     public String classify(String userMessage) {
+
+        // SCHEDULING IS ABSOLUTE PRIORITY — must be checked before CODER_FORCE_PATTERN.
+        // "write a sort function tomorrow" must route coordinator, not coder.
+        if (SCHEDULING_GUARD_PATTERN.matcher(userMessage).find()) {
+            Log.debugf("CLASSIFIER fast-path: scheduling signal → coordinator");
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
 
         // Fast-path: explicit code generation request → always coder
         if (CODER_FORCE_PATTERN.matcher(userMessage).find()) {
