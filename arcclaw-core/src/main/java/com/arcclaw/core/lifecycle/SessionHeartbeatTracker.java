@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -34,6 +35,14 @@ public class SessionHeartbeatTracker {
     public void removeHeartbeat(String sessionId) {
         heartbeats.remove(sessionId);
     }
+
+    /**
+     * Returns all currently tracked session IDs with their last heartbeat timestamps.
+     */
+    public Map<String, Instant> activeSessions() {
+        return Map.copyOf(heartbeats);  // immutable snapshot
+    }
+
 
     /**
      * Get the number of tracked sessions (for testing/monitoring).

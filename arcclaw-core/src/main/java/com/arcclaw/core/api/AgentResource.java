@@ -1,5 +1,7 @@
 package com.arcclaw.core.api;
 
+import java.util.Map;
+
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -35,6 +37,15 @@ public class AgentResource {
         return Response.status(Response.Status.CREATED)
                 .entity(new CreateSessionResponse(sessionService.createSession()))
                 .build();
+    }
+
+    @GET
+    public Response listSessions() {
+        var sessions = sessionService.listSessions();
+        return Response.ok(Map.of(
+                "sessions", sessions.keySet(),
+                "count", sessions.size()
+        )).build();
     }
 
     @POST

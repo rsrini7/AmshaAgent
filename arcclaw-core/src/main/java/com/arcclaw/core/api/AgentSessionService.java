@@ -92,6 +92,10 @@ public class AgentSessionService {
         return sessionId;
     }
 
+    public Map<String, Instant> listSessions() {
+        return heartbeatTracker.activeSessions();
+    }
+
     public Response runSync(String sessionId, RunAgentRequest request) {
         log.infof("Running agent sync for session: {}, role: {}, goal: {}", sessionId, request.agentRole(),
                 request.goal());
