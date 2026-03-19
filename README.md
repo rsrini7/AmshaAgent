@@ -13,7 +13,7 @@
 
 > **A self-hosted, security-first multi-agent AI framework built on Quarkus + LangChain4J**
 >
-> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 0.26.1 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Apache Camel · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Apache Camel · Groq Cloud
 
 ---
 

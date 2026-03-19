@@ -1,6 +1,6 @@
 # ArcClaw — Setup Guide
 
-> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 0.26.1 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This is the single source of truth for setting up ArcClaw on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. Work through the sections in order before moving to the [Testing Guide](./TESTING_GUIDE.md).
 

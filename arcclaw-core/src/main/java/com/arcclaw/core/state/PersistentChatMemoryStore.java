@@ -51,7 +51,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             return new ArrayList<>();
         }
         
-        // LangChain4j 0.26.1 utility for message serialization
+        // LangChain4j utility for message serialization
         List<ChatMessage> allMessages = 
                 ChatMessageDeserializer.messagesFromJson(entity.getMessagesJson());
 

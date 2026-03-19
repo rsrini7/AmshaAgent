@@ -1,6 +1,6 @@
 # ArcClaw — Testing Guide
 
-> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 0.26.1 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide documents the complete REST API and automated test suite for ArcClaw. Use it alongside the [Telegram Testing Guide](./TELEGRAM_TESTING.md) for full end-to-end coverage.
 
