@@ -394,6 +394,12 @@ mp:
 
 "%cli":
   quarkus:
+    banner:
+      enabled: false
+    mcp:
+      server:
+        stdio:
+          enabled: false
     log:
       level: ERROR
       console:
