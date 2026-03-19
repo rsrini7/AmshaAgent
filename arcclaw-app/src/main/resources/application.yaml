@@ -394,12 +394,6 @@ mp:
 
 "%cli":
   quarkus:
-    banner:
-      enabled: true
-      path: arcclaw-banner.txt
-    otel:
-      sdk:
-        disabled: true     # Stops the sun.misc.Unsafe JVM warnings
     log:
       level: ERROR
       console:
@@ -418,6 +412,9 @@ mp:
     hibernate-orm:
       log:
         sql: false # Forces SQL logging off even if global dev is true
+  arcclaw:
+    telegram:
+      enabled: false        
 
 "%dev":
   camel:
