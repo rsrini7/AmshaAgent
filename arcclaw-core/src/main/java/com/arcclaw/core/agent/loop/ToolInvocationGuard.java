@@ -51,7 +51,7 @@ public class ToolInvocationGuard {
 
     // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
     private static final Pattern GITHUB_TRIGGER_PATTERN = Pattern.compile(
-            "(?i)\\b(repo|repository|github|gh|fetch|gist|clone|" +
+            "(?i)\\b(repo|repository|github|gh|fetch|gist|gists|clone|" +
                     "pull\\s+request|pr|get|show|describe|description|desc|" +
                     "star|fork|issue|commit|branch|tag|readme|release)\\b");
 

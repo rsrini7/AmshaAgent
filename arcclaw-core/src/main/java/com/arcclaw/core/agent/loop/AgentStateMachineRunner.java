@@ -334,12 +334,33 @@ public class AgentStateMachineRunner {
                         List.copyOf(history)));
             }
 
-            log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
-            log.debugf(e, "Full stacktrace for ReasoningEngine failure at iteration %d in session %s", iteration, sessionId);
-            return StepDecision.terminal(AgentResult.failed(
-                    "ReasoningEngine error: " + e.getMessage(),
-                    AgentResult.FailureCategory.SYSTEM_ERROR,
-                    List.copyOf(history)));
+            boolean isNetworkError = e instanceof java.net.ConnectException
+                    || e instanceof java.net.SocketTimeoutException
+                    || e.getCause() instanceof java.net.ConnectException
+                    || e.getCause() instanceof java.net.SocketTimeoutException
+                    || (e.getMessage() != null && (
+                        e.getMessage().contains("ConnectTimeoutException")
+                        || e.getMessage().contains("connection timed out")
+                        || e.getMessage().contains("Connection reset")
+                        || e.getMessage().contains("Connection refused")));
+
+                if (isNetworkError) {
+                    log.errorf("ReasoningEngine network failure at iteration %d: %s",
+                            iteration, e.getMessage());
+                    log.debugf(e, "Full stacktrace for network failure in session %s", sessionId);
+                    return StepDecision.terminal(AgentResult.failed(
+                            "⚠️ Unable to reach the AI service. Please check your internet connection and try again.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.copyOf(history)));
+                }
+
+                log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
+                log.debugf(e, "Full stacktrace for ReasoningEngine failure...");
+                return StepDecision.terminal(AgentResult.failed(
+                        "ReasoningEngine error: " + e.getMessage(),
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
+
         }
 
         if (step == null) {
