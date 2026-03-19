@@ -1,6 +1,5 @@
 package com.arcclaw.core.config;
 
-import io.quarkus.runtime.LaunchMode;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -16,6 +15,9 @@ public class SystemMetadataRegistry {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "unknown")
     String appVersion;
 
+    @ConfigProperty(name = "quarkus.profile", defaultValue = "prod")
+    String activeProfile;
+
     private String startedAt;
 
     @PostConstruct
@@ -23,41 +25,13 @@ public class SystemMetadataRegistry {
         startedAt = Instant.now().toString();
     }
 
-    public String getAppName() {
-        return appName;
-    }
-
-    public String getAppVersion() {
-        return appVersion;
-    }
-
-    public String getStartedAt() {
-        return startedAt;
-    }
-
-    /**
-     * Package-private for unit testing — receives LaunchMode as arg
-     * so tests can call resolveEnvironment(LaunchMode.DEVELOPMENT)
-     * without needing to mock the static LaunchMode.current() call.
-     */
-    String resolveEnvironment(LaunchMode mode) {
-        return switch (mode) {
-            case DEVELOPMENT -> "dev";
-            case TEST -> "test";
-            case NORMAL -> "prod";
-            default -> "unknown";
-        };
-    }
-
-    /**
-     * Production entry point — calls static LaunchMode.current()
-     */
-    public String getEnvironment() {
-        return resolveEnvironment(LaunchMode.current());
-    }
+    public String getAppName()    { return appName; }
+    public String getAppVersion() { return appVersion; }
+    public String getStartedAt()  { return startedAt; }
+    public String getEnvironment() { return activeProfile; }
 
     public SystemInfo toInfo() {
-        return new SystemInfo(appName, appVersion, getEnvironment(), startedAt);
+        return new SystemInfo(appName, appVersion, activeProfile, startedAt);
     }
 
     public record SystemInfo(

@@ -6,15 +6,12 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
-import org.jboss.logging.Logger;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
 @Readiness
 @ApplicationScoped
 public class PodmanImageHealthCheck implements HealthCheck {
-
-    private static final Logger log = Logger.getLogger(PodmanImageHealthCheck.class);
 
     @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "docker.io/library/alpine:latest")
     protected String containerImage;
