@@ -22,16 +22,8 @@ public class PodmanImageHealthCheck implements HealthCheck {
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
     boolean sandboxEnabled;
    
-
-   @Override
+    @Override
     public HealthCheckResponse call() {
-        if (!sandboxEnabled) {
-            return HealthCheckResponse
-                .named("Podman Image: " + containerImage)
-                .up()
-                .withData("status", "sandbox disabled — skipped")
-                .build();
-        }
         try {
             ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "exists", containerImage);
             pb.redirectErrorStream(true);
@@ -42,13 +34,30 @@ public class PodmanImageHealthCheck implements HealthCheck {
                 process.destroyForcibly();
                 return HealthCheckResponse.named("Podman Image: " + containerImage)
                     .down()
-                    .withData("error", "image check timed out")
+                    .withData("error", "image check timed out — Podman machine may be stopped")
                     .build();
             }
+
             if (process.exitValue() == 0) {
+                if (!sandboxEnabled) {
+                    return HealthCheckResponse.named("Podman Image: " + containerImage)
+                        .up()
+                        .withData("status", "image present but sandbox is disabled")
+                        .withData("hint", "Set ARCCLAW_SANDBOX_ENABLED=true in .env or arcclaw.sandbox.enabled=true in application.yaml to enable")
+                        .build();
+                }
                 return HealthCheckResponse.named("Podman Image: " + containerImage)
                     .up()
                     .withData("image", containerImage)
+                    .build();
+            }
+
+            // exit != 0 means image not found
+            if (!sandboxEnabled) {
+                return HealthCheckResponse.named("Podman Image: " + containerImage)
+                    .down()
+                    .withData("error", "image not found")
+                    .withData("hint", "Run: podman pull " + containerImage)
                     .build();
             }
             return HealthCheckResponse.named("Podman Image: " + containerImage)
