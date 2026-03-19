@@ -13,15 +13,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class PodmanImageHealthCheck implements HealthCheck {
 
-    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "docker.io/library/alpine:latest")
-    protected String containerImage;
+    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "arcclaw-tool-runner:latest")
+    String containerImage;
 
     @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
     String podmanPath;
 
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
     boolean sandboxEnabled;
-   
+
     @Override
     public HealthCheckResponse call() {
         try {
@@ -35,6 +35,10 @@ public class PodmanImageHealthCheck implements HealthCheck {
                 return HealthCheckResponse.named("Podman Image: " + containerImage)
                     .down()
                     .withData("error", "image check timed out — Podman machine may be stopped")
+                    .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                    .withData("hint", sandboxEnabled
+                        ? "Run: podman machine start"
+                        : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                     .build();
             }
 
@@ -43,32 +47,40 @@ public class PodmanImageHealthCheck implements HealthCheck {
                     return HealthCheckResponse.named("Podman Image: " + containerImage)
                         .up()
                         .withData("status", "image present but sandbox is disabled")
-                        .withData("hint", "Set ARCCLAW_SANDBOX_ENABLED=true in .env or arcclaw.sandbox.enabled=true in application.yaml to enable")
+                        .withData("sandbox-enabled", "false")
+                        .withData("hint", "Set ARCCLAW_SANDBOX_ENABLED=true in .env or " +
+                                "arcclaw.sandbox.enabled=true in application.yaml to enable")
                         .build();
                 }
                 return HealthCheckResponse.named("Podman Image: " + containerImage)
                     .up()
                     .withData("image", containerImage)
+                    .withData("sandbox-enabled", "true")
                     .build();
             }
 
             // exit != 0 means image not found
-            if (!sandboxEnabled) {
-                return HealthCheckResponse.named("Podman Image: " + containerImage)
-                    .down()
-                    .withData("error", "image not found")
-                    .withData("hint", "Run: podman pull " + containerImage)
-                    .build();
-            }
             return HealthCheckResponse.named("Podman Image: " + containerImage)
                 .down()
-                .withData("error", "image not found — run: podman pull " + containerImage)
+                .withData("error", "image not found")
+                .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                .withData("hint", sandboxEnabled
+                    ? "Run: podman pull " + containerImage
+                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                 .build();
 
         } catch (Exception e) {
             return HealthCheckResponse.named("Podman Image: " + containerImage)
                 .down()
-                .withData("error", e.getMessage())
+                .withData("error", e.getMessage() != null
+                    ? (e.getMessage().length() > 200
+                        ? e.getMessage().substring(0, 200)
+                        : e.getMessage())
+                    : "unknown error")
+                .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                .withData("hint", sandboxEnabled
+                    ? "Run: podman machine start"
+                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                 .build();
         }
     }

@@ -32,6 +32,10 @@ public class PodmanHealthCheck implements HealthCheck {
                 return HealthCheckResponse.named("Podman Engine")
                     .down()
                     .withData("error", "Process timed out — Podman machine may be stopped")
+                    .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                    .withData("hint", sandboxEnabled
+                        ? "Run: podman machine start"
+                        : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                     .build();
             }
 
@@ -40,12 +44,15 @@ public class PodmanHealthCheck implements HealthCheck {
                     return HealthCheckResponse.named("Podman Engine")
                         .up()
                         .withData("status", "Podman is running but sandbox is disabled")
-                        .withData("hint", "Set ARCCLAW_SANDBOX_ENABLED=true in .env or arcclaw.sandbox.enabled=true in application.yaml to enable")
+                        .withData("sandbox-enabled", "false")
+                        .withData("hint", "Set ARCCLAW_SANDBOX_ENABLED=true in .env or " +
+                                "arcclaw.sandbox.enabled=true in application.yaml to enable")
                         .build();
                 }
                 return HealthCheckResponse.named("Podman Engine")
                     .up()
                     .withData("status", "running")
+                    .withData("sandbox-enabled", "true")
                     .build();
             }
 
@@ -53,12 +60,24 @@ public class PodmanHealthCheck implements HealthCheck {
             return HealthCheckResponse.named("Podman Engine")
                 .down()
                 .withData("error", err.length() > 200 ? err.substring(0, 200) : err)
+                .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                .withData("hint", sandboxEnabled
+                    ? "Run: podman machine start"
+                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                 .build();
 
         } catch (Exception e) {
             return HealthCheckResponse.named("Podman Engine")
                 .down()
-                .withData("error", e.getMessage())
+                .withData("error", e.getMessage() != null
+                    ? (e.getMessage().length() > 200
+                        ? e.getMessage().substring(0, 200)
+                        : e.getMessage())
+                    : "unknown error")
+                .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                .withData("hint", sandboxEnabled
+                    ? "Run: podman machine start"
+                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                 .build();
         }
     }
