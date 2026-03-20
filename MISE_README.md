@@ -49,20 +49,68 @@ mise run dev
 
 ## 2. Install mise
 
+### macOS / Linux / WSL2
+
 ```bash
-# macOS / Linux / WSL2
+# One-liner (bash/zsh/fish auto-detected)
 curl https://mise.run | sh
 
-# Wire to your shell (pick one)
-echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc   # bash
-echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc     # zsh
+# Or shell-specific (installs + wires activation automatically)
+curl https://mise.run/zsh  | sh   # zsh
+curl https://mise.run/bash | sh   # bash
 
-source ~/.bashrc   # or source ~/.zshrc
+# Wire manually if preferred (pick one)
+echo 'eval "$(~/.local/bin/mise activate zsh)"'  >> ~/.zshrc    # zsh
+echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc   # bash
+
+source ~/.zshrc   # or source ~/.bashrc
 ```
 
-Verify:
+### Windows — Scoop ✅ Recommended
+
+**Scoop is the recommended Windows installer** — it automatically adds mise shims to `PATH` and avoids the `%PATH%` length limit that winget can trigger. [mise.jdx](https://mise.jdx.dev/installing-mise.html)
+
+```powershell
+# Install Scoop if you don't have it
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+# Install mise
+scoop install mise
+```
+
+Wire to your **PowerShell profile** (Windows Terminal / PowerShell 7+):
+```powershell
+# PowerShell 7+ (pwsh.exe) — Windows Terminal default
+echo '(&mise activate pwsh) | Out-String | Invoke-Expression' `
+  >> $HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1
+
+# PowerShell 5.1 (powershell.exe) — legacy Windows PowerShell
+echo '(&mise activate pwsh) | Out-String | Invoke-Expression' `
+  >> $HOME\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1
+```
+
+Reload:
+```powershell
+. $PROFILE
+```
+
+### Windows — winget ⚠️ Caution
+
+```powershell
+winget install jdx.mise
+```
+
+> ⚠️ **PATH length limit**: Windows caps the user `%PATH%` at ~2048 characters.  If you [mise.jdx](https://mise.jdx.dev/installing-mise.html)
+> already have many tools installed, `winget install jdx.mise` can push you over that limit,
+> silently breaking PATH resolution for other tools. **Prefer Scoop** — it manages shims in a
+> single directory so only one path entry is needed regardless of how many tools are installed.
+
+### Verify (all platforms)
+
 ```bash
-mise --version   # mise 2025.x.x
+mise --version     # mise 2025.x.x
+mise doctor        # diagnoses common setup issues
 ```
 
 ---
