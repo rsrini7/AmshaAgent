@@ -5,19 +5,9 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     echo "❌  TELEGRAM_BOT_TOKEN is not set in .env"
     exit 1
 fi
-DEV_ARGS=(
-    "--add-opens=java.base/java.nio=ALL-UNNAMED"
-    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
-    "--add-opens=java.base/java.lang=ALL-UNNAMED"
-    "--enable-native-access=ALL-UNNAMED"
-    "-Dsun.misc.unsafe.memory.access=allow"
-    "-Dfile.encoding=UTF-8"
-    "-Dstdout.encoding=UTF-8"
-    "-Dsun.stdout.encoding=UTF-8"
-    "-Dsun.stderr.encoding=UTF-8"
-    "-Dquarkus.profile=dev"
-    "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+exec ./mvnw quarkus:dev -pl arcclaw-app -am \
+    '-Djvm.args=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Darcclaw.telegram.enabled=true' \
+    "-Dquarkus.args=attach" \
+    "-Dquarkus.profile=dev" \
+    "-Darcclaw.rag.vec-extension-path=../lib/vec0" \
     "-Darcclaw.data-dir=../data"
-)
-DEV_ARGS+=("-Dquarkus.args=attach" "-Darcclaw.telegram.enabled=true")
-exec ./mvnw quarkus:dev -pl arcclaw-app -am "${DEV_ARGS[@]}"

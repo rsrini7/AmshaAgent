@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run native binary — Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env) (Linux/WSL2 only)"
+#MISE description="Run native binary — Telegram daemon (Linux/WSL2 only)"
 set -euo pipefail
 RUNNER="arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
 if [[ ! -f "$RUNNER" ]]; then

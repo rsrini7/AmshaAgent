@@ -11,7 +11,6 @@ GOAL="${1:-${GOAL:-}}"
 if [[ -z "$GOAL" ]]; then
     echo "Usage:  mise run ask -- \"Your goal here\""
     echo "Or:     GOAL=\"Your goal\" mise run ask"
-    echo ""
     echo "Roles:  coordinator · researcher · architect · synthesizer · debugger"
     exit 1
 fi

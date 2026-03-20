@@ -1,40 +1,35 @@
 # =============================================================================
 # mise.toml — ArcClaw Agent Kernel
 # Docs: https://mise.jdx.dev
-#
-# Platform support: macOS · WSL2 (Ubuntu) · Linux
-# Windows (native PowerShell): see scripts/windows/ — ps1 wrappers still work
+# Platform: macOS · WSL2 (Ubuntu) · Linux
+# Windows: see scripts/windows/ for .ps1 wrappers
 # =============================================================================
 
 [tools]
-java  = "temurin-25"   # JDK 25 Temurin — pinned per-project
-maven = "3.9"          # fallback; ./mvnw wrapper is included in the repo
+java  = "temurin-25"
+maven = "3.9"
 
-# ---------------------------------------------------------------------------
-# Environment — loaded into every task + your shell on `cd` into this dir
-# ---------------------------------------------------------------------------
 [env]
+# Auto-load project secrets — never committed
 _.file = ".env"
 
-# JDK 25 module opens — inherited by all tasks via JDK_JAVA_OPTIONS
-JDK_JAVA_OPTIONS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
-
-# sqlite-vec extension path (no suffix — SQLite appends .so/.dylib automatically)
+# sqlite-vec extension path (no suffix — SQLite appends .so/.dylib)
 ARCCLAW_VEC_EXT = "../lib/vec0"
 
 # Default data directory relative to project root
 ARCCLAW_DATA_DIR_DEFAULT = "../data"
 
-# ---------------------------------------------------------------------------
-# Task config — auto-discovers mise-tasks/ directory
-# ---------------------------------------------------------------------------
+# NOTE: JDK_JAVA_OPTIONS is intentionally NOT set here.
+# Setting it globally causes mvnw to receive --add-opens as Maven CLI args
+# (Maven CLI parser does not understand JVM-level flags).
+# Each task sets MAVEN_OPTS inline (for build tasks) or uses
+# -Djvm.args (for quarkus:dev tasks) to scope the flags correctly.
+
 [task_config]
 includes = ["mise-tasks"]
 
 # ---------------------------------------------------------------------------
-# Inline proxy tasks — these three share a name with a subdirectory in
-# mise-tasks/ so they cannot be file tasks (filesystem constraint).
-# All other tasks live in mise-tasks/ as self-contained scripts.
+# Inline proxy tasks (share name with a subdirectory — filesystem constraint)
 # ---------------------------------------------------------------------------
 
 [tasks.setup]
@@ -42,25 +37,17 @@ description = "First-time setup: .env, chmod +x mvnw and all mise-tasks scripts"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-
 if [[ ! -f .env ]]; then
     cp .env.example .env
     echo "✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc."
 else
     echo "ℹ️   .env already exists — skipping copy."
 fi
-
 chmod +x mvnw
-echo "✅  mvnw is executable."
-
 find mise-tasks -type f | xargs chmod +x 2>/dev/null || true
-echo "✅  All mise-tasks scripts are executable."
-
+echo "✅  mvnw and all mise-tasks scripts are executable."
 echo ""
-echo "Next steps:"
-echo "  mise run setup:env-check   → validate .env"
-echo "  mise run build             → compile the application"
-echo "  mise run dev               → start with hot reload"
+echo "Next:  mise run setup:env-check   mise run build   mise run dev"
 """
 
 [tasks.build]
@@ -68,6 +55,7 @@ description = "JVM build — all modules, skip tests (fast daily driver)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
 echo "✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar"
 """
@@ -77,20 +65,10 @@ description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no P
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-DEV_ARGS=(
-    "--add-opens=java.base/java.nio=ALL-UNNAMED"
-    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
-    "--add-opens=java.base/java.lang=ALL-UNNAMED"
-    "--enable-native-access=ALL-UNNAMED"
-    "-Dsun.misc.unsafe.memory.access=allow"
-    "-Dfile.encoding=UTF-8"
-    "-Dstdout.encoding=UTF-8"
-    "-Dsun.stdout.encoding=UTF-8"
-    "-Dsun.stderr.encoding=UTF-8"
-    "-Dquarkus.args=serve"
-    "-Dquarkus.profile=dev"
-    "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+exec ./mvnw quarkus:dev -pl arcclaw-app -am \
+    '-Djvm.args=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow' \
+    "-Dquarkus.args=serve" \
+    "-Dquarkus.profile=dev" \
+    "-Darcclaw.rag.vec-extension-path=../lib/vec0" \
     "-Darcclaw.data-dir=../data"
-)
-exec ./mvnw quarkus:dev -pl arcclaw-app -am "${DEV_ARGS[@]}"
 """

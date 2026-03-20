@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Native build with 6 GB heap cap (for memory-constrained machines)"
 set -euo pipefail
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
 ./mvnw clean package -pl arcclaw-app -am -Pnative -DskipTests \
     "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 echo "✅  Native binary built with 6 GB heap cap."

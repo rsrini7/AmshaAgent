@@ -21,6 +21,6 @@ JVM_ARGS=(
     "-Dsun.stdout.encoding=UTF-8"
     "-Dsun.stderr.encoding=UTF-8"
     "-Dquarkus.profile=cli"
-    "-Darcclaw.telegram.enabled=true"
 )
+JVM_ARGS+=("-Darcclaw.telegram.enabled=true")
 exec java "${JVM_ARGS[@]}" -jar "$JAR" attach

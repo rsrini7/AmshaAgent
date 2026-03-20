@@ -2,5 +2,6 @@
 #MISE description="GraalVM native binary via Mandrel container (requires Podman, ≥8 GB RAM, 5–15 min)"
 set -euo pipefail
 echo "⚠️   Native build: Podman must be running. Needs ≥8 GB free RAM. Takes 5–15 min."
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
 ./mvnw clean package -pl arcclaw-app -am -Pnative -DskipTests
 echo "✅  Native binary: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"

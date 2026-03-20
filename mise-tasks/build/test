@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 #MISE description="Build and run all tests (clean verify)"
 set -euo pipefail
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
 ./mvnw clean verify -pl arcclaw-app -am
