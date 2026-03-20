@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Rebuild all Docker Compose images"
+set -euo pipefail
+docker compose build
+echo "✅  All Compose images rebuilt."

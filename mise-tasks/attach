@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Run packaged jar — Telegram channel daemon (CLI profile, requires TELEGRAM_BOT_TOKEN)"
+set -euo pipefail
+JAR="arcclaw-app/target/quarkus-app/quarkus-run.jar"
+if [[ ! -f "$JAR" ]]; then
+    echo "❌  JAR not found. Run: mise run build"
+    exit 1
+fi
+if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+    echo "❌  TELEGRAM_BOT_TOKEN is not set in .env"
+    exit 1
+fi
+./arcclaw-cli.sh attach

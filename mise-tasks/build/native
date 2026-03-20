@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="GraalVM native binary via Mandrel container (requires Podman, ≥8 GB RAM, 5–15 min)"
+set -euo pipefail
+echo "⚠️   Native build: Podman must be running. Needs ≥8 GB free RAM. Takes 5–15 min."
+./mvnw clean package -pl arcclaw-app -am -Pnative -DskipTests
+echo "✅  Native binary: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"

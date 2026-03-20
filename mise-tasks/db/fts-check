@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Verify SQLite FTS5 is available (required for full-text search)"
+set -euo pipefail
+if sqlite3 :memory: "CREATE VIRTUAL TABLE t USING fts5(x);" 2>/dev/null; then
+    echo "✅  FTS5 is available."
+else
+    echo "❌  FTS5 not available."
+    echo "    Fix: sudo apt install sqlite3   (Ubuntu)"
+    exit 1
+fi

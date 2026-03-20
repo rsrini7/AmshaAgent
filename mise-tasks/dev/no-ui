@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
+set -euo pipefail
+./mvnw quarkus:dev -pl arcclaw-app -am \
+    "-Dquarkus.args=serve" \
+    "-Dquarkus.console.enabled=false" \
+    "-Dquarkus.devui.enabled=false" \
+    "-Darcclaw.rag.vec-extension-path=${ARCCLAW_VEC_EXT}" \
+    "-Darcclaw.data-dir=${ARCCLAW_DATA_DIR_DEFAULT}"

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
+set -euo pipefail
+sudo apt-get install -y dos2unix
+dos2unix mvnw
+chmod +x mvnw
+echo "✅  mvnw CRLF fixed and marked executable."

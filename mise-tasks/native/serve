@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Run native binary — REST daemon (Linux/WSL2 only, requires mise run build:native)"
+set -euo pipefail
+RUNNER="arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
+if [[ ! -f "$RUNNER" ]]; then
+    echo "❌  Native binary not found. Run: mise run build:native"
+    exit 1
+fi
+./arcclaw-native.sh serve

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="List all available mise tasks with descriptions"
+mise tasks

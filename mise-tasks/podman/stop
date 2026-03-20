@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="macOS: stop the Podman machine"
+set -euo pipefail
+podman machine stop
+echo "✅  Podman machine stopped."

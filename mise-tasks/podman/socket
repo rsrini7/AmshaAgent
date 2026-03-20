@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
+set -euo pipefail
+systemctl --user enable --now podman.socket
+SOCK="/run/user/$(id -u)/podman/podman.sock"
+ls -l "$SOCK"
+echo ""
+echo "✅  Podman socket active."
+echo "    Add this to ~/.bashrc:"
+echo "    export DOCKER_HOST=\"unix://$SOCK\""

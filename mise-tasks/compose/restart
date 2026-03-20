@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Restart only the arcclaw service (observability stack stays up)"
+set -euo pipefail
+docker compose restart arcclaw
+echo "✅  arcclaw service restarted."

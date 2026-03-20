@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
+set -euo pipefail
+RUNNER="arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
+if [[ ! -f "$RUNNER" ]]; then
+    echo "❌  Native binary not found. Run: mise run build:native"
+    exit 1
+fi
+docker compose up -d
+echo ""
+echo "✅  Stack started:"
+echo "    ArcClaw REST  → http://localhost:8080"
+echo "    Jaeger UI     → http://localhost:16686"
+echo "    Prometheus    → http://localhost:9090"
+echo "    Ollama        → http://localhost:11434"

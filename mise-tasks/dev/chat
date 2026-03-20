@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Dev mode — interactive REPL (hot reload, strategy: NONE)"
+set -euo pipefail
+./arcclaw-dev.sh chat

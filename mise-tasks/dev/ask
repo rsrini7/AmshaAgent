@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description='Dev mode — one-shot task. Usage: mise run dev:ask -- "Your goal"'
+#MISE alias="da"
+set -euo pipefail
+GOAL="${1:-${GOAL:-}}"
+if [[ -z "$GOAL" ]]; then
+    echo "Usage:  mise run dev:ask -- \"Your goal here\""
+    echo "Or:     GOAL=\"Your goal\" mise run dev:ask"
+    echo ""
+    echo "Roles (optional):  coordinator · researcher · architect · synthesizer · debugger"
+    echo "        ROLE=researcher mise run dev:ask -- \"Research LangChain4j ScopedValues\""
+    exit 1
+fi
+./arcclaw-dev.sh ask "$GOAL" ${ROLE:+--role "$ROLE"}

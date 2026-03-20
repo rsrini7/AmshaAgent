@@ -1,0 +1,79 @@
+# =============================================================================
+# mise.toml — ArcClaw Agent Kernel
+# Docs: https://mise.jdx.dev
+#
+# Platform support: macOS · WSL2 (Ubuntu) · Linux
+# Windows (native): use the .ps1 wrappers directly — see MISE_README.md §13
+# =============================================================================
+
+[tools]
+java  = "temurin-25"   # JDK 25 Temurin — pinned per-project
+maven = "3.9"          # fallback; ./mvnw wrapper is included in the repo
+
+# ---------------------------------------------------------------------------
+# Environment — loaded into every task + your shell on `cd` into this dir
+# ---------------------------------------------------------------------------
+[env]
+# Auto-load .env secrets (never committed)
+_.file = ".env"
+
+# JDK 25 module opens required by Netty / Quarkus (applied to all tasks)
+JDK_JAVA_OPTIONS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
+
+# sqlite-vec extension (no suffix — SQLite appends .so/.dylib automatically)
+ARCCLAW_VEC_EXT = "../lib/vec0"
+
+# Default data directory relative to project root
+ARCCLAW_DATA_DIR_DEFAULT = "../data"
+
+# ---------------------------------------------------------------------------
+# Task config — auto-discovers mise-tasks/ directory
+# ---------------------------------------------------------------------------
+[task_config]
+includes = ["mise-tasks"]
+
+# ---------------------------------------------------------------------------
+# Inline proxy tasks — these share a name with a subdirectory in mise-tasks/
+# so they CANNOT be file tasks (filesystem can't have both file and dir
+# with the same name). All other tasks live in mise-tasks/.
+# ---------------------------------------------------------------------------
+
+[tasks.setup]
+description = "First-time setup: .env, chmod +x all scripts and mise-tasks"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 1. Create .env from example
+if [[ ! -f .env ]]; then
+    cp .env.example .env
+    echo "✅  .env created — open it and fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc."
+else
+    echo "ℹ️   .env already exists — skipping copy."
+fi
+
+# 2. chmod +x repo shell scripts
+chmod +x mvnw
+chmod +x arcclaw-cli.sh arcclaw-dev.sh arcclaw-native.sh
+echo "✅  Shell scripts are executable."
+
+# 3. chmod +x every file in mise-tasks/
+find mise-tasks -type f | xargs chmod +x 2>/dev/null || true
+echo "✅  mise-tasks/ scripts are executable."
+
+echo ""
+echo "Next: run  mise run setup:env-check  to validate .env"
+"""
+
+[tasks.build]
+description = "JVM build — all modules, skip tests (fast daily driver)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+./mvnw clean package -pl arcclaw-app -am -DskipTests
+echo "✅  Build done: arcclaw-app/target/quarkus-app/quarkus-run.jar"
+"""
+
+[tasks.dev]
+description = "Dev mode — serve on :8080 with hot reload (strategy: NONE)"
+run = "./arcclaw-dev.sh serve"

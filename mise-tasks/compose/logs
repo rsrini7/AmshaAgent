@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Follow live arcclaw container logs (Ctrl+C to stop)"
+docker compose logs -f arcclaw

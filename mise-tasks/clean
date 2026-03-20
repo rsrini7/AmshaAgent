@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Clean Maven build artifacts"
+set -euo pipefail
+./mvnw clean
+echo "✅  Build artifacts cleaned."

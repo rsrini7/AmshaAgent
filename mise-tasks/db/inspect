@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Open arcclaw-meta.db in sqlite3 interactive CLI"
+set -euo pipefail
+DB="${ARCCLAW_DATA_DIR:-./data}/arcclaw-meta.db"
+if [[ ! -f "$DB" ]]; then
+    echo "❌  Database not found at: $DB"
+    echo "    Has ArcClaw been started at least once?"
+    exit 1
+fi
+echo "Opening $DB ..."
+sqlite3 "$DB"

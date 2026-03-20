@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Run packaged jar — interactive REPL (CLI profile)"
+set -euo pipefail
+JAR="arcclaw-app/target/quarkus-app/quarkus-run.jar"
+if [[ ! -f "$JAR" ]]; then
+    echo "❌  JAR not found. Run: mise run build"
+    exit 1
+fi
+./arcclaw-cli.sh chat

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Native build with 6 GB heap cap (for memory-constrained machines)"
+set -euo pipefail
+./mvnw clean package -pl arcclaw-app -am -Pnative -DskipTests \
+    "-Dquarkus.native.additional-build-args=-J-Xmx6g"
+echo "✅  Native binary built with 6 GB heap cap."
