@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Build the arcclaw-tool-runner Podman/Docker image (required before running in %prod)"
+#MISE description="Build arcclaw-tool-runner Podman/Docker image (required before running in %prod)"
 set -euo pipefail
 if command -v docker &>/dev/null; then
     echo "→ Using Docker Compose..."

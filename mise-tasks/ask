@@ -13,7 +13,18 @@ if [[ -z "$GOAL" ]]; then
     echo "Or:     GOAL=\"Your goal\" mise run ask"
     echo ""
     echo "Roles:  coordinator · researcher · architect · synthesizer · debugger"
-    echo "        ROLE=researcher mise run ask -- \"Summarize audit events\""
     exit 1
 fi
-./arcclaw-cli.sh ask "$GOAL" ${ROLE:+--role "$ROLE"}
+JVM_ARGS=(
+    "--add-opens=java.base/java.nio=ALL-UNNAMED"
+    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
+    "--add-opens=java.base/java.lang=ALL-UNNAMED"
+    "--enable-native-access=ALL-UNNAMED"
+    "-Dsun.misc.unsafe.memory.access=allow"
+    "-Dfile.encoding=UTF-8"
+    "-Dstdout.encoding=UTF-8"
+    "-Dsun.stdout.encoding=UTF-8"
+    "-Dsun.stderr.encoding=UTF-8"
+    "-Dquarkus.profile=cli"
+)
+exec java "${JVM_ARGS[@]}" -jar "$JAR" ask "$GOAL" ${ROLE:+--role "$ROLE"}

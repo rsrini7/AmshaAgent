@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
 #MISE description="macOS: start the Podman machine"
 set -euo pipefail
-podman machine start
-echo "✅  Podman machine started."
+podman machine start && echo "✅  Podman machine started."

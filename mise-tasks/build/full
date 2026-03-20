@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Clean install all modules including arcclaw-core, arcclaw-mcp, arcclaw-rag (skip tests)"
+#MISE description="Clean install all modules: arcclaw-core, channel-api, mcp, rag, deployment, app (skip tests)"
 set -euo pipefail
 ./mvnw clean install \
     -pl arcclaw-core,arcclaw-channel-api,arcclaw-mcp,arcclaw-rag,arcclaw-deployment,arcclaw-app \

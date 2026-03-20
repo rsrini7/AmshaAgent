@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description='Dev mode — one-shot task. Usage: mise run dev:ask -- "Your goal"'
+#MISE description='Dev mode — one-shot task with hot reload. Usage: mise run dev:ask -- "Your goal"'
 #MISE alias="da"
 set -euo pipefail
 GOAL="${1:-${GOAL:-}}"
@@ -7,8 +7,22 @@ if [[ -z "$GOAL" ]]; then
     echo "Usage:  mise run dev:ask -- \"Your goal here\""
     echo "Or:     GOAL=\"Your goal\" mise run dev:ask"
     echo ""
-    echo "Roles (optional):  coordinator · researcher · architect · synthesizer · debugger"
-    echo "        ROLE=researcher mise run dev:ask -- \"Research LangChain4j ScopedValues\""
+    echo "Roles:  coordinator · researcher · architect · synthesizer · debugger"
     exit 1
 fi
-./arcclaw-dev.sh ask "$GOAL" ${ROLE:+--role "$ROLE"}
+DEV_ARGS=(
+    "--add-opens=java.base/java.nio=ALL-UNNAMED"
+    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
+    "--add-opens=java.base/java.lang=ALL-UNNAMED"
+    "--enable-native-access=ALL-UNNAMED"
+    "-Dsun.misc.unsafe.memory.access=allow"
+    "-Dfile.encoding=UTF-8"
+    "-Dstdout.encoding=UTF-8"
+    "-Dsun.stdout.encoding=UTF-8"
+    "-Dsun.stderr.encoding=UTF-8"
+    "-Dquarkus.profile=dev"
+    "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+    "-Darcclaw.data-dir=../data"
+    "-Dquarkus.args=ask $GOAL${ROLE:+ --role $ROLE}"
+)
+exec ./mvnw quarkus:dev -pl arcclaw-app -am "${DEV_ARGS[@]}"

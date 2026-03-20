@@ -3,7 +3,7 @@
 echo "── Podman version ───────────────────────────────"
 podman --version 2>/dev/null || echo "  podman not found"
 echo "── Running containers ───────────────────────────"
-podman ps 2>/dev/null || echo "  (podman not running or no containers)"
+podman ps 2>/dev/null || echo "  (podman not running)"
 echo "── arcclaw-tool-runner image ────────────────────"
 if podman images 2>/dev/null | grep -q arcclaw-tool-runner; then
     podman images | grep arcclaw-tool-runner

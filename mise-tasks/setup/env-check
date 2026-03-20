@@ -8,8 +8,8 @@ fi
 source .env
 issues=()
 [[ -z "${GROQ_API_KEY:-}" ]]                                   && issues+=("GROQ_API_KEY is empty")
-[[ "${ARCCLAW_VAULT_PEPPER:-}"    == *"changeme"* ]]           && issues+=("ARCCLAW_VAULT_PEPPER is still a placeholder")
-[[ "${ARCCLAW_AUDIT_HMAC_KEY:-}"  == *"changeme"* ]]           && issues+=("ARCCLAW_AUDIT_HMAC_KEY is still a placeholder")
+[[ "${ARCCLAW_VAULT_PEPPER:-}"     == *"changeme"* ]]          && issues+=("ARCCLAW_VAULT_PEPPER is still a placeholder")
+[[ "${ARCCLAW_AUDIT_HMAC_KEY:-}"   == *"changeme"* ]]          && issues+=("ARCCLAW_AUDIT_HMAC_KEY is still a placeholder")
 [[ "${ARCCLAW_API_KEY_INTERNAL:-}" == *"changeme"* ]]          && issues+=("ARCCLAW_API_KEY_INTERNAL is still a placeholder")
 if [[ ${#issues[@]} -gt 0 ]]; then
     echo "⚠️   Issues found in .env:"
