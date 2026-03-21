@@ -183,12 +183,12 @@ Write-Host '✅  mvnw CRLF fixed and marked executable.'
 [tasks."jdk:graalvm"]
 description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
 dir = "{{config_root}}"
-run = ["mise use java@graalvm-community-25.0.2", "java -version"]
+run = ["mise use --path mise.pwsh.toml java@graalvm-community-25.0.2", "java -version"]
 
 [tasks."jdk:temurin"]
 description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
 dir = "{{config_root}}"
-run = ["mise use java@temurin-25", "java -version"]
+run = ["mise use --path mise.pwsh.toml java@temurin-25", "java -version"]
 
 [tasks."jdk:install"]
 description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
@@ -340,7 +340,7 @@ if ($strategy -eq 'container') {
 } else {
     # ── Local build — switch to GraalVM, restore Temurin after ───────────────
     try {
-        mise use java@graalvm-community-25.0.2
+        mise use --path mise.pwsh.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
         # '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' - if needed add it
         & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
@@ -350,7 +350,7 @@ if ($strategy -eq 'container') {
     } finally {
         if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
         elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
-        mise use java@temurin-25
+        mise use --path mise.pwsh.toml java@temurin-25
         Write-Host '✅  Switched back to Temurin 25.'
     }
 }
@@ -394,7 +394,7 @@ if (Test-Path '.env') {
 }
 # ─────────────────────────────────────────────────────────────────────────────
 try {
-    mise use java@graalvm-community-25.0.2
+    mise use --path mise.pwsh.toml java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
     # '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' - if needed add it
@@ -412,7 +412,7 @@ try {
     # ── restore .env ──────────────────────────────────────────────────────────
     if ($envBackup -eq $true)          { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
-    mise use java@temurin-25
+    mise use --path mise.pwsh.toml java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
 }
 """
@@ -447,7 +447,7 @@ if (Test-Path '.env') {
 }
 # ─────────────────────────────────────────────────────────────────────────────
 try {
-    mise use java@graalvm-community-25.0.2
+    mise use --path mise.pwsh.toml java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
         '-Dquarkus.native.container-build=false' `
@@ -460,7 +460,7 @@ try {
     # ── restore .env ──────────────────────────────────────────────────────────
     if ($envBackup -eq $true)          { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
-    mise use java@temurin-25
+    mise use --path mise.pwsh.toml java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
 }
 """

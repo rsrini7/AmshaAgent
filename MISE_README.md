@@ -892,6 +892,24 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 
 ## 18. Troubleshooting
 
+### `mise.toml` keeps getting a `[tools]` block added to it
+
+`mise use java@...` writes to the nearest `mise.toml` by default, regardless of
+`MISE_DEFAULT_CONFIG_FILENAME`. This means any `jdk:graalvm`, `jdk:temurin`, or
+`build:native*` task that calls `mise use` without `--path` will pollute `mise.toml`.
+
+**Fix — ensure every `mise use` call in both platform configs has an explicit `--path`:**
+
+```bash
+# mise.bash.toml — all occurrences:
+mise use --path mise.bash.toml java@graalvm-community-25.0.2
+mise use --path mise.bash.toml java@temurin-25
+
+# mise.pwsh.toml — all occurrences:
+mise use --path mise.pwsh.toml java@graalvm-community-25.0.2
+mise use --path mise.pwsh.toml java@temurin-25
+```
+
 ### `mise ERROR Config files … are not trusted`
 
 ```bash

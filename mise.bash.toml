@@ -97,7 +97,7 @@ echo '✅  mvnw CRLF fixed and marked executable.'
 description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
 dir = "{{config_root}}"
 run = [
-  "mise use java@graalvm-community-25.0.2",
+  "mise use --path mise.bash.toml java@graalvm-community-25.0.2",
   "java -version",
 ]
 
@@ -105,7 +105,7 @@ run = [
 description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
 dir = "{{config_root}}"
 run = [
-  "mise use java@temurin-25",
+  "mise use --path mise.bash.toml java@temurin-25",
   "java -version",
 ]
 
@@ -239,10 +239,10 @@ else
         if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
         elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
         fi
-        mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+        mise use --path mise.bash.toml java@temurin-25 && echo '✅  Switched back to Temurin 25.'
     }
     trap _arcclaw_native_cleanup EXIT
-    mise use java@graalvm-community-25.0.2
+    mise use --path mise.bash.toml java@graalvm-community-25.0.2
     GRAAL_HOME="$(mise where java@graalvm-community-25.0.2)"
     export JAVA_HOME="$GRAAL_HOME" GRAALVM_HOME="$GRAAL_HOME"
     export PATH="$GRAAL_HOME/bin:$PATH"
@@ -288,10 +288,10 @@ _arcclaw_native_cleanup() {
     if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
     elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
     fi
-    mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+    mise use --path mise.bash.toml java@temurin-25 && echo '✅  Switched back to Temurin 25.'
 }
 trap _arcclaw_native_cleanup EXIT
-mise use java@graalvm-community-25.0.2
+mise use --path mise.bash.toml java@graalvm-community-25.0.2
 GRAAL_HOME="$(mise where java@graalvm-community-25.0.2)"
 export JAVA_HOME="$GRAAL_HOME" GRAALVM_HOME="$GRAAL_HOME"
 export PATH="$GRAAL_HOME/bin:$PATH"
@@ -334,10 +334,10 @@ _arcclaw_native_cleanup() {
     if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
     elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
     fi
-    mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+    mise use --path mise.bash.toml java@temurin-25 && echo '✅  Switched back to Temurin 25.'
 }
 trap _arcclaw_native_cleanup EXIT
-mise use java@graalvm-community-25.0.2
+mise use --path mise.bash.toml java@graalvm-community-25.0.2
 GRAAL_HOME="$(mise where java@graalvm-community-25.0.2)"
 export JAVA_HOME="$GRAAL_HOME" GRAALVM_HOME="$GRAAL_HOME"
 export PATH="$GRAAL_HOME/bin:$PATH"
