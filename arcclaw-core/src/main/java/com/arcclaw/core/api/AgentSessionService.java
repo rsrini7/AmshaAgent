@@ -3,6 +3,7 @@ package com.arcclaw.core.api;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -87,7 +88,7 @@ public class AgentSessionService {
 
     public String createSession() {
         String sessionId = UUID.randomUUID().toString();
-        log.infof("Creating new session: {}", sessionId);
+        log.infof("Creating new session:  %s", sessionId);
         heartbeatTracker.recordHeartbeat(sessionId);
         return sessionId;
     }
@@ -97,8 +98,15 @@ public class AgentSessionService {
     }
 
     public Response runSync(String sessionId, RunAgentRequest request) {
-        log.infof("Running agent sync for session: {}, role: {}, goal: {}", sessionId, request.agentRole(),
+        log.infof("Running agent sync for session:  %s, role:  %s, goal:  %s", sessionId, request.agentRole(),
                 request.goal());
+
+        var sessionError = validateSession(sessionId);
+        if (sessionError.isPresent()) return sessionError.get();
+
+        var roleError = validateRole(request.agentRole());
+        if (roleError.isPresent()) return roleError.get();
+
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         try {
@@ -114,7 +122,7 @@ public class AgentSessionService {
                 );
             });
         } catch (Exception e) {
-            log.errorf("Sync agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+            log.errorf("Sync agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
             return Response.serverError()
                     .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
@@ -122,7 +130,14 @@ public class AgentSessionService {
     }
 
     public void runAsync(String sessionId, RunAgentRequest request, AsyncResponse response) {
-        log.infof("Submitting async agent run to @VirtualThreads executor, session: {}", sessionId);
+        log.infof("Submitting async agent run to @VirtualThreads executor, session:  %s", sessionId);
+
+        var sessionError = validateSession(sessionId);
+        if (sessionError.isPresent()) { response.resume(sessionError.get()); return; }
+
+        var roleError = validateRole(request.agentRole());
+        if (roleError.isPresent()) { response.resume(roleError.get()); return; }
+
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
@@ -162,7 +177,7 @@ public class AgentSessionService {
                 });
 
             } catch (Exception e) {
-                log.errorf("Async agent run threw exception for session {}: {}", sessionId, e.getMessage(), e);
+                log.errorf("Async agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
                 response.resume(Response.serverError()
                         .entity(Map.of("status", "ERROR", "message",
                             e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
@@ -173,6 +188,13 @@ public class AgentSessionService {
 
     public Response approve(String sessionId, String agentRole) {
         log.infof("REST approve for session %s role %s", sessionId, agentRole);
+
+        var sessionError = validateSession(sessionId);
+        if (sessionError.isPresent()) return sessionError.get();
+
+        var roleError = validateRole(agentRole);
+        if (roleError.isPresent()) return roleError.get();
+
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
@@ -201,6 +223,13 @@ public class AgentSessionService {
 
     public Response deny(String sessionId, String agentRole) {
         log.infof("REST deny for session %s role %s", sessionId, agentRole);
+
+        var sessionError = validateSession(sessionId);
+        if (sessionError.isPresent()) return sessionError.get();
+
+        var roleError = validateRole(agentRole);
+        if (roleError.isPresent()) return roleError.get();
+
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
@@ -225,30 +254,39 @@ public class AgentSessionService {
     }
 
     public Response getStatus(String sessionId, String role) {
-        String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
-        return agentStore.load(sessionId, canonicalRole)
-                .map(cp -> {
-                    try {
-                        List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-                        return Response.ok(new SessionStatusResponse(
-                                sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
-                    } catch (Exception e) {
-                        log.errorf("Failed to load steps for session %s: %s",
-                                sessionId, e.getMessage(), e);
-                        return Response.serverError().entity(e.getMessage()).build();
-                    }
-                })
-                .orElseGet(() -> Response.ok(Map.of(
-                        "sessionId", sessionId,
-                        "role", canonicalRole,
-                        "status", CheckpointStatus.NOT_STARTED.name(),
-                        "steps", List.of()
-                )).build());
+        var sessionError = validateSession(sessionId);
+        if (sessionError.isPresent()) return sessionError.get();
+
+        try {
+            String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
+            return agentStore.load(sessionId, canonicalRole)
+                    .map(cp -> {
+                        try {
+                            List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
+                            return Response.ok(new SessionStatusResponse(
+                                    sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
+                        } catch (Exception e) {
+                            log.errorf("Failed to load steps for session %s: %s",
+                                    sessionId, e.getMessage(), e);
+                            return Response.serverError().entity(e.getMessage()).build();
+                        }
+                    })
+                    .orElseGet(() -> Response.ok(Map.of(
+                            "sessionId", sessionId,
+                            "role", canonicalRole,
+                            "status", CheckpointStatus.NOT_STARTED.name(),
+                            "steps", List.of()
+                    )).build());
+            } catch (IllegalArgumentException e) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
+                    .build();
+            }
     }
 
 
     public Response terminateSession(String sessionId) {
-        log.infof("Terminating session: {}", sessionId);
+        log.infof("Terminating session:  %s", sessionId);
         workspaceManager.terminateSession(sessionId);
         return Response.noContent().build();
     }
@@ -267,4 +305,28 @@ public class AgentSessionService {
         };
         return new MessageContext("rest-chat-" + sessionId, user, msg, noOpSender);
     }
+
+    private Optional<Response> validateRole(String role) {
+        try {
+            AgentRoleEnum.fromString(role);
+            return Optional.empty();
+        } catch (IllegalArgumentException e) {
+            return Optional.of(Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
+                    .build());
+        }
+    }
+
+    private Optional<Response> validateSession(String sessionId) {
+        if (!heartbeatTracker.exists(sessionId)) {
+            return Optional.of(Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of(
+                        "error", "Session not found: " + sessionId,
+                        "code",  "SESSION_NOT_FOUND"
+                    ))
+                    .build());
+        }
+        return Optional.empty();
+    }
+
 }

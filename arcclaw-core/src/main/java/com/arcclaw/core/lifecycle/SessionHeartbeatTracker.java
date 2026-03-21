@@ -43,6 +43,12 @@ public class SessionHeartbeatTracker {
         return Map.copyOf(heartbeats);  // immutable snapshot
     }
 
+    /**
+     * Returns true if the session is currently being tracked.
+     */
+    public boolean exists(String sessionId) {
+        return heartbeats.containsKey(sessionId);
+    }
 
     /**
      * Get the number of tracked sessions (for testing/monitoring).

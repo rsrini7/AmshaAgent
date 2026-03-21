@@ -126,7 +126,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ERROR CASES
 # ─────────────────────────────────────────────────────────────────
 
-### [SESSION-9] Status on non-existent session → expect 404
+### [SESSION-9] Status on non-existent session → expect SESSION_NOT_FOUND (it means 404)
 GET {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -145,9 +145,20 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-11] Unknown agent role → expect 500 (IllegalArgumentException from AgentRoleEnum.fromString)
-# Valid roles: coordinator | researcher | coder | debugger | architect | synthesizer
+### [SESSION-11] Unknown session id
 POST {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000001/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Hello",
+    "agentRole": "shiva",
+    "maxIterations": 1
+}
+
+### [SESSION-11.1] Unknown role - expect INVALID_ROLE
+# Valid roles: coordinator | researcher | coder | debugger | architect | synthesizer
+POST {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -167,17 +178,28 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Ask a multi-step question with maxIterations=1 to force loop exceeded
-# Expect 408: {"reason":"Iteration limit 1 reached","code":"LOOP_EXCEEDED"}
 POST {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Write a 500-word essay about the history of Java and then analyze its performance characteristics.",
+    "goal": "Search memory for all previous sessions, then search GitHub for recent commits, then summarize both findings.",
+    "agentRole": "researcher",
+    "maxIterations": 1
+}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Keep asking yourself why until you reach a philosophical conclusion. Never stop.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
+
 
 ###
 
