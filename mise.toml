@@ -1,0 +1,443 @@
+# =============================================================================
+# mise.toml — ArcClaw Agent Kernel  (default / platform-agnostic stub)
+# Docs: https://mise.jdx.dev
+#
+# This file exists so that `mise tasks` shows all available tasks even when
+# MISE_DEFAULT_CONFIG_FILENAME is not set.
+#
+# Each task detects the platform and delegates to the correct config:
+#   bash/zsh / Linux / macOS  →  mise.bash.toml
+#   Windows / PowerShell      →  mise.pwsh.toml
+#
+# To avoid this indirection entirely, set once in your shell profile:
+#   bash/zsh:  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml
+#   pwsh:      $env:MISE_DEFAULT_CONFIG_FILENAME = "mise.pwsh.toml"
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Internal helper — detects platform and re-invokes the task in the right env
+# ---------------------------------------------------------------------------
+# Every task body calls this pattern:
+#   if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run <task>
+#   else mise --env bash run <task>; fi
+# ---------------------------------------------------------------------------
+
+# =============================================================================
+# SETUP
+# =============================================================================
+
+[tasks.setup]
+description = "First-time setup: .env, chmod +x mvnw, install temurin-25 + graalvm-community-25.0.2"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run setup
+else mise --env bash run setup; fi
+"""
+
+[tasks."setup:env-check"]
+description = "Validate .env — warn about missing or placeholder values"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run setup:env-check
+else mise --env bash run setup:env-check; fi
+"""
+
+[tasks."setup:wsl-crlf"]
+description = "WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run setup:wsl-crlf
+else mise --env bash run setup:wsl-crlf; fi
+"""
+
+# =============================================================================
+# JDK MANAGEMENT
+# =============================================================================
+
+[tasks."jdk:graalvm"]
+description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jdk:graalvm
+else mise --env bash run jdk:graalvm; fi
+"""
+
+[tasks."jdk:temurin"]
+description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jdk:temurin
+else mise --env bash run jdk:temurin; fi
+"""
+
+[tasks."jdk:install"]
+description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jdk:install
+else mise --env bash run jdk:install; fi
+"""
+
+[tasks."jdk:status"]
+description = "Show which JDK is currently active and list all installed JDKs"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jdk:status
+else mise --env bash run jdk:status; fi
+"""
+
+# =============================================================================
+# BUILD
+# =============================================================================
+
+[tasks.build-app]
+description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run build-app
+else mise --env bash run build-app; fi
+"""
+
+[tasks."build:full"]
+description = "Clean install all modules, skip tests"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run build:full
+else mise --env bash run build:full; fi
+"""
+
+[tasks."build:test"]
+description = "Build and run all tests"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run build:test
+else mise --env bash run build:test; fi
+"""
+
+[tasks."build:native"]
+description = "Native binary — Podman container (default) or local GraalVM — auto-detects, auto-switches JDK"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run build:native
+else mise --env bash run build:native; fi
+"""
+
+[tasks."build:native-local"]
+description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run build:native-local
+else mise --env bash run build:native-local; fi
+"""
+
+[tasks."build:native-lowmem"]
+description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run build:native-lowmem
+else mise --env bash run build:native-lowmem; fi
+"""
+
+[tasks.clean]
+description = "Clean Maven build artifacts"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run clean
+else mise --env bash run clean; fi
+"""
+
+# =============================================================================
+# DEV MODE  (hot reload — Temurin 25, no Podman)
+# =============================================================================
+
+[tasks.dev]
+description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dev
+else mise --env bash run dev; fi
+"""
+
+[tasks."dev:chat"]
+description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dev:chat
+else mise --env bash run dev:chat; fi
+"""
+
+[tasks."dev:attach"]
+description = "Dev mode — Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dev:attach
+else mise --env bash run dev:attach; fi
+"""
+
+[tasks."dev:ask"]
+description = "Dev mode — one-shot task. Usage: GOAL=\"your goal\" mise run dev:ask"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dev:ask
+else mise --env bash run dev:ask; fi
+"""
+
+[tasks."dev:no-ui"]
+description = "Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dev:no-ui
+else mise --env bash run dev:no-ui; fi
+"""
+
+[tasks."dev:kill"]
+description = "Kill any lingering Quarkus dev / quarkus-run.jar background processes"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dev:kill
+else mise --env bash run dev:kill; fi
+"""
+
+# =============================================================================
+# JAR RUN  (packaged quarkus-run.jar)
+# =============================================================================
+
+[tasks."jar:serve"]
+description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jar:serve
+else mise --env bash run jar:serve; fi
+"""
+
+[tasks."jar:chat"]
+description = "Run packaged jar — interactive REPL (CLI profile)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jar:chat
+else mise --env bash run jar:chat; fi
+"""
+
+[tasks."jar:attach"]
+description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jar:attach
+else mise --env bash run jar:attach; fi
+"""
+
+[tasks."jar:ask"]
+description = "Run packaged jar — one-shot task. Usage: GOAL=\"your goal\" mise run jar:ask"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jar:ask
+else mise --env bash run jar:ask; fi
+"""
+
+[tasks."jar:run-dev-profile"]
+description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run jar:run-dev-profile
+else mise --env bash run jar:run-dev-profile; fi
+"""
+
+# =============================================================================
+# NATIVE BINARY
+# =============================================================================
+
+[tasks."native:serve"]
+description = "Run native binary — REST daemon on :8080"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run native:serve
+else mise --env bash run native:serve; fi
+"""
+
+[tasks."native:chat"]
+description = "Run native binary — interactive REPL"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run native:chat
+else mise --env bash run native:chat; fi
+"""
+
+[tasks."native:attach"]
+description = "Run native binary — Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run native:attach
+else mise --env bash run native:attach; fi
+"""
+
+[tasks."native:ask"]
+description = "Run native binary — one-shot task. Usage: GOAL=\"your goal\" mise run native:ask"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run native:ask
+else mise --env bash run native:ask; fi
+"""
+
+# =============================================================================
+# DIST — release packaging
+# =============================================================================
+
+[tasks.dist]
+description = "Assemble dist/ folder: native binary + .env.example + vec0 extension"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dist
+else mise --env bash run dist; fi
+"""
+
+[tasks."dist:pack"]
+description = "Create OS-specific release archives from dist/ for GitHub releases"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run dist:pack
+else mise --env bash run dist:pack; fi
+"""
+
+# =============================================================================
+# DOCKER COMPOSE
+# =============================================================================
+
+[tasks."compose:up"]
+description = "Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run compose:up
+else mise --env bash run compose:up; fi
+"""
+
+[tasks."compose:down"]
+description = "Stop the observability stack (data volumes are preserved)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run compose:down
+else mise --env bash run compose:down; fi
+"""
+
+[tasks."compose:down-clean"]
+description = "Stop the stack and DELETE all data volumes (irreversible — prompts for confirmation)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run compose:down-clean
+else mise --env bash run compose:down-clean; fi
+"""
+
+[tasks."compose:logs"]
+description = "Follow live arcclaw container logs (Ctrl+C to stop)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run compose:logs
+else mise --env bash run compose:logs; fi
+"""
+
+[tasks."compose:restart"]
+description = "Restart only the arcclaw service (observability stack stays up)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run compose:restart
+else mise --env bash run compose:restart; fi
+"""
+
+# =============================================================================
+# PODMAN
+# =============================================================================
+
+[tasks."podman:init"]
+description = "macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run podman:init
+else mise --env bash run podman:init; fi
+"""
+
+[tasks."podman:start"]
+description = "macOS: start the Podman machine"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run podman:start
+else mise --env bash run podman:start; fi
+"""
+
+[tasks."podman:stop"]
+description = "macOS: stop the Podman machine"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run podman:stop
+else mise --env bash run podman:stop; fi
+"""
+
+[tasks."podman:socket"]
+description = "WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run podman:socket
+else mise --env bash run podman:socket; fi
+"""
+
+[tasks."podman:status"]
+description = "Print Podman version, running containers, and tool-runner image status"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run podman:status
+else mise --env bash run podman:status; fi
+"""
+
+# =============================================================================
+# SANDBOX
+# =============================================================================
+
+[tasks."sandbox:check"]
+description = "Verify the arcclaw-tool-runner sandbox image exists"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run sandbox:check
+else mise --env bash run sandbox:check; fi
+"""
+
+# =============================================================================
+# DATABASE HELPERS
+# =============================================================================
+
+[tasks."db:inspect"]
+description = "Open arcclaw-meta.db in sqlite3 interactive CLI"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run db:inspect
+else mise --env bash run db:inspect; fi
+"""
+
+[tasks."db:fts-check"]
+description = "Verify SQLite FTS5 is available (required for full-text search)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run db:fts-check
+else mise --env bash run db:fts-check; fi
+"""
+
+[tasks."db:vec-check"]
+description = "Check sqlite-vec extension exists for your platform (lib/vec0.so / .dylib / .dll)"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run db:vec-check
+else mise --env bash run db:vec-check; fi
+"""
+
+# =============================================================================
+# INFO / HELP
+# =============================================================================
+
+[tasks.info]
+description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
+run = """
+#!/usr/bin/env sh
+if [ "${OS:-}" = "Windows_NT" ]; then mise --env pwsh run info
+else mise --env bash run info; fi
+"""
+
+[tasks.help]
+description = "List all available mise tasks with descriptions"
+run = ["mise tasks"]
