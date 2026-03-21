@@ -17,7 +17,7 @@
 
 ---
 
-> **Docs**: [Setup](./SETUP.md) · [Testing Guide](./TESTING_GUIDE.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md) · [REST Client Files](./rest-http/)
+> **Docs**: [Mise Setup](./MISE_README.md) ·  [Manual Setup](./SETUP.md) · [Testing Guide](./TESTING_GUIDE.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md) · [REST Client Files](./rest-http/)
 
 ---
 
@@ -1163,7 +1163,8 @@ Where `my-skill.md` follows the two-block format (YAML frontmatter + system prom
 | Document | Purpose |
 |---|---|
 | [`README.md`](./README.md) | Architecture overview, agent personas, security model, extension guide |
-| [`SETUP.md`](./SETUP.md) | Prerequisites, OS-specific setup, build, run modes, Docker Compose, native build |
+| [`MISE_README.md`](./MISE_README.md) | mise task runner — install, trust, all `mise run` tasks, dev/jar/native/compose modes, Windows (Scoop/winget/PS1), troubleshooting |
+| [`SETUP.md`](./SETUP.md) | Manual Setup, Prerequisites, OS-specific setup, build, run modes, Docker Compose, native build |
 | [`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md) | Telegram bot end-to-end testing (19 sections) |
 | [`FAQ.md`](./FAQ.md) | In-depth architecture Q&A, security rationale, and operational guidance |
 | [`rest-http/`](./rest-http/) | IntelliJ / VSCode REST Client files — see `rest-http/README.md` for full index |
