@@ -239,27 +239,40 @@ if (Test-Path '.env') {
     Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
 }
 # ─────────────────────────────────────────────────────────────────────────────
-try {
-    mise use java@graalvm-community-25.0.2
-    $env:MAVEN_OPTS = $mOpts
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
-    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
-    Write-Host "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-    Write-Host ''
-    Write-Host '▶   Run with one of:'
-    Write-Host '      mise run native:serve                → HTTP + MCP server on :8080'
-    Write-Host '      mise run native:chat                 → interactive REPL'
-    Write-Host '      mise run native:attach               → Telegram daemon'
-    Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
-    Write-Host ''
-    Write-Host '▶   Or assemble a dist/ folder:  mise run dist'
-} finally {
-    # ── restore .env ──────────────────────────────────────────────────────────
-    if ($envBackup -eq $true)          { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
-    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
-    mise use java@temurin-25
-    Write-Host '✅  Switched back to Temurin 25.'
+if ($strategy -eq 'container') {
+    # ── Container build — GraalVM runs inside Podman, host JDK unchanged ─────
+    Write-Host 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
+    try {
+        $env:MAVEN_OPTS = $mOpts
+        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+        if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    } finally {
+        if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+        elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
+    }
+} else {
+    # ── Local build — switch to GraalVM, restore Temurin after ───────────────
+    try {
+        mise use java@graalvm-community-25.0.2
+        $env:MAVEN_OPTS = $mOpts
+        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+        if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    } finally {
+        if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+        elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
+        mise use java@temurin-25
+        Write-Host '✅  Switched back to Temurin 25.'
+    }
 }
+Write-Host "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+Write-Host ''
+Write-Host '▶   Run with one of:'
+Write-Host '      mise run native:serve                → HTTP + MCP server on :8080'
+Write-Host '      mise run native:chat                 → interactive REPL'
+Write-Host '      mise run native:attach               → Telegram daemon'
+Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
+Write-Host ''
+Write-Host '▶   Or assemble a dist/ folder:  mise run dist'
 """
 
 [tasks."build:native-local"]

@@ -218,16 +218,30 @@ else
     echo 'ℹ️   No .env found — building without config override (good for CI).'
 fi
 # ─────────────────────────────────────────────────────────────────────────────
-_arcclaw_native_cleanup() {
-    if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
-    elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
-    fi
-    mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
-}
-trap _arcclaw_native_cleanup EXIT
-mise use java@graalvm-community-25.0.2
-export MAVEN_OPTS="$MOPTS"
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
+if [[ "$strategy" == 'container' ]]; then
+    # ── Container build — GraalVM runs inside Podman, host JDK unchanged ─────
+    echo 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
+    _arcclaw_native_cleanup() {
+        if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
+        elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
+        fi
+    }
+    trap _arcclaw_native_cleanup EXIT
+    export MAVEN_OPTS="$MOPTS"
+    ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
+else
+    # ── Local build — switch to GraalVM, restore Temurin after ───────────────
+    _arcclaw_native_cleanup() {
+        if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
+        elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
+        fi
+        mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+    }
+    trap _arcclaw_native_cleanup EXIT
+    mise use java@graalvm-community-25.0.2
+    export MAVEN_OPTS="$MOPTS"
+    ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
+fi
 echo "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
 echo ''
 echo '▶   Run with one of:'
