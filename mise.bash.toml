@@ -486,6 +486,8 @@ JVM_ARGS=(
     '-Dfile.encoding=UTF-8' '-Dstdout.encoding=UTF-8'
     '-Dsun.stdout.encoding=UTF-8' '-Dsun.stderr.encoding=UTF-8'
     '-Dquarkus.profile=cli'
+    '-Dquarkus.mcp.server.stdio.enabled=true'
+    '-Darcclaw.telegram.enabled=true'
     '-Darcclaw.rag.vec-extension-path=./lib/vec0'
     '-Darcclaw.data-dir=./data'
 )
