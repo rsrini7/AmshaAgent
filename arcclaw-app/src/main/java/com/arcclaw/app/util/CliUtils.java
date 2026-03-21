@@ -14,6 +14,24 @@ import java.util.List;
  * load values into the JVM environment. Quarkus owns config loading. Our only
  * job here is to fail fast with a clear human-readable message when required
  * configuration is absent, so users never see a cryptic Quarkus stack trace.
+ *
+ * <p><strong>Telegram validation strategy:</strong>
+ * <ul>
+ *   <li>{@code attach} mode — hard error if any Telegram var is missing.
+ *       The command has no purpose without Telegram.</li>
+ *   <li>{@code serve} mode — Telegram is optional. We soft-warn (print to
+ *       stderr, do not exit) in three cases:
+ *       <ol>
+ *         <li>{@code ARCCLAW_TELEGRAM_ENABLED=true} but vars are missing
+ *             → Telegram will fail at runtime.</li>
+ *         <li>{@code TELEGRAM_BOT_TOKEN} is set but
+ *             {@code ARCCLAW_TELEGRAM_ENABLED} is not true
+ *             → Looks like an oversight; bot won't start.</li>
+ *         <li>{@code TELEGRAM_BOT_TOKEN} set but access-control vars missing
+ *             → Security hole: bot would be open to anyone.</li>
+ *       </ol>
+ *   </li>
+ * </ul>
  */
 public class CliUtils {
 
@@ -32,19 +50,21 @@ public class CliUtils {
         ),
         new VarSpec(
             "ARCCLAW_VAULT_PEPPER",
-            "Secret pepper for the credential vault (≥32 random characters).",
+            "Secret pepper for the credential vault (>=32 random characters).",
             "Generate one with:",
             "  Linux/macOS:  openssl rand -base64 32",
             "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
-            "⚠️  Never change this after first boot — it decrypts your stored secrets."
+            "Then add:  ARCCLAW_VAULT_PEPPER=<generated value>",
+            "WARNING: Never change this after first boot - it decrypts your stored secrets."
         ),
         new VarSpec(
             "ARCCLAW_AUDIT_HMAC_KEY",
-            "HMAC key for the audit log integrity chain (≥32 random characters).",
+            "HMAC key for the audit log integrity chain (>=32 random characters).",
             "Generate one with:",
             "  Linux/macOS:  openssl rand -base64 32",
             "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
-            "⚠️  Never change this after first boot — it signs your audit trail."
+            "Then add:  ARCCLAW_AUDIT_HMAC_KEY=<generated value>",
+            "WARNING: Never change this after first boot - it signs your audit trail."
         ),
         new VarSpec(
             "ARCCLAW_API_KEY_INTERNAL",
@@ -56,7 +76,7 @@ public class CliUtils {
         ),
     };
 
-    /** Additional vars required only for 'attach' (Telegram daemon) mode. */
+    /** Required for attach mode (hard) and validated for serve mode (soft). */
     private static final VarSpec[] TELEGRAM_VARS = {
         new VarSpec(
             "TELEGRAM_BOT_TOKEN",
@@ -86,7 +106,8 @@ public class CliUtils {
      * Validates required environment variables before Quarkus boots.
      *
      * <p>Peeks at {@code args[0]} to determine which vars are required.
-     * Exits with code 1 and a full setup guide if any required var is absent.
+     * For core vars: exits with code 1 and a full setup guide if any are absent.
+     * For Telegram vars in serve mode: prints warnings but does not exit.
      * Does NOT load or set any properties — Quarkus owns config.
      *
      * @param args the raw CLI args passed to {@code main()}
@@ -94,7 +115,7 @@ public class CliUtils {
     public static void validateRequiredEnvVars(String[] args) {
         String mode = args.length > 0 ? args[0].toLowerCase() : "";
 
-        // No validation needed for help/version flags
+        // No validation needed for help/version flags or bare invocation
         if (mode.equals("--help") || mode.equals("-h")
                 || mode.equals("--version") || mode.equals("-v")
                 || mode.isEmpty()) {
@@ -104,50 +125,52 @@ public class CliUtils {
         boolean dotEnvPresent = Files.exists(Path.of(".env"));
         List<VarSpec> missing = new ArrayList<>();
 
-        // Always check core vars
+        // ── Core vars — always required ───────────────────────────────────────
         for (VarSpec spec : CORE_VARS) {
             if (!isSet(spec.key)) missing.add(spec);
         }
 
-        // Telegram vars only for attach mode
+        // ── Telegram vars — hard required for attach, soft-warn for serve ─────
         if (mode.equals("attach")) {
             for (VarSpec spec : TELEGRAM_VARS) {
                 if (!isSet(spec.key)) missing.add(spec);
             }
+        } else if (mode.equals("serve")) {
+            warnTelegramIfPartial();
         }
 
         if (missing.isEmpty()) return;
 
-        // ── Print the setup guide ─────────────────────────────────────────────
+        // ── Print setup guide and exit ────────────────────────────────────────
         System.err.println();
-        System.err.println("  ❌  ArcClaw cannot start — required configuration is missing.");
+        System.err.println("  X  ArcClaw cannot start - required configuration is missing.");
         System.err.println();
 
         if (!dotEnvPresent) {
-            System.err.println("  ℹ️   No .env file found in: " + Path.of(".env").toAbsolutePath());
-            System.err.println("      Create one by copying the example:");
-            System.err.println("        cp .env.example .env          (Linux/macOS)");
-            System.err.println("        Copy-Item .env.example .env   (Windows)");
-            System.err.println("      Then fill in the values listed below.");
+            System.err.println("  INFO: No .env file found in: " + Path.of(".env").toAbsolutePath());
+            System.err.println("        Create one by copying the example:");
+            System.err.println("          cp .env.example .env          (Linux/macOS)");
+            System.err.println("          Copy-Item .env.example .env   (Windows)");
+            System.err.println("        Then fill in the values listed below.");
         } else {
-            System.err.println("  ℹ️   .env found at: " + Path.of(".env").toAbsolutePath());
-            System.err.println("      The following keys are missing or empty — check for typos.");
+            System.err.println("  INFO: .env found at: " + Path.of(".env").toAbsolutePath());
+            System.err.println("        The following keys are missing or empty - check for typos.");
         }
 
         System.err.println();
-        System.err.println("  ── Missing variables " + "─".repeat(55));
+        System.err.println("  -- Missing variables " + "-".repeat(55));
 
         for (VarSpec spec : missing) {
             System.err.println();
-            System.err.println("  🔑  " + spec.key);
-            System.err.println("      " + spec.description);
+            System.err.println("  KEY: " + spec.key);
+            System.err.println("       " + spec.description);
             for (String step : spec.howToGet) {
-                System.err.println("      " + step);
+                System.err.println("       " + step);
             }
         }
 
         System.err.println();
-        System.err.println("  " + "─".repeat(74));
+        System.err.println("  " + "-".repeat(74));
         System.err.println("  After updating .env, re-run:  ./run.sh " + mode
                 + "  (or ./run.ps1 " + mode + " on Windows)");
         System.err.println();
@@ -158,11 +181,67 @@ public class CliUtils {
     // Internal helpers
     // -------------------------------------------------------------------------
 
+    /**
+     * Soft-warns about partial or inconsistent Telegram configuration in
+     * serve mode. Prints to stderr but does NOT exit — Telegram is optional
+     * for serve. Three cases are detected:
+     * <ol>
+     *   <li>ARCCLAW_TELEGRAM_ENABLED=true but some Telegram vars are missing.</li>
+     *   <li>TELEGRAM_BOT_TOKEN is set but ARCCLAW_TELEGRAM_ENABLED is not true
+     *       (token present but Telegram won't actually start).</li>
+     *   <li>TELEGRAM_BOT_TOKEN set but access-control vars are missing
+     *       (security hole: bot would accept messages from anyone).</li>
+     * </ol>
+     */
+    private static void warnTelegramIfPartial() {
+        boolean enabled    = "true".equalsIgnoreCase(System.getenv("ARCCLAW_TELEGRAM_ENABLED"));
+        boolean hasToken   = isSet("TELEGRAM_BOT_TOKEN");
+        boolean hasUserIds = isSet("ARCCLAW_TELEGRAM_ALLOWED_USER_IDS");
+        boolean hasUsers   = isSet("ARCCLAW_TELEGRAM_ALLOWED_USERS");
+
+        // Case 1: explicitly enabled but vars missing
+        if (enabled) {
+            List<String> missingKeys = new ArrayList<>();
+            if (!hasToken)   missingKeys.add("TELEGRAM_BOT_TOKEN");
+            if (!hasUserIds) missingKeys.add("ARCCLAW_TELEGRAM_ALLOWED_USER_IDS");
+            if (!hasUsers)   missingKeys.add("ARCCLAW_TELEGRAM_ALLOWED_USERS");
+            if (!missingKeys.isEmpty()) {
+                System.err.println();
+                System.err.println("  WARN: ARCCLAW_TELEGRAM_ENABLED=true but Telegram vars are missing:");
+                missingKeys.forEach(k -> System.err.println("        - " + k));
+                System.err.println("        Telegram will fail at runtime. Add the missing vars to .env");
+                System.err.println("        or run in attach mode:  ./run.sh attach");
+                System.err.println();
+            }
+            return;
+        }
+
+        // Case 2: token present but Telegram not enabled — looks like an oversight
+        if (hasToken && !enabled) {
+            System.err.println();
+            System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but ARCCLAW_TELEGRAM_ENABLED is not 'true'.");
+            System.err.println("        Telegram will NOT start in serve mode.");
+            System.err.println("        To enable: add  ARCCLAW_TELEGRAM_ENABLED=true  to your .env");
+            System.err.println("        To run as Telegram daemon: ./run.sh attach");
+            System.err.println();
+        }
+
+        // Case 3: token set and enabled, but access control missing — security hole
+        if (hasToken && enabled && (!hasUserIds || !hasUsers)) {
+            System.err.println();
+            System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but access-control vars are missing.");
+            if (!hasUserIds) System.err.println("        - ARCCLAW_TELEGRAM_ALLOWED_USER_IDS is not set");
+            if (!hasUsers)   System.err.println("        - ARCCLAW_TELEGRAM_ALLOWED_USERS is not set");
+            System.err.println("        Without these, the bot may respond to messages from anyone.");
+            System.err.println("        Find your user ID by messaging @userinfobot on Telegram.");
+            System.err.println();
+        }
+    }
+
     /** True if the key is non-null, non-blank, and not a placeholder. */
     private static boolean isSet(String key) {
         String val = System.getenv(key);
         if (val == null || val.isBlank()) return false;
-        // Treat common placeholder values as unset
         return !val.contains("changeme") && !val.contains("<") && !val.equals("your_key_here");
     }
 
