@@ -136,11 +136,19 @@ public class AgentStateMachineRunner {
         history.add(completedStep);
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
 
-        if ("synthesizer".equals(agentRole)) {
+        if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(agentRole)) {
             String combinedContext = history.stream()
-                    .filter(s -> s.observation() != null && !s.observation().isBlank())
+                    .filter(s -> s.observation() != null 
+                            && !s.observation().isBlank()
+                            && !"Task completed.".equals(s.observation()))  // skip trivial
                     .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
                     .collect(Collectors.joining("\n\n"));
+
+            if (combinedContext.isBlank()) {
+                // No real multi-agent findings — return direct answer as-is
+                return AgentResult.finished(answer, List.copyOf(history));
+            }
+
             return synthesizerAgent.synthesize(sessionId, combinedContext, history);
         }
 
