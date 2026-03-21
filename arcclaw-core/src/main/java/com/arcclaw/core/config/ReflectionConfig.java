@@ -2,6 +2,7 @@ package com.arcclaw.core.config;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.AuditEventResponse;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
@@ -33,6 +34,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  */
 @RegisterForReflection(
     targets = {
+        AgentResponseMapper.AgentResponse.class,
+        AgentResponseMapper.ApprovalRequiredResponse.class,
+        AgentResponseMapper.ApprovalRequest.class,
+        AgentResponseMapper.ErrorResponse.class,
+        SystemMetadataRegistry.SystemInfo.class,
         SystemMetadataRegistry.SystemInfo.class,
         ReasoningStep.class,
         AgentResult.class,

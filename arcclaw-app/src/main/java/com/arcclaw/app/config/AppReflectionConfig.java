@@ -1,18 +1,22 @@
 package com.arcclaw.app.config;
 
 import com.arcclaw.app.channel.telegram.TelegramAgentHandler;
+import com.arcclaw.rag.EmbeddingModelProducer;
+import com.arcclaw.rag.GlobalKnowledgeBase;
+import com.arcclaw.rag.RagContextEnricher;
+import com.arcclaw.rag.ScoredChunk;
+import com.arcclaw.rag.TwoTierMemoryService;
+
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(
     targets = {
-        TelegramAgentHandler.class
-    },
-    classNames = {
-        "com.arcclaw.rag.ScoredChunk",
-        "com.arcclaw.rag.RagContextEnricher",
-        "com.arcclaw.rag.TwoTierMemoryService",
-        "com.arcclaw.rag.GlobalKnowledgeBase",
-        "com.arcclaw.rag.EmbeddingModelProducer"
+        TelegramAgentHandler.class,
+        ScoredChunk.class,
+        RagContextEnricher.class,
+        TwoTierMemoryService.class,
+        GlobalKnowledgeBase.class,
+        EmbeddingModelProducer.class
     }
 )
 public class AppReflectionConfig {
