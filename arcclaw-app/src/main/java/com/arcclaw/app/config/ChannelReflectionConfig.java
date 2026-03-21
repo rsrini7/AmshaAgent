@@ -1,5 +1,6 @@
 package com.arcclaw.app.config;
 
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.structured.AgentContribution;
 import com.arcclaw.channel.api.structured.ConflictSummary;
 import com.arcclaw.channel.api.structured.SynthesisResult;
@@ -10,7 +11,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
     targets = {
         AgentContribution.class,
         ConflictSummary.class,
-        SynthesisResult.class
+        SynthesisResult.class,
+        ChannelUser.class
     }
 )
 public class ChannelReflectionConfig {

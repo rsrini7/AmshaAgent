@@ -238,8 +238,9 @@ if [[ "$strategy" == 'container' ]]; then
         fi
     }
     trap _arcclaw_native_cleanup EXIT
+    # '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' - if needed add it
     export MAVEN_OPTS="$MOPTS"
-    ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag" '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' 
+    ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
 else
     # ── Local build — switch to GraalVM, restore Temurin after ───────────────
     _arcclaw_native_cleanup() {
@@ -251,7 +252,7 @@ else
     trap _arcclaw_native_cleanup EXIT
     mise use java@graalvm-community-25.0.2
     export MAVEN_OPTS="$MOPTS"
-    ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag" '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree'
+    ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
 fi
 echo "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
 echo ''
@@ -301,7 +302,8 @@ _arcclaw_native_cleanup() {
 trap _arcclaw_native_cleanup EXIT
 mise use java@graalvm-community-25.0.2
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false' '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree'
+# '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' - if needed add it
+./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
 echo '✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 echo ''
 echo '▶   Assembling dist/ folder...'
@@ -350,7 +352,7 @@ mise use java@graalvm-community-25.0.2
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
     '-Dquarkus.native.container-build=false' \
-    '-Dquarkus.native.additional-build-args=-J-Xmx6g,-H:+PrintAnalysisCallTree'
+    '-Dquarkus.native.additional-build-args=-J-Xmx6g'
 echo '✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 echo ''
 echo '▶   Assembling dist/ folder...'
