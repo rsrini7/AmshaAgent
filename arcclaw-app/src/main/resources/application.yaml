@@ -55,7 +55,7 @@ quarkus:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 5
-      transactions: local
+      transactions: enabled
 
   hibernate-orm:
     dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
