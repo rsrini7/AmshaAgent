@@ -451,7 +451,7 @@ mp:
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
-      strategy: PODMAN        # no Podman in local dev
+      strategy: NONE        # no Podman in local dev
     governance:
       budget-usd: 9.99
       approval-timeout-minutes: 10

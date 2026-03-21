@@ -22,7 +22,7 @@ services:
       #- OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
       # The OpenAI extension properly parses this dynamically at runtime!
       #- QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-llama3.2:1b}
-      - QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
       # LangChain credentials
