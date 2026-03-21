@@ -35,9 +35,11 @@ _.file = ".env"
 
 [tasks.setup]
 description = "First-time setup: .env, chmod +x mvnw, install temurin-25 + graalvm-community-25.0.2"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if (-not (Test-Path '.env')) {
     Copy-Item '.env.example' '.env'
     Write-Host '✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
@@ -56,9 +58,11 @@ Write-Host '✅  Both JDKs installed.'
 
 [tasks."setup:env-check"]
 description = "Validate .env — warn about missing or placeholder values"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if (-not (Test-Path '.env')) {
     Write-Host '❌  .env not found. Run: mise run setup'
     exit 1
@@ -83,9 +87,11 @@ if ($issues.Count -gt 0) {
 
 [tasks."setup:wsl-crlf"]
 description = "WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if ($IsWindows) {
     Write-Host 'ℹ️   Not needed on native Windows — CRLF fix is for WSL2/Linux only.'
     exit 0
@@ -102,6 +108,7 @@ Write-Host '✅  mvnw CRLF fixed and marked executable.'
 
 [tasks."jdk:graalvm"]
 description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
+dir = "{{config_root}}"
 run = [
   "mise use java@graalvm-community-25.0.2",
   "java -version",
@@ -109,6 +116,7 @@ run = [
 
 [tasks."jdk:temurin"]
 description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
+dir = "{{config_root}}"
 run = [
   "mise use java@temurin-25",
   "java -version",
@@ -116,6 +124,7 @@ run = [
 
 [tasks."jdk:install"]
 description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
+dir = "{{config_root}}"
 run = [
   "mise install java@temurin-25",
   "mise install java@graalvm-community-25.0.2",
@@ -124,6 +133,7 @@ run = [
 
 [tasks."jdk:status"]
 description = "Show which JDK is currently active and list all installed JDKs"
+dir = "{{config_root}}"
 run = [
   "java -version",
   "mise ls java",
@@ -135,9 +145,11 @@ run = [
 
 [tasks.build]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
 & $mvnw clean package -pl arcclaw-app -am -DskipTests
@@ -147,9 +159,11 @@ Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 
 [tasks."build:full"]
 description = "Clean install all modules, skip tests"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
 & $mvnw clean install -DskipTests
@@ -159,9 +173,11 @@ Write-Host '✅  Full build complete.'
 
 [tasks."build:test"]
 description = "Build and run all tests"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 & $mvnw clean verify
@@ -171,9 +187,11 @@ Write-Host '✅  Tests complete.'
 
 [tasks."build:native"]
 description = "Native binary — Podman container (default on Linux/macOS) or local GraalVM — auto-detects, auto-switches JDK"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $mOpts  = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
@@ -277,9 +295,11 @@ Write-Host '▶   Or assemble a dist/ folder:  mise run dist'
 
 [tasks."build:native-local"]
 description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 Write-Host 'ℹ️   build:native-local: local GraalVM, no Podman container.'
@@ -325,9 +345,11 @@ try {
 
 [tasks."build:native-lowmem"]
 description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 Write-Host 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
@@ -369,9 +391,11 @@ try {
 
 [tasks.clean]
 description = "Clean Maven build artifacts"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 & $mvnw clean
 Write-Host '✅  Build artifacts cleaned.'
@@ -383,9 +407,11 @@ Write-Host '✅  Build artifacts cleaned.'
 
 [tasks.dev]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
 & $mvnw quarkus:dev -pl arcclaw-app -am `
@@ -399,9 +425,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."dev:chat"]
 description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
 & $mvnw quarkus:dev -pl arcclaw-app -am `
@@ -415,9 +443,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."dev:attach"]
 description = "Dev mode — Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if (-not $env:TELEGRAM_BOT_TOKEN) {
     Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'
     exit 1
@@ -435,9 +465,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."dev:ask"]
 description = 'Dev mode — one-shot task. Set $env:GOAL="..." then: mise run dev:ask'
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }
 if (-not $goal) {
     Write-Host 'Usage:  $env:GOAL="Your goal here"; mise run dev:ask'
@@ -460,9 +492,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."dev:no-ui"]
 description = "Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
 & $mvnw quarkus:dev -pl arcclaw-app -am `
@@ -482,9 +516,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks.serve]
 description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build'; exit 1 }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -506,9 +542,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks.chat]
 description = "Run packaged jar — interactive REPL (CLI profile)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build'; exit 1 }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -530,9 +568,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks.attach]
 description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build'; exit 1 }
 if (-not $env:TELEGRAM_BOT_TOKEN) { Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1 }
@@ -556,9 +596,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks.ask]
 description = 'Run packaged jar — one-shot task. Set $env:GOAL="..." then: mise run ask'
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build'; exit 1 }
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }
@@ -590,9 +632,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."jar:serve-dev-profile"]
 description = "Run packaged jar with %dev profile (no Podman sandbox) — for smoke-testing without Podman"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build'; exit 1 }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -618,9 +662,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."native:serve"]
 description = "Run native binary — REST daemon on :8080"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
@@ -635,9 +681,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."native:chat"]
 description = "Run native binary — interactive REPL"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
@@ -652,9 +700,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."native:attach"]
 description = "Run native binary — Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if (-not $env:TELEGRAM_BOT_TOKEN) { Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1 }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
@@ -670,9 +720,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."native:ask"]
 description = 'Run native binary — one-shot task. Set $env:GOAL="..." then: mise run native:ask'
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }
 if (-not $goal) {
     Write-Host 'Usage:  $env:GOAL="Your goal here"; mise run native:ask'
@@ -700,9 +752,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks.dist]
 description = "Assemble dist/ folder: native exe + .env.example + vec0 extension + run instructions"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $suffix  = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $exeName = "arcclaw-app-1.0.0-SNAPSHOT$suffix"
 $src     = "arcclaw-app/target/$exeName"
@@ -754,6 +808,7 @@ $runPs1 = @'
 # Usage: .\run.ps1 serve | chat | attach | ask "your goal"
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe       = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner.exe'
 if (-not (Test-Path $exe)) {
@@ -857,9 +912,11 @@ Write-Host '      dist/run.ps1   → Windows/pwsh (.\run.ps1 serve|chat|ask|atta
 
 [tasks."compose:up"]
 description = "Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
@@ -876,18 +933,22 @@ Write-Host '    Ollama        → http://localhost:11434'
 
 [tasks."compose:down"]
 description = "Stop the observability stack (data volumes are preserved)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 docker compose down
 Write-Host '✅  Stack stopped. Data volumes preserved.'
 """
 
 [tasks."compose:down-clean"]
 description = "Stop the stack and DELETE all data volumes (irreversible — prompts for confirmation)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 Write-Host '⚠️   WARNING: This will permanently delete all data volumes.'
 $confirm = Read-Host 'Type YES to confirm'
 if ($confirm -eq 'YES') {
@@ -901,14 +962,17 @@ if ($confirm -eq 'YES') {
 
 [tasks."compose:logs"]
 description = "Follow live arcclaw container logs (Ctrl+C to stop)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = "docker compose logs -f arcclaw"
 
 [tasks."compose:restart"]
 description = "Restart only the arcclaw service (observability stack stays up)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 docker compose restart arcclaw
 Write-Host '✅  arcclaw service restarted.'
 """
@@ -919,9 +983,11 @@ Write-Host '✅  arcclaw service restarted.'
 
 [tasks."podman:init"]
 description = "macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if ($IsWindows) {
     Write-Host 'ℹ️   podman:init is macOS-only. On Windows use Podman Desktop or Docker Desktop.'
     exit 0
@@ -933,9 +999,11 @@ Write-Host '✅  Podman machine initialised and running.'
 
 [tasks."podman:start"]
 description = "macOS: start the Podman machine"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if ($IsWindows) { Write-Host 'ℹ️   podman:start is macOS-only.'; exit 0 }
 podman machine start
 Write-Host '✅  Podman machine started.'
@@ -943,9 +1011,11 @@ Write-Host '✅  Podman machine started.'
 
 [tasks."podman:stop"]
 description = "macOS: stop the Podman machine"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if ($IsWindows) { Write-Host 'ℹ️   podman:stop is macOS-only.'; exit 0 }
 podman machine stop
 Write-Host '✅  Podman machine stopped.'
@@ -953,9 +1023,11 @@ Write-Host '✅  Podman machine stopped.'
 
 [tasks."podman:socket"]
 description = "WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 if ($IsWindows) {
     Write-Host 'ℹ️   podman:socket is WSL2/Linux-only. On Windows, Podman Desktop manages the socket.'
     exit 0
@@ -972,6 +1044,7 @@ Write-Host "    export DOCKER_HOST=`"unix://$sock`""
 
 [tasks."podman:status"]
 description = "Print Podman version, running containers, and tool-runner image status"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 Write-Host '── Podman version ───────────────────────────────'
@@ -991,9 +1064,11 @@ Write-Host "  $($env:DOCKER_HOST ?? '(not set)')"
 
 [tasks."sandbox:check"]
 description = "Verify the arcclaw-tool-runner sandbox image exists"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $img = (podman images 2>&1) | Select-String 'arcclaw-tool-runner'
 if ($img) {
     Write-Host '✅  arcclaw-tool-runner image is present.'
@@ -1010,9 +1085,11 @@ if ($img) {
 
 [tasks."db:inspect"]
 description = "Open arcclaw-meta.db in sqlite3 interactive CLI"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
+Set-Location $env:MISE_CONFIG_ROOT
 $dataDir = if ($env:ARCCLAW_DATA_DIR) { $env:ARCCLAW_DATA_DIR } else { './data' }
 $db = "$dataDir/arcclaw-meta.db"
 if (-not (Test-Path $db)) {
@@ -1026,6 +1103,7 @@ sqlite3 $db
 
 [tasks."db:fts-check"]
 description = "Verify SQLite FTS5 is available (required for full-text search)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $result = sqlite3 ':memory:' 'CREATE VIRTUAL TABLE t USING fts5(x);' 2>&1
@@ -1040,6 +1118,7 @@ if ($LASTEXITCODE -eq 0) {
 
 [tasks."db:vec-check"]
 description = "Check sqlite-vec extension exists for your platform (lib/vec0.dll / .so / .dylib)"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ext = if ($IsWindows) { './lib/vec0.dll' } elseif ($IsMacOS) { './lib/vec0.dylib' } else { './lib/vec0.so' }
@@ -1058,6 +1137,7 @@ if (Test-Path $ext) {
 
 [tasks.info]
 description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
+dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 run = """
 Write-Host '── Java ─────────────────────────────────────────'
@@ -1077,4 +1157,5 @@ Write-Host "  $($env:ARCCLAW_VEC_EXT ?? '(not set)')"
 
 [tasks.help]
 description = "List all available mise tasks with descriptions"
+dir = "{{config_root}}"
 run = ["mise tasks"]

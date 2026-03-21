@@ -34,9 +34,11 @@ _.file = ".env"
 
 [tasks.setup]
 description = "First-time setup: .env, chmod +x mvnw, install temurin-25 + graalvm-community-25.0.2"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 if [[ ! -f .env ]]; then
     cp .env.example .env
     echo '✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
@@ -53,9 +55,11 @@ echo '✅  Both JDKs installed.'
 
 [tasks."setup:env-check"]
 description = "Validate .env — warn about missing or placeholder values"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 if [[ ! -f .env ]]; then
     echo '❌  .env not found. Run: mise run setup'
     exit 1
@@ -77,9 +81,11 @@ fi
 
 [tasks."setup:wsl-crlf"]
 description = "WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 sudo apt-get install -y dos2unix
 dos2unix mvnw
 chmod +x mvnw
@@ -92,6 +98,7 @@ echo '✅  mvnw CRLF fixed and marked executable.'
 
 [tasks."jdk:graalvm"]
 description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
+dir = "{{config_root}}"
 run = [
   "mise use java@graalvm-community-25.0.2",
   "java -version",
@@ -99,6 +106,7 @@ run = [
 
 [tasks."jdk:temurin"]
 description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
+dir = "{{config_root}}"
 run = [
   "mise use java@temurin-25",
   "java -version",
@@ -106,6 +114,7 @@ run = [
 
 [tasks."jdk:install"]
 description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
+dir = "{{config_root}}"
 run = [
   "mise install java@temurin-25",
   "mise install java@graalvm-community-25.0.2",
@@ -114,6 +123,7 @@ run = [
 
 [tasks."jdk:status"]
 description = "Show which JDK is currently active and list all installed JDKs"
+dir = "{{config_root}}"
 run = [
   "java -version",
   "mise ls java",
@@ -125,9 +135,11 @@ run = [
 
 [tasks.build]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
 echo '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
@@ -135,9 +147,11 @@ echo '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 
 [tasks."build:full"]
 description = "Clean install all modules, skip tests"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
 ./mvnw clean install -DskipTests
 echo '✅  Full build complete.'
@@ -145,9 +159,11 @@ echo '✅  Full build complete.'
 
 [tasks."build:test"]
 description = "Build and run all tests"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 ./mvnw clean verify
 echo '✅  Tests complete.'
@@ -155,9 +171,11 @@ echo '✅  Tests complete.'
 
 [tasks."build:native"]
 description = "Native binary — Podman container (default on Linux/macOS) or local GraalVM — auto-detects, auto-switches JDK"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 MOPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 
 # ── Resolve build strategy ────────────────────────────────────────────────────
@@ -255,9 +273,11 @@ echo '▶   Or assemble a dist/ folder:  mise run dist'
 
 [tasks."build:native-local"]
 description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 echo 'ℹ️   build:native-local: local GraalVM, no Podman container.'
 
 # ── .env shield — TEMP FIX ───────────────────────────────────────────────────
@@ -299,9 +319,11 @@ echo '      GOAL="..." mise run native:ask → single-shot query'
 
 [tasks."build:native-lowmem"]
 description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 echo 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
 
 # ── .env shield — TEMP FIX ───────────────────────────────────────────────────
@@ -339,9 +361,11 @@ echo '✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-
 
 [tasks.clean]
 description = "Clean Maven build artifacts"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 ./mvnw clean
 echo '✅  Build artifacts cleaned.'
 """
@@ -359,9 +383,11 @@ JVM_ARGS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk
 
 [tasks.dev]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
     "-Djvm.args=$JVM_ARGS" \\
     '-Dquarkus.args=serve' \\
@@ -372,9 +398,11 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 
 [tasks."dev:chat"]
 description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
     "-Djvm.args=$JVM_ARGS" \\
     '-Dquarkus.args=chat' \\
@@ -385,9 +413,11 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 
 [tasks."dev:attach"]
 description = "Dev mode — Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     echo '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1
 fi
@@ -401,9 +431,11 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 
 [tasks."dev:ask"]
 description = 'Dev mode — one-shot task. Usage: GOAL="your goal" mise run dev:ask'
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 GOAL="${1:-${GOAL:-}}"
 if [[ -z "$GOAL" ]]; then
     echo 'Usage:  GOAL="Your goal here" mise run dev:ask'
@@ -423,9 +455,11 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 
 [tasks."dev:no-ui"]
 description = "Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
     "-Djvm.args=$JVM_ARGS" \\
     '-Dquarkus.args=serve' \\
@@ -442,9 +476,11 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 
 [tasks.serve]
 description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 JVM_ARGS=(
@@ -464,9 +500,11 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" serve
 
 [tasks.chat]
 description = "Run packaged jar — interactive REPL (CLI profile)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 JVM_ARGS=(
@@ -486,9 +524,11 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" chat
 
 [tasks.attach]
 description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && echo '❌  TELEGRAM_BOT_TOKEN is not set in .env' && exit 1
@@ -510,9 +550,11 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" attach
 
 [tasks.ask]
 description = 'Run packaged jar — one-shot task. Usage: GOAL="your goal" mise run ask'
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 GOAL="${1:-${GOAL:-}}"
@@ -542,9 +584,11 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" "${CMD_ARGS[@]}"
 
 [tasks."jar:serve-dev-profile"]
 description = "Run packaged jar with %dev profile (no Podman sandbox) — for smoke-testing without Podman"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 JVM_ARGS=(
@@ -568,9 +612,11 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" serve
 
 [tasks."native:serve"]
 description = "Run native binary — REST daemon on :8080"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
@@ -581,9 +627,11 @@ exec "./$RUNNER" serve
 
 [tasks."native:chat"]
 description = "Run native binary — interactive REPL"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
@@ -594,9 +642,11 @@ exec "./$RUNNER" chat
 
 [tasks."native:attach"]
 description = "Run native binary — Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && echo '❌  TELEGRAM_BOT_TOKEN is not set in .env' && exit 1
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
@@ -608,9 +658,11 @@ exec "./$RUNNER" attach
 
 [tasks."native:ask"]
 description = 'Run native binary — one-shot task. Usage: GOAL="your goal" mise run native:ask'
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 GOAL="${1:-${GOAL:-}}"
 if [[ -z "$GOAL" ]]; then
     echo 'Usage:  GOAL="Your goal here" mise run native:ask'
@@ -634,9 +686,11 @@ exec "./$RUNNER" "${CMD_ARGS[@]}"
 
 [tasks.dist]
 description = "Assemble dist/ folder: native binary + .env.example + vec0 extension"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 if [[ ! -f "$RUNNER" ]]; then
     echo "❌  Native binary not found at $RUNNER — run: mise run build:native"
@@ -771,9 +825,11 @@ echo '      dist/run.ps1   → Windows/pwsh (.\run.ps1 serve|chat|ask|attach)'
 
 [tasks."compose:up"]
 description = "Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 docker compose up -d
@@ -787,18 +843,22 @@ echo '    Ollama        → http://localhost:11434'
 
 [tasks."compose:down"]
 description = "Stop the observability stack (data volumes are preserved)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 docker compose down
 echo '✅  Stack stopped. Data volumes preserved.'
 """
 
 [tasks."compose:down-clean"]
 description = "Stop the stack and DELETE all data volumes (irreversible — prompts for confirmation)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 echo '⚠️   WARNING: This will permanently delete all data volumes.'
 read -r -p 'Type YES to confirm: ' confirm
 if [[ "$confirm" == "YES" ]]; then
@@ -812,13 +872,16 @@ fi
 
 [tasks."compose:logs"]
 description = "Follow live arcclaw container logs (Ctrl+C to stop)"
+dir = "{{config_root}}"
 run = "docker compose logs -f arcclaw"
 
 [tasks."compose:restart"]
 description = "Restart only the arcclaw service (observability stack stays up)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 docker compose restart arcclaw
 echo '✅  arcclaw service restarted.'
 """
@@ -829,9 +892,11 @@ echo '✅  arcclaw service restarted.'
 
 [tasks."podman:init"]
 description = "macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 podman machine init --memory 6144 --cpus 4 --disk-size 40
 podman machine start
 echo '✅  Podman machine initialised and running.'
@@ -839,27 +904,33 @@ echo '✅  Podman machine initialised and running.'
 
 [tasks."podman:start"]
 description = "macOS: start the Podman machine"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 podman machine start
 echo '✅  Podman machine started.'
 """
 
 [tasks."podman:stop"]
 description = "macOS: stop the Podman machine"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 podman machine stop
 echo '✅  Podman machine stopped.'
 """
 
 [tasks."podman:socket"]
 description = "WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 systemctl --user enable --now podman.socket
 SOCK="/run/user/$(id -u)/podman/podman.sock"
 ls -l "$SOCK"
@@ -871,6 +942,7 @@ echo "    export DOCKER_HOST=\"unix://$SOCK\""
 
 [tasks."podman:status"]
 description = "Print Podman version, running containers, and tool-runner image status"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 echo '── Podman version ───────────────────────────────'
@@ -893,9 +965,11 @@ echo "  ${DOCKER_HOST:-(not set)}"
 
 [tasks."sandbox:check"]
 description = "Verify the arcclaw-tool-runner sandbox image exists"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 if podman images | grep -q arcclaw-tool-runner; then
     echo '✅  arcclaw-tool-runner image is present.'
     podman images | grep arcclaw-tool-runner
@@ -911,9 +985,11 @@ fi
 
 [tasks."db:inspect"]
 description = "Open arcclaw-meta.db in sqlite3 interactive CLI"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 DB="${ARCCLAW_DATA_DIR:-./data}/arcclaw-meta.db"
 if [[ ! -f "$DB" ]]; then
     echo "❌  Database not found at: $DB"
@@ -926,9 +1002,11 @@ sqlite3 "$DB"
 
 [tasks."db:fts-check"]
 description = "Verify SQLite FTS5 is available (required for full-text search)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 if sqlite3 :memory: 'CREATE VIRTUAL TABLE t USING fts5(x);' 2>/dev/null; then
     echo '✅  FTS5 is available.'
 else
@@ -939,9 +1017,11 @@ fi
 
 [tasks."db:vec-check"]
 description = "Check sqlite-vec extension exists for your platform (lib/vec0.so / .dylib)"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$MISE_CONFIG_ROOT"
 OS="$(uname -s)"
 if   [[ "$OS" == "Darwin" ]]; then EXT='./lib/vec0.dylib'
 elif [[ "$OS" == "Linux"  ]]; then EXT='./lib/vec0.so'
@@ -962,6 +1042,7 @@ fi
 
 [tasks.info]
 description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
+dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 echo '── Java ─────────────────────────────────────────'
@@ -980,4 +1061,5 @@ echo "  ${ARCCLAW_VEC_EXT:-(not set)}"
 
 [tasks.help]
 description = "List all available mise tasks with descriptions"
+dir = "{{config_root}}"
 run = ["mise tasks"]
