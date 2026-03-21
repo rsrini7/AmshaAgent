@@ -857,7 +857,8 @@ if ($args.Count -eq 0) {
     Write-Host ""
     exit 0
 }
-& "$exe" $args
+$process = Start-Process -FilePath $exe -ArgumentList $args -NoNewWindow -Wait -PassThru
+exit $process.ExitCode
 '@
 $runPs1 | Set-Content (Join-Path $distDir 'run.ps1') -Encoding UTF8
 
