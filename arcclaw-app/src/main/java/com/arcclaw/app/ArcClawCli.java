@@ -5,6 +5,7 @@ import java.nio.file.Path;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
+import com.arcclaw.app.util.CliUtils;
 
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -22,6 +23,12 @@ import picocli.CommandLine.Command;
  * <strong>Data-dir lifecycle:</strong> The static {@code main()} method
  * provisions {@code ARCCLAW_DATA_DIR} <em>before</em> {@code Quarkus.run()}
  * is called, ensuring the directory exists before Hibernate boots.
+ * <p>
+ * <strong>Config validation lifecycle:</strong> {@link CliUtils#validateRequiredEnvVars}
+ * also runs before {@code Quarkus.run()} so the user sees one clear actionable
+ * message instead of a Quarkus stack trace when required env vars are absent.
+ * We do NOT load .env here — Quarkus owns config loading via its SmallRye
+ * config system. We only check whether required vars are present.
  */
 @QuarkusMain
 @Command(name = "arcclaw", mixinStandardHelpOptions = true, subcommands = {
@@ -41,15 +48,16 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     public static void main(String... args) {
 
-        // Load .env manually — Quarkus config system hasn't started yet
-        // CliUtils.loadDotEnv();
-        // CliUtils.validateRequiredEnvVars(); 
+        // 1. Validate required env vars early — before Quarkus boots.
+        //    Shows a clear setup guide if anything is missing, then exits.
+        //    Does NOT load .env — Quarkus handles config loading itself.
+        CliUtils.validateRequiredEnvVars(args);
 
-         try {
+        // 2. Provision data directory before Hibernate starts.
+        try {
             String dataDir = System.getProperty("ARCCLAW_DATA_DIR",
                     System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
             Path dirPath = Path.of(dataDir);
-            //System.out.printf("[ArcClaw] Data dir: %s%n", dirPath.toAbsolutePath());
             Files.createDirectories(dirPath);
             Files.createDirectories(dirPath.resolve("workspaces"));
         } catch (Exception e) {
@@ -60,6 +68,8 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
             System.err.println("[ArcClaw]    Fix: ensure the directory is writable or set ARCCLAW_DATA_DIR.");
             System.exit(1);
         }
+
+        // 3. Boot Quarkus — config system, CDI, and all extensions start here.
         Quarkus.run(ArcClawCli.class, args);
     }
 
