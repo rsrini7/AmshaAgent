@@ -6,24 +6,21 @@
 # =============================================================================
 
 [tools]
+# Default JDK — used by all dev, build:*, jar, native tasks except build:native*
 java  = "temurin-25"
 maven = "3.9"
 
+# GraalVM is installed alongside Temurin but NOT the default.
+# Switch with:   mise run jdk:graalvm   (before native build)
+# Switch back:   mise run jdk:temurin   (after native build)
+# Current JDK:   mise run jdk:status
+
 [env]
-# Auto-load project secrets — never committed
 _.file = ".env"
-
-# sqlite-vec extension path (no suffix — SQLite appends .so/.dylib)
-ARCCLAW_VEC_EXT = "../lib/vec0"
-
-# Default data directory relative to project root
+ARCCLAW_VEC_EXT          = "../lib/vec0"
 ARCCLAW_DATA_DIR_DEFAULT = "../data"
 
-# NOTE: JDK_JAVA_OPTIONS is intentionally NOT set here.
-# Setting it globally causes mvnw to receive --add-opens as Maven CLI args
-# (Maven CLI parser does not understand JVM-level flags).
-# Each task sets MAVEN_OPTS inline (for build tasks) or uses
-# -Djvm.args (for quarkus:dev tasks) to scope the flags correctly.
+# NOTE: JDK_JAVA_OPTIONS intentionally NOT set here — see §15 in MISE_README.md
 
 [task_config]
 includes = ["mise-tasks"]
@@ -33,7 +30,7 @@ includes = ["mise-tasks"]
 # ---------------------------------------------------------------------------
 
 [tasks.setup]
-description = "First-time setup: .env, chmod +x mvnw and all mise-tasks scripts"
+description = "First-time setup: .env, chmod +x mvnw and all mise-tasks scripts, install both JDKs"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -47,11 +44,18 @@ chmod +x mvnw
 find mise-tasks -type f | xargs chmod +x 2>/dev/null || true
 echo "✅  mvnw and all mise-tasks scripts are executable."
 echo ""
+echo "Installing JDKs (temurin-25 + graalvm-community-25.0.2)..."
+mise install java@temurin-25
+mise install java@graalvm-community-25.0.2
+echo "✅  Both JDKs installed."
+echo ""
+echo "Current JDK: $(java -version 2>&1 | head -1)"
+echo ""
 echo "Next:  mise run setup:env-check   mise run build   mise run dev"
 """
 
 [tasks.build]
-description = "JVM build — all modules, skip tests (fast daily driver)"
+description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail

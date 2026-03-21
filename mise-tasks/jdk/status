@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Show which JDK is currently active and list all installed JDKs"
+echo "── Active JDK ───────────────────────────────────"
+java -version 2>&1
+echo ""
+echo "── Installed JDKs (mise) ────────────────────────"
+mise ls java 2>/dev/null
+echo ""
+echo "── JAVA_HOME ────────────────────────────────────"
+echo "  ${JAVA_HOME:-"(not set)"}"
+echo ""
+echo "Switch commands:"
+echo "  mise run jdk:graalvm   → GraalVM Community 25.0.2 (use before build:native)"
+echo "  mise run jdk:temurin   → Temurin 25 (default)"

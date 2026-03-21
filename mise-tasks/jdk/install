@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
+set -euo pipefail
+echo "Installing temurin-25 ..."
+mise install java@temurin-25
+echo "Installing graalvm-community-25.0.2 ..."
+mise install java@graalvm-community-25.0.2
+echo ""
+echo "✅  Both JDKs installed."
+mise ls java

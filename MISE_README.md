@@ -3,7 +3,7 @@
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite · Podman (rootless) · Groq Cloud
 >
 > **This guide** covers `mise` as the unified task runner for **macOS**, **WSL2 (Ubuntu)**, and **Linux**.
-> Windows (native PowerShell) → see [§13](#13-windows-powershell-users) — ps1 wrappers live in `scripts/windows/`.
+> Windows (native PowerShell) → see [§14](#14-windows-powershell-users) — ps1 wrappers in `scripts/windows/`.
 
 ---
 
@@ -14,17 +14,18 @@
 3. [Trust mise.toml (First-Time Security Step)](#3-trust-misetoml-first-time-security-step)
 4. [Repository Layout](#4-repository-layout)
 5. [First-Time Bootstrap](#5-first-time-bootstrap)
-6. [All Tasks at a Glance](#6-all-tasks-at-a-glance)
-7. [Build Tasks](#7-build-tasks)
-8. [Dev Mode Tasks (hot reload)](#8-dev-mode-tasks-hot-reload)
-9. [JAR Run Tasks](#9-jar-run-tasks)
-10. [Native Binary Tasks](#10-native-binary-tasks)
-11. [Docker Compose Tasks](#11-docker-compose-tasks)
-12. [Podman Setup Tasks](#12-podman-setup-tasks)
-13. [Database Helpers](#13-database-helpers)
+6. [JDK Management — Temurin vs GraalVM](#6-jdk-management--temurin-vs-graalvm)
+7. [All Tasks at a Glance](#7-all-tasks-at-a-glance)
+8. [Build Tasks](#8-build-tasks)
+9. [Dev Mode Tasks (hot reload)](#9-dev-mode-tasks-hot-reload)
+10. [JAR Run Tasks](#10-jar-run-tasks)
+11. [Native Binary Tasks](#11-native-binary-tasks)
+12. [Docker Compose Tasks](#12-docker-compose-tasks)
+13. [Podman Setup Tasks](#13-podman-setup-tasks)
 14. [Windows PowerShell Users](#14-windows-powershell-users)
-15. [Environment Variables Reference](#15-environment-variables-reference)
-16. [Troubleshooting](#16-troubleshooting)
+15. [Database Helpers](#15-database-helpers)
+16. [Environment Variables Reference](#16-environment-variables-reference)
+17. [Troubleshooting](#17-troubleshooting)
 
 ---
 
@@ -41,8 +42,9 @@ mise run dev
 
 `mise` also:
 - **Pins JDK 25 (Temurin) per-project** — consistent `java -version` everywhere.
+- **Manages both JDKs** — Temurin 25 (dev/build) and GraalVM Community 25.0.2 (native) installed side-by-side; switch with one command.
 - **Auto-loads `.env`** into every task and your shell when you `cd` into the project.
-- **Self-contained tasks** — all JVM flags, paths, and logic live directly in `mise-tasks/` scripts. No wrapper `.sh` files needed.
+- **Self-contained tasks** — all JVM flags and logic live in `mise-tasks/`. No wrapper `.sh` files.
 - **No chmod surprises** — `mise run setup` makes every script executable automatically.
 
 ---
@@ -52,15 +54,15 @@ mise run dev
 ### macOS / Linux / WSL2
 
 ```bash
-# One-liner (bash/zsh/fish auto-detected)
+# One-liner (auto-detects shell)
 curl https://mise.run | sh
 
-# Or shell-specific (installs + wires activation automatically)
+# Shell-specific (installs + wires activation automatically)
 curl https://mise.run/zsh  | sh   # zsh
 curl https://mise.run/bash | sh   # bash
 
-# Wire manually if preferred (pick one)
-echo 'eval "$(~/.local/bin/mise activate zsh)"'  >> ~/.zshrc    # zsh
+# Wire manually if preferred
+echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc    # zsh
 echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc   # bash
 
 source ~/.zshrc   # or source ~/.bashrc
@@ -71,7 +73,7 @@ source ~/.zshrc   # or source ~/.bashrc
 **Scoop is the recommended Windows installer** — it automatically adds mise shims to `PATH` and avoids the `%PATH%` length limit that winget can trigger. [mise.jdx](https://mise.jdx.dev/installing-mise.html)
 
 ```powershell
-# Install Scoop if you don't have it
+# Install Scoop (if not already installed)
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 
@@ -79,21 +81,18 @@ Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 scoop install mise
 ```
 
-Wire to your **PowerShell profile** (Windows Terminal / PowerShell 7+):
+Wire to your PowerShell profile:
 ```powershell
-# PowerShell 7+ (pwsh.exe) — Windows Terminal default
-echo '(&mise activate pwsh) | Out-String | Invoke-Expression' `
-  >> $HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1
+# PowerShell 7+ (Windows Terminal default — pwsh.exe)
+Add-Content $HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1 `
+    '(&mise activate pwsh) | Out-String | Invoke-Expression'
 
-# PowerShell 5.1 (powershell.exe) — legacy Windows PowerShell
-echo '(&mise activate pwsh) | Out-String | Invoke-Expression' `
-  >> $HOME\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1
+# PowerShell 5.1 (legacy — powershell.exe)
+Add-Content $HOME\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1 `
+    '(&mise activate pwsh) | Out-String | Invoke-Expression'
 ```
 
-Reload:
-```powershell
-. $PROFILE
-```
+Reload: `. $PROFILE`
 
 ### Windows — winget ⚠️ Caution
 
@@ -101,64 +100,53 @@ Reload:
 winget install jdx.mise
 ```
 
-> ⚠️ **PATH length limit**: Windows caps the user `%PATH%` at ~2048 characters.  If you [mise.jdx](https://mise.jdx.dev/installing-mise.html)
-> already have many tools installed, `winget install jdx.mise` can push you over that limit,
-> silently breaking PATH resolution for other tools. **Prefer Scoop** — it manages shims in a
-> single directory so only one path entry is needed regardless of how many tools are installed.
+> ⚠️ **PATH length limit**: Windows caps user `%PATH%` at ~2048 characters. If you have many
+> tools installed, winget can silently push you over this limit, breaking PATH resolution for
+> other tools. **Prefer Scoop** — it manages all shims under a single directory entry.
 
 ### Verify (all platforms)
 
 ```bash
-mise --version     # mise 2025.x.x
-mise doctor        # diagnoses common setup issues
+mise --version    # mise 2025.x.x
+mise doctor       # diagnoses common setup issues
 ```
 
 ---
 
 ## 3. Trust mise.toml (First-Time Security Step)
 
-After cloning and `cd`-ing into the project, mise shows this on first use:
+After cloning, mise shows this on first use:
 
 ```
-mise ERROR Config files in ~/Ws/ArcClawInternal/mise.toml are not trusted.
-Trust them with `mise trust`.
+mise ERROR Config files in ~/Ws/ArcClaw/mise.toml are not trusted.
 ```
 
-This is **expected** — mise won't execute config from an unknown directory until you explicitly approve it.
-
-### Fix — one command
+This is **expected** — supply-chain protection. Fix:
 
 ```bash
-cd ArcClawInternal    # must be inside the project directory
+cd ArcClaw
 mise trust
-source ~/.zshrc       # or open a new terminal
-```
-
-Verify:
-```bash
-mise tasks            # lists all arcclaw tasks with descriptions
+source ~/.zshrc    # or open a new terminal
+mise tasks         # should list all tasks
 ```
 
 ### Skip for your own repos (optional)
 
-**`~/.config/mise/config.toml`:**
 ```toml
+# ~/.config/mise/config.toml
 [settings]
 trust_all = true
 ```
 
-**Or environment variable** (add to `~/.zshrc`):
-```bash
-export MISE_TRUST_ALL=1
-```
+Or: `export MISE_TRUST_ALL=1` in `~/.zshrc`.
 
-> ⚠️ Use `trust_all` only on personal machines. Keep the default on CI/shared environments.
+> ⚠️ `trust_all` on personal machines only. Keep default on CI.
 
-### Trust command reference
+### Trust commands
 
 ```bash
 mise trust              # trust current directory
-mise trust --all        # trust all discovered config files
+mise trust --all        # trust all discovered configs
 mise trust --untrust    # revoke trust
 mise trust --status     # show trust status
 ```
@@ -169,69 +157,31 @@ mise trust --status     # show trust status
 
 ```
 ArcClaw/
-├── mise.toml                    ← tools (JDK 25), env, 3 inline proxy tasks
-├── mise-tasks/                  ← ALL tasks as self-contained executable scripts
-│   ├── serve                    → mise run serve
-│   ├── chat                     → mise run chat
-│   ├── attach                   → mise run attach
-│   ├── ask                      → mise run ask
-│   ├── clean                    → mise run clean
-│   ├── info                     → mise run info
-│   ├── help                     → mise run help
-│   ├── setup/
-│   │   ├── wsl-crlf             → mise run setup:wsl-crlf
-│   │   └── env-check            → mise run setup:env-check
-│   ├── build/
-│   │   ├── full                 → mise run build:full
-│   │   ├── test                 → mise run build:test
-│   │   ├── native               → mise run build:native
-│   │   └── native-lowmem        → mise run build:native-lowmem
-│   ├── dev/
-│   │   ├── chat                 → mise run dev:chat
-│   │   ├── attach               → mise run dev:attach
-│   │   ├── ask                  → mise run dev:ask
-│   │   └── no-ui                → mise run dev:no-ui
-│   ├── jar/
-│   │   └── serve-dev-profile    → mise run jar:serve-dev-profile
-│   ├── native/
-│   │   ├── serve                → mise run native:serve
-│   │   ├── chat                 → mise run native:chat
-│   │   └── attach               → mise run native:attach
-│   ├── compose/
-│   │   ├── up                   → mise run compose:up
-│   │   ├── down                 → mise run compose:down
-│   │   ├── down-clean           → mise run compose:down-clean
-│   │   ├── logs                 → mise run compose:logs
-│   │   ├── restart              → mise run compose:restart
-│   │   └── build                → mise run compose:build
-│   ├── sandbox/
-│   │   ├── build                → mise run sandbox:build
-│   │   └── check                → mise run sandbox:check
-│   ├── podman/
-│   │   ├── init                 → mise run podman:init
-│   │   ├── start                → mise run podman:start
-│   │   ├── stop                 → mise run podman:stop
-│   │   ├── socket               → mise run podman:socket
-│   │   └── status               → mise run podman:status
-│   └── db/
-│       ├── inspect              → mise run db:inspect
-│       ├── fts-check            → mise run db:fts-check
-│       └── vec-check            → mise run db:vec-check
+├── mise.toml                    ← tools (temurin-25 + graalvm), env, 3 inline proxy tasks
+├── mise-tasks/
+│   ├── serve / chat / attach / ask / clean / info / help
+│   ├── jdk/
+│   │   ├── graalvm              → mise run jdk:graalvm   (switch to GraalVM 25.0.2)
+│   │   ├── temurin              → mise run jdk:temurin   (switch back to Temurin 25)
+│   │   ├── status               → mise run jdk:status    (show active + installed JDKs)
+│   │   └── install              → mise run jdk:install   (install both JDKs)
+│   ├── setup/   wsl-crlf, env-check
+│   ├── build/   full, test, native*, native-lowmem*
+│   │                (* auto-switch to GraalVM, build, switch back)
+│   ├── dev/     chat, attach, ask, no-ui
+│   ├── jar/     serve-dev-profile
+│   ├── native/  serve, chat, attach
+│   ├── compose/ up, down, down-clean, logs, restart, build
+│   ├── sandbox/ build, check
+│   ├── podman/  init, start, stop, socket, status
+│   └── db/      inspect, fts-check, vec-check
 ├── scripts/
-│   └── windows/                 ← Windows-native PS1 fallbacks (no mise/WSL2 required)
-│       ├── arcclaw-cli.ps1
-│       ├── arcclaw-dev.ps1
-│       ├── arcclaw-dev-jar-serve.ps1
-│       └── mvn-clean-install-skiptests.ps1
-└── mvnw / mvnw.cmd              ← Maven wrapper (must stay at repo root)
+│   └── windows/                 ← PS1 wrappers (Windows-native fallback)
+└── mvnw / mvnw.cmd
 ```
 
-> **Design note**: `setup`, `build`, and `dev` are defined inline in `mise.toml` because the filesystem
-> cannot have both a file and a directory with the same name (e.g. `mise-tasks/build` file vs
-> `mise-tasks/build/` directory). Every other task is a fully self-contained script in `mise-tasks/`.
->
-> **No root-level .sh files**: all JVM args and launch logic previously in `arcclaw-cli.sh`,
-> `arcclaw-dev.sh`, and `arcclaw-native.sh` are now inlined directly into the relevant task scripts.
+> **JDK default**: `temurin-25` is active for everything except `build:native` and
+> `build:native-lowmem` which auto-switch to `graalvm-community-25.0.2` and back.
 
 ---
 
@@ -245,26 +195,26 @@ cd ArcClaw
 # 2. Trust mise.toml
 mise trust
 
-# 3. Install JDK 25 (mise handles this)
-mise install
-java -version   # openjdk 25
-
-# 4. Initialise .env + chmod all scripts
+# 3. Install both JDKs + chmod all scripts + .env
 mise run setup
+# installs temurin-25, graalvm-community-25.0.2, sets up .env, chmod +x all tasks
 
-# 5. Validate .env
+# 4. Validate .env
 mise run setup:env-check
 
-# 6. WSL2 only — fix CRLF if cloned on Windows
+# 5. WSL2 only — fix CRLF if cloned on Windows
 mise run setup:wsl-crlf
 
-# 7. Build
+# 6. Verify JDKs
+mise run jdk:status
+
+# 7. Build (uses Temurin 25)
 mise run build
 
-# 8. Build Podman sandbox image (required for %prod)
+# 8. Build Podman sandbox image
 mise run podman:init      # macOS only (one-time)
-mise run sandbox:build    # all platforms
-mise run sandbox:check    # verify
+mise run sandbox:build
+mise run sandbox:check
 
 # 9. Run
 mise run dev              # hot reload on :8080
@@ -272,23 +222,69 @@ mise run dev              # hot reload on :8080
 
 ### What `mise run setup` does
 
-1. Copies `.env.example` → `.env` (skips if exists)
+1. `.env.example` → `.env` (skips if exists)
 2. `chmod +x mvnw`
-3. `find mise-tasks -type f | xargs chmod +x` — every task script becomes executable
-
-Open `.env` and set at minimum:
-
-| Variable | Notes |
-|---|---|
-| `GROQ_API_KEY` | Starts with `gsk_` — required for all LLM calls |
-| `ARCCLAW_VAULT_PEPPER` | ≥32 bytes, **never change** after first boot |
-| `ARCCLAW_AUDIT_HMAC_KEY` | ≥32 bytes, **never change** after first boot |
-| `ARCCLAW_API_KEY_INTERNAL` | Bearer token for REST API (`X-ArcClaw-API-Key` header) |
-| `TELEGRAM_BOT_TOKEN` | Only required for `attach` mode |
+3. `find mise-tasks -type f | xargs chmod +x`
+4. `mise install java@temurin-25`
+5. `mise install java@graalvm-community-25.0.2`
 
 ---
 
-## 6. All Tasks at a Glance
+## 6. JDK Management — Temurin vs GraalVM
+
+ArcClaw uses **two JDKs** managed entirely by mise — no manual downloads, no `JAVA_HOME` editing:
+
+| JDK | Version | Used for |
+|---|---|---|
+| Temurin (default) | `temurin-25` | All dev, build, jar, native-run tasks |
+| GraalVM Community | `graalvm-community-25.0.2` | `build:native`, `build:native-lowmem` only |
+
+### Day-to-day commands
+
+```bash
+# See which JDK is active + all installed JDKs
+mise run jdk:status
+
+# Switch to GraalVM (e.g. for a manual native build session)
+mise run jdk:graalvm
+mise run build:native
+mise run jdk:temurin   # switch back
+
+# Let build:native manage the switch automatically (recommended)
+mise run build:native
+# → auto-switches to GraalVM → builds → auto-switches back to Temurin
+```
+
+### Install both JDKs anytime (idempotent)
+
+```bash
+mise run jdk:install
+```
+
+### How `build:native` handles the switch
+
+```
+mise run build:native
+  │
+  ├─ mise use java@graalvm-community-25.0.2   (switches mise.toml [tools.java])
+  ├─ ./mvnw clean package -Pnative ...        (GraalVM active)
+  └─ mise use java@temurin-25                 (restores mise.toml [tools.java])
+```
+
+No manual intervention needed. If the build fails, the script still switches back to Temurin.
+
+### About your old `.java-version` file
+
+Your previous `.java-version` had `graalvm64-25.0.2` (SDKMan notation). mise reads `.java-version`
+but does not understand SDKMan prefixes. Safe to delete — `mise.toml [tools]` now owns the JDK pin:
+
+```bash
+rm .java-version
+```
+
+---
+
+## 7. All Tasks at a Glance
 
 ```bash
 mise run help    # or: mise tasks
@@ -296,23 +292,27 @@ mise run help    # or: mise tasks
 
 | Task | What it does |
 |---|---|
-| **`mise run setup`** | Copy `.env.example → .env`, chmod +x mvnw + all mise-tasks |
-| `mise run setup:wsl-crlf` | Fix CRLF line endings in mvnw (WSL2 after Windows clone) |
+| **`mise run setup`** | `.env`, chmod +x all scripts, install temurin-25 + graalvm-community-25.0.2 |
+| `mise run setup:wsl-crlf` | Fix CRLF in mvnw (WSL2 after Windows clone) |
 | `mise run setup:env-check` | Validate `.env` for missing/placeholder values |
-| **`mise run build`** | JVM build, skip tests — fast daily driver |
-| `mise run build:full` | Clean install all modules (arcclaw-core, mcp, rag, app) |
+| **`mise run jdk:status`** | Show active JDK + all installed JDKs |
+| `mise run jdk:graalvm` | Switch active JDK to GraalVM Community 25.0.2 |
+| `mise run jdk:temurin` | Switch active JDK back to Temurin 25 |
+| `mise run jdk:install` | Install both JDKs (idempotent) |
+| **`mise run build`** | JVM build, skip tests — fast daily driver (Temurin) |
+| `mise run build:full` | Clean install all modules |
 | `mise run build:test` | Build and run all tests |
-| `mise run build:native` | GraalVM native binary via Mandrel container |
-| `mise run build:native-lowmem` | Native build with 6 GB heap cap |
+| `mise run build:native` | Native binary — **auto-switches** GraalVM → Temurin |
+| `mise run build:native-lowmem` | Same with 6 GB heap cap |
 | `mise run clean` | `mvnw clean` |
-| **`mise run dev`** | Quarkus hot-reload — serve on :8080 (strategy: NONE) |
+| **`mise run dev`** | Hot-reload serve on :8080 (strategy: NONE) |
 | `mise run dev:chat` | Hot-reload — interactive REPL |
 | `mise run dev:attach` | Hot-reload — Telegram daemon |
 | `mise run dev:ask` | Hot-reload — one-shot task |
-| `mise run dev:no-ui` | Hot-reload — Dev UI + console disabled (NPE workaround) |
+| `mise run dev:no-ui` | Hot-reload — Dev UI + console disabled |
 | **`mise run serve`** | Packaged jar — REST daemon on :8080 |
 | `mise run chat` | Packaged jar — interactive REPL |
-| `mise run attach` | Packaged jar — Telegram channel daemon |
+| `mise run attach` | Packaged jar — Telegram daemon |
 | `mise run ask` | Packaged jar — one-shot task |
 | `mise run jar:serve-dev-profile` | Packaged jar with `%dev` profile (no Podman) |
 | `mise run native:serve` | Native binary — serve (Linux/WSL2) |
@@ -332,33 +332,26 @@ mise run help    # or: mise tasks
 | `mise run podman:socket` | WSL2/Linux: enable Podman user socket |
 | `mise run podman:status` | Podman + image status |
 | `mise run db:inspect` | Open `arcclaw-meta.db` in sqlite3 |
-| `mise run db:fts-check` | Verify FTS5 is available |
+| `mise run db:fts-check` | Verify FTS5 available |
 | `mise run db:vec-check` | Check `lib/vec0.so` / `.dylib` exists |
 | `mise run info` | Print Java, Podman, Docker versions |
 | `mise run help` | List all tasks |
 
 ---
 
-## 7. Build Tasks
+## 8. Build Tasks
 
 ```bash
-# Fast daily build
-mise run build
-# → arcclaw-app/target/quarkus-app/quarkus-run.jar
+mise run build           # JVM build, skip tests → quarkus-run.jar
+mise run build:full      # all modules (after branch switch or schema change)
+mise run build:test      # with tests
 
-# Full clean install (all modules — use after branch switch or schema change)
-mise run build:full
-
-# With tests
-mise run build:test
-
-# Native binary (Podman required, ≥8 GB RAM, 5–15 min)
+# Native — auto-manages GraalVM switch
 mise run podman:status
-mise run build:native
-# → arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner
+mise run build:native         # full RAM
+mise run build:native-lowmem  # 6 GB heap cap
 
-# Memory-constrained
-mise run build:native-lowmem     # caps native-image at 6 GB heap
+mise run clean
 ```
 
 Increase Podman VM RAM if native build OOMs:
@@ -371,32 +364,17 @@ mise run build:native
 
 ---
 
-## 8. Dev Mode Tasks (hot reload)
+## 9. Dev Mode Tasks (hot reload)
 
-All `dev` / `dev:*` tasks run `./mvnw quarkus:dev` directly — **no delegate `.sh` file**.
-JVM args, profile, vec extension path, and data directory are fully inlined.
-Sandbox strategy is `NONE` in dev mode — no Podman needed.
+All `dev` / `dev:*` tasks use Temurin 25 and pass JVM flags via `-Djvm.args` (not `JDK_JAVA_OPTIONS`).
+No Podman needed — sandbox strategy is `NONE` in dev mode.
 
 ```bash
 mise run dev           # serve on :8080 · hot reload · Dev UI at /q/dev-ui
 mise run dev:chat      # interactive REPL
 mise run dev:no-ui     # serve — Dev UI + console disabled (Quarkus NPE workaround)
-```
-
-### Telegram daemon
-
-```bash
-# TELEGRAM_BOT_TOKEN must be set in .env
-mise run dev:attach
-# Watch for: INFO [TelegramChannelRoute] routeStatus=Started
-```
-
-### One-shot task
-
-```bash
-mise run dev:ask -- "Analyze the ArcClaw repository architecture"
-
-# With role:
+mise run dev:attach    # Telegram daemon (TELEGRAM_BOT_TOKEN required in .env)
+mise run dev:ask -- "Analyze the ArcClaw architecture"
 GOAL="Review auth flow" ROLE=debugger mise run dev:ask
 ```
 
@@ -404,179 +382,166 @@ Available roles: `coordinator` · `researcher` · `architect` · `synthesizer` �
 
 ---
 
-## 9. JAR Run Tasks
+## 10. JAR Run Tasks
 
-These tasks run the **packaged jar** directly — all JVM args and profile flags are inlined.
-Each task checks the jar exists first and prints a clear error if not.
+All jar tasks invoke `java` directly — JVM args fully inlined, no delegate `.sh` files.
 
 ```bash
 mise run serve         # REST daemon on :8080 (CLI profile)
 mise run chat          # interactive REPL
-mise run attach        # Telegram daemon (requires TELEGRAM_BOT_TOKEN)
+mise run attach        # Telegram daemon (TELEGRAM_BOT_TOKEN required)
 mise run ask -- "List all active cron jobs"
 ROLE=researcher mise run ask -- "Research Quarkus ScopedValues patterns"
-
-# Packaged jar with %dev profile (no Podman sandbox — smoke-test mode)
-mise run jar:serve-dev-profile
+mise run jar:serve-dev-profile   # %dev profile, no Podman
 ```
 
 ---
 
-## 10. Native Binary Tasks
-
-All native tasks inline `LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6` (required for `vec0.so`
-symbol resolution in GraalVM native images). Each task checks the binary exists first.
+## 11. Native Binary Tasks
 
 **Prerequisite:** `mise run build:native`
 
 ```bash
-mise run native:serve    # REST daemon on :8080
+mise run native:serve    # REST daemon (Linux/WSL2 only)
 mise run native:chat     # interactive REPL
-mise run native:attach   # Telegram daemon (requires TELEGRAM_BOT_TOKEN)
+mise run native:attach   # Telegram daemon
 ```
 
-> **Linux / WSL2 only.** Native binaries cannot run on macOS or Windows hosts.
+> `LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6` is set inline — required for `vec0.so` symbol resolution.
 
 ---
 
-## 11. Docker Compose Tasks
-
-The Compose stack: **ArcClaw** (native) + **Ollama** + **OTel Collector** + **Jaeger** + **Prometheus**.
+## 12. Docker Compose Tasks
 
 **Prerequisite:** `mise run build:native`
 
 ```bash
-mise run compose:up          # start full stack
-# ArcClaw REST:  http://localhost:8080
-# Jaeger UI:     http://localhost:16686
-# Prometheus:    http://localhost:9090
-# Ollama:        http://localhost:11434
+mise run compose:up          # ArcClaw + Ollama + OTel + Jaeger + Prometheus
+# ArcClaw:   http://localhost:8080
+# Jaeger:    http://localhost:16686
+# Prometheus:http://localhost:9090
+# Ollama:    http://localhost:11434
 
-mise run compose:logs        # follow arcclaw logs live
-mise run compose:restart     # restart only arcclaw service
+mise run compose:logs        # follow logs
+mise run compose:restart     # restart arcclaw only
 mise run compose:down        # stop, keep volumes
-mise run compose:down-clean  # stop + delete all volumes (prompts YES)
+mise run compose:down-clean  # stop + delete volumes (prompts YES)
 ```
 
 ---
 
-## 12. Podman Setup Tasks
+## 13. Podman Setup Tasks
 
 ### macOS
 
 ```bash
-mise run podman:init    # one-time: create VM (6 GB RAM, 4 CPUs, 40 GB disk)
-mise run podman:start   # day-to-day start
-mise run podman:stop    # day-to-day stop
-mise run podman:status  # full status check
+mise run podman:init    # one-time VM creation (6 GB RAM, 4 CPUs, 40 GB disk)
+mise run podman:start
+mise run podman:stop
+mise run podman:status
 ```
 
 ### WSL2 / Ubuntu
 
 ```bash
 mise run podman:socket
-# Prints the DOCKER_HOST export line — add it to ~/.bashrc
-```
-
----
-
-## 13. Database Helpers
-
-```bash
-mise run db:inspect     # open arcclaw-meta.db in sqlite3 interactive CLI
-mise run db:fts-check   # verify FTS5 is compiled into your SQLite build
-mise run db:vec-check   # check lib/vec0.so (Linux) or lib/vec0.dylib (macOS) exists
+# Prints DOCKER_HOST export line — add to ~/.bashrc
 ```
 
 ---
 
 ## 14. Windows PowerShell Users
 
-The `.ps1` wrappers have been relocated to `scripts/windows/` and updated with a
-comment pointing to their `mise run` equivalents. Copy them to the repo root if you
-need to run them directly:
-
-```powershell
-# From repo root on Windows
-copy scripts\windows\arcclaw-cli.ps1 .
-copy scripts\windows\arcclaw-dev.ps1 .
-```
+PS1 wrappers are in `scripts/windows/`. For the full `mise` experience use **WSL2 Ubuntu**.
 
 | Goal | Command |
 |---|---|
 | Build (skip tests) | `.\scripts\windows\mvn-clean-install-skiptests.ps1` |
 | Dev — serve | `.\scripts\windows\arcclaw-dev.ps1` |
-| Dev — chat | `.\scripts\windows\arcclaw-dev.ps1 chat` |
-| Dev — attach | `.\scripts\windows\arcclaw-dev.ps1 attach` |
-| Dev — ask | `.\scripts\windows\arcclaw-dev.ps1 ask "Your goal"` |
-| Jar — serve | `.\scripts\windows\arcclaw-cli.ps1 serve` |
-| Jar — chat | `.\scripts\windows\arcclaw-cli.ps1 chat` |
-| Jar — attach | `.\scripts\windows\arcclaw-cli.ps1 attach` |
-| Jar — ask | `.\scripts\windows\arcclaw-cli.ps1 ask "Your goal"` |
+| Dev — chat/attach/ask | `.\scripts\windows\arcclaw-dev.ps1 chat\|attach\|ask "goal"` |
+| Jar — serve/chat/attach | `.\scripts\windows\arcclaw-cli.ps1 serve\|chat\|attach` |
 | Jar — ask with role | `.\scripts\windows\arcclaw-cli.ps1 ask "goal" --role coordinator` |
 | Jar dev-serve | `.\scripts\windows\arcclaw-dev-jar-serve.ps1` |
 
-For the full `mise` experience on Windows, use **WSL2 Ubuntu** — all `mise run` commands
-work identically there.
+---
+
+## 15. Database Helpers
+
+```bash
+mise run db:inspect     # sqlite3 interactive CLI on arcclaw-meta.db
+mise run db:fts-check   # verify FTS5
+mise run db:vec-check   # verify lib/vec0.so or .dylib
+```
 
 ---
 
-## 15. Environment Variables Reference
-
-`mise.toml [env]` loads `.env` and sets these automatically in every task and your shell:
+## 16. Environment Variables Reference
 
 | Variable | Source | Notes |
 |---|---|---|
-| `JDK_JAVA_OPTIONS` | `mise.toml` | All `--add-opens` + unsafe flags for JDK 25 |
-| `ARCCLAW_VEC_EXT` | `mise.toml` | `../lib/vec0` — sqlite-vec extension path |
+| `ARCCLAW_VEC_EXT` | `mise.toml` | `../lib/vec0` |
 | `ARCCLAW_DATA_DIR_DEFAULT` | `mise.toml` | `../data` |
-| All `.env` variables | `_.file = ".env"` | Loaded automatically via mise dotenv |
-| `GROQ_API_KEY` | `.env` | Required — starts with `gsk_` |
-| `ARCCLAW_VAULT_PEPPER` | `.env` | ≥32 bytes, must not change after first boot |
-| `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, must not change after first boot |
-| `ARCCLAW_API_KEY_INTERNAL` | `.env` | Bearer token for `X-ArcClaw-API-Key` header |
+| All `.env` vars | `_.file = ".env"` | Auto-loaded |
+| `GROQ_API_KEY` | `.env` | Required, starts with `gsk_` |
+| `ARCCLAW_VAULT_PEPPER` | `.env` | ≥32 bytes, never change after first boot |
+| `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
+| `ARCCLAW_API_KEY_INTERNAL` | `.env` | Bearer token for REST API |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
+
+> **`JDK_JAVA_OPTIONS` is intentionally not set in `mise.toml [env]`** — it gets picked up by
+> `mvnw` itself and causes Maven to fail parsing `--add-opens` as a Maven CLI argument.
+> Dev tasks use `-Djvm.args=...` (Quarkus forwards to forked JVM); build tasks use
+> `export MAVEN_OPTS=...` inline (read by mvnw script, not Maven CLI parser).
 
 ---
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### `mise ERROR Config files … are not trusted`
 ```bash
-cd ArcClawInternal
-mise trust
-source ~/.zshrc
+mise trust && source ~/.zshrc
 ```
-To skip permanently for personal repos, add `trust_all = true` to `~/.config/mise/config.toml`.
 
-### `mise: command not found`
+### `java: command not found`
 ```bash
-source ~/.bashrc   # or source ~/.zshrc
+mise install   # inside project root
 ```
 
-### `java: command not found` inside a mise task
+### `Permission denied` on any task
 ```bash
-mise install   # inside the project root — downloads temurin-25
+mise run setup   # re-runs chmod +x
 ```
 
-### `Permission denied` on any task script
-```bash
-mise run setup   # re-runs chmod +x on all mise-tasks/ scripts
-```
-
-### `./mvnw: cannot execute: required file not found` (WSL2)
+### `./mvnw: cannot execute` (WSL2 CRLF)
 ```bash
 mise run setup:wsl-crlf
 ```
 
+### `Unable to parse command line options: Unrecognized option: --add-opens`
+You have `JDK_JAVA_OPTIONS` set globally (shell profile or `mise.toml [env]`). Remove it —
+each task sets `MAVEN_OPTS` or `-Djvm.args` internally.
+
 ### `sandboxStrategy=NONE` when you expect `PODMAN`
-1. `mise run dev`? Dev mode always uses `NONE`. Use `mise run serve` or `mise run compose:up`.
-2. Podman not running when ArcClaw started? Restart after `mise run podman:start`.
-3. On Windows (not WSL2)? OS check bypasses Linux namespaces. Run inside WSL2.
+- `mise run dev`? Dev mode always uses `NONE`. Use `mise run serve` or `mise run compose:up`.
+- Podman not running? `mise run podman:start` then restart ArcClaw.
 
 ### `NullPointerException` in Quarkus Dev Console
 ```bash
 mise run dev:no-ui
+```
+
+### After `build:native` the active JDK is wrong
+```bash
+mise run jdk:status   # check current
+mise run jdk:temurin  # restore if stuck on GraalVM
+```
+
+### OOM during native build
+```bash
+mise run build:native-lowmem
+# or:
+mise run podman:stop && podman machine set --memory 8192 && mise run podman:start
+mise run build:native
 ```
 
 ### Podman socket missing after restart (WSL2)
@@ -584,42 +549,18 @@ mise run dev:no-ui
 mise run podman:socket
 ```
 
-### OOM during native build
+### Groq key rejected
 ```bash
-mise run build:native-lowmem
-# or:
-mise run podman:stop
-podman machine set --memory 8192
-mise run podman:start
-mise run build:native
-```
-
-### `lstat /arcclaw-app/target` (docker compose up)
-```bash
-mise run build:native
-mise run compose:up
-```
-
-### Ollama port 11434 collision
-Edit `docker-compose.yaml`: `"11434:11434"` → `"11435:11434"`, then `mise run compose:up`.
-
-### FTS5 not available
-```bash
-mise run db:fts-check
-sudo apt install sqlite3   # Ubuntu
+mise run setup:env-check
+# Boot logs should show: Seeding secret: GROQ_API_KEY
 ```
 
 ### sqlite-vec not loading
 ```bash
 mise run db:vec-check
-mise run info              # confirm ARCCLAW_VEC_EXT is set
+mise run info   # confirm ARCCLAW_VEC_EXT is set
 ```
-
-### Groq key rejected
-- Must start with `gsk_`, no whitespace.
-- Run `mise run setup:env-check`.
-- Boot logs should show: `Seeding secret: GROQ_API_KEY`
 
 ---
 
-*ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · mise tasks (Option A — fully self-contained)*
+*ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · mise tasks · Temurin 25 + GraalVM Community 25.0.2*
