@@ -820,10 +820,10 @@ $runPs1 = @'
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$exe       = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner.exe'
+$suffix = if ($env:OS -eq 'Windows_NT') { '-runner.exe' } else { '-runner' }
+$exe    = Join-Path $scriptDir "arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $exe)) {
-    # Linux/macOS binary name (no .exe)
-    $exe = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner'
+    Write-Host "❌  Binary not found: $exe"; exit 1
 }
 # Load .env if present
 $envFile = Join-Path $scriptDir '.env'
@@ -857,7 +857,7 @@ if ($args.Count -eq 0) {
     Write-Host ""
     exit 0
 }
-& $exe @args
+& "$exe" $args
 '@
 $runPs1 | Set-Content (Join-Path $distDir 'run.ps1') -Encoding UTF8
 

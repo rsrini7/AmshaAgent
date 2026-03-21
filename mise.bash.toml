@@ -795,7 +795,7 @@ if ($args.Count -eq 0) {
     Write-Host ""
     exit 0
 }
-& $exe @args
+& "$exe" $args
 LAUNCHER
 
 echo ''
