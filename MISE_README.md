@@ -136,21 +136,35 @@ ArcClaw ships three config files:
 
 | File             | Shell                | Platform               | Role                                               |
 | ---------------- | -------------------- | ---------------------- | -------------------------------------------------- |
-| `mise.toml`      | sh (Linux/macOS only)| All platforms          | **Landing page only** — one `help` task            |
+| `mise.toml`      | sh (Linux/macOS only)| All platforms          | **Bootstrap only** — `setup:profile:nix` + `help`  |
 | `mise.bash.toml` | bash / zsh           | Linux · macOS · WSL2   | Full task list — daily driver for bash/zsh users   |
 | `mise.pwsh.toml` | PowerShell 7+ (pwsh) | Windows · macOS · WSL2 | Full task list — daily driver for PowerShell users |
 
-### `mise.toml` — the landing page
+### `mise.toml` — the bootstrap config
 
-`mise.toml` is what mise loads when `MISE_DEFAULT_CONFIG_FILENAME` is not set (i.e. fresh clone, no profile configured). It contains **one task only** — `help` — which prints the setup instructions below so you always know what to do next.
+`mise.toml` is what mise loads when `MISE_DEFAULT_CONFIG_FILENAME` is not set (fresh clone, no profile configured). It contains **two tasks only**:
+
+| Task | Platform | What it does |
+|---|---|---|
+| `setup:profile:nix` | Linux · macOS · WSL2 | Auto-writes `MISE_DEFAULT_CONFIG_FILENAME` to your shell profile. Detects `$SHELL`, finds `~/.bashrc` or `~/.zshrc`, inserts the export line **before** `mise activate`. Idempotent — safe to re-run. |
+| `start` | Linux · macOS · WSL2 | Full setup guide for all platforms including Windows manual steps. Description visible on all platforms via `mise tasks` — no `run` needed. |
+
+**Linux/macOS/WSL2 — quickest path:**
+
+```bash
+mise run setup:profile:nix    # auto-writes your profile, tells you exactly what changed
+source ~/.bashrc               # (or ~/.zshrc)
+mise tasks                     # now shows all ArcClaw tasks
+```
+
+**Windows — manual only** (`setup:profile:nix` and `start` both require `sh`):
 
 ```
-mise tasks       ← shows the help task and its full description (works everywhere)
-mise run help    ← prints the same instructions as a formatted banner (requires sh)
+mise tasks    ← description of `start` has the exact lines to add to $PROFILE
 ```
 
-> **Windows note:** `mise run help` requires `sh` (Git Bash / WSL2). Without `sh`,
-> run `mise tasks` instead — the description text already has everything you need.
+> On Windows without Git Bash or WSL2, `mise tasks` shows the full `$PROFILE`
+> instructions in the `start` task description — no `run` needed.
 
 ### `mise.bash.toml` / `mise.pwsh.toml` — the real configs
 
@@ -257,7 +271,7 @@ Or: set `MISE_TRUST_ALL=1` in your shell profile.
 
 ```
 ArcClaw/
-├── mise.toml            ← landing page: one `help` task for unconfigured shells
+├── mise.toml            ← bootstrap: setup:profile:nix + help (Linux/macOS/WSL2 · sh)
 ├── mise.bash.toml       ← all tasks — bash/sh variant  (Linux · macOS · WSL2)
 ├── mise.pwsh.toml       ← all tasks — pwsh variant     (Windows · macOS · WSL2)
 ├── mvnw / mvnw.cmd
@@ -294,12 +308,27 @@ cd ArcClaw
 # 2. Trust config files
 mise trust --all
 
-# 3. See setup instructions (if MISE_DEFAULT_CONFIG_FILENAME not set yet)
-mise tasks           # description column shows what to do
-mise run help        # formatted banner — requires sh (Linux/macOS/WSL2)
+# 3. Configure your shell profile — pick your path:
 
-# 4. Set your shell profile ONCE (see §3 — pick bash, zsh, or pwsh)
-#    After reloading, mise tasks shows all tasks from the right config.
+#    Linux/macOS/WSL2 — AUTO (recommended):
+mise run setup:profile:nix
+source ~/.bashrc              # or ~/.zshrc
+
+#    Linux/macOS/WSL2 — need guidance first?
+mise run start                # full guide printed to terminal
+
+#    Windows pwsh — MANUAL: add to $PROFILE (ORDER MATTERS), then reload:
+#    $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'   # ← FIRST
+#    (&mise activate pwsh) | Out-String | Invoke-Expression  # ← SECOND
+#    . $PROFILE
+#    (or: mise tasks → read the `start` task description)
+
+#    Any platform — ONE-OFF (no profile change, skip step 3):
+#    mise --env bash run setup    # Linux/macOS/WSL2
+#    mise --env pwsh run setup    # Windows
+
+# 4. Verify the config is loaded (mise tasks should show all tasks now)
+mise tasks
 
 # 5. Install both JDKs + create .env
 mise run setup
@@ -386,6 +415,8 @@ mise run help    # or: mise tasks
 
 | Task                              | What it does                                                                           |
 | --------------------------------- | -------------------------------------------------------------------------------------- |
+| **`mise run setup:profile:nix`**  | Linux/macOS/WSL2: auto-write `MISE_DEFAULT_CONFIG_FILENAME` to shell profile    |
+| `mise run start`                  | Full setup guide for all platforms — Windows: read via `mise tasks` description |
 | **`mise run setup`**              | `.env`, chmod +x mvnw (Linux), install temurin-25 + graalvm-community-25.0.2           |
 | `mise run setup:wsl-crlf`         | Fix CRLF in mvnw (WSL2 after Windows clone)                                            |
 | `mise run setup:env-check`        | Validate `.env` for missing/placeholder values                                         |
@@ -856,21 +887,25 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 mise trust --all
 ```
 
-### Tasks use the wrong config / `mise tasks` shows only `help`
+### Tasks use the wrong config / `mise tasks` shows only `start` and `setup:profile:nix`
 
-This means `MISE_DEFAULT_CONFIG_FILENAME` is not set — you're on the `mise.toml` landing page.
+This means `MISE_DEFAULT_CONFIG_FILENAME` is not set — you're on the `mise.toml` bootstrap.
 
 ```bash
+# Quickest fix (Linux/macOS/WSL2):
+mise run setup:profile:nix
+source ~/.bashrc    # or ~/.zshrc
+
+# Need guidance first?
+mise run start      # full guide (Linux/macOS/WSL2 — requires sh)
+mise tasks          # any platform — read `start` description column
+
 # Check which file mise resolved
 mise doctor
 
 # Confirm the env var is set
 echo $MISE_DEFAULT_CONFIG_FILENAME        # bash/zsh
 $env:MISE_DEFAULT_CONFIG_FILENAME         # pwsh
-
-# See full setup instructions
-mise run help          # Linux/macOS/WSL2 (requires sh)
-mise tasks             # any platform — description column has the instructions
 
 # One-off: run tasks immediately without touching your profile
 mise --env bash tasks
@@ -961,4 +996,4 @@ mise run native:serve    # or: native:chat / native:attach
 ***
 
 *ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · mise tasks · Temurin 25 + GraalVM Community 25.0.2*
-*bash/zsh lovers → `mise.bash.toml` · pwsh lovers → `mise.pwsh.toml` · fresh clone → `mise run help`*
+*bash/zsh → `mise.bash.toml` · pwsh → `mise.pwsh.toml` · fresh clone → `mise run start`*
