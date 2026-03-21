@@ -1031,3 +1031,5 @@ echo "  ${ARCCLAW_VEC_EXT:-(not set)}"
 description = "List all available mise tasks with descriptions"
 dir = "{{config_root}}"
 run = ["mise tasks"]
+
+# end of file
