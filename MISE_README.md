@@ -143,18 +143,27 @@ ArcClaw ships two config files side-by-side:
 
 ### Recommended: set once in your shell profile, never type `--env` again
 
+> **Important:** `MISE_DEFAULT_CONFIG_FILENAME` must be exported **before** the
+> `mise activate` line in your shell profile — mise reads it during activation to
+> resolve which config file to load. Setting it after `mise activate` has no effect
+> for the current shell session.
+
 **Linux / macOS / WSL2 — bash**
 
-Add to `~/.bashrc`:
+Add to `~/.bashrc` — order matters:
 ```bash
-export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml
+# ~/.bashrc — ORDER MATTERS
+export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          # ← FIRST
+eval "$(~/.local/bin/mise activate bash)"                   # ← SECOND
 ```
 
 **Linux / macOS / WSL2 — zsh**
 
-Add to `~/.zshrc`:
+Add to `~/.zshrc` — order matters:
 ```zsh
-export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml
+# ~/.zshrc — ORDER MATTERS
+export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          # ← FIRST
+eval "$(~/.local/bin/mise activate zsh)"                    # ← SECOND
 ```
 
 Then reload:
@@ -164,9 +173,11 @@ source ~/.bashrc   # or source ~/.zshrc
 
 **Windows — PowerShell**
 
-Add to `$PROFILE` (`~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`):
+Add to `$PROFILE` (`~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`) — order matters:
 ```powershell
-$env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'
+# $PROFILE — ORDER MATTERS
+$env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'                # ← FIRST
+(&mise activate pwsh) | Out-String | Invoke-Expression               # ← SECOND
 ```
 
 Then reload:
@@ -321,7 +332,10 @@ mise run jdk:temurin      # switch back
 
 # Let build:native auto-manage (recommended)
 mise run build:native
-# → switches to GraalVM → builds → switches back to Temurin (even on failure)
+# → auto-detects Podman or local → switches to GraalVM → builds → switches back to Temurin (even on failure)
+
+# Force local GraalVM explicitly
+mise run build:native-local
 ```
 
 ### Install both JDKs anytime (idempotent)
@@ -360,8 +374,9 @@ mise run help    # or: mise tasks
 | **`mise run build`** | JVM build, skip tests — fast daily driver (Temurin) |
 | `mise run build:full` | Clean install all modules |
 | `mise run build:test` | Build and run all tests |
-| `mise run build:native` | Native binary — **auto-switches** GraalVM → Temurin |
-| `mise run build:native-lowmem` | Same with 6 GB heap cap |
+| `mise run build:native` | Native binary — **auto-detects** Podman (default) or local GraalVM, auto-switches JDK |
+| `mise run build:native-local` | Native binary — always local GraalVM, no container (fast, any OS) |
+| `mise run build:native-lowmem` | Native binary — local GraalVM, 6 GB heap cap (RAM-constrained machines) |
 | `mise run clean` | `mvnw clean` |
 | **`mise run dev`** | Hot-reload serve on :8080 (strategy: NONE) |
 | `mise run dev:chat` | Hot-reload — interactive REPL |
@@ -404,15 +419,38 @@ mise run build           # JVM build, skip tests → quarkus-run.jar
 mise run build:full      # all modules (after branch switch or schema change)
 mise run build:test      # with tests
 mise run clean
-
-# Native — auto-manages GraalVM switch
-# Linux/macOS: ensure Podman is running first
-mise run podman:status
-mise run build:native         # full RAM
-mise run build:native-lowmem  # 6 GB heap cap
 ```
 
-Increase Podman VM RAM if native build OOMs (Linux/macOS):
+### Native build strategy
+
+`build:native` resolves which strategy to use in this order:
+
+1. **Windows** → always local GraalVM (container build produces a Linux ELF — unusable on Windows)
+2. **`ARCCLAW_NATIVE_BUILD=local`** → force local GraalVM, no container
+3. **`ARCCLAW_NATIVE_BUILD=container`** → force Podman, error clearly if not found
+4. **Podman detected and running** → container build (default on Linux/macOS — more portable binary)
+5. **Podman not found/not running** → local GraalVM + install hint printed
+
+```bash
+# Recommended: let build:native auto-detect
+mise run podman:status        # confirm Podman is running (Linux/macOS)
+mise run build:native         # auto-detects → container if Podman up, local otherwise
+
+# Force strategies explicitly
+mise run build:native-local   # always local GraalVM — fastest, works offline, any OS
+mise run build:native-lowmem  # local GraalVM, 6 GB heap cap (RAM-constrained machines)
+
+# Force container via env var (useful for CI or shell profile)
+export ARCCLAW_NATIVE_BUILD=container   # bash/zsh
+$env:ARCCLAW_NATIVE_BUILD = 'container' # pwsh
+mise run build:native
+
+# Suppress the Podman-not-found warning on a local-only machine
+export ARCCLAW_NATIVE_BUILD=local       # bash/zsh — add to ~/.bashrc or ~/.zshrc
+$env:ARCCLAW_NATIVE_BUILD = 'local'     # pwsh — add to $PROFILE
+```
+
+Increase Podman VM RAM if container build OOMs (macOS):
 ```bash
 mise run podman:stop
 podman machine set --memory 8192
@@ -620,6 +658,7 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
 | `GOAL` | shell env | Goal string for `ask`, `dev:ask`, `native:ask` |
 | `ROLE` | shell env | Optional role override for `ask` tasks |
+| `ARCCLAW_NATIVE_BUILD` | shell env / `.env` | `local` or `container` — overrides `build:native` auto-detection |
 | `MISE_DEFAULT_CONFIG_FILENAME` | shell profile | Set to `mise.bash.toml` or `mise.pwsh.toml` to avoid `--env` every time |
 
 > **`ARCCLAW_VEC_EXT` and `ARCCLAW_DATA_DIR` are not set as global env vars.**

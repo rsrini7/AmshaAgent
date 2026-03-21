@@ -170,28 +170,96 @@ Write-Host '✅  Tests complete.'
 """
 
 [tasks."build:native"]
-description = "Native binary — auto-switches GraalVM → Temurin (all platforms)"
+description = "Native binary — Podman container (default on Linux/macOS) or local GraalVM — auto-detects, auto-switches JDK"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw          = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$containerFlag = if ($IsWindows) { '-Dquarkus.native.container-build=false' } else { '-Dquarkus.native.container-build=true' }
-$suffix        = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+$mOpts  = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+
+# ── Resolve build strategy ────────────────────────────────────────────────────
+# Priority: Windows(always local) > ARCCLAW_NATIVE_BUILD env var > auto-detect Podman > fallback local
+$strategy = 'local'
+if ($IsWindows) {
+    Write-Host 'ℹ️   Windows: using local GraalVM (container build produces a Linux ELF — unusable on Windows).'
+} elseif ($env:ARCCLAW_NATIVE_BUILD -eq 'local') {
+    Write-Host 'ℹ️   ARCCLAW_NATIVE_BUILD=local: using local GraalVM.'
+} elseif ($env:ARCCLAW_NATIVE_BUILD -eq 'container') {
+    if (Get-Command podman -ErrorAction SilentlyContinue) {
+        Write-Host 'ℹ️   ARCCLAW_NATIVE_BUILD=container: using Podman container build.'
+        $strategy = 'container'
+    } else {
+        Write-Host '❌  ARCCLAW_NATIVE_BUILD=container but podman not found.'
+        Write-Host '    Install Podman:'
+        Write-Host '      macOS:      mise run podman:init'
+        Write-Host '      Linux/WSL2: sudo apt install podman  then  mise run podman:socket'
+        exit 1
+    }
+} else {
+    # Auto-detect: probe Podman — it is the preferred default on Linux/macOS
+    if (Get-Command podman -ErrorAction SilentlyContinue) {
+        podman info 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host 'ℹ️   Podman detected and running → container build (portable binary, recommended).'
+            $strategy = 'container'
+        } else {
+            Write-Host '⚠️   Podman installed but not running → falling back to local GraalVM.'
+            Write-Host '    To use container builds start Podman first:'
+            Write-Host '      macOS:      mise run podman:start'
+            Write-Host '      Linux/WSL2: mise run podman:socket'
+        }
+    } else {
+        Write-Host '⚠️   Podman not found → using local GraalVM build.'
+        Write-Host '    To use container builds (more portable binary, recommended for Linux targets):'
+        Write-Host '      macOS:      mise run podman:init'
+        Write-Host '      Linux/WSL2: sudo apt install podman  then  mise run podman:socket'
+        Write-Host '    To silence this warning:  export ARCCLAW_NATIVE_BUILD=local  (or set in .env)'
+    }
+}
+$containerFlag = if ($strategy -eq 'container') { '-Dquarkus.native.container-build=true' } else { '-Dquarkus.native.container-build=false' }
+# ─────────────────────────────────────────────────────────────────────────────
+
+try {
+    mise use java@graalvm-community-25.0.2
+    $env:MAVEN_OPTS = $mOpts
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    Write-Host "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host ''
+    Write-Host '▶   Run with one of:'
+    Write-Host '      mise run native:serve                → HTTP + MCP server on :8080'
+    Write-Host '      mise run native:chat                 → interactive REPL'
+    Write-Host '      mise run native:attach               → Telegram daemon'
+    Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
+    Write-Host ''
+    Write-Host '▶   Or assemble a dist/ folder:  mise run dist'
+} finally {
+    mise use java@temurin-25
+    Write-Host '✅  Switched back to Temurin 25.'
+}
+"""
+
+[tasks."build:native-local"]
+description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
+shell = "pwsh -NonInteractive -Command"
+run = """
+$ErrorActionPreference = 'Stop'
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+Write-Host 'ℹ️   build:native-local: local GraalVM, no Podman container.'
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
-    Write-Host "✅  Native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host "✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host ''
     Write-Host '▶   Run with one of:'
-    Write-Host '      mise run native:serve          → HTTP + MCP server on :8080'
-    Write-Host '      mise run native:chat           → interactive REPL'
-    Write-Host '      mise run native:attach         → Telegram daemon'
-    Write-Host '      $env:GOAL="..."; mise run native:ask  → single-shot query'
-    Write-Host ''
-    Write-Host '▶   Or assemble a dist/ folder:'
-    Write-Host '      mise run dist'
+    Write-Host '      mise run native:serve                → HTTP + MCP server on :8080'
+    Write-Host '      mise run native:chat                 → interactive REPL'
+    Write-Host '      mise run native:attach               → Telegram daemon'
+    Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
 } finally {
     mise use java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
@@ -199,19 +267,21 @@ try {
 """
 
 [tasks."build:native-lowmem"]
-description = "Native binary — 6 GB heap cap — auto-switches GraalVM → Temurin"
+description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
 shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw          = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$containerFlag = if ($IsWindows) { '-Dquarkus.native.container-build=false' } else { '-Dquarkus.native.container-build=true' }
-$suffix        = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+Write-Host 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag '-Dquarkus.native.additional-build-args=-J-Xmx6g'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
+        '-Dquarkus.native.container-build=false' `
+        '-Dquarkus.native.additional-build-args=-J-Xmx6g'
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
-    Write-Host "✅  Native lowmem build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host "✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 } finally {
     mise use java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
