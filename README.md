@@ -4,6 +4,7 @@
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
   ![Quarkus](https://img.shields.io/badge/Quarkus-3.27.2-blue.svg?style=flat&logo=quarkus)
+  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.5.0-FC4C02?style=flat&logo=langchain)
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
