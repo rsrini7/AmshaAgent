@@ -818,7 +818,6 @@ $runPs1 = @'
 # Sets required env vars and forwards subcommand to the native binary.
 # Usage: ./run.ps1 serve | chat | attach | ask "your goal"
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
-quiet = true
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe       = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner.exe'
