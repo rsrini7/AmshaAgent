@@ -218,7 +218,13 @@ else
     echo 'ℹ️   No .env found — building without config override (good for CI).'
 fi
 # ─────────────────────────────────────────────────────────────────────────────
-trap '# ── restore .env ──────────────────────────────────────────────────────────────; if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'; elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env;                echo 'ℹ️   Temporary build.env copy removed.'; fi; mise use java@temurin-25 && echo "✅  Switched back to Temurin 25."' EXIT
+_arcclaw_native_cleanup() {
+    if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
+    elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
+    fi
+    mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+}
+trap _arcclaw_native_cleanup EXIT
 mise use java@graalvm-community-25.0.2
 export MAVEN_OPTS="$MOPTS"
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
@@ -258,7 +264,13 @@ else
     echo 'ℹ️   No .env found — building without config override (good for CI).'
 fi
 # ─────────────────────────────────────────────────────────────────────────────
-trap '# ── restore .env ──────────────────────────────────────────────────────────────; if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'; elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env;                echo 'ℹ️   Temporary build.env copy removed.'; fi; mise use java@temurin-25 && echo "✅  Switched back to Temurin 25."' EXIT
+_arcclaw_native_cleanup() {
+    if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
+    elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
+    fi
+    mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+}
+trap _arcclaw_native_cleanup EXIT
 mise use java@graalvm-community-25.0.2
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
@@ -296,7 +308,13 @@ else
     echo 'ℹ️   No .env found — building without config override (good for CI).'
 fi
 # ─────────────────────────────────────────────────────────────────────────────
-trap '# ── restore .env ──────────────────────────────────────────────────────────────; if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'; elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env;                echo 'ℹ️   Temporary build.env copy removed.'; fi; mise use java@temurin-25 && echo "✅  Switched back to Temurin 25."' EXIT
+_arcclaw_native_cleanup() {
+    if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
+    elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
+    fi
+    mise use java@temurin-25 && echo '✅  Switched back to Temurin 25.'
+}
+trap _arcclaw_native_cleanup EXIT
 mise use java@graalvm-community-25.0.2
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
