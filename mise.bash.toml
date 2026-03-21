@@ -1,15 +1,11 @@
 # =============================================================================
-# mise-sh.toml — ArcClaw Agent Kernel  (bash/sh variant)
+# mise.bash.toml — ArcClaw Agent Kernel  (bash/sh variant)
 # Docs: https://mise.jdx.dev
 # Platform: macOS · WSL2 (Ubuntu) · Linux
 # No PowerShell required — all tasks run in bash/sh.
 #
-# Usage:
-#   cp mise-sh.toml mise.toml    # make this the active config
-#   # or:
-#   MISE_CONFIG_FILE=mise-sh.toml mise run <task>
-#
-# Windows users → use mise-pwsh.toml instead (no bash needed).
+# Activate with:  mise --env bash tasks   (or any mise command)
+# Windows users → use mise.pwsh.toml instead (no bash needed).
 # =============================================================================
 
 [tools]
@@ -21,9 +17,12 @@ java  = "temurin-25"
 maven = "3.9"
 
 [env]
-_.file                   = ".env"
-ARCCLAW_VEC_EXT          = "../lib/vec0"
-ARCCLAW_DATA_DIR_DEFAULT = "../data"
+_.file = ".env"
+
+# ARCCLAW_VEC_EXT and ARCCLAW_DATA_DIR are intentionally NOT set here.
+# quarkus:dev forks Maven inside arcclaw-app/ → needs ../lib/vec0 and ../data.
+# jar and native tasks run from the project root  → need  ./lib/vec0 and  ./data.
+# Each task passes -Darcclaw.rag.vec-extension-path and -Darcclaw.data-dir explicitly.
 
 # NOTE: JDK_JAVA_OPTIONS intentionally NOT set here.
 # Dev tasks pass JVM flags via -Djvm.args; build tasks set MAVEN_OPTS inline.
@@ -199,10 +198,15 @@ echo '✅  Build artifacts cleaned.'
 """
 
 # =============================================================================
-# DEV MODE TASKS  (hot reload — Temurin 25, no Podman)
+# SHARED VARS — referenced as $JVM_ARGS inside task scripts
 # =============================================================================
 
+[vars]
 JVM_ARGS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+
+# =============================================================================
+# DEV MODE TASKS  (hot reload — Temurin 25, no Podman)
+# =============================================================================
 
 [tasks.dev]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
@@ -303,6 +307,8 @@ JVM_ARGS=(
     '-Dfile.encoding=UTF-8' '-Dstdout.encoding=UTF-8'
     '-Dsun.stdout.encoding=UTF-8' '-Dsun.stderr.encoding=UTF-8'
     '-Dquarkus.profile=cli'
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0'
+    '-Darcclaw.data-dir=./data'
 )
 exec java "${JVM_ARGS[@]}" -jar "$JAR" serve
 """
@@ -323,6 +329,8 @@ JVM_ARGS=(
     '-Dfile.encoding=UTF-8' '-Dstdout.encoding=UTF-8'
     '-Dsun.stdout.encoding=UTF-8' '-Dsun.stderr.encoding=UTF-8'
     '-Dquarkus.profile=cli'
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0'
+    '-Darcclaw.data-dir=./data'
 )
 exec java "${JVM_ARGS[@]}" -jar "$JAR" chat
 """
@@ -345,6 +353,8 @@ JVM_ARGS=(
     '-Dsun.stdout.encoding=UTF-8' '-Dsun.stderr.encoding=UTF-8'
     '-Dquarkus.profile=cli'
     '-Darcclaw.telegram.enabled=true'
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0'
+    '-Darcclaw.data-dir=./data'
 )
 exec java "${JVM_ARGS[@]}" -jar "$JAR" attach
 """
@@ -373,6 +383,8 @@ JVM_ARGS=(
     '-Dfile.encoding=UTF-8' '-Dstdout.encoding=UTF-8'
     '-Dsun.stdout.encoding=UTF-8' '-Dsun.stderr.encoding=UTF-8'
     '-Dquarkus.profile=cli'
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0'
+    '-Darcclaw.data-dir=./data'
 )
 CMD_ARGS=("ask" "$GOAL")
 [[ -n "${ROLE:-}" ]] && CMD_ARGS+=("--role" "$ROLE")
@@ -413,7 +425,7 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" serve
+exec "./$RUNNER" serve -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
 """
 
 [tasks."native:chat"]
@@ -424,7 +436,7 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" chat
+exec "./$RUNNER" chat -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
 """
 
 [tasks."native:attach"]
@@ -436,7 +448,7 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" attach
+exec "./$RUNNER" attach -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
 """
 
 [tasks."native:ask"]
@@ -456,6 +468,7 @@ RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 CMD_ARGS=("ask" "$GOAL")
 [[ -n "${ROLE:-}" ]] && CMD_ARGS+=("--role" "$ROLE")
+CMD_ARGS+=("-Darcclaw.rag.vec-extension-path=./lib/vec0" "-Darcclaw.data-dir=./data")
 exec "./$RUNNER" "${CMD_ARGS[@]}"
 """
 
