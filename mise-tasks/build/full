@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Clean install all modules: arcclaw-core, channel-api, mcp, rag, deployment, app (skip tests)"
-set -euo pipefail
-export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
-./mvnw clean install \
-    -pl arcclaw-core,arcclaw-channel-api,arcclaw-mcp,arcclaw-rag,arcclaw-deployment,arcclaw-app \
-    -DskipTests
-echo "✅  Full build complete."

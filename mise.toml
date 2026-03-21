@@ -7,8 +7,9 @@
 
 [tools]
 # Default JDK — used by all dev, build:*, jar, native tasks except build:native*
-java  = "graalvm-community-25.0.2"
+java  = "temurin-25"
 maven = "3.9"
+powershell = "latest"
 
 # GraalVM is installed alongside Temurin but NOT the default.
 # Switch with:   mise run jdk:graalvm   (before native build)
@@ -31,27 +32,24 @@ includes = ["mise-tasks"]
 
 [tasks.setup]
 description = "First-time setup: .env, chmod +x mvnw and all mise-tasks scripts, install both JDKs"
+shell = "pwsh -NonInteractive -Command"
 run = """
-#!/usr/bin/env bash
-set -euo pipefail
-if [[ ! -f .env ]]; then
-    cp .env.example .env
-    echo "✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc."
-else
-    echo "ℹ️   .env already exists — skipping copy."
-fi
-chmod +x mvnw
-find mise-tasks -type f | xargs chmod +x 2>/dev/null || true
-echo "✅  mvnw and all mise-tasks scripts are executable."
-echo ""
-echo "Installing JDKs (temurin-25 + graalvm-community-25.0.2)..."
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path '.env')) {
+    Copy-Item '.env.example' '.env'
+    Write-Host '✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
+} else {
+    Write-Host 'ℹ️   .env already exists — skipping copy.'
+}
+if (-not $IsWindows) {
+    chmod +x mvnw
+    Get-ChildItem -Path mise-tasks -Recurse -File | ForEach-Object { chmod +x $_.FullName }
+    Write-Host '✅  mvnw and all mise-tasks scripts are executable.'
+}
+Write-Host 'Installing JDKs (temurin-25 + graalvm-community-25.0.2)...'
 mise install java@temurin-25
 mise install java@graalvm-community-25.0.2
-echo "✅  Both JDKs installed."
-echo ""
-echo "Current JDK: $(java -version 2>&1 | head -1)"
-echo ""
-echo "Next:  mise run setup:env-check   mise run build   mise run dev"
+Write-Host '✅  Both JDKs installed.'
 """
 
 # ---------------------------------------------------------------------------
@@ -87,15 +85,83 @@ run = [
   "mise ls java",
 ]
 
+# ---------------------------------------------------------------------------
+# Build tasks — cross-platform (Linux · macOS · WSL2 · Windows pwsh)
+# ---------------------------------------------------------------------------
+
+[tasks."build:native"]
+description = "Native binary — auto-switches GraalVM → Temurin (all platforms)"
+shell = "pwsh -NonInteractive -Command"
+run = """
+$ErrorActionPreference = 'Stop'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+try {
+    mise use java@graalvm-community-25.0.2
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests
+    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    Write-Host '✅  Native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
+} finally {
+    mise use java@temurin-25
+    Write-Host '✅  Switched back to Temurin 25'
+}
+"""
+
+[tasks."build:native-lowmem"]
+description = "Native binary — 6 GB heap cap — auto-switches GraalVM → Temurin"
+shell = "pwsh -NonInteractive -Command"
+run = """
+$ErrorActionPreference = 'Stop'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+try {
+    mise use java@graalvm-community-25.0.2
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.additional-build-args=-J-Xmx6g'
+    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    Write-Host '✅  Native lowmem build complete.'
+} finally {
+    mise use java@temurin-25
+    Write-Host '✅  Switched back to Temurin 25'
+}
+"""
+
 [tasks.build]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
+shell = "pwsh -NonInteractive -Command"
 run = """
-#!/usr/bin/env bash
-set -euo pipefail
-export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
-./mvnw clean package -pl arcclaw-app -am -DskipTests
-echo "✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar"
+$ErrorActionPreference = 'Stop'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+& $mvnw clean package -pl arcclaw-app -am -DskipTests
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 """
+
+[tasks."build:full"]
+description = "Clean install all modules, skip tests"
+shell = "pwsh -NonInteractive -Command"
+run = """
+$ErrorActionPreference = 'Stop'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+& $mvnw clean install -DskipTests
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host '✅  Full build complete.'
+"""
+
+[tasks."build:test"]
+description = "Build and run all tests"
+shell = "pwsh -NonInteractive -Command"
+run = """
+$ErrorActionPreference = 'Stop'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+& $mvnw clean verify
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host '✅  Tests complete.'
+"""
+
+
 
 [tasks.dev]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
