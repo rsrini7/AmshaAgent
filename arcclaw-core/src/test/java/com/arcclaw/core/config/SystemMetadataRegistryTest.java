@@ -13,8 +13,9 @@ class SystemMetadataRegistryTest {
     @BeforeEach
     void setUp() {
         registry = new SystemMetadataRegistry();
-        registry.appName = "arcclaw-test";
-        registry.appVersion = "1.2.3";
+        registry.appName      = "arcclaw-test";
+        registry.appVersion   = "1.2.3";
+        registry.activeProfile = "test";
         registry.init();
     }
 
@@ -25,6 +26,7 @@ class SystemMetadataRegistryTest {
         assertEquals("arcclaw-test", info.name());
         assertEquals("1.2.3", info.version());
         assertNotNull(info.environment());
+        assertEquals("test", info.environment());
         assertNotNull(info.startedAt());
     }
 

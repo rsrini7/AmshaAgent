@@ -1,10 +1,14 @@
 package com.arcclaw.core.agent.loop;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -12,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.reflex.PiiScanReflex;
+
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 @ExtendWith(MockitoExtension.class)
@@ -20,8 +26,18 @@ class ChatMemoryWriterTest {
     @Mock
     ChatMemoryStore chatMemoryStore;
 
+    @Mock
+    PiiScanReflex piiScanReflex;
+
     @InjectMocks
     ChatMemoryWriter chatMemoryWriter;
+
+    @BeforeEach
+    void setUp() {
+        // piiScanReflex.redactPii() should return input unchanged for unit tests.
+        // Marked lenient to avoid UnnecessaryStubbingException in tests that don't reach the redaction call.
+        lenient().when(piiScanReflex.redactPii(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
 
     @Test
     void testSaveGoalSkipsResumeGoals() {

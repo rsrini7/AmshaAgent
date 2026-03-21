@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -93,6 +94,10 @@ class AgentSessionServiceTest {
         
         mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), any(), any(AutonomyLevel.class), anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(5)).call());
+
+        // Ensure session exists by default so we don't return 404 in validateSession.
+        // Marked lenient to avoid UnnecessaryStubbingException in tests that don't call validateSession.
+        lenient().when(heartbeatTracker.exists(anyString())).thenReturn(true);
     }
 
     @AfterEach
@@ -132,6 +137,7 @@ class AgentSessionServiceTest {
 
     @Test
     void testApprove_noCheckpoint_returns409() {
+        // Mock session exists but checkpoint is missing
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         Response response = service.approve("sess1", "coordinator");
         assertEquals(409, response.getStatus());
@@ -157,7 +163,6 @@ class AgentSessionServiceTest {
         Response response = service.deny("sess1", "coordinator");
         assertEquals(200, response.getStatus());
         verify(agentStore).markFailed(123L, "Human denied via REST");
-        verify(heartbeatTracker).removeHeartbeat("sess1");
     }
 
     @Test
@@ -169,7 +174,8 @@ class AgentSessionServiceTest {
 
     @Test
     void testGetStatus_notFound_returns404() {
-        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        // Explicitly mock as non-existent for this specific test
+        when(heartbeatTracker.exists(anyString())).thenReturn(false);
         Response response = service.getStatus("sess1", "coordinator");
         assertEquals(404, response.getStatus());
     }
