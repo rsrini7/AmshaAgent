@@ -17,6 +17,7 @@ import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -42,8 +43,14 @@ class AgentResourceTest {
         @InjectMock
         ApiKeyRegistry apiKeyRegistry;
 
+        @InjectMock
+        SessionHeartbeatTracker heartbeatTracker;
+
         @BeforeEach
         void setupMock() {
+                // Ensure sessions exist by default so we don't hit 404 in validateSession
+                Mockito.when(heartbeatTracker.exists(anyString())).thenReturn(true);
+
                 ReasoningStep finishStep = new ReasoningStep("Calculated final answer", ReasoningStep.FINISH,
                                 Map.of("response", "42"), null, 0, 0);
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
@@ -65,6 +72,9 @@ class AgentResourceTest {
                 Mockito.when(agentStore.loadSteps(any())).thenReturn(List.of(
                     new ReasoningStep("Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), null, 0, 0)
                 ));
+                
+                // Explicitly mock session-not-found for 404 compliance tests
+                Mockito.when(heartbeatTracker.exists(Mockito.eq("fake-id-123"))).thenReturn(false);
                 Mockito.when(agentStore.load(Mockito.eq("fake-id-123"), anyString())).thenReturn(Optional.empty());
         }
 
