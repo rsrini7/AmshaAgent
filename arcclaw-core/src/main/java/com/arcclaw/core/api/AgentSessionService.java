@@ -22,6 +22,8 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -51,6 +53,7 @@ public class AgentSessionService {
     private final SessionHeartbeatTracker heartbeatTracker;
     private final DevSecretSeeder devSeeder;
     private final AgentResponseMapper responseMapper;
+    private final ReflexRegistry reflexRegistry;
     private final ExecutorService vThreads;
 
     protected AgentSessionService() {
@@ -62,7 +65,8 @@ public class AgentSessionService {
         this.heartbeatTracker = null;
         this.devSeeder = null;
         this.responseMapper = null;
-        this.vThreads = null;
+        this.reflexRegistry = null;
+        this.vThreads = null;        
     }
 
     @Inject
@@ -74,6 +78,7 @@ public class AgentSessionService {
                                SessionHeartbeatTracker heartbeatTracker,
                                DevSecretSeeder devSeeder,
                                AgentResponseMapper responseMapper,
+                               ReflexRegistry reflexRegistry,
                                @VirtualThreads ExecutorService vThreads) {
         this.log = log;
         this.agentLoop = agentLoop;
@@ -83,6 +88,7 @@ public class AgentSessionService {
         this.heartbeatTracker = heartbeatTracker;
         this.devSeeder = devSeeder;
         this.responseMapper = responseMapper;
+        this.reflexRegistry = reflexRegistry;
         this.vThreads = vThreads;
     }
 
@@ -106,6 +112,9 @@ public class AgentSessionService {
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) return roleError.get();
+
+        var commandResponse = handleSlashCommand(sessionId, request);
+        if (commandResponse.isPresent()) return commandResponse.get();
 
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
@@ -137,6 +146,9 @@ public class AgentSessionService {
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) { response.resume(roleError.get()); return; }
+        
+        var commandResponse = handleSlashCommand(sessionId, request);
+        if (commandResponse.isPresent()) { response.resume(commandResponse.get()); return; }
 
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
@@ -325,6 +337,32 @@ public class AgentSessionService {
                     .build());
         }
         return Optional.empty();
+    }
+
+    private Optional<Response> handleSlashCommand(String sessionId, RunAgentRequest request) {
+        String goal = request.goal();
+        if (goal == null || !goal.startsWith("/")) return Optional.empty();
+
+        MessageContext context = createRestContext(sessionId, goal);
+
+        try {
+            ReflexResult result = WorkspaceContext.run(
+                sessionId, "rest:api", sessionId, AutonomyLevel.FULL,
+                request.agentRole(),
+                () -> reflexRegistry.processIfReflex(
+                    sessionId, "rest:api", sessionId, goal, context)
+            );
+
+            return result.commandResponse()
+                    .map(response -> Response.ok(Map.of(
+                        "status", "OK",
+                        "message", response
+                    )).build());
+
+        } catch (Exception e) {
+            log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage(), e);
+            return Optional.empty(); // fall through to agent loop
+        }
     }
 
 }

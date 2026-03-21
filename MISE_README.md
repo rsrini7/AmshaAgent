@@ -385,7 +385,7 @@ mise run help    # or: mise tasks
 | `mise run jdk:temurin`           | Switch active JDK back to Temurin 25                                                  |
 | `mise run jdk:install`           | Install both JDKs (idempotent)                                                        |
 | **`mise run build`**             | JVM build, skip tests — fast daily driver (Temurin)                                   |
-| `mise run build:full-skiptests`  | Clean install all modules and skipTests                                               |
+| `mise run build:full`  | Clean install all modules and skipTests                                               |
 | `mise run build:test`            | Build and run all tests                                                               |
 | `mise run build:native`          | Native binary — **auto-detects** Podman (default) or local GraalVM, auto-switches JDK |
 | `mise run build:native-local`    | Native binary — always local GraalVM, no container (fast, any OS)                     |
@@ -429,7 +429,7 @@ mise run help    # or: mise tasks
 
 ```bash
 mise run build-app              # JVM build, skip tests → quarkus-run.jar
-mise run build:full-skiptests   # all modules (after branch switch or schema change), skip tests
+mise run build:full   # all modules (after branch switch or schema change), skip tests
 mise run build:test             # with tests
 mise run clean
 ```

@@ -158,7 +158,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 """
 
-[tasks."build:full-skiptests"]
+[tasks."build:full"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"

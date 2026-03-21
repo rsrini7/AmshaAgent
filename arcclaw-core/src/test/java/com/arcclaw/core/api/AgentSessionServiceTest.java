@@ -29,6 +29,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -64,6 +65,9 @@ class AgentSessionServiceTest {
     AgentResponseMapper responseMapper;
 
     @Mock
+    ReflexRegistry reflexRegistry;
+
+    @Mock
     ExecutorService vThreads;
 
     @Mock
@@ -78,7 +82,7 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, devSeeder, responseMapper, vThreads);
+                heartbeatTracker, devSeeder, responseMapper, reflexRegistry, vThreads);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);

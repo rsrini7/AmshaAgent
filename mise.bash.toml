@@ -142,7 +142,7 @@ export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 echo '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 """
 
-[tasks."build:full-skiptests"]
+[tasks."build:full"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
 run = """
