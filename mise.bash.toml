@@ -1068,6 +1068,7 @@ if [[ -f "dist/$RUNNER" ]]; then
     cp "dist/run.sh"         "$STAGE/run.sh"
     cp "dist/.env.example"   "$STAGE/.env.example"
     [[ -f 'dist/lib/vec0.so' ]] && mkdir -p "$STAGE/lib" && cp 'dist/lib/vec0.so' "$STAGE/lib/vec0.so"
+    sed -i.bak 's|arcclaw-app-[^/]*-runner|arcclaw|g' "$STAGE/run.sh" && rm "$STAGE/run.sh.bak"
     chmod +x "$STAGE/arcclaw" "$STAGE/run.sh"
     ARCHIVE="$OUT/arcclaw-$VERSION-linux-x64.tar.gz"
     tar -czf "$ARCHIVE" -C "$STAGE" .
@@ -1085,6 +1086,7 @@ if [[ -f "dist/$RUNNER" ]]; then
         cp "dist/run.sh"           "$STAGE/run.sh"
         cp "dist/.env.example"     "$STAGE/.env.example"
         mkdir -p "$STAGE/lib" && cp 'dist/lib/vec0.dylib' "$STAGE/lib/vec0.dylib"
+        sed -i.bak 's|arcclaw-app-[^/]*-runner|arcclaw|g' "$STAGE/run.sh" && rm "$STAGE/run.sh.bak"
         chmod +x "$STAGE/arcclaw" "$STAGE/run.sh"
         ARCHIVE="$OUT/arcclaw-$VERSION-macos-aarch64.tar.gz"
         tar -czf "$ARCHIVE" -C "$STAGE" .
@@ -1099,6 +1101,7 @@ if [[ -f "dist/${RUNNER}.exe" ]]; then
     STAGE=$(mktemp -d)
     cp "dist/${RUNNER}.exe"  "$STAGE/arcclaw.exe"
     cp "dist/run.ps1"        "$STAGE/run.ps1"
+    sed -i.bak 's|arcclaw-app-[^/]*-runner|arcclaw|g' "$STAGE/run.ps1" && rm "$STAGE/run.ps1.bak"
     cp "dist/.env.example"   "$STAGE/.env.example"
     [[ -f 'dist/lib/vec0.dll' ]] && mkdir -p "$STAGE/lib" && cp 'dist/lib/vec0.dll' "$STAGE/lib/vec0.dll"
     ARCHIVE="$(pwd)/$OUT/arcclaw-$VERSION-windows-x64.zip"

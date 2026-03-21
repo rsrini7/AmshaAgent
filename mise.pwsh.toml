@@ -1284,6 +1284,9 @@ if (Test-Path "dist/$runner.exe") {
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner.exe"  "$stage/arcclaw.exe"
     Copy-Item 'dist/run.ps1'      "$stage/run.ps1"
+    (Get-Content "$stage/run.ps1") `
+    -replace 'arcclaw-app-[^/]*-runner\\.exe', 'arcclaw.exe' `
+    -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$stage/run.ps1"
     Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.dll') { Copy-Item 'dist/lib/vec0.dll' "$stage/lib/vec0.dll" }
     $archive = "$out/arcclaw-$version-windows-x64.zip"
@@ -1300,6 +1303,7 @@ if (Test-Path "dist/$runner") {
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner"      "$stage/arcclaw"
     Copy-Item 'dist/run.sh'       "$stage/run.sh"
+    (Get-Content "$STAGE/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$STAGE/run.sh"
     Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.so') { Copy-Item 'dist/lib/vec0.so' "$stage/lib/vec0.so" }
     $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
@@ -1321,6 +1325,7 @@ if ((Test-Path "dist/$runner") -and (Test-Path 'dist/lib/vec0.dylib')) {
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner"         "$stage/arcclaw"
     Copy-Item 'dist/run.sh'          "$stage/run.sh"
+    (Get-Content "$STAGE/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$STAGE/run.sh"
     Copy-Item 'dist/.env.example'    "$stage/.env.example"
     Copy-Item 'dist/lib/vec0.dylib'  "$stage/lib/vec0.dylib"
     $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
