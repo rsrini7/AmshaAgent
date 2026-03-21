@@ -905,7 +905,12 @@ if [[ $# -eq 0 ]]; then
 fi
 exec "$EXE" "$@"
 '@
-$runSh | Set-Content (Join-Path $distDir 'run.sh') -Encoding UTF8
+$runShLf = $runSh -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path (Resolve-Path $distDir) 'run.sh'),
+    $runShLf,
+    [System.Text.UTF8Encoding]::new($false)   # UTF-8, no BOM
+)
 if (-not $IsWindows) { chmod +x (Join-Path $distDir 'run.sh') }
 
 Write-Host ''

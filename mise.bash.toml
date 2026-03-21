@@ -748,7 +748,10 @@ if [[ $# -eq 0 ]]; then
     echo ""
     exit 0
 fi
-exec "$EXE" "$@"
+# Strip any Windows \r from args (guards against CRLF-contaminated copies of this script)
+CLEAN_ARGS=()
+for arg in "$@"; do CLEAN_ARGS+=("${arg//$'\r'/}"); done
+exec "$EXE" "${CLEAN_ARGS[@]}"
 LAUNCHER
 chmod +x "dist/run.sh"
 
