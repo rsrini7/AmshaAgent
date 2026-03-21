@@ -240,7 +240,6 @@ public class AgentSessionService {
 
                 MDC.put(MdcKeys.USER_ID, "rest:deny");
                 agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
-                // ← heartbeatTracker.removeHeartbeat(sessionId) REMOVED
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
         } catch (Exception e) {
