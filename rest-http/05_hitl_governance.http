@@ -111,6 +111,26 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+### [HITL-9] Status after deny — should be FAILED
+# Expect 200: {"sessionId":"...","status":"FAILED","steps":[...],"failReason":"Human denied via REST"}
+GET {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+### This always returns 200 if the key is valid — good for rate limit testing
+GET {{baseUrl}}/api/v1/sessions
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
 ### [HITL-8] DENY via dedicated REST endpoint
 # Expect 200: {"status":"DENIED","session":"..."}
 # AgentSessionService.deny() calls agentStore.markFailed() and removes heartbeat
@@ -118,12 +138,13 @@ POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/deny?ag
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
+
 ###
 
-### [HITL-9] Status after deny — should be FAILED
-# Expect 200: {"sessionId":"...","status":"FAILED","steps":[...],"failReason":"Human denied via REST"}
-GET {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/status/coordinator
+### This always returns 200 if the key is valid — good for rate limit testing
+GET {{baseUrl}}/api/v1/sessions
 X-ArcClaw-API-Key: {{validKey}}
+
 
 ###
 

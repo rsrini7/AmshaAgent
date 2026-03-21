@@ -222,8 +222,6 @@ public class AgentSessionService {
     }
 
     public Response deny(String sessionId, String agentRole) {
-        log.infof("REST deny for session %s role %s", sessionId, agentRole);
-
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
 
@@ -242,7 +240,7 @@ public class AgentSessionService {
 
                 MDC.put(MdcKeys.USER_ID, "rest:deny");
                 agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
-                heartbeatTracker.removeHeartbeat(sessionId);
+                // ← heartbeatTracker.removeHeartbeat(sessionId) REMOVED
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
         } catch (Exception e) {
@@ -252,6 +250,7 @@ public class AgentSessionService {
             MDC.remove(MdcKeys.USER_ID);
         }
     }
+
 
     public Response getStatus(String sessionId, String role) {
         var sessionError = validateSession(sessionId);
