@@ -485,7 +485,9 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data serve
+export ARCCLAW_RAG_VEC_EXTENSION_PATH="./lib/vec0"
+export ARCCLAW_DATA_DIR="./data"
+exec "./$RUNNER" serve
 """
 
 [tasks."native:chat"]
@@ -496,7 +498,9 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data chat
+export ARCCLAW_RAG_VEC_EXTENSION_PATH="./lib/vec0"
+export ARCCLAW_DATA_DIR="./data"
+exec "./$RUNNER" chat
 """
 
 [tasks."native:attach"]
@@ -508,7 +512,9 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data attach
+export ARCCLAW_RAG_VEC_EXTENSION_PATH="./lib/vec0"
+export ARCCLAW_DATA_DIR="./data"
+exec "./$RUNNER" attach
 """
 
 [tasks."native:ask"]
@@ -528,8 +534,8 @@ RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 CMD_ARGS=("ask" "$GOAL")
 [[ -n "${ROLE:-}" ]] && CMD_ARGS+=("--role" "$ROLE")
-# Prepend -D flags so they come before the subcommand (picocli parses args after subcommand name)
-CMD_ARGS=("-Darcclaw.rag.vec-extension-path=./lib/vec0" "-Darcclaw.data-dir=./data" "${CMD_ARGS[@]}")
+export ARCCLAW_RAG_VEC_EXTENSION_PATH="./lib/vec0"
+export ARCCLAW_DATA_DIR="./data"
 exec "./$RUNNER" "${CMD_ARGS[@]}"
 """
 
@@ -567,11 +573,15 @@ fi
 echo ''
 echo '✅  dist/ assembled. Next steps:'
 echo '      cd dist'
-echo '      cp .env.example .env          # fill in your API keys'
-echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner serve    # HTTP + MCP on :8080'
-echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner chat     # interactive REPL'
-echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner ask "your prompt"'
-echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner attach   # Telegram daemon'
+echo '      cp .env.example .env                                      # fill in API keys'
+echo '      export ARCCLAW_RAG_VEC_EXTENSION_PATH=./lib/vec0          # required for vector search'
+echo '      export ARCCLAW_DATA_DIR=./data                            # data directory'
+echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner serve                 # HTTP + MCP on :8080'
+echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner chat                  # interactive REPL'
+echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner ask "your prompt"     # single-shot query'
+echo '      ./arcclaw-app-1.0.0-SNAPSHOT-runner attach                # Telegram daemon'
+echo ''
+echo '    Tip: add env vars to dist/.env — Quarkus native reads them automatically.'
 """
 
 # =============================================================================

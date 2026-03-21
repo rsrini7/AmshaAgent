@@ -548,7 +548,9 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-& "./$runner" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data serve
+$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:ARCCLAW_DATA_DIR = "./data"
+& "./$runner" serve
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -563,7 +565,9 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-& "./$runner" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data chat
+$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:ARCCLAW_DATA_DIR = "./data"
+& "./$runner" chat
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -579,7 +583,9 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-& "./$runner" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data attach
+$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:ARCCLAW_DATA_DIR = "./data"
+& "./$runner" attach
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -603,8 +609,8 @@ if (-not (Test-Path $runner)) {
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $cmdArgs = @('ask', $goal)
 if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
-# Prepend -D flags so they come before the subcommand (picocli parses args after subcommand name)
-$cmdArgs = @('-Darcclaw.rag.vec-extension-path=./lib/vec0', '-Darcclaw.data-dir=./data') + $cmdArgs
+$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" @cmdArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
@@ -652,11 +658,15 @@ if (Test-Path $vec0Src) {
 Write-Host ''
 Write-Host "✅  dist/ assembled. Next steps:"
 Write-Host "      cd dist"
-Write-Host "      Copy-Item .env.example .env        # then fill in your API keys"
-Write-Host "      ./$exeName serve                   # HTTP + MCP server on :8080"
-Write-Host "      ./$exeName chat                    # interactive REPL"
-Write-Host "      ./$exeName ask 'your prompt'       # single-shot query"
-Write-Host "      ./$exeName attach                  # Telegram daemon"
+Write-Host "      Copy-Item .env.example .env                             # fill in API keys"
+Write-Host "      `$env:ARCCLAW_RAG_VEC_EXTENSION_PATH='./lib/vec0'      # required for vector search"
+Write-Host "      `$env:ARCCLAW_DATA_DIR='./data'                        # data directory"
+Write-Host "      ./$exeName serve                                        # HTTP + MCP server on :8080"
+Write-Host "      ./$exeName chat                                         # interactive REPL"
+Write-Host "      ./$exeName ask 'your prompt'                            # single-shot query"
+Write-Host "      ./$exeName attach                                        # Telegram daemon"
+Write-Host ""
+Write-Host "    Tip: add env vars to dist/.env — Quarkus native reads them automatically."
 """
 
 # =============================================================================

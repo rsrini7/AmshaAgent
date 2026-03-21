@@ -541,18 +541,31 @@ dist/
 ```
 
 Then run from anywhere:
+
+> **Note:** Quarkus native binaries have no JVM — `-Dkey=value` flags don't work.
+> Use environment variables for config (MicroProfile Config convention: dots and hyphens → underscores, uppercase).
+
 ```bash
 # Linux/macOS
 cd dist && cp .env.example .env
+export ARCCLAW_RAG_VEC_EXTENSION_PATH=./lib/vec0
+export ARCCLAW_DATA_DIR=./data
 ./arcclaw-app-1.0.0-SNAPSHOT-runner serve
 ./arcclaw-app-1.0.0-SNAPSHOT-runner chat
 ./arcclaw-app-1.0.0-SNAPSHOT-runner ask "your prompt"
 ./arcclaw-app-1.0.0-SNAPSHOT-runner attach
+```
 
+```powershell
 # Windows
 cd dist; Copy-Item .env.example .env
+$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:ARCCLAW_DATA_DIR = "./data"
 .\arcclaw-app-1.0.0-SNAPSHOT-runner.exe serve
 ```
+
+Tip: you can also add `ARCCLAW_RAG_VEC_EXTENSION_PATH=./lib/vec0` and `ARCCLAW_DATA_DIR=./data`
+directly to `dist/.env` — Quarkus native picks up `.env` automatically at startup.
 
 ### sqlite-vec (vec0) — one-time download
 
