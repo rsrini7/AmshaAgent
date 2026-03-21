@@ -742,25 +742,30 @@ if (-not (Test-Path $src)) {
     exit 1
 }
 
-if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
-New-Item -ItemType Directory "$distDir/lib" | Out-Null
+# Preserve any existing platform binaries — only recreate lib/ and support files
+New-Item -ItemType Directory -Force "$distDir/lib" | Out-Null
 
 Copy-Item $src "$distDir/$exeName"
 Copy-Item '.env.example' "$distDir/.env.example"
 
-# Platform-aware vec0 extension copy
-$vec0Src = if ($IsWindows) { 'lib/vec0.dll' } elseif ($IsMacOS) { 'lib/vec0.dylib' } else { 'lib/vec0.so' }
-$vec0Dst = if ($IsWindows) { "$distDir/lib/vec0.dll" } elseif ($IsMacOS) { "$distDir/lib/vec0.dylib" } else { "$distDir/lib/vec0.so" }
-
-if (Test-Path $vec0Src) {
-    Copy-Item $vec0Src $vec0Dst
-    Write-Host "✅  sqlite-vec extension copied to dist/lib/"
-} else {
-    Write-Host "⚠️   sqlite-vec extension not found at $vec0Src — vector search will be degraded to FTS5."
+# Copy ALL vec0 variants that exist — preserves other platforms' files
+$vec0Copied = 0
+@( @('lib/vec0.so',    "$distDir/lib/vec0.so",    'Linux'),
+   @('lib/vec0.dylib', "$distDir/lib/vec0.dylib", 'macOS'),
+   @('lib/vec0.dll',   "$distDir/lib/vec0.dll",   'Windows') ) | ForEach-Object {
+    $src, $dst, $plat = $_
+    if (Test-Path $src) {
+        Copy-Item $src $dst
+        Write-Host "✅  $dst copied ($plat)"
+        $vec0Copied++
+    }
+}
+if ($vec0Copied -eq 0) {
+    Write-Host '⚠️   No vec0 extension found in lib/ — vector search will degrade to FTS5.'
     Write-Host '    Download from: https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6'
-    if ($IsWindows)      { Write-Host '    Windows : sqlite-vec-v0.1.6-loadable-windows-x86_64.zip → vec0.dll  → lib/' }
-    elseif ($IsMacOS)    { Write-Host '    macOS   : sqlite-vec-v0.1.6-loadable-macos-aarch64.zip  → vec0.dylib → lib/' }
-    else                 { Write-Host '    Linux   : sqlite-vec-v0.1.6-loadable-linux-x86_64.zip   → vec0.so   → lib/' }
+    Write-Host '    Linux  : sqlite-vec-v0.1.6-loadable-linux-x86_64.zip   → vec0.so    → lib/'
+    Write-Host '    macOS  : sqlite-vec-v0.1.6-loadable-macos-aarch64.zip  → vec0.dylib → lib/'
+    Write-Host '    Windows: sqlite-vec-v0.1.6-loadable-windows-x86_64.zip → vec0.dll   → lib/'
 }
 
 Write-Host ''
@@ -876,8 +881,14 @@ if (-not $IsWindows) { chmod +x (Join-Path $distDir 'run.sh') }
 
 Write-Host ''
 Write-Host '✅  Launchers written:'
-Write-Host '      dist/run.sh    → Linux/macOS  (./run.sh serve|chat|ask|attach)'
-Write-Host '      dist/run.ps1   → Windows/pwsh (.\run.ps1 serve|chat|ask|attach)'
+Write-Host '      dist/run.sh    → Linux/macOS  :  ./run.sh serve|chat|ask|attach'
+Write-Host '      dist/run.ps1   → Windows/pwsh :  ./run.ps1 serve|chat|ask|attach'
+Write-Host ''
+Write-Host '── Binaries in dist/ ────────────────────────────────────────────────'
+if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner')     { Write-Host '  ✅  runner        (Linux/macOS)' } else { Write-Host '  ·   runner        (Linux/macOS) — not built yet' }
+if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner.exe') { Write-Host '  ✅  runner.exe    (Windows)'     } else { Write-Host '  ·   runner.exe    (Windows)     — not built yet' }
+Write-Host '─────────────────────────────────────────────────────────────────────'
+Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
 
 # =============================================================================

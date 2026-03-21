@@ -671,22 +671,21 @@ if [[ ! -f "$RUNNER" ]]; then
     echo "❌  Native binary not found at $RUNNER — run: mise run build:native"
     exit 1
 fi
-rm -rf dist && mkdir -p dist/lib
+# Preserve any existing platform binaries — only recreate lib/ and support files
+mkdir -p dist/lib
 cp "$RUNNER" dist/
 cp .env.example dist/.env.example
-# Platform-aware vec0 copy
-OS="$(uname -s)"
-if   [[ "$OS" == "Darwin" ]]; then VEC0_SRC='lib/vec0.dylib'; VEC0_DST='dist/lib/vec0.dylib'
-elif [[ "$OS" == "Linux"  ]]; then VEC0_SRC='lib/vec0.so';    VEC0_DST='dist/lib/vec0.so'
-fi
-if [[ -f "${VEC0_SRC:-}" ]]; then
-    cp "$VEC0_SRC" "$VEC0_DST"
-    echo "✅  sqlite-vec extension copied to dist/lib/"
-else
-    echo "⚠️   sqlite-vec extension not found at ${VEC0_SRC:-lib/vec0.*} — vector search will degrade to FTS5."
+# Copy ALL vec0 variants that exist — preserves other platforms' files
+vec0_copied=0
+[[ -f 'lib/vec0.so'    ]] && cp 'lib/vec0.so'    'dist/lib/vec0.so'    && echo '✅  dist/lib/vec0.so    copied (Linux)'  && (( vec0_copied++ )) || true
+[[ -f 'lib/vec0.dylib' ]] && cp 'lib/vec0.dylib' 'dist/lib/vec0.dylib' && echo '✅  dist/lib/vec0.dylib copied (macOS)'  && (( vec0_copied++ )) || true
+[[ -f 'lib/vec0.dll'   ]] && cp 'lib/vec0.dll'   'dist/lib/vec0.dll'   && echo '✅  dist/lib/vec0.dll   copied (Windows)' && (( vec0_copied++ )) || true
+if (( vec0_copied == 0 )); then
+    echo '⚠️   No vec0 extension found in lib/ — vector search will degrade to FTS5.'
     echo '    Download from: https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6'
-    [[ "$OS" == "Darwin" ]] && echo '    macOS : sqlite-vec-v0.1.6-loadable-macos-aarch64.zip  → vec0.dylib → lib/'
-    [[ "$OS" == "Linux"  ]] && echo '    Linux : sqlite-vec-v0.1.6-loadable-linux-x86_64.zip   → vec0.so    → lib/'
+    echo '    Linux  : sqlite-vec-v0.1.6-loadable-linux-x86_64.zip   → vec0.so    → lib/'
+    echo '    macOS  : sqlite-vec-v0.1.6-loadable-macos-aarch64.zip  → vec0.dylib → lib/'
+    echo '    Windows: sqlite-vec-v0.1.6-loadable-windows-x86_64.zip → vec0.dll   → lib/'
 fi
 echo ''
 echo '✅  dist/ assembled. Next steps:'
@@ -792,6 +791,12 @@ echo ''
 echo '✅  Launchers written:'
 echo '      dist/run.sh   → Linux/macOS  :  ./run.sh serve|chat|ask|attach'
 echo '      dist/run.ps1  → Windows/pwsh :  ./run.ps1 serve|chat|ask|attach'
+echo ''
+echo '── Binaries in dist/ ────────────────────────────────────────────────'
+[[ -f 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner'     ]] && echo '  ✅  runner        (Linux/macOS)' || echo '  ·   runner        (Linux/macOS) — not built yet'
+[[ -f 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner.exe' ]] && echo '  ✅  runner.exe    (Windows)'     || echo '  ·   runner.exe    (Windows)     — not built yet'
+echo '─────────────────────────────────────────────────────────────────────'
+echo '    Build the missing platform binary and re-run: mise run dist'
 """
 
 # =============================================================================
