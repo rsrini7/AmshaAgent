@@ -434,6 +434,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
@@ -1064,6 +1065,7 @@ Write-Host "    export DOCKER_HOST=`"unix://$sock`""
 description = "Print Podman version, running containers, and tool-runner image status"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 Write-Host '── Podman version ───────────────────────────────'
 $pv = podman --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $pv" } else { Write-Host '  podman not found' }
@@ -1123,6 +1125,7 @@ sqlite3 $db
 description = "Verify SQLite FTS5 is available (required for full-text search)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 $result = sqlite3 ':memory:' 'CREATE VIRTUAL TABLE t USING fts5(x);' 2>&1
 if ($LASTEXITCODE -eq 0) {
@@ -1138,6 +1141,7 @@ if ($LASTEXITCODE -eq 0) {
 description = "Check sqlite-vec extension exists for your platform (lib/vec0.dll / .so / .dylib)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 $ext = if ($IsWindows) { './lib/vec0.dll' } elseif ($IsMacOS) { './lib/vec0.dylib' } else { './lib/vec0.so' }
 if (Test-Path $ext) {
@@ -1157,6 +1161,7 @@ if (Test-Path $ext) {
 description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 Write-Host '── Java ─────────────────────────────────────────'
 java -version 2>&1 | ForEach-Object { Write-Host "  $_" }
@@ -1176,8 +1181,8 @@ Write-Host "  $($env:ARCCLAW_VEC_EXT ?? '(not set)')"
 [tasks."dist:pack"]
 description = "Create OS-specific release archives from dist/ for GitHub releases"
 dir = "{{config_root}}"
-quiet = true
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $version = '1.0.0'
