@@ -220,6 +220,25 @@ if ($IsWindows) {
 $containerFlag = if ($strategy -eq 'container') { '-Dquarkus.native.container-build=true' } else { '-Dquarkus.native.container-build=false' }
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+# ── .env shield — TEMP FIX ───────────────────────────────────────────────────
+# Quarkus bakes BUILD_TIME config properties from .env into the native binary.
+# We move .env aside so no secrets or API keys are frozen into the binary.
+# Long-term fix: maintain a build.env with only non-secret build-time config
+# and rename it here instead (see MISE_README.md §Build Tasks).
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into binary.'
+} elseif (Test-Path 'build.env') {
+    Copy-Item 'build.env' '.env'
+    $envBackup = 'build.env'
+    Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
+} else {
+    Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
+}
+# ─────────────────────────────────────────────────────────────────────────────
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = $mOpts
@@ -235,6 +254,9 @@ try {
     Write-Host ''
     Write-Host '▶   Or assemble a dist/ folder:  mise run dist'
 } finally {
+    # ── restore .env ──────────────────────────────────────────────────────────
+    if ($envBackup -eq $true)          { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     mise use java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
 }
@@ -248,6 +270,25 @@ $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 Write-Host 'ℹ️   build:native-local: local GraalVM, no Podman container.'
+
+# ── .env shield — TEMP FIX ───────────────────────────────────────────────────
+# Quarkus bakes BUILD_TIME config properties from .env into the native binary.
+# We move .env aside so no secrets or API keys are frozen into the binary.
+# Long-term fix: maintain a build.env with only non-secret build-time config
+# and rename it here instead (see MISE_README.md §Build Tasks).
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into binary.'
+} elseif (Test-Path 'build.env') {
+    Copy-Item 'build.env' '.env'
+    $envBackup = 'build.env'
+    Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
+} else {
+    Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
+}
+# ─────────────────────────────────────────────────────────────────────────────
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
@@ -261,6 +302,9 @@ try {
     Write-Host '      mise run native:attach               → Telegram daemon'
     Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
 } finally {
+    # ── restore .env ──────────────────────────────────────────────────────────
+    if ($envBackup -eq $true)          { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     mise use java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
 }
@@ -274,6 +318,25 @@ $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 Write-Host 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
+
+# ── .env shield — TEMP FIX ───────────────────────────────────────────────────
+# Quarkus bakes BUILD_TIME config properties from .env into the native binary.
+# We move .env aside so no secrets or API keys are frozen into the binary.
+# Long-term fix: maintain a build.env with only non-secret build-time config
+# and rename it here instead (see MISE_README.md §Build Tasks).
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into binary.'
+} elseif (Test-Path 'build.env') {
+    Copy-Item 'build.env' '.env'
+    $envBackup = 'build.env'
+    Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
+} else {
+    Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
+}
+# ─────────────────────────────────────────────────────────────────────────────
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
@@ -283,6 +346,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
     Write-Host "✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 } finally {
+    # ── restore .env ──────────────────────────────────────────────────────────
+    if ($envBackup -eq $true)          { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     mise use java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
 }
@@ -667,6 +733,109 @@ Write-Host "      ./$exeName ask 'your prompt'                            # sing
 Write-Host "      ./$exeName attach                                        # Telegram daemon"
 Write-Host ""
 Write-Host "    Tip: add env vars to dist/.env — Quarkus native reads them automatically."
+
+# ── Generate run.ps1 launcher ────────────────────────────────────────────────
+$runPs1 = @'
+# run.ps1 — ArcClaw launcher
+# Sets required env vars and forwards subcommand to the native binary.
+# Usage: .\run.ps1 serve | chat | attach | ask "your goal"
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$ErrorActionPreference = 'Stop'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$exe       = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner.exe'
+if (-not (Test-Path $exe)) {
+    # Linux/macOS binary name (no .exe)
+    $exe = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner'
+}
+# Load .env if present
+$envFile = Join-Path $scriptDir '.env'
+if (Test-Path $envFile) {
+    Get-Content $envFile | Where-Object { $_ -match '^[^#].*=' } | ForEach-Object {
+        $k, $v = $_ -split '=', 2
+        [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
+    }
+}
+# Default paths (override via .env or env vars before calling this script)
+if (-not $env:ARCCLAW_RAG_VEC_EXTENSION_PATH) { $env:ARCCLAW_RAG_VEC_EXTENSION_PATH = './lib/vec0' }
+if (-not $env:ARCCLAW_DATA_DIR)               { $env:ARCCLAW_DATA_DIR = './data' }
+if ($args.Count -eq 0) {
+    Write-Host ""
+    Write-Host "    ___                ________  "
+    Write-Host "   /   |  __________  / ____/ /___ __      __"
+    Write-Host "  / /| | / ___/ ___/ / /   / / __  / | /| / /"
+    Write-Host " / ___ |/ /  / /__  / /___/ / /_/ /| |/ |/ / "
+    Write-Host "/_/  |_/_/   \___/  \____/_/\__,_/ |__/|__/  "
+    Write-Host ""
+    Write-Host "  ArcClaw Agent Kernel"
+    Write-Host ""
+    Write-Host "  USAGE"
+    Write-Host "    .
+un.ps1 serve                    Start HTTP + MCP server on :8080"
+    Write-Host "    .
+un.ps1 chat                     Start interactive REPL"
+    Write-Host "    .
+un.ps1 ask `"your goal here`"    Run one-shot task and exit"
+    Write-Host "    .
+un.ps1 attach                   Start Telegram daemon"
+    Write-Host ""
+    Write-Host "  OPTIONS (append to any command)"
+    Write-Host "    --role coordinator|researcher|architect|synthesizer|debugger"
+    Write-Host ""
+    exit 0
+}
+& $exe @args
+'@
+$runPs1 | Set-Content (Join-Path $distDir 'run.ps1') -Encoding UTF8
+
+# ── Generate run.sh launcher ─────────────────────────────────────────────────
+$runSh = @'
+#!/usr/bin/env bash
+# run.sh — ArcClaw launcher
+# Sets required env vars and forwards subcommand to the native binary.
+# Usage: ./run.sh serve | chat | attach | ask "your goal"
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXE="$SCRIPT_DIR/arcclaw-app-1.0.0-SNAPSHOT-runner"
+if [[ ! -f "$EXE" ]]; then
+    echo "❌  Binary not found: $EXE"; exit 1
+fi
+# Load .env if present
+[[ -f "$SCRIPT_DIR/.env" ]] && set -a && source "$SCRIPT_DIR/.env" && set +a
+# Default paths (override via .env or env vars)
+export ARCCLAW_RAG_VEC_EXTENSION_PATH="${ARCCLAW_RAG_VEC_EXTENSION_PATH:-./lib/vec0}"
+export ARCCLAW_DATA_DIR="${ARCCLAW_DATA_DIR:-./data}"
+# Linux: preload libm for sqlite-vec symbol resolution
+[[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
+if [[ $# -eq 0 ]]; then
+    echo ""
+    echo "    ___                ________  "
+    echo "   /   |  __________  / ____/ /___ __      __"
+    echo "  / /| | / ___/ ___/ / /   / / __  / | /| / /"
+    echo " / ___ |/ /  / /__  / /___/ / /_/ /| |/ |/ / "
+    echo "/_/  |_/_/   \___/  \____/_/\__,_/ |__/|__/  "
+    echo ""
+    echo "  ArcClaw Agent Kernel"
+    echo ""
+    echo "  USAGE"
+    echo "    ./run.sh serve                   Start HTTP + MCP server on :8080"
+    echo "    ./run.sh chat                    Start interactive REPL"
+    echo "    ./run.sh ask 'your goal here'    Run one-shot task and exit"
+    echo "    ./run.sh attach                  Start Telegram daemon"
+    echo ""
+    echo "  OPTIONS (append to any command)"
+    echo "    --role coordinator|researcher|architect|synthesizer|debugger"
+    echo ""
+    exit 0
+fi
+exec "$EXE" "$@"
+'@
+$runSh | Set-Content (Join-Path $distDir 'run.sh') -Encoding UTF8
+if (-not $IsWindows) { chmod +x (Join-Path $distDir 'run.sh') }
+
+Write-Host ''
+Write-Host '✅  Launchers written:'
+Write-Host '      dist/run.sh    → Linux/macOS  (./run.sh serve|chat|ask|attach)'
+Write-Host '      dist/run.ps1   → Windows/pwsh (.\run.ps1 serve|chat|ask|attach)'
 """
 
 # =============================================================================

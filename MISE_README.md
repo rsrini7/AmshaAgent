@@ -421,6 +421,47 @@ mise run build:test      # with tests
 mise run clean
 ```
 
+### .env shielding — secrets stay out of the binary
+
+Quarkus resolves config in two phases:
+
+| Phase | When | Effect |
+|---|---|---|
+| `BUILD_TIME` | During `native-image` compilation | **Frozen permanently into the binary** |
+| `RUN_TIME` | Every startup | Read fresh — can always be overridden |
+
+If `.env` is present during a native build, any `BUILD_TIME` properties in it get baked in.
+This means API keys, passwords, or vault peppers could be embedded in a binary you share or deploy.
+
+**Temp fix (automatic):** All three `build:native*` tasks now auto-shield `.env` before building
+and restore it in the `finally`/`trap` block — even if the build fails:
+
+```
+build:native
+  ├─ .env         → .env.build-backup   (if .env exists)
+  ├─ build.env    → .env                (if build.env exists — long-term approach)
+  ├─ mvnw clean package -Pnative ...
+  └─ .env.build-backup → .env           (always restored)
+```
+
+**Long-term fix — `build.env`:** Create a `build.env` file with only the non-secret,
+build-time config your app needs for compilation (datasource driver class, extension flags, etc.).
+No API keys. No vault secrets. The build tasks check for `build.env` and use it automatically:
+
+```properties
+# build.env — committed to git, no secrets
+# Only build-time Quarkus config that affects native-image compilation.
+# Runtime values (API keys, paths, tokens) must NOT go here.
+quarkus.datasource.db-kind=sqlite
+quarkus.hibernate-orm.database.generation=none
+```
+
+Add to `.gitignore` (`.env` should already be there):
+```
+.env
+.env.build-backup
+```
+
 ### Native build strategy
 
 `build:native` resolves which strategy to use in this order:
@@ -535,37 +576,65 @@ This produces:
 ```
 dist/
   arcclaw-app-1.0.0-SNAPSHOT-runner.exe   (or -runner on Linux/macOS)
+  run.sh                                   ← Linux/macOS launcher  ✅ use this
+  run.ps1                                  ← Windows/pwsh launcher ✅ use this
   .env.example                             → copy to .env, fill in keys
   lib/
     vec0.dll / vec0.so / vec0.dylib        (copied from lib/ if present)
 ```
 
-Then run from anywhere:
+### Using the launchers (recommended)
 
-> **Note:** Quarkus native binaries have no JVM — `-Dkey=value` flags don't work.
-> Use environment variables for config (MicroProfile Config convention: dots and hyphens → underscores, uppercase).
+The `run.sh` / `run.ps1` scripts handle everything for the user:
+- Sets `ARCCLAW_RAG_VEC_EXTENSION_PATH` and `ARCCLAW_DATA_DIR` automatically
+- Loads `.env` if present in the same directory
+- Sets `LD_PRELOAD` on Linux for sqlite-vec
+- Shows a branded help menu when called with no arguments
 
 ```bash
-# Linux/macOS
-cd dist && cp .env.example .env
-export ARCCLAW_RAG_VEC_EXTENSION_PATH=./lib/vec0
-export ARCCLAW_DATA_DIR=./data
-./arcclaw-app-1.0.0-SNAPSHOT-runner serve
-./arcclaw-app-1.0.0-SNAPSHOT-runner chat
-./arcclaw-app-1.0.0-SNAPSHOT-runner ask "your prompt"
-./arcclaw-app-1.0.0-SNAPSHOT-runner attach
+# Linux/macOS — just copy dist/ anywhere and run
+cd dist
+cp .env.example .env    # fill in API keys
+./run.sh                # shows help menu
+./run.sh serve          # HTTP + MCP server on :8080
+./run.sh chat           # interactive REPL
+./run.sh ask "summarize logs"
+./run.sh attach         # Telegram daemon
 ```
 
 ```powershell
 # Windows
-cd dist; Copy-Item .env.example .env
+cd dist
+Copy-Item .env.example .env    # fill in API keys
+.\run.ps1                     # shows help menu
+.\run.ps1 serve               # HTTP + MCP server on :8080
+.\run.ps1 chat                # interactive REPL
+.\run.ps1 ask "summarize logs"
+.\run.ps1 attach              # Telegram daemon
+```
+
+> **Note:** Quarkus native binaries have no JVM — `-Dkey=value` system properties don't work.
+> The launchers set the correct environment variables instead (MicroProfile Config convention:
+> `arcclaw.data-dir` → `ARCCLAW_DATA_DIR`).
+> Add any extra config to `dist/.env` — Quarkus native loads it automatically at startup.
+
+### Running the binary directly (advanced)
+
+If you prefer not to use the launchers, set env vars yourself:
+
+```bash
+# Linux/macOS
+export ARCCLAW_RAG_VEC_EXTENSION_PATH=./lib/vec0
+export ARCCLAW_DATA_DIR=./data
+./arcclaw-app-1.0.0-SNAPSHOT-runner serve
+```
+
+```powershell
+# Windows
 $env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 .\arcclaw-app-1.0.0-SNAPSHOT-runner.exe serve
 ```
-
-Tip: you can also add `ARCCLAW_RAG_VEC_EXTENSION_PATH=./lib/vec0` and `ARCCLAW_DATA_DIR=./data`
-directly to `dist/.env` — Quarkus native picks up `.env` automatically at startup.
 
 ### sqlite-vec (vec0) — one-time download
 
