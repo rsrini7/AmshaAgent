@@ -141,9 +141,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # UserId comes from WorkspaceScopeHolder — tenant-isolated
 # ─────────────────────────────────────────────────────────────────
 
+# @name cronSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
 ### [REFLEX-6] /crons — list all scheduled tasks (alias 1)
 # Expect 200: "No scheduled tasks found." or formatted cron list
-POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -156,7 +161,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [REFLEX-7] /cron — alias 2 (same behaviour)
-POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -169,7 +174,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [REFLEX-8] /list crons — natural language alias (same behaviour)
-POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -189,14 +194,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 ### [REFLEX-9] deletecron with a fake ID — expect "not found" error message
-POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
     "goal": "deletecron 00000000-dead-beef-0000-000000000000",
     "agentRole": "coordinator",
-    "maxIterations": 1
+    "maxIterations": 3
 }
 
 ###
@@ -211,7 +216,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [REFLEX-10] /halt — terminates workspace immediately
 # Expect 200: "🛑 System Halted. Workspace terminated."
 # WARNING: session is now terminated — do not reuse reflexSession after this
-POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -224,7 +229,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [REFLEX-11] Verify halt: status on terminated session → 404
-GET {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/status/coordinator
+GET {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###

@@ -203,8 +203,8 @@ public class AgentCronRepository {
      * Tenant-isolated delete. User B cannot delete User A's cron row.
      */
     @Transactional(TxType.REQUIRED)
-    public void deleteByIdAndUserId(String id, String userId) {
-        em.createQuery(
+    public int deleteByIdAndUserId(String id, String userId) {
+        return em.createQuery(
                 "DELETE FROM AgentCronEntity c WHERE c.id = :id AND c.userId = :userId"
         ).setParameter("id", id)
          .setParameter("userId", userId)

@@ -70,6 +70,10 @@ public class PiiScanReflex implements AgentReflex {
         new PiiRule(UPI_VPA, "UPI", "[REDACTED-UPI]")
     );
 
+    private static final Pattern UUID_PATTERN = Pattern.compile(
+        "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    );
+
     // Private detection — mode-independent
     @Override
     public boolean matches(String input) {
@@ -84,33 +88,42 @@ public class PiiScanReflex implements AgentReflex {
 
     @Override
     public String sanitize(String sessionId, String userId, String input) {
-        // Always runs in Pass 2 regardless of mode
-        // In BLOCK_AND_NOTIFY mode this is a no-op since Pass 1 already blocked
         if (input == null || input.isBlank()) return input;
 
-        String result = input;
+        // Mask UUIDs temporarily so card/phone patterns don't match inside them
+        List<String> uuidPlaceholders = new ArrayList<>();
+        Matcher uuidMatcher = UUID_PATTERN.matcher(input);
+        StringBuffer uuidProtected = new StringBuffer();
+        while (uuidMatcher.find()) {
+            String placeholder = "UUID_PLACEHOLDER_" + uuidPlaceholders.size() + "_";
+            uuidPlaceholders.add(uuidMatcher.group());
+            uuidMatcher.appendReplacement(uuidProtected, placeholder);
+        }
+        uuidMatcher.appendTail(uuidProtected);
+        String result = uuidProtected.toString();
+
+        // Run PII rules on UUID-masked input
         List<String> detectedTypes = new ArrayList<>();
         boolean redacted = false;
-
         for (PiiRule rule : RULES) {
             Matcher m = rule.pattern().matcher(result);
             if (m.find()) {
                 result = m.replaceAll(rule.replacement());
-                if (!detectedTypes.contains(rule.type())) {
-                    detectedTypes.add(rule.type());
-                }
+                if (!detectedTypes.contains(rule.type())) detectedTypes.add(rule.type());
                 redacted = true;
             }
         }
 
-        if (redacted) {
-            log.warnf("[PII-REDACTED] session=%s user=%s mode=%s types=%s " +
-                      "original_length=%d sanitized_length=%d",
-                    sessionId, userId, piiMode,
-                    String.join(",", detectedTypes),
-                    input.length(), result.length());
+        // Restore UUIDs
+        for (int i = 0; i < uuidPlaceholders.size(); i++) {
+            result = result.replace("UUID_PLACEHOLDER_" + i + "_", uuidPlaceholders.get(i));
         }
 
+        if (redacted) {
+            log.warnf("[PII-REDACTED] session=%s user=%s mode=%s types=%s original_length=%d sanitized_length=%d",
+                    sessionId, userId, piiMode, String.join(",", detectedTypes),
+                    input.length(), result.length());
+        }
         return result;
     }
 
