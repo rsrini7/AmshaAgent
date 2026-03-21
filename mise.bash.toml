@@ -1038,6 +1038,76 @@ echo '── ARCCLAW_VEC_EXT ─────────────────
 echo "  ${ARCCLAW_VEC_EXT:-(not set)}"
 """
 
+[tasks."dist:pack"]
+description = "Create OS-specific release archives from dist/ for GitHub releases"
+dir = "{{config_root}}"
+quiet = true
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+VERSION='1.0.0'
+OUT='dist/release'
+RUNNER='arcclaw-app-1.0.0-SNAPSHOT-runner'
+mkdir -p "$OUT"
+packed=0
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+if [[ -f "dist/$RUNNER" ]]; then
+    STAGE=$(mktemp -d)
+    cp "dist/$RUNNER"        "$STAGE/arcclaw"
+    cp "dist/run.sh"         "$STAGE/run.sh"
+    cp "dist/.env.example"   "$STAGE/.env.example"
+    [[ -f 'dist/lib/vec0.so' ]] && mkdir -p "$STAGE/lib" && cp 'dist/lib/vec0.so' "$STAGE/lib/vec0.so"
+    chmod +x "$STAGE/arcclaw" "$STAGE/run.sh"
+    ARCHIVE="$OUT/arcclaw-$VERSION-linux-x64.tar.gz"
+    tar -czf "$ARCHIVE" -C "$STAGE" .
+    rm -rf "$STAGE"
+    echo "✅  $ARCHIVE"
+    (( packed++ )) || true
+fi
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+if [[ -f "dist/$RUNNER" ]]; then
+    # macOS and Linux share the same binary name — detect by vec0.dylib presence
+    if [[ -f 'dist/lib/vec0.dylib' ]]; then
+        STAGE=$(mktemp -d)
+        cp "dist/$RUNNER"          "$STAGE/arcclaw"
+        cp "dist/run.sh"           "$STAGE/run.sh"
+        cp "dist/.env.example"     "$STAGE/.env.example"
+        mkdir -p "$STAGE/lib" && cp 'dist/lib/vec0.dylib' "$STAGE/lib/vec0.dylib"
+        chmod +x "$STAGE/arcclaw" "$STAGE/run.sh"
+        ARCHIVE="$OUT/arcclaw-$VERSION-macos-aarch64.tar.gz"
+        tar -czf "$ARCHIVE" -C "$STAGE" .
+        rm -rf "$STAGE"
+        echo "✅  $ARCHIVE"
+        (( packed++ )) || true
+    fi
+fi
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+if [[ -f "dist/${RUNNER}.exe" ]]; then
+    STAGE=$(mktemp -d)
+    cp "dist/${RUNNER}.exe"  "$STAGE/arcclaw.exe"
+    cp "dist/run.ps1"        "$STAGE/run.ps1"
+    cp "dist/.env.example"   "$STAGE/.env.example"
+    [[ -f 'dist/lib/vec0.dll' ]] && mkdir -p "$STAGE/lib" && cp 'dist/lib/vec0.dll' "$STAGE/lib/vec0.dll"
+    ARCHIVE="$(pwd)/$OUT/arcclaw-$VERSION-windows-x64.zip"
+    (cd "$STAGE" && zip -r "$ARCHIVE" .)
+    rm -rf "$STAGE"
+    echo "✅  dist/release/arcclaw-$VERSION-windows-x64.zip"
+    (( packed++ )) || true
+fi
+
+if (( packed == 0 )); then
+    echo '❌  No binaries found in dist/ — run mise run build:native first'
+    exit 1
+fi
+echo ''
+echo "── Release archives in $OUT/ ─────────────────────────────────────"
+ls -lh "$OUT/"
+echo '──────────────────────────────────────────────────────────────────'
+"""
+
 [tasks.help]
 description = "List all available mise tasks with descriptions"
 dir = "{{config_root}}"

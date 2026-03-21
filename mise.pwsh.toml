@@ -1173,6 +1173,86 @@ Write-Host '── ARCCLAW_VEC_EXT ───────────────
 Write-Host "  $($env:ARCCLAW_VEC_EXT ?? '(not set)')"
 """
 
+[tasks."dist:pack"]
+description = "Create OS-specific release archives from dist/ for GitHub releases"
+dir = "{{config_root}}"
+quiet = true
+shell = "pwsh -NonInteractive -Command"
+run = """
+$ErrorActionPreference = 'Stop'
+$version = '1.0.0'
+$out     = 'dist/release'
+$runner  = 'arcclaw-app-1.0.0-SNAPSHOT-runner'
+New-Item -ItemType Directory -Force $out | Out-Null
+$packed = 0
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+if (Test-Path "dist/$runner.exe") {
+    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
+    New-Item -ItemType Directory $stage | Out-Null
+    New-Item -ItemType Directory "$stage/lib" | Out-Null
+    Copy-Item "dist/$runner.exe"  "$stage/arcclaw.exe"
+    Copy-Item 'dist/run.ps1'      "$stage/run.ps1"
+    Copy-Item 'dist/.env.example' "$stage/.env.example"
+    if (Test-Path 'dist/lib/vec0.dll') { Copy-Item 'dist/lib/vec0.dll' "$stage/lib/vec0.dll" }
+    $archive = "$out/arcclaw-$version-windows-x64.zip"
+    Compress-Archive -Path "$stage/*" -DestinationPath $archive -Force
+    Remove-Item $stage -Recurse -Force
+    Write-Host "✅  $archive"
+    $packed++
+}
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+if (Test-Path "dist/$runner") {
+    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
+    New-Item -ItemType Directory $stage | Out-Null
+    New-Item -ItemType Directory "$stage/lib" | Out-Null
+    Copy-Item "dist/$runner"      "$stage/arcclaw"
+    Copy-Item 'dist/run.sh'       "$stage/run.sh"
+    Copy-Item 'dist/.env.example' "$stage/.env.example"
+    if (Test-Path 'dist/lib/vec0.so') { Copy-Item 'dist/lib/vec0.so' "$stage/lib/vec0.so" }
+    $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
+    # Use tar if available (WSL2/Git Bash), else warn
+    if (Get-Command tar -ErrorAction SilentlyContinue) {
+        tar -czf $archive -C $stage .
+        Write-Host "✅  $archive"
+        $packed++
+    } else {
+        Write-Host "⚠️   tar not found — skipping Linux archive. Run from WSL2 to build it."
+    }
+    Remove-Item $stage -Recurse -Force
+}
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+if ((Test-Path "dist/$runner") -and (Test-Path 'dist/lib/vec0.dylib')) {
+    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
+    New-Item -ItemType Directory $stage | Out-Null
+    New-Item -ItemType Directory "$stage/lib" | Out-Null
+    Copy-Item "dist/$runner"         "$stage/arcclaw"
+    Copy-Item 'dist/run.sh'          "$stage/run.sh"
+    Copy-Item 'dist/.env.example'    "$stage/.env.example"
+    Copy-Item 'dist/lib/vec0.dylib'  "$stage/lib/vec0.dylib"
+    $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
+    if (Get-Command tar -ErrorAction SilentlyContinue) {
+        tar -czf $archive -C $stage .
+        Write-Host "✅  $archive"
+        $packed++
+    } else {
+        Write-Host "⚠️   tar not found — skipping macOS archive. Run from WSL2 to build it."
+    }
+    Remove-Item $stage -Recurse -Force
+}
+
+if ($packed -eq 0) {
+    Write-Host '❌  No binaries found in dist/ — run mise run build:native first'
+    exit 1
+}
+Write-Host ''
+Write-Host "── Release archives in $out/ ──────────────────────────────────────"
+Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
+Write-Host '───────────────────────────────────────────────────────────────────'
+"""
+
 [tasks.help]
 description = "List all available mise tasks with descriptions"
 dir = "{{config_root}}"
