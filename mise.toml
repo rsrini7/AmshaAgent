@@ -95,12 +95,18 @@ shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+
+# Windows: GraalVM is local via mise — no container needed
+# Linux/macOS: use Podman container build (existing behaviour)
+$containerFlag = if ($IsWindows) { '-Dquarkus.native.container-build=false' } else { '-Dquarkus.native.container-build=true' }
+
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
-    Write-Host '✅  Native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
+    $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+    Write-Host "✅  Native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 } finally {
     mise use java@temurin-25
     Write-Host '✅  Switched back to Temurin 25'
@@ -113,10 +119,11 @@ shell = "pwsh -NonInteractive -Command"
 run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$containerFlag = if ($IsWindows) { '-Dquarkus.native.container-build=false' } else { '-Dquarkus.native.container-build=true' }
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.additional-build-args=-J-Xmx6g'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag '-Dquarkus.native.additional-build-args=-J-Xmx6g'
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
     Write-Host '✅  Native lowmem build complete.'
 } finally {

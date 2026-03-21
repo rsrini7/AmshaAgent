@@ -271,6 +271,9 @@ mise run build:native
 mise run jdk:install
 ```
 
+### Windows native support for graalvm
+winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+
 ### How `build:native` handles the switch
 
 ```
@@ -282,15 +285,6 @@ mise run build:native
 ```
 
 No manual intervention needed. If the build fails, the script still switches back to Temurin.
-
-### About your old `.java-version` file
-
-Your previous `.java-version` had `graalvm64-25.0.2` (SDKMan notation). mise reads `.java-version`
-but does not understand SDKMan prefixes. Safe to delete — `mise.toml [tools]` now owns the JDK pin:
-
-```bash
-rm .java-version
-```
 
 ---
 
