@@ -13,7 +13,7 @@
 # GraalVM is installed alongside but NOT the default.
 # Switch with:  mise run jdk:graalvm  (before native build)
 # Switch back:  mise run jdk:temurin  (after native build — build:native does this automatically)
-java       = "temurin-25"
+java       = "graalvm-community-25.0.2"
 maven      = "3.9"
 powershell = "latest"
 
@@ -262,7 +262,7 @@ if ($strategy -eq 'container') {
     Write-Host 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
     try {
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree'
         if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
@@ -275,7 +275,7 @@ if ($strategy -eq 'container') {
     try {
         mise use java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree'
         if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
@@ -328,7 +328,7 @@ if (Test-Path '.env') {
 try {
     mise use java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'  '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree'
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
     Write-Host "✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host ''
@@ -382,7 +382,7 @@ try {
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
         '-Dquarkus.native.container-build=false' `
-        '-Dquarkus.native.additional-build-args=-J-Xmx6g'
+        '-Dquarkus.native.additional-build-args=-J-Xmx6g,-H:+PrintAnalysisCallTree'
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
     Write-Host "✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Assembling dist/ folder...'
