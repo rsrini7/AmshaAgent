@@ -81,6 +81,16 @@ Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 scoop install mise
 ```
 
+vcredist2022 installation may be required.
+```powershell
+scoop bucket add extras
+scoop install vcredist2022
+
+Note: wait untill... Running post_install script...WARN  A restart is required to complete the installation
+
+Restart windows
+```
+
 Wire to your PowerShell profile:
 ```powershell
 # PowerShell 7+ (Windows Terminal default — pwsh.exe)
