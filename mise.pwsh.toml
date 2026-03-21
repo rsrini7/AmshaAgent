@@ -525,7 +525,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # JAR RUN TASKS  (packaged quarkus-run.jar)
 # =============================================================================
 
-[tasks.serve]
+[tasks."jar:serve"]
 description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -543,7 +543,7 @@ $jvmArgs = @(
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
     '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
-    '-Dquarkus.profile=dev',
+    '-Dquarkus.profile=cli',
     '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
@@ -551,7 +551,7 @@ $jvmArgs = @(
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
-[tasks.chat]
+[tasks."jar:chat"]
 description = "Run packaged jar — interactive REPL (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -577,7 +577,7 @@ $jvmArgs = @(
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
-[tasks.attach]
+[tasks."jar:attach"]
 description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -605,7 +605,7 @@ $jvmArgs = @(
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
-[tasks.ask]
+[tasks."jar:ask"]
 description = 'Run packaged jar — one-shot task. Set $env:GOAL="..." then: mise run ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"

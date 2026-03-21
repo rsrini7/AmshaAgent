@@ -469,7 +469,7 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 # JAR RUN TASKS  (packaged quarkus-run.jar)
 # =============================================================================
 
-[tasks.serve]
+[tasks."jar:serve"]
 description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
 run = """
@@ -485,14 +485,14 @@ JVM_ARGS=(
     '-Dsun.misc.unsafe.memory.access=allow'
     '-Dfile.encoding=UTF-8' '-Dstdout.encoding=UTF-8'
     '-Dsun.stdout.encoding=UTF-8' '-Dsun.stderr.encoding=UTF-8'
-    '-Dquarkus.profile=dev'
+    '-Dquarkus.profile=cli'
     '-Darcclaw.rag.vec-extension-path=./lib/vec0'
     '-Darcclaw.data-dir=./data'
 )
 exec java "${JVM_ARGS[@]}" -jar "$JAR" serve
 """
 
-[tasks.chat]
+[tasks."jar:chat"]
 description = "Run packaged jar — interactive REPL (CLI profile)"
 dir = "{{config_root}}"
 run = """
@@ -515,7 +515,7 @@ JVM_ARGS=(
 exec java "${JVM_ARGS[@]}" -jar "$JAR" chat
 """
 
-[tasks.attach]
+[tasks."jar:attach"]
 description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 run = """
@@ -540,7 +540,7 @@ JVM_ARGS=(
 exec java "${JVM_ARGS[@]}" -jar "$JAR" attach
 """
 
-[tasks.ask]
+[tasks."jar:ask"]
 description = 'Run packaged jar — one-shot task. Usage: GOAL="your goal" mise run ask'
 dir = "{{config_root}}"
 run = """
