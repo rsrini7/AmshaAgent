@@ -7,7 +7,7 @@
 
 [tools]
 # Default JDK — used by all dev, build:*, jar, native tasks except build:native*
-java  = "temurin-25"
+java  = "graalvm-community-25.0.2"
 maven = "3.9"
 powershell = "latest"
 
