@@ -642,7 +642,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
-description = "Run packaged jar with dev profile. Usage: mise run jar:run -- serve|chat|attach|ask"
+description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -650,7 +650,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
-$cmd = if ($args.Count -gt 0) { $args[0] } else { 'serve' }
+$cmd = '{{arg(i=0, default="serve")}}'
 if ($cmd -notin @('serve','chat','attach','ask')) {
     Write-Host "❌  Unknown command: $cmd"
     Write-Host '    Valid: serve | chat | attach | ask'
@@ -672,6 +672,10 @@ $jvmArgs = @(
     '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
+if ($cmd -in @('chat','ask')) {
+    $jvmArgs += '-Dquarkus.mcp.server.stdio.enabled=false'
+    $jvmArgs += '-Darcclaw.telegram.enabled=false'
+}
 if ($cmd -eq 'attach') { $jvmArgs += '-Darcclaw.telegram.enabled=true' }
 Write-Host "▶   Starting JAR in dev profile — mode: $cmd"
 & java @jvmArgs -jar $jar $cmd

@@ -574,7 +574,7 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" "${CMD_ARGS[@]}"
 """
 
 [tasks."jar:run-dev-profile"]
-description = "Run packaged jar with dev profile. Usage: mise run jar:run -- serve|chat|attach|ask"
+description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 quiet = true
 run = """
@@ -582,7 +582,7 @@ run = """
 set -euo pipefail
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build-app' && exit 1
-CMD="${1:-serve}"
+CMD='{{arg(i=0, default="serve")}}'
 case "$CMD" in
     serve|chat|attach|ask) ;;
     *) echo "❌  Unknown command: $CMD"; echo '    Valid: serve | chat | attach | ask'; exit 1 ;;
@@ -600,6 +600,10 @@ JVM_ARGS=(
     '-Darcclaw.rag.vec-extension-path=./lib/vec0'
     '-Darcclaw.data-dir=./data'
 )
+if [[ "$CMD" == 'chat' || "$CMD" == 'ask' ]]; then
+    JVM_ARGS+=('-Dquarkus.mcp.server.stdio.enabled=false')
+    JVM_ARGS+=('-Darcclaw.telegram.enabled=false')
+fi
 [[ "$CMD" == 'attach' ]] && JVM_ARGS+=('-Darcclaw.telegram.enabled=true')
 echo "▶   Starting JAR in dev profile — mode: $CMD"
 exec java "${JVM_ARGS[@]}" -jar "$JAR" "$CMD"
