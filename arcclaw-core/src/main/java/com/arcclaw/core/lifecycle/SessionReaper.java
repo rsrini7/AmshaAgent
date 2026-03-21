@@ -7,23 +7,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import com.arcclaw.core.persistence.SqliteErrorStrings;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.persistence.SqliteErrorStrings;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.
@@ -44,6 +44,9 @@ public class SessionReaper {
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
+    @Inject
+    Event<ApprovalTimedOutEvent> approvalTimedOutEvent;
+
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
 
@@ -55,8 +58,8 @@ public class SessionReaper {
     }
 
     /**
-     * On application startup, find any IN_PROGRESS checkpoints from a previous
-     * JVM crash and mark them as FAILED.
+     * On application startup, find any IN_PROGRESS or AWAITING_APPROVAL
+     * checkpoints from a previous JVM crash and mark them as FAILED.
      */
     public void onStartup(@Observes StartupEvent event) {
         int maxRetries = 5;
@@ -68,13 +71,18 @@ public class SessionReaper {
                 QuarkusTransaction.requiringNew().run(() -> {
                     doRecoverZombies();
                 });
-                return; // success
+                return;
             } catch (Exception e) {
                 lastEx = e;
                 if (SqliteErrorStrings.isBusy(e)) {
                     log.warnf("SQLite BUSY on onStartup attempt %d/%d — retrying in %dms",
                             attempt, maxRetries, backoffMs * attempt);
-                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                    try {
+                        Thread.sleep(backoffMs * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
                 } else {
                     log.errorf("Non-retryable error during onStartup zombie recovery: %s", e.getMessage());
                     log.debugf(e, "Full stacktrace for non-retryable error in onStartup zombie recovery");
@@ -82,7 +90,7 @@ public class SessionReaper {
                 }
             }
         }
-        log.errorf("Failed onStartup zombie recovery after %d retries: %s", maxRetries, 
+        log.errorf("Failed onStartup zombie recovery after %d retries: %s", maxRetries,
                 lastEx != null ? lastEx.getMessage() : "unknown");
         log.debugf(lastEx, "Full stacktrace for retry exhaustion in onStartup zombie recovery");
     }
@@ -137,19 +145,18 @@ public class SessionReaper {
 
     /**
      * Scheduled GC sweep — terminates sessions whose heartbeat exceeds the TTL.
+     * Skips sessions that are AWAITING_APPROVAL (handled by sweepTimedOutApprovals).
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
+    @Transactional
     public void gcSweep() {
         if (shuttingDown) return;
-        if (heartbeatTracker.activeSessionCount() == 0) {
-            return;
-        }
+        if (heartbeatTracker.activeSessionCount() == 0) return;
 
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
         log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
                 sessionTtlMinutes, cutoff);
 
-        // 1 Bulk Query instead of N+1 individual queries
         Set<String> awaitingApprovalIds = em.createQuery(
                 "SELECT c.sessionId FROM AgentCheckpoint c WHERE c.status = :status", String.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
@@ -161,7 +168,6 @@ public class SessionReaper {
                 log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
                 return;
             }
-
             log.warnf("GC sweep: session=%s expired", sessionId);
             workspaceManager.terminateSession(sessionId);
             heartbeatTracker.removeHeartbeat(sessionId);
@@ -170,14 +176,16 @@ public class SessionReaper {
 
     /**
      * Terminate sessions that have been AWAITING_APPROVAL for too long.
+     * Marks the checkpoint FAILED and notifies the user via their channel.
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
     @Transactional
     public void sweepTimedOutApprovals() {
         if (shuttingDown) return;
 
-        var cutoff = LocalDateTime.now()
+        LocalDateTime cutoff = LocalDateTime.now()
                 .minus(Duration.ofMinutes(approvalTimeoutMinutes));
+
         List<AgentCheckpoint> timedOut = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
@@ -185,12 +193,31 @@ public class SessionReaper {
                 .setParameter("cutoff", cutoff)
                 .getResultList();
 
+        if (timedOut.isEmpty()) return;
+
+        Instant now = Instant.now();
         for (var cp : timedOut) {
-            log.warnf("Approval timeout session=%s. Terminating.", cp.getSessionId());
+            log.warnf("Approval timeout: session=%s role=%s — marking FAILED", 
+                    cp.getSessionId(), cp.getAgentRole());
+
+            // 1. Mark checkpoint FAILED
+            cp.setStatus(CheckpointStatus.FAILED);
+            cp.setFailedAt(now);
+            cp.setFailReason("Approval timed out after " + approvalTimeoutMinutes + " minutes.");
+            em.merge(cp);
+
+            // 2. Notify user via their channel (fire-and-forget, must not roll back TX)
+            approvalTimedOutEvent.fireAsync(new ApprovalTimedOutEvent(
+                    cp.getSessionId(),
+                    cp.getChannelPlatformId(),
+                    cp.getChannelType(),
+                    cp.getPendingToolName(),
+                    approvalTimeoutMinutes
+            ));
+
+            // 3. Clean up session
             workspaceManager.terminateSession(cp.getSessionId());
             heartbeatTracker.removeHeartbeat(cp.getSessionId());
         }
     }
-
-
 }

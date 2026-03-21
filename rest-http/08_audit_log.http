@@ -38,7 +38,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = key-internal-changeme
+@validKey = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Create a session and run a few tasks to generate audit events

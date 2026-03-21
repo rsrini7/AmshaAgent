@@ -116,6 +116,23 @@ public class AgentSessionService {
         var commandResponse = handleSlashCommand(sessionId, request);
         if (commandResponse.isPresent()) return commandResponse.get();
 
+        try {
+            String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+            agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                    throw new AwaitingApprovalException(sessionId);
+                }
+            });
+        } catch (AwaitingApprovalException e) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(Map.of(
+                        "error",  "Session is awaiting human approval",
+                        "code",   "AWAITING_APPROVAL",
+                        "hint",   "Use POST /sessions/" + sessionId + "/approve to proceed"
+                    ))
+                    .build();
+        }
+
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
         try {
@@ -362,6 +379,12 @@ public class AgentSessionService {
         } catch (Exception e) {
             log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage(), e);
             return Optional.empty(); // fall through to agent loop
+        }
+    }
+
+    private static class AwaitingApprovalException extends RuntimeException {
+        AwaitingApprovalException(String sessionId) {
+            super("Session awaiting approval: " + sessionId);
         }
     }
 

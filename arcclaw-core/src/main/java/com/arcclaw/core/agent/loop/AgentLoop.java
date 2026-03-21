@@ -197,8 +197,22 @@ public class AgentLoop {
             }
 
             // --- CHECKPOINT FINAL STATE ---
-            if (result instanceof AgentResult.AwaitingApproval) {
-                log.debugf("Session %s paused, waiting for human approval.", sessionId);
+            if (result instanceof AgentResult.AwaitingApproval awaiting) {
+                log.debugf("Session %s paused, waiting for human approval — tool=%s",
+                        sessionId, awaiting.toolName());
+
+                if (context != null && context.getUser() != null) {
+                    agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                        cp.setChannelPlatformId(context.getUser().platformId());
+                        cp.setChannelType(context.getUser().channel().name());
+                        agentStore.save(cp);
+                        log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
+                                sessionId, context.getUser().channel(), context.getUser().platformId());
+                    });
+                } else {
+                    log.warnf("No MessageContext user for session=%s — approval timeout notification will be skipped",
+                            sessionId);
+                }
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
                 if (result instanceof AgentResult.Finished) {
                     agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED);
