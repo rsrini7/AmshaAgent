@@ -273,6 +273,17 @@ public class AgentStepProcessor {
                 observation != null && observation.length() > 200
                         ? observation.substring(0, 200) + "..." : observation);
 
+        // Check fast-path BEFORE success/failure branching
+        if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
+                || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
+            log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
+            String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
+            String prefix = response.success() ? "✅ " : "❌ ";
+            String finalAnswer = prefix + cleanOutput;
+            writer.saveAnswer(sessionId, finalAnswer);
+            return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+        }                        
+
         if (stepFailed) {
             consecutiveFailures++;
             if (consecutiveFailures >= 2) {
