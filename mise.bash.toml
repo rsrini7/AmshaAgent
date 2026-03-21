@@ -702,7 +702,7 @@ echo ''
 echo '    Tip: add env vars to dist/.env — Quarkus native reads them automatically.'
 
 # ── Generate run.sh launcher ─────────────────────────────────────────────────
-cat > "$distDir/run.sh" << 'LAUNCHER'
+cat > "dist/run.sh" << 'LAUNCHER'
 #!/usr/bin/env bash
 # run.sh — ArcClaw launcher
 # Sets required env vars and forwards subcommand to the native binary.
@@ -743,10 +743,10 @@ if [[ $# -eq 0 ]]; then
 fi
 exec "$EXE" "$@"
 LAUNCHER
-chmod +x "$distDir/run.sh"
+chmod +x "dist/run.sh"
 
 # ── Generate run.ps1 launcher ────────────────────────────────────────────────
-cat > "$distDir/run.ps1" << 'LAUNCHER'
+cat > "dist/run.ps1" << 'LAUNCHER'
 # run.ps1 — ArcClaw launcher
 # Sets required env vars and forwards subcommand to the native binary.
 # Usage: .\run.ps1 serve | chat | attach | ask "your goal"
@@ -790,8 +790,8 @@ LAUNCHER
 
 echo ''
 echo '✅  Launchers written:'
-echo '      dist/run.sh    → Linux/macOS  (./run.sh serve|chat|ask|attach)'
-echo '      dist/run.ps1   → Windows/pwsh (.\run.ps1 serve|chat|ask|attach)'
+echo '      dist/run.sh   → Linux/macOS  :  ./run.sh serve|chat|ask|attach'
+echo '      dist/run.ps1  → Windows/pwsh :  ./run.ps1 serve|chat|ask|attach'
 """
 
 # =============================================================================
