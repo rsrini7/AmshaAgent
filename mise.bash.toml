@@ -173,7 +173,6 @@ set -euo pipefail
 MOPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 
 # ── Resolve build strategy ────────────────────────────────────────────────────
-# Priority: ARCCLAW_NATIVE_BUILD env var > auto-detect Podman > fallback local
 strategy='local'
 if [[ "${ARCCLAW_NATIVE_BUILD:-}" == 'local' ]]; then
     echo 'ℹ️   ARCCLAW_NATIVE_BUILD=local: using local GraalVM.'
@@ -189,7 +188,6 @@ elif [[ "${ARCCLAW_NATIVE_BUILD:-}" == 'container' ]]; then
         exit 1
     fi
 else
-    # Auto-detect: probe Podman — preferred default on Linux/macOS
     if command -v podman &>/dev/null; then
         if podman info &>/dev/null; then
             echo 'ℹ️   Podman detected and running → container build (portable binary, recommended).'
@@ -211,12 +209,7 @@ fi
 containerFlag="-Dquarkus.native.container-build=$([ "$strategy" = 'container' ] && echo true || echo false)"
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-# ── .env shield — TEMP FIX ───────────────────────────────────────────────────
-# Quarkus bakes BUILD_TIME config properties from .env into the native binary.
-# We move .env aside so no secrets or API keys are frozen into the binary.
-# Long-term fix: maintain a build.env with only non-secret build-time config
-# and rename it here instead (see MISE_README.md §Build Tasks).
+# ── .env shield ───────────────────────────────────────────────────────────────
 env_backup=''
 if [[ -f .env ]]; then
     mv .env .env.build-backup
@@ -230,8 +223,8 @@ else
     echo 'ℹ️   No .env found — building without config override (good for CI).'
 fi
 # ─────────────────────────────────────────────────────────────────────────────
+
 if [[ "$strategy" == 'container' ]]; then
-    # ── Container build — GraalVM runs inside Podman, host JDK unchanged ─────
     echo 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
     _arcclaw_native_cleanup() {
         if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
@@ -239,11 +232,9 @@ if [[ "$strategy" == 'container' ]]; then
         fi
     }
     trap _arcclaw_native_cleanup EXIT
-    # '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' - if needed add it
     export MAVEN_OPTS="$MOPTS"
     ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
 else
-    # ── Local build — switch to GraalVM, restore Temurin after ───────────────
     _arcclaw_native_cleanup() {
         if   [[ "$env_backup" == 'dotenv'    ]]; then mv .env.build-backup .env; echo 'ℹ️   .env restored.'
         elif [[ "$env_backup" == 'build.env' ]]; then rm -f .env; echo 'ℹ️   Temporary build.env copy removed.'
@@ -252,6 +243,9 @@ else
     }
     trap _arcclaw_native_cleanup EXIT
     mise use java@graalvm-community-25.0.2
+    GRAAL_HOME="$(mise where java@graalvm-community-25.0.2)"
+    export JAVA_HOME="$GRAAL_HOME" GRAALVM_HOME="$GRAAL_HOME"
+    export PATH="$GRAAL_HOME/bin:$PATH"
     export MAVEN_OPTS="$MOPTS"
     ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "$containerFlag"
 fi
@@ -276,11 +270,7 @@ run = """
 set -euo pipefail
 echo 'ℹ️   build:native-local: local GraalVM, no Podman container.'
 
-# ── .env shield — TEMP FIX ───────────────────────────────────────────────────
-# Quarkus bakes BUILD_TIME config properties from .env into the native binary.
-# We move .env aside so no secrets or API keys are frozen into the binary.
-# Long-term fix: maintain a build.env with only non-secret build-time config
-# and rename it here instead (see MISE_README.md §Build Tasks).
+# ── .env shield ───────────────────────────────────────────────────────────────
 env_backup=''
 if [[ -f .env ]]; then
     mv .env .env.build-backup
@@ -302,8 +292,10 @@ _arcclaw_native_cleanup() {
 }
 trap _arcclaw_native_cleanup EXIT
 mise use java@graalvm-community-25.0.2
+GRAAL_HOME="$(mise where java@graalvm-community-25.0.2)"
+export JAVA_HOME="$GRAAL_HOME" GRAALVM_HOME="$GRAAL_HOME"
+export PATH="$GRAAL_HOME/bin:$PATH"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-# '-Dquarkus.native.additional-build-args=-H:+PrintAnalysisCallTree' - if needed add it
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
 echo '✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 echo ''
@@ -324,11 +316,7 @@ run = """
 set -euo pipefail
 echo 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
 
-# ── .env shield — TEMP FIX ───────────────────────────────────────────────────
-# Quarkus bakes BUILD_TIME config properties from .env into the native binary.
-# We move .env aside so no secrets or API keys are frozen into the binary.
-# Long-term fix: maintain a build.env with only non-secret build-time config
-# and rename it here instead (see MISE_README.md §Build Tasks).
+# ── .env shield ───────────────────────────────────────────────────────────────
 env_backup=''
 if [[ -f .env ]]; then
     mv .env .env.build-backup
@@ -350,6 +338,9 @@ _arcclaw_native_cleanup() {
 }
 trap _arcclaw_native_cleanup EXIT
 mise use java@graalvm-community-25.0.2
+GRAAL_HOME="$(mise where java@graalvm-community-25.0.2)"
+export JAVA_HOME="$GRAAL_HOME" GRAALVM_HOME="$GRAAL_HOME"
+export PATH="$GRAAL_HOME/bin:$PATH"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
     '-Dquarkus.native.container-build=false' \
@@ -359,6 +350,7 @@ echo ''
 echo '▶   Assembling dist/ folder...'
 mise run dist
 """
+
 
 [tasks.clean]
 description = "Clean Maven build artifacts"
