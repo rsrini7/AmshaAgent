@@ -255,13 +255,15 @@ else
 fi
 echo "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
 echo ''
+echo '▶   Assembling dist/ folder...'
+mise run dist
+echo ''
 echo '▶   Run with one of:'
 echo '      mise run native:serve          → HTTP + MCP server on :8080'
 echo '      mise run native:chat           → interactive REPL'
 echo '      mise run native:attach         → Telegram daemon'
 echo '      GOAL="..." mise run native:ask → single-shot query'
 echo ''
-echo '▶   Or assemble a dist/ folder:  mise run dist'
 """
 
 [tasks."build:native-local"]
@@ -302,6 +304,8 @@ export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
 echo '✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 echo ''
+echo '▶   Assembling dist/ folder...'
+mise run dist
 echo '▶   Run with one of:'
 echo '      mise run native:serve          → HTTP + MCP server on :8080'
 echo '      mise run native:chat           → interactive REPL'
@@ -348,6 +352,9 @@ export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
     '-Dquarkus.native.container-build=false' \
     '-Dquarkus.native.additional-build-args=-J-Xmx6g'
 echo '✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
+echo ''
+echo '▶   Assembling dist/ folder...'
+mise run dist
 """
 
 [tasks.clean]
@@ -663,6 +670,7 @@ exec "./$RUNNER" "${CMD_ARGS[@]}"
 [tasks.dist]
 description = "Assemble dist/ folder: native binary + .env.example + vec0 extension"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -750,6 +758,7 @@ cat > "dist/run.ps1" << 'LAUNCHER'
 # Sets required env vars and forwards subcommand to the native binary.
 # Usage: ./run.ps1 serve | chat | attach | ask "your goal"
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+quiet = true
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe       = Join-Path $scriptDir 'arcclaw-app-1.0.0-SNAPSHOT-runner'
