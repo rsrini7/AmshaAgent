@@ -140,7 +140,7 @@ run = [
 # BUILD TASKS
 # =============================================================================
 
-[tasks.build]
+[tasks.build-app]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -148,12 +148,12 @@ run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean package -pl arcclaw-app -am -DskipTests
+& $mvnw clean install -pl arcclaw-app -am -DskipTests
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 """
 
-[tasks."build:full"]
+[tasks."build:full-skiptests"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
