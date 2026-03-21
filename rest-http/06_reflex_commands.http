@@ -201,7 +201,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "deletecron 00000000-dead-beef-0000-000000000000",
     "agentRole": "coordinator",
-    "maxIterations": 3
+    "maxIterations": 1
 }
 
 ###

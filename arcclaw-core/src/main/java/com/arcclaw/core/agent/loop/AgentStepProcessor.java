@@ -40,6 +40,7 @@ import jakarta.inject.Inject;
  */
 @ApplicationScoped
 public class AgentStepProcessor {
+
     private static final Logger log = Logger.getLogger(AgentStepProcessor.class);
 
     private static final Set<String> REACT_KEYWORDS = Set.of(
@@ -58,6 +59,8 @@ public class AgentStepProcessor {
 
     // ── Engine step ──────────────────────────────────────────────────────────
 
+
+    /** Calls the reasoning engine for the next step, handles budget events and LLM exceptions. */
     StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
             List<ReasoningStep> history, String agentRole, String transientError,
             int llmSchemaErrorCount, int iteration) {
@@ -102,6 +105,7 @@ public class AgentStepProcessor {
         return StepDecision.proceed(step);
     }
 
+    /** Classifies and handles LLM-level exceptions: schema errors, rate limits, network faults. */
     private StepDecision handleEngineException(Exception e, String sessionId,
             int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
@@ -154,6 +158,7 @@ public class AgentStepProcessor {
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
     }
 
+    /** Returns true if the exception is a transient network connectivity fault. */
     private boolean isNetworkError(Exception e) {
         if (e instanceof java.net.ConnectException
                 || e instanceof java.net.SocketTimeoutException) return true;
@@ -166,23 +171,23 @@ public class AgentStepProcessor {
                 || msg.contains("Connection refused"));
     }
 
+
     // ── Tool validation ──────────────────────────────────────────────────────
 
+
+    /** Validates the tool name — rejects hallucinated tools and leaked ReAct keywords. */
     StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history,
             ReasoningStep step, String goal, int consecutiveFailures) {
         String toolName = step.action();
         if (toolRegistry.findTool(toolName).isPresent())
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
 
-        // Check dynamic MCP tools before treating as hallucination.
-        // DynamicToolLookup may be unsatisfied in test profiles — guard with isUnsatisfied().
         if (!dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
             log.debugf("[AgentStepProcessor] '%s' resolved as dynamic MCP tool — proceeding", toolName);
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
         }
 
-        // ReAct keyword leaked as tool name — ephemeral correction, not persisted
         if (REACT_KEYWORDS.contains(toolName.toUpperCase())) {
             log.warnf("[AgentStepProcessor] ReAct keyword '%s' used as tool name — ephemeral correction",
                     toolName);
@@ -210,81 +215,124 @@ public class AgentStepProcessor {
         return StepDecision.retryValidation(consecutiveFailures);
     }
 
+
     // ── Tool invocation ──────────────────────────────────────────────────────
 
+
+    /** Orchestrates the 4 phases: guard → invoke → observe → resolve outcome. */
     StepDecision invokeToolAndObserve(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
             int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
+        // Phase 1 — Guard: dedup / block / pause for approval
+        StepDecision guardDecision = evaluateGuard(
+                sessionId, agentRole, history, step, goal, skillSnapshot);
+        if (guardDecision != null) return guardDecision;
+
+        // Phase 2 — Invoke: call tool, catch approval interrupts
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
+        ToolResponse response;
+        try {
+            response = invokeTool(sessionId, agentRole, history, step, toolName, params);
+        } catch (FastExitException e) {
+            return e.decision;
+        }
 
-        ToolInvocationGuard.GuardDecision decision =
-                guard.evaluate(sessionId, agentRole, toolName, params, history, goal, skillSnapshot);
+        // Phase 3 — Observe: build observation string and persist to history
+        String observation = buildObservation(response);
+        final ReasoningStep completedStep = step.withObservation(observation);
+        history.add(completedStep);
+        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
+        log.debugf("Observation for '%s': %s", toolName,
+                observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
+
+        // Phase 4 — Resolve: fast-path exit or circuit breaker
+        return resolveOutcome(sessionId, toolName, response, observation,
+                completedStep, history, consecutiveFailures);
+    }
+
+    /** Evaluates guard decisions — returns null if tool should proceed normally. */
+    private StepDecision evaluateGuard(String sessionId, String agentRole,
+            List<ReasoningStep> history, ReasoningStep step,
+            String goal, List<CompiledSkillEntry> skillSnapshot) {
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                sessionId, agentRole, step.action(),
+                step.actionInput() != null ? step.actionInput() : Map.of(),
+                history, goal, skillSnapshot);
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
             history.add(dedupStep);
             observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
-            return StepDecision.proceedWithFailures(dedupStep, consecutiveFailures);
+            return StepDecision.proceedWithFailures(dedupStep, 0);
         }
         if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
             final ReasoningStep blockedStep = step.withObservation(b.observation());
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
-            return StepDecision.retryValidation(consecutiveFailures);
+            return StepDecision.retryValidation(0);
         }
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
-            return StepDecision.terminal(
-                    persistApprovalCheckpoint(sessionId, agentRole,
-                            p.toolName(), p.paramsJson(), history));
+            return StepDecision.terminal(persistApprovalCheckpoint(
+                    sessionId, agentRole, p.toolName(), p.paramsJson(), history));
         }
+        return null; // PROCEED
+    }
 
-        ToolResponse response;
+    /** Invokes the tool — throws FastExitException if approval is required mid-invocation. */
+    private ToolResponse invokeTool(String sessionId, String agentRole,
+            List<ReasoningStep> history, ReasoningStep step,
+            String toolName, Map<String, Object> params) {
         try {
-            response = invoker.invoke(toolName, params, sessionId);
+            return invoker.invoke(toolName, params, sessionId);
         } catch (RequiresApprovalException e) {
-            return StepDecision.terminal(
+            throw new FastExitException(StepDecision.terminal(
                     persistApprovalCheckpoint(sessionId, agentRole,
-                            e.getToolName(), e.getToolParametersJson(), history));
+                            e.getToolName(), e.getToolParametersJson(), history)));
         }
+    }
 
-        String observation = response.output();
-        boolean stepFailed = !response.success();
+    /** Normalizes tool output into a consistent observation string. */
+    private String buildObservation(ToolResponse response) {
+        if (response.success()) return response.output();
+        String out = response.output();
+        if (out != null && out.startsWith("Tool execution failed:")) return out;
+        return "Tool execution failed: " + out + " (exit=" + response.exitCode() + ")";
+    }
 
-        if (stepFailed
-                && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
-                && observation != null
-                && observation.contains("GitHub integration is not available")) {
-            final ReasoningStep completedStep = step.withObservation(observation);
-            history.add(completedStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
-            if (sessionId != null && !observation.isBlank()) writer.saveAnswer(sessionId, observation);
-            return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
-        }
+    /**
+     * Resolves the step outcome:
+     * - Schedule tools always fast-path exit (success or failure).
+     * - GitHub unavailable exits immediately.
+     * - All others go through the consecutive failure circuit breaker.
+     */
+    private StepDecision resolveOutcome(String sessionId, String toolName,
+            ToolResponse response, String observation,
+            ReasoningStep completedStep, List<ReasoningStep> history,
+            int consecutiveFailures) {
 
-        if (stepFailed && (observation == null || !observation.startsWith("Tool execution failed:")))
-            observation = "Tool execution failed: " + observation + " (exit=" + response.exitCode() + ")";
-
-        final ReasoningStep completedStep = step.withObservation(observation);
-        history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
-        log.debugf("Observation for '%s': %s", toolName,
-                observation != null && observation.length() > 200
-                        ? observation.substring(0, 200) + "..." : observation);
-
-        // Check fast-path BEFORE success/failure branching
+        // Fast-path: schedule tools always terminate immediately — no LLM reformulation needed
         if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
             log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
             String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
-            String prefix = response.success() ? "✅ " : "❌ ";
-            String finalAnswer = prefix + cleanOutput;
+            String finalAnswer = (response.success() ? "✅ " : "❌ ") + cleanOutput;
             writer.saveAnswer(sessionId, finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
-        }                        
+        }
 
-        if (stepFailed) {
+        // GitHub unavailable — surface directly without LLM reformulation
+        if (!response.success()
+                && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
+                && observation.contains("GitHub integration is not available")) {
+            if (sessionId != null && !observation.isBlank()) writer.saveAnswer(sessionId, observation);
+            return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
+        }
+
+        // Circuit breaker — trip after 2 consecutive tool failures
+        if (!response.success()) {
             consecutiveFailures++;
             if (consecutiveFailures >= 2) {
                 log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s tool=%s failures=%d",
@@ -296,21 +344,16 @@ public class AgentStepProcessor {
             }
         } else {
             consecutiveFailures = 0;
-            if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                    || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
-                log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
-                String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
-                String finalAnswer = "✅ " + cleanOutput;
-                writer.saveAnswer(sessionId, finalAnswer);
-                return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
-            }
         }
 
         return StepDecision.proceedWithFailures(completedStep, consecutiveFailures);
     }
 
+
     // ── Checkpoint ───────────────────────────────────────────────────────────
 
+
+    /** Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult. */
     AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,
             String toolName, String paramsJson, List<ReasoningStep> history) {
         AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
@@ -328,5 +371,18 @@ public class AgentStepProcessor {
         log.infof("[STATE-MACHINE] Pausing session %s for human approval of tool '%s'",
                 sessionId, toolName);
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
+    }
+
+
+    // ── Internal types ───────────────────────────────────────────────────────
+
+
+    /** Unchecked signal to short-circuit invokeTool() when approval is required mid-call. */
+    static class FastExitException extends RuntimeException {
+        final StepDecision decision;
+        FastExitException(StepDecision decision) {
+            super(null, null, true, false); // suppress stacktrace — control flow only
+            this.decision = decision;
+        }
     }
 }
