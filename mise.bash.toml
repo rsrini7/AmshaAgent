@@ -485,7 +485,7 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" serve -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
+exec "./$RUNNER" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data serve
 """
 
 [tasks."native:chat"]
@@ -496,7 +496,7 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" chat -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
+exec "./$RUNNER" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data chat
 """
 
 [tasks."native:attach"]
@@ -508,7 +508,7 @@ set -euo pipefail
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-exec "./$RUNNER" attach -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
+exec "./$RUNNER" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data attach
 """
 
 [tasks."native:ask"]
@@ -528,7 +528,8 @@ RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 CMD_ARGS=("ask" "$GOAL")
 [[ -n "${ROLE:-}" ]] && CMD_ARGS+=("--role" "$ROLE")
-CMD_ARGS+=("-Darcclaw.rag.vec-extension-path=./lib/vec0" "-Darcclaw.data-dir=./data")
+# Prepend -D flags so they come before the subcommand (picocli parses args after subcommand name)
+CMD_ARGS=("-Darcclaw.rag.vec-extension-path=./lib/vec0" "-Darcclaw.data-dir=./data" "${CMD_ARGS[@]}")
 exec "./$RUNNER" "${CMD_ARGS[@]}"
 """
 

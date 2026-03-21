@@ -548,7 +548,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-& "./$runner" serve -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
+& "./$runner" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data serve
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -563,7 +563,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-& "./$runner" chat -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
+& "./$runner" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data chat
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -579,7 +579,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-& "./$runner" attach -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data
+& "./$runner" -Darcclaw.rag.vec-extension-path=./lib/vec0 -Darcclaw.data-dir=./data attach
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -603,7 +603,8 @@ if (-not (Test-Path $runner)) {
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $cmdArgs = @('ask', $goal)
 if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
-$cmdArgs += '-Darcclaw.rag.vec-extension-path=./lib/vec0', '-Darcclaw.data-dir=./data'
+# Prepend -D flags so they come before the subcommand (picocli parses args after subcommand name)
+$cmdArgs = @('-Darcclaw.rag.vec-extension-path=./lib/vec0', '-Darcclaw.data-dir=./data') + $cmdArgs
 & "./$runner" @cmdArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
