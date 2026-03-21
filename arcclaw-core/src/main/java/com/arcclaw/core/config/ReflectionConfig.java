@@ -9,6 +9,7 @@ import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
+import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.persistence.ArcClawSQLiteDialect;
 import com.arcclaw.core.skill.AgentSkillEntity;
@@ -38,8 +39,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         AgentResponseMapper.ApprovalRequiredResponse.class,
         AgentResponseMapper.ApprovalRequest.class,
         AgentResponseMapper.ErrorResponse.class,
+        AgentResult.Finished.class,
+        AgentResult.AwaitingApproval.class,
+        AgentResult.Failed.class,
+        AgentResult.LoopExceeded.class,
+        AgentResult.FailureCategory.class,
         SystemMetadataRegistry.SystemInfo.class,
-        SystemMetadataRegistry.SystemInfo.class,
+        AuditVerifier.VerificationResult.class,
         ReasoningStep.class,
         AgentResult.class,
         RunAgentRequest.class,
