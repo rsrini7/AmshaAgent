@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Dev mode — interactive REPL with hot reload (strategy: NONE)"
-set -euo pipefail
-exec ./mvnw quarkus:dev -pl arcclaw-app -am \
-    '-Djvm.args=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow' \
-    "-Dquarkus.args=chat" \
-    "-Dquarkus.profile=dev" \
-    "-Darcclaw.rag.vec-extension-path=../lib/vec0" \
-    "-Darcclaw.data-dir=../data"

@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
-set -euo pipefail
-podman machine init --memory 6144 --cpus 4 --disk-size 40
-podman machine start
-echo "✅  Podman machine initialised and running."

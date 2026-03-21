@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Stop the observability stack (data volumes are preserved)"
-set -euo pipefail
-docker compose down
-echo "✅  Stack stopped. Data volumes preserved."
