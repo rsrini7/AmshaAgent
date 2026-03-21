@@ -54,6 +54,39 @@ echo ""
 echo "Next:  mise run setup:env-check   mise run build   mise run dev"
 """
 
+# ---------------------------------------------------------------------------
+# JDK switch tasks — cross-platform (Linux · macOS · WSL2 · Windows pwsh)
+# ---------------------------------------------------------------------------
+
+[tasks."jdk:graalvm"]
+description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
+run = [
+  "mise use java@graalvm-community-25.0.2",
+  "java -version",
+]
+
+[tasks."jdk:temurin"]
+description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
+run = [
+  "mise use java@temurin-25",
+  "java -version",
+]
+
+[tasks."jdk:install"]
+description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
+run = [
+  "mise install java@temurin-25",
+  "mise install java@graalvm-community-25.0.2",
+  "mise ls java",
+]
+
+[tasks."jdk:status"]
+description = "Show which JDK is currently active and list all installed JDKs"
+run = [
+  "java -version",
+  "mise ls java",
+]
+
 [tasks.build]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 run = """

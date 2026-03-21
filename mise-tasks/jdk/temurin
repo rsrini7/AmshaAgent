@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
-set -euo pipefail
-mise use java@temurin-25
-echo ""
-echo "✅  Active JDK switched to Temurin 25"
-java -version
