@@ -5,28 +5,163 @@
 # This file is the fallback mise loads when MISE_DEFAULT_CONFIG_FILENAME
 # is not set (i.e. fresh clone, no shell profile configured yet).
 #
-# It contains exactly TWO tasks:
-#
-#   setup:profile:nix   Auto-write MISE_DEFAULT_CONFIG_FILENAME to your
-#                       shell profile. Linux · macOS · WSL2 only (requires sh).
-#                       Windows users → see `mise tasks` description of `start`.
+# It contains exactly THREE tasks:
 #
 #   start               Full setup guide for all platforms. Run: mise run start
-#                       Linux/macOS/WSL2 only (requires sh).
-#                       Windows users → `mise tasks` shows the same info in the
-#                       description column without needing to run anything.
+#                       Linux/macOS/WSL2 (requires sh). Windows users: just
+#                       run `mise tasks` — the description has everything.
 #
-# AFTER running setup:profile:nix (or configuring manually), mise loads the
-# correct platform config directly and this file is no longer involved:
+#   setup:profile:nix   Auto-write MISE_DEFAULT_CONFIG_FILENAME to ~/.bashrc
+#                       or ~/.zshrc. Linux · macOS · WSL2 only (requires sh).
+#
+#   setup:profile:win   Auto-write MISE_DEFAULT_CONFIG_FILENAME to $PROFILE.
+#                       Windows only (requires pwsh). Lives in mise.pwsh.toml —
+#                       listed here for discoverability.
+#
+# AFTER setup, mise loads the correct platform config and this file is gone:
 #   bash/zsh  →  mise.bash.toml   (Linux · macOS · WSL2)
 #   pwsh      →  mise.pwsh.toml   (Windows · macOS · WSL2)
 # =============================================================================
+
+# =============================================================================
+# start — full setup guide, all platforms
+# =============================================================================
+
+[tasks.start]
+description = '''
+New to this project? Run:  mise run start
+Full setup guide for all platforms — Linux · macOS · WSL2 · Windows.
+
+  Linux/macOS/WSL2 — AUTO (recommended):
+    mise run setup:profile:nix        <- detects shell, writes profile, done
+    source ~/.bashrc                  <- (or ~/.zshrc)
+    mise tasks                        <- now shows all ArcClaw tasks
+
+  Windows pwsh — AUTO:
+    mise --env pwsh run setup:profile:win   <- writes to $PROFILE
+    . $PROFILE
+
+  Linux/macOS/WSL2 — MANUAL (add to ~/.bashrc or ~/.zshrc, ORDER MATTERS):
+    export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml   # BEFORE mise activate
+    eval "$(~/.local/bin/mise activate bash)"
+
+  Windows pwsh — MANUAL (add to $PROFILE, ORDER MATTERS):
+    $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml' # BEFORE mise activate
+    (&mise activate pwsh) | Out-String | Invoke-Expression
+
+  ONE-OFF (no profile change — run a task right now):
+    mise --env bash tasks              # Linux / macOS / WSL2
+    mise --env pwsh tasks              # Windows / PowerShell
+    mise --env bash run dev
+
+  See MISE_README.md section 3 for full documentation.
+'''
+run = """
+#!/usr/bin/env sh
+cat << 'GUIDE'
+
+  ArcClaw — mise Task Runner
+  ==========================
+
+  New here? This guide covers all platforms.
+  mise has loaded the bootstrap config (mise.toml), which only has:
+    start                 <- this task (you are here)
+    setup:profile:nix     <- auto-configures your shell (Linux · macOS · WSL2)
+    setup:profile:win     <- auto-configures your shell (Windows pwsh only)
+                             run via: mise --env pwsh run setup:profile:win
+
+  -- QUICKEST SETUP (Linux / macOS / WSL2) ------------------------------------
+
+    mise run setup:profile:nix
+
+    Detects your shell (bash or zsh), finds ~/.bashrc or ~/.zshrc, inserts
+    the export line BEFORE the mise activate line. Idempotent — safe to re-run.
+    Then:  source ~/.bashrc   (or ~/.zshrc)
+    Then:  mise tasks         <- now shows all ArcClaw tasks
+
+  -- QUICKEST SETUP (Windows pwsh) --------------------------------------------
+
+    mise --env pwsh run setup:profile:win
+
+    Finds your $PROFILE, writes MISE_DEFAULT_CONFIG_FILENAME before mise
+    activate. Idempotent — safe to re-run.
+    Then:  . $PROFILE
+    Then:  mise tasks         <- now shows all ArcClaw tasks
+
+  -- MANUAL SETUP -------------------------------------------------------------
+
+  Add to your shell profile. ORDER MATTERS: export BEFORE mise activate.
+
+  bash  -> ~/.bashrc
+  +--------------------------------------------------------------+
+  |  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          |  <- FIRST
+  |  eval "$(~/.local/bin/mise activate bash)"                   |  <- SECOND
+  +--------------------------------------------------------------+
+
+  zsh   -> ~/.zshrc
+  +--------------------------------------------------------------+
+  |  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          |  <- FIRST
+  |  eval "$(~/.local/bin/mise activate zsh)"                    |  <- SECOND
+  +--------------------------------------------------------------+
+
+  pwsh  -> $PROFILE
+  +--------------------------------------------------------------+
+  |  $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'        |  <- FIRST
+  |  (&mise activate pwsh) | Out-String | Invoke-Expression      |  <- SECOND
+  +--------------------------------------------------------------+
+
+  After reloading your shell:
+    mise tasks        <- shows all ArcClaw tasks
+    mise run setup    <- first-time project setup (JDKs, .env)
+
+  -- ONE-OFF (skip profile setup, run a task right now) -----------------------
+
+    mise --env bash tasks              # list tasks (Linux / macOS / WSL2)
+    mise --env pwsh tasks              # list tasks (Windows / PowerShell)
+    mise --env bash run dev            # run any bash task directly
+    mise --env pwsh run build:native   # run any pwsh task directly
+
+  -- WHAT IS MISE_DEFAULT_CONFIG_FILENAME? ------------------------------------
+
+    ArcClaw ships two platform-specific task configs in the same directory:
+      mise.bash.toml  -- all tasks in bash/sh  (Linux · macOS · WSL2)
+      mise.pwsh.toml  -- all tasks in pwsh     (Windows · macOS · WSL2)
+
+    Without this variable, mise falls back to mise.toml (this file), which
+    only has start, setup:profile:nix, and setup:profile:win.
+
+    Setting it in your profile tells mise which config to load every time
+    you open a terminal in this project -- permanently, no --env needed.
+
+  -- FULL DOCUMENTATION -------------------------------------------------------
+
+    MISE_README.md -- Section 3: Config File Selection
+
+GUIDE
+"""
 
 # =============================================================================
 # setup:profile:nix — auto-configure shell profile (Linux · macOS · WSL2)
 # =============================================================================
 
 [tasks."setup:profile:nix"]
+description = '''
+Linux/macOS/WSL2 only — auto-write MISE_DEFAULT_CONFIG_FILENAME to your shell
+profile so mise always loads mise.bash.toml. Safe to re-run (idempotent).
+
+  Windows users: run `mise --env pwsh run setup:profile:win` instead.
+
+  What this does:
+    1. Detects your shell via $SHELL (bash or zsh)
+    2. Finds the right rc file (~/.bashrc or ~/.zshrc)
+    3. Inserts the export line BEFORE the mise activate line
+    4. Prints exactly what was written and where
+    5. Tells you to reload — nothing else is touched
+
+  Run:   mise run setup:profile:nix
+  Then:  source ~/.bashrc   (or ~/.zshrc)
+  Check: echo $MISE_DEFAULT_CONFIG_FILENAME
+'''
 run = """
 #!/usr/bin/env sh
 set -eu
@@ -39,20 +174,20 @@ case "${SHELL:-}" in
   */zsh)
     RC_FILE="$HOME/.zshrc"
     SHELL_NAME="zsh"
-    ACTIVATE_LINE='eval "$(~/.local/bin/mise activate zsh)"'
+    ACTIVATE_HINT='eval "$(~/.local/bin/mise activate zsh)"'
     ;;
   *)
     RC_FILE="$HOME/.bashrc"
     SHELL_NAME="bash"
-    ACTIVATE_LINE='eval "$(~/.local/bin/mise activate bash)"'
+    ACTIVATE_HINT='eval "$(~/.local/bin/mise activate bash)"'
     ;;
 esac
 
-echo "── Shell detected: $SHELL_NAME → $RC_FILE ───────────────────────────────────"
+echo "── Shell detected: $SHELL_NAME -> $RC_FILE ──────────────────────────────────"
 
 # ── Idempotency check ─────────────────────────────────────────────────────────
 if [ -f "$RC_FILE" ] && grep -q 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"; then
-  echo "ℹ️   MISE_DEFAULT_CONFIG_FILENAME already present in $RC_FILE — skipping."
+  echo "i   MISE_DEFAULT_CONFIG_FILENAME already present in $RC_FILE -- skipping."
   echo ""
   grep 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"
   echo ""
@@ -61,10 +196,9 @@ if [ -f "$RC_FILE" ] && grep -q 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"; then
 fi
 
 # ── Write: export line must come BEFORE mise activate ────────────────────────
-# Strategy: if rc file exists and contains a mise activate line, insert the
-# export just before it. Otherwise append to end of file.
+# If rc file has a mise activate line, insert the export just before it.
+# Otherwise append to end of file.
 if [ -f "$RC_FILE" ] && grep -q 'mise activate' "$RC_FILE"; then
-  # Use awk to insert before the first 'mise activate' line
   TMP=$(mktemp)
   awk -v comment="$COMMENT" -v export_line="$EXPORT_LINE" '
     !inserted && /mise activate/ {
@@ -75,17 +209,17 @@ if [ -f "$RC_FILE" ] && grep -q 'mise activate' "$RC_FILE"; then
     { print }
   ' "$RC_FILE" > "$TMP"
   mv "$TMP" "$RC_FILE"
-  echo "✅  Inserted BEFORE mise activate line in $RC_FILE"
+  echo "OK  Inserted BEFORE mise activate line in $RC_FILE"
 else
-  # No activate line yet — append both the export and activate hint
   printf '\\n%s\\n%s\\n' "$COMMENT" "$EXPORT_LINE" >> "$RC_FILE"
-  echo "✅  Appended to $RC_FILE"
+  echo "OK  Appended to $RC_FILE"
   echo ""
-  echo "    ⚠️  No 'mise activate' line found. Make sure your profile also has:"
-  echo "       $ACTIVATE_LINE"
+  echo "    WARNING: No 'mise activate' line found in $RC_FILE."
+  echo "    Make sure your profile also contains:"
+  echo "      $ACTIVATE_HINT"
 fi
 
-# ── Summary ──────────────────────────────────────────────────────────────────
+# ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "── Written ──────────────────────────────────────────────────────────────────"
 grep 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"
@@ -93,126 +227,36 @@ echo "────────────────────────�
 echo ""
 echo "Next steps:"
 echo "  1. Reload:  source $RC_FILE"
-echo "  2. Verify:  echo \\$MISE_DEFAULT_CONFIG_FILENAME"
-echo "  3. Run:     mise tasks          ← now shows all ArcClaw tasks"
-echo "              mise run setup      ← first-time project setup (JDKs, .env)"
-"""
-description = """
-Linux/macOS/WSL2 only — auto-write MISE_DEFAULT_CONFIG_FILENAME to your shell
-profile so mise always loads mise.bash.toml. Safe to re-run (idempotent).
-
-  Windows users: configure manually — see `mise run help` or `mise tasks`.
-
-  What this does:
-    1. Detects your shell via $SHELL (bash or zsh)
-    2. Finds the right rc file (~/.bashrc or ~/.zshrc)
-    3. Prepends the export line BEFORE the mise activate line
-    4. Prints exactly what was written and where
-    5. Tells you to reload — nothing else is touched
-
-  Run:   mise run setup:profile:nix
-  Then:  source ~/.bashrc   (or ~/.zshrc)
-  Check: echo $MISE_DEFAULT_CONFIG_FILENAME
+echo "  2. Verify:  echo MISE_DEFAULT_CONFIG_FILENAME (should be mise.bash.toml)"
+echo "  3. Run:     mise tasks          <- now shows all ArcClaw tasks"
+echo "              mise run setup      <- first-time project setup (JDKs, .env)"
 """
 
 # =============================================================================
-# help — setup instructions as a formatted banner
+# setup:profile:win — Windows stub pointing to mise.pwsh.toml
+# =============================================================================
+# This task lives in mise.pwsh.toml (requires pwsh).
+# It is documented here so it appears when users run `mise tasks` after
+# cloning — but must be invoked via:
+#   mise --env pwsh run setup:profile:win
+#
+# Defining it as a stub here with a clear error avoids silent failure if
+# a Linux/macOS user accidentally runs it without --env pwsh.
 # =============================================================================
 
-[tasks.start]
-description = """
-New to this project? Run:  mise run start
-Full setup guide for all platforms — Linux · macOS · WSL2 · Windows.
+[tasks."setup:profile:win"]
+description = '''
+Windows only — auto-write MISE_DEFAULT_CONFIG_FILENAME to $PROFILE so mise
+always loads mise.pwsh.toml. Safe to re-run (idempotent).
 
-  Linux/macOS/WSL2 — AUTO (recommended):
-    mise run setup:profile:nix        ← detects shell, writes profile, done
-    source ~/.bashrc                  ← (or ~/.zshrc)
-    mise tasks                        ← now shows all ArcClaw tasks
-
-  Linux/macOS/WSL2 — MANUAL (add to ~/.bashrc or ~/.zshrc, ORDER MATTERS):
-    export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml   # BEFORE mise activate
-    eval \"$(~/.local/bin/mise activate bash)\"
-
-  Windows pwsh — MANUAL (add to $PROFILE, ORDER MATTERS):
-    $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml' # BEFORE mise activate
-    (&mise activate pwsh) | Out-String | Invoke-Expression
-
-  ONE-OFF (no profile change — run a task right now):
-    mise --env bash tasks              # Linux / macOS / WSL2
-    mise --env pwsh tasks              # Windows / PowerShell
-    mise --env bash run dev
-
-  See MISE_README.md §3 for full documentation.
-"""
+  Must be run via:   mise --env pwsh run setup:profile:win
+  Linux/macOS/WSL2:  use setup:profile:nix instead.
+'''
 run = """
 #!/usr/bin/env sh
-cat << 'EOF'
-
-  ArcClaw — mise Task Runner
-  ==========================
-
-  New here? This guide covers all platforms.
-  mise has loaded the bootstrap config (mise.toml), which only has:
-    start               ← this task
-    setup:profile:nix   ← auto-configures your shell (Linux · macOS · WSL2)
-
-  ── QUICKEST SETUP (Linux · macOS · WSL2) ────────────────────────────────────
-
-    mise run setup:profile:nix
-
-    Detects your shell ($SHELL), finds ~/.bashrc or ~/.zshrc, inserts the
-    export line BEFORE the mise activate line. Idempotent — safe to re-run.
-    Then:  source ~/.bashrc   (or ~/.zshrc)
-    Then:  mise tasks         ← now shows all ArcClaw tasks
-
-  ── MANUAL SETUP ─────────────────────────────────────────────────────────────
-
-  Add to your shell profile. ORDER MATTERS: export BEFORE mise activate.
-
-  bash  → ~/.bashrc
-  ┌──────────────────────────────────────────────────────────────┐
-  │  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          │  ← FIRST
-  │  eval "$(~/.local/bin/mise activate bash)"                   │  ← SECOND
-  └──────────────────────────────────────────────────────────────┘
-
-  zsh   → ~/.zshrc
-  ┌──────────────────────────────────────────────────────────────┐
-  │  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          │  ← FIRST
-  │  eval "$(~/.local/bin/mise activate zsh)"                    │  ← SECOND
-  └──────────────────────────────────────────────────────────────┘
-
-  pwsh  → $PROFILE   (Windows — manual only, no sh available)
-  ┌──────────────────────────────────────────────────────────────┐
-  │  $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'        │  ← FIRST
-  │  (&mise activate pwsh) | Out-String | Invoke-Expression      │  ← SECOND
-  └──────────────────────────────────────────────────────────────┘
-
-  After reloading your shell:
-    mise tasks        ← shows all ArcClaw tasks
-    mise run setup    ← first-time project setup (JDKs, .env)
-
-  ── ONE-OFF (skip profile setup, run a task right now) ───────────────────────
-
-    mise --env bash tasks              # list tasks (Linux / macOS / WSL2)
-    mise --env pwsh tasks              # list tasks (Windows / PowerShell)
-    mise --env bash run dev            # run any bash task directly
-    mise --env pwsh run build:native   # run any pwsh task directly
-
-  ── WHAT IS MISE_DEFAULT_CONFIG_FILENAME? ────────────────────────────────────
-
-    ArcClaw ships two platform-specific task configs in the same directory:
-      mise.bash.toml  — all tasks in bash/sh  (Linux · macOS · WSL2)
-      mise.pwsh.toml  — all tasks in pwsh     (Windows · macOS · WSL2)
-
-    Without this variable, mise falls back to mise.toml (this file), which
-    only has start and setup:profile:nix.
-
-    Setting it in your profile tells mise which config to load every time
-    you open a terminal in this project — permanently, no --env needed.
-
-  ── FULL DOCUMENTATION ───────────────────────────────────────────────────────
-
-    MISE_README.md — Section 3: Config File Selection
-
-EOF
+echo "ERROR: setup:profile:win requires pwsh and must be run via:"
+echo "         mise --env pwsh run setup:profile:win"
+echo ""
+echo "  Linux/macOS/WSL2? Use: mise run setup:profile:nix"
+exit 1
 """
