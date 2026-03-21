@@ -41,7 +41,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = key-internal-changeme
+@validKey = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Two dedicated sessions — one per reflex type
@@ -152,7 +152,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "Server at 192.168.1.100 is returning 503. What should I check first?",
     "agentRole": "coordinator",
-    "maxIterations": 1
+    "maxIterations": 2
 }
 
 ###

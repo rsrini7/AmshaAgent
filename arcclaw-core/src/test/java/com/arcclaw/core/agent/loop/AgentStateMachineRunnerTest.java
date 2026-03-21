@@ -20,6 +20,7 @@ import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
@@ -47,6 +48,7 @@ class AgentStateMachineRunnerTest {
     private ToolInvoker invoker;
     private ChatMemoryWriter writer;
     private SkillRegistry skillRegistry;
+    private PiiScanReflex piiScanReflex;
     private AgentOtelContext agentOtelContext;
 
     @SuppressWarnings("unchecked")
@@ -67,6 +69,7 @@ class AgentStateMachineRunnerTest {
         invoker          = mock(ToolInvoker.class);
         writer           = mock(ChatMemoryWriter.class);
         skillRegistry    = mock(SkillRegistry.class);
+        piiScanReflex    = mock(PiiScanReflex.class);
         agentOtelContext = mock(AgentOtelContext.class);
 
         stepProcessor = new AgentStepProcessor();
@@ -84,6 +87,7 @@ class AgentStateMachineRunnerTest {
         runner.writer           = writer;
         runner.observers        = observers;
         runner.skillRegistry    = skillRegistry;
+        runner.piiScanReflex    = piiScanReflex;
         runner.agentOtelContext = agentOtelContext;
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());

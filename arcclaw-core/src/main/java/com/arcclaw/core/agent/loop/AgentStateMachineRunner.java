@@ -21,6 +21,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
 
@@ -37,6 +38,7 @@ public class AgentStateMachineRunner {
     @Inject Instance<AgentObserver> observers;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
     @Inject SkillRegistry skillRegistry;
+    @Inject PiiScanReflex piiScanReflex;
     @Inject AgentOtelContext agentOtelContext;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
@@ -48,7 +50,7 @@ public class AgentStateMachineRunner {
         String transientError = null;
 
         log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
-                context.sessionId(), context.goal(), context.maxIterations());
+                context.sessionId(), piiScanReflex.redactPii(context.goal()), context.maxIterations());
 
         writer.saveGoal(context.sessionId(), context.goal());
 
