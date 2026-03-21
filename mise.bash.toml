@@ -38,7 +38,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 if [[ ! -f .env ]]; then
     cp .env.example .env
     echo '✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
@@ -59,7 +58,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 if [[ ! -f .env ]]; then
     echo '❌  .env not found. Run: mise run setup'
     exit 1
@@ -85,7 +83,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 sudo apt-get install -y dos2unix
 dos2unix mvnw
 chmod +x mvnw
@@ -139,7 +136,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
 ./mvnw clean package -pl arcclaw-app -am -DskipTests
 echo '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
@@ -151,7 +147,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
 ./mvnw clean install -DskipTests
 echo '✅  Full build complete.'
@@ -163,7 +158,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 export MAVEN_OPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 ./mvnw clean verify
 echo '✅  Tests complete.'
@@ -175,7 +169,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 MOPTS='--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 
 # ── Resolve build strategy ────────────────────────────────────────────────────
@@ -277,7 +270,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 echo 'ℹ️   build:native-local: local GraalVM, no Podman container.'
 
 # ── .env shield — TEMP FIX ───────────────────────────────────────────────────
@@ -323,7 +315,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 echo 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
 
 # ── .env shield — TEMP FIX ───────────────────────────────────────────────────
@@ -365,7 +356,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 ./mvnw clean
 echo '✅  Build artifacts cleaned.'
 """
@@ -387,7 +377,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
     "-Djvm.args=$JVM_ARGS" \\
     '-Dquarkus.args=serve' \\
@@ -402,7 +391,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
     "-Djvm.args=$JVM_ARGS" \\
     '-Dquarkus.args=chat' \\
@@ -417,7 +405,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     echo '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1
 fi
@@ -435,7 +422,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 GOAL="${1:-${GOAL:-}}"
 if [[ -z "$GOAL" ]]; then
     echo 'Usage:  GOAL="Your goal here" mise run dev:ask'
@@ -459,7 +445,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
     "-Djvm.args=$JVM_ARGS" \\
     '-Dquarkus.args=serve' \\
@@ -480,7 +465,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 JVM_ARGS=(
@@ -504,7 +488,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 JVM_ARGS=(
@@ -528,7 +511,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && echo '❌  TELEGRAM_BOT_TOKEN is not set in .env' && exit 1
@@ -554,7 +536,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 GOAL="${1:-${GOAL:-}}"
@@ -588,7 +569,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 JAR='arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [[ ! -f "$JAR" ]] && echo '❌  JAR not found. Run: mise run build' && exit 1
 JVM_ARGS=(
@@ -616,7 +596,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
@@ -631,7 +610,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
@@ -646,7 +624,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && echo '❌  TELEGRAM_BOT_TOKEN is not set in .env' && exit 1
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
@@ -662,7 +639,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 GOAL="${1:-${GOAL:-}}"
 if [[ -z "$GOAL" ]]; then
     echo 'Usage:  GOAL="Your goal here" mise run native:ask'
@@ -690,7 +666,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 if [[ ! -f "$RUNNER" ]]; then
     echo "❌  Native binary not found at $RUNNER — run: mise run build:native"
@@ -829,7 +804,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 RUNNER='arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner'
 [[ ! -f "$RUNNER" ]] && echo '❌  Native binary not found. Run: mise run build:native' && exit 1
 docker compose up -d
@@ -847,7 +821,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 docker compose down
 echo '✅  Stack stopped. Data volumes preserved.'
 """
@@ -858,7 +831,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 echo '⚠️   WARNING: This will permanently delete all data volumes.'
 read -r -p 'Type YES to confirm: ' confirm
 if [[ "$confirm" == "YES" ]]; then
@@ -881,7 +853,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 docker compose restart arcclaw
 echo '✅  arcclaw service restarted.'
 """
@@ -896,7 +867,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 podman machine init --memory 6144 --cpus 4 --disk-size 40
 podman machine start
 echo '✅  Podman machine initialised and running.'
@@ -908,7 +878,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 podman machine start
 echo '✅  Podman machine started.'
 """
@@ -919,7 +888,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 podman machine stop
 echo '✅  Podman machine stopped.'
 """
@@ -930,7 +898,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 systemctl --user enable --now podman.socket
 SOCK="/run/user/$(id -u)/podman/podman.sock"
 ls -l "$SOCK"
@@ -969,7 +936,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 if podman images | grep -q arcclaw-tool-runner; then
     echo '✅  arcclaw-tool-runner image is present.'
     podman images | grep arcclaw-tool-runner
@@ -989,7 +955,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 DB="${ARCCLAW_DATA_DIR:-./data}/arcclaw-meta.db"
 if [[ ! -f "$DB" ]]; then
     echo "❌  Database not found at: $DB"
@@ -1006,7 +971,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 if sqlite3 :memory: 'CREATE VIRTUAL TABLE t USING fts5(x);' 2>/dev/null; then
     echo '✅  FTS5 is available.'
 else
@@ -1021,7 +985,6 @@ dir = "{{config_root}}"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$MISE_CONFIG_ROOT"
 OS="$(uname -s)"
 if   [[ "$OS" == "Darwin" ]]; then EXT='./lib/vec0.dylib'
 elif [[ "$OS" == "Linux"  ]]; then EXT='./lib/vec0.so'

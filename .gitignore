@@ -8,6 +8,9 @@ release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 
+# Native 
+dist/
+
 # IDE - VSCode
 .vscode/
 *.code-workspace
