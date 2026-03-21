@@ -131,6 +131,7 @@ run = [
 # =============================================================================
 
 [tasks.build-app]
+depends = ["dev:kill"]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 dir = "{{config_root}}"
 run = """
@@ -1108,6 +1109,27 @@ echo ''
 echo "── Release archives in $OUT/ ─────────────────────────────────────"
 ls -lh "$OUT/"
 echo '──────────────────────────────────────────────────────────────────'
+"""
+
+[tasks."dev:kill"]
+description = "Kill any lingering Quarkus dev / quarkus-run.jar background processes"
+dir = "{{config_root}}"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo '── Scanning for lingering Quarkus processes ─────────────────────'
+PIDS=$(jps -l 2>/dev/null | grep -E 'quarkus-run\\.jar|quarkus\\.jar|QuarkusDevModeMain' | awk '{print $1}')
+if [[ -z "$PIDS" ]]; then
+    echo '✅  No lingering Quarkus processes found.'
+    exit 0
+fi
+echo 'Found:'
+jps -l | grep -E 'quarkus-run\\.jar|quarkus\\.jar|QuarkusDevModeMain'
+echo ''
+for PID in $PIDS; do
+    kill -9 "$PID" 2>/dev/null && echo "✅  Killed PID $PID" || echo "⚠️   Could not kill PID $PID (already gone?)"
+done
+echo '────────────────────────────────────────────────────────────────'
 """
 
 [tasks.help]

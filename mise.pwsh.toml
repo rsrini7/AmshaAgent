@@ -144,6 +144,7 @@ run = [
 # =============================================================================
 
 [tasks.build-app]
+depends = ["dev:kill"]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1259,6 +1260,36 @@ Write-Host ''
 Write-Host "── Release archives in $out/ ──────────────────────────────────────"
 Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
 Write-Host '───────────────────────────────────────────────────────────────────'
+"""
+
+[tasks."dev:kill"]
+description = "Kill any lingering Quarkus dev / quarkus-run.jar background processes"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '── Scanning for lingering Quarkus processes ─────────────────────'
+$jps = Get-Command jps -ErrorAction SilentlyContinue
+if (-not $jps) { Write-Host '❌  jps not found — is a JDK active? Run: mise run jdk:status'; exit 1 }
+$procs = & jps -l 2>&1 | Where-Object { $_ -match 'quarkus-run\\.jar|quarkus\\.jar|QuarkusDevModeMain' }
+if (-not $procs) {
+    Write-Host '✅  No lingering Quarkus processes found.'
+    exit 0
+}
+Write-Host 'Found:'
+$procs | ForEach-Object { Write-Host "  $_" }
+Write-Host ''
+$procs | ForEach-Object {
+    $pid = ($_ -split '\\s+')[0]
+    try {
+        Stop-Process -Id $pid -Force
+        Write-Host "✅  Killed PID $pid"
+    } catch {
+        Write-Host "⚠️   Could not kill PID $pid (already gone?)"
+    }
+}
+Write-Host '────────────────────────────────────────────────────────────────'
 """
 
 [tasks.help]
