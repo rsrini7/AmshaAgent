@@ -748,7 +748,7 @@ chmod +x "dist/run.sh"
 cat > "dist/run.ps1" << 'LAUNCHER'
 # run.ps1 — ArcClaw launcher
 # Sets required env vars and forwards subcommand to the native binary.
-# Usage: .\run.ps1 serve | chat | attach | ask "your goal"
+# Usage: ./run.ps1 serve | chat | attach | ask "your goal"
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -774,10 +774,10 @@ if ($args.Count -eq 0) {
     Write-Host "  ArcClaw Agent Kernel"
     Write-Host ""
     Write-Host "  USAGE"
-    Write-Host "    .\run.ps1 serve                    Start HTTP + MCP server on :8080"
-    Write-Host "    .\run.ps1 chat                     Start interactive REPL"
-    Write-Host "    .\run.ps1 ask 'your goal here'     Run one-shot task and exit"
-    Write-Host "    .\run.ps1 attach                   Start Telegram daemon"
+    Write-Host "    ./run.ps1 serve                    Start HTTP + MCP server on :8080"
+    Write-Host "    ./run.ps1 chat                     Start interactive REPL"
+    Write-Host "    ./run.ps1 ask 'your goal here'     Run one-shot task and exit"
+    Write-Host "    ./run.ps1 attach                   Start Telegram daemon"
     Write-Host ""
     Write-Host "  OPTIONS (append to any command)"
     Write-Host "    --role coordinator|researcher|architect|synthesizer|debugger"
