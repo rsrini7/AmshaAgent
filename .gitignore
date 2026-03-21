@@ -43,3 +43,4 @@ data/
 # Environment Variables
 .env
 .env.local
+.env.build*
