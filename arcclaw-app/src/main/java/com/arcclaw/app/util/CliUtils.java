@@ -48,9 +48,11 @@ public class CliUtils {
         ),
         new VarSpec(
             "ARCCLAW_API_KEY_INTERNAL",
-            "Bearer token for ArcClaw's REST API.",
-            "Set any secret string, e.g.:",
-            "  ARCCLAW_API_KEY_INTERNAL=my-secret-api-key-changeme"
+            "Bearer token for ArcClaw's REST API (used in Authorization: Bearer <token> header).",
+            "Generate a strong random key with:",
+            "  Linux/macOS:  openssl rand -base64 32",
+            "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
+            "Then add:  ARCCLAW_API_KEY_INTERNAL=<generated value>"
         ),
     };
 
