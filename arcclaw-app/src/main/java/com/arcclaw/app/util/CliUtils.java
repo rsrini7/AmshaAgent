@@ -199,6 +199,20 @@ public class CliUtils {
         boolean hasUserIds = isSet("ARCCLAW_TELEGRAM_ALLOWED_USER_IDS");
         boolean hasUsers   = isSet("ARCCLAW_TELEGRAM_ALLOWED_USERS");
 
+        // Case 0: nothing Telegram-related set at all — gentle info nudge
+        if (!enabled && !hasToken && !hasUserIds && !hasUsers) {
+            System.err.println();
+            System.err.println("  INFO: Telegram channel is not configured (optional).");
+            System.err.println("        To enable: set these in your .env and run ./run.sh attach:");
+            System.err.println("          ARCCLAW_TELEGRAM_ENABLED=true");
+            System.err.println("          TELEGRAM_BOT_TOKEN=<token from @BotFather>");
+            System.err.println("          ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>");
+            System.err.println("          ARCCLAW_TELEGRAM_ALLOWED_USERS=<your @username without @>");
+            System.err.println("        Continuing in HTTP/MCP-only mode.");
+            System.err.println();
+            return;
+        }
+
         // Case 1: explicitly enabled but vars missing
         if (enabled) {
             List<String> missingKeys = new ArrayList<>();

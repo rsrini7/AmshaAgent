@@ -759,7 +759,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 [tasks.dist]
 description = "Assemble dist/ folder: native exe + .env.example + vec0 extension + run instructions"
 dir = "{{config_root}}"
-quiet = true
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
