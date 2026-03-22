@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -92,8 +93,8 @@ class AgentSessionServiceTest {
         mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
         
-        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), any(), any(AutonomyLevel.class), anyString(), any(Callable.class)))
-                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(5)).call());
+        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), any(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
 
         // Ensure session exists by default so we don't return 404 in validateSession.
         // Marked lenient to avoid UnnecessaryStubbingException in tests that don't call validateSession.
@@ -118,9 +119,10 @@ class AgentSessionServiceTest {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Finished.class);
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
-        when(responseMapper.mapResult(result, false)).thenReturn(Response.ok().build());
+        when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(Response.ok().build());
 
         Response response = service.runSync("sess1", request);
+        assertNotNull(response, "Response should not be null");
         assertEquals(200, response.getStatus());
     }
 
@@ -129,9 +131,10 @@ class AgentSessionServiceTest {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Failed.class);
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
-        when(responseMapper.mapResult(result, false)).thenReturn(Response.status(451).build());
+        when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(Response.status(451).build());
 
         Response response = service.runSync("sess1", request);
+        assertNotNull(response, "Response should not be null");
         assertEquals(451, response.getStatus());
     }
 

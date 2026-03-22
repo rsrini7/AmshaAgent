@@ -37,7 +37,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = key-internal-changeme
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Session for cron scheduling tests
@@ -191,7 +191,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "deletecron 00000000-dead-beef-0000-000000000000",
     "agentRole": "coordinator",
-    "maxIterations": 1
+    "maxIterations": 5
 }
 
 ###

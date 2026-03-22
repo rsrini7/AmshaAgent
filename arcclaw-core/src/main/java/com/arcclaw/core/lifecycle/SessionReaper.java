@@ -27,6 +27,13 @@ import jakarta.transaction.Transactional;
 
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.
+ * <p>
+ * Transaction pattern — mirrors AgentCronRepository WAL-safe split:
+ * - Reads use NOT_SUPPORTED (no write lock acquired)
+ * - Writes use REQUIRED (atomic micro-short transactions per row)
+ * - Scheduled entry points have NO @Transactional (delegate to split methods)
+ * This prevents SQLITE_BUSY / "cannot commit - no transaction is active" errors
+ * caused by Narayana XA wrapping reads that SQLite has already auto-committed.
  */
 @ApplicationScoped
 public class SessionReaper {
@@ -84,14 +91,15 @@ public class SessionReaper {
                         return;
                     }
                 } else {
-                    log.errorf("Non-retryable error during onStartup zombie recovery: %s", e.getMessage());
+                    log.errorf("Non-retryable error during onStartup zombie recovery: %s",
+                            e.getMessage());
                     log.debugf(e, "Full stacktrace for non-retryable error in onStartup zombie recovery");
                     return;
                 }
             }
         }
-        log.errorf("Failed onStartup zombie recovery after %d retries: %s", maxRetries,
-                lastEx != null ? lastEx.getMessage() : "unknown");
+        log.errorf("Failed onStartup zombie recovery after %d retries: %s",
+                maxRetries, lastEx != null ? lastEx.getMessage() : "unknown");
         log.debugf(lastEx, "Full stacktrace for retry exhaustion in onStartup zombie recovery");
     }
 
@@ -143,12 +151,16 @@ public class SessionReaper {
         }
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // GC SWEEP — terminates expired sessions
+    // ──────────────────────────────────────────────────────────────
+
     /**
      * Scheduled GC sweep — terminates sessions whose heartbeat exceeds the TTL.
      * Skips sessions that are AWAITING_APPROVAL (handled by sweepTimedOutApprovals).
+     * NO @Transactional — delegates to split read/write methods.
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
-    @Transactional
     public void gcSweep() {
         if (shuttingDown) return;
         if (heartbeatTracker.activeSessionCount() == 0) return;
@@ -157,11 +169,7 @@ public class SessionReaper {
         log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
                 sessionTtlMinutes, cutoff);
 
-        Set<String> awaitingApprovalIds = em.createQuery(
-                "SELECT c.sessionId FROM AgentCheckpoint c WHERE c.status = :status", String.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .getResultStream()
-                .collect(Collectors.toSet());
+        Set<String> awaitingApprovalIds = findAwaitingApprovalIds();
 
         heartbeatTracker.forEachExpired(cutoff, sessionId -> {
             if (awaitingApprovalIds.contains(sessionId)) {
@@ -174,50 +182,71 @@ public class SessionReaper {
         });
     }
 
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    Set<String> findAwaitingApprovalIds() {
+        em.clear();
+        return em.createQuery(
+                "SELECT c.sessionId FROM AgentCheckpoint c WHERE c.status = :status",
+                String.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .getResultStream()
+                .collect(Collectors.toSet());
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // APPROVAL TIMEOUT SWEEP — terminates stale AWAITING_APPROVAL sessions
+    // ──────────────────────────────────────────────────────────────
+
     /**
      * Terminate sessions that have been AWAITING_APPROVAL for too long.
-     * Marks the checkpoint FAILED and notifies the user via their channel.
+     * Marks checkpoint FAILED and notifies user via their channel.
+     * NO @Transactional — delegates to split read/write methods.
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
-    @Transactional
     public void sweepTimedOutApprovals() {
         if (shuttingDown) return;
 
+        List<AgentCheckpoint> timedOut = findTimedOutApprovals();
+        if (timedOut.isEmpty()) return;
+
+        for (var cp : timedOut) {
+            log.warnf("Approval timeout: session=%s role=%s — marking FAILED",
+                    cp.getSessionId(), cp.getAgentRole());
+            markApprovalTimedOut(cp);
+        }
+    }
+
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    List<AgentCheckpoint> findTimedOutApprovals() {
+        em.clear();
         LocalDateTime cutoff = LocalDateTime.now()
                 .minus(Duration.ofMinutes(approvalTimeoutMinutes));
-
-        List<AgentCheckpoint> timedOut = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", cutoff)
                 .getResultList();
+    }
 
-        if (timedOut.isEmpty()) return;
+    @Transactional(Transactional.TxType.REQUIRED)
+    void markApprovalTimedOut(AgentCheckpoint cp) {
+        cp.setStatus(CheckpointStatus.FAILED);
+        cp.setFailedAt(Instant.now());
+        cp.setFailReason("Approval timed out after " + approvalTimeoutMinutes + " minutes.");
+        em.merge(cp);
 
-        Instant now = Instant.now();
-        for (var cp : timedOut) {
-            log.warnf("Approval timeout: session=%s role=%s — marking FAILED", 
-                    cp.getSessionId(), cp.getAgentRole());
+        // fireAsync — non-blocking, does not enlist in SQLite XA transaction
+        approvalTimedOutEvent.fireAsync(new ApprovalTimedOutEvent(
+                cp.getSessionId(),
+                cp.getChannelPlatformId(),
+                cp.getChannelType(),
+                cp.getPendingToolName(),
+                approvalTimeoutMinutes
+        ));
 
-            // 1. Mark checkpoint FAILED
-            cp.setStatus(CheckpointStatus.FAILED);
-            cp.setFailedAt(now);
-            cp.setFailReason("Approval timed out after " + approvalTimeoutMinutes + " minutes.");
-            em.merge(cp);
-
-            // 2. Notify user via their channel (fire-and-forget, must not roll back TX)
-            approvalTimedOutEvent.fireAsync(new ApprovalTimedOutEvent(
-                    cp.getSessionId(),
-                    cp.getChannelPlatformId(),
-                    cp.getChannelType(),
-                    cp.getPendingToolName(),
-                    approvalTimeoutMinutes
-            ));
-
-            // 3. Clean up session
-            workspaceManager.terminateSession(cp.getSessionId());
-            heartbeatTracker.removeHeartbeat(cp.getSessionId());
-        }
+        workspaceManager.terminateSession(cp.getSessionId());
+        heartbeatTracker.removeHeartbeat(cp.getSessionId());
     }
 }
