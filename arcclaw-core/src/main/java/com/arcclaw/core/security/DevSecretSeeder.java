@@ -46,9 +46,14 @@ public class DevSecretSeeder {
      * Seeds host OS environment variables into the SecretVault at startup.
      */
     public void onStart(@Observes @Priority(100) StartupEvent ev) {
-        // 1. Mandatory system key seeding for dev/test
+        // 1. Mandatory system key seeding for dev/test (random key, ephemeral)
         if ("dev".equals(profile) || "test".equals(profile)) {
             seedAuditHmacKey();
+        }
+
+        // 2. Reads ARCCLAW_AUDIT_HMAC_KEY from .env, same key every boot (stable)
+        if (autoSeedEnabled && !"dev".equals(profile) && !"test".equals(profile)) {
+            seedAuditHmacKeyFromEnv();
         }
 
         if (!autoSeedEnabled) {
@@ -124,6 +129,31 @@ public class DevSecretSeeder {
         } finally {
             // Zero the raw bytes before garbage collection
             Arrays.fill(secretBytes, (byte) 0);
+        }
+    }
+
+    private void seedAuditHmacKeyFromEnv() {
+        String keyName = VaultConstants.AUDIT_HMAC_KEY_NAME;
+        if (secretVault.systemKeyExists(keyName)) {
+            log.debugf("DevSecretSeeder: %s already in vault, skipping.", keyName);
+            return;
+        }
+        String envValue = ConfigProvider.getConfig()
+                .getOptionalValue("ARCCLAW_AUDIT_HMAC_KEY", String.class)
+                .orElse(null);
+        if (envValue == null || envValue.isBlank()) {
+            log.warnf("DevSecretSeeder: ARCCLAW_AUDIT_HMAC_KEY not set — " +
+                    "vault key cannot be seeded. Set it in .env.");
+            return;
+        }
+        byte[] keyBytes = java.util.Base64.getDecoder().decode(envValue);
+        try {
+            secretVault.storeSystemKey(keyName, keyBytes);
+            log.infof("DevSecretSeeder: seeded %s from ARCCLAW_AUDIT_HMAC_KEY env var.", keyName);
+        } catch (Exception e) {
+            log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, e.getMessage());
+        } finally {
+            Arrays.fill(keyBytes, (byte) 0);
         }
     }
 }
