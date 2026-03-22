@@ -125,7 +125,7 @@ if ($IsWindows) {
         $rcFile     = "$env:HOME/.bashrc"
         $shellName  = 'bash'
         $activateLine   = 'eval "$(~/.local/bin/mise activate bash)"'
-        $completionLine = 'eval "$(mise completion bash)"'
+        $completionLine = 'eval "$(mise completion bash --include-bash-completion-lib)"'
     }
     Write-Host "-- Shell detected: $shellName -> $rcFile"
 
