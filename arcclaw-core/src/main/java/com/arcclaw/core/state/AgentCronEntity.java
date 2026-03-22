@@ -78,11 +78,19 @@ public class AgentCronEntity {
      * Canonical display string used by reflexes and tools.
      */
     public String toDisplayString() {
+        String nextFire = (status == CronStatus.COMPLETED
+                || status == CronStatus.FAILED
+                || status == CronStatus.SKIPPED
+                || nextFireTime == null)
+                ? "N/A"
+                : InstantToTextConverter.format(nextFireTime);
+
         return String.format(
                 "ID: %s | Cron: %s | TZ: %s | RunOnce: %s | " +
                 "Goal: %s | Next fire: %s | Status: %s",
                 id, cronExpression, timezone, runOnce,
-                goal, nextFireTime, status
+                goal, nextFire, status
         );
     }
+
 }
