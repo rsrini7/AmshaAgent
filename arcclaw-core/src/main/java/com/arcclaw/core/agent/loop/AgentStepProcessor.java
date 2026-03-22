@@ -116,13 +116,27 @@ public class AgentStepProcessor {
             log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, e.getMessage());
             boolean isToolUseFailed = e.getMessage() != null
                     && e.getMessage().contains("tool_use_failed");
+
             if (isToolUseFailed) {
-                log.errorf("[STATE-MACHINE] session %s: tool_use_failed — failing fast", sessionId);
-                return StepDecision.terminal(AgentResult.failed(
-                        "The requested operation is not supported. " +
-                        "Only 'view' and 'list' are valid commands for the github tool.",
-                        AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
+                llmSchemaErrorCount++;
+                if (llmSchemaErrorCount >= 2) {
+                    log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                    return StepDecision.terminal(AgentResult.failed(
+                            "The agent could not complete this request due to repeated tool schema errors. " +
+                            "Try rephrasing your goal.",
+                            AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
+                }
+                
+                log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
+                        sessionId, llmSchemaErrorCount);
+                return StepDecision.retryEngine(
+                        "System: Your previous tool call was rejected due to a schema type mismatch: " +
+                        e.getMessage() +
+                        ". Ensure boolean fields use literal true/false (not \"true\"/\"false\" as strings). " +
+                        "Correct the types and retry.",
+                        llmSchemaErrorCount);
             }
+
             llmSchemaErrorCount++;
             if (llmSchemaErrorCount >= 2) {
                 log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
@@ -130,6 +144,7 @@ public class AgentStepProcessor {
                         "SCHEMA_ERROR", AgentResult.FailureCategory.SCHEMA_ERROR,
                         List.copyOf(history)));
             }
+
             return StepDecision.retryEngine(
                     "System: Your previous tool call was rejected. Error: " + e.getMessage() +
                     ". Please review the tool schema and correct your arguments.",

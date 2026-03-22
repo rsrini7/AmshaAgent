@@ -37,7 +37,11 @@ public class AgentResponseMapper {
             case USER_DENIED -> Response.status(422)
                     .entity(new ErrorResponse(f.reason(), "USER_DENIED")).build();
             case SCHEMA_ERROR -> Response.status(422)
-                    .entity(new ErrorResponse(f.reason(), "SCHEMA")).build();
+                    .entity(new ErrorResponse(
+                            "The agent encountered a schema error and could not complete the request. " +
+                                    "Try rephrasing your goal or simplifying the parameters.",
+                            "SCHEMA"))
+                    .build();
             case SYSTEM_ERROR -> Response.serverError()
                     .entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
             case RATE_LIMIT -> Response.status(429)

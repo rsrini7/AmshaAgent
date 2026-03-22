@@ -809,7 +809,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:SQLITE_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" serve
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -828,7 +828,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:SQLITE_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" chat
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -848,7 +848,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:SQLITE_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" attach
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -875,7 +875,7 @@ if (-not (Test-Path $runner)) {
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $cmdArgs = @('ask', $goal)
 if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
-$env:ARCCLAW_RAG_VEC_EXTENSION_PATH = "./lib/vec0"
+$env:SQLITE_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" @cmdArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1090,7 +1090,7 @@ if (Test-Path $envFile) {
         [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
     }
 }
-if (-not $env:ARCCLAW_RAG_VEC_EXTENSION_PATH) { $env:ARCCLAW_RAG_VEC_EXTENSION_PATH = './lib/vec0' }
+if (-not $env:SQLITE_VEC_PATH) { $env:SQLITE_VEC_PATH = './lib/vec0' }
 if (-not $env:ARCCLAW_DATA_DIR)               { $env:ARCCLAW_DATA_DIR = './data' }
 if ($args.Count -eq 0) {
     Write-Host ""
@@ -1263,7 +1263,7 @@ if [[ -f "$SCRIPT_DIR/.env" ]]; then
     done < "$SCRIPT_DIR/.env"
 fi
 
-export ARCCLAW_RAG_VEC_EXTENSION_PATH="${ARCCLAW_RAG_VEC_EXTENSION_PATH:-./lib/vec0}"
+export SQLITE_VEC_PATH="${SQLITE_VEC_PATH:-./lib/vec0}"
 export ARCCLAW_DATA_DIR="${ARCCLAW_DATA_DIR:-./data}"
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 if [[ $# -eq 0 ]]; then

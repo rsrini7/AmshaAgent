@@ -67,6 +67,7 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                     sqliteConn.getDatabase().enable_load_extension(true);
 
                     try (Statement vecStmt = connection.createStatement()) {
+                        log.infof("FtsConnectionInterceptor: loading sqlite-vec from path: %s", vecExtensionPath);
                         vecStmt.execute("SELECT load_extension('" + vecExtensionPath + "')");
                         vectorSearchEnabled.compareAndSet(false, true);
                         log.info("FtsConnectionInterceptor: sqlite-vec loaded successfully.");
