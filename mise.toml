@@ -8,7 +8,7 @@
 #
 # BOOTSTRAP SEQUENCE (fresh clone):
 #   1. mise trust --all
-#   2. mise install              ← installs pwsh, java, maven, usage
+#   2. mise install              ← installs pwsh, java, maven
 #   3. mise run setup:profile    ← writes shell profile (activate + completion)
 #   4. reload your shell
 #   5. mise run setup            ← .env, chmod mvnw, JDKs
@@ -51,7 +51,7 @@ run = [
     "echo   ===========================",
     "echo.",
     "echo   BOOTSTRAP SEQUENCE",
-    "echo   1. mise install               installs pwsh + java + maven + usage",
+    "echo   1. mise install               installs pwsh + java + maven",
     "echo   2. mise run setup:profile     writes shell profile activate + completion",
     "echo   3. reload your shell",
     "echo   4. mise run setup             .env + chmod mvnw + JDKs",
