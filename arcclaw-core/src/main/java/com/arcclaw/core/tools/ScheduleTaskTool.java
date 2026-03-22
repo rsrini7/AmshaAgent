@@ -157,9 +157,14 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "goal is required.");
         }
 
+        // Only flag "it" if the entire goal is under 6 words — likely no context
+        boolean hasNakedIt = goal.split("\\s+").length < 6
+                && goal.toLowerCase().matches(".*\\bit\\b.*");
+
+        boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
 
         // Step 2 — Naked pronoun guard
-        if (NAKED_PRONOUN.matcher(goal).find()) {
+        if (hasNakedPronoun) {
             return ToolResponse.failure(422,
                     "Goal contains unresolved references (e.g., 'it', 'the code'). " +
                     "Rewrite with explicit technical context before scheduling. " +

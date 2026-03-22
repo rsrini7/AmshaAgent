@@ -20,20 +20,21 @@ public sealed interface ChannelCommand
                 ChannelCommand.Halt,
                 ChannelCommand.Reset,
                 ChannelCommand.History,
-                ChannelCommand.ListTasks,
+                ChannelCommand.CronTasks,
+                ChannelCommand.DeleteCron,
                 ChannelCommand.Unknown {
 
     // Single compiled Pattern — avoids repeated compilation per message.
     // The inner group (\\S+) matches the first non-whitespace token after the command.
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(approve|deny|status|halt|reset|history|cron|crons|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
+            "^/(approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
             Pattern.CASE_INSENSITIVE
     );
 
     /**
      * Returns {@code true} for commands that alter agent state or authorise tool
      * execution (Approve, Deny, Halt, Reset). Returns {@code false} for read-only
-     * or informational commands (Status, ListTasks, Unknown).
+     * or informational commands (Status, CronTasks, Unknown).
      */
     default boolean isControlCommand() {
         return this instanceof Approve
@@ -61,7 +62,7 @@ public sealed interface ChannelCommand
             trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
         }
 
-        var matcher = CMD_PATTERN.matcher(text.trim());
+        var matcher = CMD_PATTERN.matcher(trimmed);
         if (!matcher.matches()) {
             return new Unknown(text);
         }
@@ -76,7 +77,14 @@ public sealed interface ChannelCommand
             case "halt"    -> new Halt();
             case "reset"   -> new Reset();
             case "history" -> new History();
-            case "list", "listtask", "listtasks" -> new ListTasks();
+            case "crons"    -> new CronTasks();
+            case "cron"     -> "delete".equalsIgnoreCase(arg)
+                        ? new DeleteCron(Optional.ofNullable(
+                              text.trim().split("\\s+").length > 2
+                              ? text.trim().split("\\s+")[2] : null))
+                        : new CronTasks();
+            case "deletecron" -> new DeleteCron(optArg);
+            case "listtask", "listtasks", "crontask", "crontasks" -> new CronTasks();
             default -> new Unknown(text);
         };
     }
@@ -111,10 +119,17 @@ public sealed interface ChannelCommand
     record Reset() implements ChannelCommand {}
 
     /** Lists scheduled cron tasks for the current user. */
-    record ListTasks() implements ChannelCommand {}
+    record CronTasks() implements ChannelCommand {}
 
     /** Shows conversation history for the current session. */
     record History() implements ChannelCommand {}
+
+    /**
+     * Deletes a scheduled cron task.
+     *
+     * @param cronId the ID of the cron task to delete
+     */
+    record DeleteCron(Optional<String> cronId) implements ChannelCommand {}
 
     /**
      * Fallback for any text that does not match a known command.

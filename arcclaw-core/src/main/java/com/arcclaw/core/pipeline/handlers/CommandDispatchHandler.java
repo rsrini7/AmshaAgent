@@ -62,8 +62,15 @@ public class CommandDispatchHandler implements MessageHandler {
                 dispatch(context, "/reset");
                 yield HandleResult.STOP;
             }
-            case ChannelCommand.ListTasks _ -> {
-                dispatch(context, "/list");
+            case ChannelCommand.CronTasks _ -> {
+                dispatch(context, "/crons");
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.DeleteCron dc -> {
+                String input = dc.cronId()
+                        .map(id -> "deletecron " + id)
+                        .orElse("deletecron");
+                dispatch(context, input);
                 yield HandleResult.STOP;
             }
             case ChannelCommand.Unknown u -> {

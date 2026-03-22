@@ -22,11 +22,14 @@ class AuditServiceTest {
     @Mock
     ComplianceAuditService complianceAuditService;
 
+    @Mock 
+    AuditEventRepository auditEventRepository;
+
     AuditService auditService;
 
     @BeforeEach
     void setUp() {
-        auditService = new AuditService(telemetryAuditService, complianceAuditService);
+        auditService = new AuditService(telemetryAuditService, complianceAuditService, auditEventRepository);
     }
 
     @Test

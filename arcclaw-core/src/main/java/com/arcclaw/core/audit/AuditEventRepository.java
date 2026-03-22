@@ -91,4 +91,15 @@ public class AuditEventRepository {
                 .getResultList();
     }
 
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public boolean hasEventInSession(String sessionId, SecurityEventType eventType) {
+        Long count = em.createQuery(
+                "SELECT COUNT(a) FROM AuditEvent a " +
+                "WHERE a.sessionId = :sid AND a.eventType = :type",
+                Long.class)
+            .setParameter("sid", sessionId)
+            .setParameter("type", eventType.name())
+            .getSingleResult();
+        return count > 0;
+    }
 }

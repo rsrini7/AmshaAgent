@@ -37,7 +37,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
     targets = {
         AgentResponseMapper.AgentResponse.class,
         AgentResponseMapper.ApprovalRequiredResponse.class,
-        AgentResponseMapper.ApprovalRequest.class,
         AgentResponseMapper.ErrorResponse.class,
         AgentResult.Finished.class,
         AgentResult.AwaitingApproval.class,

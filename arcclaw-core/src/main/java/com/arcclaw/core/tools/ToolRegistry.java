@@ -14,6 +14,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -117,6 +118,33 @@ public class ToolRegistry {
         var tool = findTool(toolName)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
+        // Role-capability hard block
+        // Schema filter is soft (LLM can hallucinate past it).
+        // This is the hard enforcement layer — role must explicitly own the capability.
+        String agentRole = WorkspaceContext.agentRole();
+        if (agentRole != null) {
+            try {
+                AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
+                boolean roleAllowed = role.definition().capabilities().stream()
+                        .anyMatch(cap -> cap.toolName().equals(toolName));
+                if (!roleAllowed) {
+                    log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
+                            agentRole, toolName);
+                    String userId = (String) MDC.get(MdcKeys.USER_ID);
+                    auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+                            SecurityEventType.TOOL_BLOCKED,
+                            "tool=" + toolName + " reason=ROLE_CAPABILITY_MISMATCH role=" + agentRole);
+                    return ToolResponse.failure(403,
+                            "Tool '" + toolName + "' is not available for role '" + agentRole + "'. "
+                            + "This action requires a different agent role.");
+                }
+            } catch (IllegalArgumentException e) {
+                // Unknown role — fail closed
+                log.warnf("SECURITY: Unknown agentRole=%s — blocking tool=%s", agentRole, toolName);
+                return ToolResponse.failure(403, "Unknown agent role: " + agentRole);
+            }
+        }
+
         // Governance check
         var level = WorkspaceContext.autonomy();
         var requiredOp = tool.requiredOperation();
@@ -139,9 +167,9 @@ public class ToolRegistry {
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
-            String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-            auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+            String mdcUserId = (String) MDC.get(MdcKeys.USER_ID);
+            String mdcAgentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
+            auditService.record(WorkspaceContext.requireSessionId(), mdcUserId, mdcAgentRole,
                     SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
 
             throw new SecurityException(
@@ -167,9 +195,9 @@ public class ToolRegistry {
 
                 String postProcessedOutput = tool.postProcessOutput(initialOutput, params); // if you added the hook
 
-                String userId = (String) MDC.get(MdcKeys.USER_ID);
-                String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+                String mdcUserId = (String) MDC.get(MdcKeys.USER_ID);
+                String mdcAgentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
+                auditService.record(WorkspaceContext.requireSessionId(), mdcUserId, mdcAgentRole,
                         SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
 
                 return ToolResponse.success(postProcessedOutput);
@@ -196,9 +224,9 @@ public class ToolRegistry {
                 log.errorf("Tool '%s' execution failed: %s", toolName, raw);
                 log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName,
                         WorkspaceContext.requireSessionId());
-                String userId = (String) MDC.get(MdcKeys.USER_ID);
-                String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+                String mdcUserId = (String) MDC.get(MdcKeys.USER_ID);
+                String mdcAgentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
+                auditService.record(WorkspaceContext.requireSessionId(), mdcUserId, mdcAgentRole,
                         SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
                 return ToolResponse.failure(1, friendly);
             }
@@ -207,9 +235,9 @@ public class ToolRegistry {
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         ToolResponse response = tool.execute(params);
 
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
-        String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-        auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
+        String mdcUserId = (String) MDC.get(MdcKeys.USER_ID);
+        String mdcAgentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
+        auditService.record(WorkspaceContext.requireSessionId(), mdcUserId, mdcAgentRole,
                 SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
 
         return response;
