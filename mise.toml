@@ -284,27 +284,26 @@ $ErrorActionPreference = 'Stop'
 
 $configValue    = 'mise.pwsh.toml'
 $varLine        = "`$env:MISE_DEFAULT_CONFIG_FILENAME = '$configValue'"
-$commentConfig  = '# mise — ArcClaw: load pwsh task config (added by setup:profile:win)'
+$commentConfig  = '# mise - ArcClaw: load pwsh task config (added by setup:profile:win)'
 $completionLine = 'mise completion powershell | Out-String | Invoke-Expression'
-$commentCompl   = '# mise — ArcClaw: tab completion (added by setup:profile:win)'
+$commentCompl   = '# mise - ArcClaw: tab completion (added by setup:profile:win)'
 
-# ── Resolve $PROFILE path ─────────────────────────────────────────────────────
+# Resolve $PROFILE path
 $profilePath = $PROFILE
 if (-not $profilePath) {
     $profilePath = "$env:USERPROFILE\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1"
 }
 New-Item -ItemType Directory -Force (Split-Path $profilePath) | Out-Null
-Write-Host "── Profile: $profilePath ────────────────────────────────────────────────────"
+Write-Host "-- Profile: $profilePath"
 
-# ── Step 1: MISE_DEFAULT_CONFIG_FILENAME — independent idempotency check ──────
+# Step 1: MISE_DEFAULT_CONFIG_FILENAME - independent idempotency check
 $profileContent = if (Test-Path $profilePath) { [System.IO.File]::ReadAllText($profilePath) } else { '' }
 if ($profileContent -match 'MISE_DEFAULT_CONFIG_FILENAME') {
     Write-Host "i   MISE_DEFAULT_CONFIG_FILENAME already present -- skipping."
 } else {
     if ($profileContent -match 'mise activate') {
-        # Insert BEFORE the first mise activate line
-        $lines   = $profileContent -split "`n"
-        $output  = [System.Collections.Generic.List[string]]::new()
+        $lines    = $profileContent -split "`n"
+        $output   = [System.Collections.Generic.List[string]]::new()
         $inserted = $false
         foreach ($line in $lines) {
             if (-not $inserted -and $line -match 'mise activate') {
@@ -319,14 +318,13 @@ if ($profileContent -match 'MISE_DEFAULT_CONFIG_FILENAME') {
     } else {
         Add-Content $profilePath "`n$commentConfig`n$varLine"
         Write-Host "OK  MISE_DEFAULT_CONFIG_FILENAME appended."
-        Write-Host ""
         Write-Host "    WARNING: No 'mise activate' line found in profile."
         Write-Host "    Make sure your profile also contains:"
         Write-Host "      (`&mise activate pwsh) | Out-String | Invoke-Expression"
     }
 }
 
-# ── Step 2: mise completion — independent idempotency check ───────────────────
+# Step 2: mise completion - independent idempotency check
 $profileContent = if (Test-Path $profilePath) { [System.IO.File]::ReadAllText($profilePath) } else { '' }
 if ($profileContent -match 'mise completion') {
     Write-Host "i   mise completion already present -- skipping."
@@ -335,11 +333,10 @@ if ($profileContent -match 'mise completion') {
     Write-Host "OK  mise completion appended."
 }
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# Summary
 Write-Host ""
-Write-Host "── Written ──────────────────────────────────────────────────────────────────"
+Write-Host "-- Written --"
 Get-Content $profilePath | Select-String -Pattern 'MISE_DEFAULT_CONFIG_FILENAME|mise completion'
-Write-Host "─────────────────────────────────────────────────────────────────────────────"
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Reload:  . `$PROFILE"
