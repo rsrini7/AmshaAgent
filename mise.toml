@@ -67,6 +67,7 @@ Full setup guide for all platforms — Linux · macOS · WSL2 · Windows.
 
   See MISE_README.md section 3 for full documentation.
 '''
+quiet = true
 run = """
 #!/usr/bin/env sh
 cat << 'GUIDE'
@@ -178,6 +179,7 @@ is checked independently, no duplicates).
   Check: echo $MISE_DEFAULT_CONFIG_FILENAME
          mise run <TAB>   <- should list all tasks
 '''
+quiet = true
 run = """
 #!/usr/bin/env sh
 set -eu
@@ -276,6 +278,7 @@ to $PROFILE so mise always loads mise.pwsh.toml. Safe to re-run (idempotent
          mise run <TAB>   <- should list all tasks
 '''
 shell = "pwsh -NonInteractive -Command"
+quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 
