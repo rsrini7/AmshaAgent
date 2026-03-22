@@ -50,6 +50,63 @@ ArcClaw is the only enterprise-grade, Java-native, financially governed agent ke
 
 ---
 
+Further comparisons:
+
+Now I have rich data on every project. Here is the full expanded comparison:
+
+## The Complete \*Claw + Anti-Claw Ecosystem vs ArcClaw
+
+### The "Claw" Family (Security/Architecture-First Forks)
+
+| Agent | Language | Philosophy | Sandbox | Memory | Audit | Secret Mgmt |
+|---|---|---|---|---|---|---|
+| **ArcClaw**  [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt) | Java/Quarkus | Enterprise-grade governed agent kernel | ✅ Podman per-tool | ✅ SQLite FTS5 + vec0 RAG  | ✅ OTel + AuditService  | ✅ `@RequiresSecret` ephemeral env-file  [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt) |
+| **OpenClaw**  [mindstudio](https://www.mindstudio.ai/blog/what-is-openclaw-ai-agent/) | Node.js | Original viral hit; features > security | ✅ (basic) | ✅ SQLite vector | ❌ | ✅ Aquaman proxy |
+| **IronClaw** (NEAR AI)  [mexc](https://www.mexc.co/en-IN/news/788052) | Rust | TEE + cryptographic proof of execution | ✅ Isolated tools | ✅ PostgreSQL AES-256 | ✅ Full tool activity log | ✅ Runtime credential injection |
+| **NanoClaw**  [dextralabs](https://dextralabs.com/blog/top-openclaw-alternatives/) | Docker-first | "If it breaks, breaks inside a container" | ✅ Docker per-task | ❌ | ❌ | ❌ |
+| **NemoClaw** (NVIDIA)  [blog.crewai](https://blog.crewai.com/orchestrating-self-evolving-agents-with-crewai-and-nvidia-nemoclaw/) | NVIDIA OpenShell | Infra-layer policy enforcement, kernel-level | ✅ OS/kernel level | ❌ | ✅ (policy-level) | ✅ Privacy router |
+| **ZeroClaw**  [dev](https://dev.to/lightningdev123/zeroclaw-a-minimal-rust-based-ai-agent-framework-for-self-hosted-systems-5593) | Rust | Speed-first; 400× faster startup than Node | ❌ | ❌ | ❌ | ❌ |
+| **PicoClaw**  [pico-claw](https://pico-claw.com) | Go | Edge/IoT; runs on RISC-V, <10MB RAM | ❌ | ❌ | ❌ | ❌ |
+| **Moltis**  [everydev](https://www.everydev.ai/tools/openfang) | Rust | Observability-first; Prometheus/Grafana built-in | ✅ | ❌ | ✅ Metrics | ❌ |
+| **OpenFang**  [everydev](https://www.everydev.ai/tools/openfang) | Rust | Agent OS; 7 Hands + 16 security systems | ✅ WASM dual-metered | ✅ Knowledge graph | ✅ Merkle audit trail | ✅ Ed25519 manifest signing |
+
+### The "Anti-Claw" (Different Architecture Paradigm)
+
+| Agent | Language | Core Innovation | Best For | ArcClaw Comparison |
+|---|---|---|---|---|
+| **Hermes Agent** (Nous Research)  [yuv](https://yuv.ai/blog/hermes-agent) | Python | 3-tier memory: context → procedural Skill Docs (SKILL.md) → user-modeling via Honcho | Self-improving, personalized assistant | ArcClaw has RAG memory but lacks auto-synthesized persistent skill documents |
+| **ThePopeBot**  [aiagentstore](https://aiagentstore.ai/ai-agent/thepopebot) | GitHub Actions / Docker | Git-native; every action = a git commit, fully reversible memory | DevOps / CI-CD engineers | ArcClaw has OTel audit but not git-native reversible audit trail |
+| **Agent Zero**  [reddit](https://www.reddit.com/r/AgentsOfAI/comments/1r781cu/openclaw_ironclaw_are_ai_agents_currently_too/) | Python/Docker | Persistent Docker container spawns sub-agents (Coding, Terminal) for multitask | Reliable autonomous coding intern | ArcClaw has multi-agent roles; Agent Zero specialises in container-native sub-agent spawning |
+| **memU**  [till-freitag](https://till-freitag.com/blog/openclaw-alternatives-en) | Python | Hierarchical knowledge graph + proactive actions + token compression | Long-horizon personalised memory | ArcClaw memory is session-scoped + FTS5/vec0; memU graphs relationships across sessions |
+| **NanoBot**  [youtube](https://www.youtube.com/watch?v=ZyeBXy14IlY) | Python (4,000 lines) | Minimal and fully auditable for research; 22+ LLM providers | Research / transparency | ArcClaw is much larger enterprise-grade; NanoBot is minimal by design |
+
+## Where ArcClaw Stands Alone
+
+These capabilities exist **only in ArcClaw** across the entire ecosystem: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+
+- **Per-session USD hard + soft budget governance** with floor enforcement for zero-token reports — no other framework does this [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **JVM crash recovery** via `SessionReaper` zombie detection for `INPROGRESS`/`AWAITING_APPROVAL` checkpoints [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **CDI-scoped tenant isolation** — `WorkspaceScoped`, `ScopedValue`-bound `USERID` hard boundary that LLM parameters cannot override [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **Role-based HITL approval workflows** with per-tool `RequiresApprovalException` + approval timeout sweep [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **OTel traced audit** with `AuditService` across security events per session and agent role
+
+## ArcClaw's Closest Rival Per Dimension
+
+| Dimension | Closest Rival | Gap direction |
+|---|---|---|
+| Security depth | **IronClaw** (NEAR AI)  [mexc](https://www.mexc.co/en-IN/news/788052) | IronClaw adds TEE + cryptographic proof; ArcClaw has Podman + CDI scope |
+| Infra-layer enforcement | **NemoClaw** (NVIDIA)  [nvidia](https://www.nvidia.com/en-in/ai/nemoclaw/) | NemoClaw enforces at OS/kernel; ArcClaw at CDI/sandbox boundary |
+| Memory sophistication | **Hermes Agent**  [ubos](https://ubos.tech/news/nous-research-unveils-hermes-agent-multi%E2%80%91level-memory-ai-with-remote-terminal-access/) | Hermes auto-synthesizes SKILL.md procedural docs; ArcClaw has FTS5/vec0 RAG |
+| Audit trail | **ThePopeBot**  [aiagentstore](https://aiagentstore.ai/ai-agent/thepopebot) | ThePopeBot's every action = git commit reversible; ArcClaw uses OTel spans |
+| Agent OS completeness | **OpenFang**  [everydev](https://www.everydev.ai/tools/openfang) | OpenFang ships 30 agents, 40 channels, 16 security systems in one binary; ArcClaw is more focused |
+| Observability | **Moltis**  [everydev](https://www.everydev.ai/tools/openfang) | Moltis has Prometheus/Grafana; ArcClaw uses OTel spans only |
+
+## Key Opportunity for ArcClaw
+
+The one feature from Hermes Agent worth strongly considering for ArcClaw is **auto-synthesized Skill Documents** — when an agent completes a complex task, it writes a `SKILL.md` to a searchable library. Given you already have SQLite FTS5 + vec0 RAG in place, this would be a natural Phase 6x addition: auto-persist successful agent task chains as retrievable procedural memory, making ArcClaw's agents self-improving across sessions. [marktechpost](https://www.marktechpost.com/2026/02/26/nous-research-releases-hermes-agent-to-fix-ai-forgetfulness-with-multi-level-memory-and-dedicated-remote-terminal-access-support/)
+
+
+---
 
 
 Grok:
