@@ -1235,7 +1235,7 @@ The following environment variables are read from `.env` at startup:
 | `ARCCLAW_PII_MODE` | no | `REDACT_AND_FORWARD` | PII handling mode: `REDACT_AND_FORWARD` (silent redact) or `BLOCK_AND_NOTIFY` (reject message) |
 | `OPENAI_API_KEY` | no | `dummy-key-to-bypass-validation` | Required if using OpenAI as the LLM provider (via `docker-compose.yaml` override) |
 | `OPENAI_MODEL` | no | `gpt-4o` | OpenAI model name when using OpenAI provider |
-| `EMBED_API_KEY` | no | — | API key for Jina or OpenAI embedding providers (`arcclaw.rag.embed-provider`) |
+| `ARCCLAW_EMBED_API_KEY` | no | — | API key for Jina or OpenAI embedding providers (`arcclaw.rag.embed-provider`) |
 
 ---
 

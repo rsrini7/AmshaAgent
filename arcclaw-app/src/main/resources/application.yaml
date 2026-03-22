@@ -251,13 +251,13 @@ arcclaw:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
   rag:
     context-chunks: 5
-    embed-provider: ${EMBED_PROVIDER:ollama}
-    embed-model: ${EMBED_MODEL:nomic-embed-text:v1.5}
-    embed-base-url: ${EMBED_BASE_URL:http://localhost:11434}
-    embed-api-key: ${EMBED_API_KEY:}
+    embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
+    embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
+    embed-base-url: ${ARCCLAW_EMBED_BASE_URL:http://localhost:11434}
+    embed-api-key: ${ARCCLAW_EMBED_API_KEY:}
     embed-timeout-seconds: 30
     # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
-    embed-dimensions: ${EMBED_DIMENSIONS:768}
+    embed-dimensions: ${ARCCLAW_EMBED_DIMENSIONS:768}
     vec-extension-path: "${SQLITE_VEC_PATH:./lib/vec0}"
   auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
   skills:
