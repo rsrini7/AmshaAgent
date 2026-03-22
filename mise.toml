@@ -53,10 +53,12 @@ Full setup guide for all platforms — Linux · macOS · WSL2 · Windows.
   Linux/macOS/WSL2 — MANUAL (add to ~/.bashrc or ~/.zshrc, ORDER MATTERS):
     export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml   # BEFORE mise activate
     eval "$(~/.local/bin/mise activate bash)"
+    eval "$(mise completion bash)"
 
   Windows pwsh — MANUAL (add to $PROFILE, ORDER MATTERS):
     $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml' # BEFORE mise activate
     (&mise activate pwsh) | Out-String | Invoke-Expression
+    mise completion powershell | Out-String | Invoke-Expression
 
   ONE-OFF (no profile change — run a task right now):
     mise --env bash tasks              # Linux / macOS / WSL2
@@ -105,18 +107,21 @@ cat << 'GUIDE'
   +--------------------------------------------------------------+
   |  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          |  <- FIRST
   |  eval "$(~/.local/bin/mise activate bash)"                   |  <- SECOND
+  |  eval "$(mise completion bash)"                              |  <- THIRD
   +--------------------------------------------------------------+
 
   zsh   -> ~/.zshrc
   +--------------------------------------------------------------+
   |  export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml          |  <- FIRST
   |  eval "$(~/.local/bin/mise activate zsh)"                    |  <- SECOND
+  |  eval "$(mise completion zsh)"                               |  <- THIRD
   +--------------------------------------------------------------+
 
   pwsh  -> $PROFILE
   +--------------------------------------------------------------+
   |  $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'        |  <- FIRST
   |  (&mise activate pwsh) | Out-String | Invoke-Expression      |  <- SECOND
+  |  mise completion powershell | Out-String | Invoke-Expression |  <- THIRD
   +--------------------------------------------------------------+
 
   After reloading your shell:
@@ -155,90 +160,96 @@ GUIDE
 
 [tasks."setup:profile:nix"]
 description = '''
-Linux/macOS/WSL2 only — auto-write MISE_DEFAULT_CONFIG_FILENAME to your shell
-profile so mise always loads mise.bash.toml. Safe to re-run (idempotent).
+Linux/macOS/WSL2 only — auto-write MISE_DEFAULT_CONFIG_FILENAME and mise
+completion to your shell profile. Safe to re-run (idempotent — each line
+is checked independently, no duplicates).
 
   Windows users: run `mise --env pwsh run setup:profile:win` instead.
 
   What this does:
     1. Detects your shell via $SHELL (bash or zsh)
     2. Finds the right rc file (~/.bashrc or ~/.zshrc)
-    3. Inserts the export line BEFORE the mise activate line
-    4. Prints exactly what was written and where
-    5. Tells you to reload — nothing else is touched
+    3. Inserts MISE_DEFAULT_CONFIG_FILENAME BEFORE the mise activate line
+    4. Appends `eval "$(mise completion <shell>)"` after activate
+    5. Each line is checked independently — re-running never duplicates
 
   Run:   mise run setup:profile:nix
   Then:  source ~/.bashrc   (or ~/.zshrc)
   Check: echo $MISE_DEFAULT_CONFIG_FILENAME
+         mise run <TAB>   <- should list all tasks
 '''
 run = """
 #!/usr/bin/env sh
 set -eu
 
 EXPORT_LINE='export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml'
-COMMENT='# mise — ArcClaw: load bash task config (added by setup:profile:nix)'
+COMMENT_CONFIG='# mise — ArcClaw: load bash task config (added by setup:profile:nix)'
+COMMENT_COMPLETION='# mise — ArcClaw: tab completion (added by setup:profile:nix)'
 
 # ── Detect rc file from $SHELL ────────────────────────────────────────────────
 case "${SHELL:-}" in
   */zsh)
     RC_FILE="$HOME/.zshrc"
     SHELL_NAME="zsh"
+    COMPLETION_LINE='eval "$(mise completion zsh)"'
     ACTIVATE_HINT='eval "$(~/.local/bin/mise activate zsh)"'
     ;;
   *)
     RC_FILE="$HOME/.bashrc"
     SHELL_NAME="bash"
+    COMPLETION_LINE='eval "$(mise completion bash)"'
     ACTIVATE_HINT='eval "$(~/.local/bin/mise activate bash)"'
     ;;
 esac
 
 echo "── Shell detected: $SHELL_NAME -> $RC_FILE ──────────────────────────────────"
 
-# ── Idempotency check ─────────────────────────────────────────────────────────
+# ── Step 1: MISE_DEFAULT_CONFIG_FILENAME — independent idempotency check ──────
 if [ -f "$RC_FILE" ] && grep -q 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"; then
-  echo "i   MISE_DEFAULT_CONFIG_FILENAME already present in $RC_FILE -- skipping."
-  echo ""
-  grep 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"
-  echo ""
-  echo "    If the value looks wrong, edit $RC_FILE manually."
-  exit 0
+  echo "i   MISE_DEFAULT_CONFIG_FILENAME already present — skipping."
+else
+  if [ -f "$RC_FILE" ] && grep -q 'mise activate' "$RC_FILE"; then
+    TMP=$(mktemp)
+    awk -v comment="$COMMENT_CONFIG" -v export_line="$EXPORT_LINE" '
+      !inserted && /mise activate/ {
+        print comment
+        print export_line
+        inserted=1
+      }
+      { print }
+    ' "$RC_FILE" > "$TMP"
+    mv "$TMP" "$RC_FILE"
+    echo "OK  MISE_DEFAULT_CONFIG_FILENAME inserted BEFORE mise activate."
+  else
+    printf '\\n%s\\n%s\\n' "$COMMENT_CONFIG" "$EXPORT_LINE" >> "$RC_FILE"
+    echo "OK  MISE_DEFAULT_CONFIG_FILENAME appended."
+    echo ""
+    echo "    WARNING: No 'mise activate' line found in $RC_FILE."
+    echo "    Make sure your profile also contains:"
+    echo "      $ACTIVATE_HINT"
+  fi
 fi
 
-# ── Write: export line must come BEFORE mise activate ────────────────────────
-# If rc file has a mise activate line, insert the export just before it.
-# Otherwise append to end of file.
-if [ -f "$RC_FILE" ] && grep -q 'mise activate' "$RC_FILE"; then
-  TMP=$(mktemp)
-  awk -v comment="$COMMENT" -v export_line="$EXPORT_LINE" '
-    !inserted && /mise activate/ {
-      print comment
-      print export_line
-      inserted=1
-    }
-    { print }
-  ' "$RC_FILE" > "$TMP"
-  mv "$TMP" "$RC_FILE"
-  echo "OK  Inserted BEFORE mise activate line in $RC_FILE"
+# ── Step 2: mise completion — independent idempotency check ───────────────────
+if [ -f "$RC_FILE" ] && grep -q 'mise completion' "$RC_FILE"; then
+  echo "i   mise completion already present — skipping."
 else
-  printf '\\n%s\\n%s\\n' "$COMMENT" "$EXPORT_LINE" >> "$RC_FILE"
-  echo "OK  Appended to $RC_FILE"
-  echo ""
-  echo "    WARNING: No 'mise activate' line found in $RC_FILE."
-  echo "    Make sure your profile also contains:"
-  echo "      $ACTIVATE_HINT"
+  printf '\\n%s\\n%s\\n' "$COMMENT_COMPLETION" "$COMPLETION_LINE" >> "$RC_FILE"
+  echo "OK  mise completion appended."
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "── Written ──────────────────────────────────────────────────────────────────"
-grep 'MISE_DEFAULT_CONFIG_FILENAME' "$RC_FILE"
+grep -E 'MISE_DEFAULT_CONFIG_FILENAME|mise completion' "$RC_FILE"
 echo "─────────────────────────────────────────────────────────────────────────────"
 echo ""
 echo "Next steps:"
 echo "  1. Reload:  source $RC_FILE"
-echo "  2. Verify:  echo MISE_DEFAULT_CONFIG_FILENAME (should be mise.bash.toml)"
-echo "  3. Run:     mise tasks          <- now shows all ArcClaw tasks"
-echo "              mise run setup      <- first-time project setup (JDKs, .env)"
+echo "  2. Verify:  echo MISE_DEFAULT_CONFIG_FILENAME"
+echo "              mise run <TAB>   <- should list all tasks"
+echo "  3. Run:     mise tasks"
+echo "              mise run setup   <- first-time project setup (JDKs, .env)"
 """
 
 # =============================================================================
@@ -255,8 +266,8 @@ echo "              mise run setup      <- first-time project setup (JDKs, .env)
 
 [tasks."setup:profile:win"]
 description = '''
-Windows only — auto-write MISE_DEFAULT_CONFIG_FILENAME to $PROFILE so mise
-always loads mise.pwsh.toml. Safe to re-run (idempotent).
+Windows only — auto-write MISE_DEFAULT_CONFIG_FILENAME and mise completion
+to $PROFILE. Safe to re-run (idempotent — each line checked independently).
 
   Must be run via:   mise --env pwsh run setup:profile:win
   Linux/macOS/WSL2:  use setup:profile:nix instead.

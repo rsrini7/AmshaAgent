@@ -202,6 +202,7 @@ All ArcClaw tasks live here. mise loads the right one automatically once
 ```bash
 export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml   # ← FIRST
 eval "$(~/.local/bin/mise activate bash)"             # ← SECOND
+eval "$(mise completion bash)"                        # ← THIRD
 ```
 
 **zsh → `~/.zshrc`**
@@ -209,6 +210,7 @@ eval "$(~/.local/bin/mise activate bash)"             # ← SECOND
 ```zsh
 export MISE_DEFAULT_CONFIG_FILENAME=mise.bash.toml   # ← FIRST
 eval "$(~/.local/bin/mise activate zsh)"              # ← SECOND
+eval "$(mise completion zsh)"                         # ← THIRD
 ```
 
 Reload: `source ~/.bashrc` or `source ~/.zshrc`
@@ -218,6 +220,7 @@ Reload: `source ~/.bashrc` or `source ~/.zshrc`
 ```powershell
 $env:MISE_DEFAULT_CONFIG_FILENAME = 'mise.pwsh.toml'           # ← FIRST
 (&mise activate pwsh) | Out-String | Invoke-Expression          # ← SECOND
+mise completion powershell | Out-String | Invoke-Expression     # ← THIRD
 ```
 
 Reload: `. $PROFILE`
@@ -372,24 +375,11 @@ mise run dev              # hot reload on :8080
 4. `mise install java@graalvm-community-25.0.2`
 5. `mise install usage` ← installs the tab completion engine
 
-### Tab completion (one-time per shell)
+### Tab completion
 
-After `mise run setup`, wire completions into your shell profile:
-
-```bash
-# bash — add to ~/.bashrc
-eval "$(mise completion bash)"
-
-# zsh — add to ~/.zshrc
-eval "$(mise completion zsh)"
-```
-
-```powershell
-# pwsh — add to $PROFILE
-mise completion powershell | Out-String | Invoke-Expression
-```
-
-Then reload and use:
+`setup:profile:nix` and `setup:profile:win` write both `MISE_DEFAULT_CONFIG_FILENAME`
+**and** `mise completion <shell>` to your profile in one step — no separate action needed.
+After reloading your shell:
 
 ```bash
 mise run <TAB>          # lists all tasks
@@ -397,8 +387,8 @@ mise run build<TAB>     # filters to build:*, build-app
 mise run dev:<TAB>      # filters to dev:chat, dev:ask, dev:kill ...
 ```
 
-> `usage` is listed in `[tools]` in `mise.bash.toml` and `mise.pwsh.toml` so it installs
-> automatically with `mise install` — no manual step needed.
+> Each line is written with its own idempotency check — re-running
+> `setup:profile:nix` or `setup:profile:win` never creates duplicates.
 
 ***
 
