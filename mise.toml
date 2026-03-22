@@ -8,7 +8,7 @@
 #
 # BOOTSTRAP SEQUENCE (fresh clone):
 #   1. mise trust --all
-#   2. mise install              ← installs pwsh, java, maven
+#   2. mise install              ← installs pwsh, java, maven, usage
 #   3. mise run setup:profile    ← writes shell profile (activate + completion)
 #   4. reload your shell
 #   5. mise run setup            ← .env, chmod mvnw, JDKs
@@ -51,7 +51,7 @@ run = [
     "echo   ===========================",
     "echo.",
     "echo   BOOTSTRAP SEQUENCE",
-    "echo   1. mise install               installs pwsh + java + maven",
+    "echo   1. mise install               installs pwsh + java + maven + usage",
     "echo   2. mise run setup:profile     writes shell profile activate + completion",
     "echo   3. reload your shell",
     "echo   4. mise run setup             .env + chmod mvnw + JDKs",
@@ -179,6 +179,9 @@ mise install java@temurin-25
 mise install java@graalvm-community-25.0.2 --quiet
 Write-Host '✅  Both JDKs installed.'
 # Add to the setup task after JDK installs:
+Write-Host 'Installing usage globally (required for tab completion)...'
+mise use --global github:jdx/usage@3.0.0
+Write-Host '✅  usage installed globally.'
 """
 
 [tasks."setup:env-check"]
