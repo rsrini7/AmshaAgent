@@ -149,7 +149,7 @@ ArcClaw ships three config files:
 |---|---|---|
 | `start` | Linux · macOS · WSL2 (sh) | Full setup guide for all platforms. `mise tasks` description readable everywhere — no `run` needed on Windows. |
 | `setup:profile:nix` | Linux · macOS · WSL2 (sh) | Auto-writes `MISE_DEFAULT_CONFIG_FILENAME` to `~/.bashrc` or `~/.zshrc`. Inserts export **before** `mise activate`. Idempotent. |
-| `setup:profile:win` | Windows (pwsh) | Auto-writes `MISE_DEFAULT_CONFIG_FILENAME` to `$PROFILE`. Lives in `mise.pwsh.toml`, stubbed in `mise.toml` for discoverability. Must run via `mise --env pwsh run setup:profile:win`. |
+| `setup:profile:win` | Windows (pwsh) | Auto-writes `MISE_DEFAULT_CONFIG_FILENAME` to `$PROFILE`. Runs in pwsh via `shell = "pwsh ..."` — just `mise run setup:profile:win`, no `--env` needed. |
 
 **Linux/macOS/WSL2 — quickest path:**
 
@@ -162,9 +162,9 @@ mise tasks                     # now shows all ArcClaw tasks
 **Windows — quickest path:**
 
 ```powershell
-mise --env pwsh run setup:profile:win   # auto-writes $PROFILE
+mise run setup:profile:win   # auto-writes $PROFILE (pwsh runs natively in mise.toml)
 . $PROFILE
-mise tasks                              # now shows all ArcClaw tasks
+mise tasks                   # now shows all ArcClaw tasks
 ```
 
 **Not sure / want to read first:**
@@ -330,7 +330,7 @@ mise run setup:profile:nix
 source ~/.bashrc              # or ~/.zshrc
 
 #    Windows — AUTO:
-#    mise --env pwsh run setup:profile:win
+#    mise run setup:profile:win
 #    . $PROFILE
 
 #    Any platform — need guidance first:
@@ -963,7 +963,7 @@ mise run setup:profile:nix
 source ~/.bashrc    # or ~/.zshrc
 
 # Windows — quickest fix:
-mise --env pwsh run setup:profile:win
+mise run setup:profile:win
 # then: . $PROFILE
 
 # Need guidance first:

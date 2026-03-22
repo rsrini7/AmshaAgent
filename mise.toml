@@ -47,7 +47,7 @@ Full setup guide for all platforms — Linux · macOS · WSL2 · Windows.
     mise tasks                        <- now shows all ArcClaw tasks
 
   Windows pwsh — AUTO:
-    mise --env pwsh run setup:profile:win   <- writes to $PROFILE
+    mise run setup:profile:win        <- writes to $PROFILE, done
     . $PROFILE
 
   Linux/macOS/WSL2 — MANUAL (add to ~/.bashrc or ~/.zshrc, ORDER MATTERS):
@@ -92,10 +92,10 @@ cat << 'GUIDE'
 
   -- QUICKEST SETUP (Windows pwsh) --------------------------------------------
 
-    mise --env pwsh run setup:profile:win
+    mise run setup:profile:win
 
     Finds your $PROFILE, writes MISE_DEFAULT_CONFIG_FILENAME before mise
-    activate. Idempotent — safe to re-run.
+    activate, appends mise completion. Idempotent — safe to re-run.
     Then:  . $PROFILE
     Then:  mise tasks         <- now shows all ArcClaw tasks
 
@@ -253,32 +253,97 @@ echo "              mise run setup   <- first-time project setup (JDKs, .env)"
 """
 
 # =============================================================================
-# setup:profile:win — Windows stub pointing to mise.pwsh.toml
-# =============================================================================
-# This task lives in mise.pwsh.toml (requires pwsh).
-# It is documented here so it appears when users run `mise tasks` after
-# cloning — but must be invoked via:
-#   mise --env pwsh run setup:profile:win
-#
-# Defining it as a stub here with a clear error avoids silent failure if
-# a Linux/macOS user accidentally runs it without --env pwsh.
+# setup:profile:win — auto-configure PowerShell profile (Windows)
 # =============================================================================
 
 [tasks."setup:profile:win"]
 description = '''
 Windows only — auto-write MISE_DEFAULT_CONFIG_FILENAME and mise completion
-to $PROFILE. Safe to re-run (idempotent — each line checked independently).
+to $PROFILE so mise always loads mise.pwsh.toml. Safe to re-run (idempotent
+— each line is checked independently, no duplicates).
 
-  Must be run via:   mise --env pwsh run setup:profile:win
-  Linux/macOS/WSL2:  use setup:profile:nix instead.
+  Linux/macOS/WSL2 users: run `mise run setup:profile:nix` instead.
+
+  What this does:
+    1. Finds your $PROFILE (PowerShell profile file)
+    2. Inserts MISE_DEFAULT_CONFIG_FILENAME BEFORE the mise activate line
+    3. Appends `mise completion powershell | Out-String | Invoke-Expression`
+    4. Each line is checked independently — re-running never duplicates
+
+  Run:   mise run setup:profile:win
+  Then:  . $PROFILE
+  Check: $env:MISE_DEFAULT_CONFIG_FILENAME
+         mise run <TAB>   <- should list all tasks
 '''
+shell = "pwsh -NonInteractive -Command"
 run = """
-#!/usr/bin/env sh
-echo "ERROR: setup:profile:win requires pwsh and must be run via:"
-echo "         mise --env pwsh run setup:profile:win"
-echo ""
-echo "  Linux/macOS/WSL2? Use: mise run setup:profile:nix"
-exit 1
+$ErrorActionPreference = 'Stop'
+
+$configValue    = 'mise.pwsh.toml'
+$varLine        = "`$env:MISE_DEFAULT_CONFIG_FILENAME = '$configValue'"
+$commentConfig  = '# mise — ArcClaw: load pwsh task config (added by setup:profile:win)'
+$completionLine = 'mise completion powershell | Out-String | Invoke-Expression'
+$commentCompl   = '# mise — ArcClaw: tab completion (added by setup:profile:win)'
+
+# ── Resolve $PROFILE path ─────────────────────────────────────────────────────
+$profilePath = $PROFILE
+if (-not $profilePath) {
+    $profilePath = "$env:USERPROFILE\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1"
+}
+New-Item -ItemType Directory -Force (Split-Path $profilePath) | Out-Null
+Write-Host "── Profile: $profilePath ────────────────────────────────────────────────────"
+
+# ── Step 1: MISE_DEFAULT_CONFIG_FILENAME — independent idempotency check ──────
+$profileContent = if (Test-Path $profilePath) { [System.IO.File]::ReadAllText($profilePath) } else { '' }
+if ($profileContent -match 'MISE_DEFAULT_CONFIG_FILENAME') {
+    Write-Host "i   MISE_DEFAULT_CONFIG_FILENAME already present -- skipping."
+} else {
+    if ($profileContent -match 'mise activate') {
+        # Insert BEFORE the first mise activate line
+        $lines   = $profileContent -split "`n"
+        $output  = [System.Collections.Generic.List[string]]::new()
+        $inserted = $false
+        foreach ($line in $lines) {
+            if (-not $inserted -and $line -match 'mise activate') {
+                $output.Add($commentConfig)
+                $output.Add($varLine)
+                $inserted = $true
+            }
+            $output.Add($line)
+        }
+        [System.IO.File]::WriteAllText($profilePath, ($output -join "`n"))
+        Write-Host "OK  MISE_DEFAULT_CONFIG_FILENAME inserted BEFORE mise activate."
+    } else {
+        Add-Content $profilePath "`n$commentConfig`n$varLine"
+        Write-Host "OK  MISE_DEFAULT_CONFIG_FILENAME appended."
+        Write-Host ""
+        Write-Host "    WARNING: No 'mise activate' line found in profile."
+        Write-Host "    Make sure your profile also contains:"
+        Write-Host "      (`&mise activate pwsh) | Out-String | Invoke-Expression"
+    }
+}
+
+# ── Step 2: mise completion — independent idempotency check ───────────────────
+$profileContent = if (Test-Path $profilePath) { [System.IO.File]::ReadAllText($profilePath) } else { '' }
+if ($profileContent -match 'mise completion') {
+    Write-Host "i   mise completion already present -- skipping."
+} else {
+    Add-Content $profilePath "`n$commentCompl`n$completionLine"
+    Write-Host "OK  mise completion appended."
+}
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "── Written ──────────────────────────────────────────────────────────────────"
+Get-Content $profilePath | Select-String -Pattern 'MISE_DEFAULT_CONFIG_FILENAME|mise completion'
+Write-Host "─────────────────────────────────────────────────────────────────────────────"
+Write-Host ""
+Write-Host "Next steps:"
+Write-Host "  1. Reload:  . `$PROFILE"
+Write-Host "  2. Verify:  `$env:MISE_DEFAULT_CONFIG_FILENAME"
+Write-Host "              mise run <TAB>   <- should list all tasks"
+Write-Host "  3. Run:     mise tasks"
+Write-Host "              mise run setup   <- first-time project setup (JDKs, .env)"
 """
 
 # end of file
