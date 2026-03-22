@@ -55,7 +55,7 @@ public class ScheduleTaskTool implements AgentTool {
      * The LLM self-corrects via the existing TOOL REJECTION HANDLING prompt rule.
      */
     private static final Pattern NAKED_PRONOUN = Pattern.compile(
-            "\\b(it|this|that|the code|the file|the thing|the result)\\b",
+            "\\b(this|that|the code|the file|the thing|the result)\\b",
             Pattern.CASE_INSENSITIVE
     );
 
