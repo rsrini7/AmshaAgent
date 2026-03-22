@@ -37,7 +37,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+@validKey = Fxa8CCQGpjHr7DS3eiSTlb3W0RKzImwHXPkNbq9S98c=
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Session for cron scheduling tests
@@ -146,6 +146,31 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 3
 }
 
+### This always returns 200 if the key is valid — good for rate limit testing
+GET {{baseUrl}}/api/v1/sessions
+X-ArcClaw-API-Key: {{validKey}}
+
+
+
+### [SESSION-3] Check status after sync run
+# Expect 200: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
+GET {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+### [CRON-7] List the public repositories of GitHub user rsrini7 using the github tool.
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "schedule to List the public repositories of GitHub user rsrini7 using the github tool after 1 minute",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
 ###
 
 # ─────────────────────────────────────────────────────────────────
@@ -162,7 +187,7 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "deletecron REPLACE_WITH_ACTUAL_CRON_ID",
+    "goal": "deletecron 3243e38f-1bf3-4df5-8445-a3c1c7186c61",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
@@ -275,7 +300,7 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Schedule a one-time task to run in 5 minutes that performs a cross-domain summary: what are the key JVM metrics an AI agent kernel should monitor?",
+    "goal": "Schedule a one-time task to run in 1 minute that performs a cross-domain summary: what are the key JVM metrics an AI agent kernel should monitor?",
     "agentRole": "synthesizer",
     "maxIterations": 5
 }

@@ -98,7 +98,7 @@ public class AuditEventRepository {
                 "WHERE a.sessionId = :sid AND a.eventType = :type",
                 Long.class)
             .setParameter("sid", sessionId)
-            .setParameter("type", eventType.name())
+            .setParameter("type", eventType)
             .getSingleResult();
         return count > 0;
     }
