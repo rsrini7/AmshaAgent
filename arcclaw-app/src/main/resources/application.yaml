@@ -267,8 +267,8 @@ arcclaw:
       enabled: true
   routing:
     intent-classifier:
-      model: ${INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
-      ollama-model: ${INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
+      model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
+      ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
   memory:
     compaction:
       enabled: true
@@ -277,8 +277,8 @@ arcclaw:
       max-tokens: 1024
       api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:${quarkus.langchain4j.openai.base-url}}"
-      model: "${COMPACTION_MODEL:llama-3.1-8b-instant}"
-      ollama-model: "${COMPACTION_OLLAMA_MODEL:llama3.2}"
+      model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
+      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
   chat-memory:
     max-messages: 20
   api:
