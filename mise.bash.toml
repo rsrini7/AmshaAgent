@@ -803,7 +803,17 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Load .env if present
-[[ -f "$SCRIPT_DIR/.env" ]] && set -a && source "$SCRIPT_DIR/.env" && set +a
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    while IFS= read -r _line || [[ -n "$_line" ]]; do
+        # skip blank lines and comments
+        [[ "$_line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${_line// }" ]] && continue
+        # only process valid KEY=value lines — value is never shell-evaluated
+        if [[ "$_line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*) ]]; then
+            export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+        fi
+    done < "$SCRIPT_DIR/.env"
+fi
 # Default paths (override via .env or env vars)
 export ARCCLAW_RAG_VEC_EXTENSION_PATH="${ARCCLAW_RAG_VEC_EXTENSION_PATH:-./lib/vec0}"
 export ARCCLAW_DATA_DIR="${ARCCLAW_DATA_DIR:-./data}"
