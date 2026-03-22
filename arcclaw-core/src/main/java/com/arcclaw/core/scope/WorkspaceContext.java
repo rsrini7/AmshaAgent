@@ -1,5 +1,6 @@
 package com.arcclaw.core.scope;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 
 import java.lang.ScopedValue;
@@ -33,6 +34,18 @@ public final class WorkspaceContext {
                 .call(() -> task.call());
     }
 
+    public static <T> T run(String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, ChannelType channelType, Callable<T> task) throws Exception {
+        return ScopedValue.where(SESSION_ID, sessionId)
+                .where(USER_ID, userId)
+                .where(CHAT_ID, chatId)
+                .where(AUTONOMY, autonomy)
+                .where(AGENT_ROLE, role)
+                .where(CHANNEL_TYPE, channelType.name())
+                .where(WorkspaceScopeHolder.USER_ID, userId)
+                .where(WorkspaceScopeHolder.CHAT_ID, chatId)
+                .call(() -> task.call());
+    }
+
     public static void run(String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, Runnable task) {
         try {
             run(sessionId, userId, chatId, autonomy, role, () -> {
@@ -45,6 +58,20 @@ public final class WorkspaceContext {
             throw new RuntimeException(e);
         }
     }
+
+    public static void run(String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, ChannelType channelType, Runnable task) {
+        try {
+            run(sessionId, userId, chatId, autonomy, role, channelType, () -> {
+                task.run();
+                return null;
+            });
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     public static <T> T runWithFullAutonomy(String sessionId, String userId, String chatId, String role, Callable<T> task) throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);

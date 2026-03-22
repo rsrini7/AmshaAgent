@@ -36,6 +36,14 @@ public class TelegramCronNotificationObserver {
             return;
         }
 
+        // Telegram chat IDs are always numeric — UUIDs are REST session IDs
+        String chatId = event.channelPlatformId();
+        if (chatId == null || !chatId.matches("-?\\d+")) {
+            log.warnf("CRON-NOTIFY skipped — chatId '%s' is not a valid Telegram ID (cronId=%s)",
+                    chatId, event.cronId());
+            return;
+        }
+
         if (event.failureCategory() != null) {
             log.warnf("CRON-FAIL cronId=%s category=%s", event.cronId(), event.failureCategory());
         }
