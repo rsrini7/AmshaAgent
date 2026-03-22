@@ -90,7 +90,7 @@ public class ApiKeyRegistry {
         Bucket bucket = rateLimiter.get(key, k -> Bucket.builder()
                 .addLimit(Bandwidth.builder()
                         .capacity(requestsPerMinute)
-                        .refillGreedy(requestsPerMinute, Duration.ofMinutes(1))
+                        .refillIntervally(requestsPerMinute, Duration.ofMinutes(1))
                         .build())
                 .build());
         return bucket.tryConsume(1);

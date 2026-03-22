@@ -5,60 +5,83 @@ import java.util.concurrent.TimeUnit;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
-import org.eclipse.microprofile.health.Liveness;
-import org.jboss.logging.Logger;
+import org.eclipse.microprofile.health.Readiness;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-@Liveness
+@Readiness
 @ApplicationScoped
 public class PodmanImageHealthCheck implements HealthCheck {
 
-    private static final Logger log = Logger.getLogger(PodmanImageHealthCheck.class);
-
-    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "docker.io/library/alpine:latest")
-    protected String containerImage;
+    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "arcclaw-tool-runner:latest")
+    String containerImage;
 
     @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
     String podmanPath;
 
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
     boolean sandboxEnabled;
-   
 
     @Override
     public HealthCheckResponse call() {
-        if (!sandboxEnabled) {
-            log.warn("Sandbox is disabled");
-            return HealthCheckResponse
-                .named("Podman Image: " + containerImage)
-                .up()
-                .withData("status", "sandbox disabled — skipped")
-                .build();
-        }
-
         try {
             ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "exists", containerImage);
+            pb.redirectErrorStream(true);
             Process process = pb.start();
-            boolean finished = process.waitFor(2, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
 
-            if (finished && process.exitValue() == 0) {
-                return HealthCheckResponse.named("Podman Image: " + containerImage).up().build();
-            } else {
-                if (!finished) {
-                    process.destroyForcibly();
-                    return HealthCheckResponse.named("Podman Image: " + containerImage).down()
-                            .withData("error", "Process timed out after 2 seconds")
-                            .build();
-                }
-                return HealthCheckResponse.named("Podman Image: " + containerImage).down()
-                        .withData("error", "Image not found or process exited with code " + process.exitValue())
-                        .build();
-            }
-        } catch (Exception e) {
-            return HealthCheckResponse.named("Podman Image: " + containerImage).down()
-                    .withData("error", e.getMessage())
+            if (!finished) {
+                process.destroyForcibly();
+                return HealthCheckResponse.named("Podman Image: " + containerImage)
+                    .down()
+                    .withData("error", "image check timed out — Podman machine may be stopped")
+                    .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                    .withData("hint", sandboxEnabled
+                        ? "Run: podman machine start"
+                        : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                     .build();
+            }
+
+            if (process.exitValue() == 0) {
+                if (!sandboxEnabled) {
+                    return HealthCheckResponse.named("Podman Image: " + containerImage)
+                        .up()
+                        .withData("status", "image present but sandbox is disabled")
+                        .withData("sandbox-enabled", "false")
+                        .withData("hint", "Set ARCCLAW_SANDBOX_ENABLED=true in .env or " +
+                                "arcclaw.sandbox.enabled=true in application.yaml to enable")
+                        .build();
+                }
+                return HealthCheckResponse.named("Podman Image: " + containerImage)
+                    .up()
+                    .withData("image", containerImage)
+                    .withData("sandbox-enabled", "true")
+                    .build();
+            }
+
+            // exit != 0 means image not found
+            return HealthCheckResponse.named("Podman Image: " + containerImage)
+                .down()
+                .withData("error", "image not found")
+                .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                .withData("hint", sandboxEnabled
+                    ? "Run: podman pull " + containerImage
+                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
+                .build();
+
+        } catch (Exception e) {
+            return HealthCheckResponse.named("Podman Image: " + containerImage)
+                .down()
+                .withData("error", e.getMessage() != null
+                    ? (e.getMessage().length() > 200
+                        ? e.getMessage().substring(0, 200)
+                        : e.getMessage())
+                    : "unknown error")
+                .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
+                .withData("hint", sandboxEnabled
+                    ? "Run: podman machine start"
+                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
+                .build();
         }
     }
 }

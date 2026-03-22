@@ -171,46 +171,24 @@ public class WorkspaceManager {
                 return; // success
             } catch (Exception e) {
                 lastEx = e;
-                if (isSqliteBusy(e)) {
+                if (SqliteErrorStrings.isBusy(e)) {
                     log.warnf("SQLite BUSY on markCheckpointsFailed attempt %d/%d for session=%s — retrying in %dms",
                             attempt, maxRetries, sessionId, backoffMs * attempt);
                     try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
                 } else {
-                    log.errorf(e, "Non-retryable error marking checkpoints FAILED for session=%s", sessionId);
+                    log.errorf("Non-retryable error marking checkpoints FAILED for session=%s: %s", sessionId, e.getMessage());
+                    log.debugf(e, "Full stacktrace for non-retryable error in markCheckpointsFailed for session=%s", sessionId);
                     throw e;
                 }
             }
         }
-        log.errorf(lastEx, "Failed to mark checkpoints FAILED after %d retries for session=%s", maxRetries, sessionId);
+        log.errorf("Failed to mark checkpoints FAILED after %d retries for session=%s: %s", maxRetries, sessionId, 
+                lastEx != null ? lastEx.getMessage() : "unknown");
+        log.debugf(lastEx, "Full stacktrace for retry exhaustion in markCheckpointsFailed for session=%s", sessionId);
         if (lastEx != null) throw new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, lastEx);
     }
 
-    private static boolean isSqliteBusy(Throwable e) {
-        // Intentional copy — also exists in SessionReaper.
-        // Kept private static to avoid extracting a shared utility for one method.
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            String msg = t.getMessage();
-            if (msg != null) {
-                String lower = msg.toLowerCase();
-                if (lower.contains(SqliteErrorStrings.BUSY) || 
-                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
-                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
-                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
-                    return true;
-                }
-            }
-            if (t.getClass().getSimpleName().equals(SqliteErrorStrings.SQLITE_EXCEPTION)) {
-                try {
-                    var method = t.getClass().getMethod("getResultCode");
-                    Object code = method.invoke(t);
-                    if (code instanceof Integer rc) {
-                        if (rc == 5 || rc == 6 || rc == 261) return true;
-                    }
-                } catch (Exception ignored) { }
-            }
-        }
-        return false;
-    }
+
 
     private void wipeWorkspaceDir(String sessionId) {
         Path workspaceDir = Path.of(workspaceRootDir, sessionId);

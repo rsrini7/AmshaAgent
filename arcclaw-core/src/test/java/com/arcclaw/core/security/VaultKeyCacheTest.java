@@ -1,13 +1,19 @@
 package com.arcclaw.core.security;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +46,72 @@ class VaultKeyCacheTest {
     }
 
     @Test
+    void testIdempotency() {
+        byte[] keyBytes = new byte[32];
+        VaultKey key = new VaultKey(keyBytes);
+        when(derivation.deriveSessionKey(sessionId)).thenReturn(key);
+
+        VaultKey first = null;
+        for (int i = 0; i < 10; i++) {
+            VaultKey current = cache.getOrDerive(sessionId, derivation);
+            if (first == null) {
+                first = current;
+            } else {
+                assertSame(first, current, "Reference should be identical");
+            }
+        }
+        verify(derivation, times(1)).deriveSessionKey(sessionId);
+    }
+
+    @Test
+    void testConcurrencyWithVirtualThreads() throws InterruptedException {
+        // We use an AtomicInteger to count actual invocations in the mock
+        AtomicInteger derivationCount = new AtomicInteger(0);
+        
+        when(derivation.deriveSessionKey(anyString())).thenAnswer(invocation -> {
+            derivationCount.incrementAndGet();
+            // Simulate some work to increase race condition probability
+            Thread.sleep(50);
+            return new VaultKey(new byte[32]);
+        });
+
+        int threadCount = 2;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicReference<VaultKey> ref1 = new AtomicReference<>();
+        AtomicReference<VaultKey> ref2 = new AtomicReference<>();
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                startLatch.await();
+                ref1.set(cache.getOrDerive(sessionId, derivation));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                doneLatch.countDown();
+            }
+        });
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                startLatch.await();
+                ref2.set(cache.getOrDerive(sessionId, derivation));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                doneLatch.countDown();
+            }
+        });
+
+        startLatch.countDown();
+        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
+        assertTrue(finished, "Threads should finish in time");
+
+        assertEquals(1, derivationCount.get(), "deriveSessionKey should be called exactly once");
+        assertSame(ref1.get(), ref2.get(), "Both threads should get the same key instance");
+    }
+
+    @Test
     void testWipeZeroesKey() {
         byte[] keyBytes = new byte[32];
         VaultKey key = new VaultKey(keyBytes);
@@ -51,8 +123,6 @@ class VaultKeyCacheTest {
         cache.wipe();
 
         assertTrue(cached.isDestroyed());
-        // Verify safety check after wipe (should return null in getOrDerive if we bypass lock, 
-        // but here we just test that it's wiped)
     }
 
     @Test
@@ -96,3 +166,4 @@ class VaultKeyCacheTest {
         verify(derivation, times(2)).deriveSessionKey(sessionId);
     }
 }
+

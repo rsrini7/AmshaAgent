@@ -1030,3 +1030,131 @@
 - [x] Verify: `StructuredOutputEngineSchemaTest` passes, proving schema gets loaded correctly
 - [x] Verify: Run full project tests with `mvn test`
 - [x] Documentation: Update `PLAN.md`, `TASKS.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md`
+
+---
+
+## Phase 63-A — VaultKeyCache: ReentrantLock Refactor ✅
+- [x] Refactor `VaultKeyCache.java`: Replace `synchronized(this)` with instance-field `ReentrantLock` for virtual thread safety <!-- id: 506 -->
+- [x] Implement double-checked locking with `volatile` cachedKey for optimal performance <!-- id: 507 -->
+- [x] Update `VaultKeyCacheTest.java`: Add `testConcurrencyWithVirtualThreads` using `CountDownLatch` <!-- id: 508 -->
+- [x] Add `testIdempotency` and `testSafetyFallbackIfKeyDestroyedExternally` to the test suite <!-- id: 509 -->
+- [x] Verify: Run `VaultKeyCacheTest` and confirm `BUILD SUCCESS` <!-- id: 510 -->
+- [x] Documentation: Update `PLAN.md`, `TASKS.md`, `WALKTHROUGH.md`, and `TROUBLESHOOTING.md` <!-- id: 511 -->
+
+---
+
+## Phase 63-B — Resume Signal Mechanism Refactor ✅
+- [x] Replace string-based resume checks with structured boolean `isResumeSignal` in `MessageContext`
+- [x] Delete `RESUME_GOAL_PREFIX` from `AgentSentinels.java`
+- [x] Introduce new constants `GOAL_TOOL_APPROVED`, `GOAL_RESUME_APPROVED`, and `GOAL_RESUME_DENIED` in `AgentSentinels`
+- [x] Update `ReflexResult` factory methods to incorporate `MessageContext`
+- [x] Update all `Reflex` implementations to handle new `ReflexResult` and `MessageContext` signatures
+- [x] Update `ChatMemoryWriter.java` and `ChatHistoryAssembler.java` to use `AgentSentinels` constants
+- [x] Refactor API usage for `ChannelUser`, `ChannelMessage`, and `ChannelSender` across codebase
+- [x] Verify all core and app integration tests pass with 0 regressions
+
+---
+
+## Phase 63-C — EncryptedSecret Version Split & Concurrency Fixes ✅
+- [x] Separate `version` field in `EncryptedSecret.java` into `ormVersion` (managed by Hibernate) and `encryptionKeyVersion` (application logic)
+- [x] Update `SecretVaultImpl.java` to explicitly manage `encryptionKeyVersion` without conflicting with Hibernate optimistic locking
+- [x] Update `EncryptedSecretVersionTest` to point to `getOrmVersion()`
+- [x] Write `testConcurrentStore_NoConflictWithHibernateVersion` in `SecretVaultImplTest` using `CountDownLatch` and Virtual Threads
+- [x] Remove `data-dir` configuration from `application.yaml` and update dev `sandbox.strategy` to `NONE`
+- [x] Verify all core and app tests pass with 0 regressions
+
+---
+
+## Phase 63-D — PodmanMcpTransport: @PreDestroy Process Cleanup ✅
+- [x] Add `@PreDestroy void cleanup()` to `PodmanMcpTransport`
+- [x] Ensure cleanup handles process termination gracefully with `destroy()` and `destroyForcibly()`
+- [x] Create test `testPreDestroyCleanup` in `PodmanMcpTransportTest` validating cleanup behavior
+
+---
+
+## Phase 63-E — Config Ordinal & System.nanoTime SLA Measurement ✅
+- [x] Update `DotenvConfigSourceProvider` to ordinal `296` ensuring it beats SmallRye's default
+- [x] Replace `System.currentTimeMillis()` with `System.nanoTime()` in `IntentClassifierService` for SLA accuracy
+- [x] Add verification test `testOrdinalIsExplicitly296` to `DotenvConfigSourceProviderTest`
+
+---
+
+## Phase 63-F — ToolObservationSanitizer: Injection & PII Sanitization ✅
+- [x] Add pure `redactPii(String)` method to `PiiScanReflex` matching all PII rules independent of `piiMode` config
+- [x] Create `ToolObservationSanitizer` defining hard 16KiB truncation, prompt injection sanitization, and PII redaction
+- [x] Inject `ToolObservationSanitizer` into `ToolInvoker` tracking and sanitizing raw `ToolResponse.output()`
+- [x] Test rigorous failure structures with mocked sanitization via `ToolInvokerTest` and `ToolObservationSanitizerTest`
+
+---
+
+## Phase 63-G — Pepper as char[]: Zero-on-Use Secret Handling ✅
+- [x] Build `@Priority(200)` `CharArrayConverter` supporting `@ConfigProperty char[] pepperChars` conversion
+- [x] Register `CharArrayConverter` as a MicroProfile SPI Service within `META-INF/services/org.eclipse.microprofile.config.spi.Converter`
+- [x] Update `Argon2idKeyDerivation` to unpack config injected `pepperChars` array securely inside `deriveSessionKey()`
+- [x] Ensure both local byte/char arrays and component scoped property `pepperChars` are securely wiped using `Arrays.fill(..., 0)` inside a strong `finally` block
+- [x] Configure GraalVM Native Image to support runtime reflection on `CharArrayConverter.class`
+- [x] Adjust unit tests mapping Java reflection validations parsing `char[]` buffer memory state
+
+---
+
+## Phase 63-H — Security & Audit Hardening ✅
+- [x] Implement deterministic HMAC key retrieval in `AuditHashUtil` from `SecretVault`. <!-- id: 512 -->
+- [x] Bypass `VaultKeyCache` for "SYSTEM" session in `SecretVaultImpl` to support boot-time access. <!-- id: 513 -->
+- [x] Seed `arcclaw-audit-hmac-key` in `DevSecretSeeder` for `dev` and `test` profiles. <!-- id: 514 -->
+- [x] Validate `arcclaw-audit-hmac-key` presence in `StartupSecurityValidator` for non-dev profiles. <!-- id: 515 -->
+- [x] Update `StartupSecurityValidator*Test` suites to use `@InjectMock SecretVault`. <!-- id: 516 -->
+- [x] Refactor `AuditHashUtil` to use `Instance<SecretVault>` for lazy initialization, breaking circular dependency with `SecretVault`.
+- [x] Suppress excessive 500-line stacktraces in logs by moving full traces to DEBUG level in `AuditHashUtil`, `MemorySearchTool`, `MessagePipeline`, `ReflexRegistry`, and `ToolInvoker`.
+- [x] Fix data integrity bug in `Argon2idKeyDerivation` by switching from `.array()` to explicit byte extraction.
+- [x] Add `@Priority(100)` to `DevSecretSeeder` to ensure early seeding of security keys during startup.
+- [x] Verify: All related hardening tests pass with clean logs and 0 regressions. <!-- id: 517 -->
+
+---
+
+## Phase 63-H Extended — Log Noise Reduction & Startup Resilience ✅
+- [x] Refactor Error Logging: Move full stack traces from ERROR to DEBUG level for `AgentStateMachineRunner`, `AsyncPersistenceEngine`, `ToolRegistry`, `StatefulAgentStoreImpl`, `WorkspaceManager`, and `SessionReaper`. <!-- id: 518 -->
+- [x] Implement Eager Initialization in `AuditHashUtil`: Use `@StartupEvent` to prime HMAC keys during boot, preventing expensive Argon2id derivation from blocking the first transactional audit record. <!-- id: 519 -->
+- [x] Implement SYSTEM Master Key Caching in `SecretVaultImpl`: Use `ReentrantLock` and volatile caching to avoid redundant, high-CPU key derivations during parallel execution. <!-- id: 520 -->
+- [x] Harden Shutdown Logic: Add guards in `AsyncPersistenceEngine` and `AuditHashUtil` to detect `Arc.container() == null` shutdown races and suppress related `NullPointerException` logs. <!-- id: 521 -->
+- [x] Refactor `IntentClassifierService`: Move LLM authentication/timeout stack traces to DEBUG while keeping WARN logs concise. <!-- id: 522 -->
+
+## Phase 63-H Extended — Split-Package Cleanup (Quarkus Optimization) ✅
+- [x] Resolve Split-Package Warnings: Relocate all `arcclaw-app` test classes from `com.arcclaw.core.*` namespace to `com.arcclaw.app.*`. <!-- id: 523 -->
+- [x] Fixed Packages: `com.arcclaw.core.api`, `com.arcclaw.core.audit`, `com.arcclaw.core.health`, `com.arcclaw.core.scope`, `com.arcclaw.core.security`, `com.arcclaw.core.structured`. <!-- id: 524 -->
+- [x] Verify: `mvn clean test` succeeds with 28+ app-layer tests passed and zero `SplitPackageProcessor` warnings. <!-- id: 525 -->
+- [x] Result: Faster Quarkus augmentation and unambiguous classpath resolution for all test contexts. <!-- id: 526 -->
+---
+
+## Phase 63-I — TmpfsSecretTransport: @PostConstruct Stale File Sweep ✅
+- [x] Implement `@PostConstruct void sweepStaleTmpFiles()` in `TmpfsSecretTransport.java` <!-- id: 527 -->
+- [x] Ensure sweep is Linux-only by checking for `/dev/shm` presence <!-- id: 528 -->
+- [x] Filter sweep to only remove files with `arcclaw-secrets-` prefix <!-- id: 529 -->
+- [x] Handle non-Linux and non-existent directories gracefully without failing startup <!-- id: 530 -->
+- [x] Add Linux-specific unit tests in `TmpfsSecretTransportTest.java` (using `@EnabledOnOs(OS.LINUX)`) <!-- id: 531 -->
+- [x] Verify: All tests pass, including directory non-existence and cleanup logic <!-- id: 532 -->
+
+---
+
+## Phase 63 — Refactoring and Hardening (Prompts J-T) ✅
+- [x] Prompt 63-J — `AsyncPersistenceEngine`: Two Bounded Queues with Synchronous Critical Fallback <!-- id: 533 -->
+- [x] Prompt 63-K — `AgentCronScheduler`: Lookback Window to Prevent Restart Burst <!-- id: 534 -->
+- [x] Prompt 63-L — `McpClientService` HTTP Pool Bound + `CompactionModelProducer` Dedicated Config <!-- id: 535 -->
+- [x] Prompt 63-M — `SkillRegistry` + `AgentStateMachineRunner`: Per-Iteration Skill Snapshot <!-- id: 536 -->
+- [x] Prompt 63-N — `CompactionHandler`: Fire Compaction Asynchronously via CDI Event <!-- id: 537 -->
+- [x] Prompt 63-O — `PermissiveJsonExtractor`: Pre-Parse Size Cap + Duplicate Key Detection <!-- id: 538 -->
+- [x] Prompt 63-P — `AgentStateMachineRunner`: Interface Injection + `isSqliteBusy` Deduplication <!-- id: 539 -->
+- [x] Prompt 63-Q — `TwoTierMemoryService`: Fast Path When Vector Search Disabled <!-- id: 540 -->
+- [x] Prompt 63-R — `NdjsonWriter`: Enforce MCP Newline Framing at the Type Level <!-- id: 541 -->
+- [x] Prompt 63-S — Build-Time `@RunOnVirtualThread` Enforcement via `@BuildStep` <!-- id: 542 -->
+- [x] Prompt 63-T — `AgentOtelContext`: Instrument Iteration and Tool Spans <!-- id: 543 -->
+
+## Phase 63-U — Post-Implementation Verification Fixes ✅
+- [x] Implement immediate `pepper` zeroing in `Argon2idKeyDerivation` (finally block). <!-- id: 544 -->
+- [x] Replace `"error-missing-hmac-key"` returning with `IllegalStateException` throw in `AuditHashUtil`. <!-- id: 545 -->
+- [x] Implement 3-retry loop for HMAC boot race in `AsyncPersistenceEngine.persistSynchronously()`. <!-- id: 546 -->
+- [x] Add catch for `ComplianceViolationException` in `drainCritical()` to increment failure counter. <!-- id: 547 -->
+- [x] Centralize magic literals into `VaultConstants.java`. <!-- id: 548 -->
+- [x] Update `StartupSecurityValidator` to use `VaultConstants`. <!-- id: 549 -->
+- [x] Fix visibility of `ChatMemoryWriter.SKIP_GOALS` for pinning tests. <!-- id: 550 -->
+- [x] Resolve `AsyncPersistenceEngineTest` race condition using localized polling. <!-- id: 551 -->
+- [x] Verify: All component tests (Argon2, Audit, Persistence, Vault) pass with zero raw literals. <!-- id: 552 -->

@@ -1,6 +1,6 @@
 package com.arcclaw.app.routing;
 
-import java.util.Optional;
+import java.util.List;
 
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.skill.CompiledSkillEntry;
@@ -9,17 +9,20 @@ import com.arcclaw.core.skill.SkillRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
+import jakarta.annotation.Priority;
 
 /**
- * An alternative intent classifier that sits in front of the default {@link IntentClassifierService}.
+ * An alternative intent classifier that sits in front of the default
+ * {@link IntentClassifierService}.
  * <p>
- * Evaluates user input against the rapidly executable pre-compiled regex trigger patterns
+ * Evaluates user input against the rapidly executable pre-compiled regex
+ * trigger patterns
  * stored in the {@link SkillRegistry}. If a match is found, it bypasses the LLM
  * completely and routes directly to the mapped dynamic role ("skill:name").
  */
 @ApplicationScoped
 @Alternative
-@jakarta.annotation.Priority(1)
+@Priority(1)
 public class SkillAwareIntentClassifier implements IntentClassifier {
 
     @Inject
@@ -34,10 +37,12 @@ public class SkillAwareIntentClassifier implements IntentClassifier {
             return fallbackService.classify(userMessage);
         }
 
-        Optional<CompiledSkillEntry> match = skillRegistry.findMatch(userMessage);
-        if (match.isPresent()) {
-            // Return dynamic role name syntax
-            return "skill:" + match.get().definition().name();
+        List<CompiledSkillEntry> snapshot = skillRegistry.currentSnapshot();
+        for (CompiledSkillEntry entry : snapshot) {
+            if (entry.matches(userMessage)) {
+                // Return dynamic role name syntax
+                return "skill:" + entry.definition().name();
+            }
         }
 
         // No skill trigger match — fallback to expensive LLM classification

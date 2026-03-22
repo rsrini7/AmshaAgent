@@ -15,9 +15,12 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -27,6 +30,14 @@ import java.util.stream.Collectors;
  * Orchestrates the dual-tier loading of agent skills.
  * Reads static skills from the classpath (via index.txt) and dynamic
  * skills from the SQLite database. Compiles them and populates the registries.
+ * <p>
+ * Warning propagation: unknown ToolCapability names are silently excluded
+ * but collected and returned from {@link #reloadAll(boolean)} so callers
+ * (e.g. the skill save endpoint) can surface them in the API response.
+ * <p>
+ * Zombie guard: if ALL declared tool-capabilities are invalid the skill is
+ * rejected entirely to prevent a role with an empty capability set being
+ * registered and silently doing nothing when triggered.
  */
 @ApplicationScoped
 public class SkillLoader {
@@ -49,31 +60,42 @@ public class SkillLoader {
     @Inject
     TelemetryAuditService telemetryAuditService;
 
+    // Startup hook
     /**
      * Triggered on application startup to perform the initial dual-tier load.
+     * Warnings are logged but not surfaced — no API caller to receive them.
      */
     void onStart(@Observes StartupEvent ev) {
         LOG.info("Initializing AgentSkills — dual-tier load starting");
-        reloadAll(false);
+        List<String> warnings = reloadAll(false);
+        if (!warnings.isEmpty()) {
+            LOG.warnf("Startup skill load completed with %d warning(s):", warnings.size());
+            warnings.forEach(w -> LOG.warnf("  %s", w));
+        }
     }
+
+    // Public API
 
     /**
      * Performs a full reload of skills from classpath and database.
-     * Overwrites the current entries in the registries atomically.
+     * Overwrites current registry entries atomically.
      *
      * @param isRefresh true if triggered by a manual API refresh, false for startup.
+     * @return Collected warnings (unknown capabilities, pattern errors, etc.)
+     *         to be surfaced to API callers. Never null, may be empty.
      */
-    public void reloadAll(boolean isRefresh) {
+    public List<String> reloadAll(boolean isRefresh) {
         Map<String, CompiledSkillEntry> mergedSkills = new LinkedHashMap<>();
+        List<String> allWarnings = new ArrayList<>();
 
         // Tier 1: Classpath static skills
-        loadClasspathSkills(mergedSkills);
+        allWarnings.addAll(loadClasspathSkills(mergedSkills));
 
-        // Tier 2: Database dynamic skills
-        loadDatabaseSkills(mergedSkills);
+        // Tier 2: Database dynamic skills (DB overrides classpath on name clash)
+        allWarnings.addAll(loadDatabaseSkills(mergedSkills));
 
         List<CompiledSkillEntry> finalList = List.copyOf(mergedSkills.values());
-        
+
         // Atomically swap the registry list
         skillRegistry.reload(finalList);
 
@@ -84,18 +106,27 @@ public class SkillLoader {
 
         LOG.infof("AgentSkill tier-merge complete. Loaded %d skills.", finalList.size());
 
-        SecurityEventType eventType = isRefresh ? SecurityEventType.SKILL_REFRESHED : SecurityEventType.SKILL_LOADED;
-        telemetryAuditService.record("system", "system", "system", eventType, "Loaded " + finalList.size() + " skills");
+        SecurityEventType eventType = isRefresh
+                ? SecurityEventType.SKILL_REFRESHED
+                : SecurityEventType.SKILL_LOADED;
+        telemetryAuditService.record("system", "system", "system", eventType,
+                "Loaded " + finalList.size() + " skills");
+
+        return List.copyOf(allWarnings);
     }
 
-    private void loadClasspathSkills(Map<String, CompiledSkillEntry> mergedSkills) {
+    // Tier loaders
+
+    private List<String> loadClasspathSkills(Map<String, CompiledSkillEntry> mergedSkills) {
+        List<String> warnings = new ArrayList<>();
         try (InputStream indexStream = getClass().getResourceAsStream(INDEX_PATH)) {
             if (indexStream == null) {
                 LOG.warnf("classpath %s missing. Skipping static tier.", INDEX_PATH);
-                return;
+                return warnings;
             }
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(indexStream, StandardCharsets.UTF_8))) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(indexStream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
@@ -104,14 +135,20 @@ public class SkillLoader {
                     String resourcePath = "/skills/" + line;
                     try (InputStream skillStream = getClass().getResourceAsStream(resourcePath)) {
                         if (skillStream == null) {
-                            LOG.warnf("Skill file %s listed in index.txt but not found on classpath", resourcePath);
+                            String w = "Skill file '" + resourcePath
+                                    + "' listed in index.txt but not found on classpath";
+                            LOG.warnf(w);
+                            warnings.add(w);
                             continue;
                         }
                         String content = new String(skillStream.readAllBytes(), StandardCharsets.UTF_8);
                         SkillDefinition def = parser.parse(content);
-                        addSafe(mergedSkills, def, "classpath");
+                        warnings.addAll(addSafe(mergedSkills, def, "classpath"));
+
                     } catch (IllegalArgumentException e) {
-                        LOG.warnf("Malformed static skill definition %s: %s", resourcePath, e.getMessage());
+                        String w = "Malformed static skill '" + resourcePath + "': " + e.getMessage();
+                        LOG.warnf(w);
+                        warnings.add(w);
                     } catch (Exception e) {
                         LOG.warnf(e, "Failed to load static skill %s", resourcePath);
                     }
@@ -120,18 +157,22 @@ public class SkillLoader {
         } catch (Exception e) {
             LOG.errorf(e, "Fatal failure reading static skill index %s", INDEX_PATH);
         }
+        return warnings;
     }
 
-    private void loadDatabaseSkills(Map<String, CompiledSkillEntry> mergedSkills) {
+    private List<String> loadDatabaseSkills(Map<String, CompiledSkillEntry> mergedSkills) {
+        List<String> warnings = new ArrayList<>();
         try {
             List<AgentSkillEntity> dbSkills = repository.findAllSkills();
             for (AgentSkillEntity entity : dbSkills) {
                 try {
                     SkillDefinition def = parser.parse(entity.getDefinitionYaml());
-                    // DB tier overrides classpath tier if names clash
-                    addSafe(mergedSkills, def, "database");
+                    warnings.addAll(addSafe(mergedSkills, def, "database"));
                 } catch (IllegalArgumentException e) {
-                    LOG.warnf("Malformed database skill definition '%s': %s", entity.getName(), e.getMessage());
+                    String w = "Malformed database skill '" + entity.getName()
+                            + "': " + e.getMessage();
+                    LOG.warnf(w);
+                    warnings.add(w);
                 } catch (Exception e) {
                     LOG.warnf(e, "Failed to load database skill '%s'", entity.getName());
                 }
@@ -139,49 +180,113 @@ public class SkillLoader {
         } catch (Exception e) {
             LOG.error("Failed to query database skills", e);
         }
+        return warnings;
     }
 
-    private void addSafe(Map<String, CompiledSkillEntry> map, SkillDefinition def, String source) {
+    // Compilation helpers
+
+    /**
+     * Compiles a skill definition into a {@link CompiledSkillEntry} and adds it
+     * to the merge map.
+     *
+     * @return Warnings produced during compilation (unknown caps, etc.). Never null.
+     * @throws IllegalArgumentException if the skill is rejected (zombie guard).
+     * @throws PatternSyntaxException   if a trigger-pattern regex is malformed.
+     */
+    private List<String> addSafe(Map<String, CompiledSkillEntry> map,
+                                  SkillDefinition def, String source) {
+        List<String> warnings = new ArrayList<>();
         try {
             Pattern[] compiledPatterns = compilePatterns(def.triggerPatterns());
-            Set<ToolCapability> compiledTools = compileTools(def.name(), def.toolCapabilities());
-            
+            CompileToolsResult toolsResult = compileTools(def.name(), def.toolCapabilities());
+            warnings.addAll(toolsResult.warnings());
+
+            // Zombie guard — every declared capability was invalid; reject the skill
+            // rather than register an empty-capability role that silently does nothing.
+            if (toolsResult.valid().isEmpty()
+                    && def.toolCapabilities() != null
+                    && !def.toolCapabilities().isEmpty()) {
+                throw new IllegalArgumentException(
+                        "All declared tool-capabilities are invalid: " + def.toolCapabilities()
+                        + ". Valid values: " + validCapabilityNames()
+                        + ". Skill rejected to prevent a zombie role.");
+            }
+
             String canonicalRoleName = "skill:" + def.name();
             RoleDefinition roleDef = new RoleDefinition(
-                canonicalRoleName,
-                "Skill: " + def.name(),
-                def.description(),
-                def.maxIterations(),
-                false, // Skills do not require HITL approval by default
-                compiledTools
+                    canonicalRoleName,
+                    "Skill: " + def.name(),
+                    def.description(),
+                    def.maxIterations(),
+                    false,   // Skills do not require HITL approval by default
+                    toolsResult.valid()
             );
 
-            CompiledSkillEntry entry = new CompiledSkillEntry(def, compiledPatterns, roleDef, source);
-            map.put(def.name(), entry);
+            map.put(def.name(), new CompiledSkillEntry(def, compiledPatterns, roleDef, source));
+
         } catch (PatternSyntaxException e) {
-            LOG.warnf("Failed to compile regex for skill '%s': %s", def.name(), e.getMessage());
+            String w = "Failed to compile trigger-pattern regex for skill '"
+                    + def.name() + "': " + e.getMessage();
+            LOG.warnf(w);
+            warnings.add(w);
         }
+        return warnings;
     }
 
     private Pattern[] compilePatterns(List<String> rawPatterns) {
         return rawPatterns.stream()
-            .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
-            .toArray(Pattern[]::new);
+                .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
+                .toArray(Pattern[]::new);
     }
 
-    private Set<ToolCapability> compileTools(String skillName, List<String> rawTools) {
-        return rawTools.stream()
-            .map(str -> {
-                String normalizedInput = str.toUpperCase().replace("_", "");
-                for (ToolCapability cap : ToolCapability.values()) {
-                    if (cap.name().replace("_", "").equals(normalizedInput)) {
-                        return cap;
+    /**
+     * Parses raw tool-capability strings into {@link ToolCapability} enum values.
+     * Unknown strings are excluded and collected as warnings — they are never
+     * silently dropped without a trace.
+     * <p>
+     * Matching is case-insensitive and underscore-tolerant
+     * (e.g. {@code "memory_search"} and {@code "MEMORYSEARCH"} both resolve).
+     */
+    private CompileToolsResult compileTools(String skillName, List<String> rawTools) {
+        if (rawTools == null || rawTools.isEmpty()) {
+            return new CompileToolsResult(Set.of(), List.of());
+        }
+
+        List<String> warnings = new ArrayList<>();
+        Set<ToolCapability> valid = rawTools.stream()
+                .map(str -> {
+                    String normalized = str.toUpperCase().replace("_", "");
+                    for (ToolCapability cap : ToolCapability.values()) {
+                        if (cap.name().replace("_", "").equals(normalized)) {
+                            return cap;
+                        }
                     }
-                }
-                LOG.warnf("Skipping unknown ToolCapability '%s' in skill '%s'", str, skillName);
-                return null;
-            })
-            .filter(java.util.Objects::nonNull)
-            .collect(Collectors.toUnmodifiableSet());
+                    String w = "Unknown ToolCapability '" + str + "' in skill '" + skillName
+                            + "' — excluded. Valid values: " + validCapabilityNames();
+                    LOG.warnf(w);
+                    warnings.add(w);
+                    return (ToolCapability) null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+
+        return new CompileToolsResult(valid, List.copyOf(warnings));
+    }
+
+    // Internal result record
+    /**
+     * Carries both the valid compiled capabilities and any warnings
+     * produced during parsing, so callers can propagate them up the stack.
+     */
+    private record CompileToolsResult(Set<ToolCapability> valid, List<String> warnings) {}
+
+    // ──────────────────────────────────────────────────────────────
+    // Utility
+    // ──────────────────────────────────────────────────────────────
+
+    private static String validCapabilityNames() {
+        return Arrays.stream(ToolCapability.values())
+                .map(Enum::name)
+                .collect(Collectors.joining(", "));
     }
 }

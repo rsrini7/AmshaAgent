@@ -1,6 +1,8 @@
 package com.arcclaw.core.agent.persona;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
 
 import java.util.List;
 
@@ -36,4 +38,12 @@ public interface Agent {
      * @return Unmodifiable list of allowed tool names.
      */
     List<String> allowedTools();
+
+    /**
+     * Synthesizes multi-agent findings into a final resolution.
+     * Overridden by specialist synthesizer agents (e.g. Dattatreya).
+     */
+    default AgentResult synthesize(String sessionId, String combinedContext, List<ReasoningStep> history) {
+        throw new UnsupportedOperationException("This agent role does not support multi-agent synthesis");
+    }
 }

@@ -167,7 +167,7 @@ Every module added to ArcClaw MUST include the `jandex-maven-plugin`. Failure to
 
 **REQ-SEC-03:** Secret rotation (`reEncrypt`) must stay entirely within `byte[]` arrays. No `String` intermediate may be used during the decrypt-then-encrypt rotation operation.
 
-**REQ-SEC-04:** The `SecretVault` interface must expose: `store(name, secret)`, `get(name)` returning `Optional<VaultKey>`, `rotate(name, newMasterKey)`, and `delete(name)`.
+**REQ-SEC-04:** The `SecretVault` interface must expose: `store(name, secret)`, `get(name)` returning `Optional<VaultKey>`, `rotateSecrets(sessionId, old, new)` (throws until Phase 64), and `delete(name)`.
 
 **REQ-SEC-05:** The `EncryptedSecret` JPA entity must NOT use `@Lob` on its `byte[]` fields (ciphertext, salt, nonce). SQLite maps raw `byte[]` natively via `getBytes()`.
 

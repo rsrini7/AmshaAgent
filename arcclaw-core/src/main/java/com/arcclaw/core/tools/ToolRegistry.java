@@ -12,14 +12,15 @@ import java.util.stream.StreamSupport;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
@@ -28,7 +29,6 @@ import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.arcclaw.core.util.MdcKeys;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -36,15 +36,19 @@ import jakarta.inject.Inject;
 /**
  * CDI-based tool registry with governance enforcement.
  * <p>
- * Discovers all {@link AgentTool} implementations via
- * {@code Instance<AgentTool>}
+ * Discovers all {@link AgentTool} implementations via {@code Instance<AgentTool>}
  * at runtime. Before invoking any tool, the registry:
  * <ol>
+ * <li>Enforces role-capability hard block (schema filter is soft — LLM can hallucinate past it)</li>
  * <li>Verifies autonomy governance via {@link AutonomyPolicy}</li>
  * <li>Reflectively reads {@link RequiresSecret} annotations from the tool's
- * {@code execute()} method to build the secrets map</li>
+ *     {@code execute()} method to build the secrets map</li>
  * <li>Delegates execution to the tool implementation</li>
  * </ol>
+ * <p>
+ * Audit userId/agentRole are sourced from {@link WorkspaceContext}/{@link WorkspaceScopeHolder}
+ * ScopedValues — NOT MDC. MDC is ThreadLocal and dies at virtual thread boundaries;
+ * ScopedValues are propagated correctly across Quarkus virtual threads.
  */
 @ApplicationScoped
 public class ToolRegistry {
@@ -53,7 +57,6 @@ public class ToolRegistry {
 
     @Inject
     Instance<AgentTool> discoveredTools;
-
 
     @Inject
     ObjectMapper objectMapper;
@@ -74,8 +77,7 @@ public class ToolRegistry {
     /**
      * Lists all discovered tool names.
      *
-     * @return Unmodifiable list of tool names from CDI-discovered {@link AgentTool}
-     *         beans.
+     * @return Unmodifiable list of tool names from CDI-discovered {@link AgentTool} beans.
      */
     public List<String> listTools() {
         return StreamSupport.stream(discoveredTools.spliterator(), false)
@@ -101,31 +103,60 @@ public class ToolRegistry {
      * Execution flow:
      * <ol>
      * <li>Lookup tool by name from CDI {@code Instance<AgentTool>}</li>
-     * <li>Check
-     * {@code AutonomyPolicy.isAllowed(autonomyLevel, tool.requiredOperation())}</li>
-     * <li>If denied → throw {@link SecurityException}</li>
-     * <li>Delegate to {@code tool.execute(params)}</li>
+     * <li>Role-capability hard block — role must explicitly own the capability</li>
+     * <li>Check {@code AutonomyPolicy.isAllowed(autonomyLevel, tool.requiredOperation())}</li>
+     * <li>If denied → throw {@link SecurityException} or {@link RequiresApprovalException}</li>
+     * <li>Delegate to {@code tool.execute(params)} or sandbox path</li>
      * </ol>
      *
      * @param toolName The unique tool name.
      * @param params   Tool-specific parameters.
      * @return The tool execution result.
-     * @throws SecurityException        If the operation is not allowed under the
-     *                                  current autonomy level.
+     * @throws SecurityException        If the operation is not allowed under the current autonomy level.
      * @throws IllegalArgumentException If the tool is not found.
      */
     public ToolResponse invokeTool(String toolName, Map<String, Object> params) {
         var tool = findTool(toolName)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
-        // Governance check
+        // Role-capability hard block 
+        // Schema filter is soft (LLM can hallucinate past it).
+        // This is the hard enforcement layer — role must explicitly own the capability.
+        String agentRole = WorkspaceContext.agentRole();
+        if (agentRole != null) {
+            try {
+                AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
+                boolean roleAllowed = role.definition().capabilities().stream()
+                        .anyMatch(cap -> cap.toolName().equals(toolName));
+                if (!roleAllowed) {
+                    log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
+                            agentRole, toolName);
+                    auditService.record(
+                            WorkspaceContext.requireSessionId(),
+                            resolveUserId(),
+                            agentRole,
+                            SecurityEventType.TOOL_BLOCKED,
+                            "tool=" + toolName + " reason=ROLE_CAPABILITY_MISMATCH role=" + agentRole);
+                    return ToolResponse.failure(403,
+                            "Tool '" + toolName + "' is not available for role '" + agentRole + "'. "
+                            + "This action requires a different agent role.");
+                }
+            } catch (IllegalArgumentException e) {
+                // Unknown role — fail closed
+                log.warnf("SECURITY: Unknown agentRole=%s — blocking tool=%s", agentRole, toolName);
+                return ToolResponse.failure(403, "Unknown agent role: " + agentRole);
+            }
+        }
+
+        // Autonomy governance check 
         var level = WorkspaceContext.autonomy();
         var requiredOp = tool.requiredOperation();
 
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
-            // Step 4: Sprint 2B Approval Interception
+            // Sprint 2B: Approval interception for SUPERVISED level sensitive operations
             if (level == AutonomyLevel.SUPERVISED &&
-                    (requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.VAULT_ACCESS
+                    (requiredOp == ToolOperation.NETWORK_OUTBOUND
+                            || requiredOp == ToolOperation.VAULT_ACCESS
                             || requiredOp == ToolOperation.EXECUTE_SHELL)) {
 
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
@@ -139,11 +170,13 @@ public class ToolRegistry {
 
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
-            
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
-            String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-            auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
-                SecurityEventType.TOOL_BLOCKED, "tool=" + toolName + " op=" + requiredOp);
+
+            auditService.record(
+                    WorkspaceContext.requireSessionId(),
+                    resolveUserId(),
+                    WorkspaceContext.agentRole(),
+                    SecurityEventType.TOOL_BLOCKED,
+                    "tool=" + toolName + " op=" + requiredOp);
 
             throw new SecurityException(
                     "Operation " + requiredOp + " not permitted at autonomy level " + level);
@@ -151,9 +184,9 @@ public class ToolRegistry {
 
         log.infof("Invoking tool '%s' (operation=%s, level=%s)", toolName, requiredOp, level);
 
+        // Sandbox path
         if (tool.requiresSandbox()) {
             var requiredSecrets = extractRequiredSecrets(tool.getClass(), "sandboxCommand");
-            var command = tool.sandboxCommand(params);
             var workspaceRoot = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
 
             try {
@@ -161,56 +194,53 @@ public class ToolRegistry {
                     Files.createDirectories(workspaceRoot);
                 }
 
-                String output = isolationExecutor.executeSandboxed(
+                var command = tool.sandboxCommand(params);
+
+                String initialOutput = isolationExecutor.executeSandboxed(
                         WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
-                
-                String userId = (String) MDC.get(MdcKeys.USER_ID);
-                String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
-                    SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=true");
-                    
-                return ToolResponse.success(output);
+
+                String postProcessedOutput = tool.postProcessOutput(initialOutput, params);
+
+                recordToolAudit(toolName, true);
+                return ToolResponse.success(postProcessedOutput);
+
+            } catch (IllegalArgumentException e) {
+                // Allowlist / guardrail violations from sandboxCommand() — tell the LLM clearly
+                log.warnf("Tool '%s' parameter validation failed: %s", toolName, e.getMessage());
+                return ToolResponse.failure(1, e.getMessage());
+
             } catch (SecurityException e) {
                 return ToolResponse.failure(1, "Security violation: " + e.getMessage());
+
             } catch (Exception e) {
                 String raw = e.getMessage() != null ? e.getMessage() : "";
-
                 String friendly;
                 if (toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                         && raw.contains("Cannot run program \"gh\"")) {
                     friendly = "GitHub integration is not available in this environment. "
-                            + "The `gh` CLI is not installed, so I cannot run GitHub commands here. "
-                            + "Please run the equivalent `gh` command locally on your own machine.";
+                            + "The `gh` CLI is not installed. "
+                            + "Please run the equivalent `gh` command locally.";
                 } else {
                     friendly = "Tool '" + toolName + "' failed: " + raw;
                 }
-
-                log.errorf(e, "Tool '%s' execution failed: %s (friendly='%s')", toolName, raw, friendly);
-
-                String userId = (String) MDC.get(MdcKeys.USER_ID);
-                String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-                auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole,
-                    SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=false");
-
+                log.errorf("Tool '%s' execution failed: %s", toolName, raw);
+                log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName,
+                        WorkspaceContext.requireSessionId());
+                recordToolAudit(toolName, false);
                 return ToolResponse.failure(1, friendly);
             }
-
         }
 
+        // Direct (non-sandbox) path
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         ToolResponse response = tool.execute(params);
-        
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
-        String agentRole = (String) MDC.get(MdcKeys.AGENT_ROLE);
-        auditService.record(WorkspaceContext.requireSessionId(), userId, agentRole, 
-            SecurityEventType.TOOL_INVOKED, "tool=" + toolName + " success=" + response.success());
-            
+        recordToolAudit(toolName, response.success());
         return response;
     }
 
     /**
      * Resumes execution of a pending tool from its serialized JSON parameters.
-     * 
+     *
      * @param toolName   The unique tool name.
      * @param paramsJson The serialized JSON parameters.
      * @param sessionId  The workspace session ID.
@@ -224,6 +254,35 @@ public class ToolRegistry {
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Failed to deserialize tool parameters for " + toolName, e);
         }
+    }
+
+    // Private helpers
+
+    /**
+     * Records a TOOL_INVOKED audit event using ScopedValues — not MDC.
+     * <p>
+     * MDC is ThreadLocal and dies at virtual thread boundaries. WorkspaceContext
+     * and WorkspaceScopeHolder use ScopedValues which are correctly propagated
+     * across Quarkus virtual threads.
+     */
+    private void recordToolAudit(String toolName, boolean success) {
+        auditService.record(
+                WorkspaceContext.requireSessionId(),
+                resolveUserId(),
+                WorkspaceContext.agentRole(),
+                SecurityEventType.TOOL_INVOKED,
+                "tool=" + toolName + " success=" + success);
+    }
+
+    /**
+     * Resolves the userId from the WorkspaceScopeHolder ScopedValue.
+     * Falls back to {@code "internal"} if the scope is not bound
+     * (e.g., background cron execution without an API key context).
+     */
+    private String resolveUserId() {
+        return WorkspaceScopeHolder.USER_ID.isBound()
+                ? WorkspaceScopeHolder.USER_ID.get()
+                : "internal";
     }
 
     /**
@@ -240,10 +299,11 @@ public class ToolRegistry {
     public static Map<String, String> extractRequiredSecrets(
             Class<? extends AgentTool> toolClass, String methodName) {
         var secrets = new LinkedHashMap<String, String>();
-        
-        // THE FIX: Unwrap Quarkus CDI Proxies to read annotations from the true class
+
+        // Unwrap Quarkus CDI proxies to read annotations from the true class
         Class<?> actualClass = toolClass;
-        while (actualClass.getName().contains("_ClientProxy") || actualClass.getName().contains("_Subclass")) {
+        while (actualClass.getName().contains("_ClientProxy")
+                || actualClass.getName().contains("_Subclass")) {
             actualClass = actualClass.getSuperclass();
         }
 
@@ -259,7 +319,6 @@ public class ToolRegistry {
             if (single != null && container == null) {
                 secrets.put(single.envVar(), single.vaultKey());
             }
-
         } catch (NoSuchMethodException _) {
             log.warnf("Tool %s has no %s(Map) method — no secrets extracted",
                     actualClass.getName(), methodName);

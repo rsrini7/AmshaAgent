@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
 
 /**
  * Parses a raw markdown skill document into a {@link SkillDefinition}.
@@ -61,8 +62,8 @@ public class SkillDefinitionParser {
             null, // Auto-generate UUID
             fm.name(),
             fm.description(),
-            fm.triggerPatterns() != null ? fm.triggerPatterns() : java.util.List.of(),
-            fm.toolCapabilities() != null ? fm.toolCapabilities() : java.util.List.of(),
+            fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
+            fm.toolCapabilities() != null ? fm.toolCapabilities() : List.of(),
             fm.maxIterations() > 0 ? fm.maxIterations() : 5,
             systemPromptBody
         );

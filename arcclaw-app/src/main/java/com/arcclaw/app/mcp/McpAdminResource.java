@@ -4,11 +4,13 @@ import java.util.Map;
 
 import com.arcclaw.mcp.bridge.McpToolBridge;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.arcclaw.mcp.config.McpToolAllowlist;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
@@ -18,13 +20,13 @@ import jakarta.ws.rs.core.MediaType;
 @RunOnVirtualThread
 public class McpAdminResource {
 
-    @Inject com.arcclaw.mcp.config.McpToolAllowlist config;
+    @Inject McpToolAllowlist config;
     @Inject McpToolBridge bridge;
     @Inject DynamicToolCapabilityRegistry registry;
     
     private void checkEnabled() {
         if (!config.serverEnabled()) {
-            throw new jakarta.ws.rs.NotFoundException();
+            throw new NotFoundException();
         }
     }
 

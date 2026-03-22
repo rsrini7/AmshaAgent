@@ -62,8 +62,15 @@ public class CommandDispatchHandler implements MessageHandler {
                 dispatch(context, "/reset");
                 yield HandleResult.STOP;
             }
-            case ChannelCommand.ListTasks _ -> {
-                dispatch(context, "/list");
+            case ChannelCommand.CronTasks _ -> {
+                dispatch(context, "/crons");
+                yield HandleResult.STOP;
+            }
+            case ChannelCommand.DeleteCron dc -> {
+                String input = dc.cronId()
+                        .map(id -> "deletecron " + id)
+                        .orElse("deletecron");
+                dispatch(context, input);
                 yield HandleResult.STOP;
             }
             case ChannelCommand.Unknown u -> {
@@ -81,7 +88,7 @@ public class CommandDispatchHandler implements MessageHandler {
                         result = WorkspaceContext.run(
                             sessionId, userId, chatId, 
                             AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
-                            () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw())
+                            () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
                         );
                     } catch (Exception e) {
                         log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage(), e);
@@ -119,7 +126,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 chatId,
                 AutonomyLevel.FULL, 
                 AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input)
+                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context)
             );
         } catch (Exception e) {
             log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage(), e);

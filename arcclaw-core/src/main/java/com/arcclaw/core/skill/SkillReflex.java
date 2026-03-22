@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
+import com.arcclaw.core.reflex.ReflexResult;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -29,10 +31,10 @@ public class SkillReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         List<CompiledSkillEntry> activeSkills = registry.getAll();
         if (activeSkills.isEmpty()) {
-            return "No skills are currently loaded.";
+            return ReflexResult.respond("No skills are currently loaded.", context);
         }
 
         String list = activeSkills.stream()
@@ -42,6 +44,6 @@ public class SkillReflex implements AgentReflex {
                 e.triggerPatterns().length))
             .collect(Collectors.joining("\n"));
 
-        return "### Active Skills\n\n" + list;
+        return ReflexResult.respond("### Active Skills\n\n" + list, context);
     }
 }

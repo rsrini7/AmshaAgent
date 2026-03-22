@@ -1,8 +1,8 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -36,9 +36,9 @@ public class CheckpointResumeHandler {
         this.toolRegistry = toolRegistry;
     }
 
-    public AgentResult handle(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
-        // 1. Only proceed if the goal explicitly signals a resumption attempt
-        if (goal == null || !goal.toLowerCase().startsWith(AgentSentinels.RESUME_GOAL_PREFIX)) {
+    public AgentResult handle(String sessionId, String agentRole, String goal, List<ReasoningStep> history, MessageContext context) {
+        // 1. Only proceed if the context explicitly signals a resumption attempt
+        if (context == null || !context.isResumeSignal()) {
             return null;
         }
         
@@ -64,7 +64,7 @@ public class CheckpointResumeHandler {
         // 3. Logic-Based Denial Check
         // We no longer scan chat history. We check if the "goal" passed from 
         // CommandDispatchHandler contains the explicit signal "denial".
-        boolean isDenial = goal.toLowerCase().contains("denial");
+        boolean isDenial = goal != null && goal.toLowerCase().contains("denial");
 
         if (isDenial) {
             log.infof("[AgentLoop] User denied tool execution for session %s, tool %s", sessionId, pendingTool);

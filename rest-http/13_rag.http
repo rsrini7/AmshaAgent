@@ -1,0 +1,44 @@
+
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+
+###
+
+### [SESSION-1] Create a new session
+# @name ragSession
+# Expect 201: {"sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### Ask a multi-step question with maxIterations=1
+# Post-RAG: agent calls ingest_document tool → 202 AWAITING_APPROVAL
+# Expected: 202 with toolName=ingest_document
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Ingest This: Write a 500-word essay about the history of Java and then analyze its performance characteristics.",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+
+###
+
+### [HITL-3] Poll status — should show AWAITING_APPROVAL
+# Expect 200: {"sessionId":"...","status":"AWAITING_APPROVAL","steps":[...],"failReason":null}
+# Run this immediately after HITL-2 before approving
+GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###

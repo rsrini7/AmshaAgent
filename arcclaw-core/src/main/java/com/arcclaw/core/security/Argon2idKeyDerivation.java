@@ -1,11 +1,16 @@
 package com.arcclaw.core.security;
 
-import jakarta.enterprise.context.ApplicationScoped;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.nio.charset.StandardCharsets;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Handles key derivation using the Argon2id algorithm (winner of the Password
@@ -35,7 +40,7 @@ public class Argon2idKeyDerivation {
      * unrecoverable.
      */
     @ConfigProperty(name = "arcclaw.vault.pepper")
-    String pepper;
+    char[] pepperChars;
 
     /**
      * Derives a symmetric encryption key for a specific session.
@@ -50,29 +55,47 @@ public class Argon2idKeyDerivation {
             throw new IllegalArgumentException("Session ID cannot be null or empty during key derivation");
         }
 
-        // Convert inputs to bytes
-        // Note: In a stricter implementation, pepper would be loaded as char[]/byte[].
-        // Here we accept the String config injection but convert immediately.
-        byte[] passwordBytes = pepper.getBytes(StandardCharsets.UTF_8);
+        // Properly extract bytes from ByteBuffer without assuming it's fully packed
+        ByteBuffer bb = StandardCharsets.UTF_8.encode(CharBuffer.wrap(pepperChars));
+        byte[] passwordBytes = new byte[bb.remaining()];
+        bb.get(passwordBytes);
         byte[] saltBytes = sessionId.getBytes(StandardCharsets.UTF_8);
 
-        // Configure Argon2id
-        Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
-                .withVersion(Argon2Parameters.ARGON2_VERSION_13)
-                .withMemoryAsKB(MEMORY_COST_KB)
-                .withIterations(ITERATIONS)
-                .withParallelism(PARALLELISM)
-                .withSalt(saltBytes)
-                .build();
+        try {
+            // Configure Argon2id
+            Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
+                    .withVersion(Argon2Parameters.ARGON2_VERSION_13)
+                    .withMemoryAsKB(MEMORY_COST_KB)
+                    .withIterations(ITERATIONS)
+                    .withParallelism(PARALLELISM)
+                    .withSalt(saltBytes)
+                    .build();
 
-        Argon2BytesGenerator generator = new Argon2BytesGenerator();
-        generator.init(params);
+            Argon2BytesGenerator generator = new Argon2BytesGenerator();
+            generator.init(params);
 
-        // Generate Key
-        byte[] resultKey = new byte[KEY_LENGTH_BYTES];
-        generator.generateBytes(passwordBytes, resultKey);
+            // Generate Key
+            byte[] resultKey = new byte[KEY_LENGTH_BYTES];
+            generator.generateBytes(passwordBytes, resultKey);
 
-        // Return wrapped key (caller is responsible for closing)
-        return new VaultKey(resultKey);
+            // Return wrapped key (caller is responsible for closing)
+            return new VaultKey(resultKey);
+        } finally {
+            // Zero ALL intermediate arrays immediately after use — not only in @PreDestroy
+            Arrays.fill(passwordBytes, (byte) 0);
+            Arrays.fill(pepperChars, '\0');
+            // Also zero the ByteBuffer backing array — encode() allocates an internal buffer
+            // that may retain pepper bytes after bb.get() completes
+            if (bb.hasArray()) {
+                Arrays.fill(bb.array(), (byte) 0);
+            }
+        }
+    }
+
+    @PreDestroy
+    void cleanup() {
+        if (pepperChars != null) {
+            Arrays.fill(pepperChars, '\0');
+        }
     }
 }

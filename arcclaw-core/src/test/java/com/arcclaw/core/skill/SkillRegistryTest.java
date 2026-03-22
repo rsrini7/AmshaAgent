@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.Set;
+import com.arcclaw.core.agent.role.RoleDefinition;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,10 +16,9 @@ class SkillRegistryTest {
 
     private CompiledSkillEntry createMockEntry(String name, String regex) {
         SkillDefinition def = new SkillDefinition("id", name, "desc", List.of(), List.of(), 5, "prompt");
-        Pattern[] patterns = new Pattern[]{Pattern.compile(regex, Pattern.CASE_INSENSITIVE)};
-        com.arcclaw.core.agent.role.RoleDefinition role = new com.arcclaw.core.agent.role.RoleDefinition(
-            "skill:" + name, name, "desc", 5, false, java.util.Set.of()
-        );
+        Pattern[] patterns = new Pattern[] { Pattern.compile(regex, Pattern.CASE_INSENSITIVE) };
+        RoleDefinition role = new RoleDefinition(
+                "skill:" + name, name, "desc", 5, false, Set.of());
         return new CompiledSkillEntry(def, patterns, role, "classpath");
     }
 
@@ -68,15 +69,40 @@ class SkillRegistryTest {
         assertTrue(registry.findMatch("").isEmpty());
         assertTrue(registry.findMatch("   ").isEmpty());
     }
-    
+
     @Test
     void testReloadHandlesDuplicateNamesByOverwriting() {
         CompiledSkillEntry e1 = createMockEntry("duplicate", "match1");
         CompiledSkillEntry e2 = createMockEntry("duplicate", "match2");
         registry.reload(List.of(e1, e2));
-        
+
         // Internal reload logic uses a map, so duplicates in the input list
         // result in the last one winning.
         assertEquals(1, registry.size());
+    }
+
+    @Test
+    void testCurrentSnapshotProvidesStableList() {
+        CompiledSkillEntry e1 = createMockEntry("code-reviewer", ".*");
+        registry.reload(List.of(e1));
+
+        List<CompiledSkillEntry> snapshot = registry.currentSnapshot();
+
+        // Check it contains the element
+        assertEquals(1, snapshot.size());
+
+        // Verify that even if List.copyOf returns the same instance,
+        // the snapshot remains stable across a swap (hot reload).
+        CompiledSkillEntry e2 = createMockEntry("bug-hunter", ".*");
+        registry.reload(List.of(e2)); // Hot reload
+
+        // Snapshot is frozen
+        assertEquals(1, snapshot.size());
+        assertEquals("code-reviewer", snapshot.get(0).definition().name());
+
+        // New snapshot reflects new entries
+        List<CompiledSkillEntry> newSnapshot = registry.currentSnapshot();
+        assertEquals(1, newSnapshot.size());
+        assertEquals("bug-hunter", newSnapshot.get(0).definition().name());
     }
 }

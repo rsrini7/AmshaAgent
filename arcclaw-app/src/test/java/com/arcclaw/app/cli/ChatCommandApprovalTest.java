@@ -76,7 +76,7 @@ public class ChatCommandApprovalTest {
         System.setIn(new ByteArrayInputStream(input.getBytes()));
 
         // Mock ReflexRegistry to return no reflex for "run sensitive tool"
-        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), eq("run sensitive tool")))
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), eq("run sensitive tool"), any()))
                 .thenReturn(new ReflexResult(Optional.empty(), "run sensitive tool"));
 
         // Mock AgentLoop to return AwaitingApproval
@@ -84,7 +84,7 @@ public class ChatCommandApprovalTest {
         AgentResult.AwaitingApproval awaiting = new AgentResult.AwaitingApproval(
                 "test-tool", longParams, "session-123", List.of(), 10, 10
         );
-        when(agentLoop.run(any(), any(), eq("run sensitive tool"), any(), anyInt()))
+        when(agentLoop.run(any(), any(), eq("run sensitive tool"), any(), anyInt(), any()))
                 .thenReturn(awaiting);
 
         // Run the command
@@ -111,14 +111,14 @@ public class ChatCommandApprovalTest {
         System.setIn(new ByteArrayInputStream(input.getBytes()));
 
         // Mock ReflexRegistry to handle /approve
-        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), eq("/approve")))
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), eq("/approve"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approved!"), "/approve"));
 
         // Run the command
         chatCommand.run();
 
         // Verify ReflexRegistry was called
-        verify(reflexRegistry).processIfReflex(anyString(), eq("cli-user"), eq("cli-chat"), eq("/approve"));
+        verify(reflexRegistry).processIfReflex(anyString(), eq("cli-user"), eq("cli-chat"), eq("/approve"), any());
         
         // Verify output contains reflex response
         String output = testOut.toString();

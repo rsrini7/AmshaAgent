@@ -2,6 +2,7 @@ package com.arcclaw.core.skill;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Immutable definition of an agent skill loaded from a YAML frontmatter markdown file.
@@ -53,6 +54,6 @@ public record SkillDefinition(
         triggerPatterns = triggerPatterns == null ? List.of() : List.copyOf(triggerPatterns);
         toolCapabilities = toolCapabilities == null ? List.of() : List.copyOf(toolCapabilities);
         if (maxIterations <= 0) maxIterations = 5;
-        if (id == null || id.isBlank()) id = java.util.UUID.randomUUID().toString();
+        if (id == null || id.isBlank()) id = UUID.randomUUID().toString();
     }
 }

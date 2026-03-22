@@ -26,6 +26,8 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.CronScheduleUtil;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -66,18 +68,18 @@ public class ApproveReflex implements AgentReflex {
     }
 
     @Override
-    public String execute(String sessionId, String userId, String chatId, String input) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         ChannelCommand.Approve approve = (ChannelCommand.Approve) ChannelCommand.parse(input);
         Optional<String> cronId = approve.cronId();
 
         try {
-            return WorkspaceScopeHolder.call(sessionId, () -> {
+            String response = WorkspaceScopeHolder.call(sessionId, () -> {
                 // Seed development secrets for the approval thread
                 devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
                 // 1. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {
-                    return handleCronApproval(cronId.get(), userId, chatId);
+                    return handleCronApproval(cronId.get(), userId, chatId, context);
                 }
 
                 // 2. Session checkpoint — interactive approval
@@ -92,10 +94,14 @@ public class ApproveReflex implements AgentReflex {
 
                 if (activeRole != null) {
                     log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
+                    
+                    context.setResumeSignal(true);
+                    context.setGoal(AgentSentinels.GOAL_RESUME_APPROVED);
+
                     final String finalRole = activeRole;
                     AgentResult result = WorkspaceContext.runWithFullAutonomy(
                             sessionId, userId, chatId, finalRole,
-                            () -> agentLoop.run(sessionId, finalRole, "Resuming task after approval", reasoningEngine, 5)
+                            () -> agentLoop.run(sessionId, finalRole, AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 5, context)
                     );
                     return CronResultFormatter.format(result);
                 }
@@ -119,13 +125,14 @@ public class ApproveReflex implements AgentReflex {
                 // 4. Nothing pending anywhere
                 return "No pending tool executions require approval.";
             });
+            return ReflexResult.respond(response, context);
         } catch (Exception e) {
             log.errorf("Failed to process approval for session %s: %s", sessionId, e.getMessage(), e);
-            return "❌ **Approval Error**: An internal fault occurred while resuming the task.";
+            return ReflexResult.respond("❌ **Approval Error**: An internal fault occurred while resuming the task.", context);
         }
     }
 
-    private String handleCronApproval(String cronId, String userId, String chatId) throws Exception {
+    private String handleCronApproval(String cronId, String userId, String chatId, MessageContext context) throws Exception {
         AgentCronEntity cron = cronRepository.findByUserId(userId).stream()
                 .filter(c -> c.id.equals(cronId))
                 .findFirst()
@@ -151,12 +158,15 @@ public class ApproveReflex implements AgentReflex {
 
         String cronSessionId = pendingCheckpoint.getSessionId(); // ← actual sessionId
 
+        context.setResumeSignal(true);
+        context.setGoal(AgentSentinels.GOAL_RESUME_APPROVED);
+
         AgentResult result = WorkspaceContext.run(
                 cronSessionId, cron.userId, cron.chatId,
                 AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> agentLoop.run(
                         cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        "Resuming task after approval", reasoningEngine, 5)
+                        AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 5, context)
         );
 
         // Exhaustive status transition

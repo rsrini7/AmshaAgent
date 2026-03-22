@@ -95,7 +95,7 @@ class ContextCompactionServiceIntegrationTest {
                             .build());
 
             // Act
-            boolean result = service.compactIfNeeded(TEST_SESSION_ID, "test-user");
+            boolean result = service.compact(TEST_SESSION_ID, "test-user");
 
             // Assert
             assertTrue(result, "Compaction should have taken place");

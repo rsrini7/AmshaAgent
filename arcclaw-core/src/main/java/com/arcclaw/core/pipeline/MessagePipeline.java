@@ -45,14 +45,15 @@ public class MessagePipeline {
                     return;
                 }
             } catch (Exception e) {
-                log.errorf(e, "Pipeline handler %s failed for chat %s",
-                        handler.getClass().getSimpleName(), context.getChatId());
+                log.errorf("Pipeline handler %s failed for chat %s: %s",
+                        handler.getClass().getSimpleName(), context.getChatId(), e.getMessage());
+                log.debugf(e, "Full stacktrace for pipeline failure in handler %s", handler.getClass().getSimpleName());
                 try {
                     context.getSender().sendRaw(context.getUser(),
                         "⚠️ An internal error occurred. Please try again.");
                 } catch (Exception notifyEx) {
-                    log.warnf(notifyEx, "Failed to send pipeline error notification to chat %s",
-                            context.getChatId());
+                    log.warnf("Failed to send pipeline error notification to chat %s: %s",
+                            context.getChatId(), notifyEx.getMessage());
                 }
                 return;
             }

@@ -1,12 +1,17 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import com.arcclaw.core.compaction.CompactionInFlightFlag;
+import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.state.ContextCompactionService;
+import com.arcclaw.core.scope.WorkspaceScoped;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
+import com.arcclaw.core.scope.WorkspaceContext;
 
 /**
  * compacts conversation history if necessary before passing to the agent.
@@ -18,6 +23,13 @@ public class CompactionHandler implements MessageHandler {
     @Inject
     ContextCompactionService compactionService;
 
+    @Inject
+    Event<CompactionRequest> compactionEvent;
+
+    @Inject
+    @WorkspaceScoped
+    CompactionInFlightFlag compactionInFlight;
+
     @Override
     public int priority() {
         return 60;
@@ -25,18 +37,28 @@ public class CompactionHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
+        if (!WorkspaceContext.SESSION_ID.isBound()) {
+            log.debug("CompactionHandler: WorkspaceScoped context not active, deferring compaction check");
+            return HandleResult.CONTINUE;
+        }
+
         String sessionId = context.getSessionId()
                 .orElseThrow(() -> new IllegalStateException("Session ID must be resolved before compaction."));
         String userId = context.getUser().platformId();
 
-        try {
-            boolean compacted = compactionService.compactIfNeeded(sessionId, userId);
-            if (compacted) {
-                log.debugf("Compaction triggered for session %s", sessionId);
+        if (compactionService.shouldCompact(sessionId)) {
+            if (compactionInFlight.compareAndSet(false, true)) {
+                compactionEvent.fireAsync(new CompactionRequest(sessionId, userId))
+                        .toCompletableFuture()
+                        .exceptionally(ex -> {
+                            log.errorf(ex, "Async compaction event delivery failed for session %s", sessionId);
+                            compactionInFlight.set(false);
+                            return null;
+                        });
+                log.debugf("Async compaction triggered for session %s", sessionId);
+            } else {
+                log.debugf("Compaction already in-flight for session %s — skipping trigger", sessionId);
             }
-        } catch (Exception e) {
-            // Log but don't fail the pipeline; compaction is an optimization
-            log.warnf(e, "Compaction failed for session %s during pipeline execution", sessionId);
         }
 
         return HandleResult.CONTINUE;

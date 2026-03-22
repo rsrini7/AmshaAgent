@@ -114,7 +114,7 @@ class CronResultHandlerTest {
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
-                eq(com.arcclaw.core.audit.SecurityEventType.CRONFAILED), anyString());
+                eq(SecurityEventType.CRONFAILED), anyString());
     }
 
     @Test
@@ -127,7 +127,7 @@ class CronResultHandlerTest {
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
-                eq(com.arcclaw.core.audit.SecurityEventType.CRONFAILED), anyString());
+                eq(SecurityEventType.CRONFAILED), anyString());
     }
 
     @Test
@@ -140,6 +140,6 @@ class CronResultHandlerTest {
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
-                eq(com.arcclaw.core.audit.SecurityEventType.CRONFAILED), anyString());
+                eq(SecurityEventType.CRONFAILED), anyString());
     }
 }

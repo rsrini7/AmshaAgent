@@ -6,6 +6,8 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.security.DestructiveVocabularyFilter;
+
 import dev.langchain4j.exception.HttpException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -21,6 +23,9 @@ public class IntentClassificationHandler implements MessageHandler {
     @Inject
     IntentClassifier classifier;
 
+    @Inject
+    DestructiveVocabularyFilter destructiveVocabularyFilter;
+
     @Override
     public int priority() {
         return 50;
@@ -29,13 +34,32 @@ public class IntentClassificationHandler implements MessageHandler {
     @Override
     public HandleResult handle(MessageContext context) {
         if (context.getAgentRole().isPresent()) {
-            return HandleResult.CONTINUE; // Already resolved
+            return HandleResult.CONTINUE;
         }
 
         ChannelMessage message = context.getMessage();
         if (message != null && message.text() != null) {
+
+            // ── DESTRUCTIVE VOCABULARY GUARD ──────────────────────────────
+            // Block before any LLM call. coordinator still has github tool,
+            // so overriding role is not enough — we must stop the pipeline.
+            if (destructiveVocabularyFilter.isDestructive(message.text())) {
+                log.warnf("[IntentClassificationHandler] Destructive vocabulary detected " +
+                        "— blocking before agent dispatch. chat=%s", context.getChatId());
+                String safeReply = "⛔ I can only perform read operations (view, list). " +
+                        "Destructive operations such as deleting repositories are not supported.";
+                context.getSender().sendRaw(context.getUser(), safeReply);
+                return HandleResult.STOP;    // ← short-circuits AgentDispatchHandler entirely
+            }
+            // ── END DESTRUCTIVE VOCABULARY GUARD ──────────────────────────
+
             try {
                 String role = classifier.classify(message.text());
+
+                // Apply destructive-vocabulary role override as secondary guard
+                // (handles edge cases where isDestructive missed but role is tool-capable)
+                role = destructiveVocabularyFilter.filter(role, message.text());  // ← ADD
+
                 context.setAgentRole(role);
                 log.infof("Classified message as role '%s' for chat %s", role, context.getChatId());
             } catch (HttpException e) {

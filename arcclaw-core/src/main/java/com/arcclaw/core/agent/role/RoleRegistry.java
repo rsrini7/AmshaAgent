@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -69,6 +70,6 @@ public class RoleRegistry {
         RoleDefinition def = dynamicRoles.get(canonicalName);
         return def == null ? Set.of() : def.capabilities().stream()
                 .map(ToolCapability::toolName)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

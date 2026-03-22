@@ -160,6 +160,23 @@ public class AgentCronRepository {
     }
 
     /**
+     * Skip jobs that missed their lookback window.
+     * Updates status to SKIPPED and advances nextFireTime.
+     */
+    @Transactional(TxType.REQUIRED)
+    public void markSkipped(List<AgentCronEntity> skippedJobs) {
+        String now = InstantToTextConverter.format(Instant.now());
+        for (AgentCronEntity job : skippedJobs) {
+            em.createNativeQuery(
+                "UPDATE agentcron SET status='SKIPPED', nextFireTime=:next, updatedAt=:now WHERE id=:id"
+            ).setParameter("next", InstantToTextConverter.format(job.nextFireTime))
+             .setParameter("now", now)
+             .setParameter("id", job.id)
+             .executeUpdate();
+        }
+    }
+
+    /**
      * Crash/OOM recovery: resets RUNNING rows stuck longer than threshold.
      * Rows with null lastFireTime (claimed but never started) use createdAt
      * as fallback.
@@ -186,8 +203,8 @@ public class AgentCronRepository {
      * Tenant-isolated delete. User B cannot delete User A's cron row.
      */
     @Transactional(TxType.REQUIRED)
-    public void deleteByIdAndUserId(String id, String userId) {
-        em.createQuery(
+    public int deleteByIdAndUserId(String id, String userId) {
+        return em.createQuery(
                 "DELETE FROM AgentCronEntity c WHERE c.id = :id AND c.userId = :userId"
         ).setParameter("id", id)
          .setParameter("userId", userId)

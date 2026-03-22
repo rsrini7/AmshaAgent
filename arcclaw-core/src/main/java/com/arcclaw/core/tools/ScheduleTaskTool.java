@@ -55,7 +55,7 @@ public class ScheduleTaskTool implements AgentTool {
      * The LLM self-corrects via the existing TOOL REJECTION HANDLING prompt rule.
      */
     private static final Pattern NAKED_PRONOUN = Pattern.compile(
-            "\\b(it|this|that|the code|the file|the thing|the result)\\b",
+            "\\b(this|that|the code|the file|the thing|the result)\\b",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -146,8 +146,13 @@ public class ScheduleTaskTool implements AgentTool {
         String goal           = (String) params.get("goal");
         String timezone       = params.containsKey("timezone")
                 ? (String) params.get("timezone") : "UTC";
-        boolean runOnce       = params.containsKey("runOnce")
-                && Boolean.parseBoolean(String.valueOf(params.get("runOnce")));
+        Object runOnceRaw = params.get("runOnce");
+        boolean runOnce = switch (runOnceRaw) {
+            case Boolean b -> b;
+            case String s  -> Boolean.parseBoolean(s);
+            case null      -> false;
+            default        -> false;
+        };
 
 
         if (cronExpression == null || cronExpression.isBlank()) {
@@ -157,9 +162,14 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "goal is required.");
         }
 
+        // Only flag "it" if the entire goal is under 6 words — likely no context
+        boolean hasNakedIt = goal.split("\\s+").length < 6
+                && goal.toLowerCase().matches(".*\\bit\\b.*");
+
+        boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
 
         // Step 2 — Naked pronoun guard
-        if (NAKED_PRONOUN.matcher(goal).find()) {
+        if (hasNakedPronoun) {
             return ToolResponse.failure(422,
                     "Goal contains unresolved references (e.g., 'it', 'the code'). " +
                     "Rewrite with explicit technical context before scheduling. " +

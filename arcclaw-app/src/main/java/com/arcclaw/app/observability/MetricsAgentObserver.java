@@ -18,6 +18,8 @@ public class MetricsAgentObserver implements AgentObserver {
                 "type", "input").increment(inputTokens);
         registry.counter("arcclaw.agent.tokens",
                 "type", "output").increment(outputTokens);
+        // One counter per LLM round-trip
+        registry.counter("arcclaw.agent.llm.calls").increment();
     }
 
     @Override
@@ -25,5 +27,18 @@ public class MetricsAgentObserver implements AgentObserver {
         // Count agent invocations tagged by role
         registry.counter("arcclaw.agent.invocations",
                 "role", role != null ? role : "unknown").increment();
+
+        // Track which tools are being called and how often
+        if (step.action() != null && !ReasoningStep.FINISH.equals(step.action())) {
+            registry.counter("arcclaw.agent.tool.calls",
+                    "tool", step.action(),
+                    "role", role != null ? role : "unknown").increment();
+        }
+
+        // Track finish steps separately — measures task completion rate
+        if (ReasoningStep.FINISH.equals(step.action())) {
+            registry.counter("arcclaw.agent.completions",
+                    "role", role != null ? role : "unknown").increment();
+        }                
     }
 }

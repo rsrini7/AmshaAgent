@@ -62,10 +62,10 @@ class ChannelCommandParseTest {
     }
 
     @Test
-    void parseListTasks() {
-        assertInstanceOf(ChannelCommand.ListTasks.class, ChannelCommand.parse("/list"));
-        assertInstanceOf(ChannelCommand.ListTasks.class, ChannelCommand.parse("/listtasks"));
-        assertInstanceOf(ChannelCommand.ListTasks.class, ChannelCommand.parse("/listtask"));
+    void parseCronTasks() {
+        assertInstanceOf(ChannelCommand.CronTasks.class, ChannelCommand.parse("/crons"));
+        assertInstanceOf(ChannelCommand.CronTasks.class, ChannelCommand.parse("/listtasks"));
+        assertInstanceOf(ChannelCommand.CronTasks.class, ChannelCommand.parse("/listtask"));
     }
 
     // ------------------------------------------------------------------
@@ -137,7 +137,7 @@ class ChannelCommandParseTest {
         assertTrue(new ChannelCommand.Reset().isControlCommand());
 
         assertFalse(new ChannelCommand.Status().isControlCommand());
-        assertFalse(new ChannelCommand.ListTasks().isControlCommand());
+        assertFalse(new ChannelCommand.CronTasks().isControlCommand());
         assertFalse(new ChannelCommand.Unknown("raw").isControlCommand());
     }
 }

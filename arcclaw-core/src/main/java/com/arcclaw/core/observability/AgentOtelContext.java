@@ -1,14 +1,16 @@
 package com.arcclaw.core.observability;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.jboss.logging.Logger;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * OTel session-level span management.
@@ -18,6 +20,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @ApplicationScoped
 public class AgentOtelContext implements AgentObserver {
+
+    private static final Logger log = Logger.getLogger(AgentOtelContext.class);
 
     @Inject
     Tracer tracer;
@@ -34,7 +38,8 @@ public class AgentOtelContext implements AgentObserver {
      * @return The active root {@link Span}.
      */
     public Span startSessionSpan(String sessionId) {
-        if (sessionId == null) return null;
+        if (sessionId == null)
+            return null;
         Span span = tracer.spanBuilder("arcclaw.session")
                 .setAttribute("sessionId", sessionId)
                 .startSpan();
@@ -49,7 +54,8 @@ public class AgentOtelContext implements AgentObserver {
      * @param sessionId The workspace session ID.
      */
     public void endSessionSpan(String sessionId) {
-        if (sessionId == null) return;
+        if (sessionId == null)
+            return;
         Span span = rootSpans.remove(sessionId);
         if (span != null) {
             span.end();
@@ -70,7 +76,8 @@ public class AgentOtelContext implements AgentObserver {
      * @return The child {@link Span}.
      */
     public Span childSpan(String sessionId, String operationName) {
-        if (sessionId == null) return null;
+        if (sessionId == null)
+            return null;
         Span parent = rootSpans.get(sessionId);
         Context parentContext = parent != null
                 ? Context.current().with(parent)
@@ -82,7 +89,8 @@ public class AgentOtelContext implements AgentObserver {
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
-        if (sessionId == null) return;
+        if (sessionId == null)
+            return;
         Span rootSpan = rootSpans.get(sessionId);
         if (rootSpan != null) {
             long totalIn = totalInputTokens
@@ -94,5 +102,49 @@ public class AgentOtelContext implements AgentObserver {
             rootSpan.setAttribute("llm.usage.prompt_tokens", totalIn);
             rootSpan.setAttribute("llm.usage.completion_tokens", totalOut);
         }
+    }
+
+    /**
+     * Starts a child span for one agent reasoning iteration.
+     * Must be ended via span.end() in a finally block by the caller.
+     *
+     * @return the started Span, or Span.getInvalid() if tracing is unavailable for
+     *         this session
+     */
+    public Span startIterationSpan(String sessionId, int iteration, String agentRole) {
+        Span parent = rootSpans.get(sessionId);
+        if (parent == null) {
+            log.debugf("No root span for session %s — returning no-op span", sessionId);
+            return Span.getInvalid();
+        }
+        Context parentContext = Context.current().with(parent);
+        return tracer.spanBuilder("agent.iteration")
+                .setParent(parentContext)
+                .setAttribute("session.id", sessionId)
+                .setAttribute("agent.role", agentRole)
+                .setAttribute("iteration", (long) iteration)
+                .startSpan();
+    }
+
+    /**
+     * Starts a child span for a single tool invocation.
+     * Must be ended via span.end() in a finally block by the caller.
+     *
+     * @return the started Span, or Span.getInvalid() if tracing is unavailable for
+     *         this session
+     */
+    public Span startToolSpan(String sessionId, String toolName, String toolOperation) {
+        Span parent = rootSpans.get(sessionId);
+        if (parent == null) {
+            log.debugf("No root span for session %s — returning no-op span", sessionId);
+            return Span.getInvalid();
+        }
+        Context parentContext = Context.current().with(parent);
+        return tracer.spanBuilder("agent.tool")
+                .setParent(parentContext)
+                .setAttribute("session.id", sessionId)
+                .setAttribute("tool.name", toolName)
+                .setAttribute("tool.operation", toolOperation)
+                .startSpan();
     }
 }

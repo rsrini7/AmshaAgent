@@ -102,16 +102,23 @@ public class ManageScheduleTool implements AgentTool {
                 if (cronId == null || cronId.isBlank()) {
                     yield ToolResponse.failure(400, "cronId is required for delete action.");
                 }
-                cronRepository.deleteByIdAndUserId(cronId, userId);
+
+                int deleted = cronRepository.deleteByIdAndUserId(cronId, userId); // ← capture result
+
+                if (deleted == 0) {
+                    yield ToolResponse.failure(404,
+                        "Cron job not found: " + cronId + ". Use action='list' to see valid IDs.");
+                }
 
                 String sessionId = WorkspaceScopeHolder.getIfActive();
-                auditService.record(sessionId, userId,
+                auditService.record(sessionId, userId,           // ← only audit on actual deletion
                         AgentRoleEnum.COORDINATOR.toScopedName(),
                         SecurityEventType.CRONDELETED,
                         "cronId=" + cronId);
 
-                yield ToolResponse.success("Cron job " + cronId + " deleted.");
+                yield ToolResponse.success("✅ Cron job " + cronId + " deleted.");
             }
+
             default -> ToolResponse.failure(400,
                     "Unknown action: " + action + ". Use 'list' or 'delete'.");
         };

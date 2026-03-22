@@ -12,6 +12,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import dev.langchain4j.data.message.UserMessage;
+import jakarta.enterprise.event.ObservesAsync;
+import com.arcclaw.core.compaction.CompactionRequest;
+import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -69,7 +72,29 @@ public class ContextCompactionService {
         --- END ---
         """;
 
-    public boolean compactIfNeeded(String sessionId, String userId) {
+    @Inject
+    CompactionInFlightFlag compactionInFlight;
+
+    public boolean shouldCompact(String sessionId) {
+        if (!enabled) return false;
+        List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
+        long count = allMessages.stream()
+                .filter(m -> !(m instanceof SystemMessage))
+                .count();
+        return count >= threshold;
+    }
+
+    public void onCompactionRequested(@ObservesAsync CompactionRequest request) {
+        try {
+            compact(request.sessionId(), request.userId());
+        } catch (Exception e) {
+            log.errorf(e, "Compaction failed for session %s", request.sessionId());
+        } finally {
+            compactionInFlight.set(false);
+        }
+    }
+
+    public boolean compact(String sessionId, String userId) {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);

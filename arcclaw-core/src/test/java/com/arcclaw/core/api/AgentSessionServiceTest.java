@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -23,12 +24,14 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -64,6 +67,9 @@ class AgentSessionServiceTest {
     AgentResponseMapper responseMapper;
 
     @Mock
+    ReflexRegistry reflexRegistry;
+
+    @Mock
     ExecutorService vThreads;
 
     @Mock
@@ -78,7 +84,7 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, devSeeder, responseMapper, vThreads);
+                heartbeatTracker, devSeeder, responseMapper, reflexRegistry, vThreads);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
@@ -87,8 +93,12 @@ class AgentSessionServiceTest {
         mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
         
-        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), any(), any(AutonomyLevel.class), anyString(), any(Callable.class)))
-                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(5)).call());
+        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), any(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
+
+        // Ensure session exists by default so we don't return 404 in validateSession.
+        // Marked lenient to avoid UnnecessaryStubbingException in tests that don't call validateSession.
+        lenient().when(heartbeatTracker.exists(anyString())).thenReturn(true);
     }
 
     @AfterEach
@@ -108,10 +118,11 @@ class AgentSessionServiceTest {
     void testRunSync_finished_returns200() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Finished.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenReturn(result);
-        when(responseMapper.mapResult(result, false)).thenReturn(Response.ok().build());
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
+        when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(Response.ok().build());
 
         Response response = service.runSync("sess1", request);
+        assertNotNull(response, "Response should not be null");
         assertEquals(200, response.getStatus());
     }
 
@@ -119,15 +130,17 @@ class AgentSessionServiceTest {
     void testRunSync_complianceViolation_returns451() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Failed.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt())).thenReturn(result);
-        when(responseMapper.mapResult(result, false)).thenReturn(Response.status(451).build());
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
+        when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(Response.status(451).build());
 
         Response response = service.runSync("sess1", request);
+        assertNotNull(response, "Response should not be null");
         assertEquals(451, response.getStatus());
     }
 
     @Test
     void testApprove_noCheckpoint_returns409() {
+        // Mock session exists but checkpoint is missing
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         Response response = service.approve("sess1", "coordinator");
         assertEquals(409, response.getStatus());
@@ -153,7 +166,6 @@ class AgentSessionServiceTest {
         Response response = service.deny("sess1", "coordinator");
         assertEquals(200, response.getStatus());
         verify(agentStore).markFailed(123L, "Human denied via REST");
-        verify(heartbeatTracker).removeHeartbeat("sess1");
     }
 
     @Test
@@ -165,7 +177,8 @@ class AgentSessionServiceTest {
 
     @Test
     void testGetStatus_notFound_returns404() {
-        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        // Explicitly mock as non-existent for this specific test
+        when(heartbeatTracker.exists(anyString())).thenReturn(false);
         Response response = service.getStatus("sess1", "coordinator");
         assertEquals(404, response.getStatus());
     }

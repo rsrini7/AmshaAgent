@@ -35,7 +35,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = key-internal-changeme
+@validKey = Fxa8CCQGpjHr7DS3eiSTlb3W0RKzImwHXPkNbq9S98c=
 
 # ─────────────────────────────────────────────────────────────────
 # MULTI-TURN CONVERSATION
@@ -114,6 +114,14 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {"goal": "Memory window test message 1: What is virtual threading?", "agentRole": "coordinator", "maxIterations": 1}
+
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
 
 ###
 

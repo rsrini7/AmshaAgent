@@ -9,6 +9,8 @@ arcclaw:
   channel:
     telegram:
       bot-token: "test-bot-token"
+  cron:
+    max-lookback-window: PT999H
 
 quarkus:
   application:
@@ -53,7 +55,9 @@ quarkus:
     category:
       "org.hibernate.SQL":
         level: WARN
-      "dev.langchain4j.model.chat.listener.ListenersUtil":
+      "org.hibernate.resource.transaction":
+        level: ERROR
+      "com.arjuna":
         level: ERROR
       "com.arcclaw.core.agent":
         level: "OFF"

@@ -21,6 +21,8 @@ public final class MessageContext {
     private String sessionId;
     private String agentRole;
     private AgentState initialState;
+    private String goal;
+    private boolean resumeSignal = false;
 
     public MessageContext(String chatId, ChannelUser user, ChannelMessage message, ChannelSender sender) {
         this.chatId = chatId;
@@ -42,4 +44,11 @@ public final class MessageContext {
 
     public Optional<AgentState> getInitialState() { return Optional.ofNullable(initialState); }
     public void setInitialState(AgentState initialState) { this.initialState = initialState; }
+
+    public boolean isResumeSignal() { return resumeSignal; }
+    public void setResumeSignal(boolean resumeSignal) { this.resumeSignal = resumeSignal; }
+
+    public String getGoal() { return goal; }
+    public void setGoal(String goal) { this.goal = goal; }
 }
+

@@ -70,6 +70,7 @@
 | **Security** | Regex Boundary Failure | `\b` fails on `rm -rf` due to space/dash. | Split pattern into `DESTRUCTIVE_WORDS` and `RM_RF_PATTERN` (`(?i)rm\s*-rf`). |
 | **Testing** | `TestInstantiationException` | `@InjectMock` on `@Singleton` / Field Injection incompatibility. | Migrate to **Constructor Injection** and use `MockitoExtension` for manual instantiation. |
 | **Config** | Missing Telegram Config | `arcclaw.telegram.*` properties ignored. | Ensure all Telegram properties use the `arcclaw.channel.telegram.*` namespace. |
+| **Persistence** | `EncryptedSecret` Migration | `@Version` field rename from `version` to `orm_version`. | **Manual Migration Required**: Rename `version` column to `orm_version` and add `encryption_key_version` (INT, default 1) in existing databases. |
  
 ---
 
@@ -3400,3 +3401,116 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
 **Symptom:** Tests involving `@WorkspaceScoped`, such as `WorkspaceScopeTest`, consistently fail during maven builds, indicating CDI contexts are not active.
 **Root Cause:** A duplicate `WorkspaceScopeTest.java` test file existed in the `arcclaw-app` module while also existing in another module, causing a split-package CDI resolution error during the test augmentation phase.
 **Resolution:** Delete the duplicate test file. Ensure test classes for custom CDI scopes are uniquely located.
+
+---
+
+## 24. Phase 63 — Refactoring and Hardening Troubleshooting
+
+### 🔴 Failure: Async Route Registration Tests Returning Null (TelegramChannelRoute)
+**Symptom**: Integration tests assessing Camel integrations failing fast assuming routes don't exist when evaluating `camelContext.getRoute("telegram-bot")`.
+**Root Cause**: The `onStart` hooks invoke the primary registration within standard async `@VirtualThreads` preventing testing contexts running via `@BeforeEach` bindings from detecting full registration before assertion checks evaluate. 
+**Resolution**: Implemented localized 2000ms delay evaluation loops manually polling for route bindings tracking contextual initialization gracefully prior to performing teardown scenarios avoiding explicit thread deadlocks.
+
+### 🔴 Failure: `NullPointerException` in `AgentStateMachineRunnerTest` (OTel Span)
+**Symptom**: `NullPointerException` when calling `agentOtelContext.startIterationSpan()` during unit tests.
+**Root Cause**: Added OpenTelemetry instrumentation requires the `AgentOtelContext` to be present. In non-Quarkus unit tests, the field is `null`.
+**Resolution**: Inject a mocked `AgentOtelContext` into the runner. Configure the mock to return `Span.getInvalid()` by default (e.g., `when(agentOtelContext.startIterationSpan(any(), anyInt(), any())).thenReturn(Span.getInvalid())`) to satisfy the API without requiring a full OTel SDK setup.
+
+### 🔴 Failure: Build Failure: `@RunOnVirtualThread` Missing
+**Symptom**: `BuildException: Agent implementation 'com.foo.MyAgent' is missing @RunOnVirtualThread annotation`.
+**Root Cause**: Phase 63-S introduced a `@BuildStep` that enforces virtual thread execution for all agents to prevent event-loop blocking.
+**Resolution**: Add the `@RunOnVirtualThread` annotation to the class or the entry method of the identified agent.
+
+### 🔴 Failure: `AsyncPersistenceEngine` Queue Overflow
+**Symptom**: `RejectedExecutionException` or dropped telemetry events during heavy agent load.
+**Root Cause**: The telemetry queue is bounded to prevent OOM. If LLM bursts exceed the consumer's write speed to SQLite, the queue fills up.
+**Resolution**: Telemetry drops are expected and safe. Critical security audits are unaffected as they use a separate queue with a synchronous blocking fallback. If telemetry loss is too high, increase the queue capacity in `application.yaml` or optimize SQLite write performance (e.g., WAL mode).
+
+### 🔴 Failure: MCP Handshake `java.io.IOException: Invalid NDJSON framing`
+**Symptom**: MCP clients fail to parse messages from `PodmanMcpTransport`.
+**Root Cause**: MCP stdio transport requires strict newline-terminated JSON strings. Multi-line JSON output or missing trailing newlines break the framing.
+**Resolution**: Use the `NdjsonWriter` to ensure every message is a single-line JSON followed by `\n`. Avoid using raw `System.out.println` for protocol messages.
+---
+
+## 20. Phase 63 — Vault & Audit Hardening
+
+### 🔴 Failure: `rotateSecrets()` Throws Exception
+**Symptom:** Application logic calling `rotateSecrets()` results in `UnsupportedOperationException`.
+**Root Cause:** Phase 63 architecture mandates "honest deferral" of rotation logic until Phase 64. Documentation references suggesting 24-hour automatic rotation were incorrect and have been removed.
+**Resolution:** Remove any application-level timers or logic attempting to trigger rotation. Full automated key rotation is scheduled for the Phase 64 roadmap.
+
+### 🔴 Failure: `AuditHashUtil` Missing HMAC Key at Startup
+**Symptom:** `AuditHashUtil` constructor throws `IllegalStateException: Audit HMAC key 'arcclaw-audit-hmac-key' is missing from SecretVault`.
+**Root Cause:** The mandatory system secret for audit chaining was not seeded or provisioned.
+**Resolution:** 
+1. **Dev/Test**: Ensure `DevSecretSeeder` is enabled (`ARCCLAW_AUTO_SEED_SECRETS=true`). It will automatically generate a 32-byte key if missing.
+2. **Prod**: The deployment pipeline must provision `arcclaw-audit-hmac-key` into the `SecretVault` system keyspace before the application starts. `StartupSecurityValidator` will halt the JVM if this key is absent.
+
+### 🔴 Failure: Huge Stacktraces in Background Persistence
+**Symptom**: Logs flooded with 500+ line stacktraces for `AuditHashUtil.hmacHex` every few seconds.
+**Root Cause**: `AsyncPersistenceEngine` retries failed telemetry writes 5 times. If `AuditHashUtil` throws an exception for a missing key, every retry logs the full stack trace, creating massive log noise.
+**Resolution**: Refactored `AuditHashUtil` to log the missing key detail once at the error level and return a placeholder string (`error-missing-hmac-key`) instead of throwing. This preserves log hygiene while still indicating an issue.
+
+### 🔴 Failure: Circular Dependency / Startup Race with SecretVault
+**Symptom**: `ContextNotActiveException` or `UnsatisfiedDependencyException` involving `SecretVault`, `AuditHashUtil`, and `PersistenceEngine` during boot.
+**Root Cause**: `AuditHashUtil` required `SecretVault` in its constructor, forming a circular injection chain with the persistence and auditing layers before the CDI container was fully ready.
+**Resolution**: Converted `AuditHashUtil` to use `Instance<SecretVault>` for lazy retrieval and added `@Priority(100)` to `DevSecretSeeder` to guarantee security keys are provisioned early in the `StartupEvent` sequence.
+
+### 🔴 Failure: Decryption Errors (AAD Binding Mismatch)
+**Symptom**: `Security Decryption failed: Integrity check or AAD binding mismatch` when retrieving secrets.
+**Root Cause**: `Argon2idKeyDerivation` used `ByteBuffer.array()` on the output of `Charset.encode()`, which can return an internal backing array larger than the actual data (containing trailing nulls). This lead to inconsistent key derivation.
+**Resolution**: Switched to explicit byte extraction using `bb.get(passwordBytes)` to ensure only the correctly encoded bytes are used for HMAC-key and session-key derivation.
+
+## “Tests run: 0”
+./mvnw clean test -pl arcclaw-app -am "-Dtest=CompactionModelProducerTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+
+Why You See “Tests run: 0”
+
+You’re filtering with -Dtest=CompactionModelProducerTest, but that outer class has no test methods.
+The actual tests are in two nested classes annotated with @QuarkusTest inside that file:
+DefaultFallbackTest
+OverrideKeyTest
+Maven Surefire’s -Dtest filter matches class names. When you specify only the outer class, JUnit finds no test methods, so it reports 0 tests.
+Code reference:
+
+Nested test classes in CompactionModelProducerTest.java
+Run The Tests Correctly
+
+Target the inner classes by matching the nested names (note the $ in nested class names).
+Git Bash:
+
+Run all nested tests in that file:
+./mvnw clean test -pl arcclaw-app -am -Dtest='com.arcclaw.app.compaction.CompactionModelProducerTest$*' -Dsurefire.failIfNoSpecifiedTests=false
+Or specify both explicitly:
+./mvnw clean test -pl arcclaw-app -am -Dtest='com.arcclaw.app.compaction.CompactionModelProducerTest
+[objectObject]
+DefaultFallbackTest,com.arcclaw.app.compaction.CompactionModelProducerTestOverrideKeyTest' -Dsurefire.failIfNoSpecifiedTests=false
+PowerShell:
+
+Escape $ with a backtick:
+./mvnw clean test -pl arcclaw-app -am "-Dtest=com.arcclaw.app.compaction.CompactionModelProducerTest`$*" -Dsurefire.failIfNoSpecifiedTests=false
+Or list both:
+./mvnw clean test -pl arcclaw-app -am "-Dtest=com.arcclaw.app.compaction.CompactionModelProducerTest$DefaultFallbackTest,com.arcclaw.app.compaction.CompactionModelProducerTest$OverrideKeyTest" -Dsurefire.failIfNoSpecifiedTests=false
+Notes
+
+-pl arcclaw-app -am builds dependencies and runs their test phases too. In modules without matching tests, Surefire can fail; keeping -Dsurefire.failIfNoSpecifiedTests=false avoids failures in those modules.
+If you want to avoid nested-class escaping, a simple alternative is to refactor the two inner test classes into two top-level test classes. That’s optional and not required for running them.
+
+---
+
+## 25. Phase 63-U — Security & Persistence Hardening Troubleshooting
+
+### 🔴 Failure: `IllegalStateException: Audit HMAC key... is missing` at Boot
+**Symptom**: The application fails to start or the first persistence event crashes with an `IllegalStateException`.
+**Root Cause**: A race condition where `AsyncPersistenceEngine` attempts to persist a very early event (e.g., startup audit) before the `AuditHashUtil` has fully primed the HMAC key from the `SecretVault`.
+**Resolution**: Implemented a localized retry loop in `persistSynchronously` that waits for up to 3 attempts (with 500ms backoff) for the HMAC key to become available, resolving the bootstrap race.
+
+### 🔴 Failure: `VaultConstants` Type Mismatch or Missing Imports
+**Symptom**: Compilation errors after refactoring magic literals to constants.
+**Root Cause**: Missing static imports or incorrect package references for the new `VaultConstants` class.
+**Resolution**: Ensure `com.arcclaw.core.security.VaultConstants` is imported. Use `VaultConstants.SYSTEM_SESSION_ID` and `VaultConstants.AUDIT_HMAC_KEY_NAME` consistently.
+
+### 🔴 Failure: `Argon2idKeyDerivationTest` Zeroing Assertion Failure
+**Symptom**: The test fails asserting that the pepper array is zeroed.
+**Root Cause**: The zeroing logic might be placed before the actual use or the test is checking a copy of the array instead of the original.
+**Resolution**: Ensure the zeroing happens in a `finally` block in `deriveSessionKey`. The test should pass the original array to the method and then verify its contents.

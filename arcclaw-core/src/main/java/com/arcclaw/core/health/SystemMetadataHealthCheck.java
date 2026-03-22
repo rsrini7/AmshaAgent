@@ -16,12 +16,22 @@ public class SystemMetadataHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
-        return HealthCheckResponse
-                .named("System Metadata")
+        String version = registry.getAppVersion();
+        String startedAt = registry.getStartedAt();
+
+        if (version == null || startedAt == null) {
+            return HealthCheckResponse.named("System Metadata")
+                    .down()
+                    .withData("error", "SystemMetadataRegistry not fully initialized")
+                    .build();
+        }
+
+        return HealthCheckResponse.named("System Metadata")
                 .up()
-                .withData("version", registry.getAppVersion())
+                .withData("version", version)
                 .withData("environment", registry.getEnvironment())
-                .withData("startedAt", registry.getStartedAt())
+                .withData("startedAt", startedAt)
                 .build();
     }
+
 }

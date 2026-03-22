@@ -47,7 +47,7 @@ class ContextCompactionServiceTest {
     @Test
     void testBypassWhenDisabled() {
         service.enabled = false;
-        assertFalse(service.compactIfNeeded("session1", "test-user"));
+        assertFalse(service.compact("session1", "test-user"));
         verifyNoInteractions(mockChatStore);
     }
 
@@ -56,7 +56,7 @@ class ContextCompactionServiceTest {
         // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         List<ChatMessage> msgs = List.of(UserMessage.userMessage("1"), AiMessage.aiMessage("2"));
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
-        assertFalse(service.compactIfNeeded("session1", "test-user"));
+        assertFalse(service.compact("session1", "test-user"));
         verifyNoInteractions(mockModel);
     }
 
@@ -75,7 +75,7 @@ class ContextCompactionServiceTest {
                 .aiMessage(AiMessage.aiMessage("New Summary Text"))
                 .build());
 
-        assertTrue(service.compactIfNeeded("session1", "test-user"));
+        assertTrue(service.compact("session1", "test-user"));
 
         verify(mockModel, times(1)).chat(any(UserMessage.class));
         verify(mockRepo, times(1)).upsertSummary("session1", "test-user", "New Summary Text", 5);
@@ -96,7 +96,7 @@ class ContextCompactionServiceTest {
                 .aiMessage(AiMessage.aiMessage("   \n "))
                 .build());
 
-        assertFalse(service.compactIfNeeded("session1", "test-user"));
+        assertFalse(service.compact("session1", "test-user"));
         verify(mockRepo, never()).upsertSummary(any(), any(), any(), anyInt());
     }
 }

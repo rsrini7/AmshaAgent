@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +20,7 @@ import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.security.DestructiveVocabularyFilter;
 
 import dev.langchain4j.exception.HttpException;
 
@@ -33,12 +36,19 @@ class IntentClassificationHandlerTest {
         classifier = mock(IntentClassifier.class);
         sender = mock(ChannelSender.class);
         handler.classifier = classifier;
+
+        var destructiveFilter = mock(DestructiveVocabularyFilter.class);
+        when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
+        when(destructiveFilter.filter(anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0)); // ← THIS was missing
+        handler.destructiveVocabularyFilter = destructiveFilter;
     }
+
 
     @Test
     void testHandle_rateLimit_notifiesUserAndDefaultsToCoordinator() {
         ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 
         when(classifier.classify(anyString())).thenThrow(new HttpException(429, "Too many requests"));
@@ -53,13 +63,16 @@ class IntentClassificationHandlerTest {
     @Test
     void testHandle_success_setsRole() {
         ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
-        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", java.time.Instant.now());
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 
-        when(classifier.classify(anyString())).thenReturn("developer");
+        // "developer" is not a valid AgentRoleEnum — use a real scoped name
+        when(classifier.classify(anyString()))
+                .thenReturn(AgentRoleEnum.CODER.toScopedName());
 
         handler.handle(context);
 
-        assertEquals("developer", context.getAgentRole().get());
+        assertEquals(AgentRoleEnum.CODER.toScopedName(), context.getAgentRole().get());
     }
+
 }

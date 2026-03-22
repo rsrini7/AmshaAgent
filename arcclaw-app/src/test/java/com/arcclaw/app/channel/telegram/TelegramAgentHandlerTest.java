@@ -16,6 +16,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.concurrent.ExecutorService;
+import java.lang.reflect.Field;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ChannelType;
+import java.time.Instant;
+
 class TelegramAgentHandlerTest {
 
     private TelegramAgentHandler handler;
@@ -38,18 +45,18 @@ class TelegramAgentHandlerTest {
         handler.sender = sender;
 
         // Stub a mock executor to run immediately in the same thread
-        java.util.concurrent.ExecutorService syncExecutor = mock(java.util.concurrent.ExecutorService.class);
+        ExecutorService syncExecutor = mock(ExecutorService.class);
         doAnswer(invocation -> {
             ((Runnable) invocation.getArgument(0)).run();
             return null;
         }).when(syncExecutor).submit(any(Runnable.class));
 
         // Inject the sync executor into the chatQueues cache via reflection
-        java.lang.reflect.Field queuesField = TelegramAgentHandler.class.getDeclaredField("chatQueues");
+        Field queuesField = TelegramAgentHandler.class.getDeclaredField("chatQueues");
         queuesField.setAccessible(true);
         @SuppressWarnings("unchecked")
-        com.github.benmanes.caffeine.cache.Cache<String, java.util.concurrent.ExecutorService> mockCache = 
-            mock(com.github.benmanes.caffeine.cache.Cache.class);
+        Cache<String, ExecutorService> mockCache = 
+            mock(Cache.class);
         when(mockCache.get(anyString(), any())).thenReturn(syncExecutor);
         queuesField.set(handler, mockCache);
     }
@@ -58,7 +65,7 @@ class TelegramAgentHandlerTest {
     void testValidMessageDelegatesToPipeline() {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new com.arcclaw.channel.api.ChannelUser("456", "alice", com.arcclaw.channel.api.ChannelType.TELEGRAM), "hello world", "chat123", java.time.Instant.now());
+                new ChannelUser("456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
 
         handler.receiveMessage(exchange);
@@ -100,7 +107,7 @@ class TelegramAgentHandlerTest {
     void testTextMessageProcessedNormally() {
         Exchange exchange = createExchange("chat123", "456", "alice", "valid text");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new com.arcclaw.channel.api.ChannelUser("456", "alice", com.arcclaw.channel.api.ChannelType.TELEGRAM), "valid text", "chat123", java.time.Instant.now());
+                new ChannelUser("456", "alice", ChannelType.TELEGRAM), "valid text", "chat123", Instant.now());
         when(mapper.map(eq("valid text"), any(), eq("chat123"))).thenReturn(msg);
 
         handler.receiveMessage(exchange);
@@ -113,7 +120,7 @@ class TelegramAgentHandlerTest {
     void testExceptionInPipelineIsHandledGracefully() {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new com.arcclaw.channel.api.ChannelUser("456", "alice", com.arcclaw.channel.api.ChannelType.TELEGRAM), "hello world", "chat123", java.time.Instant.now());
+                new ChannelUser("456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
         doThrow(new RuntimeException("Pipeline crash")).when(pipeline).process(any());
 

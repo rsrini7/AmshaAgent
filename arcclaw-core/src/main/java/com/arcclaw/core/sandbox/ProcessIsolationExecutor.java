@@ -46,6 +46,9 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
     String sandboxStrategy;
 
+    @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
+    boolean sandboxEnabled;
+
     @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
     String podmanPath;
 
@@ -60,6 +63,7 @@ public class ProcessIsolationExecutor {
     /** Startup availability check — degrades gracefully if Podman not installed. */
     @PostConstruct
     void checkPodmanAvailability() {
+
         if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
             try {
                 var pb = new ProcessBuilder(podmanPath, "--version");
@@ -88,6 +92,14 @@ public class ProcessIsolationExecutor {
      */
     public String executeSandboxed(
             String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
+
+        // arcclaw.sandbox.enabled=false overrides strategy entirely.
+        // Tools run directly on host PATH regardless of configured strategy.
+        // Set ARCCLAW_SANDBOX_ENABLED=true in .env to restore isolation.
+        if (!sandboxEnabled) {
+            log.debugf("Sandbox disabled — executing directly (session=%s)", sessionId);
+            return directExecutor.executeDirectly(workspaceRoot, command);
+        }
 
         if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
             return directExecutor.executeDirectly(workspaceRoot, command);

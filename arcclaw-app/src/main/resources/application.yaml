@@ -8,6 +8,10 @@ quarkus:
   application:
     name: arcclaw
     version: "1.0.0"
+  
+  banner:
+    enabled: true
+    path: arcclaw-banner.txt
 
   index-dependency:
     arcclaw-core:
@@ -51,6 +55,7 @@ quarkus:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 5
+      transactions: enabled
 
   hibernate-orm:
     dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
@@ -153,6 +158,11 @@ quarkus:
   thread-pool:
     core-threads: 1   # minimize platform threads; virtual threads handle concurrency
 
+smallrye:
+  context-propagation:
+    managed-executor:
+      max-async: 20
+
   transaction-manager:
     default-transaction-timeout: 300
     enable-recovery: false
@@ -241,13 +251,13 @@ arcclaw:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
   rag:
     context-chunks: 5
-    embed-provider: ${EMBED_PROVIDER:ollama}
-    embed-model: ${EMBED_MODEL:nomic-embed-text:v1.5}
-    embed-base-url: ${EMBED_BASE_URL:http://localhost:11434}
-    embed-api-key: ${EMBED_API_KEY:}
+    embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
+    embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
+    embed-base-url: ${ARCCLAW_EMBED_BASE_URL:http://localhost:11434}
+    embed-api-key: ${ARCCLAW_EMBED_API_KEY:}
     embed-timeout-seconds: 30
     # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
-    embed-dimensions: ${EMBED_DIMENSIONS:768}
+    embed-dimensions: ${ARCCLAW_EMBED_DIMENSIONS:768}
     vec-extension-path: "${SQLITE_VEC_PATH:./lib/vec0}"
   auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
   skills:
@@ -257,16 +267,18 @@ arcclaw:
       enabled: true
   routing:
     intent-classifier:
-      model: ${INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
-      ollama-model: ${INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
+      model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
+      ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
   memory:
     compaction:
       enabled: true
       threshold: 5
       keep-recent: 5
       max-tokens: 1024
-      model: ${COMPACTION_MODEL:llama-3.1-8b-instant}
-      ollama-model: ${COMPACTION_OLLAMA_MODEL:llama3.2}
+      api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
+      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${quarkus.langchain4j.openai.base-url}}"
+      model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
+      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
   chat-memory:
     max-messages: 20
   api:
@@ -284,6 +296,7 @@ arcclaw:
     poll-interval: 30s
     max-concurrent: 10
     max-iterations: 2
+    max-lookback-window: PT5M
 
   channel:
     telegram:
@@ -384,9 +397,10 @@ mp:
   quarkus:
     banner:
       enabled: false
-    otel:
-      sdk:
-        disabled: true     # Stops the sun.misc.Unsafe JVM warnings
+    mcp:
+      server:
+        stdio:
+          enabled: false
     log:
       level: ERROR
       console:
@@ -405,6 +419,9 @@ mp:
     hibernate-orm:
       log:
         sql: false # Forces SQL logging off even if global dev is true
+  arcclaw:
+    telegram:
+      enabled: false        
 
 "%dev":
   camel:
@@ -432,11 +449,10 @@ mp:
         sql: false
 
   arcclaw:
-    data-dir: "${ARCCLAW_DATA_DIR:./data}"
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
-      strategy: PODMAN        # no Podman in local dev
+      strategy: NONE        # no Podman in local dev
     governance:
       budget-usd: 9.99
       approval-timeout-minutes: 10
@@ -444,6 +460,8 @@ mp:
       pepper: "dev-pepper-not-for-production-0000000000000000000000000000"
     debug:
       llm: true
+    metadata:
+      environment: dev
 
 "%test":
   quarkus:
@@ -456,8 +474,14 @@ mp:
       dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
     log:
       category:
+        "com.arcclaw":
+          level: INFO
         "org.hibernate.SQL":
           level: DEBUG
+        "com.arjuna":
+          level: ERROR
+        "org.hibernate.resource.transaction":
+          level: ERROR
     langchain4j:
       ollama:
         chat-model:
@@ -496,6 +520,9 @@ mp:
 
     mcp:
       server-enabled: false
+
+    cron:
+      max-lookback-window: PT999H
 
 "%staging":
   quarkus:

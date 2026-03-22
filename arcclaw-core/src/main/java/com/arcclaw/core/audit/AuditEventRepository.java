@@ -1,20 +1,15 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.security.CryptoConstants;
+import java.util.List;
+import java.util.UUID;
+
+import org.jboss.logging.Logger;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.HexFormat;
-import java.util.List;
 
 @ApplicationScoped
 public class AuditEventRepository {
@@ -34,9 +29,8 @@ public class AuditEventRepository {
         }
     }
 
-    @ConfigProperty(name = "arcclaw.audit.hmac-key", 
-                defaultValue = "dev-audit-hmac-key-min-32-bytes-00000")
-    String hmacKey;
+    @Inject
+    AuditHashUtil hashUtil;
 
     /**
      * Persists an AuditEvent and computes its HMAC chain fields.
@@ -56,13 +50,19 @@ public class AuditEventRepository {
         // Step 2: chain to previous hash
         String prevHash = findLatestHash(event.sessionId);
         if (prevHash == null) {
-            prevHash = AuditHashUtil.sha256hex("GENESIS:" + event.sessionId);
+            prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
         }
         event.prevHash = prevHash;
         
         String payload = event.computePayloadStr();
-        event.hmacHash = computeHmac(prevHash + "|" + payload);
+        event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
         
+        if (event.hmacHash == null) {
+            Logger.getLogger(AuditEventRepository.class)
+                .errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.", event.sessionId);
+            event.hmacHash = "error-null-fallback-" + UUID.randomUUID();
+        }
+
         em.persist(event);
     }
 
@@ -91,15 +91,15 @@ public class AuditEventRepository {
                 .getResultList();
     }
 
-    private String computeHmac(String data) {
-        try {
-            Mac mac = Mac.getInstance(CryptoConstants.HMAC_SHA256);
-            SecretKeySpec secretKeySpec = new SecretKeySpec(hmacKey.getBytes(StandardCharsets.UTF_8), CryptoConstants.HMAC_SHA256);
-            mac.init(secretKeySpec);
-            byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to compute HMAC", e);
-        }
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public boolean hasEventInSession(String sessionId, SecurityEventType eventType) {
+        Long count = em.createQuery(
+                "SELECT COUNT(a) FROM AuditEvent a " +
+                "WHERE a.sessionId = :sid AND a.eventType = :type",
+                Long.class)
+            .setParameter("sid", sessionId)
+            .setParameter("type", eventType)
+            .getSingleResult();
+        return count > 0;
     }
 }

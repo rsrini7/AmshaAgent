@@ -16,6 +16,9 @@ public class AuditEventRepositoryTest {
     @Inject
     AuditEventRepository repository;
 
+    @Inject
+    AuditHashUtil hashUtil;
+
     @Test
     @Transactional
     public void testRecordAndFindSession() {
@@ -49,7 +52,7 @@ public class AuditEventRepositoryTest {
         assertEquals(3, events.size());
 
         // e1 should link to genesis
-        String expectedGenesis = AuditHashUtil.sha256hex("GENESIS:" + sessionId);
+        String expectedGenesis = hashUtil.sha256hex("GENESIS:" + sessionId);
         assertEquals(expectedGenesis, events.get(0).prevHash);
         
         // e2 should link to e1

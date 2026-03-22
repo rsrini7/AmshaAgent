@@ -20,6 +20,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.MdcKeys;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -68,6 +69,9 @@ public class AgentLoop {
     @Inject
     CheckpointResumeHandler checkpointResumeHandler;
 
+    @Inject
+    AuditHashUtil hashUtil;
+
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
      */
@@ -103,6 +107,12 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
+        return run(sessionId, agentRole, goal, engine, maxIterations, null);
+    }
+
+    @ActivateRequestContext
+    public AgentResult run(String sessionId, String agentRole, String goal,
+            ReasoningEngine engine, int maxIterations, MessageContext context) {
 
         // --- Resolve agentRole at the API boundary ---
         //
@@ -128,11 +138,13 @@ public class AgentLoop {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
             // Fall through with coordinator as safe default
             return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                               goal, engine, maxIterations);
+                               goal, engine, maxIterations, context);
         }
 
-        return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations);
+
+        return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations, context);
     }
+
 
     /**
      * Internal execution path — called after role resolution is complete.
@@ -141,7 +153,7 @@ public class AgentLoop {
      */
     @ActivateRequestContext
     AgentResult runWithRole(String sessionId, String canonicalRole, String goal,
-            ReasoningEngine engine, int maxIterations) {
+            ReasoningEngine engine, int maxIterations, MessageContext context) {
 
         // --- CONTEXT SETUP ---
         MDC.put(MdcKeys.SESSION_ID, sessionId);
@@ -168,11 +180,11 @@ public class AgentLoop {
             }
 
             AgentResult resumeResult = checkpointResumeHandler.handle(
-                    sessionId, canonicalRole, goal, resumedHistory);
+                    sessionId, canonicalRole, goal, resumedHistory, context);
             if (resumeResult != null) {
                 result = resumeResult;
             } else {
-                AgentExecutionContext context = new AgentExecutionContext(
+                AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                         sessionId,
                         WorkspaceContext.userId(),
                         WorkspaceContext.chatId(),
@@ -181,12 +193,26 @@ public class AgentLoop {
                         WorkspaceContext.autonomy(),
                         maxIterations
                 );
-                result = stateMachineRunner.run(context, engine, resumedHistory);
+                result = stateMachineRunner.run(agentExecutionContext, engine, resumedHistory);
             }
 
             // --- CHECKPOINT FINAL STATE ---
-            if (result instanceof AgentResult.AwaitingApproval) {
-                log.debugf("Session %s paused, waiting for human approval.", sessionId);
+            if (result instanceof AgentResult.AwaitingApproval awaiting) {
+                log.debugf("Session %s paused, waiting for human approval — tool=%s",
+                        sessionId, awaiting.toolName());
+
+                if (context != null && context.getUser() != null) {
+                    agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                        cp.setChannelPlatformId(context.getUser().platformId());
+                        cp.setChannelType(context.getUser().channel().name());
+                        agentStore.save(cp);
+                        log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
+                                sessionId, context.getUser().channel(), context.getUser().platformId());
+                    });
+                } else {
+                    log.warnf("No MessageContext user for session=%s — approval timeout notification will be skipped",
+                            sessionId);
+                }
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
                 if (result instanceof AgentResult.Finished) {
                     agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED);
@@ -228,7 +254,7 @@ public class AgentLoop {
             throw e;
         } finally {
             if (result != null) {
-                String goalHash = AuditHashUtil.sha256hex(goal);
+                String goalHash = hashUtil.sha256hex(goal);
                 String userId = MDC.get(MdcKeys.USER_ID) != null ? (String) MDC.get(MdcKeys.USER_ID) : "unknown";
                 final AgentResult finalResult = result;
                 observers.forEach(o -> o.onLoopComplete(sessionId, userId, canonicalRole, goalHash, finalResult));

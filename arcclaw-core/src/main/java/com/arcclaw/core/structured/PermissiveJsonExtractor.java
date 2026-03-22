@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
@@ -17,14 +18,18 @@ import org.jboss.logging.Logger;
 public class PermissiveJsonExtractor {
     private static final Logger log = Logger.getLogger(PermissiveJsonExtractor.class);
     
+    private static final int MAX_JSON_CHARS = 512 * 1024; // 512 KiB hard cap
+
     // Pattern to match ```json ... ``` or plain ``` ... ``` blocks
     private static final Pattern JSON_FENCE_PATTERN = Pattern.compile(
             "^\\s*```(?:json)?\\s*(.*?)\\s*```\\s*$", Pattern.DOTALL);
 
-    private final ObjectMapper objectMapper;
-
     public PermissiveJsonExtractor() {
-        this.objectMapper = JsonMapper.builder()
+        // No-op constructor, mapper built per-request to satisfy prompt requirements
+    }
+
+    private ObjectMapper buildPermissiveMapper() {
+        return JsonMapper.builder()
                 .enable(JsonReadFeature.ALLOW_TRAILING_COMMA)
                 .enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
                 .enable(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
@@ -44,16 +49,31 @@ public class PermissiveJsonExtractor {
      * @throws JsonExtractionException If parsing fails despite leniency
      */
     public <T> T extract(String rawResponse, Class<T> targetType) {
+        // Pre-parse validations — before any ObjectMapper construction
         if (rawResponse == null || rawResponse.isBlank()) {
-            throw new JsonExtractionException("Empty response received", rawResponse, targetType, null, null);
+            throw new JsonExtractionException("LLM returned null or blank response");
+        }
+        if (rawResponse.length() > MAX_JSON_CHARS) {
+            throw new JsonExtractionException(
+                String.format("LLM JSON response exceeds %d char limit (actual: %d chars). " +
+                    "Possible prompt-stuffing or runaway generation.",
+                    MAX_JSON_CHARS, rawResponse.length()));
         }
 
+        ObjectMapper mapper = buildPermissiveMapper();
+        // Add duplicate key detection — duplicate keys in LLM output = schema confusion
+        mapper.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+
         String cleaned = stripFences(rawResponse);
-        cleaned = unwrapSchemaEnvelope(cleaned);  // add this line
+        cleaned = unwrapSchemaEnvelope(cleaned, mapper);
         try {
-            return objectMapper.readValue(cleaned, targetType);
+            return mapper.readValue(cleaned, targetType);
         } catch (Exception e) {
-            log.warnf("JSON extraction failed for type %s. Cleaned input: %s", targetType.getSimpleName(), cleaned);
+            log.warnf("JSON extraction failed for type %s. Cleaned input: %s",
+                    targetType.getSimpleName(),
+                    cleaned != null && cleaned.length() > 120
+                        ? cleaned.substring(0, 120) + "...[" + cleaned.length() + " chars]"
+                        : cleaned);
             throw new JsonExtractionException(
                     "Permissive extraction failed: " + e.getMessage(),
                     rawResponse, targetType, cleaned, e);
@@ -67,12 +87,12 @@ public class PermissiveJsonExtractor {
      * LLM incorrectly returns: {"type":"object","properties":{"contributions":[...],"finalResolution":"..."}}
      * This method extracts the "properties" value, giving Jackson a flat instance to deserialize.
      */
-    private String unwrapSchemaEnvelope(String json) {
+    private String unwrapSchemaEnvelope(String json, ObjectMapper mapper) {
         try {
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
+            JsonNode root = mapper.readTree(json);
             if (root.has("type") && root.has("properties")
                     && "object".equals(root.get("type").asText())) {
-                return objectMapper.writeValueAsString(root.get("properties"));
+                return mapper.writeValueAsString(root.get("properties"));
             }
         } catch (Exception ignored) {
             // Not a schema envelope — return original

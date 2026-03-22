@@ -1,5 +1,10 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,11 +17,6 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
-
-import java.time.Instant;
-import java.time.LocalDateTime;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * JPA entity for persisting agent reasoning loop state.
@@ -71,6 +71,14 @@ public class AgentCheckpoint {
     @Deprecated
     @Column(columnDefinition = "TEXT")
     private String stateJson;
+
+    /** Channel platform ID (e.g. Telegram chat ID) — used for timeout notifications. */
+    @Column(name = "channel_platform_id", length = 128)
+    private String channelPlatformId;
+
+    /** Channel type (e.g. TELEGRAM, REST_API) — used for timeout notifications. */
+    @Column(name = "channel_type", length = 32)
+    private String channelType;
 
     /** Timestamp when a failure occurred (null if not failed). */
     private Instant failedAt;
@@ -148,6 +156,12 @@ public class AgentCheckpoint {
     public void setStateJson(String stateJson) {
         this.stateJson = stateJson;
     }
+
+    public String getChannelPlatformId() { return channelPlatformId; }
+    public void setChannelPlatformId(String channelPlatformId) { this.channelPlatformId = channelPlatformId; }
+
+    public String getChannelType() { return channelType; }
+    public void setChannelType(String channelType) { this.channelType = channelType; }
 
     public Instant getFailedAt() {
         return failedAt;

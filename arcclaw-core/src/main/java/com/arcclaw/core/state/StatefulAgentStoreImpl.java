@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Objects;
 
 import org.hibernate.exception.LockAcquisitionException;
 import org.jboss.logging.Logger;
@@ -137,7 +138,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize stateJson for checkpoint id=%d", checkpoint.getId());
+            log.errorf("Failed to deserialize stateJson for checkpoint id=%d: %s", checkpoint.getId(), e.getMessage());
+            log.debugf(e, "Full stacktrace for deserialization failure of checkpoint id=%d", checkpoint.getId());
             return List.of();
         }
     }
@@ -415,7 +417,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .findFirst();
     }
 

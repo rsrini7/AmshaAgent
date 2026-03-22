@@ -24,6 +24,7 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
 import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -165,7 +166,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 try {
                     governanceLayer.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
-                } catch (com.arcclaw.core.governance.BudgetWarningException w) {
+                } catch (BudgetWarningException w) {
                     log.warnf("Budget warning for session %s structured call: %s", sessionId, w.getMessage());
                     // LLM call succeeded — absorb soft warning and return normally
                 }

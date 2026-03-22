@@ -83,7 +83,9 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceBlocksNetworkOutbound() {
-        WorkspaceContext.run(TEST_SESSION, "", "", AutonomyLevel.READONLY, "", () -> {
+        // Use a role that has 'github' capability (e.g., COORDINATOR) 
+        // to pass the role-capability check, but then hit the autonomy level block.
+        WorkspaceContext.run(TEST_SESSION, "coordinator", "", AutonomyLevel.READONLY, "coordinator", () -> {
             var ex = assertThrows(SecurityException.class,
                     () -> registry.invokeTool("github", Map.<String, Object>of("target", "test/repo")));
 

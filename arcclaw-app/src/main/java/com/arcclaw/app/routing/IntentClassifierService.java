@@ -1,13 +1,14 @@
 package com.arcclaw.app.routing;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
-import com.arcclaw.app.security.DestructiveVocabularyFilter;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.security.DestructiveVocabularyFilter;
 
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
@@ -38,11 +39,26 @@ public class IntentClassifierService implements IntentClassifier {
                         Pattern.compile(
                             "(?i)^\\s*(ingest|store this|add to (knowledge|rag|memory|kb)|" +
                             "remember this|save this|learn this|index this|" +
-                            // Compound fetch+ingest patterns
                             ".*(and\\s+ingest|then\\s+ingest|and\\s+store|then\\s+store|" +
                             "and\\s+remember|and\\s+save\\s+that|and\\s+add\\s+that))",
                             Pattern.CASE_INSENSITIVE
                         );
+
+    private static final Pattern CODER_FORCE_PATTERN =
+        Pattern.compile(
+            "(?i)^\\s*(write|create|generate|implement|code|build|make)\\s+" +
+            ".*(program|function|method|class|algorithm|code|script|snippet|" +
+            "fibonacci|fib|sort|search|binary|linked.?list|tree|graph|" +
+            "hello.?world|factorial|prime|palindrome|anagram)",
+            Pattern.CASE_INSENSITIVE
+        );
+
+    private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
+        "(?i)\\b(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec)|tomorrow|" +
+        "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|schedule|remind(\\s+me)?|" +
+        "every\\s+(day|week|hour)|once\\s+a\\s+(day|week)|later)\\b"
+    );
+
 
     @PostConstruct
     void init() {
@@ -120,6 +136,19 @@ public class IntentClassifierService implements IntentClassifier {
 
     public String classify(String userMessage) {
 
+        // SCHEDULING IS ABSOLUTE PRIORITY — must be checked before CODER_FORCE_PATTERN.
+        // "write a sort function tomorrow" must route coordinator, not coder.
+        if (SCHEDULING_GUARD_PATTERN.matcher(userMessage).find()) {
+            Log.debugf("CLASSIFIER fast-path: scheduling signal → coordinator");
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
+        // Fast-path: explicit code generation request → always coder
+        if (CODER_FORCE_PATTERN.matcher(userMessage).find()) {
+            Log.debugf("CLASSIFIER fast-path: code generation keyword → coder");
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+
         // Force coordinator for ingest/store commands — these require
         // INGEST_DOCUMENT tool which only COORDINATOR and DATTATREYA hold.
         // LLM classifier reliably misroutes these to architect.
@@ -135,22 +164,21 @@ public class IntentClassifierService implements IntentClassifier {
         String safePrompt = dynamicClassifierPrompt.formatted(wrapped);
 
         String raw;
-        long start = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         try {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
-            Log.warnf(e, "Intent classifier failed for session, defaulting to coordinator");
+            Log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", e.getMessage());
+            Log.debugf(e, "Full stacktrace for intent classifier failure");
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 3_000) {
-            Log.warnf("CLASSIFIER SLA exceeded: %dms (target: 3000ms). " +
-                      "Check Groq latency or reduce classifier prompt length.", elapsed);
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+        if (elapsedMs > 3_000L) {
+            Log.warnf("IntentClassifier SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
         }
 
         String result = sanitize(raw.trim().toLowerCase());
-        Log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsed, result);
+        Log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
         return destructiveFilter.filter(result, userMessage);
     }
 

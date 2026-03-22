@@ -11,17 +11,21 @@ public class AuditService {
 
     private final TelemetryAuditService telemetryAuditService;
     private final ComplianceAuditService complianceAuditService;
+    private final AuditEventRepository auditEventRepository;
 
     protected AuditService() {
         this.telemetryAuditService = null;
         this.complianceAuditService = null;
+        this.auditEventRepository = null;
     }
 
     @Inject
     public AuditService(TelemetryAuditService telemetryAuditService,
-                        ComplianceAuditService complianceAuditService) {
+                        ComplianceAuditService complianceAuditService,
+                        AuditEventRepository auditEventRepository) {
         this.telemetryAuditService = telemetryAuditService;
         this.complianceAuditService = complianceAuditService;
+        this.auditEventRepository = auditEventRepository;
     }
 
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
@@ -42,4 +46,9 @@ public class AuditService {
     public void waitForIdle() {
         telemetryAuditService.waitForIdle();
     }
+
+    public boolean hasEventInSession(String sessionId, SecurityEventType eventType) {
+        return auditEventRepository.hasEventInSession(sessionId, eventType);
+    }
+    
 }

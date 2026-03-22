@@ -13,16 +13,18 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import jakarta.annotation.PreDestroy;
 
 @ApplicationScoped
 public class PodmanMcpTransport {
@@ -33,7 +35,7 @@ public class PodmanMcpTransport {
     @Inject ObjectMapper objectMapper;
 
     private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, BufferedWriter> writers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, OutputStream> writers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BufferedReader> readers = new ConcurrentHashMap<>();
     private final AtomicInteger requestIdGenerator = new AtomicInteger(1);
 
@@ -71,7 +73,7 @@ public class PodmanMcpTransport {
                 Process process = pb.start();
 
                 activeProcesses.put(config.serverName(), process);
-                writers.put(config.serverName(), new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)));
+                writers.put(config.serverName(), process.getOutputStream());
                 readers.put(config.serverName(), new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)));
 
                 // Step 1: Initialize
@@ -146,7 +148,7 @@ public class PodmanMcpTransport {
                 p.destroy();
             }
             try {
-                BufferedWriter w = writers.remove(serverName);
+                OutputStream w = writers.remove(serverName);
                 if (w != null) w.close();
                 BufferedReader r = readers.remove(serverName);
                 if (r != null) r.close();
@@ -183,13 +185,11 @@ public class PodmanMcpTransport {
     }
 
     private void writeLine(String serverName, JsonNode node) throws IOException {
-        BufferedWriter writer = writers.get(serverName);
-        if (writer == null) throw new IOException("No writer for server: " + serverName);
-        
+        OutputStream out = writers.get(serverName);
+        if (out == null) throw new IOException("No writer for server: " + serverName);
+
         String json = objectMapper.writeValueAsString(node);
-        writer.write(json);
-        writer.write('\n'); // frame with newline
-        writer.flush();     // ensure delivery
+        NdjsonWriter.writeLine(out, json);
     }
 
     private JsonNode readResponse(String serverName) throws IOException {
@@ -199,5 +199,25 @@ public class PodmanMcpTransport {
         String line = reader.readLine();
         if (line == null) throw new IOException("MCP server closed connection unexpectedly");
         return objectMapper.readTree(line);
+    }
+
+    @PreDestroy
+    void cleanup() {
+        log.info("PodmanMcpTransport shutting down — terminating active MCP processes");
+        activeProcesses.forEach((sessionId, process) -> {
+            log.infof("Destroying MCP process for session: %s", sessionId);
+            process.destroy();
+            try {
+                if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                    log.warnf("Process for session %s did not exit in 3s — forcibly killing", sessionId);
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
+        });
+        activeProcesses.clear();
+        log.info("PodmanMcpTransport cleanup complete");
     }
 }

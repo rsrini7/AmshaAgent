@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -33,12 +37,12 @@ class ToolInvocationGuardDynamicTest {
         this.mockInstance = mocked;
 
         mockToolRegistry = mock(ToolRegistry.class);
-        
+
         // Manual injection for unit test
         guard.dynamicToolLookup = mockInstance;
-        guard.agentStore = mock(com.arcclaw.core.state.StatefulAgentStore.class);
-        guard.roleRegistry = mock(com.arcclaw.core.agent.role.RoleRegistry.class);
-        guard.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        guard.agentStore = mock(StatefulAgentStore.class);
+        guard.roleRegistry = mock(RoleRegistry.class);
+        guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = mockToolRegistry;
     }
 
@@ -46,13 +50,12 @@ class ToolInvocationGuardDynamicTest {
     void testUnsatisfiedInstanceDoesNotBreakGuard() {
         when(mockInstance.isUnsatisfied()).thenReturn(true);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
-        
+
         // Should fall through to normal logic (e.g. block github if intent missing)
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "github", Map.of("op", "search"), 
-                Collections.emptyList(), "just a question"
-        );
-        
+                "s1", "coordinator", "github", Map.of("op", "search"),
+                Collections.emptyList(), "just a question", List.of());
+
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
     }
 
@@ -62,12 +65,11 @@ class ToolInvocationGuardDynamicTest {
         when(mockInstance.get()).thenReturn(mockLookup);
         when(mockLookup.isDynamicToolAllowed("external_tool")).thenReturn(true);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
-        
+
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "external_tool", Map.of("arg", "val"), 
-                Collections.emptyList(), "execute external search"
-        );
-        
+                "s1", "coordinator", "external_tool", Map.of("arg", "val"),
+                Collections.emptyList(), "execute external search", List.of());
+
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
     }
 
@@ -77,13 +79,12 @@ class ToolInvocationGuardDynamicTest {
         when(mockInstance.get()).thenReturn(mockLookup);
         when(mockLookup.isDynamicToolAllowed("github")).thenReturn(false);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
-        
+
         // Should fall through to GITHUB_TRIGGER_PATTERN and hit intent block
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "github", Map.of(), 
-                Collections.emptyList(), "just a question"
-        );
-        
+                "s1", "coordinator", "github", Map.of(),
+                Collections.emptyList(), "just a question", List.of());
+
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
     }
 }

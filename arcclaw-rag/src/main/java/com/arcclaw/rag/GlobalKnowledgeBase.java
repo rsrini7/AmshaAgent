@@ -11,6 +11,7 @@ import org.jboss.logging.Logger;
 
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.CompactionSummaryEntity;
 
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -51,7 +52,7 @@ public class GlobalKnowledgeBase {
 
             // Persist raw text for hydration at search time.
             // "rag:" prefix avoids PK collision with real session IDs.
-            var ragChunk = new com.arcclaw.core.state.CompactionSummaryEntity();
+            var ragChunk = new CompactionSummaryEntity();
             ragChunk.sessionId = "rag:" + chunkId;
             ragChunk.summary = text;
             ragChunk.createdAt = Instant.now();

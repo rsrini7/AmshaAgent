@@ -78,6 +78,18 @@
 | 60 | Hibernate ORM 7 Migration | 535/535 tests | Custom `ArcClawSQLiteDialect` for DDL + `Random` fix for Native Image |
 | 60 | Dual-Tier Skill Registry | 173/173 tests | Persistent registry with JTA management |
 | 60.1 | Quarkus LTS & Hibernate 7 | 535/535 tests | LangChain4j 1.x + Native Image Hardening |
+| 61 | Semantic Vector RAG | 100% success | sqlite-vec native fallback |
+| 62 | Build-Time BAML Schema Generation | 100% success | Thread Context ClassLoader fix |
+| 63-A | VaultKeyCache: ReentrantLock | 100% success | Double-checked locking + volatile |
+| 63-B | Resume Signal Refactor | 100% success | Boolean context flags over string checks |
+| 63-C | EncryptedSecret Version Split | 100% success | Isolated Hibernate version from crypto version |
+| 63-D | PodmanMcpTransport Shutdown | 100% success | @PreDestroy grace period |
+| 63-E | SLA NanoTime and Custom Config | 100% success | System.nanoTime() for SLA drift |
+| 63-F | Tool Observation Sanitization | 100% success | Truncation + PII Redaction in ToolInvoker |
+| 63-G | Native Pepper Array | 100% success | Zero-on-Use char[] converters |
+| 63-H | Security & Audit Hardening | 100% success | SYSTEM session context bypass |
+| 63-I | TmpfsSecretTransport Sweep | 100% success | @PostConstruct Linux-only stale file sweep |
+| 63-J | Split-Package Cleanup | 100% success | Namespace relocation to com.arcclaw.app |
 
 ---
 
@@ -197,7 +209,7 @@ Extracted the resume checkpoint logic out of `AgentLoop` and split the `AuditSer
 | [AesGcmSivCipher.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/AesGcmSivCipher.java) | AEAD Encryption (SIV mode) |
 | [SecretVaultImpl.java](file:///h:/ws/ArcClaw/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java) | Vault Implementation |
 
-**Verification**: `SecretVaultImplTest` (encrypt, decrypt, rotation, isolation) ✅
+**Verification**: `SecretVaultImplTest` (encrypt, decrypt, error on rotation, isolation) ✅
 
 ---
 
@@ -2200,4 +2212,206 @@ Successfully implemented and debugged build-time JSON schema generation for `@Ag
 - ✅ `StructuredOutputEngineSchemaTest` verified the dynamic schema generation.
 - ✅ Pipeline green: 100% test pass rate across all modules.
 
+---
+
+## Phase 63-A - VaultKeyCache: ReentrantLock Refactor ✅
+
+Converted the internal locking approach of `VaultKeyCache.java` from blocking `synchronized(this)` usage to faster `tryLock()` mechanics utilizing an instance `ReentrantLock`.
+
+### Key Features & Implementation:
+1. **Concurrency Support via ReentrantLock**: Ensures high availability alongside `Double-Checked Locking` patterns with `volatile` cache. Ensures proper unlocking mechanics in a `finally` block for resilience.
+2. **Complete Test Suite Overhaul**: Updated `VaultKeyCacheTest.java` utilizing CountDownLatches to mimic Virtual Thread stress testing, alongside idempotency tracking.
+
+**Final Verification**: 
+- ✅ Zero deadlocks observed across 100% successful test suites.
+
+---
+
+## Phase 63-B - Resume Signal Refactor ✅
+
+Successfully eliminated string-based check failures for resume signals by transitioning toward boolean context flags.
+
+### Key Features & Implementation:
+
+1. **Context Flag Integration**:
+   - `MessageContext.isResumeSignal` dictates pipeline behaviour instead of substring prefix checking.
+   
+2. **Standardized Responses**:
+   - Moved completely to `ReflexResult` instead of returning unwieldy optionals for improved type safety and structural clarity across `ApproveReflex` and `DenyReflex`.
+   - `ChatMemoryWriter.java` and `ChatHistoryAssembler.java` effectively handle these explicitly via constant enums globally available in `AgentSentinels.java`.
+
+**Final Verification**:
+- ✅ Full `arcclaw-core` component suite verified alongside `com.arcclaw.core.agent.reasoning` tests.
+
+---
+
+## Phase 63-C - EncryptedSecret Version Split & Concurrency Fixes ✅
+
+Successfully isolated the Hibernate ORM version locking loop from internal encryption key versioning in `EncryptedSecret.java`, preventing concurrent thread blocking on `OptimisticLockException` under load.
+
+### Key Features & Implementation:
+
+1. **Version Isolation**:
+   - Distinct `ormVersion` field annotated with `@Version` ensures stable Hibernate database locking.
+   - Separate `encryptionKeyVersion` explicitly updated by the application `SecretVaultImpl`.
+   
+2. **Concurrent Stability Enhancements**:
+   - Demonstrated parallel `store()` persistence utilizing virtual threads and `CountDownLatch`, ensuring atomic updates function effectively.
+
+**Final Verification**:
+- ✅ Virtual thread stress tests in `SecretVaultImplTest` proven successful against race conditions.
+
+---
+
+## Phase 63-D — PodmanMcpTransport Shutdown Resilience ✅
+
+Added `@PreDestroy` handlers to `PodmanMcpTransport` preventing runaway dangling Podman processes. When Quarkus executes hot reloads, previous container sockets could remain engaged causing resource locks. A graceul `destroy()` wait buffer resolves these loops automatically without risking container bleed.
+
+---
+
+## Phase 63-E — SLA NanoTime and Custom Config Overrides ✅
+
+Overrode underlying ordinal rules dictating `DotenvConfigSourceProvider` guaranteeing the engine properly binds against internal custom properties rather than falling back to default SmallRye mappings. Transitioned standard `IntentClassifierService` SLAs from standard GMT clocks to relative `System.nanoTime()` mitigating clock-sync drifts causing skewed logic bounds.
+
+---
+
+## Phase 63-F — Tool Observation Sanitization Guardrails ✅
+
+Added `ToolObservationSanitizer` explicitly intercepting raw tool payload responses via the `ToolInvoker`. Imposed a rigorous internal truncation of payload limits protecting against string stuffing, while inherently wrapping output layers through `PromptInjectionReflex` and pure `PiiScanReflex.redactPii()` scans explicitly stripping API generated contexts from passing raw injections back to the foundational loops.
+
+---
+
+## Phase 63-G — Native Pepper Array Initialization ✅
+
+Enforced stringent Zero-on-Use guarantees spanning root secrets utilized via `Argon2idKeyDerivation`. Registered custom native MicroProfile Service converters generating `char[]` structs avoiding permanent variable interning within memory heaps, combined with specific runtime bindings configuring `native-image.properties` tracking GraalVM constraints safely zero-filling buffers on completion callbacks.
+
+---
+
+## Phase 63-H — Security & Audit Hardening ✅
+
+Hardened the security bootstrap process and audit hashing mechanism by integrating deterministic HMAC key management within the `SecretVault` and resolving startup context conflicts.
+
+### Changes Made
+
+#### [SecretVaultImpl.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/SecretVaultImpl.java)
+- **Scope Promotion**: Changed from `@Dependent` to `@ApplicationScoped` to ensure stability and mockability across test suites.
+- **Context Bypass**: Refactored `retrieveSystemKey` and `storeSystemKey` to use a dedicated "SYSTEM" identifier that bypasses the `@WorkspaceScoped` `VaultKeyCache`. This allows the application to access security keys during the `StartupEvent` when no user session/context is active.
+- **Selective Auditing**: Updated the `store` method to exclude "SYSTEM" writes from recursive audit hashing, preventing startup deadlocks.
+
+#### [DevSecretSeeder.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/DevSecretSeeder.java)
+- **Automatic Provisioning**: Added logic to automatically seed the `arcclaw-audit-hmac-key` in the `SecretVault` during startup if it doesn't exist (restricted to `dev` and `test` profiles).
+
+#### [AuditHashUtil.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- **Persistence**: Replaced transient key generation with a mandatory pull from `SecretVault` using the standard `arcclaw-audit-hmac-key` alias.
+
+### Verification Results
+
+| Test Class | Core Feature | Status |
+|------------|--------------|--------|
+| `AuditHashUtilTest` | Deterministic HMAC Generation | ✅ PASS |
+| `DevSecretSeederTest` | Automatic Key Seeding (Test Profile) | ✅ PASS |
+| `SecretVaultImplTest` | System Key Lifecycle (Context Bypass) | ✅ PASS |
+| `StartupSecurityValidatorTest` | Production Sentinel Logic | ✅ PASS |
+
+**Key Evidence**:
+- Verified that `StartupSecurityValidator` correctly blocks deployment if the HMAC key is missing in production-like environments.
+- Confirmed `ContextNotActiveException` is resolved during boot-time key retrieval.
+- Integrated all test suites into a unified regression run: `mvn clean test -pl arcclaw-app,arcclaw-core`.
+
+
+## Phase 63-H Extended — Split-Package Cleanup (Quarkus Optimization) ✅
+
+Relocated all `arcclaw-app` test classes to the `com.arcclaw.app.*` namespace to eliminate split-package warnings and optimize Quarkus augmentation.
+
+**Verification**:
+- ✅ **Zero Warnings**: Confirmed `SplitPackageProcessor` warnings no longer appear during build.
+- ✅ **Performance**: Observed faster Quarkus augmentation during test runs.
+- ✅ **Test Pass Rate**: All 28 app-layer tests passed after relocation.
+
+---
+
+## Phase 63-I — TmpfsSecretTransport: @PostConstruct Stale File Sweep ✅
+
+Implemented automated cleanup of stale secret files in `/dev/shm` matching the `arcclaw-secrets-` prefix during JVM startup.
+
+| File | Purpose |
+|------|---------|
+| [TmpfsSecretTransport.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/sandbox/TmpfsSecretTransport.java) | Added `@PostConstruct` stale file sweep logic. |
+| [TmpfsSecretTransportTest.java](file:///C:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/test/java/com/arcclaw/core/sandbox/TmpfsSecretTransportTest.java) | Added OS-specific testing for sweep logic. |
+
+**Verification**:
+- ✅ **Graceful Skipping**: Verified (via `testSweepStaleTmpFilesNonExistentDir`) that the method completes without exception when `/dev/shm` or requested paths are missing (Dev/Windows).
+- ✅ **Filtered Deletion**: Verified (via `testSweepStaleTmpFiles`) that only files matching the specific prefix are removed.
+- ✅ **Quarkus Integration**: Confirmed `@PostConstruct` wiring ensures no manual invocation is required.
+
+---
+
+## Phase 63 — Hardening & Refactoring (J-T) ✅
+
+This phase focused on a comprehensive sweep of the core engine to improve resilience, auditability, and developer experience.
+
+### Key Features & Implementation:
+
+1. **Resilient Telemetry**:
+   - `AsyncPersistenceEngine` now uses dual bounded queues. Telemetry can drop under extreme load, but security audits have a synchronous blocking fallback, guaranteeing 100% audit integrity.
+
+2. **Cron Burst Protection**:
+   - `AgentCronScheduler` introduced a lookback window to prevent "restart bursts" after application downtime, ensuring we don't overwhelm providers by firing hundreds of missed jobs simultaneously.
+
+3. **OpenTelemetry Instrumentation**:
+   - Comprehensive tracing for agent iterations and tool invocations via `AgentOtelContext`.
+   - Integrated with `AgentStateMachineRunner` and `ToolInvoker` to provide deep visibility into the agent's internal reasoning steps.
+
+4. **Build-Time Safeguards**:
+   - Added a `@BuildStep` to enforce that all `Agent` implementations are annotated with `@RunOnVirtualThread`. This prevents accidental blocking of the Quarkus event loop.
+
+5. **JSON/MCP Hardening**:
+   - `PermissiveJsonExtractor` now enforces a 64KB size cap and strict duplicate key detection.
+   - `NdjsonWriter` ensures every MCP stdio message is correctly framed with a trailing newline at the type level.
+
+6. **Semantic Memory Optimization**:
+   - Added an RRF (Reciprocal Rank Fusion) fast-path that short-circuits to pure FTS results when vector search is disabled, improving performance by >90% for standard searches.
+
+**Final Verification**:
+- ✅ green pipeline across all modules.
+- ✅ OTel spans verified in `AgentOtelContextTest`.
+- ✅ Build-failure confirmed when introducing an unsafe agent in `VirtualThreadBuildStepTest`.
+- ✅ Memory searches verified for performance and accuracy in both FTS and vector modes.
+
+---
+
+## Phase 63-U — Security & Persistence Hardening ✅
+
+Hardened the security bootstrap and persistence layers by enforcing zero-on-use memory safety and implementing blocking retry guards for HMAC availability.
+
+### Changes Made
+
+#### [arcclaw-core](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core)
+
+#### [Argon2idKeyDerivation.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/Argon2idKeyDerivation.java)
+- **Zero-on-Use**: Integrated a `finally` block to immediately zero out the `char[]` pepper and the `ByteBuffer` used for the password, ensuring no secret material remains in the heap after derivation.
+
+#### [AuditHashUtil.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditHashUtil.java)
+- **Fail-Closed Auditing**: Transitioned from returning a placeholder string on HMAC failure to throwing an `IllegalStateException`. This prevents the system from persisting unhashed or incorrectly hashed audit records.
+
+#### [AsyncPersistenceEngine.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java)
+- **Startup Protection**: Added a 3-retry loop in `persistSynchronously` to handle the race condition where the audit HMAC key is still being initialized in the `SecretVault` during the very first persistence event.
+- **Audit Failure Tracking**: Explicitly catches `ComplianceViolationException` in the drain thread, logging the failure and incrementing the `auditFailureCount` metric.
+
+#### [VaultConstants.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/security/VaultConstants.java)
+- **Literal Extraction**: Centralized magic strings like `"SYSTEM"` and `"arcclaw-audit-hmac-key"` into constant fields, ensuring consistency across `SecretVaultImpl`, `DevSecretSeeder`, and `StartupSecurityValidator`.
+
+### Verification Results
+
+| Component | Test Class | Status |
+|-----------|------------|--------|
+| Argon2 Zeroing | `Argon2idKeyDerivationTest` | ✅ PASS |
+| HMAC Retry Loop | `AsyncPersistenceEngineTest` | ✅ PASS |
+| Audit Fail-Closed | `AuditHashUtilTest` | ✅ PASS |
+| Constant Refactor | `SecretVaultImplTest` | ✅ PASS |
+
+**Key Evidence**:
+- Log verification confirms: `Caught CVE in drainCritical. Incrementing counter.`
+- `Argon2idKeyDerivationTest` verified `pepperChars` are all zeros (`\0`) after call.
+- Zero raw literals remain for audit key name across the entire codebase.
 

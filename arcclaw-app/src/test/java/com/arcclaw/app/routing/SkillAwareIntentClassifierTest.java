@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -46,26 +46,26 @@ class SkillAwareIntentClassifierTest {
     @Test
     void testFastPathRoutesToSkillAndBypassesLLM() {
         SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, "p");
-        RoleDefinition roleDefinition = new com.arcclaw.core.agent.role.RoleDefinition(
-            "skill:code-reviewer", "Code Reviewer", "desc", 5, false, java.util.Set.of()
-        );
-        CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[0], roleDefinition, "db");
-        
-        when(skillRegistry.findMatch("review my code")).thenReturn(Optional.of(entry));
+        RoleDefinition roleDefinition = new RoleDefinition(
+                "skill:code-reviewer", "Code Reviewer", "desc", 5, false, Set.of());
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[] { Pattern.compile(".*review.*code.*") },
+                roleDefinition, "db");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
 
         String role = classifier.classify("review my code");
-        
+
         assertEquals("skill:code-reviewer", role);
         verify(fallbackService, never()).classify(anyString());
     }
 
     @Test
     void testNoMatchFallsBackToLLM() {
-        when(skillRegistry.findMatch("what is the weather")).thenReturn(Optional.empty());
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of());
         when(fallbackService.classify("what is the weather")).thenReturn("coordinator");
 
         String role = classifier.classify("what is the weather");
-        
+
         assertEquals("coordinator", role);
         verify(fallbackService, times(1)).classify("what is the weather");
     }
@@ -77,7 +77,7 @@ class SkillAwareIntentClassifierTest {
 
         assertEquals("coordinator", classifier.classify(null));
         assertEquals("coordinator", classifier.classify("   "));
-        
+
         verify(fallbackService, times(1)).classify(null);
         verify(fallbackService, times(1)).classify("   ");
     }

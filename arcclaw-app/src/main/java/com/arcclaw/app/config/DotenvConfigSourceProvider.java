@@ -75,8 +75,8 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
             @Override
             public int getOrdinal() {
                 // Higher than application.yaml (250) but lower than System Properties (400)
-                // Default .env ordinal in SmallRye is 295
-                return 295;
+                // Default .env ordinal in SmallRye is 295. We use 296 to explicitly beat it.
+                return 296;
             }
         });
     }

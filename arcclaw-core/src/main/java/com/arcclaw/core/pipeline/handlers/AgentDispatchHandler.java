@@ -82,8 +82,10 @@ public class AgentDispatchHandler implements MessageHandler {
                     role,
                     goal,
                     reasoningEngine,
-                    resolvedMaxIterations
+                    resolvedMaxIterations,
+                    context
                 )
+
             );
         } catch (Exception e) {
             log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage(), e);

@@ -100,7 +100,8 @@ public class MemorySearchTool implements AgentTool {
                     return ToolResponse.success(
                         "Memory index temporarily unavailable. Proceed with current context.");
                 }
-                log.errorf(e, "MemorySearchTool failed for session %s", sessionId);
+                log.errorf("MemorySearchTool failed for session %s: %s", sessionId, msg);
+                log.debugf(e, "Full stacktrace for MemorySearchTool failure in session %s", sessionId);
                 return ToolResponse.failure(500, "Memory search failed: " + msg);
             }
 

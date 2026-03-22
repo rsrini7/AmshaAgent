@@ -10,6 +10,13 @@ public final class AgentSentinels {
     /** User refused the tool execution. matches text in DenyReflex. */
     public static final String DENY_SENTINEL = "Human denied the tool execution.";
 
-    /** Prefix used when resuming a task from a checkpoint. */
-    public static final String RESUME_GOAL_PREFIX = "resuming task";
+    /** Verbatim string currently inlined in ChatMemoryWriter for tool approvals. */
+    public static final String GOAL_TOOL_APPROVED =
+        "The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request.";
+
+    /** Internal goal strings used when resuming a task. */
+    public static final String GOAL_RESUME_APPROVED = "Resuming task after approval";
+    public static final String GOAL_RESUME_DENIED   = "Resuming task after denial";
+
 }
+

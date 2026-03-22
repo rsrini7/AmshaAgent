@@ -17,10 +17,15 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -61,6 +66,12 @@ class ApproveReflexTest {
         instance.jobCompletedEvent = jobCompletedEventMock;
     }
 
+    private MessageContext createContext(String input) {
+        ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
+        return new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
+    }
+
     @Test
     void testCronIdApprovalResumesAndCompletes() {
         String cronId = "cron-123";
@@ -79,12 +90,15 @@ class ApproveReflexTest {
 
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
         when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Cron Success", List.of()));
 
-        String resultText = approveReflex.execute("session-1", userId, "chat-1", "/approve " + cronId);
+        MessageContext ctx = createContext("/approve " + cronId);
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve " + cronId, ctx);
 
-        assertTrue(resultText.isEmpty());
+        assertTrue(result.commandResponse().isPresent());
+        assertTrue(result.commandResponse().get().isEmpty());
+        assertTrue(ctx.isResumeSignal());
         verify(cronRepository).markCompleted(eq(cronId), any(Instant.class));
         verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
     }
@@ -100,7 +114,9 @@ class ApproveReflexTest {
         when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
 
-        String resultText = approveReflex.execute("session-1", userId, "chat-1", "/approve");
+        MessageContext ctx = createContext("/approve");
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
+        String resultText = result.commandResponse().get();
 
         assertTrue(resultText.contains("No active approval in this chat session"));
         assertTrue(resultText.contains("Backup databases"));
@@ -121,13 +137,15 @@ class ApproveReflexTest {
         when(statefulAgentStore.load(anyString(), eq(AgentRoleEnum.COORDINATOR.toScopedName())))
                 .thenReturn(Optional.of(cp));
         
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Session Result", List.of()));
 
-        String resultText = approveReflex.execute("session-1", userId, "chat-1", "/approve");
+        MessageContext ctx = createContext("/approve");
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
 
-        assertEquals("Session Result", resultText);
-        verify(agentLoop).run(eq("session-1"), eq(AgentRoleEnum.COORDINATOR.toScopedName()), anyString(), any(), anyInt());
+        assertEquals("Session Result", result.commandResponse().get());
+        assertTrue(ctx.isResumeSignal());
+        verify(agentLoop).run(eq("session-1"), eq(AgentRoleEnum.COORDINATOR.toScopedName()), anyString(), any(), anyInt(), eq(ctx));
     }
 
     @Test
@@ -146,7 +164,9 @@ class ApproveReflexTest {
         when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(c1, c2));
 
-        String resultText = approveReflex.execute("session-1", userId, "chat-1", "/approve");
+        MessageContext ctx = createContext("/approve");
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
+        String resultText = result.commandResponse().get();
 
         assertTrue(resultText.contains("Multiple background tasks awaiting approval"));
         assertTrue(resultText.contains("cron-1"));

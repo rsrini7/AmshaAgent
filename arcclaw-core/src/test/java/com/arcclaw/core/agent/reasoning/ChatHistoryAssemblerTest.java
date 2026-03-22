@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.data.message.AiMessage;
@@ -77,7 +78,7 @@ class ChatHistoryAssemblerTest {
     @Test
     void testAssemble_resumalGoalInjected() {
         // Arrange
-        String goal = "The tool execution has been approved and completed";
+        String goal = AgentSentinels.GOAL_TOOL_APPROVED;
 
         // Act
         List<ChatMessage> result = assembler.assemble(null, goal, List.of());

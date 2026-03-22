@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
@@ -42,9 +43,9 @@ public class AgentFunctionProcessor {
 
     @BuildStep
     void processAgentFunctions(CombinedIndexBuildItem indexBuildItem,
-                               io.quarkus.deployment.annotations.BuildProducer<GeneratedResourceBuildItem> resources,
-                               io.quarkus.deployment.annotations.BuildProducer<NativeImageResourceBuildItem> nativeResources,
-                               io.quarkus.deployment.annotations.BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws IOException {
+                               BuildProducer<GeneratedResourceBuildItem> resources,
+                               BuildProducer<NativeImageResourceBuildItem> nativeResources,
+                               BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws IOException {
 
         IndexView index = indexBuildItem.getIndex();
         System.out.println("[AgentFunctionProcessor] Processing agent functions...");
@@ -95,7 +96,7 @@ public class AgentFunctionProcessor {
     }
 
     private void buildSchema(IndexView index, Type type, ObjectNode node, Set<String> processedTypes,
-                             io.quarkus.deployment.annotations.BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
+                             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
         
         String typeName = type.name().toString();
         

@@ -99,6 +99,6 @@ public class EmbeddingModelProducer {
         return apiKey.filter(k -> !k.isBlank())
             .orElseThrow(() -> new IllegalStateException(
                 "arcclaw.rag.embed-api-key is required for provider '" + providerName + "'. " +
-                "Set EMBED_API_KEY in .env"));
+                "Set ARCCLAW_EMBED_API_KEY in .env"));
     }
 }
