@@ -35,6 +35,7 @@ _.file = ".env"
 [tasks.setup]
 description = "First-time setup: .env, chmod +x mvnw, install temurin-25 + graalvm-community-25.0.2"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -55,6 +56,7 @@ echo '✅  Both JDKs installed.'
 [tasks."setup:env-check"]
 description = "Validate .env — warn about missing or placeholder values"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -80,6 +82,7 @@ fi
 [tasks."setup:wsl-crlf"]
 description = "WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -134,6 +137,7 @@ run = [
 depends = ["dev:kill"]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -145,6 +149,7 @@ echo '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 [tasks."build:full"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -156,6 +161,7 @@ echo '✅  Full build complete.'
 [tasks."build:test"]
 description = "Build and run all tests"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -167,6 +173,7 @@ echo '✅  Tests complete.'
 [tasks."build:native"]
 description = "Native binary — Podman container (default on Linux/macOS) or local GraalVM — auto-detects, auto-switches JDK"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -265,6 +272,7 @@ echo ''
 [tasks."build:native-local"]
 description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -311,6 +319,7 @@ echo '      GOAL="..." mise run native:ask → single-shot query'
 [tasks."build:native-lowmem"]
 description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -355,6 +364,7 @@ mise run dist
 [tasks.clean]
 description = "Clean Maven build artifacts"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -376,6 +386,7 @@ JVM_ARGS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk
 [tasks.dev]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -390,6 +401,7 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 [tasks."dev:chat"]
 description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -404,6 +416,7 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 [tasks."dev:attach"]
 description = "Dev mode — Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -421,6 +434,7 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 [tasks."dev:ask"]
 description = 'Dev mode — one-shot task. Usage: GOAL="your goal" mise run dev:ask'
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -444,6 +458,7 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 [tasks."dev:no-ui"]
 description = "Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -464,6 +479,7 @@ exec ./mvnw quarkus:dev -pl arcclaw-app -am \\
 [tasks."jar:serve"]
 description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -489,6 +505,7 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" serve
 [tasks."jar:chat"]
 description = "Run packaged jar — interactive REPL (CLI profile)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -512,6 +529,7 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" chat
 [tasks."jar:attach"]
 description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -537,6 +555,7 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" attach
 [tasks."jar:ask"]
 description = 'Run packaged jar — one-shot task. Usage: GOAL="your goal" mise run ask'
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -610,6 +629,7 @@ exec java "${JVM_ARGS[@]}" -jar "$JAR" "$CMD"
 [tasks."native:serve"]
 description = "Run native binary — REST daemon on :8080"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -624,6 +644,7 @@ exec "./$RUNNER" serve
 [tasks."native:chat"]
 description = "Run native binary — interactive REPL"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -638,6 +659,7 @@ exec "./$RUNNER" chat
 [tasks."native:attach"]
 description = "Run native binary — Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -653,6 +675,7 @@ exec "./$RUNNER" attach
 [tasks."native:ask"]
 description = 'Run native binary — one-shot task. Usage: GOAL="your goal" mise run native:ask'
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1273,6 +1296,7 @@ echo '────────────────────────�
 [tasks."compose:up"]
 description = "Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1290,6 +1314,7 @@ echo '    Ollama        → http://localhost:11434'
 [tasks."compose:down"]
 description = "Stop the observability stack (data volumes are preserved)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1300,6 +1325,7 @@ echo '✅  Stack stopped. Data volumes preserved.'
 [tasks."compose:down-clean"]
 description = "Stop the stack and DELETE all data volumes (irreversible — prompts for confirmation)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1322,6 +1348,7 @@ run = "docker compose logs -f arcclaw"
 [tasks."compose:restart"]
 description = "Restart only the arcclaw service (observability stack stays up)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1336,6 +1363,7 @@ echo '✅  arcclaw service restarted.'
 [tasks."podman:init"]
 description = "macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1347,6 +1375,7 @@ echo '✅  Podman machine initialised and running.'
 [tasks."podman:start"]
 description = "macOS: start the Podman machine"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1357,6 +1386,7 @@ echo '✅  Podman machine started.'
 [tasks."podman:stop"]
 description = "macOS: stop the Podman machine"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1367,6 +1397,7 @@ echo '✅  Podman machine stopped.'
 [tasks."podman:socket"]
 description = "WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1382,6 +1413,7 @@ echo "    export DOCKER_HOST=\"unix://$SOCK\""
 [tasks."podman:status"]
 description = "Print Podman version, running containers, and tool-runner image status"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 echo '── Podman version ───────────────────────────────'
@@ -1405,6 +1437,7 @@ echo "  ${DOCKER_HOST:-(not set)}"
 [tasks."sandbox:check"]
 description = "Verify the arcclaw-tool-runner sandbox image exists"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1424,6 +1457,7 @@ fi
 [tasks."db:inspect"]
 description = "Open arcclaw-meta.db in sqlite3 interactive CLI"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1440,6 +1474,7 @@ sqlite3 "$DB"
 [tasks."db:fts-check"]
 description = "Verify SQLite FTS5 is available (required for full-text search)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1454,6 +1489,7 @@ fi
 [tasks."db:vec-check"]
 description = "Check sqlite-vec extension exists for your platform (lib/vec0.so / .dylib)"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1478,6 +1514,7 @@ fi
 [tasks.info]
 description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 echo '── Java ─────────────────────────────────────────'
@@ -1497,6 +1534,7 @@ echo "  ${ARCCLAW_VEC_EXT:-(not set)}"
 [tasks."dev:kill"]
 description = "Kill any lingering Quarkus dev / quarkus-run.jar background processes"
 dir = "{{config_root}}"
+quiet = true
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
