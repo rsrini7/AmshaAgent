@@ -57,8 +57,12 @@ public class ReflexRegistry {
                             "action=DENY session=" + sessionId);
                     } else {
                         auditType = SecurityEventType.REFLEX_COMMAND;
+
+                        String reflexName = reflex.getClass().getSimpleName()
+                            .replace("_ClientProxy", "")
+                            .replace("_Subclass", "");
                         auditService.record(sessionId, userId, "reflex", auditType,
-                            "command=" + reflex.getClass().getSimpleName());
+                            "command=" + reflexName);
                     }
 
                     // Pass 1: Command short-circuit — sanitizedInput is unused since LLM is bypassed

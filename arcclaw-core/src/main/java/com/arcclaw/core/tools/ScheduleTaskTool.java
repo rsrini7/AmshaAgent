@@ -146,8 +146,13 @@ public class ScheduleTaskTool implements AgentTool {
         String goal           = (String) params.get("goal");
         String timezone       = params.containsKey("timezone")
                 ? (String) params.get("timezone") : "UTC";
-        boolean runOnce       = params.containsKey("runOnce")
-                && Boolean.parseBoolean(String.valueOf(params.get("runOnce")));
+        Object runOnceRaw = params.get("runOnce");
+        boolean runOnce = switch (runOnceRaw) {
+            case Boolean b -> b;
+            case String s  -> Boolean.parseBoolean(s);
+            case null      -> false;
+            default        -> false;
+        };
 
 
         if (cronExpression == null || cronExpression.isBlank()) {
