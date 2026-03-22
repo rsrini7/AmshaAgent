@@ -139,7 +139,7 @@ public class AgentSessionService {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 devSeeder.seedDevSecrets();
                 return WorkspaceContext.run(
-                        sessionId, "rest:sync", sessionId, AutonomyLevel.SUPERVISED, request.agentRole(), ChannelType.REST_API, () -> {
+                        sessionId, "rest:api", sessionId, AutonomyLevel.SUPERVISED, request.agentRole(), ChannelType.REST_API, () -> {
                             MessageContext context = createRestContext(sessionId, request.goal());
                             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations, context);
                             return responseMapper.mapResult(result, false);
@@ -194,7 +194,7 @@ public class AgentSessionService {
 
                 AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
 
-                WorkspaceContext.run(sessionId, "rest:async", sessionId, runLevel, request.agentRole(), ChannelType.REST_API, () -> {
+                WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, request.agentRole(), ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     if (isApproval) {
                         context.setResumeSignal(true);
@@ -233,8 +233,8 @@ public class AgentSessionService {
                             .build();
                 }
 
-                MDC.put(MdcKeys.USER_ID, "rest:approve");
-                return WorkspaceContext.run(sessionId, "rest:approve", sessionId, AutonomyLevel.FULL, canonicalRole, ChannelType.REST_API, () -> {
+                MDC.put(MdcKeys.USER_ID, "rest:api");
+                return WorkspaceContext.run(sessionId, "rest:api", sessionId, AutonomyLevel.FULL, canonicalRole, ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, AgentSentinels.GOAL_RESUME_APPROVED);
                     context.setResumeSignal(true);
                     AgentResult result = agentLoop.run(sessionId, agentRole, AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 1, context);
@@ -266,7 +266,7 @@ public class AgentSessionService {
                             .build();
                 }
 
-                MDC.put(MdcKeys.USER_ID, "rest:deny");
+                MDC.put(MdcKeys.USER_ID, "rest:api");
                 agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
