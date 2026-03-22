@@ -860,13 +860,10 @@ if (-not (Test-Path $src)) {
     exit 1
 }
 
-# Preserve any existing platform binaries — only recreate lib/ and support files
 New-Item -ItemType Directory -Force "$distDir/lib" | Out-Null
-
 Copy-Item $src "$distDir/$exeName"
 Copy-Item '.env.example' "$distDir/.env.example"
 
-# Copy ALL vec0 variants that exist — preserves other platforms' files
 $vec0Copied = 0
 @( @('lib/vec0.so',    "$distDir/lib/vec0.so",    'Linux'),
    @('lib/vec0.dylib', "$distDir/lib/vec0.dylib", 'macOS'),
@@ -896,6 +893,7 @@ Write-Host ''
 $runPs1 = @'
 # run.ps1 — ArcClaw launcher with first-run auto-setup
 # Usage: ./run.ps1 serve | chat | attach | ask "your goal"
+# Platform: Windows (native pwsh) — random keys use [Convert]::ToBase64String, no openssl needed
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -917,19 +915,63 @@ if (-not (Test-Path $envPath)) {
     if (Test-Path $envExample) { Copy-Item $envExample $envPath }
     else { New-Item $envPath -ItemType File | Out-Null }
 
+    # ── Helper: random base64 — pure PowerShell, no openssl needed on Windows ─
     function New-RandomBase64 {
         [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) }))
     }
+
+    # ── Helper: replace a key line in .env ────────────────────────────────────
+    function Set-EnvLine($file, $key, $value) {
+        $c = [System.IO.File]::ReadAllText($file)
+        $c = $c -replace "(?m)^$key=.*", "$key=$value"
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+
+    # ── Helper: comment out a key — clears placeholders Quarkus can't parse ──
+    function Clear-EnvLine($file, $key) {
+        $c = [System.IO.File]::ReadAllText($file)
+        $c = $c -replace "(?m)^$key=.*", "# $key="
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+
+    # ── Helper: prompt and validate the 3 Telegram keys ──────────────────────
+    function Set-TelegramKeys($file) {
+        $tgToken = Read-Host "  TELEGRAM_BOT_TOKEN  (@BotFather -> /newbot)"
+        Set-EnvLine $file 'TELEGRAM_BOT_TOKEN' $tgToken
+        Write-Host "  OK  TELEGRAM_BOT_TOKEN set."
+
+        do {
+            $raw = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated -- @userinfobot)").Trim() -replace '\\s', ''
+            if ($raw -notmatch '^[0-9]+(,[0-9]+)*$') {
+                Write-Host "  X  Numeric only, e.g. 123456789 or 123456789,987654321"
+            }
+        } while ($raw -notmatch '^[0-9]+(,[0-9]+)*$')
+        Set-EnvLine $file 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS' $raw
+        Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+
+        do {
+            $rawu = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated)").Trim() -replace '\\s', ''
+            if ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$') {
+                Write-Host "  X  Letters, numbers and _ only, e.g. john or john,jane_doe"
+            }
+        } while ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$')
+        Set-EnvLine $file 'ARCCLAW_TELEGRAM_ALLOWED_USERS' $rawu
+        Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+        Write-Host ""
+    }
+
+    # ── Auto-generate 4 secret keys ──────────────────────────────────────────
     $vaultPepper = New-RandomBase64
     $auditKey    = New-RandomBase64
     $apiKey      = New-RandomBase64
+    $apiKeyCi    = New-RandomBase64
 
-    $envContent = [System.IO.File]::ReadAllText($envPath)
-    $envContent = $envContent -replace '(?m)^ARCCLAW_VAULT_PEPPER=.*',     "ARCCLAW_VAULT_PEPPER=$vaultPepper"
-    $envContent = $envContent -replace '(?m)^ARCCLAW_AUDIT_HMAC_KEY=.*',   "ARCCLAW_AUDIT_HMAC_KEY=$auditKey"
-    $envContent = $envContent -replace '(?m)^ARCCLAW_API_KEY_INTERNAL=.*', "ARCCLAW_API_KEY_INTERNAL=$apiKey"
-    [System.IO.File]::WriteAllText($envPath, $envContent)
+    Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER'     $vaultPepper
+    Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY'   $auditKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' $apiKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI'       $apiKeyCi
 
+    # ── Write keys-backup.txt ─────────────────────────────────────────────────
     $backup  = "# ArcClaw -- auto-generated secret keys`n"
     $backup += "# Created: $(Get-Date)`n#`n"
     $backup += "# WARNING: VAULT_PEPPER and AUDIT_HMAC_KEY are immutable.`n"
@@ -938,34 +980,98 @@ if (-not (Test-Path $envPath)) {
     $backup += "ARCCLAW_VAULT_PEPPER=$vaultPepper`n"
     $backup += "ARCCLAW_AUDIT_HMAC_KEY=$auditKey`n"
     $backup += "ARCCLAW_API_KEY_INTERNAL=$apiKey`n"
+    $backup += "ARCCLAW_API_KEY_CI=$apiKeyCi`n"
     [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
 
-    Write-Host "  OK  Auto-generated: VAULT_PEPPER · AUDIT_HMAC_KEY · API_KEY_INTERNAL"
-    Write-Host "  !!  Saved to keys-backup.txt -- VAULT_PEPPER is immutable, keep it safe"
+    Write-Host "  OK  Auto-generated: VAULT_PEPPER · AUDIT_HMAC_KEY · API_KEY_INTERNAL · API_KEY_CI"
+    Write-Host "  !!  Saved to keys-backup.txt -- VAULT_PEPPER is immutable, back it up"
     Write-Host ""
 
+    # ── GROQ_API_KEY — required, must start with gsk_ ─────────────────────────
     do {
         $groqKey = Read-Host "  GROQ_API_KEY  (https://console.groq.com -- starts with gsk_)"
         if (-not $groqKey.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_ -- try again." }
     } while (-not $groqKey.StartsWith('gsk_'))
-    $envContent = [System.IO.File]::ReadAllText($envPath)
-    $envContent = $envContent -replace '(?m)^GROQ_API_KEY=.*', "GROQ_API_KEY=$groqKey"
-    [System.IO.File]::WriteAllText($envPath, $envContent)
+    Set-EnvLine $envPath 'GROQ_API_KEY' $groqKey
     Write-Host "  OK  GROQ_API_KEY set."
     Write-Host ""
 
-    if ($args.Count -gt 0 -and $args[0] -eq 'attach') {
+    # ── ARCCLAW_EMBED_API_KEY — required (jina is the default provider) ───────
+    Write-Host "  Embedding provider: jina -- API key required."
+    Write-Host "  Get a free key at: https://jina.ai (1M tokens/month, no credit card)"
+    $embedKey = Read-Host "  ARCCLAW_EMBED_API_KEY (starts with jina_)"
+    Set-EnvLine $envPath 'ARCCLAW_EMBED_API_KEY' $embedKey
+    Write-Host "  OK  ARCCLAW_EMBED_API_KEY set."
+    Write-Host ""
+
+    # ── GITHUB_TOKEN — optional ───────────────────────────────────────────────
+    $ghToken = Read-Host "  GITHUB_TOKEN  (optional -- press Enter to skip)"
+    if ($ghToken) {
+        Set-EnvLine $envPath 'GITHUB_TOKEN' $ghToken
+        Write-Host "  OK  GITHUB_TOKEN set."
+    } else {
+        Clear-EnvLine $envPath 'GITHUB_TOKEN'
+        Write-Host "  i   GITHUB_TOKEN skipped."
+    }
+    Write-Host ""
+
+    # ── Telegram — driven by ARCCLAW_TELEGRAM_ENABLED + subcommand ───────────
+    $envText   = [System.IO.File]::ReadAllText($envPath)
+    $tgMatch   = [regex]::Match($envText, '(?m)^ARCCLAW_TELEGRAM_ENABLED=(.+)')
+    $tgEnabled = if ($tgMatch.Success) { $tgMatch.Groups[1].Value.Trim() } else { 'false' }
+    $cmd       = if ($args.Count -gt 0) { $args[0] } else { 'serve' }
+
+    if ($cmd -eq 'attach') {
+        # attach — always mandatory regardless of TELEGRAM_ENABLED value
+        Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ENABLED' 'true'
         Write-Host "  attach mode -- Telegram configuration required."
         Write-Host ""
-        $tgToken = Read-Host "  TELEGRAM_BOT_TOKEN             (@BotFather -> /newbot)"
-        $tgIds   = Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric ID from @userinfobot)"
-        $tgUsers = Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS     (username without @)"
-        $envContent = [System.IO.File]::ReadAllText($envPath)
-        $envContent = $envContent -replace '(?m)^TELEGRAM_BOT_TOKEN=.*',                "TELEGRAM_BOT_TOKEN=$tgToken"
-        $envContent = $envContent -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=.*', "ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=$tgIds"
-        $envContent = $envContent -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*',    "ARCCLAW_TELEGRAM_ALLOWED_USERS=$tgUsers"
-        [System.IO.File]::WriteAllText($envPath, $envContent)
-        Write-Host "  OK  Telegram keys set."
+        Set-TelegramKeys $envPath
+
+    } elseif ($tgEnabled -eq 'true') {
+        # serve/chat/ask with TELEGRAM_ENABLED=true — optional, skip to disable
+        Write-Host "  Telegram is enabled in .env.example."
+        Write-Host "  Configure now, or press Enter on TELEGRAM_BOT_TOKEN to disable."
+        Write-Host ""
+        $tgTokenPeek = Read-Host "  TELEGRAM_BOT_TOKEN  (Enter to skip and disable Telegram)"
+        if (-not $tgTokenPeek) {
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ENABLED' 'false'
+            Clear-EnvLine $envPath 'TELEGRAM_BOT_TOKEN'
+            Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS'
+            Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS'
+            Write-Host "  i   Telegram disabled. Re-run ./run.ps1 attach to configure later."
+            Write-Host ""
+        } else {
+            Set-EnvLine $envPath 'TELEGRAM_BOT_TOKEN' $tgTokenPeek
+            Write-Host "  OK  TELEGRAM_BOT_TOKEN set."
+
+            do {
+                $raw = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated -- @userinfobot)").Trim() -replace '\\s', ''
+                if ($raw -notmatch '^[0-9]+(,[0-9]+)*$') {
+                    Write-Host "  X  Numeric only, e.g. 123456789 or 123456789,987654321"
+                }
+            } while ($raw -notmatch '^[0-9]+(,[0-9]+)*$')
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS' $raw
+            Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+
+            do {
+                $rawu = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated)").Trim() -replace '\\s', ''
+                if ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$') {
+                    Write-Host "  X  Letters, numbers and _ only, e.g. john or john,jane_doe"
+                }
+            } while ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$')
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS' $rawu
+            Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+            Write-Host ""
+        }
+
+    } else {
+        # serve/chat/ask with TELEGRAM_ENABLED=false — clear placeholders, no prompt
+        Clear-EnvLine $envPath 'TELEGRAM_BOT_TOKEN'
+        Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS'
+        Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS'
+        Write-Host "  i   Telegram not enabled -- placeholders cleared."
+        Write-Host "      Re-run ./run.ps1 attach to configure Telegram later."
         Write-Host ""
     }
 
@@ -975,7 +1081,7 @@ if (-not (Test-Path $envPath)) {
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Load .env if present
+# ── Safe .env loader — values are never shell-evaluated ──────────────────────
 $envFile = Join-Path $scriptDir '.env'
 if (Test-Path $envFile) {
     Get-Content $envFile | Where-Object { $_ -match '^[^#].*=' } | ForEach-Object {
@@ -1016,6 +1122,8 @@ $runSh = @'
 #!/usr/bin/env bash
 # run.sh — ArcClaw launcher with first-run auto-setup
 # Usage: ./run.sh serve | chat | attach | ask "your goal"
+# Platform: macOS · Linux · WSL2
+# Random key generation: openssl rand -base64 32 (standard on all supported platforms)
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXE="$SCRIPT_DIR/arcclaw-app-1.0.0-SNAPSHOT-runner"
@@ -1036,13 +1144,23 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
         touch "$SCRIPT_DIR/.env"
     fi
 
+    _setsed() {
+        sed -i.bak "s|^$1=.*|$1=$2|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    }
+
+    _clearkey() {
+        sed -i.bak "s|^$1=.*|# $1=|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    }
+
     _VAULT_PEPPER="$(openssl rand -base64 32)"
     _AUDIT_KEY="$(openssl rand -base64 32)"
     _API_KEY="$(openssl rand -base64 32)"
+    _API_KEY_CI="$(openssl rand -base64 32)"
 
-    sed -i.bak "s|^ARCCLAW_VAULT_PEPPER=.*|ARCCLAW_VAULT_PEPPER=$_VAULT_PEPPER|"     "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
-    sed -i.bak "s|^ARCCLAW_AUDIT_HMAC_KEY=.*|ARCCLAW_AUDIT_HMAC_KEY=$_AUDIT_KEY|"    "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
-    sed -i.bak "s|^ARCCLAW_API_KEY_INTERNAL=.*|ARCCLAW_API_KEY_INTERNAL=$_API_KEY|"  "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    _setsed ARCCLAW_VAULT_PEPPER     "$_VAULT_PEPPER"
+    _setsed ARCCLAW_AUDIT_HMAC_KEY   "$_AUDIT_KEY"
+    _setsed ARCCLAW_API_KEY_INTERNAL "$_API_KEY"
+    _setsed ARCCLAW_API_KEY_CI       "$_API_KEY_CI"
 
     cat > "$SCRIPT_DIR/keys-backup.txt" << KEYS
 # ArcClaw — auto-generated secret keys
@@ -1055,10 +1173,11 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
 ARCCLAW_VAULT_PEPPER=$_VAULT_PEPPER
 ARCCLAW_AUDIT_HMAC_KEY=$_AUDIT_KEY
 ARCCLAW_API_KEY_INTERNAL=$_API_KEY
+ARCCLAW_API_KEY_CI=$_API_KEY_CI
 KEYS
 
-    echo "  ✅  Auto-generated: VAULT_PEPPER · AUDIT_HMAC_KEY · API_KEY_INTERNAL"
-    echo "  ⚠️   Saved to keys-backup.txt — VAULT_PEPPER is immutable, keep it safe"
+    echo "  ✅  Auto-generated: VAULT_PEPPER · AUDIT_HMAC_KEY · API_KEY_INTERNAL · API_KEY_CI"
+    echo "  ⚠️   Saved to keys-backup.txt — VAULT_PEPPER is immutable, back it up"
     echo ""
 
     while true; do
@@ -1067,27 +1186,111 @@ KEYS
         [[ "$_GROQ_KEY" == gsk_* ]] && break
         echo "  ❌  Must start with gsk_ — try again."
     done
-    sed -i.bak "s|^GROQ_API_KEY=.*|GROQ_API_KEY=$_GROQ_KEY|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    _setsed GROQ_API_KEY "$_GROQ_KEY"
     echo "  ✅  GROQ_API_KEY set."
     echo ""
 
-    if [[ "${1:-}" == "attach" ]]; then
-        echo "  attach mode — Telegram configuration required."
-        echo ""
-        printf "  TELEGRAM_BOT_TOKEN            (@BotFather → /newbot): "
+    echo "  Embedding provider: jina — API key required."
+    echo "  Get a free key at: https://jina.ai (1M tokens/month, no credit card)"
+    printf "  ARCCLAW_EMBED_API_KEY (starts with jina_): "
+    read -r _EMBED_KEY
+    _setsed ARCCLAW_EMBED_API_KEY "$_EMBED_KEY"
+    echo "  ✅  ARCCLAW_EMBED_API_KEY set."
+    echo ""
+
+    printf "  GITHUB_TOKEN  (optional — press Enter to skip): "
+    read -r _GH_TOKEN
+    if [[ -n "$_GH_TOKEN" ]]; then
+        _setsed GITHUB_TOKEN "$_GH_TOKEN"
+        echo "  ✅  GITHUB_TOKEN set."
+    else
+        _clearkey GITHUB_TOKEN
+        echo "  ℹ️   GITHUB_TOKEN skipped."
+    fi
+    echo ""
+
+    _TG_ENABLED="$(grep '^ARCCLAW_TELEGRAM_ENABLED=' "$SCRIPT_DIR/.env" | tail -1 | cut -d= -f2 | tr -d '[:space:]')"
+    _CMD="${1:-serve}"
+
+    _setup_telegram() {
+        printf "  TELEGRAM_BOT_TOKEN  (@BotFather → /newbot): "
         read -r _TG_TOKEN
-        sed -i.bak "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=$_TG_TOKEN|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        _setsed TELEGRAM_BOT_TOKEN "$_TG_TOKEN"
         echo "  ✅  TELEGRAM_BOT_TOKEN set."
 
-        printf "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric ID from @userinfobot): "
-        read -r _TG_IDS
-        sed -i.bak "s|^ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=.*|ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=$_TG_IDS|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        while true; do
+            printf "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated — @userinfobot): "
+            read -r _TG_IDS_RAW
+            _TG_IDS="$(echo "$_TG_IDS_RAW" | tr -d ' ')"
+            [[ "$_TG_IDS" =~ ^[0-9]+(,[0-9]+)*$ ]] && break
+            echo "  ❌  Numeric only, e.g. 123456789 or 123456789,987654321"
+        done
+        _setsed ARCCLAW_TELEGRAM_ALLOWED_USER_IDS "$_TG_IDS"
         echo "  ✅  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
 
-        printf "  ARCCLAW_TELEGRAM_ALLOWED_USERS     (username without @): "
-        read -r _TG_USERS
-        sed -i.bak "s|^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*|ARCCLAW_TELEGRAM_ALLOWED_USERS=$_TG_USERS|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        while true; do
+            printf "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated): "
+            read -r _TG_USERS_RAW
+            _TG_USERS="$(echo "$_TG_USERS_RAW" | tr -d ' ')"
+            [[ "$_TG_USERS" =~ ^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$ ]] && break
+            echo "  ❌  Letters, numbers and _ only, e.g. john or john,jane_doe"
+        done
+        _setsed ARCCLAW_TELEGRAM_ALLOWED_USERS "$_TG_USERS"
         echo "  ✅  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+        echo ""
+    }
+
+    if [[ "$_CMD" == "attach" ]]; then
+        _setsed ARCCLAW_TELEGRAM_ENABLED true
+        echo "  attach mode — Telegram configuration required."
+        echo ""
+        _setup_telegram
+
+    elif [[ "$_TG_ENABLED" == "true" ]]; then
+        echo "  Telegram is enabled in .env.example."
+        echo "  Configure now, or press Enter on TELEGRAM_BOT_TOKEN to disable."
+        echo ""
+        printf "  TELEGRAM_BOT_TOKEN  (Enter to skip and disable Telegram): "
+        read -r _TG_TOKEN_PEEK
+        if [[ -z "$_TG_TOKEN_PEEK" ]]; then
+            _setsed ARCCLAW_TELEGRAM_ENABLED false
+            _clearkey TELEGRAM_BOT_TOKEN
+            _clearkey ARCCLAW_TELEGRAM_ALLOWED_USER_IDS
+            _clearkey ARCCLAW_TELEGRAM_ALLOWED_USERS
+            echo "  ℹ️   Telegram disabled. Re-run ./run.sh attach to configure later."
+            echo ""
+        else
+            _setsed TELEGRAM_BOT_TOKEN "$_TG_TOKEN_PEEK"
+            echo "  ✅  TELEGRAM_BOT_TOKEN set."
+
+            while true; do
+                printf "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated — @userinfobot): "
+                read -r _TG_IDS_RAW
+                _TG_IDS="$(echo "$_TG_IDS_RAW" | tr -d ' ')"
+                [[ "$_TG_IDS" =~ ^[0-9]+(,[0-9]+)*$ ]] && break
+                echo "  ❌  Numeric only, e.g. 123456789 or 123456789,987654321"
+            done
+            _setsed ARCCLAW_TELEGRAM_ALLOWED_USER_IDS "$_TG_IDS"
+            echo "  ✅  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+
+            while true; do
+                printf "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated): "
+                read -r _TG_USERS_RAW
+                _TG_USERS="$(echo "$_TG_USERS_RAW" | tr -d ' ')"
+                [[ "$_TG_USERS" =~ ^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$ ]] && break
+                echo "  ❌  Letters, numbers and _ only, e.g. john or john,jane_doe"
+            done
+            _setsed ARCCLAW_TELEGRAM_ALLOWED_USERS "$_TG_USERS"
+            echo "  ✅  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+            echo ""
+        fi
+
+    else
+        _clearkey TELEGRAM_BOT_TOKEN
+        _clearkey ARCCLAW_TELEGRAM_ALLOWED_USER_IDS
+        _clearkey ARCCLAW_TELEGRAM_ALLOWED_USERS
+        echo "  ℹ️   Telegram not enabled — placeholders cleared."
+        echo "       Re-run ./run.sh attach to configure Telegram later."
         echo ""
     fi
 
@@ -1097,18 +1300,18 @@ KEYS
 fi
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Load .env if present
+# ── Safe .env loader — values are never shell-evaluated ──────────────────────
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
     while IFS= read -r _line || [[ -n "$_line" ]]; do
-        # skip blank lines and comments
         [[ "$_line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "${_line// }" ]] && continue
-        # only process valid KEY=value lines — value is never shell-evaluated
         if [[ "$_line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*) ]]; then
             export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
         fi
     done < "$SCRIPT_DIR/.env"
 fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 export ARCCLAW_RAG_VEC_EXTENSION_PATH="${ARCCLAW_RAG_VEC_EXTENSION_PATH:-./lib/vec0}"
 export ARCCLAW_DATA_DIR="${ARCCLAW_DATA_DIR:-./data}"
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
@@ -1139,7 +1342,7 @@ $runShLf = $runSh -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path (Resolve-Path $distDir) 'run.sh'),
     $runShLf,
-    [System.Text.UTF8Encoding]::new($false)   # UTF-8, no BOM
+    [System.Text.UTF8Encoding]::new($false)
 )
 if (-not $IsWindows) { chmod +x (Join-Path $distDir 'run.sh') }
 
