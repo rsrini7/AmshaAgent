@@ -74,6 +74,21 @@ public class CliUtils {
             "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
             "Then add:  ARCCLAW_API_KEY_INTERNAL=<generated value>"
         ),
+        new VarSpec(
+            "ARCCLAW_API_KEY_CI",
+            "CI/CD API key for pipeline smoke tests (read-only).",
+            "Generate a strong random key with:",
+            "  Linux/macOS:  openssl rand -base64 32",
+            "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
+            "Then add:  ARCCLAW_API_KEY_CI=<generated value>"
+        ),
+        new VarSpec(
+            "ARCCLAW_EMBED_API_KEY",
+            "API key for the embedding provider (default: Jina AI).",
+            "1. Sign up at https://jina.ai — free tier: 1M tokens/month, no credit card",
+            "2. Copy your API key — it starts with 'jina_'",
+            "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"
+        ),
     };
 
     /** Required for attach mode (hard) and validated for serve mode (soft). */
@@ -171,8 +186,9 @@ public class CliUtils {
 
         System.err.println();
         System.err.println("  " + "-".repeat(74));
-        System.err.println("  After updating .env, re-run:  ./run.sh " + mode
-                + "  (or ./run.ps1 " + mode + " on Windows)");
+        System.err.println("  After updating .env, re-run:");
+        System.err.println("    ./run.sh " + mode + "    (Linux/macOS/WSL2)");
+        System.err.println("    ./run.ps1 " + mode + "   (Windows)");
         System.err.println();
         System.exit(1);
     }
@@ -252,11 +268,26 @@ public class CliUtils {
         }
     }
 
-    /** True if the key is non-null, non-blank, and not a placeholder. */
+    /**
+     * True if the key is non-null, non-blank, and not a known placeholder pattern.
+     *
+     * <p>Placeholder patterns detected:
+     * <ul>
+     *   <li>{@code changeme} — default dev values</li>
+     *   <li>{@code <...>} — angle-bracket templates (e.g. {@code key-<random>})</li>
+     *   <li>{@code your_key_here} / {@code your_..._here} — human-readable stubs</li>
+     *   <li>Repeated {@code x} characters (>=8) — e.g. {@code jina_xxxxxxxx...}</li>
+     * </ul>
+     */
     private static boolean isSet(String key) {
         String val = System.getenv(key);
         if (val == null || val.isBlank()) return false;
-        return !val.contains("changeme") && !val.contains("<") && !val.equals("your_key_here");
+        if (val.contains("changeme"))      return false;
+        if (val.contains("<"))             return false;
+        if (val.contains("your_") && val.contains("_here")) return false;
+        // Catch repeated-x placeholders like jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        if (val.matches(".*x{8,}.*"))      return false;
+        return true;
     }
 
     // -------------------------------------------------------------------------
