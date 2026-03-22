@@ -887,22 +887,14 @@ if ($vec0Copied -eq 0) {
 }
 
 Write-Host ''
-Write-Host "✅  dist/ assembled. Next steps:"
-Write-Host "      cd dist"
-Write-Host "      Copy-Item .env.example .env                             # fill in API keys"
-Write-Host "      `$env:ARCCLAW_RAG_VEC_EXTENSION_PATH='./lib/vec0'      # required for vector search"
-Write-Host "      `$env:ARCCLAW_DATA_DIR='./data'                        # data directory"
-Write-Host "      ./$exeName serve                                        # HTTP + MCP server on :8080"
-Write-Host "      ./$exeName chat                                         # interactive REPL"
-Write-Host "      ./$exeName ask 'your prompt'                            # single-shot query"
-Write-Host "      ./$exeName attach                                        # Telegram daemon"
-Write-Host ""
-Write-Host "    Tip: add env vars to dist/.env — Quarkus native reads them automatically."
+Write-Host '✅  dist/ assembled. Next steps:'
+Write-Host '      cd dist && ./run.sh serve    (Linux/macOS — first run auto-configures .env)'
+Write-Host '      cd dist && ./run.ps1 serve   (Windows)'
+Write-Host ''
 
 # ── Generate run.ps1 launcher ────────────────────────────────────────────────
 $runPs1 = @'
-# run.ps1 — ArcClaw launcher
-# Sets required env vars and forwards subcommand to the native binary.
+# run.ps1 — ArcClaw launcher with first-run auto-setup
 # Usage: ./run.ps1 serve | chat | attach | ask "your goal"
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
@@ -912,6 +904,77 @@ $exe    = Join-Path $scriptDir "arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $exe)) {
     Write-Host "❌  Binary not found: $exe"; exit 1
 }
+
+# ── First-run auto-setup ──────────────────────────────────────────────────────
+$envPath = Join-Path $scriptDir '.env'
+if (-not (Test-Path $envPath)) {
+    Write-Host ""
+    Write-Host "  -- ArcClaw first-run setup --------------------------------------------------"
+    Write-Host "  No .env found -- running interactive setup now."
+    Write-Host ""
+
+    $envExample = Join-Path $scriptDir '.env.example'
+    if (Test-Path $envExample) { Copy-Item $envExample $envPath }
+    else { New-Item $envPath -ItemType File | Out-Null }
+
+    function New-RandomBase64 {
+        [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) }))
+    }
+    $vaultPepper = New-RandomBase64
+    $auditKey    = New-RandomBase64
+    $apiKey      = New-RandomBase64
+
+    $envContent = [System.IO.File]::ReadAllText($envPath)
+    $envContent = $envContent -replace '(?m)^ARCCLAW_VAULT_PEPPER=.*',     "ARCCLAW_VAULT_PEPPER=$vaultPepper"
+    $envContent = $envContent -replace '(?m)^ARCCLAW_AUDIT_HMAC_KEY=.*',   "ARCCLAW_AUDIT_HMAC_KEY=$auditKey"
+    $envContent = $envContent -replace '(?m)^ARCCLAW_API_KEY_INTERNAL=.*', "ARCCLAW_API_KEY_INTERNAL=$apiKey"
+    [System.IO.File]::WriteAllText($envPath, $envContent)
+
+    $backup  = "# ArcClaw -- auto-generated secret keys`n"
+    $backup += "# Created: $(Get-Date)`n#`n"
+    $backup += "# WARNING: VAULT_PEPPER and AUDIT_HMAC_KEY are immutable.`n"
+    $backup += "# Changing them after first boot corrupts your vault and audit log.`n"
+    $backup += "# Store somewhere safe (password manager, encrypted backup).`n#`n"
+    $backup += "ARCCLAW_VAULT_PEPPER=$vaultPepper`n"
+    $backup += "ARCCLAW_AUDIT_HMAC_KEY=$auditKey`n"
+    $backup += "ARCCLAW_API_KEY_INTERNAL=$apiKey`n"
+    [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
+
+    Write-Host "  OK  Auto-generated: VAULT_PEPPER · AUDIT_HMAC_KEY · API_KEY_INTERNAL"
+    Write-Host "  !!  Saved to keys-backup.txt -- VAULT_PEPPER is immutable, keep it safe"
+    Write-Host ""
+
+    do {
+        $groqKey = Read-Host "  GROQ_API_KEY  (https://console.groq.com -- starts with gsk_)"
+        if (-not $groqKey.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_ -- try again." }
+    } while (-not $groqKey.StartsWith('gsk_'))
+    $envContent = [System.IO.File]::ReadAllText($envPath)
+    $envContent = $envContent -replace '(?m)^GROQ_API_KEY=.*', "GROQ_API_KEY=$groqKey"
+    [System.IO.File]::WriteAllText($envPath, $envContent)
+    Write-Host "  OK  GROQ_API_KEY set."
+    Write-Host ""
+
+    if ($args.Count -gt 0 -and $args[0] -eq 'attach') {
+        Write-Host "  attach mode -- Telegram configuration required."
+        Write-Host ""
+        $tgToken = Read-Host "  TELEGRAM_BOT_TOKEN             (@BotFather -> /newbot)"
+        $tgIds   = Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric ID from @userinfobot)"
+        $tgUsers = Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS     (username without @)"
+        $envContent = [System.IO.File]::ReadAllText($envPath)
+        $envContent = $envContent -replace '(?m)^TELEGRAM_BOT_TOKEN=.*',                "TELEGRAM_BOT_TOKEN=$tgToken"
+        $envContent = $envContent -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=.*', "ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=$tgIds"
+        $envContent = $envContent -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*',    "ARCCLAW_TELEGRAM_ALLOWED_USERS=$tgUsers"
+        [System.IO.File]::WriteAllText($envPath, $envContent)
+        Write-Host "  OK  Telegram keys set."
+        Write-Host ""
+    }
+
+    Write-Host "  OK  Setup complete. Starting ArcClaw..."
+    Write-Host "  --------------------------------------------------------------------------"
+    Write-Host ""
+}
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Load .env if present
 $envFile = Join-Path $scriptDir '.env'
 if (Test-Path $envFile) {
@@ -920,7 +983,6 @@ if (Test-Path $envFile) {
         [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
     }
 }
-# Default paths (override via .env or env vars before calling this script)
 if (-not $env:ARCCLAW_RAG_VEC_EXTENSION_PATH) { $env:ARCCLAW_RAG_VEC_EXTENSION_PATH = './lib/vec0' }
 if (-not $env:ARCCLAW_DATA_DIR)               { $env:ARCCLAW_DATA_DIR = './data' }
 if ($args.Count -eq 0) {
@@ -952,8 +1014,7 @@ $runPs1 | Set-Content (Join-Path $distDir 'run.ps1') -Encoding UTF8
 # ── Generate run.sh launcher ─────────────────────────────────────────────────
 $runSh = @'
 #!/usr/bin/env bash
-# run.sh — ArcClaw launcher
-# Sets required env vars and forwards subcommand to the native binary.
+# run.sh — ArcClaw launcher with first-run auto-setup
 # Usage: ./run.sh serve | chat | attach | ask "your goal"
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -961,12 +1022,85 @@ EXE="$SCRIPT_DIR/arcclaw-app-1.0.0-SNAPSHOT-runner"
 if [[ ! -f "$EXE" ]]; then
     echo "❌  Binary not found: $EXE"; exit 1
 fi
+
+# ── First-run auto-setup ──────────────────────────────────────────────────────
+if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
+    echo ""
+    echo "  ── ArcClaw first-run setup ──────────────────────────────────────────────"
+    echo "  No .env found — running interactive setup now."
+    echo ""
+
+    if [[ -f "$SCRIPT_DIR/.env.example" ]]; then
+        cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
+    else
+        touch "$SCRIPT_DIR/.env"
+    fi
+
+    _VAULT_PEPPER="$(openssl rand -base64 32)"
+    _AUDIT_KEY="$(openssl rand -base64 32)"
+    _API_KEY="$(openssl rand -base64 32)"
+
+    sed -i.bak "s|^ARCCLAW_VAULT_PEPPER=.*|ARCCLAW_VAULT_PEPPER=$_VAULT_PEPPER|"     "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    sed -i.bak "s|^ARCCLAW_AUDIT_HMAC_KEY=.*|ARCCLAW_AUDIT_HMAC_KEY=$_AUDIT_KEY|"    "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    sed -i.bak "s|^ARCCLAW_API_KEY_INTERNAL=.*|ARCCLAW_API_KEY_INTERNAL=$_API_KEY|"  "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+
+    cat > "$SCRIPT_DIR/keys-backup.txt" << KEYS
+# ArcClaw — auto-generated secret keys
+# Created: $(date)
+#
+# WARNING: VAULT_PEPPER and AUDIT_HMAC_KEY are immutable.
+# Changing them after first boot will corrupt your vault and audit log.
+# Store this file somewhere safe (password manager, encrypted backup).
+#
+ARCCLAW_VAULT_PEPPER=$_VAULT_PEPPER
+ARCCLAW_AUDIT_HMAC_KEY=$_AUDIT_KEY
+ARCCLAW_API_KEY_INTERNAL=$_API_KEY
+KEYS
+
+    echo "  ✅  Auto-generated: VAULT_PEPPER · AUDIT_HMAC_KEY · API_KEY_INTERNAL"
+    echo "  ⚠️   Saved to keys-backup.txt — VAULT_PEPPER is immutable, keep it safe"
+    echo ""
+
+    while true; do
+        printf "  GROQ_API_KEY  (https://console.groq.com — starts with gsk_): "
+        read -r _GROQ_KEY
+        [[ "$_GROQ_KEY" == gsk_* ]] && break
+        echo "  ❌  Must start with gsk_ — try again."
+    done
+    sed -i.bak "s|^GROQ_API_KEY=.*|GROQ_API_KEY=$_GROQ_KEY|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+    echo "  ✅  GROQ_API_KEY set."
+    echo ""
+
+    if [[ "${1:-}" == "attach" ]]; then
+        echo "  attach mode — Telegram configuration required."
+        echo ""
+        printf "  TELEGRAM_BOT_TOKEN            (@BotFather → /newbot): "
+        read -r _TG_TOKEN
+        sed -i.bak "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=$_TG_TOKEN|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        echo "  ✅  TELEGRAM_BOT_TOKEN set."
+
+        printf "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric ID from @userinfobot): "
+        read -r _TG_IDS
+        sed -i.bak "s|^ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=.*|ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=$_TG_IDS|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        echo "  ✅  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+
+        printf "  ARCCLAW_TELEGRAM_ALLOWED_USERS     (username without @): "
+        read -r _TG_USERS
+        sed -i.bak "s|^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*|ARCCLAW_TELEGRAM_ALLOWED_USERS=$_TG_USERS|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        echo "  ✅  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+        echo ""
+    fi
+
+    echo "  ✅  Setup complete. Starting ArcClaw..."
+    echo "  ─────────────────────────────────────────────────────────────────────────"
+    echo ""
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Load .env if present
 [[ -f "$SCRIPT_DIR/.env" ]] && set -a && source "$SCRIPT_DIR/.env" && set +a
-# Default paths (override via .env or env vars)
 export ARCCLAW_RAG_VEC_EXTENSION_PATH="${ARCCLAW_RAG_VEC_EXTENSION_PATH:-./lib/vec0}"
 export ARCCLAW_DATA_DIR="${ARCCLAW_DATA_DIR:-./data}"
-# Linux: preload libm for sqlite-vec symbol resolution
 [[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 if [[ $# -eq 0 ]]; then
     echo ""
@@ -1032,8 +1166,8 @@ if (Test-Path "dist/$runner.exe") {
     Copy-Item "dist/$runner.exe"  "$stage/arcclaw.exe"
     Copy-Item 'dist/run.ps1'      "$stage/run.ps1"
     (Get-Content "$stage/run.ps1") `
-    -replace 'arcclaw-app-[^/]*-runner\\.exe', 'arcclaw.exe' `
-    -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$stage/run.ps1"
+        -replace 'arcclaw-app-[^/]*-runner\\.exe', 'arcclaw.exe' `
+        -replace 'arcclaw-app-[^/]*-runner',      'arcclaw' | Set-Content "$stage/run.ps1"
     Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.dll') { Copy-Item 'dist/lib/vec0.dll' "$stage/lib/vec0.dll" }
     $archive = "$out/arcclaw-$version-windows-x64.zip"
@@ -1050,11 +1184,10 @@ if (Test-Path "dist/$runner") {
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner"      "$stage/arcclaw"
     Copy-Item 'dist/run.sh'       "$stage/run.sh"
-    (Get-Content "$STAGE/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$STAGE/run.sh"
+    (Get-Content "$stage/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$stage/run.sh"
     Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.so') { Copy-Item 'dist/lib/vec0.so' "$stage/lib/vec0.so" }
     $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
-    # Use tar if available (WSL2/Git Bash), else warn
     if (Get-Command tar -ErrorAction SilentlyContinue) {
         tar -czf $archive -C $stage .
         Write-Host "✅  $archive"
@@ -1072,7 +1205,7 @@ if ((Test-Path "dist/$runner") -and (Test-Path 'dist/lib/vec0.dylib')) {
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner"         "$stage/arcclaw"
     Copy-Item 'dist/run.sh'          "$stage/run.sh"
-    (Get-Content "$STAGE/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$STAGE/run.sh"
+    (Get-Content "$stage/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$stage/run.sh"
     Copy-Item 'dist/.env.example'    "$stage/.env.example"
     Copy-Item 'dist/lib/vec0.dylib'  "$stage/lib/vec0.dylib"
     $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
