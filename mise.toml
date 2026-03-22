@@ -19,8 +19,11 @@
 #                       listed here for discoverability.
 #
 # IMPORTANT — NO [tools] SECTION HERE
-# mise.toml intentionally has no [tools] block. JDK management lives entirely
-# in mise.bash.toml and mise.pwsh.toml.
+# mise.toml intentionally has no [tools] block. All tool management lives
+# entirely in mise.bash.toml and mise.pwsh.toml, including:
+#   java    = "temurin-25"
+#   maven   = "3.9"
+#   usage   = "latest"   ← required for `mise run <TAB>` tab completion
 #
 # If you see [tools] appearing here it means a `mise use java@...` call ran
 # without --path. Fix: ensure all `mise use` calls in mise.bash.toml and

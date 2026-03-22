@@ -15,6 +15,7 @@
 # Switch back:  mise run jdk:temurin  (after native build — build:native does this automatically)
 java  = "temurin-25"
 maven = "3.9"
+usage = "latest" # For mise auto completions
 
 [env]
 _.file = ".env"

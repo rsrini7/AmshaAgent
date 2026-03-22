@@ -51,6 +51,7 @@ mise run dev
 - **Auto-loads `.env`** into every task and your shell when you `cd` into the project.
 - **All tasks inline** — everything lives in the config file. No wrapper `.sh` or `.ps1` files.
 - **Three config flavours** — `mise.toml` (bootstrap: run once to auto-configure your shell profile), `mise.bash.toml` (bash/zsh daily driver), `mise.pwsh.toml` (PowerShell daily driver).
+- **Tab completion** — `mise run <TAB>` lists and filters all task names. Powered by the `usage` tool, installed automatically via `[tools]`.
 
 ***
 
@@ -369,6 +370,35 @@ mise run dev              # hot reload on :8080
 2. `chmod +x mvnw` (Linux/macOS/WSL2 only — not needed on Windows)
 3. `mise install java@temurin-25`
 4. `mise install java@graalvm-community-25.0.2`
+5. `mise install usage` ← installs the tab completion engine
+
+### Tab completion (one-time per shell)
+
+After `mise run setup`, wire completions into your shell profile:
+
+```bash
+# bash — add to ~/.bashrc
+eval "$(mise completion bash)"
+
+# zsh — add to ~/.zshrc
+eval "$(mise completion zsh)"
+```
+
+```powershell
+# pwsh — add to $PROFILE
+mise completion powershell | Out-String | Invoke-Expression
+```
+
+Then reload and use:
+
+```bash
+mise run <TAB>          # lists all tasks
+mise run build<TAB>     # filters to build:*, build-app
+mise run dev:<TAB>      # filters to dev:chat, dev:ask, dev:kill ...
+```
+
+> `usage` is listed in `[tools]` in `mise.bash.toml` and `mise.pwsh.toml` so it installs
+> automatically with `mise install` — no manual step needed.
 
 ***
 
@@ -910,11 +940,28 @@ mise use --path mise.pwsh.toml java@graalvm-community-25.0.2
 mise use --path mise.pwsh.toml java@temurin-25
 ```
 
+Affected tasks (check all 5 per file): `jdk:graalvm`, `jdk:temurin`, `build:native`
+(×2 — switch + trap restore), `build:native-local`, `build:native-lowmem`.
+
+**Also clean up `mise.toml`** — remove the `[tools]` block if it was already written there.
+`mise.toml` must never have a `[tools]` section.
+
 ### `mise ERROR Config files … are not trusted`
 
 ```bash
 mise trust --all
 ```
+
+### `Error: usage CLI not found` (tab completion broken)
+
+```bash
+mise install usage        # install via mise (recommended)
+# or globally:
+mise use -g usage
+```
+
+Then reload your shell. `usage` is listed in `[tools]` in both platform configs so
+`mise install` / `mise run setup` installs it automatically going forward.
 
 ### Tasks use the wrong config / `mise tasks` shows only `start`, `setup:profile:nix`, `setup:profile:win`
 
