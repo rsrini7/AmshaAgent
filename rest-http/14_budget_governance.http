@@ -1,0 +1,341 @@
+### ═══════════════════════════════════════════════════════════════
+### 14 — BUDGET GOVERNANCE & AUTONOMY LEVEL
+###
+### ArcClaw enforces a per-session USD budget cap via GovernanceLayer.
+###
+### Budget enforcement (post Phase 64-A):
+###   80% of max → BudgetWarningException (soft signal, logged, NOT thrown to user)
+###   100% of max → BudgetExceededException (hard stop — session cannot run again)
+###
+### CRITICAL Phase 64-A fix (A1):
+###   Hard limit is checked BEFORE soft warning.
+###   A single call that exceeds both thresholds fires BudgetExceededException,
+###   NOT BudgetWarningException. Before the fix, BudgetWarningException fired
+###   and the session ran one call over budget with no hard enforcement.
+###
+### Autonomy levels (post Phase 64-A fix A2):
+###   SUPERVISED (default) — tools with NETWORK_OUTBOUND require manual approval
+###   FULL                 — tools execute without approval
+###   READONLY             — all tool calls are blocked, only read/think allowed
+###
+### CRITICAL Phase 64-A fix (A2):
+###   Sessions created via REST with FULL autonomy were previously silently
+###   downgraded to SUPERVISED when Telegram messages arrived.
+###   After the fix, the stored autonomy level is correctly passed to
+###   WorkspaceContext.run() via MessageContext.
+###
+### Prerequisites: ArcClaw serve mode, GROQ_API_KEY, GITHUB_TOKEN set
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW A: BUDGET SOFT WARNING (80% threshold)
+# ─────────────────────────────────────────────────────────────────
+
+### [BUDGET-1] Create session for budget warning test
+# @name budgetWarnSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [BUDGET-2] Run tasks to accumulate cost near 80%
+# The default max budget is typically $0.10 per session.
+# Run several complex tasks to approach the 80% ($0.08) threshold.
+# Observe logs for: "Budget warning: 80% of session limit reached"
+# After this fires once, warningSent is permanently true — the warning
+# will NOT fire again for this session (AtomicBoolean CAS, Nuance #28).
+POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Write a 500-word technical analysis of Java Virtual Threads vs OS threads, covering scheduling, memory overhead, and Quarkus integration patterns.",
+    "agentRole": "researcher",
+    "maxIterations": 3
+}
+
+###
+
+### [BUDGET-3] Check status — confirm cost is accumulating
+# Inspect usdCost field in the response or call /status reflex
+POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/status",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [BUDGET-4] Check audit for BUDGET_EXCEEDED event at 80% threshold
+# Expect: one BUDGET_EXCEEDED event with detail containing "80%" or "warning"
+GET {{baseUrl}}/api/v1/audit/session/{{budgetWarnSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW B: BUDGET HARD LIMIT — POST PHASE 64-A FIX
+#
+# IMPORTANT: Hard limit must fire ON THE CALL that exceeds it, not the next one.
+# Before Phase 64-A fix: a single call past both thresholds fired only
+# BudgetWarningException (warning), session ran over budget. Next call then
+# threw BudgetExceededException. This was a one-call over-budget window.
+# After fix: BudgetExceededException fires immediately on the exceeding call.
+# ─────────────────────────────────────────────────────────────────
+
+### [BUDGET-5] Create session for hard limit test
+# @name budgetHardSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [BUDGET-6] Configure a very low budget via custom session params
+# Note: if your API supports per-session budget override, use that.
+# Otherwise, run many tasks to exhaust a standard budget.
+# Keep running tasks until the session exhausts its limit.
+POST {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Write a comprehensive 1000-word guide to Quarkus CDI scopes including WorkspaceScoped custom CDI scope, @ApplicationScoped, @RequestScoped, and @SessionScoped with comparison tables.",
+    "agentRole": "researcher",
+    "maxIterations": 5
+}
+
+###
+
+### [BUDGET-7] Attempt another run after budget exhausted
+# Expect: answer contains budget exceeded message
+# GovernanceLayer.assertWithinBudget() is called before any LLM invocation.
+# The session is blocked — no tokens consumed by this call.
+POST {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 1 + 1?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [BUDGET-8] Audit: confirm LOOP_BUDGET_EXCEEDED event is present (mandatory audit event)
+# The LOOP_BUDGET_EXCEEDED audit event is mandatory — agent halts if write fails.
+# Expect: eventType=LOOP_BUDGET_EXCEEDED in the audit list
+GET {{baseUrl}}/api/v1/audit/session/{{budgetHardSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [BUDGET-9] Verify HMAC chain is intact despite budget exception
+# BudgetExceededException is a hard stop — but all prior audit events
+# must still form an unbroken HMAC chain.
+# Expect: {"valid": true, "brokenAtId": null, "totalRows": N}
+GET {{baseUrl}}/api/v1/audit/{{budgetHardSession.response.body.sessionId}}/verify
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW C: AUTONOMY LEVEL — SUPERVISED (DEFAULT)
+# This is the default for all sessions. Tool calls requiring
+# NETWORK_OUTBOUND operation (GithubTool) pause for approval.
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTO-1] Create default session (autonomy = SUPERVISED implicitly)
+# @name supervisedSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [AUTO-2] Run GitHub task — must pause for approval
+# ToolInvocationGuard checks: AutonomyLevel.SUPERVISED + NETWORK_OUTBOUND
+# → throws RequiresApprovalException → 202 AWAITING_APPROVAL
+POST {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "List the public repositories of GitHub user rsrini7.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [AUTO-3] Confirm AWAITING_APPROVAL state
+# Expect: status = AWAITING_APPROVAL (tool paused pending human decision)
+GET {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [AUTO-4] Cancel — deny the tool call
+POST {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/deny?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW D: AUTONOMY LEVEL — FULL
+#
+# CRITICAL Phase 64-A fix (A2):
+# Sessions created with FULL autonomy must NOT be downgraded to SUPERVISED
+# when messages arrive via any channel (Telegram or REST).
+# Before the fix: AgentDispatchHandler hardcoded AutonomyLevel.SUPERVISED.
+# After the fix: stored level is read from MessageContext, set by
+# SessionResolutionHandler from the persisted checkpoint/session record.
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTO-5] Create session with explicit FULL autonomy
+# @name fullAutoSession
+# Expect 201: {"sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+# The FULL autonomy level is stored in the session/checkpoint record.
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "autonomyLevel": "FULL"
+}
+
+###
+
+### [AUTO-6] Run GitHub task — must execute WITHOUT approval prompt
+# FULL autonomy bypasses ToolInvocationGuard's approval check.
+# ToolOperation=NETWORK_OUTBOUND is permitted without human intervention.
+# Expect: 200 Finished (NOT 202 AWAITING_APPROVAL)
+# Confirm logs: "AutonomyLevel for session <uuid> = FULL"
+POST {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "List the public repositories of GitHub user rsrini7.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [AUTO-7] Verify status is COMPLETED (not AWAITING_APPROVAL)
+# If this returns AWAITING_APPROVAL, Phase 64-A fix A2 was not applied —
+# the autonomy level was silently downgraded to SUPERVISED.
+# Expect: status = COMPLETED
+GET {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW E: AUTONOMY LEVEL — READONLY
+# All tool invocations are blocked. Agent can only think and respond.
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTO-8] Create READONLY session
+# @name readonlySession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "autonomyLevel": "READONLY"
+}
+
+###
+
+### [AUTO-9] Run task that requires a tool — must be blocked by guard
+# ToolInvocationGuard blocks ALL tool calls for READONLY sessions.
+# No approval prompt — just an error/explanation in the response.
+# Expect: 200 Finished — with agent explaining it cannot execute tools
+POST {{baseUrl}}/api/v1/sessions/{{readonlySession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "List the public repositories of GitHub user rsrini7.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [AUTO-10] Verify tool was NOT invoked — no TOOL_INVOKED in audit
+# Expect: audit list does NOT contain eventType=TOOL_INVOKED
+GET {{baseUrl}}/api/v1/audit/session/{{readonlySession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{readonlySession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW F: EDGE CASES
+# ─────────────────────────────────────────────────────────────────
+
+### [BUDGET-ERR-1] Create session with invalid autonomy level → expect 400
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "autonomyLevel": "TURBO_MODE_YOLO"
+}
+
+###
+
+### [BUDGET-ERR-2] Run on expired/deleted session → expect 404 or empty state
+POST {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Hello",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###

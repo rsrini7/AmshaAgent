@@ -1,49 +1,48 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 09 — AUTONOMOUS CRON SCHEDULER
 ###
-### ArcClaw supports scheduling future agent tasks using the cron
+### ArcClaw supports scheduling future agent tasks via the cron
 ### scheduler. Agents schedule tasks via ScheduleTaskTool and list/
 ### manage them via ManageScheduleTool or zero-token reflexes.
 ###
 ### Only coordinator and synthesizer roles can schedule tasks
-### (they are the only ones with scheduletask in their tool schema).
+### (they are the only roles with scheduletask in their tool schema).
+### Researcher, coder, debugger, and architect CANNOT schedule.
 ###
-### How it works end-to-end:
+### End-to-end flow:
 ###   1. User instructs coordinator to schedule a task
 ###   2. Agent invokes ScheduleTaskTool with:
 ###        cronExpression (5-field UNIX), goal, timezone, runOnce
-###   3. ScheduleTaskTool validates expr via cron-utils, writes AgentCronEntity
+###   3. ScheduleTaskTool validates via cron-utils, writes AgentCronEntity
 ###   4. AgentCronScheduler polls SQLite every 30 seconds
 ###   5. On fire: CronJobRunner executes agent loop (maxIterations=2)
+###      Max-lookback-window: PT5M (jobs older than 5 min not replayed on restart)
 ###   6. CronResultHandler fires CDI AgentJobCompleted event
+###   7. ChannelCronNotificationDispatcher routes result to correct channel
+###      (Phase 64-C2: generic dispatcher, not Telegram-specific)
 ###
-### Safeguards built into ScheduleTaskTool:
-###   - Fork-bomb guard: goal prefixed with CRON:; nested CRON: rejected
+### Safeguards in ScheduleTaskTool:
+###   - Fork-bomb guard: goal prefixed "CRON:"; nested CRON: rejected
 ###   - Naked-pronoun guard: vague goals ("it", "this", "that") rejected
 ###   - runOnce=true → job row deleted after first execution
 ###
-### Management via reflexes (zero-token):
-###   /crons       → list all jobs for the current user
-###   /cron        → alias
-###   /list crons  → alias
-###   deletecron <id> → delete job by ID
+### Audit events:
+###   CRONCREATED (mandatory) → job persisted
+###   CRONFIRED   (mandatory) → job executed successfully
+###   CRONFAILED  (mandatory) → job execution threw an error
+###   CRONDELETED (non-mandatory) → job deleted
 ###
-### Management via ManageScheduleTool (LLM-invoked):
-###   action=list   → same as /crons reflex
-###   action=delete, cronId=<id> → same as deletecron reflex
-###
-### IMPORTANT: These tests require GROQ_API_KEY and GITHUB_TOKEN to be set.
-### The agent must successfully call ScheduleTaskTool for cron rows to appear.
+### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = Fxa8CCQGpjHr7DS3eiSTlb3W0RKzImwHXPkNbq9S98c=
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
-# SETUP: Session for cron scheduling tests
+# SETUP
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-0] Create session for cron tests
+### [CRON-0] Create session for cron scheduling tests
 # @name cronSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -52,15 +51,13 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SCHEDULE A RECURRING TASK
-# The coordinator invokes ScheduleTaskTool internally.
-# Audit event CRONCREATED is written when the tool succeeds.
+# SCHEDULE RECURRING TASKS
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-1] Schedule a task that fires every minute (for testing)
-# The agent parses "every minute" and converts to cron expression: "* * * * *"
-# Expect 200: agent confirms the schedule was created with a cron ID
-# Check audit log for: eventType=CRONCREATED
+### [CRON-1] Schedule a recurring task (every minute)
+# Agent parses "every minute" → cronExpression="* * * * *"
+# Expect 200: agent confirms schedule with cron ID
+# Audit event: CRONCREATED
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -74,21 +71,22 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [CRON-2] Schedule a one-shot task (runOnce=true)
-# runOnce=true → row is deleted after first fire
-# The agent sets runOnce flag in the ScheduleTaskTool invocation
+# runOnce=true → row deleted after first fire
+# Expect 200: confirmation with runOnce indicated
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Schedule a one-time task to run in 2 minutes from now that prints: ArcClaw cron job executed successfully.",
+    "goal": "Schedule a one-time task to run in 2 minutes that prints: ArcClaw cron job executed successfully.",
     "agentRole": "coordinator",
     "maxIterations": 5
 }
 
 ###
 
-### [CRON-3] Schedule task with a specific timezone
+### [CRON-3] Schedule with specific timezone
+# Expect: timezone=Asia/Kolkata in ScheduleTaskTool params
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -102,12 +100,11 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# LIST SCHEDULED TASKS
-# Three equivalent zero-token reflex paths — all query the same table
+# LIST SCHEDULED TASKS (zero-token reflex paths)
 # ─────────────────────────────────────────────────────────────────
 
 ### [CRON-4] /crons — list via reflex (no LLM call)
-# Expect: formatted list of all cron jobs for this user, including IDs
+# Expect 200: formatted list of all cron jobs with IDs
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -133,9 +130,9 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-6] List via ManageScheduleTool (agent-invoked)
-# This uses the LLM to invoke ManageScheduleTool with action=list
-# Coordinator has manageschedule in its tool schema
+### [CRON-6] List via ManageScheduleTool (LLM-invoked, not reflex)
+# Agent calls ManageScheduleTool with action=list
+# Expect 200: same list as /crons
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -146,55 +143,53 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 3
 }
 
-### This always returns 200 if the key is valid — good for rate limit testing
-GET {{baseUrl}}/api/v1/sessions
-X-ArcClaw-API-Key: {{validKey}}
+###
 
-
-
-### [SESSION-3] Check status after sync run
-# Expect 200: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
+### [CRON-6a] Session status check after cron creation
+# Expect 200: COMPLETED (cron creation tasks all finished)
 GET {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
-
 ###
 
-### [CRON-7] List the public repositories of GitHub user rsrini7 using the github tool.
+### [CRON-6b] Schedule via GitHub HITL — cron that uses a tool
+# A cron job that internally needs github → scheduler sees AWAITING_APPROVAL.
+# Notification arrives via ChannelCronNotificationDispatcher (Phase 64-C2).
+# Goal uses CRON: prefix to prevent fork-bomb nesting.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "schedule to List the public repositories of GitHub user rsrini7 using the github tool after 1 minute",
+    "goal": "Schedule a task to run in 1 minute that lists the public repos of GitHub user rsrini7.",
     "agentRole": "coordinator",
-    "maxIterations": 1
+    "maxIterations": 5
 }
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
 # DELETE SCHEDULED TASKS
-# Note: copy an actual cron ID from the /crons response above
+# IMPORTANT: Replace CRON_ID with actual ID from CRON-4 output.
 # ─────────────────────────────────────────────────────────────────
 
 ### [CRON-7] deletecron via reflex — replace CRON_ID with actual value from CRON-4
-# DeleteCronReflex: matches "deletecron <id>" prefix
-# Expect: "✅ Cron job <id> deleted." or "❌ Cron job not found."
+# DeleteCronReflex matches: input.startsWith("deletecron")
+# Expect 200: "✅ Cron job <id> deleted." or "❌ Cron job not found."
 # Audit event: CRONDELETED
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "deletecron 3243e38f-1bf3-4df5-8445-a3c1c7186c61",
+    "goal": "deletecron REPLACE_WITH_ACTUAL_CRON_ID_FROM_CRON4",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
 
 ###
 
-### [CRON-8] Delete via ManageScheduleTool (agent-invoked)
+### [CRON-8] Delete via ManageScheduleTool (LLM-invoked)
 # Coordinator invokes ManageScheduleTool with action=delete, cronId=<id>
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -208,7 +203,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-9] Delete non-existent cron ID → expect "not found" message
+### [CRON-9] Delete non-existent ID → "not found" message
+# maxIterations=1 — this is a reflex, no LLM needed
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -216,7 +212,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "deletecron 00000000-dead-beef-0000-000000000000",
     "agentRole": "coordinator",
-    "maxIterations": 5
+    "maxIterations": 1
 }
 
 ###
@@ -225,9 +221,9 @@ X-ArcClaw-API-Key: {{validKey}}
 # SAFEGUARD TESTS
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-10] Naked-pronoun guard — vague goal should be rejected by ScheduleTaskTool
-# ScheduleTaskTool rejects goals containing "it", "this", "that", "the result"
-# without sufficient specificity. Expect: agent returns error asking to restate goal.
+### [CRON-10] Naked-pronoun guard — vague goal rejected by ScheduleTaskTool
+# "it", "this", "that", "the result" without specificity → tool returns error.
+# Expect 200: agent returns error asking to restate goal concretely.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -240,17 +236,46 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-11] Coder role cannot schedule — schema filter prevents it
-# Brahma has no scheduletask tool in its schema → LLM cannot invoke it
-# Expect: agent explains it cannot schedule tasks
+### [CRON-11] Coder CANNOT schedule — empty tool schema
+# Brahma has no scheduletask or manageschedule in its schema.
+# Expect 200: agent explains it cannot create schedules (no tool available).
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Schedule a task to run every morning at 8 AM that prints hello.",
+    "goal": "Schedule a task to run every morning at 8 AM to print hello.",
     "agentRole": "coder",
     "maxIterations": 2
+}
+
+###
+
+### [CRON-12] Researcher CANNOT schedule — no scheduletask in schema
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Schedule a daily research task.",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+### [CRON-13] Fork-bomb guard — cron job cannot schedule another cron job
+# Goals fired by AgentCronScheduler are prefixed with "CRON:".
+# ScheduleTaskTool rejects goals that start with "CRON:" (nested scheduling).
+# Simulate by sending CRON: prefix explicitly.
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "CRON: schedule another task every minute",
+    "agentRole": "coordinator",
+    "maxIterations": 3
 }
 
 ###
@@ -258,19 +283,20 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 # WAIT & OBSERVE CRON EXECUTION
 # AgentCronScheduler polls every 30 seconds.
-# After scheduling CRON-1 (every minute), wait ~90 seconds then:
-#   1. Check audit for CRONFIRED event
-#   2. Check audit for CRONFAILED (if an error occurred)
+# After scheduling CRON-1 (every minute), wait ~90 seconds then verify.
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-12] Check audit for CRONFIRED event (run after ~90 seconds)
+### [CRON-14] Check audit for CRONFIRED event (run after ~90 seconds)
 # Expect: eventType=CRONFIRED in the audit list
+# If CRONFAILED appears instead: check GROQ_API_KEY and agent loop logs.
 GET {{baseUrl}}/api/v1/audit/session/{{cronSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-13] List crons after execution — runOnce job should be gone
+### [CRON-15] List crons after one-shot execution — runOnce job gone
+# CRON-2's one-shot job should have fired and auto-deleted.
+# Expect: the one-shot job no longer appears in /crons.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -283,11 +309,19 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+### [CRON-16] Verify HMAC chain intact after cron fires
+# CRONFIRED is a mandatory event — it must be in the chain.
+# Expect: {"valid":true,"brokenAtId":null,"totalRows":N}
+GET {{baseUrl}}/api/v1/audit/{{cronSession.response.body.sessionId}}/verify
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
 # ─────────────────────────────────────────────────────────────────
 # SYNTHESIZER — also has cron scheduling capability
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-14] Synthesizer (Dattatreya) can also schedule tasks
+### [CRON-17] Create session for synthesizer cron test
 # @name synthCronSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -295,12 +329,14 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+### [CRON-18] Synthesizer can schedule cross-domain tasks
+# Dattatreya has scheduletask + manageschedule in its tool schema.
 POST {{baseUrl}}/api/v1/sessions/{{synthCronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Schedule a one-time task to run in 1 minute that performs a cross-domain summary: what are the key JVM metrics an AI agent kernel should monitor?",
+    "goal": "Schedule a one-time task to run in 1 minute that performs a cross-domain summary: what are the key JVM metrics an AI agent kernel should monitor for memory, throughput, and garbage collection?",
     "agentRole": "synthesizer",
     "maxIterations": 5
 }
@@ -321,7 +357,22 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # CLEANUP
+# IMPORTANT: Delete all cron jobs BEFORE deleting sessions,
+# otherwise every-minute jobs will keep firing after the session is gone.
 # ─────────────────────────────────────────────────────────────────
+
+### Delete all remaining cron jobs (run /crons first to get IDs, then deletecron each)
+POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Using the manage schedule tool, list all scheduled tasks and delete each one.",
+    "agentRole": "coordinator",
+    "maxIterations": 5
+}
+
+###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}

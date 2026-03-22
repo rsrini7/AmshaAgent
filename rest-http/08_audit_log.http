@@ -2,27 +2,27 @@
 ### 08 — IMMUTABLE AUDIT LOG (WORM + HMAC CHAIN)
 ###
 ### ArcClaw maintains a tamper-evident, append-only audit log for
-### every session. Each row contains:
+### every session. Each row:
 ###
 ###   id, sessionId, userId, agentRole, goalHash,
 ###   outcome, eventType, eventDetail,
 ###   inputTokens, outputTokens, usdCost, iterationsUsed,
-###   timestamp, hmacHash
+###   timestamp, hmacHash, prevHash, sequence
 ###
 ### HMAC chain integrity:
 ###   Row N's hmacHash = HMAC-SHA256(prevHash | payload)
 ###   Row 1's prevHash = SHA256("GENESIS:" + sessionId)
-###   → tampering any row breaks the chain from that point forward
+###   Tampering any row breaks the chain from that point forward.
 ###
-### Endpoint map:
-###   GET /api/v1/audit/session/{sessionId}         → list events (ordered ASC)
-###   GET /api/v1/audit/{sessionId}/verify           → verify HMAC chain
-###     Response: {"valid": bool, "brokenAtId": "uuid|null", "totalRows": N}
+### Phase 64-B1 fix: SessionAuditSequencer provides per-session
+###   ReentrantLock, eliminating the TOCTOU race on MAX(sequence).
+###   Concurrent tool calls on the same session now produce unique,
+###   consecutive sequence numbers with an unbroken HMAC chain.
 ###
-### Mandatory audit events (agent halts if write fails — fail-closed):
-###   VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
-###   PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
-###   CRONFIRED, CRONFAILED
+### Endpoints:
+###   GET /api/v1/audit/session/{sessionId}    → list events (ASC by sequence)
+###   GET /api/v1/audit/{sessionId}/verify     → verify HMAC chain
+###     Response: {"valid":bool,"brokenAtId":"uuid|null","totalRows":N}
 ###
 ### All SecurityEventType values:
 ###   LOOP_FINISH, LOOP_ERROR, LOOP_BUDGET_EXCEEDED, LOOP_MAX_ITERATIONS,
@@ -32,7 +32,17 @@
 ###   VAULT_ACCESS, VAULT_STORE, VAULT_RETRIEVE, VAULT_RETRIEVE_MISS,
 ###   CHECKPOINT_CREATED, CHECKPOINT_COMPLETED, CHECKPOINT_FAILED,
 ###   CONTEXT_COMPACTED, BUDGET_EXCEEDED,
-###   CRONCREATED, CRONFIRED, CRONFAILED, CRONDELETED
+###   CRONCREATED, CRONFIRED, CRONFAILED, CRONDELETED,
+###   MCP_TOOL_INVOKED, SKILL_LOADED, SKILL_REFRESHED,
+###   STRUCTURED_OUTPUT_RETRY  (Phase 62+)
+###
+### Mandatory events (agent halts if write fails — fail-closed):
+###   VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
+###   PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
+###   CRONFIRED, CRONFAILED
+###
+### Tamper test SQLite path: ./data/arcclaw-meta.db
+###   (NOT .data/ — the directory is ./data/)
 ###
 ### Prerequisites: ArcClaw serve mode
 ### ═══════════════════════════════════════════════════════════════
@@ -41,7 +51,7 @@
 @validKey = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
 
 # ─────────────────────────────────────────────────────────────────
-# SETUP: Create a session and run a few tasks to generate audit events
+# SETUP: Run several tasks to generate diverse audit events
 # ─────────────────────────────────────────────────────────────────
 
 ### [AUDIT-SETUP-1] Create session
@@ -52,8 +62,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-SETUP-2] Run a clean agent task → emits CHECKPOINT_CREATED + LOOP_FINISH
-# Expect: audit list gains 2 rows after this
+### [AUDIT-SETUP-2] Clean task → emits CHECKPOINT_CREATED + LOOP_FINISH
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -66,7 +75,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-SETUP-3] Send prompt injection → emits PROMPT_INJECTION_BLOCKED (mandatory)
+### [AUDIT-SETUP-3] Prompt injection → emits PROMPT_INJECTION_BLOCKED (mandatory)
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -79,8 +88,22 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-SETUP-4] Run task using GitHub tool → emits TOOL_INVOKED (mandatory) + LOOP_FINISH
-# Only runs if GITHUB_TOKEN is configured and user approves the tool call
+### [AUDIT-SETUP-4] Store a secret → emits VAULT_STORE
+POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "store AUDIT_TEST_KEY=test_value_for_audit_verification",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [AUDIT-SETUP-5] GitHub tool → emits TOOL_INVOKED (mandatory) — requires GITHUB_TOKEN
+# Only runs the tool if GITHUB_TOKEN is in the vault and user approves.
+# Uses run-async so the test continues without blocking on approval.
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run-async
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -97,16 +120,17 @@ X-ArcClaw-API-Key: {{validKey}}
 # READ AUDIT LOG
 # ─────────────────────────────────────────────────────────────────
 
-### [AUDIT-1] List all audit events for a session (ordered by sequence ASC)
-# Expect 200: array of AuditEventResponse records
-# Check that eventType progression matches: CHECKPOINT_CREATED → LOOP_FINISH → PROMPT_INJECTION_BLOCKED → TOOL_INVOKED → LOOP_FINISH
+### [AUDIT-1] List all audit events for session (ordered by sequence ASC)
+# Expect 200: array of AuditEventResponse records.
+# Event progression should be approximately:
+#   CHECKPOINT_CREATED → LOOP_FINISH → PROMPT_INJECTION_BLOCKED →
+#   VAULT_STORE → LOOP_AWAITING_APPROVAL (if GITHUB_TOKEN configured)
 GET {{baseUrl}}/api/v1/audit/session/{{auditSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-2] Audit log for a session with no events → expect empty array []
-# Fresh session — no agent run executed yet
+### [AUDIT-2] Audit for a fresh session with no events → empty array []
 # @name emptyAuditSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -119,7 +143,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-3] Audit for a completely non-existent session → expect empty array []
+### [AUDIT-3] Audit for completely non-existent session → empty array []
 GET {{baseUrl}}/api/v1/audit/session/00000000-dead-beef-0000-000000000000
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -129,21 +153,22 @@ X-ArcClaw-API-Key: {{validKey}}
 # HMAC CHAIN VERIFICATION
 # ─────────────────────────────────────────────────────────────────
 
-### [AUDIT-4] Verify chain integrity for the test session
-# Expect 200: {"valid": true, "brokenAtId": null, "totalRows": N}
-# N should match the number of events listed in AUDIT-1
+### [AUDIT-4] Verify chain integrity
+# Expect 200: {"valid":true,"brokenAtId":null,"totalRows":N}
+# After Phase 64-B1: concurrent writes serialized — no TOCTOU duplicates.
 GET {{baseUrl}}/api/v1/audit/{{auditSession.response.body.sessionId}}/verify
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-5] Verify chain on a session with zero events → expect {"valid":true,"brokenAtId":null,"totalRows":0}
+### [AUDIT-5] Verify chain on session with zero events
+# Expect 200: {"valid":true,"brokenAtId":null,"totalRows":0}
 GET {{baseUrl}}/api/v1/audit/{{emptyAuditSession.response.body.sessionId}}/verify
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-6] Add more events then re-verify — totalRows should grow
+### [AUDIT-6] Add more events then re-verify — totalRows grows, chain stays valid
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -162,52 +187,10 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# TAMPER DETECTION
-# This test requires manual SQLite intervention — follow steps below.
-#
-# Step 1: Get a session with some audit rows (use auditSession above).
-# Step 2: In a terminal, run:
-#   sqlite3 .data/arcclaw-meta.db
-#   DROP TRIGGER IF EXISTS prevent_audit_update;
-#   UPDATE audit_event SET event_detail='TAMPERED' WHERE sequence=2
-#     AND session_id='<paste auditSession sessionId here>';
-#   .quit
-# Step 3: Restart ArcClaw (triggers reinstall SQLite triggers).
-# Step 4: Run AUDIT-7 below — expect valid:false.
+# SPECIFIC EVENT TYPE COVERAGE
 # ─────────────────────────────────────────────────────────────────
 
-### [AUDIT-7] Verify after manual SQLite tamper → expect valid:false, brokenAtId populated
-# Expect 200: {"valid": false, "brokenAtId": "<uuid of tampered row>", "totalRows": N}
-GET {{baseUrl}}/api/v1/audit/{{auditSession.response.body.sessionId}}/verify
-X-ArcClaw-API-Key: {{validKey}}
-
-###
-
-# ─────────────────────────────────────────────────────────────────
-# AUTH ENFORCEMENT ON AUDIT ENDPOINTS
-# ─────────────────────────────────────────────────────────────────
-
-### [AUDIT-8] Audit list without key → expect 401
-GET {{baseUrl}}/api/v1/audit/session/{{auditSession.response.body.sessionId}}
-
-###
-
-### [AUDIT-9] Audit list with invalid key → expect 401
-GET {{baseUrl}}/api/v1/audit/session/{{auditSession.response.body.sessionId}}
-X-ArcClaw-API-Key: totally-wrong-key
-
-###
-
-### [AUDIT-10] Audit verify without key → expect 401
-GET {{baseUrl}}/api/v1/audit/{{auditSession.response.body.sessionId}}/verify
-
-###
-
-# ─────────────────────────────────────────────────────────────────
-# AUDIT: SPECIFIC EVENT TYPES — PER-SCENARIO COVERAGE
-# ─────────────────────────────────────────────────────────────────
-
-### [AUDIT-11] Create session to trigger LOOP_MAX_ITERATIONS event
+### [AUDIT-7] Trigger LOOP_MAX_ITERATIONS event
 # @name loopMaxSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -215,26 +198,24 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Force loop exceeded → emits LOOP_MAX_ITERATIONS in audit
 POST {{baseUrl}}/api/v1/sessions/{{loopMaxSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Write a 5000-word technical essay with detailed footnotes.",
+    "goal": "Write a 5000-word technical essay with detailed footnotes about every Java feature since Java 8.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
 
 ###
 
-### Verify LOOP_MAX_ITERATIONS event is present
 GET {{baseUrl}}/api/v1/audit/session/{{loopMaxSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-12] Create session to trigger APPROVAL_GRANTED + APPROVAL_DENIED events
+### [AUDIT-8] Trigger APPROVAL_GRANTED + APPROVAL_DENIED events
 # @name hitlAuditSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -255,22 +236,178 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Grant approval → emits APPROVAL_GRANTED (mandatory audit event)
+### Grant approval → emits APPROVAL_GRANTED (mandatory)
 POST {{baseUrl}}/api/v1/sessions/{{hitlAuditSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Verify APPROVAL_GRANTED appears in audit
+### Verify APPROVAL_GRANTED in audit
 GET {{baseUrl}}/api/v1/audit/session/{{hitlAuditSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Verify HMAC chain remains valid after HITL flow
+### Verify HMAC chain valid after HITL flow
 GET {{baseUrl}}/api/v1/audit/{{hitlAuditSession.response.body.sessionId}}/verify
 X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [AUDIT-9] Trigger VAULT_STORE audit event
+# @name vaultAuditSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{vaultAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "store VAULT_AUDIT_TEST=audit_verification_value",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### Verify VAULT_STORE appears in audit
+GET {{baseUrl}}/api/v1/audit/session/{{vaultAuditSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [AUDIT-10] Trigger CONTEXT_COMPACTED event (requires 12+ messages)
+# @name compactAuditSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### Send enough messages to trigger compaction (aim for 12+)
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is virtual threading?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is SQLite WAL?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is Podman?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is LangChain4j?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is AES-GCM-SIV?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is Argon2id?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is GraalVM native image?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is Apache Camel?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is OpenTelemetry?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "What is MicroProfile?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+### Verify CONTEXT_COMPACTED in audit
+# Expect: at least one eventType=CONTEXT_COMPACTED row
+GET {{baseUrl}}/api/v1/audit/session/{{compactAuditSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# TAMPER DETECTION
+# This test requires manual SQLite intervention. Follow steps below.
+#
+# NOTE: Database path is ./data/arcclaw-meta.db (NOT .data/ — no leading dot)
+#
+# Step 1: Note auditSession ID.
+# Step 2: In terminal:
+#   sqlite3 ./data/arcclaw-meta.db
+#   DROP TRIGGER IF EXISTS prevent_audit_update;
+#   UPDATE audit_event SET event_detail='TAMPERED' WHERE sequence=2
+#     AND session_id='<paste auditSession sessionId here>';
+#   .quit
+# Step 3: Restart ArcClaw (AuditSchemaEnforcer reinstalls triggers on startup).
+# Step 4: Run AUDIT-TAMPER below — expect valid:false.
+# ─────────────────────────────────────────────────────────────────
+
+### [AUDIT-TAMPER] Verify chain after manual SQLite tamper
+# Expect 200: {"valid":false,"brokenAtId":"<uuid-of-tampered-row>","totalRows":N}
+GET {{baseUrl}}/api/v1/audit/{{auditSession.response.body.sessionId}}/verify
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# AUTH ENFORCEMENT ON AUDIT ENDPOINTS
+# ─────────────────────────────────────────────────────────────────
+
+### [AUDIT-AUTH-1] List without key → expect 401
+GET {{baseUrl}}/api/v1/audit/session/{{auditSession.response.body.sessionId}}
+
+###
+
+### [AUDIT-AUTH-2] List with invalid key → expect 401
+GET {{baseUrl}}/api/v1/audit/session/{{auditSession.response.body.sessionId}}
+X-ArcClaw-API-Key: totally-wrong-key
+
+###
+
+### [AUDIT-AUTH-3] Verify without key → expect 401
+GET {{baseUrl}}/api/v1/audit/{{auditSession.response.body.sessionId}}/verify
 
 ###
 
@@ -294,6 +431,16 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{hitlAuditSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{vaultAuditSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###

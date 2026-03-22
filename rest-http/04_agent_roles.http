@@ -4,22 +4,30 @@
 ### ArcClaw ships six persona-based agents. Each has a distinct
 ### system prompt, tool schema, and maxIterations constraint.
 ###
-### Role → Deity       → Tools available
+### Role → Deity        → Tools available
 ### ────────────────────────────────────────────────────────────
-### coordinator → Vishnu    → github, scheduletask, manageschedule, memory_search
-### researcher  → Saraswati → github, memory_search
-### coder       → Brahma    → NONE (empty schema — by design)
-### debugger    → Shiva     → github only
-### architect   → Brihaspati→ github, memory_search
-### synthesizer → Dattatreya→ github, scheduletask, manageschedule, memory_search
+### coordinator → Vishnu     → github, scheduletask, manageschedule, memorysearch
+### researcher  → Saraswati  → github, memorysearch
+### coder       → Brahma     → NONE (intentionally empty — structural guarantee)
+### debugger    → Shiva      → github ONLY
+### architect   → Brihaspati → github, memorysearch (NOT scheduletask)
+### synthesizer → Dattatreya → github, scheduletask, manageschedule, memorysearch
 ###
-### Hindu deity aliases also work (e.g. agentRole: "vishnu", "brahma", "shiva")
+### IMPORTANT — coder vs debugger tool schema:
+###   coder:   EMPTY schema. Structurally cannot invoke ANY tool regardless of prompt.
+###   debugger: github ONLY. CAN invoke github (read-only). Cannot schedule or search memory.
+###   The header comment in previous versions incorrectly said both had empty schemas.
 ###
-### NOTE: coder + debugger have an intentionally EMPTY tool schema.
-###       They cannot trigger tool calls regardless of prompt content.
-###       This is a structural guarantee, not just a system-prompt rule.
+### Hindu deity aliases (AgentRoleEnum.fromString):
+###   "vishnu"    → COORDINATOR
+###   "brahma"    → CODER
+###   "shiva"     → DEBUGGER
+###   "saraswati" → RESEARCHER
+###   "brihaspati"→ ARCHITECT
+###   "dattatreya" or "datta" → SYNTHESIZER
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
+### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set.
+###   GitHub tool tests additionally require GITHUB_TOKEN in vault.
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
@@ -38,7 +46,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [ROLE-2] Coordinator: task decomposition (no tools needed)
-# Expect 200 Finished: Vishnu's synthesized answer
+# Expect 200 Finished: Vishnu's answer — short, clear, coordinating tone.
 POST {{baseUrl}}/api/v1/sessions/{{coordSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -46,7 +54,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "Explain what a ReAct agent loop is in exactly 2 sentences.",
     "agentRole": "coordinator",
-    "maxIterations": 3
+    "maxIterations": 2
 }
 
 ###
@@ -57,9 +65,8 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# RESEARCHER — Saraswati (facts, knowledge retrieval)
-# Strict rule: never fabricates, only cites what it knows.
-# Has access to github + memory_search tools.
+# RESEARCHER — Saraswati (facts, knowledge retrieval, no fabrication)
+# Has: github, memorysearch. Strict no-hallucination rule.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-3] Create session for researcher
@@ -71,7 +78,8 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [ROLE-4] Researcher: knowledge question (no external tool needed)
-# Expect 200 Finished: fact-based answer from Saraswati
+# Expect 200 Finished: fact-based answer from Saraswati.
+# Logs: role='researcher', no tool invocation.
 POST {{baseUrl}}/api/v1/sessions/{{researchSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -79,7 +87,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "What is the difference between AES-GCM and AES-GCM-SIV encryption modes?",
     "agentRole": "researcher",
-    "maxIterations": 3
+    "maxIterations": 2
 }
 
 ###
@@ -91,7 +99,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # CODER — Brahma (code generation, math, logic)
-# Empty tool schema — structurally cannot make any tool calls.
+# EMPTY tool schema — structurally CANNOT invoke any tool.
+# This is enforced at the LangChain4j tool binding level, not just prompts.
 # Will refuse conversational/non-technical requests.
 # ─────────────────────────────────────────────────────────────────
 
@@ -103,21 +112,47 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-6] Coder: pure code generation (no tools needed — empty schema)
-# Expect 200 Finished: Java code from Brahma
+### [ROLE-6] Coder: pure code generation
+# Expect 200 Finished: Java code from Brahma. No tool calls attempted.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Write a Java 21 method that takes a list of integers and returns the top 3 distinct values in descending order using streams.",
+    "goal": "Write a Java 25 method that takes a list of integers and returns the top 3 distinct values in descending order using streams.",
     "agentRole": "coder",
-    "maxIterations": 3
+    "maxIterations": 2
 }
 
 ###
 
-### [ROLE-7] Coder: Brahma alias works identically
+### [ROLE-6a] Coder: CANNOT use github tool — empty schema structural guarantee
+# Even if asked directly to use github, the tool is not in Brahma's schema.
+# Expect 200: agent explains it cannot access external systems or use tools,
+# OR it answers the coding question directly without attempting a tool call.
+# Confirm in audit: NO TOOL_INVOKED event appears for this session.
+POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Using the github tool, list the topics of the rsrini7/arcclaw repository.",
+    "agentRole": "coder",
+    "maxIterations": 2
+}
+
+###
+
+### [ROLE-6b] Verify NO TOOL_INVOKED in coder session audit
+# Expect: audit list contains NO eventType=TOOL_INVOKED
+GET {{baseUrl}}/api/v1/audit/session/{{coderSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [ROLE-7] Coder: "brahma" deity alias works identically
+# Note: this is on a FRESH session — coderSession not deleted yet.
+# Uses the same coderSession.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -137,8 +172,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # DEBUGGER — Shiva (bug analysis, stack traces, security audits)
-# Contrarian persona — will challenge assumptions and surface blind spots.
-# Has github tool (read-only operations only).
+# Contrarian persona — challenges assumptions, surfaces blind spots.
+# Has: github ONLY (not scheduletask, not memorysearch).
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-8] Create session for debugger
@@ -149,17 +184,41 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-9] Debugger: analyze a stack trace
-# Expect 200 Finished: root cause analysis from Shiva
+### [ROLE-9] Debugger: stack trace analysis (no tools needed)
+# Expect 200 Finished: root cause analysis from Shiva.
+# Contrarian response — challenges your assumptions about the cause.
 POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Analyze this stack trace and identify the root cause:\njava.lang.NullPointerException: Cannot invoke method on null object\n  at com.example.UserService.getUser(UserService.java:42)\n  at com.example.UserController.handleRequest(UserController.java:18)",
+    "goal": "Analyze this stack trace:\njava.lang.NullPointerException: Cannot invoke method on null object\n  at com.example.UserService.getUser(UserService.java:42)\n  at com.example.UserController.handleRequest(UserController.java:18)",
     "agentRole": "debugger",
-    "maxIterations": 3
+    "maxIterations": 2
 }
+
+###
+
+### [ROLE-9a] Debugger HAS github (unlike coder)
+# Shiva's tool schema includes github. This test confirms it triggers AWAITING_APPROVAL.
+# Expect 202: AWAITING_APPROVAL (github tool is NETWORK_OUTBOUND, SUPERVISED session).
+# This would NOT happen for coder (empty schema = no tool attempt at all).
+POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Check the rsrini7/arcclaw GitHub repository for any recent commits related to null handling.",
+    "agentRole": "debugger",
+    "maxIterations": 2
+}
+
+###
+
+### [ROLE-9b] Cancel the github call (not under test — just cleanup)
+POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/deny?agentRole=debugger
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
@@ -170,8 +229,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # ARCHITECT — Brihaspati (system design, ADRs, trade-off analysis)
-# Will NOT write production code — delegates that back to Brahma.
-# Has github + memory_search tools for reviewing existing code/context.
+# Has: github, memorysearch. Does NOT have scheduletask.
+# Will NOT write production code — delegates to Brahma.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-10] Create session for architect
@@ -182,16 +241,33 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-11] Architect: design trade-off analysis
-# Expect 200 Finished: Brihaspati's architectural assessment
+### [ROLE-11] Architect: trade-off analysis
+# Expect 200 Finished: Brihaspati's architectural assessment.
+# ADR-style response with structured trade-offs. No production code.
 POST {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Evaluate the architectural trade-offs of using SQLite WAL mode vs PostgreSQL for an agentic AI kernel that handles hundreds of concurrent sessions. Consider latency, portability, and ACID guarantees.",
+    "goal": "Evaluate the architectural trade-offs of using SQLite WAL mode vs PostgreSQL for an AI agent kernel handling concurrent sessions. Consider: ACID guarantees, operational complexity, portability, and latency.",
     "agentRole": "architect",
-    "maxIterations": 3
+    "maxIterations": 2
+}
+
+###
+
+### [ROLE-11a] Architect CANNOT schedule tasks (no scheduletask in schema)
+# Expect 200: agent explains it cannot schedule tasks (tool not available),
+# OR the response is architectural advice without any tool call.
+# Confirm in audit: NO CRONCREATED event.
+POST {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Schedule a daily task to run architecture health checks at 9 AM.",
+    "agentRole": "architect",
+    "maxIterations": 2
 }
 
 ###
@@ -203,9 +279,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # SYNTHESIZER — Dattatreya (cross-domain: code + debug + research + arch)
-# The Trinity Incarnate. Only activate when ONE task genuinely spans
-# multiple specialist domains simultaneously.
-# Has all tools: github, scheduletask, manageschedule, memory_search.
+# The Trinity Incarnate. Has ALL tools.
+# Only activate when ONE task genuinely spans multiple specialist domains.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-12] Create session for synthesizer
@@ -217,15 +292,16 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [ROLE-13] Synthesizer: cross-domain task
-# Expect 200 Finished: integrated analysis from Dattatreya
+# Expect 200 Finished: integrated analysis from Dattatreya.
+# Response should synthesize multiple specialist viewpoints.
 POST {{baseUrl}}/api/v1/sessions/{{synthSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "A Java service is experiencing high memory under load. Diagnose whether the root cause is a code defect (Brahma's domain), a design flaw (Brihaspati's domain), or a known JVM behavior (Saraswati's domain). Synthesize a unified recommendation.",
+    "goal": "A Java service is experiencing high memory under load. Diagnose whether the root cause is a code defect (Brahma's domain), a design flaw (Brihaspati's domain), or known JVM behavior (Saraswati's domain). Synthesize a unified recommendation.",
     "agentRole": "synthesizer",
-    "maxIterations": 4
+    "maxIterations": 3
 }
 
 ###
@@ -237,10 +313,11 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # ROLE ALIAS VALIDATION
-# AgentRoleEnum.fromString() accepts both canonical names and deity aliases.
+# AgentRoleEnum.fromString() accepts deity names and role names.
+# All aliases must resolve to the correct agent persona.
 # ─────────────────────────────────────────────────────────────────
 
-### [ROLE-14] Verify all deity aliases resolve correctly
+### [ROLE-14] Create session for alias tests
 # @name aliasSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -248,53 +325,105 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### "vishnu" alias → coordinator persona
+### "vishnu" → coordinator persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Say: I am Vishnu, the Coordinator.",
+    "goal": "Say exactly: I am Vishnu, the Coordinator.",
     "agentRole": "vishnu",
     "maxIterations": 1
 }
 
 ###
 
-### "saraswati" alias → researcher persona
+### "saraswati" → researcher persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Say: I am Saraswati, the Researcher.",
+    "goal": "Say exactly: I am Saraswati, the Researcher.",
     "agentRole": "saraswati",
     "maxIterations": 1
 }
 
 ###
 
-### "shiva" alias → debugger persona
+### "shiva" → debugger persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Say: I am Shiva, the Debugger.",
+    "goal": "Say exactly: I am Shiva, the Debugger.",
     "agentRole": "shiva",
     "maxIterations": 1
 }
 
 ###
 
-### "dattatreya" alias → synthesizer persona
+### "brihaspati" → architect persona (was missing in original)
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Say: I am Dattatreya, the Synthesizer.",
+    "goal": "Say exactly: I am Brihaspati, the Architect.",
+    "agentRole": "brihaspati",
+    "maxIterations": 1
+}
+
+###
+
+### "dattatreya" → synthesizer persona
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say exactly: I am Dattatreya, the Synthesizer.",
     "agentRole": "dattatreya",
+    "maxIterations": 1
+}
+
+###
+
+### "datta" → synthesizer persona (short alias)
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say exactly: datta alias works.",
+    "agentRole": "datta",
+    "maxIterations": 1
+}
+
+###
+
+### "brahma" → coder persona
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Say exactly: I am Brahma, the Coder.",
+    "agentRole": "brahma",
+    "maxIterations": 1
+}
+
+###
+
+### Unknown agentRole → expect 400 or fallback (document behavior)
+POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Hello.",
+    "agentRole": "GANDALF_THE_GREY",
     "maxIterations": 1
 }
 

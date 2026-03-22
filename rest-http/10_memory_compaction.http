@@ -5,42 +5,50 @@
 ###
 ###   arcclaw-meta.db (primary WAL)
 ###     └─ chat_memory            — rolling LangChain4J chat window (max 20 msgs)
-###     └─ compaction_summary     — summary records from compaction runs
+###     └─ compaction_summary     — summaries from ContextCompactionService runs
 ###     └─ agent_checkpoint       — per-session ReAct state
+###     └─ rag_chunk              — RAG document chunks (Phase 64-C3+)
+###     └─ session_registry       — (channelType, channelId, userId) → sessionId (Phase 64-B3+)
 ###
 ###   arcclaw-fts.db (FTS5)
-###     └─ compaction_summary_fts — full-text indexed summaries, queryable via
-###                                 MemorySearchTool
+###     └─ compaction_summary_fts — full-text indexed summaries, queryable via MemorySearchTool
+###
+### SystemMessage objects are NEVER stored in chat_memory (Nuance #1).
+### Only UserMessage and AiMessage entries are persisted.
 ###
 ### Compaction trigger:
-###   When chat window exceeds: max-messages (20) - keep-recent (5) = threshold (5+)
-###   → ContextCompactionService summarises the oldest messages
-###   → Compact summary stored in both meta.db and fts.db
-###   → Most recent 5 messages kept verbatim
-###   → Model used for compaction: llama-3.1-8b-instant (cheap, fast)
-###   → Audit event written: CONTEXT_COMPACTED
+###   When chat window exceeds: max-messages (20) - keep-recent (5) = threshold crossed at 15+
+###   → ContextCompactionService summarises the oldest messages via llama-3.1-8b-instant
+###   → Summary stored in both meta.db (compaction_summary) and fts.db (FTS5 index)
+###   → Most recent 5 messages kept verbatim in the rolling window
+###   → Audit event: CONTEXT_COMPACTED
 ###
-### MemorySearchTool (memory_search):
+### Phase 64 changes affecting this file:
+###   Phase 64-A fix A3: Non-ASCII queries no longer silently return empty.
+###   Phase 64-A fix A6: Compaction inFlight lock is released after observer failure.
+###   Phase 64-C3: RAG chunks stored in rag_chunk table, not "rag:" prefix in compaction_summary.
+###   Phase 64-D1: Compaction summary truncation is now codepoint-safe (emoji/CJK safe).
+###
+### MemorySearchTool (tool name: "memorysearch"):
 ###   Queries FTS5 using userId scope — tenant-isolated.
 ###   Available to: coordinator, researcher, architect, synthesizer.
 ###   Input: {query: "<search terms>"}
-###   Returns: top-N matching compaction summaries
+###   Returns: top-N matching compaction summaries (after Phase 64-C3: RAG not mixed in)
 ###
 ### Conversation continuity:
-###   Chat memory (ChatMemoryStore) is NOT wiped on session soft-reset.
-###   Only the ReAct checkpoint state is cleared.
-###   → LLM retains conversational context across multiple goals.
+###   Chat memory (ChatMemoryStore) is NOT wiped on session soft-reset (/reset).
+###   Only the ReAct checkpoint state is cleared. LLM retains conversational context.
 ###
 ### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
-@validKey = Fxa8CCQGpjHr7DS3eiSTlb3W0RKzImwHXPkNbq9S98c=
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
 # MULTI-TURN CONVERSATION
 # The rolling chat memory makes the agent aware of prior exchanges
-# within the same session. This tests conversational continuity.
+# within the same session. Tests conversational continuity.
 # ─────────────────────────────────────────────────────────────────
 
 ### [MEM-0] Create session for multi-turn test
@@ -52,20 +60,23 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [MEM-1] First message — establish a fact
+# NOTE: ArcClaw is on Quarkus 3.27.2 (Phase 60.1 migration).
+# Do NOT use 3.23.0 here — that is the pre-migration version.
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Remember this: my project is called ArcClaw and it uses Quarkus 3.23.0.",
+    "goal": "Remember this: my project is called ArcClaw and it uses Quarkus 3.27.2.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
 
 ###
 
-### [MEM-2] Second message — recall from chat memory (no tools)
-# The LLM sees prior turn in its rolling window, should recall correctly
+### [MEM-2] Second message — recall from chat memory (no tools needed)
+# The LLM sees the prior turn in its rolling window (PersistentChatMemoryStore).
+# Expect: agent replies with "ArcClaw" and "Quarkus 3.27.2"
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -78,265 +89,57 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [MEM-3] Third turn — build on the context further
+### [MEM-3] Third turn — build on the context
+# ArcClaw uses Quarkus 3.27.2 (LTS, released 2025).
+# Quarkus 3.27.2 requires JDK 17+ (or 21+ for Virtual Threads) minimum;
+# ArcClaw itself uses JDK 25 (as per mise.toml: java = "temurin-25").
+# Expect: agent recalls Quarkus 3.27.2 and can discuss its JVM requirements.
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Given what you know about my project, what JVM version does Quarkus 3.23.0 require?",
+    "goal": "Given what you know about my project, what JVM version does Quarkus 3.27.2 require?",
     "agentRole": "coordinator",
     "maxIterations": 2
 }
 
 ###
 
+DELETE {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
 # ─────────────────────────────────────────────────────────────────
-# ROLLING WINDOW PRUNING
-# Chat window is capped at 20 messages (configurable).
-# After 20+ messages, older ones are pruned from the window.
-# Watch logs for: [MemoryPruning] pruned N messages session=...
-#
-# Send 22 sequential messages to see the window prune the oldest 2.
+# SOFT RESET — CHAT MEMORY PRESERVED
+# /reset clears ReAct checkpoint state, NOT the chat window.
 # ─────────────────────────────────────────────────────────────────
 
-### [MEM-4] Create a dedicated session for window pruning test
-# @name pruneSession
+### [MEM-RESET-0] Create session
+# @name resetMemSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Msg 1
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 1: What is virtual threading?", "agentRole": "coordinator", "maxIterations": 1}
-
-
-###
-
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/approve?agentRole=coordinator
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-
-###
-
-### Msg 2
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 2: What is SQLite WAL mode?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 3
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 3: What is Podman?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 4
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 4: What is LangChain4J?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 5
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 5: What is a ReAct agent loop?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 6
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 6: What is AES-GCM-SIV?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 7
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 7: What is Argon2id?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 8
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 8: What is GraalVM native image?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 9
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 9: What is Apache Camel?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 10
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 10: What is a CDI scope?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 11
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 11: What is MicroProfile?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 12 — At this point compaction may trigger (threshold=5 above keep-recent=5)
-# Watch logs for: [COMPACTION] triggered session=... messages_compacted=N
-# Audit event: CONTEXT_COMPACTED
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 12: What is OpenTelemetry?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 13
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 13: What is Jaeger?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 14
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 14: What is Prometheus?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### Msg 15 — second compaction wave may trigger here
-POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{"goal": "Memory window test message 15: What is ScopedValue in Java 21?", "agentRole": "coordinator", "maxIterations": 1}
-
-###
-
-### [MEM-5] Verify CONTEXT_COMPACTED in audit after window fills
-# Expect: at least one CONTEXT_COMPACTED eventType row
-GET {{baseUrl}}/api/v1/audit/session/{{pruneSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
-
-###
-
-# ─────────────────────────────────────────────────────────────────
-# LONG-TERM MEMORY SEARCH (MemorySearchTool)
-# Uses FTS5 to search compaction summaries across all past sessions.
-# Tenant-isolated by userId — cannot access other users' memories.
-# Only coordinator, researcher, architect, synthesizer have this tool.
-# ─────────────────────────────────────────────────────────────────
-
-### [MEM-6] Create session to test memory_search tool
-# @name memSearchSession
-POST {{baseUrl}}/api/v1/sessions
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-###
-
-### [MEM-7] Ask coordinator to search compaction summaries for SQLite topics
-# The agent will invoke MemorySearchTool with the search query
-# This is useful when earlier conversations have been compacted
-POST {{baseUrl}}/api/v1/sessions/{{memSearchSession.response.body.sessionId}}/run
+### Establish a fact
+POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Search your long-term memory for any information about SQLite and WAL mode from previous conversations.",
-    "agentRole": "coordinator",
-    "maxIterations": 3
-}
-
-###
-
-### [MEM-8] Researcher role also has memory_search
-POST {{baseUrl}}/api/v1/sessions/{{memSearchSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Search your memory for any past discussions about virtual threads or Podman.",
-    "agentRole": "researcher",
-    "maxIterations": 3
-}
-
-###
-
-### [MEM-9] Coder role does NOT have memory_search — tool schema is empty
-# Brahma cannot invoke MemorySearchTool regardless of prompt
-# Expect: agent responds without using any tool
-POST {{baseUrl}}/api/v1/sessions/{{memSearchSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Search your long-term memory for any past discussions about Java generics.",
-    "agentRole": "coder",
-    "maxIterations": 2
-}
-
-###
-
-# ─────────────────────────────────────────────────────────────────
-# SOFT RESET — verifies ReAct state clears but chat memory survives
-# ─────────────────────────────────────────────────────────────────
-
-### [MEM-10] Run a goal to establish checkpoint state
-POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "What is 10 + 10?",
+    "goal": "My favourite language is Kotlin.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
 
 ###
 
-### [MEM-11] Soft reset — wipes ReAct state, keeps chat memory
-POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
+### Soft reset — wipes checkpoint, preserves chat memory
+POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -348,25 +151,222 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [MEM-12] After reset — chat history is preserved
-# Agent should still recall "ArcClaw" and "Quarkus" from earlier turns (MEM-1)
-POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
+### Recall after reset — must still know the fact
+# Expect: agent responds with "Kotlin" (from the preserved chat window)
+POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "What was the project name I mentioned earlier in this conversation?",
+    "goal": "What is my favourite programming language?",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
 
 ###
 
+DELETE {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
 # ─────────────────────────────────────────────────────────────────
-# CLEANUP
+# ROLLING WINDOW PRUNING
+# Chat window is capped at 20 messages (configurable).
+# Send 22 sequential messages to see the window prune the oldest 2.
+# Watch logs for: [MemoryPruning] pruned N messages session=...
 # ─────────────────────────────────────────────────────────────────
 
-DELETE {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}
+### [MEM-4] Create dedicated session for window pruning test
+# @name pruneSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### Msgs 1–22: each is one turn in the rolling window.
+### Around msg 15, compaction may trigger (watch logs).
+### After msg 22, the oldest 2 are pruned from the active window.
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 1: What is virtual threading?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 2: What is SQLite WAL mode?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 3: What is Podman?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 4: What is LangChain4j?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 5: What is a ReAct agent loop?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 6: What is AES-GCM-SIV?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 7: What is Argon2id?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 8: What is GraalVM native image?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 9: What is Apache Camel?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 10: What is a CDI scope in Quarkus?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 11: What is MicroProfile Config?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+### Msg 12 — Compaction may trigger here (15 - 5 keep-recent = 10 messages eligible)
+### Watch logs for: "Compaction triggered for session ..."
+### Phase 64-A A6 fix: compactionInFlight is released after any observer failure.
+### Audit event: CONTEXT_COMPACTED
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 12: What is OpenTelemetry?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 13: What is Jaeger?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 14: What is Prometheus?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 15: What is Micrometer?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 16: What is Hibernate ORM 7?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 17: What is JOOQ?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 18: What is Redis?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 19: What is Kafka?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 20: What is gRPC?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 21: What is GraphQL?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+### Msg 22 — Rolling window is now beyond 20. Oldest messages pruned.
+### Watch logs for: "pruned N messages session=..."
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+{"goal": "Msg 22: What is REST vs GraphQL?", "agentRole": "coordinator", "maxIterations": 1}
+
+###
+
+### [MEM-5] Verify pruning happened — oldest messages no longer in window
+# Expect: agent does NOT recall Msg 1 (virtual threading) from its active window.
+# But if compaction has run, the summary may still be retrievable via memory_search.
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Do you still have the very first message we sent in this session?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [MEM-6] Confirm audit shows CONTEXT_COMPACTED event
+GET {{baseUrl}}/api/v1/audit/session/{{pruneSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
@@ -376,7 +376,139 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-DELETE {{baseUrl}}/api/v1/sessions/{{memSearchSession.response.body.sessionId}}
+
+# ─────────────────────────────────────────────────────────────────
+# CONTEXT COMPACTION — VERIFICATION
+# After compaction runs, the summary is searchable via MemorySearchTool
+# ─────────────────────────────────────────────────────────────────
+
+### [COMPACT-0] Create session for compaction test
+# @name compactSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [COMPACT-1] Search memory after compaction has run in pruneSession
+# MemorySearchTool is scoped to userId — it searches across all sessions for this user.
+# Expect: results referencing topics from the pruned messages above (if same user).
+POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search your memory for any previous discussions about Argon2id or AES-GCM-SIV.",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+### [COMPACT-2] Non-ASCII memory search (Phase 64-A A3 fix)
+# Before Phase 64-A: non-ASCII queries silently returned empty.
+# After fix: only FTS5 syntax chars are escaped, Unicode passes through.
+# First seed some content in a different language, then search for it.
+POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Explain this: 機械学習 (machine learning) is a subset of 人工知能 (AI).",
+    "agentRole": "researcher",
+    "maxIterations": 1
+}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search memory for 機械学習.",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+### [COMPACT-3] Codepoint-safe truncation (Phase 64-D1)
+# After Phase 64-D1, summaries with emoji or supplementary Unicode chars
+# are truncated at codepoint boundaries — no mid-surrogate-pair slicing.
+# Send content with emoji that would be in a long compaction summary.
+POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Summarise the following 🤖 AI topics: deep learning 🧠, neural networks 🔬, transformers ⚡, embeddings 📊, and RAG 🗂️ retrieval-augmented generation for enterprise Java.",
+    "agentRole": "researcher",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# CROSS-SESSION MEMORY ISOLATION
+# Each user's compaction summaries are scoped to their userId.
+# A different user must not see another user's memory.
+# ─────────────────────────────────────────────────────────────────
+
+### [ISOLATION-1] Session A — establish unique fact
+# @name isoSessionA
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{isoSessionA.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Remember this unique fact: the secret code is ARCCLAW-ISOLATION-TEST-ALPHA.",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [ISOLATION-2] Session B — try to retrieve Session A's fact
+# @name isoSessionB
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### Session B must NOT see Session A's secret code.
+### MemorySearchTool is userId-scoped — returns only the caller's compaction summaries.
+POST {{baseUrl}}/api/v1/sessions/{{isoSessionB.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search memory for ARCCLAW-ISOLATION-TEST-ALPHA.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{isoSessionA.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{isoSessionB.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###

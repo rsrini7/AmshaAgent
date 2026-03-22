@@ -1,18 +1,25 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 02 — API KEY AUTHENTICATION & RATE LIMITING
 ###
-### All /api/v1/* endpoints (except /api/v1/info) require the header:
+### All /api/v1/* endpoints (except /api/v1/info) require:
 ###   X-ArcClaw-API-Key: <key>
 ###
-### Default keys from .env.example / application.yaml:
+### Default keys from .env.example / DevSecretSeeder (dev mode):
 ###   internal key : key-internal-changeme    (name: "internal")
 ###   CI key       : key-ci-changeme          (name: "ci-pipeline")
 ###
-### Change these in production via:
+### In production, override via:
 ###   ARCCLAW_API_KEY_INTERNAL=<your-key>
 ###   ARCCLAW_API_KEY_CI=<your-key>
 ###
-### Rate limit: 20 requests/minute per key → HTTP 429 on the 21st
+### Rate limit: sliding window, 20 requests/minute PER KEY.
+###   21st request within 60 seconds → HTTP 429
+###   Each key has its own independent counter.
+###   The CI key and internal key do NOT share a counter.
+###
+### After Phase 64-B2: DevSecretSeeder is @IfBuildProfile("dev") only.
+###   In prod/staging, the dev seeder bean is absent from CDI entirely.
+###   The keys listed above only exist in dev/test deployments.
 ###
 ### Prerequisites: ArcClaw running in serve mode
 ### ═══════════════════════════════════════════════════════════════
@@ -23,11 +30,11 @@
 @invalidKey = totally-wrong-key
 
 # ─────────────────────────────────────────────────────────────────
-# NEGATIVE TESTS — all should be rejected (401)
+# NEGATIVE TESTS — all must return 401
 # ─────────────────────────────────────────────────────────────────
 
 ### [AUTH-1] Missing API key → expect 401
-# Response: {"error":"UNAUTHORIZED","message":"Missing or invalid API key","timestamp":"..."}
+# {"error":"UNAUTHORIZED","message":"Missing or invalid API key","timestamp":"..."}
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 
@@ -40,14 +47,14 @@ X-ArcClaw-API-Key: {{invalidKey}}
 
 ###
 
-### [AUTH-3] Empty API key → expect 401
+### [AUTH-3] Empty API key value → expect 401
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-ArcClaw-API-Key:
 
 ###
 
-### [AUTH-4] Audit endpoint without key → expect 401
+### [AUTH-4] Audit list endpoint without key → expect 401
 GET {{baseUrl}}/api/v1/audit/session/00000000-0000-0000-0000-000000000000
 
 ###
@@ -58,37 +65,47 @@ X-ArcClaw-API-Key: {{invalidKey}}
 
 ###
 
+### [AUTH-6] Skills endpoint without key → expect 401
+GET {{baseUrl}}/api/v1/skills
+
+###
+
+### [AUTH-7] MCP admin endpoint without key → expect 401
+GET {{baseUrl}}/api/v1/mcp/status
+
+###
+
+### [AUTH-8] DELETE session without key → expect 401
+DELETE {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000000
+
+###
+
 # ─────────────────────────────────────────────────────────────────
 # PUBLIC BYPASS — these endpoints skip auth entirely
 # ─────────────────────────────────────────────────────────────────
 
-### [AUTH-6] /q/health bypasses auth → expect 200 (no key needed)
+### [AUTH-9] /q/health bypasses auth → expect 200 (no key needed)
 GET {{baseUrl}}/q/health
 
 ###
 
-### [AUTH-7] /q/metrics bypasses auth → expect 200
+### [AUTH-10] /q/metrics bypasses auth → expect 200
 GET {{baseUrl}}/q/metrics
 
 ###
 
-### [AUTH-8] /api/v1/info bypasses auth → expect 200
-# ApiKeyAuthFilter explicitly allows path starting with /info
+### [AUTH-11] /api/v1/info bypasses auth → expect 200
+# ApiKeyAuthFilter explicitly allows paths starting with /info
 GET {{baseUrl}}/api/v1/info
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# POSITIVE TESTS — both named keys should be accepted
+# POSITIVE TESTS — both keys must be accepted
+# AUTH-12 (internal key) appears before AUTH-13 (CI key) — order fixed.
 # ─────────────────────────────────────────────────────────────────
 
-### [AUTH-10] CI pipeline key accepted → expect 201
-# @name authCiSession
-POST {{baseUrl}}/api/v1/sessions
-Content-Type: application/json
-X-ArcClaw-API-Key: {{ciKey}}
-
-### [AUTH-9] Internal key accepted → expect 201 session created
+### [AUTH-12] Internal key accepted → expect 201
 # @name authInternalSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -96,49 +113,80 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-# Step 2 — run agent first (creates the checkpoint)
-POST {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/run
-X-ArcClaw-API-Key: {{validKey}}
+### [AUTH-13] CI pipeline key accepted → expect 201
+# @name authCiSession
+POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
+X-ArcClaw-API-Key: {{ciKey}}
 
-{"goal": "hello", "agentRole": "coordinator"}
+###
+
+### [AUTH-14] Run a simple agent task with internal key — verifies auth flows through pipeline
+POST {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 1 + 1?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [AUTH-15] Access internal session status with CI key → expect 401
+# Sessions are associated with the creating key. Another key cannot access them.
+# (Only if the API enforces per-key session isolation — verify this behavior.)
+GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{ciKey}}
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
 # RATE LIMIT TEST
-# ApiKeyRegistry tracks requests per minute per key.
-# Default: 20 requests/minute → 21st request returns HTTP 429.
+# ApiKeyRegistry: 20 requests/minute per key (sliding window).
+# The 21st request returns HTTP 429 + Retry-After: 60.
+# Each key has its own independent counter — CI and internal are separate.
 #
-# HOW TO TEST: Send the request below 21 times rapidly in quick
-# succession using your HTTP client's "repeat" feature.
-# The 21st (or sooner) should return:
-#   HTTP 429 + header "Retry-After: 60"
-#   body: {"error":"RATE_LIMITED","message":"Too many requests...","retryAfterSeconds":60}
+# HOW TO TEST:
+# 1. Send AUTH-16 request 21 times rapidly (use REST client's "repeat" feature).
+# 2. The 21st (or earlier) returns:
+#      HTTP 429
+#      header: Retry-After: 60
+#      body: {"error":"RATE_LIMITED","message":"Too many requests...","retryAfterSeconds":60}
+# 3. Wait 60 seconds. Send again → 200 restored.
 #
-# Note: the rate limit window resets after 60 seconds.
+# AUTH-17 tests that the CI key has its own separate rate limit counter.
+# Exhaust AUTH-16 (internal), then AUTH-17 (CI) must still return 200.
 # ─────────────────────────────────────────────────────────────────
 
-### [RATELIMIT-1] Rate limit probe — run this 21 times rapidly
-# Watch for HTTP 429 + Retry-After: 60 on the 21st hit
+### [AUTH-16] Rate limit probe for internal key — run this 21 times rapidly
+# Expect: HTTP 200 for requests 1–20, HTTP 429 on request 21.
 GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### This always returns 200 if the key is valid — good for rate limit testing
-GET {{baseUrl}}/api/v1/sessions
-X-ArcClaw-API-Key: {{validKey}}
-
-
+### [AUTH-17] CI key has independent counter — must still return 200 after internal is rate-limited
+# After AUTH-16 is rate-limited, this CI key request must succeed (200).
+# The two keys do NOT share a rate limit counter.
+GET {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{ciKey}}
 
 ###
 
-### [AUTH-11] Cleanup: terminate the test sessions
+# ─────────────────────────────────────────────────────────────────
+# CLEANUP
+# ─────────────────────────────────────────────────────────────────
+
+### [AUTH-18] Cleanup internal session
 DELETE {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+### [AUTH-19] Cleanup CI session
 DELETE {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{ciKey}}
+
+###

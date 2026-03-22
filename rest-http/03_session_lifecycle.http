@@ -1,23 +1,33 @@
 ### ═══════════════════════════════════════════════════════════════
-### 03 — SESSION LIFECYCLE: CREATE → RUN → STATUS → TERMINATE
+### 03 — SESSION LIFECYCLE
 ###
-### Full happy-path flow for a synchronous and asynchronous agent run.
+### Sessions are the top-level container for all agent interactions.
+### Each session owns:
+###   - A unique session ID (random UUID via SessionRegistry, Phase 64-B3+)
+###   - A rolling chat memory store (max 20 messages, SQLite WAL)
+###   - A ReAct checkpoint (StatefulAgentStore — agent loop state)
+###   - A GovernanceLayer budget counter (per-session USD cap)
+###   - A WorkspaceScoped CDI scope (torn down on DELETE/halt)
 ###
-### Endpoint map (all under /api/v1):
-###   POST   /sessions                     → create session (201)
-###   POST   /sessions/{id}/run            → run agent synchronously (200/202/408/4xx/5xx)
-###   POST   /sessions/{id}/run-async      → run agent async, returns immediately (202)
-###   GET    /sessions/{id}/status/{role}  → poll checkpoint state (200 / 404)
-###   DELETE /sessions/{id}               → terminate session (204)
+### Session endpoints:
+###   POST   /api/v1/sessions              → create session
+###   GET    /api/v1/sessions              → list all sessions
+###   GET    /api/v1/sessions/{id}/status/{role} → poll checkpoint status
+###   POST   /api/v1/sessions/{id}/run         → synchronous run (blocks until done)
+###   POST   /api/v1/sessions/{id}/run-async   → async run (returns 202 immediately)
+###   POST   /api/v1/sessions/{id}/approve?agentRole=coordinator → approve HITL
+###   POST   /api/v1/sessions/{id}/deny?agentRole=coordinator   → deny HITL
+###   DELETE /api/v1/sessions/{id}            → terminate and wipe session
 ###
-### Response shapes:
-###   run/run-async (Finished)         → {answer, totalInputTokens, totalOutputTokens}
-###   run/run-async (AwaitingApproval) → {toolName, paramsJson, sessionId}  HTTP 202
-###   run/run-async (LoopExceeded)     → {reason, code:"LOOP_EXCEEDED"}     HTTP 408
-###   run/run-async (Failed/Budget)    → {reason, code:"BUDGET"}            HTTP 429
-###   run/run-async (Failed/Denied)    → {reason, code:"USER_DENIED"}       HTTP 422
-###   status                           → {sessionId, status, steps[], failReason}
-###     status values: IN_PROGRESS | AWAITING_APPROVAL | COMPLETED | FAILED | COMPROMISED
+### Checkpoint status values:
+###   NO_ACTIVE_STATE    → no checkpoint exists for this session+role
+###   IN_PROGRESS        → agent loop is running
+###   AWAITING_APPROVAL  → paused for human approval
+###   COMPLETED          → last run finished successfully
+###   FAILED             → last run failed (deny, timeout, budget, error)
+###
+### After Phase 64-B3: session IDs are random UUIDs stored in session_registry.
+###   (channelType=REST, channelId=sessionId, userId=apiKey) → UUID.randomUUID()
 ###
 ### Prerequisites: ArcClaw running in serve mode, GROQ_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
@@ -26,54 +36,87 @@
 @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
-# STEP 1 — CREATE SESSION
-# Returns a fresh UUID-based sessionId. No DB writes yet — just a
-# heartbeat registration.
+# FLOW A: CREATE + RUN + STATUS + DELETE
 # ─────────────────────────────────────────────────────────────────
 
 ### [SESSION-1] Create a new session
-# @name mainSession
-# Expect 201: {"sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+# @name sessionA
+# Expect 201: {"sessionId":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+# Session ID is a random UUID (Phase 64-B3+), not MD5-derived.
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 2a — SYNCHRONOUS RUN (blocks until agent finishes)
-# The HTTP connection stays open until the agent loop completes.
-# Ideal for short tasks (maxIterations ≤ 3).
-# ─────────────────────────────────────────────────────────────────
+### [SESSION-2] Status before any run — NO_ACTIVE_STATE
+# Expect 200: {"sessionId":"...","status":"NO_ACTIVE_STATE","steps":[],"failReason":null}
+GET {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
 
-### [SESSION-2] Run agent synchronously — simple arithmetic (no tools needed)
-# Expect 200: {"answer": "4", "totalInputTokens": N, "totalOutputTokens": N}
-POST {{baseUrl}}/api/v1/sessions/{{mainSession.response.body.sessionId}}/run
+###
+
+### [SESSION-3] Synchronous run — blocks until agent finishes
+# Expect 200: {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
+# Audit events: CHECKPOINT_CREATED + LOOP_FINISH
+POST {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "What is 2 + 2? Answer with just the number.",
+    "goal": "What is the capital of France?",
     "agentRole": "coordinator",
-    "maxIterations": 2
+    "maxIterations": 1
 }
 
 ###
 
-### [SESSION-3] Check status after sync run
+### [SESSION-4] Status after sync run — COMPLETED
 # Expect 200: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
-GET {{baseUrl}}/api/v1/sessions/{{mainSession.response.body.sessionId}}/status/coordinator
+GET {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-5] List all sessions — sessionA must appear
+# Expect 200: array containing sessionA's ID
+GET {{baseUrl}}/api/v1/sessions
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-6] Run a second goal on same session — chat memory accumulates
+POST {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What country is that capital in?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-7] Delete session — workspace wiped, CDI scope destroyed
+# Expect 200 or 204: success
+DELETE {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-8] Status after delete — expect 404 or NO_ACTIVE_STATE
+# Session is gone — checkpoint lookup finds nothing.
+GET {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# STEP 2b — ASYNCHRONOUS RUN (returns immediately; poll status)
-# The HTTP response returns once the virtual thread is spawned.
-# Use /status/{role} to poll the checkpoint until COMPLETED or FAILED.
+# FLOW B: ASYNC RUN (run-async returns 202 immediately)
 # ─────────────────────────────────────────────────────────────────
 
-### [SESSION-4] Create a second session for async test
+### [SESSION-9] Create session for async test
 # @name asyncSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -81,129 +124,261 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-5] Run agent asynchronously
-# Returns immediately: {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
-# or HTTP 202 AwaitingApproval if a tool needs HITL
-# For a deeper task, increase maxIterations
+### [SESSION-10] run-async — returns 202 immediately, agent runs in background
+# Expect 202: {"sessionId":"...","status":"ACCEPTED"}
+# Do NOT wait for completion — poll SESSION-11 to check progress.
 POST {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/run-async
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Summarize what ArcClaw is in one sentence, based on your training knowledge.",
+    "goal": "Explain SQLite WAL mode in exactly one sentence.",
     "agentRole": "coordinator",
-    "maxIterations": 3
+    "maxIterations": 1
 }
 
 ###
 
-### [SESSION-6] Poll status (run a few times until status is COMPLETED)
-# Expect 200: status = IN_PROGRESS (while running) → COMPLETED (when done)
+### [SESSION-11] Poll status immediately after async — may be IN_PROGRESS or COMPLETED
+# Poll this repeatedly until status=COMPLETED (or FAILED).
 GET {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 3 — TERMINATE SESSION
-# Wipes workspace directory and removes heartbeat registration.
-# Idempotent — terminating an already-terminated session is safe.
-# ─────────────────────────────────────────────────────────────────
-
-### [SESSION-7] Terminate session — expect 204 No Content
-DELETE {{baseUrl}}/api/v1/sessions/{{mainSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
-
-###
-
-### [SESSION-8] Terminate async session
 DELETE {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# ERROR CASES
+# FLOW C: MULTI-TURN CONVERSATION (chat memory persistence)
 # ─────────────────────────────────────────────────────────────────
 
-### [SESSION-9] Status on non-existent session → expect SESSION_NOT_FOUND (it means 404)
-GET {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
-
-###
-
-### [SESSION-10] Invalid request body — null goal → expect 400 (Bean Validation)
-POST {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000001/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": null,
-    "agentRole": "",
-    "maxIterations": 1
-}
-
-###
-
-### [SESSION-11] Unknown session id
-POST {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000001/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Hello",
-    "agentRole": "shiva",
-    "maxIterations": 1
-}
-
-### [SESSION-11.1] Unknown role - expect INVALID_ROLE
-# Valid roles: coordinator | researcher | coder | debugger | architect | synthesizer
-POST {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Hello",
-    "agentRole": "unknown-role",
-    "maxIterations": 1
-}
-
-###
-
-### [SESSION-12] maxIterations hit — expect 408 LoopExceeded
-# @name loopSession
+### [SESSION-12] Create session for multi-turn test
+# @name multiSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-POST {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}/run
+### [SESSION-13] Turn 1: establish a fact
+POST {{baseUrl}}/api/v1/sessions/{{multiSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Search memory for all previous sessions, then search GitHub for recent commits, then summarize both findings.",
-    "agentRole": "researcher",
-    "maxIterations": 1
-}
-
-###
-
-POST {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Keep asking yourself why until you reach a philosophical conclusion. Never stop.",
+    "goal": "My favourite Java framework is Quarkus.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
 
+###
+
+### [SESSION-14] Turn 2: recall from memory (no tools)
+# Expect: agent recalls "Quarkus" from the rolling chat window.
+POST {{baseUrl}}/api/v1/sessions/{{multiSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What Java framework did I just mention?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
 
 ###
 
-DELETE {{baseUrl}}/api/v1/sessions/{{loopSession.response.body.sessionId}}
+### [SESSION-15] Soft reset — wipes ReAct checkpoint, keeps chat memory
+POST {{baseUrl}}/api/v1/sessions/{{multiSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/reset",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-16] Turn 3 after reset: chat memory preserved
+# Expect: agent still recalls "Quarkus" (chat window persists through reset).
+POST {{baseUrl}}/api/v1/sessions/{{multiSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What framework were we discussing?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{multiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW D: LOOP MAX ITERATIONS
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-17] Create session for max iterations test
+# @name maxIterSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-18] Run with maxIterations=1 on a complex multi-step goal
+# The agent will exhaust its iteration budget before completing.
+# Expect 200: answer contains partial result, audit shows LOOP_MAX_ITERATIONS.
+POST {{baseUrl}}/api/v1/sessions/{{maxIterSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Write a 5000-word comprehensive analysis of every Quarkus extension available today.",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-19] Verify LOOP_MAX_ITERATIONS in audit
+GET {{baseUrl}}/api/v1/audit/session/{{maxIterSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{maxIterSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW E: ISOLATION — two sessions don't share context
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-20] Create two sessions
+# @name isoA
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# @name isoB
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-21] Establish unique fact in session A
+POST {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "My secret code word is ARCCLAW-ISO-ALPHA.",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-22] Session B must NOT know session A's code word
+# Expect: agent answers "I don't know" or similar — NOT "ARCCLAW-ISO-ALPHA".
+# Chat memories are per-session; workspaces are isolated.
+POST {{baseUrl}}/api/v1/sessions/{{isoB.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is my secret code word?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{isoB.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW F: ERROR / EDGE CASES
+# ─────────────────────────────────────────────────────────────────
+
+### [SESSION-ERR-1] Status on non-existent session → expect 404 or empty NO_ACTIVE_STATE
+GET {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SESSION-ERR-2] Run with invalid agentRole → expect 400
+# @name errSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{errSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Hello",
+    "agentRole": "DOES_NOT_EXIST",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-ERR-3] Run with missing goal → expect 400
+POST {{baseUrl}}/api/v1/sessions/{{errSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [SESSION-ERR-4] Run with maxIterations=0 → expect 400 or treated as 1
+POST {{baseUrl}}/api/v1/sessions/{{errSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 1+1?",
+    "agentRole": "coordinator",
+    "maxIterations": 0
+}
+
+###
+
+### [SESSION-ERR-5] Delete non-existent session → expect 404
+DELETE {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{errSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###

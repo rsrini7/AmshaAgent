@@ -1,80 +1,197 @@
 ### ═══════════════════════════════════════════════════════════════
-### 01 — SYSTEM HEALTH, METRICS & SYSTEM INFO
+### 01 — SYSTEM HEALTH & STARTUP VERIFICATION
 ###
-### These endpoints are fully public — no API key required.
-### Run these first to confirm the server is up before anything else.
+### Run these FIRST before any other test file.
+### They verify the application is fully up, all subsystems are
+### healthy, and the observability stack is reachable.
 ###
-### Prerequisites: ArcClaw running in serve mode on port 8080
-###   mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=serve"
+### Endpoint map:
+###   GET /q/health         → combined liveness + readiness (Quarkus SmallRye)
+###   GET /q/health/live    → liveness only (JVM alive)
+###   GET /q/health/ready   → readiness only (dependencies healthy)
+###   GET /q/metrics        → Prometheus/Micrometer scrape endpoint
+###   GET /api/v1/info      → app version + build info (no auth required)
+###   GET /api/v1/mcp/status→ MCP server enabled flag (auth required)
+###
+### Health check components (in /q/health/ready):
+###   ArcClaw Podman Health  → podman socket reachable
+###   ArcClaw Podman Image   → arcclaw-tool-runner image exists
+###   database               → SQLite WAL connection pool live
+###   sqlite-vec             → vec0 loaded (graceful degradation if absent)
+###
+### Expected startup log sequence (confirm in terminal before testing):
+###   INFO  [AuditSchemaEnforcer] WORM triggers installed on audit_event
+###   INFO  [AuditSchemaEnforcer] FTS5 memory index and triggers verified.
+###   (ONE of):
+###   INFO  [FtsConnectionInterceptor] sqlite-vec extension loaded successfully
+###   WARN  [FtsConnectionInterceptor] sqlite-vec not found — FTS5 only
+###   (attach telegram mode only):
+###   INFO  [TelegramChannelRoute] routeStatus=Started
+###
+### Prerequisites: ArcClaw running (serve or attach mode)
 ### ═══════════════════════════════════════════════════════════════
 
-@baseUrl = http://localhost:8080
+@baseUrl  = http://localhost:8080
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
-# SYSTEM INFO  (always public — ApiKeyAuthFilter explicitly skips /info)
+# COMBINED HEALTH (no auth required)
 # ─────────────────────────────────────────────────────────────────
 
-### [INFO-1] System metadata — name, version, environment, startedAt
-# Expect 200: {"name":"arcclaw","version":"1.0.0","environment":"dev","startedAt":"..."}
-GET {{baseUrl}}/api/v1/info
-
-###
-
-# ─────────────────────────────────────────────────────────────────
-# HEALTH CHECKS  (/q/health — Quarkus SmallRye Health, no auth)
-# Three checks registered:
-#   PodmanHealthCheck      — Liveness  (podman --version succeeds)
-#   PodmanImageHealthCheck — Readiness (arcclaw-tool-runner:latest present)
-#   SystemMetadataHealthCheck — Readiness (registry populated)
-# ─────────────────────────────────────────────────────────────────
-
-### [HEALTH-1] Combined health (all liveness + readiness checks)
-# Expect 200: {"status":"UP","checks":[...]}
-# Note: PodmanImageHealthCheck may report DOWN in %dev if image not built — that is expected.
+### [HEALTH-1] Full health check — liveness + readiness combined
+# Expect 200: {"status":"UP","checks":[...all UP...]}
+# status:"DOWN" at top level = at least one check failed (still HTTP 200).
 GET {{baseUrl}}/q/health
 
 ###
 
-### [HEALTH-2] Liveness only — is the JVM alive?
-# Expect 200: {"status":"UP","checks":[{"name":"podman","status":"UP",...}]}
+### [HEALTH-2] Liveness probe — JVM alive, no deadlock
+# Expect 200: {"status":"UP","checks":[{"name":"liveness","status":"UP"}]}
 GET {{baseUrl}}/q/health/live
 
 ###
 
-### [HEALTH-3] Readiness only — is the app ready to accept traffic?
-# Expect 200 or 503 depending on whether Podman image is present
+### [HEALTH-3] Readiness probe — all dependencies healthy
+# Expect 200: {"status":"UP","checks":[...]}
+# Each subsystem registers: database, Podman Health, Podman Image.
+# sqlite-vec absent → its check shows DOWN but overall readiness remains UP
+# (graceful degradation — FTS5-only mode still serves requests).
 GET {{baseUrl}}/q/health/ready
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# PROMETHEUS METRICS  (/q/metrics — no auth, scrape endpoint)
+# APPLICATION INFO (no auth required)
 # ─────────────────────────────────────────────────────────────────
 
-### [METRICS-1] Full Prometheus text format
-# Expect 200: large prometheus text body with jvm_*, http_*, arcclaw_* metrics
+### [HEALTH-4] Application info — version, profile, build metadata
+# Expect 200: {"name":"arcclaw","version":"...","profile":"dev|prod",...}
+# ApiKeyAuthFilter explicitly bypasses paths starting with /api/v1/info.
+GET {{baseUrl}}/api/v1/info
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# METRICS (Prometheus scrape, no auth required)
+# ─────────────────────────────────────────────────────────────────
+
+### [HEALTH-5] Prometheus metrics scrape
+# Expect 200: text/plain with Prometheus metric lines.
+# After any agent run, look for ArcClaw-specific counters:
+#   arcclaw_agent_runs_total
+#   arcclaw_tokens_input_total / arcclaw_tokens_output_total
+#   arcclaw_reflex_invocations_total
+#   arcclaw_budget_warnings_total
+#   arcclaw_audit_drop_total  ← must be 0 in normal operation
 GET {{baseUrl}}/q/metrics
 
 ###
 
-### [METRICS-2] Filter for ArcClaw-specific counters only (if supported by your client)
-# In curl: curl http://localhost:8080/q/metrics | grep arcclaw
-GET {{baseUrl}}/q/metrics
+# ─────────────────────────────────────────────────────────────────
+# MCP SERVER STATUS (auth required)
+# ─────────────────────────────────────────────────────────────────
+
+### [HEALTH-6] MCP server status
+# Expect 200: {"serverEnabled":true,"dynamicToolCount":0}
+# 404 → arcclaw.mcp.server-enabled=false in config.
+GET {{baseUrl}}/api/v1/mcp/status
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# OPENAPI / SWAGGER UI
+# END-TO-END SQLITE PIPELINE SMOKE TEST
+# Creates session → runs agent → reads audit → verifies HMAC chain.
+# Exercises the full WAL write path in one sequence.
 # ─────────────────────────────────────────────────────────────────
 
-### [SWAGGER-1] OpenAPI spec (JSON)
-# Expect 200: full OpenAPI 3.0 spec
-GET {{baseUrl}}/q/openapi
+### [HEALTH-7] Create smoke-test session
+# @name smokeSession
+# Expect 201: {"sessionId":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+# Failure here = SQLite WAL unreachable or Hibernate DDL failed at startup.
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SWAGGER-2] Swagger UI landing page (browser-friendly)
-# Open in browser: http://localhost:8080/q/swagger-ui
-GET {{baseUrl}}/q/swagger-ui
+### [HEALTH-8] Run trivial task — full pipeline smoke
+# Expect 200: {"answer":"4",...}
+# Exercises: SessionRegistry (Phase 64-B3), AgentLoop, GovernanceLayer,
+# LLM API (Groq), AuditService, HMAC chain.
+# Requires: GROQ_API_KEY valid (starts with gsk_).
+POST {{baseUrl}}/api/v1/sessions/{{smokeSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is 2 + 2?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [HEALTH-9] Verify audit events written (WORM pipeline healthy)
+# Expect 200: non-empty array with CHECKPOINT_CREATED + LOOP_FINISH.
+# Empty array = AsyncPersistenceEngine dropped events or AuditService failed.
+GET {{baseUrl}}/api/v1/audit/session/{{smokeSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HEALTH-10] Verify HMAC chain integrity
+# Expect 200: {"valid":true,"brokenAtId":null,"totalRows":N}
+# valid:false = WORM trigger missing or ARCCLAW_AUDIT_HMAC_KEY wrong.
+# After Phase 64-B1: concurrent writes protected by SessionAuditSequencer.
+GET {{baseUrl}}/api/v1/audit/{{smokeSession.response.body.sessionId}}/verify
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HEALTH-11] Cleanup smoke session
+DELETE {{baseUrl}}/api/v1/sessions/{{smokeSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# OBSERVABILITY STACK (external — requires: mise run compose:up)
+# ─────────────────────────────────────────────────────────────────
+
+### [HEALTH-12] Jaeger UI reachable
+# Expect 200: HTML. Open http://localhost:16686, search service="arcclaw".
+GET http://localhost:16686
+
+###
+
+### [HEALTH-13] Prometheus targets page
+# Expect 200: HTML. Open http://localhost:9090/targets — "arcclaw" must be UP.
+GET http://localhost:9090/targets
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# STARTUP LOG ASSERTIONS (manual — verify in terminal output)
+#
+#  MUST appear (any mode):
+#  ✅ INFO  [AuditSchemaEnforcer] WORM triggers installed on audit_event
+#  ✅ INFO  [AuditSchemaEnforcer] FTS5 memory index and triggers verified.
+#  ✅ ONE of:
+#       INFO  [FtsConnectionInterceptor] sqlite-vec extension loaded successfully
+#       WARN  [FtsConnectionInterceptor] sqlite-vec not found — FTS5 only
+#
+#  In ATTACH TELEGRAM mode additionally:
+#  ✅ INFO  [TelegramChannelRoute] routeStatus=Started
+#
+#  MUST NOT appear:
+#  ❌ NullPointerException in TelegramChannelRoute
+#       → Camel JMX disableJMX() silent no-op not fixed (Nuance #24)
+#  ❌ ERROR in Hibernate schema validation involving "identity column"
+#       → ArcClawSQLiteDialect not registered (Nuance #30)
+#  ❌ DevSecretSeeder log lines in prod/staging profile
+#       → Phase 64-B2 fix: @IfBuildProfile("dev") must exclude the bean
+# ─────────────────────────────────────────────────────────────────
 
 ###

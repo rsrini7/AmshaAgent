@@ -1,10 +1,48 @@
+### ═══════════════════════════════════════════════════════════════
+### 13 — RAG (RETRIEVAL-AUGMENTED GENERATION)
+###
+### ArcClaw provides dual-tier semantic retrieval:
+###
+###   Tier 1 (FTS5):  SQLite full-text search on compaction_summary_fts
+###   Tier 2 (vec0):  sqlite-vec vector similarity on vec_global
+###   Merge:          Reciprocal Rank Fusion (RRF, k=60) combines both tiers
+###   Graceful deg:   If vec0 binary is missing → FTS5-only, no crash
+###
+### Phase 64-C3 change:
+###   RAG chunks are now stored in rag_chunk table (not "rag:" prefix in
+###   compaction_summary). IngestDocumentTool writes to rag_chunk.
+###   MemorySearchTool queries rag_chunk + compaction_summary_fts — no
+###   cross-contamination between ingested docs and session summaries.
+###
+### IngestDocumentTool:
+###   Available to: coordinator (requires approval in SUPERVISED mode)
+###   Input: {text: "<content to ingest>", source: "<optional label>"}
+###   Stores: rag_chunk row + embedding in vec_global (if vec0 loaded)
+###   Approval required: Yes (ToolOperation=DESTRUCTIVE — modifies DB)
+###
+### MemorySearchTool (memorysearch):
+###   Available to: coordinator, researcher, architect, synthesizer
+###   Input: {query: "<search terms>"}
+###   Returns: top-N RRF-merged results from FTS5 + vector search
+###   Scoped: by userId — tenant-isolated
+###
+### Verification:
+###   After ingestion, the rag_chunk table must have the new row.
+###   After Phase 64-C3, compaction_summary must NOT have "rag:" prefixed rows.
+###
+### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
+###   sqlite-vec (vec0) binary optional — FTS5 works without it
+### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
 @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
-###
 
-### [SESSION-1] Create a new session
+# ─────────────────────────────────────────────────────────────────
+# FLOW A: INGEST → APPROVE → RECALL
+# ─────────────────────────────────────────────────────────────────
+
+### [RAG-0] Create session for RAG tests
 # @name ragSession
 # Expect 201: {"sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
 POST {{baseUrl}}/api/v1/sessions
@@ -13,32 +51,234 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Ask a multi-step question with maxIterations=1
-# Post-RAG: agent calls ingest_document tool → 202 AWAITING_APPROVAL
-# Expected: 202 with toolName=ingest_document
-POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+### [RAG-1] Ask agent to ingest a document — triggers IngestDocumentTool
+# IngestDocumentTool has ToolOperation=DESTRUCTIVE, requires approval in SUPERVISED mode.
+# Expect: 202 AWAITING_APPROVAL with toolName=ingest_document
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run-async
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Ingest This: Write a 500-word essay about the history of Java and then analyze its performance characteristics.",
+    "goal": "Ingest this document: ArcClaw is a production-grade AI agent kernel built with Java 25, Quarkus 3.27.2, and LangChain4j 1.5. It uses SQLite WAL mode for all persistence, Podman containers for sandboxed tool execution, and AES-GCM-SIV with Argon2id for secret storage.",
     "agentRole": "coordinator",
-    "maxIterations": 1
+    "maxIterations": 2
 }
-
 
 ###
 
-### [HITL-3] Poll status — should show AWAITING_APPROVAL
-# Expect 200: {"sessionId":"...","status":"AWAITING_APPROVAL","steps":[...],"failReason":null}
-# Run this immediately after HITL-2 before approving
+### [RAG-2] Poll status — should be AWAITING_APPROVAL
+# Run immediately after RAG-1.
+# Expect: status = AWAITING_APPROVAL, toolName = ingest_document
 GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+### [RAG-3] Approve the ingest tool call
+# After approval, IngestDocumentTool stores the document in rag_chunk table
+# and computes the embedding for vec_global (if sqlite-vec is loaded).
+# Expect: 200 with agent confirmation message ("Document ingested successfully")
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [RAG-4] Poll status after approval — should be COMPLETED
+# Expect: status = COMPLETED
+GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [RAG-5] Search for ingested content via MemorySearchTool
+# The agent uses memorysearch to retrieve the ingested chunk.
+# Expect: response references ArcClaw, Quarkus 3.27.2, SQLite WAL, Podman, AES-GCM-SIV.
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What do you know about ArcClaw's security and persistence approach?",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [RAG-6] Targeted memory search
+# Confirm the agent can surface specific terms from the ingested document.
+# Expect: response mentions "Argon2id" and "AES-GCM-SIV"
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search your memory for anything related to secret storage encryption.",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+### [RAG-7] Audit: confirm TOOL_INVOKED for ingest_document and memorysearch
+# Expect: LOOP_AWAITING_APPROVAL → APPROVAL_GRANTED → TOOL_INVOKED (ingest)
+#         → LOOP_FINISH → TOOL_INVOKED (memorysearch) → LOOP_FINISH
+GET {{baseUrl}}/api/v1/audit/session/{{ragSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW B: INGEST MULTIPLE DOCUMENTS — RRF MERGE TEST
+# Ingest two documents on different topics, then search for content
+# from both. Confirms RRF merges results from both tiers correctly.
+# ─────────────────────────────────────────────────────────────────
+
+### [RAG-8] Ingest second document (async)
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Ingest this: The Trimurti agent model in ArcClaw has six roles: Vishnu (coordinator), Brahma (coder), Shiva (debugger), Saraswati (researcher), Brihaspati (architect), and Dattatreya (synthesizer). Each role has a distinct persona and tool set.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [RAG-9] Approve second ingest
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [RAG-10] Search spanning both ingested documents
+# RRF should surface relevant chunks from both documents.
+# Expect: response mentions both architectural info and agent role info.
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-K: {{validKey}}
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Tell me what you know about ArcClaw's agent roles and its infrastructure stack.",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW C: RAG CROSS-SESSION ISOLATION
+# MemorySearchTool is scoped by userId — documents ingested in one
+# user's session must NOT appear in another user's search.
+# ─────────────────────────────────────────────────────────────────
+
+### [RAG-11] Create a second session (same user, different session)
+# @name ragSession2
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [RAG-12] Ingest unique content in session 2
+POST {{baseUrl}}/api/v1/sessions/{{ragSession2.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Ingest this: SECRET-ISOLATION-MARKER-BRAVO. The Phase 64-C3 test confirms rag_chunk table isolation.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [RAG-13] Approve ingest for session 2
+POST {{baseUrl}}/api/v1/sessions/{{ragSession2.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [RAG-14] Search from session 1 — must NOT return session 2's unique marker
+# MemorySearchTool uses userId scope — not sessionId scope.
+# Both sessions share the same user, so cross-session search IS expected to work
+# (this is a feature, not a bug). The isolation being tested here is cross-USER.
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search your memory for SECRET-ISOLATION-MARKER-BRAVO.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW D: PHASE 64-C3 VERIFICATION
+# After Phase 64-C3, RAG chunks are in rag_chunk table.
+# compaction_summary must NOT have "rag:" prefixed rows.
+# Verify manually via SQLite CLI after running RAG-1 through RAG-13.
+# ─────────────────────────────────────────────────────────────────
+
+### [RAG-C3-VERIFY-NOTE]
+# Run this SQL in sqlite3 ./data/arcclaw-meta.db after the above tests:
+#
+#   SELECT COUNT(*) FROM compaction_summary WHERE session_id LIKE 'rag:%';
+#   -- Must return: 0
+#
+#   SELECT COUNT(*) FROM rag_chunk;
+#   -- Must return: number of ingest operations that completed successfully (>=2 above)
+#
+#   SELECT chunk_id, source, created_at FROM rag_chunk;
+#   -- Inspect the actual stored chunks
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW E: VECTOR SEARCH FALLBACK (sqlite-vec absent)
+# When the vec0 binary is missing, FTS5-only mode activates gracefully.
+# ─────────────────────────────────────────────────────────────────
+
+### [RAG-VEC-1] Confirm FTS5-only mode (only if vec0 binary is absent)
+# Start ArcClaw WITHOUT the vec0 library. Watch logs for:
+#   "sqlite-vec extension not found — vector search disabled, FTS5 only"
+# Then run a memory search — it must still return results via FTS5.
+# Expect: agent returns FTS5 results with no error or exception.
+POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search your memory for ArcClaw persistence layer.",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# CLEANUP
+# ─────────────────────────────────────────────────────────────────
+
+DELETE {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{ragSession2.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
