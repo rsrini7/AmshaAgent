@@ -56,6 +56,7 @@ public class TelegramAgentHandler {
     }
 
     public void receiveMessage(Exchange exchange) {
+        log.infof("TELEGRAM-RECV raw exchange received");
         IncomingMessage msg = exchange.getIn().getBody(IncomingMessage.class);
 
         if (msg == null) {
