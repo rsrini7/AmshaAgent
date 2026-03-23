@@ -66,8 +66,8 @@ public class SessionResolutionHandler implements MessageHandler {
         }
 
         if (level == null) {
-            log.warnf("No stored autonomy found for session %s (first message?), defaulting to FULL", sessionId);
-            level = AutonomyLevel.FULL;
+            log.warnf("No stored autonomy found for session %s (first message?), defaulting to SUPERVISED", sessionId);
+            level = AutonomyLevel.SUPERVISED;
         }
 
         context.setAutonomyLevel(level);

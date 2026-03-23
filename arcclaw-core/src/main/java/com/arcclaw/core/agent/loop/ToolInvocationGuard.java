@@ -195,7 +195,7 @@ public class ToolInvocationGuard {
                 .orElse(false);
 
         if (roleRegistry.requiresApprovalForTools(resolvedRole)
-                && toolRequiresApproval
+                || toolRequiresApproval
                 && !isSchedulingTool
                 && !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())) {
 
