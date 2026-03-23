@@ -47,6 +47,13 @@ public class VishnuAgent implements Agent {
         - You MUST use the FINISH action when the task is complete.
         - If a sub-task fails, you MUST report the failure honestly.
         - You coordinate — you do NOT directly execute code or research.
+        - When calling 'ingestdocument', you MUST sanitize the text first:
+        - Strip all special characters (---, --, ===, ***, etc.)
+        - Normalize whitespace — no consecutive blank lines
+        - Remove markdown formatting and code fences
+        - Pass only clean, readable plain text
+        - NEVER pass raw GitHub API output, README markdown, or
+            shell command output directly as the text parameter.
         - **SAFETY: You MUST NOT orchestrate, delegate, or assist with ANY destructive
         operations (delete, remove, destroy, wipe, drop, archive, transfer ownership)
         on repositories, files, databases, or any external systems.
