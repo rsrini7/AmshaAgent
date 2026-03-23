@@ -9,17 +9,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
-import java.util.concurrent.ConcurrentHashMap;
-
 import java.util.List;
 import java.util.Map;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class PodmanMcpTransportTest {
 
@@ -80,7 +79,7 @@ class PodmanMcpTransportTest {
     @Test
     void testPreDestroyCleanup() throws Exception {
         Process mockProcess = mock(Process.class);
-        when(mockProcess.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(mockProcess.waitFor(3, TimeUnit.SECONDS)).thenReturn(true);
         
         Field activeProcessesField = PodmanMcpTransport.class.getDeclaredField("activeProcesses");
         activeProcessesField.setAccessible(true);

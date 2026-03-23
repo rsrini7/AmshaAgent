@@ -6,19 +6,19 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.time.Instant;
 
+import jakarta.inject.Inject;
+
+import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.audit.TelemetryAuditService;
+import com.arcclaw.core.skill.AgentSkillEntity;
+import com.arcclaw.core.skill.AgentSkillRepository;
+import com.arcclaw.core.util.HttpConstants;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
-
-import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.skill.AgentSkillEntity;
-import com.arcclaw.core.skill.AgentSkillRepository;
-import com.arcclaw.core.util.HttpConstants;
-
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 
 @QuarkusTest
 class SkillPersonaRoutingTest {
@@ -33,7 +33,7 @@ class SkillPersonaRoutingTest {
     IntentClassifierService intentClassifierService;
 
     @InjectMock
-    com.arcclaw.core.audit.TelemetryAuditService telemetryAuditService;
+    TelemetryAuditService telemetryAuditService;
 
     @BeforeEach
     void setup() {

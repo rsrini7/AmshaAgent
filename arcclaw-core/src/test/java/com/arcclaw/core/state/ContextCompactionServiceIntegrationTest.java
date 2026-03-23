@@ -1,31 +1,32 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import io.smallrye.common.annotation.Identifier;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import dev.langchain4j.model.chat.response.ChatResponse;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import io.smallrye.common.annotation.Identifier;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(ContextCompactionServiceIntegrationTest.CompactionTestProfile.class)
@@ -88,7 +89,7 @@ class ContextCompactionServiceIntegrationTest {
             }
             chatMemoryStore.updateMessages(TEST_SESSION_ID, seedMessages);
 
-            when(compactionModel.chat(any(dev.langchain4j.data.message.UserMessage.class)))
+            when(compactionModel.chat(any(UserMessage.class)))
                     .thenReturn(ChatResponse.builder()
                             // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                             .aiMessage(AiMessage.aiMessage("Prior session: user asked about X..."))

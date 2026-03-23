@@ -3,31 +3,34 @@ package com.arcclaw.core.agent.loop;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
-
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.audit.AuditHashUtil;
-import com.arcclaw.core.audit.ComplianceViolationException;
-import com.arcclaw.core.observability.AgentObserver;
-import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.structured.StructuredOutputException;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.util.MdcKeys;
-
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.structured.StructuredOutputException;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.MdcKeys;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 /**
  * Lifecycle shell for the ArcClaw agent reasoning loop.
@@ -90,9 +93,9 @@ public class AgentLoop {
      *     checkpoint storage, MDC, and system prompt building.</li>
      * <li>Skill roles (e.g. "skill:code-reviewer") preserve the full
      *     {@code skill:X} string as {@code canonicalRole}. This is intentional:
-     *     {@link com.arcclaw.core.agent.reasoning.SystemPromptBuilder} detects the
+     *     {@link SystemPromptBuilder} detects the
      *     prefix and injects the skill's custom system prompt from
-     *     {@link com.arcclaw.core.skill.SkillRegistry}. The checkpoint row uses
+     *     {@link SkillRegistry}. The checkpoint row uses
      *     the full {@code skill:X} key, giving each skill its own independent
      *     checkpoint and conversation history — correct and desired.</li>
      * </ul>
@@ -231,8 +234,8 @@ public class AgentLoop {
             result = AgentResult.failed(e.getMessage(), 
                     AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
-        } catch (com.arcclaw.core.governance.BudgetExceededException 
-                 | com.arcclaw.core.governance.BudgetWarningException e) {
+        } catch (BudgetExceededException 
+                 | BudgetWarningException e) {
             // Re-throw so StructuredRetryLoop or higher-level components correctly
             // see the hard stop signal.
             throw e;

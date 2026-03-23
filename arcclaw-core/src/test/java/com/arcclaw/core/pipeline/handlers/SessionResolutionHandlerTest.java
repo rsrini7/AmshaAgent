@@ -4,14 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import java.util.UUID;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -21,6 +17,11 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class SessionResolutionHandlerTest {
@@ -43,7 +44,7 @@ class SessionResolutionHandlerTest {
         MessageContext context = new MessageContext("chat1", user, msg, sender);
         
         // Match the UUID v3 (MD5) of "chat1:u1"
-        String sessionId = java.util.UUID.nameUUIDFromBytes("chat1:u1".getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        String sessionId = UUID.nameUUIDFromBytes("chat1:u1".getBytes(StandardCharsets.UTF_8)).toString();
         
         when(heartbeatTracker.getAutonomyLevel(sessionId)).thenReturn(AutonomyLevel.FULL);
 
@@ -60,7 +61,7 @@ class SessionResolutionHandlerTest {
         ChannelSender sender = mock(ChannelSender.class);
         
         MessageContext context = new MessageContext("chat1", user, msg, sender);
-        String sessionId = java.util.UUID.nameUUIDFromBytes("chat1:u1".getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        String sessionId = UUID.nameUUIDFromBytes("chat1:u1".getBytes(StandardCharsets.UTF_8)).toString();
 
         when(heartbeatTracker.getAutonomyLevel(sessionId)).thenReturn(null);
         when(agentStore.loadLatestAutonomyForSession(sessionId)).thenReturn(Optional.of(AutonomyLevel.READONLY));
@@ -77,7 +78,7 @@ class SessionResolutionHandlerTest {
         ChannelSender sender = mock(ChannelSender.class);
         
         MessageContext context = new MessageContext("chat1", user, msg, sender);
-        String sessionId = java.util.UUID.nameUUIDFromBytes("chat1:u1".getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        String sessionId = UUID.nameUUIDFromBytes("chat1:u1".getBytes(StandardCharsets.UTF_8)).toString();
 
         when(heartbeatTracker.getAutonomyLevel(sessionId)).thenReturn(null);
         when(agentStore.loadLatestAutonomyForSession(sessionId)).thenReturn(Optional.empty());

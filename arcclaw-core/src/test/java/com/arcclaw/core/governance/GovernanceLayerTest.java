@@ -6,16 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class GovernanceLayerTest {
@@ -154,7 +155,7 @@ class GovernanceLayerTest {
     }
 
     @Inject
-    org.eclipse.microprofile.context.ManagedExecutor managedExecutor;
+    ManagedExecutor managedExecutor;
 
     @Test
     void testConcurrentCostAccumulationIsAtomic() throws Exception {
@@ -162,7 +163,7 @@ class GovernanceLayerTest {
             // Each call adds $0.018 (1k in, 1k out). 
             // 10 concurrent calls should result in exactly $0.18.
             int concurrency = 10;
-            java.util.concurrent.CompletableFuture<?>[] futures = new java.util.concurrent.CompletableFuture[concurrency];
+            CompletableFuture<?>[] futures = new CompletableFuture[concurrency];
             
             for (int i = 0; i < concurrency; i++) {
                 futures[i] = managedExecutor.supplyAsync(() -> {
@@ -171,7 +172,7 @@ class GovernanceLayerTest {
                 });
             }
             
-            java.util.concurrent.CompletableFuture.allOf(futures).join();
+            CompletableFuture.allOf(futures).join();
             
             assertEquals(0.18, governanceLayer.getSessionCost(sessionId), 0.0001);
             assertEquals(1000 * concurrency, governanceLayer.getSessionInputTokens(sessionId));

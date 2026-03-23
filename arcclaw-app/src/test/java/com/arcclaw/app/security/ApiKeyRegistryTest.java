@@ -5,14 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
-
-import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(ApiKeyRegistryTest.TwoKeyProfile.class)
@@ -64,8 +66,8 @@ class ApiKeyRegistryTest {
     void testConcurrentBurstDoesNotExceedLimit() throws InterruptedException {
         String key = "test-concurrent-burst-key";
         int threads = 25;
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(threads);
-        java.util.concurrent.atomic.AtomicInteger successCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        CountDownLatch latch = new CountDownLatch(threads);
+        AtomicInteger successCount = new AtomicInteger(0);
 
         for (int i = 0; i < threads; i++) {
             new Thread(() -> {

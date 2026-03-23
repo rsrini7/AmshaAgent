@@ -1,8 +1,19 @@
 package com.arcclaw.app.channel.telegram;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.lang.reflect.Field;
+import java.time.Instant;
+import java.util.concurrent.ExecutorService;
+
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
+import com.github.benmanes.caffeine.cache.Cache;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
@@ -11,17 +22,6 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
-import java.util.concurrent.ExecutorService;
-import java.lang.reflect.Field;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ChannelType;
-import java.time.Instant;
 
 class TelegramAgentHandlerTest {
 
@@ -93,7 +93,7 @@ class TelegramAgentHandlerTest {
     @Test
     void testNullMessageBodyIsHandledGracefully() {
         Exchange exchange = mock(Exchange.class);
-        org.apache.camel.Message in = mock(org.apache.camel.Message.class);
+        Message in = mock(Message.class);
         when(exchange.getIn()).thenReturn(in);
         when(in.getBody(IncomingMessage.class)).thenReturn(null);
 

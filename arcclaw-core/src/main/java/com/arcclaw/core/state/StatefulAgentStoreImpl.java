@@ -3,29 +3,30 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.Objects;
-
-import org.hibernate.exception.LockAcquisitionException;
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
-
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.persistence.SqliteErrorStrings;
-import com.arcclaw.core.util.MdcKeys;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.persistence.SqliteErrorStrings;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.MdcKeys;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.hibernate.exception.LockAcquisitionException;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 /**
  * JPA EntityManager-based implementation of {@link StatefulAgentStore}.
@@ -72,7 +73,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpoint checkpoint;
-        com.arcclaw.core.security.AutonomyLevel autonomy = com.arcclaw.core.scope.WorkspaceContext.autonomy();
+        AutonomyLevel autonomy = WorkspaceContext.autonomy();
         
         if (existing.isPresent()) {
             checkpoint = existing.get();
@@ -90,7 +91,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             em.persist(checkpoint);
             
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole, com.arcclaw.core.audit.SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
+            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
             
             log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         }
@@ -438,10 +439,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     @Transactional
-    public Optional<com.arcclaw.core.security.AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
-        TypedQuery<com.arcclaw.core.security.AutonomyLevel> q = em.createQuery(
+    public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
+        TypedQuery<AutonomyLevel> q = em.createQuery(
                 "SELECT c.autonomyLevel FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
-                com.arcclaw.core.security.AutonomyLevel.class
+                AutonomyLevel.class
         );
         q.setParameter("sid", sessionId);
         q.setMaxResults(1);

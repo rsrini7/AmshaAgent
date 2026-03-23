@@ -7,40 +7,41 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.core.api.dto.RunAgentRequest;
-import com.arcclaw.core.api.dto.SessionStatusResponse;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
-import io.quarkus.virtual.threads.VirtualThreads;
 import com.arcclaw.core.util.MdcKeys;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.ws.rs.container.AsyncResponse;
-import jakarta.ws.rs.core.Response;
+import io.quarkus.virtual.threads.VirtualThreads;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class AgentSessionService {
@@ -149,9 +150,9 @@ public class AgentSessionService {
                         }
                 );
             });
-        } catch (com.arcclaw.core.governance.BudgetExceededException e) {
+        } catch (BudgetExceededException e) {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
-        } catch (com.arcclaw.core.governance.BudgetWarningException e) {
+        } catch (BudgetWarningException e) {
             // Treat warning as success for the call itself, with the message attached
             return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
@@ -220,9 +221,9 @@ public class AgentSessionService {
                     response.resume(responseMapper.mapResult(result, true));
                 });
 
-            } catch (com.arcclaw.core.governance.BudgetExceededException e) {
+            } catch (BudgetExceededException e) {
                 response.resume(Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build());
-            } catch (com.arcclaw.core.governance.BudgetWarningException e) {
+            } catch (BudgetWarningException e) {
                 response.resume(Response.ok().entity(Map.of("warning", e.getMessage())).build());
             } catch (Exception e) {
                 log.errorf("Async agent run threw exception for session %s: %s", sessionId, e.getMessage());
@@ -262,9 +263,9 @@ public class AgentSessionService {
                     return responseMapper.mapResult(result, false);
                 });
             });
-        } catch (com.arcclaw.core.governance.BudgetExceededException e) {
+        } catch (BudgetExceededException e) {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
-        } catch (com.arcclaw.core.governance.BudgetWarningException e) {
+        } catch (BudgetWarningException e) {
             return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
             log.errorf("Failed to approve session %s: %s", sessionId, e.getMessage());

@@ -1,10 +1,13 @@
 package com.arcclaw.core.tools;
 
-import org.junit.jupiter.api.Test;
-import java.util.Map;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Map;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 class GithubToolTest {
 
@@ -62,7 +65,7 @@ class GithubToolTest {
         var cmd = tool.sandboxCommand(params);
         assertTrue(cmd.contains("gist"));
         assertTrue(cmd.contains("list"));
-        org.junit.jupiter.api.Assertions.assertFalse(cmd.contains("rsrini7"), "gist list should NOT contain username");
+        Assertions.assertFalse(cmd.contains("rsrini7"), "gist list should NOT contain username");
     }
 
     @Test

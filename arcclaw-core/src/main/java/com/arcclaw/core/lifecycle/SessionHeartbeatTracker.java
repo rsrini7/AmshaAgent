@@ -1,12 +1,15 @@
 package com.arcclaw.core.lifecycle;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import org.jboss.logging.Logger;
-
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import com.arcclaw.core.security.AutonomyLevel;
+import org.jboss.logging.Logger;
 
 /**
  * Tracks active session liveness via heartbeats.
@@ -16,7 +19,7 @@ public class SessionHeartbeatTracker {
 
     private static final Logger log = Logger.getLogger(SessionHeartbeatTracker.class);
 
-    public record SessionMetadata(Instant lastHeartbeat, com.arcclaw.core.security.AutonomyLevel autonomyLevel) {}
+    public record SessionMetadata(Instant lastHeartbeat, AutonomyLevel autonomyLevel) {}
 
     /** Active session metadata: sessionId → last heartbeat + autonomyLevel. */
     private final ConcurrentHashMap<String, SessionMetadata> sessionData = new ConcurrentHashMap<>();
@@ -27,13 +30,13 @@ public class SessionHeartbeatTracker {
      * @param sessionId The workspace session ID.
      */
     public void recordHeartbeat(String sessionId) {
-        recordHeartbeat(sessionId, com.arcclaw.core.security.AutonomyLevel.SUPERVISED);
+        recordHeartbeat(sessionId, AutonomyLevel.SUPERVISED);
     }
 
     /**
      * Record a heartbeat with an explicit autonomy level (e.g. from REST create).
      */
-    public void recordHeartbeat(String sessionId, com.arcclaw.core.security.AutonomyLevel level) {
+    public void recordHeartbeat(String sessionId, AutonomyLevel level) {
         sessionData.put(sessionId, new SessionMetadata(Instant.now(), level));
         log.debugf("Heartbeat recorded for session=%s autonomy=%s", sessionId, level);
     }
@@ -50,7 +53,7 @@ public class SessionHeartbeatTracker {
      */
     public Map<String, Instant> activeSessions() {
         return sessionData.entrySet().stream()
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         e -> e.getValue().lastHeartbeat()
                 ));
@@ -66,7 +69,7 @@ public class SessionHeartbeatTracker {
     /**
      * Gets the autonomy level for a session.
      */
-    public com.arcclaw.core.security.AutonomyLevel getAutonomyLevel(String sessionId) {
+    public AutonomyLevel getAutonomyLevel(String sessionId) {
         SessionMetadata data = sessionData.get(sessionId);
         return data != null ? data.autonomyLevel() : null;
     }
@@ -92,7 +95,7 @@ public class SessionHeartbeatTracker {
      * @param timestamp The heartbeat timestamp.
      */
     public void injectHeartbeat(String sessionId, Instant timestamp) {
-        sessionData.put(sessionId, new SessionMetadata(timestamp, com.arcclaw.core.security.AutonomyLevel.SUPERVISED));
+        sessionData.put(sessionId, new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED));
         log.debugf("Heartbeat injected for session=%s timestamp=%s", sessionId, timestamp);
     }
 

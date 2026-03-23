@@ -1,27 +1,30 @@
 package com.arcclaw.core.persistence;
 
-import com.arcclaw.core.audit.ComplianceViolationException;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import io.micrometer.core.instrument.MeterRegistry;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+
+import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 /**
  * Unit tests for {@link AsyncPersistenceEngine}.
@@ -243,18 +246,18 @@ class AsyncPersistenceEngineTest {
     }
 
     @InjectMock
-    com.arcclaw.core.audit.AuditHashUtil auditHashUtil;
+    AuditHashUtil auditHashUtil;
 
     @Test
     void drainThread_SurvivesHmacFailure_WhenKeyBecomesAvailableOnSecondAttempt()
             throws Exception {
         // First call throws HMAC unavailable, second succeeds
-        org.mockito.Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
+        Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
             .doReturn("dummy-hmac")
             .when(auditHashUtil).hmacHex(anyString());
 
         CountDownLatch latch = new CountDownLatch(1);
-        PersistenceEvent event = PersistenceEvent.critical("ses-retry", com.arcclaw.core.audit.SecurityEventType.TOOL_INVOKED,
+        PersistenceEvent event = PersistenceEvent.critical("ses-retry", SecurityEventType.TOOL_INVOKED,
                 em2 -> {
                     auditHashUtil.hmacHex("test");
                     latch.countDown();
@@ -269,16 +272,16 @@ class AsyncPersistenceEngineTest {
     @Test
     void drainThread_ContinuesDraining_AfterExhaustingHmacRetries() throws Exception {
         // All retries fail for first event
-        org.mockito.Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
+        Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
             .when(auditHashUtil).hmacHex(anyString());
 
         CountDownLatch latch = new CountDownLatch(1);
-        PersistenceEvent failingEvent = PersistenceEvent.critical("ses-fail", com.arcclaw.core.audit.SecurityEventType.TOOL_INVOKED,
+        PersistenceEvent failingEvent = PersistenceEvent.critical("ses-fail", SecurityEventType.TOOL_INVOKED,
                 em2 -> {
                     auditHashUtil.hmacHex("test");
                 });
         
-        PersistenceEvent nextEvent = PersistenceEvent.critical("ses-next", com.arcclaw.core.audit.SecurityEventType.TOOL_INVOKED,
+        PersistenceEvent nextEvent = PersistenceEvent.critical("ses-next", SecurityEventType.TOOL_INVOKED,
                 em2 -> {
                     auditHashUtil.hmacHex("test");
                     latch.countDown();
@@ -291,7 +294,7 @@ class AsyncPersistenceEngineTest {
         
         // Second event should still be processed if the drain thread is alive
         // We need to reset the mock to succeed for the second event
-        org.mockito.Mockito.doReturn("dummy-hmac").when(auditHashUtil).hmacHex(anyString());
+        Mockito.doReturn("dummy-hmac").when(auditHashUtil).hmacHex(anyString());
         
         engine.submitCritical(nextEvent);
 

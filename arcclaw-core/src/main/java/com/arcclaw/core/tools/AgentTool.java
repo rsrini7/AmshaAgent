@@ -1,11 +1,11 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.security.ToolOperation;
-
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-
 import java.util.List;
 import java.util.Map;
+
+import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.security.ToolOperation;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
  * Contract for all ArcClaw agent tools.
@@ -21,7 +21,7 @@ import java.util.Map;
  * </ul>
  * <p>
  * Tools requiring vault secrets must annotate {@link #execute(Map)} with
- * {@link com.arcclaw.core.security.RequiresSecret @RequiresSecret}.
+ * {@link RequiresSecret @RequiresSecret}.
  * The registry reads these annotations reflectively to build the secrets map
  * before delegating to the sandbox executor.
  */

@@ -1,12 +1,16 @@
 package com.arcclaw.core.agent.loop;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -26,12 +30,9 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Handles individual step execution within the ReAct loop:
@@ -187,10 +188,10 @@ public class AgentStepProcessor {
 
     /** Returns true if the exception is a transient network connectivity fault. */
     private boolean isNetworkError(Exception e) {
-        if (e instanceof java.net.ConnectException
-                || e instanceof java.net.SocketTimeoutException) return true;
-        if (e.getCause() instanceof java.net.ConnectException
-                || e.getCause() instanceof java.net.SocketTimeoutException) return true;
+        if (e instanceof ConnectException
+                || e instanceof SocketTimeoutException) return true;
+        if (e.getCause() instanceof ConnectException
+                || e.getCause() instanceof SocketTimeoutException) return true;
         String msg = e.getMessage();
         return msg != null && (msg.contains("ConnectTimeoutException")
                 || msg.contains("connection timed out")

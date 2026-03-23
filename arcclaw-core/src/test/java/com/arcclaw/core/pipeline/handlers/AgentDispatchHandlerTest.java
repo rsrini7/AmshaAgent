@@ -7,15 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
 import java.time.Instant;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
+import java.util.List;
+import java.util.concurrent.Callable;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -28,6 +21,14 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class AgentDispatchHandlerTest {
@@ -62,13 +63,13 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), any(java.util.concurrent.Callable.class)))
-                .thenReturn(AgentResult.finished("ok", java.util.List.of()));
+                anyString(), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), any(Callable.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), any(java.util.concurrent.Callable.class)));
+                eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), any(Callable.class)));
     }
 
     @Test
@@ -77,13 +78,13 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(AutonomyLevel.READONLY);
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), any(java.util.concurrent.Callable.class)))
-                .thenReturn(AgentResult.finished("ok", java.util.List.of()));
+                anyString(), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), any(Callable.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), any(java.util.concurrent.Callable.class)));
+                eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), any(Callable.class)));
     }
 
     @Test
@@ -92,13 +93,13 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(null); // No autonomy in context
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.SUPERVISED), anyString(), any(java.util.concurrent.Callable.class)))
-                .thenReturn(AgentResult.finished("ok", java.util.List.of()));
+                anyString(), anyString(), anyString(), eq(AutonomyLevel.SUPERVISED), anyString(), any(Callable.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.SUPERVISED), anyString(), any(java.util.concurrent.Callable.class)));
+                eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.SUPERVISED), anyString(), any(Callable.class)));
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {

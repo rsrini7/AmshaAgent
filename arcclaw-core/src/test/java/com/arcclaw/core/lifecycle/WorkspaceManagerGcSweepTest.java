@@ -1,20 +1,5 @@
 package com.arcclaw.core.lifecycle;
 
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.stream.Stream;
-
 import static java.time.temporal.ChronoUnit.MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +7,23 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.stream.Stream;
+
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import org.hibernate.query.Query;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class WorkspaceManagerGcSweepTest {
@@ -130,7 +132,7 @@ class WorkspaceManagerGcSweepTest {
     @SuppressWarnings("unchecked")
     private void stubEntityManager(String awaitingSessionId, boolean isAwaitingInBulk, List<AgentCheckpoint> timedOutList) {
         // 1. Bulk Query Mock
-        TypedQuery<String> bulkQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(org.hibernate.query.Query.class));
+        TypedQuery<String> bulkQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(Query.class));
         when(bulkQueryMock.setParameter(anyString(), any())).thenReturn(bulkQueryMock);
         if (isAwaitingInBulk) {
             when(bulkQueryMock.getResultStream()).thenReturn(Stream.of(awaitingSessionId));
@@ -139,12 +141,12 @@ class WorkspaceManagerGcSweepTest {
         }
 
         // 2. Timed Out Approvals Mock
-        TypedQuery<AgentCheckpoint> timedOutQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(org.hibernate.query.Query.class));
+        TypedQuery<AgentCheckpoint> timedOutQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(Query.class));
         when(timedOutQueryMock.setParameter(anyString(), any())).thenReturn(timedOutQueryMock);
         when(timedOutQueryMock.getResultList()).thenReturn(timedOutList);
 
         // 3. Fallback Mock
-        TypedQuery<Object> fallbackQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(org.hibernate.query.Query.class));
+        TypedQuery<Object> fallbackQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(Query.class));
         when(fallbackQueryMock.setParameter(anyString(), any())).thenReturn(fallbackQueryMock);
         when(fallbackQueryMock.getResultList()).thenReturn(List.of());
 
