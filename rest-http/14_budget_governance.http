@@ -58,6 +58,23 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 3
 }
 
+# ─────────────────────────────────────────────────────────────────
+# /STATUS — checkpoint state + budget
+# StatusReflex queries StatefulAgentStore, GovernanceLayer, CompactionSummaryRepository.
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-1] /status on fresh session — no checkpoint yet
+# Expect 200: "No active session found" or budget=$0.00
+POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/status",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
 ###
 
 ### [BUDGET-3] Check status — confirm cost is accumulating
