@@ -195,10 +195,9 @@ public class GithubTool implements AgentTool {
                                 "For 'gist list', OMIT this parameter.")
                 .addStringProperty("ref",
                         "Optional branch, tag, or commit SHA. Pass EXACTLY as-is including hyphens. " +
-                                "Examples: Phase-63, main, v1.0.0, feature/my-branch. " +
-                                "Only valid when action=repo and command=view. " +
-                                "**OMIT THIS FIELD ENTIRELY when not needed — do NOT pass null, " +
-                                "empty string, or any placeholder value.**")
+                        "Examples: Phase-63, main, v1.0.0, feature/my-branch. " +
+                        "Only valid when action=repo and command=view. " +
+                        "CRITICAL: If not needed, you MUST OMIT the 'ref' key entirely. NEVER pass null.")
                 .required("action", "command")
                 .build();
     }

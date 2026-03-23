@@ -119,7 +119,7 @@ public class AgentStepProcessor {
 
     /** Classifies and handles LLM-level exceptions: schema errors, rate limits, network faults. */
     private StepDecision handleEngineException(Exception e, String sessionId,
-            int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
+        int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
         boolean isSchemaError = e instanceof InvalidRequestException
                 || (e instanceof HttpException && ((HttpException) e).statusCode() == 400);
@@ -138,15 +138,28 @@ public class AgentStepProcessor {
                             "Try rephrasing your goal.",
                             AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                 }
-                
+
+                // Build a targeted correction based on the actual violation type.
+                // Generic messages (e.g. "check boolean fields") confuse the LLM when
+                // the real error is unrelated — causing it to repeat the same mistake.
+                String rawError = e.getMessage() != null ? e.getMessage() : "";
+                String correction;
+                if (rawError.contains("expected string, but got null")) {
+                    correction = "System: Your previous tool call failed because you included an " +
+                            "optional field with a null value. " +
+                            "RULE: When you have no value for an optional field (such as 'ref' or 'target'), " +
+                            "OMIT THE FIELD COMPLETELY — do not include it as null or as an empty string, " +
+                            "simply leave it out of the tool call entirely. " +
+                            "Retry now with only the fields that have real values.";
+                } else {
+                    correction = "System: Your previous tool call was rejected due to a schema validation error: "
+                            + rawError
+                            + ". Review the tool schema carefully, correct the invalid fields, and retry.";
+                }
+
                 log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
                         sessionId, llmSchemaErrorCount);
-                return StepDecision.retryEngine(
-                        "System: Your previous tool call was rejected due to a schema type mismatch: " +
-                        e.getMessage() +
-                        ". Ensure boolean fields use literal true/false (not \"true\"/\"false\" as strings). " +
-                        "Correct the types and retry.",
-                        llmSchemaErrorCount);
+                return StepDecision.retryEngine(correction, llmSchemaErrorCount);
             }
 
             llmSchemaErrorCount++;
@@ -184,6 +197,7 @@ public class AgentStepProcessor {
                 "ReasoningEngine error: " + e.getMessage(),
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
     }
+
 
     /** Returns true if the exception is a transient network connectivity fault. */
     private boolean isNetworkError(Exception e) {
