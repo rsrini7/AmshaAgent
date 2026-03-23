@@ -3662,3 +3662,55 @@ This is an optional cleanup step, not functionally required.
 **Resolution**: Created `SqliteRetryTemplate`. This component encapsulates the "Gold Standard" retry logic (exponential backoff with jitter and canonical `isSqliteBusy` checks). Core services were refactored to wrap their `EntityManager` operations in `retryTemplate.execute()`, ensuring a single, hardened point of maintenance for persistence resilience.
 
 **Files Changed**: `SqliteRetryTemplate.java` (new), `StatefulAgentStoreImpl.java`, `SessionReaper.java`, `WorkspaceManager.java`
+
+---
+
+## Phase 64-E: Test Resilience & Context Hardening
+
+### 64-E-1 — `AgentDispatchHandler` requires `SessionContext` first
+
+**Symptom**: `AgentDispatchHandlerTest` fails with `IllegalState: AgentDispatchHandler requires SessionContext... Check handler priority ordering`.
+
+**Root Cause**: The unit test was invoking the handler directly without simulating the execution of `SessionResolutionHandler` (priority 40). In a real request, the context is always populated by the resolution handler first.
+
+**Resolution**: Updated the test helper `createTestContext()` to explicitly seed the `SessionContext` before passing it to the handler. This ensures that the handler's internal check for session presence succeeds.
+
+---
+
+### 64-E-2 — Malformed LLM JSON Handling
+
+**Symptom**: `ReasoningStepParserTest.testParse_invalidJsonArgsReturnsObserve` failed because it expected `true` (success/schema error) but received `false` or logged errors.
+
+**Root Cause**: The parser was logging the original JSON error but not transforming it into a structured `ReasoningStep` that the loop could process as an observation.
+
+**Resolution**: Updated `ReasoningStepParser.parse()` to catch `JsonParseException` and return `ReasoningStep.schemaError("invalid JSON")`. This provides a clean feedback loop for the LLM.
+
+---
+
+### 64-E-3 — Compliance Override Redaction Case Sensitivity
+
+**Symptom**: `ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted` failed because "Override" was not matched when "i" was lowercase in the regex.
+
+**Root Cause**: The regex pattern was missing the case-insensitive flag `(?i)` for specific sub-patterns.
+
+**Resolution**: Standardized the pattern in `ChatHistoryAssembler` to use global case-insensitivity for all compliance-related keywords.
+
+---
+
+### 64-E-4 — Telegram Logging & Context Hardening 
+
+#### 🔴 Issue: Excessive "Failed polling endpoint" Logs from TelegramConsumer
+**Symptom**: During tests, logs are flooded with `TelegramException: Could not GET https://api.telegram.org/bottest-bot-token/getUpdates... 404 Not Found`.
+**Root Cause**: The `camel-telegram` component attempts to poll the Telegram API using a dummy `mock-token` or `bottest-bot-token` during tests. Since these are not valid tokens, the API returns a 404, which Camel logs as a WARNING at every poll interval.
+**Resolution**: Set the logging level for `org.apache.camel.component.telegram.TelegramConsumer` and `com.arcclaw.app.channel.telegram.TelegramAgentHandler` to `OFF` in the test `application.yaml`. This silences the expected polling failures during the test suite.
+
+#### 🔴 Issue: `IllegalStateException: AgentDispatchHandler requires SessionContext...`
+**Symptom**: `AgentDispatchHandlerAutonomyTest` fails with a message indicating that `SessionContext` must be populated by `SessionResolutionHandler` first.
+**Root Cause**: The `AgentDispatchHandler` enforces a strict dependency on `SessionContext` being present in the `MessageContext`. In unit tests, this context was not being explicitly populated, leading to state violations.
+**Resolution**: Updated test setup to manually populate `SessionContext` within the `MessageContext` before invoking the `AgentDispatchHandler`. This aligns the test harness with the production pipeline middleware order.
+
+#### 🔴 Issue: `NoSuchFieldException: chatQueues` in `TelegramAgentHandlerTest`
+**Symptom**: `TelegramAgentHandlerTest.setup` fails when trying to reflectively access or modify the `chatQueues` field.
+**Root Cause**: The `chatQueues` field was replaced by a Caffeine cache (P3-12) to improve resource management, but the test was still attempting to access the old `ConcurrentHashMap` field.
+**Resolution**: Updated the test reflection to target the `processingFlags` (or equivalent) field and use the `ManagedExecutor` for synchronous execution in tests.
+
