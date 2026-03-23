@@ -2,13 +2,12 @@ package com.arcclaw.app.security;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.security.SecretVault;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class DevSecretSeederTest {

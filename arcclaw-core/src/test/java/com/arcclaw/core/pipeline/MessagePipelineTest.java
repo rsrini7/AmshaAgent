@@ -1,20 +1,20 @@
 package com.arcclaw.core.pipeline;
 
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.stream.Stream;
 
 import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 class MessagePipelineTest {
 

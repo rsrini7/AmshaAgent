@@ -1,16 +1,17 @@
 package com.arcclaw.app.channel;
 
+import java.util.List;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
-
-import java.util.List;
 
 /**
  * Registry that resolves the correct {@link ChannelSender} and {@link ReplyRenderer}

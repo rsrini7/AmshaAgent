@@ -25,7 +25,6 @@ import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ManageScheduleTool;
 import com.arcclaw.core.tools.MemorySearchTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
-
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**

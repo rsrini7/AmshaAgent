@@ -4,10 +4,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.camel.Exchange;
-import org.apache.camel.component.telegram.model.IncomingMessage;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -16,10 +15,10 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.inject.Inject;
+import org.apache.camel.Exchange;
+import org.apache.camel.component.telegram.model.IncomingMessage;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class TelegramAgentHandler {

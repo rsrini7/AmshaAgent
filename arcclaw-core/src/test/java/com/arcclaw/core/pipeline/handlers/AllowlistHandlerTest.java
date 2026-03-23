@@ -1,5 +1,10 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
+
+import java.time.Instant;
+
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -7,14 +12,8 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
-
-import java.time.Instant;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
 
 class AllowlistHandlerTest {
 

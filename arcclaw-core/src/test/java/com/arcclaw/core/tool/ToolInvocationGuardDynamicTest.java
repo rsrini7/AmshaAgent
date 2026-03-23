@@ -10,16 +10,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
-import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.enterprise.inject.Instance;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ToolInvocationGuardDynamicTest {
 

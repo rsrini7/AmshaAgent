@@ -1,13 +1,14 @@
 package com.arcclaw.core.pipeline;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the execution of {@link MessageHandler}s.

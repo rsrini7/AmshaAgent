@@ -14,8 +14,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -32,11 +32,11 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
+import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class ApproveReflexTest {
@@ -60,8 +60,8 @@ class ApproveReflexTest {
     void setup() {
         // Mocking Event injection for ApproveReflex
         ApproveReflex instance = approveReflex;
-        if (approveReflex instanceof io.quarkus.arc.ClientProxy) {
-            instance = (ApproveReflex) ((io.quarkus.arc.ClientProxy) approveReflex).arc_contextualInstance();
+        if (approveReflex instanceof ClientProxy) {
+            instance = (ApproveReflex) ((ClientProxy) approveReflex).arc_contextualInstance();
         }
         instance.jobCompletedEvent = jobCompletedEventMock;
     }

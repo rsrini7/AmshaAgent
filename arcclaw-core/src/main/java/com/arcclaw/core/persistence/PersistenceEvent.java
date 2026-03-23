@@ -1,11 +1,11 @@
 package com.arcclaw.core.persistence;
 
-import com.arcclaw.core.audit.SecurityEventType;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import jakarta.persistence.EntityManager;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import com.arcclaw.core.audit.SecurityEventType;
 
 /**
  * Represents a unit of work to be persisted by the {@link AsyncPersistenceEngine}.

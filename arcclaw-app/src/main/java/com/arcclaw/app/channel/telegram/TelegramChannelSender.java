@@ -2,15 +2,15 @@ package com.arcclaw.app.channel.telegram;
 
 import java.util.List;
 
-import org.apache.camel.ProducerTemplate;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.apache.camel.ProducerTemplate;
+import org.jboss.logging.Logger;
 
 /**
  * Telegram implementation of ChannelSender.

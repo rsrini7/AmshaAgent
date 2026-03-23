@@ -7,20 +7,19 @@ import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.jboss.logging.Logger;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.security.CryptoConstants;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-import jakarta.annotation.Priority;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.StartupEvent;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class AuditHashUtil {

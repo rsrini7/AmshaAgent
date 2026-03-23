@@ -1,11 +1,8 @@
 package com.arcclaw.app.mcp;
 
-import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
-import com.arcclaw.mcp.transport.McpClientService;
-import com.arcclaw.mcp.transport.McpConnectionException;
-import com.arcclaw.mcp.config.McpToolAllowlist;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -18,8 +15,11 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.util.Map;
-import java.util.stream.Collectors;
+import com.arcclaw.mcp.config.McpToolAllowlist;
+import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.arcclaw.mcp.transport.McpClientService;
+import com.arcclaw.mcp.transport.McpConnectionException;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 /**
  * REST admin endpoint for managing outbound MCP client connections at runtime.

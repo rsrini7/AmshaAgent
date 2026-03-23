@@ -1,12 +1,12 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-
-import java.time.Instant;
 
 /**
  * Persistent cron job entity backed by the {@code agentcron} SQLite table.

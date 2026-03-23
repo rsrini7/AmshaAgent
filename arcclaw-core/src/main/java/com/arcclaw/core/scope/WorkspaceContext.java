@@ -1,10 +1,9 @@
 package com.arcclaw.core.scope;
 
+import java.util.concurrent.Callable;
+
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
-
-import java.lang.ScopedValue;
-import java.util.concurrent.Callable;
 
 /**
  * Pure static utility backed by ScopedValue constants to hold Workspace Context.

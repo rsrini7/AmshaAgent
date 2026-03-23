@@ -1,12 +1,12 @@
 package com.arcclaw.app.channel.telegram;
 
-import com.arcclaw.channel.api.ReplyNode;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.arcclaw.channel.api.ReplyNode;
+import org.junit.jupiter.api.Test;
 
 class TelegramMarkdownV2RendererTest {
 

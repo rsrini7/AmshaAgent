@@ -1,12 +1,13 @@
 package com.arcclaw.app.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
 import com.arcclaw.app.channel.ChannelSenderRegistry;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.cron.AgentJobCompleted;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 /**

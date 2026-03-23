@@ -1,10 +1,10 @@
 package com.arcclaw.core.agent.persona;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
+import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.util.List;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
  * Vishnu — Preserver and Captain/Coordinator agent.

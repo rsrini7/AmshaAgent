@@ -5,19 +5,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexResult;
-
-import java.util.List;
-import java.util.Set;
-import java.util.regex.Pattern;
-import java.time.Instant;
-import com.arcclaw.core.agent.role.RoleDefinition;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

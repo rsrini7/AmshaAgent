@@ -5,14 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import org.junit.jupiter.api.Test;
+import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper.AgentResponse;
 import com.arcclaw.core.api.AgentResponseMapper.ApprovalRequiredResponse;
 import com.arcclaw.core.api.AgentResponseMapper.ErrorResponse;
-
-import jakarta.ws.rs.core.Response;
+import org.junit.jupiter.api.Test;
 
 class AgentResponseMapperTest {
 

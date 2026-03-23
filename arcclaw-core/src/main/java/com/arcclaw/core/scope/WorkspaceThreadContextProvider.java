@@ -1,10 +1,10 @@
 package com.arcclaw.core.scope;
 
+import java.util.Map;
+
 import org.eclipse.microprofile.context.spi.ThreadContextController;
 import org.eclipse.microprofile.context.spi.ThreadContextProvider;
 import org.eclipse.microprofile.context.spi.ThreadContextSnapshot;
-
-import java.util.Map;
 
 /**
  * MicroProfile {@link ThreadContextProvider} to propagate the {@link WorkspaceScoped} 

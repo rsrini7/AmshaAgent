@@ -1,18 +1,18 @@
 package com.arcclaw.core.state;
 
-import io.agroal.api.AgroalDataSource;
-import io.quarkus.runtime.StartupEvent;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Configures SQLite WAL mode and concurrency tuning at application startup.

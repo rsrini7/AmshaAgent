@@ -1,19 +1,18 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.security.SecretVault;
-import com.arcclaw.core.security.VaultKey;
-
-import jakarta.enterprise.inject.Instance;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
+import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultKey;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 public class AuditHashUtilTest {
 

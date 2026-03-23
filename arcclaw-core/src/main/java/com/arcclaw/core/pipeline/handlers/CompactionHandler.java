@@ -1,17 +1,18 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
-import com.arcclaw.core.state.ContextCompactionService;
-import com.arcclaw.core.scope.WorkspaceScoped;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.core.state.ContextCompactionService;
+import org.jboss.logging.Logger;
 
 /**
  * compacts conversation history if necessary before passing to the agent.

@@ -1,12 +1,13 @@
 package com.arcclaw.mcp.reflex;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
 import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.bridge.McpToolBridge;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 
 @ApplicationScoped
 public class McpReflex implements AgentReflex {

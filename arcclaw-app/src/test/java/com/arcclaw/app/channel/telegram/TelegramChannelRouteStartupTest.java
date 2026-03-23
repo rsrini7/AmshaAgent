@@ -1,18 +1,19 @@
 package com.arcclaw.app.channel.telegram;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
-import org.apache.camel.CamelContext;
-import org.apache.camel.Route;
-import org.apache.camel.ServiceStatus;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import jakarta.inject.Inject;
+
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import org.apache.camel.CamelContext;
+import org.apache.camel.Route;
+import org.apache.camel.ServiceStatus;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(TelegramChannelRouteStartupTest.RealTokenProfile.class)

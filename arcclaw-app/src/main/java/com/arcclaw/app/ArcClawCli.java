@@ -3,14 +3,14 @@ package com.arcclaw.app;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import jakarta.inject.Inject;
+
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
 import com.arcclaw.app.util.CliUtils;
-
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
-import jakarta.inject.Inject;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 

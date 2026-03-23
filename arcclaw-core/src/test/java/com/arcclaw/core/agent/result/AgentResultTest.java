@@ -1,12 +1,11 @@
 package com.arcclaw.core.agent.result;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import org.junit.jupiter.api.Test;
 
 class AgentResultTest {
 

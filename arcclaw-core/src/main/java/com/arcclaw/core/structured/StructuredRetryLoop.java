@@ -2,7 +2,8 @@ package com.arcclaw.core.structured;
 
 import java.util.function.Supplier;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
@@ -10,10 +11,8 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-
 import io.opentelemetry.api.trace.Span;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Executes an LLM call with at most one schema-correction retry. 

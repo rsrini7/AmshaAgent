@@ -9,9 +9,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
@@ -21,8 +18,9 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
-
 import dev.langchain4j.exception.HttpException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class IntentClassificationHandlerTest {
 

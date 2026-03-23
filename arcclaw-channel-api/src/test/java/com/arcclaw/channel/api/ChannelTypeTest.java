@@ -1,8 +1,10 @@
 package com.arcclaw.channel.api;
 
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.Test;
+
 import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
 
 class ChannelTypeTest {
 

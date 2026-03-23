@@ -1,15 +1,16 @@
 package com.arcclaw.core.state;
 
-import org.jboss.logging.Logger;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.regex.Pattern;
+
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class CompactionSummaryRepository {

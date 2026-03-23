@@ -1,7 +1,7 @@
 package com.arcclaw.core.observability;
 
-import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
 
 /**
  * Observer interface for the Agent reasoning engine.

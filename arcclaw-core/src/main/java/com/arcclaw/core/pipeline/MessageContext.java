@@ -1,13 +1,12 @@
 package com.arcclaw.core.pipeline;
 
+import java.util.Optional;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.result.AgentState;
-
 import com.arcclaw.core.security.AutonomyLevel;
-
-import java.util.Optional;
 
 /**
  * Context for a message passing through the pipeline.

@@ -1,12 +1,12 @@
 package com.arcclaw.core.scope;
 
-import com.arcclaw.core.security.AutonomyLevel;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.arcclaw.core.security.AutonomyLevel;
+import org.junit.jupiter.api.Test;
 
 class WorkspaceContextTest {
 

@@ -1,14 +1,15 @@
 package com.arcclaw.core.audit;
 
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class AuditEventRepositoryTest {

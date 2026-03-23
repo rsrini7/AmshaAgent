@@ -3,9 +3,6 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
-import com.arcclaw.core.security.AutonomyLevel;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,6 +15,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+
+import com.arcclaw.core.security.AutonomyLevel;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * JPA entity for persisting agent reasoning loop state.

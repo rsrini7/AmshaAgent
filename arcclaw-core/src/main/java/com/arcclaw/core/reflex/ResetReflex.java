@@ -1,19 +1,18 @@
 package com.arcclaw.core.reflex;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CheckpointStatus;
+import java.util.regex.Pattern;
 
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.util.regex.Pattern;
-
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.StatefulAgentStore;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

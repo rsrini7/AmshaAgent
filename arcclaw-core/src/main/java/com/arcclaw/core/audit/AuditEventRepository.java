@@ -3,13 +3,13 @@ package com.arcclaw.core.audit;
 import java.util.List;
 import java.util.UUID;
 
-import org.jboss.logging.Logger;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class AuditEventRepository {

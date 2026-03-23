@@ -1,20 +1,20 @@
 package com.arcclaw.rag;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.List;
+
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TwoTierMemoryServiceTest {

@@ -6,19 +6,18 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class GlobalKnowledgeBase {

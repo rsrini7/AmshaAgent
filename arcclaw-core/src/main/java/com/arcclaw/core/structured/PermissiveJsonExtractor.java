@@ -1,13 +1,15 @@
 package com.arcclaw.core.structured;
 
 import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
 /**

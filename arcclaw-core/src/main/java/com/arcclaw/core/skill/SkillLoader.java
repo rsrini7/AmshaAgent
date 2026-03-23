@@ -1,16 +1,5 @@
 package com.arcclaw.core.skill;
 
-import com.arcclaw.core.agent.role.RoleDefinition;
-import com.arcclaw.core.agent.role.RoleRegistry;
-import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.audit.TelemetryAuditService;
-import io.quarkus.runtime.StartupEvent;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -25,6 +14,18 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.role.RoleDefinition;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.audit.TelemetryAuditService;
+import io.quarkus.runtime.StartupEvent;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the dual-tier loading of agent skills.

@@ -5,16 +5,20 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -26,13 +30,8 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.CronResultFormatter;
-import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.CronScheduleUtil;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class ApproveReflex implements AgentReflex {

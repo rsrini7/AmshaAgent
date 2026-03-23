@@ -1,23 +1,21 @@
 package com.arcclaw.core.tools;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
-import com.arcclaw.core.agent.role.ToolCapability;
-
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import org.jboss.logging.Logger;
-
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Agent tool for searching user's long-term memory (past session summaries)

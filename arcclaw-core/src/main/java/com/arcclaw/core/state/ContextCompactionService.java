@@ -1,23 +1,24 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import io.smallrye.common.annotation.Identifier;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import dev.langchain4j.data.message.UserMessage;
-import jakarta.enterprise.event.ObservesAsync;
-import com.arcclaw.core.compaction.CompactionRequest;
-import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.ObservesAsync;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.compaction.CompactionInFlightFlag;
+import com.arcclaw.core.compaction.CompactionRequest;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.common.annotation.Identifier;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class ContextCompactionService {

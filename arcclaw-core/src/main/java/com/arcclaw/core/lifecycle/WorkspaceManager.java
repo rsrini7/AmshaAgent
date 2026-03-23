@@ -9,8 +9,10 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.List;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.persistence.SqliteErrorStrings;
@@ -18,14 +20,11 @@ import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
-
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Lifecycle orchestrator for workspace session termination and disk management.

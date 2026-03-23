@@ -1,9 +1,5 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
-import com.arcclaw.core.agent.result.AgentResult;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -13,9 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.enterprise.inject.Instance;
 
+import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentObserver;
@@ -24,17 +22,18 @@ import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.skill.SkillRegistry;
-
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
-import jakarta.enterprise.inject.Instance;
+import io.opentelemetry.api.trace.Span;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class AgentStateMachineRunnerTest {
 
@@ -93,7 +92,7 @@ class AgentStateMachineRunnerTest {
         when(observers.iterator()).thenReturn(Collections.emptyIterator());
         when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
 
-        io.opentelemetry.api.trace.Span invalidSpan = io.opentelemetry.api.trace.Span.getInvalid();
+        Span invalidSpan = Span.getInvalid();
         when(agentOtelContext.startIterationSpan(anyString(), anyInt(), anyString()))
                 .thenReturn(invalidSpan);
         when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString()))

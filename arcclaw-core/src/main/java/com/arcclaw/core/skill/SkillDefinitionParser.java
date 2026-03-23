@@ -1,10 +1,12 @@
 package com.arcclaw.core.skill;
 
+import java.util.List;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import jakarta.enterprise.context.ApplicationScoped;
-import java.util.List;
 
 /**
  * Parses a raw markdown skill document into a {@link SkillDefinition}.

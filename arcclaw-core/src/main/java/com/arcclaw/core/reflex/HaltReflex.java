@@ -1,9 +1,10 @@
 package com.arcclaw.core.reflex;
 
-import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.pipeline.MessageContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.pipeline.MessageContext;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

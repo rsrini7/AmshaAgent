@@ -1,18 +1,19 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.security.RequiresSecret;
-import com.arcclaw.core.security.ToolOperation;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import jakarta.enterprise.context.ApplicationScoped;
-import org.jboss.logging.Logger;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.security.ToolOperation;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import org.jboss.logging.Logger;
 
 /**
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.

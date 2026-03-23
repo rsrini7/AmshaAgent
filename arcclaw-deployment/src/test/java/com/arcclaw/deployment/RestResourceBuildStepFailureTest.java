@@ -14,7 +14,11 @@ import com.arcclaw.core.audit.AuditSchemaEnforcer;
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.quarkus.qute.Template;
 import io.quarkus.test.QuarkusUnitTest;
+import io.smallrye.common.annotation.Identifier;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
@@ -61,21 +65,21 @@ public class RestResourceBuildStepFailureTest {
 
         @Produces
         @ApplicationScoped
-        public io.micrometer.core.instrument.MeterRegistry registry() {
-            return new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        public MeterRegistry registry() {
+            return new SimpleMeterRegistry();
         }
 
         @Produces
         @ApplicationScoped
         @Named("compaction")
-        @io.smallrye.common.annotation.Identifier("compaction")
+        @Identifier("compaction")
         public ChatModel compactionModel() {
             return Mockito.mock(ChatModel.class);
         }
 
         @Produces
-        public io.quarkus.qute.Template dummyTemplate() {
-            return Mockito.mock(io.quarkus.qute.Template.class);
+        public Template dummyTemplate() {
+            return Mockito.mock(Template.class);
         }
 
         @Produces

@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -16,8 +18,6 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 /**
  * Assembles the ChatMessage list from history and the current goal.

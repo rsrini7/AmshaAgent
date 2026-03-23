@@ -1,13 +1,14 @@
 package com.arcclaw.core.state;
 
-import dev.langchain4j.model.chat.ChatModel;
-import io.smallrye.common.annotation.Identifier;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Produces;
-
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+
+import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.common.annotation.Identifier;
 
 @ApplicationScoped
 public class TestCompactionModelProducer {

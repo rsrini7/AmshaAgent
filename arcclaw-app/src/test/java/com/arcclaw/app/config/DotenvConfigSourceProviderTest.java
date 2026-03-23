@@ -1,8 +1,9 @@
 package com.arcclaw.app.config;
 
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.eclipse.microprofile.config.spi.ConfigSource;
+import org.junit.jupiter.api.Test;
 
 class DotenvConfigSourceProviderTest {
 

@@ -8,13 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.StatusCode;
-import io.opentelemetry.context.Scope;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.agent.persona.AgentRole;
 import com.arcclaw.core.agent.persona.Agent;
+import com.arcclaw.core.agent.persona.AgentRole;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -24,6 +19,10 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the Thought-Plan-Act-Observe loop.

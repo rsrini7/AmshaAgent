@@ -6,17 +6,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Instant;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.audit.TelemetryAuditService;
-
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class SkillLoaderTest {

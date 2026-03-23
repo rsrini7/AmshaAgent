@@ -1,12 +1,12 @@
 package com.arcclaw.core.skill;
 
+import java.util.List;
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Repository for {@link AgentSkillEntity} interacting with the underlying SQLite database.

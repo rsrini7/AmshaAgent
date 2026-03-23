@@ -1,13 +1,14 @@
 package com.arcclaw.app.security;
 
-import com.arcclaw.channel.api.ChannelAllowlist;
-import io.quarkus.arc.Unremovable;
-import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import com.arcclaw.channel.api.ChannelAllowlist;
+import io.quarkus.arc.Unremovable;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable

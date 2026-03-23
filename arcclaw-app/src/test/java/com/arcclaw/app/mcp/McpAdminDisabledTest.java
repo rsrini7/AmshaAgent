@@ -1,17 +1,18 @@
 package com.arcclaw.app.mcp;
 
+import static org.mockito.ArgumentMatchers.anyString;
+
 import java.util.Map;
 
-import org.junit.jupiter.api.Test;
-
+import com.arcclaw.app.security.ApiKeyRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
+import io.restassured.RestAssured;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import com.arcclaw.app.security.ApiKeyRegistry;
-import static org.mockito.ArgumentMatchers.anyString;
 
 @QuarkusTest
 @TestProfile(McpAdminDisabledTest.DisabledMcpProfile.class)
@@ -35,13 +36,13 @@ class McpAdminDisabledTest {
 
     @Test
     void testEndpointsShouldBeDisabled() {
-        io.restassured.RestAssured.given()
+        RestAssured.given()
             .header("X-ArcClaw-API-Key", "test-key")
             .when().get("/api/v1/mcp/tools")
             .then()
             .statusCode(404);
 
-        io.restassured.RestAssured.given()
+        RestAssured.given()
             .header("X-ArcClaw-API-Key", "test-key")
             .when().get("/api/v1/mcp/status")
             .then()

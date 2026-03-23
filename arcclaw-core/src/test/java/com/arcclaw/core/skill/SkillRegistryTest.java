@@ -1,14 +1,14 @@
 package com.arcclaw.core.skill;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import java.util.Set;
-import com.arcclaw.core.agent.role.RoleDefinition;
+import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.arcclaw.core.agent.role.RoleDefinition;
+import org.junit.jupiter.api.Test;
 
 class SkillRegistryTest {
 

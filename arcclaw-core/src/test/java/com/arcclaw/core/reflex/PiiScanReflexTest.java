@@ -1,8 +1,8 @@
 package com.arcclaw.core.reflex;
 
-import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

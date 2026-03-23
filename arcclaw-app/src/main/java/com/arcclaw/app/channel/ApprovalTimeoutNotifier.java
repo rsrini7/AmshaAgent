@@ -1,11 +1,12 @@
 package com.arcclaw.app.channel;
 
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.lifecycle.ApprovalTimedOutEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
+
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.lifecycle.ApprovalTimedOutEvent;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

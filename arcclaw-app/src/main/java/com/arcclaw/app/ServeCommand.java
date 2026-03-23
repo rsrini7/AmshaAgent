@@ -1,7 +1,8 @@
 package com.arcclaw.app;
 
-import io.quarkus.runtime.Quarkus;
 import jakarta.inject.Inject;
+
+import io.quarkus.runtime.Quarkus;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import picocli.CommandLine.Command;

@@ -1,31 +1,32 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.agent.role.RoleRegistry;
-import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * Validates tool calls before invocation.

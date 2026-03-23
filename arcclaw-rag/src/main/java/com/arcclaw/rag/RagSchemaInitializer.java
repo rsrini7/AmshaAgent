@@ -1,18 +1,18 @@
 package com.arcclaw.rag;
 
-import io.agroal.api.AgroalDataSource;
-import io.quarkus.runtime.StartupEvent;
+import java.sql.Connection;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-
-import java.sql.Connection;
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class RagSchemaInitializer {

@@ -11,13 +11,13 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import io.opentelemetry.api.trace.Span;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ToolInvokerTest {
 
@@ -40,7 +40,7 @@ class ToolInvokerTest {
         when(observationSanitizer.sanitize(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(1));
 
         // Mock OTel to return invalid (no-op) spans by default
-        io.opentelemetry.api.trace.Span invalidSpan = io.opentelemetry.api.trace.Span.getInvalid();
+        Span invalidSpan = Span.getInvalid();
         when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString())).thenReturn(invalidSpan);
     }
 

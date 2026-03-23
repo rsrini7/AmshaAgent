@@ -1,14 +1,15 @@
 package com.arcclaw.rag;
 
-import com.arcclaw.core.agent.reasoning.ContextEnricher;
-import com.arcclaw.core.scope.WorkspaceContext;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
 import java.util.List;
 import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.ContextEnricher;
+import com.arcclaw.core.scope.WorkspaceContext;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class RagContextEnricher implements ContextEnricher {

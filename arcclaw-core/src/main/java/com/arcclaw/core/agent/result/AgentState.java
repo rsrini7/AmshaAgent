@@ -1,8 +1,8 @@
 package com.arcclaw.core.agent.result;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
 import java.util.List;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 
 /**
  * Sealed interface representing the state of an agent execution.

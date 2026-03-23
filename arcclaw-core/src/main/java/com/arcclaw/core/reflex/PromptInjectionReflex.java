@@ -1,13 +1,14 @@
 package com.arcclaw.core.reflex;
 
-import com.arcclaw.core.pipeline.MessageContext;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
 import java.util.List;
 import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.pipeline.MessageContext;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class PromptInjectionReflex implements AgentReflex {

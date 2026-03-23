@@ -1,9 +1,10 @@
 package com.arcclaw.app.cli;
 
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.cron.AgentJobCompleted;
 import org.jboss.logging.Logger;
 
 /**

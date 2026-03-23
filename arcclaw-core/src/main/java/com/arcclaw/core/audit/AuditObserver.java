@@ -1,14 +1,15 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.observability.AgentObserver;
+import java.math.BigDecimal;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.math.BigDecimal;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ConcurrentHashMap;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.observability.AgentObserver;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Observes AgentLoop execution and records audit events upon completion.

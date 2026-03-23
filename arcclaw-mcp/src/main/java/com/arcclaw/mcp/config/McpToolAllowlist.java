@@ -1,8 +1,9 @@
 package com.arcclaw.mcp.config;
 
+import java.util.List;
+
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
-import java.util.List;
 
 /**
  * restrictive allowlist for which internal tools are exposed via MCP.

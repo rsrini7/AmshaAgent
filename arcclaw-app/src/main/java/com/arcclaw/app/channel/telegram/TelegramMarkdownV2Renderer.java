@@ -1,12 +1,13 @@
 package com.arcclaw.app.channel.telegram;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
-import jakarta.enterprise.context.ApplicationScoped;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Renders a list of {@link ReplyNode} into Telegram's MarkdownV2 format.

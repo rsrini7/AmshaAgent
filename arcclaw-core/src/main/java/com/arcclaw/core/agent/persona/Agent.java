@@ -1,10 +1,10 @@
 package com.arcclaw.core.agent.persona;
 
+import java.util.List;
+
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-
-import java.util.List;
 
 /**
  * Contract for all ArcClaw agent personas.

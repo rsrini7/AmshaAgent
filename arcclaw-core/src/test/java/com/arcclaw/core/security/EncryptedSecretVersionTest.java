@@ -1,12 +1,13 @@
 package com.arcclaw.core.security;
 
-import io.quarkus.test.junit.QuarkusTest;
+import static org.junit.jupiter.api.Assertions.*;
+
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class EncryptedSecretVersionTest {

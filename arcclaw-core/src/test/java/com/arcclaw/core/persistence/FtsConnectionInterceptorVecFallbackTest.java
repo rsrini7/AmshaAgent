@@ -1,11 +1,14 @@
 package com.arcclaw.core.persistence;
 
-import io.quarkus.test.junit.QuarkusTest;
+import java.sql.Connection;
+
+import javax.sql.DataSource;
+
 import jakarta.inject.Inject;
+
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import java.sql.Connection;
-import javax.sql.DataSource;
 
 @QuarkusTest
 class FtsConnectionInterceptorVecFallbackTest {

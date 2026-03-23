@@ -2,7 +2,9 @@ package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -16,10 +18,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.CronResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Handles the outcomes of cron job executions: updates database state,

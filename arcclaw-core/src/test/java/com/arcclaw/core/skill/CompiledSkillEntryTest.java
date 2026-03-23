@@ -1,14 +1,13 @@
 package com.arcclaw.core.skill;
 
-import org.junit.jupiter.api.Test;
-
-import com.arcclaw.core.agent.role.RoleDefinition;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.arcclaw.core.agent.role.RoleDefinition;
+import org.junit.jupiter.api.Test;
 
 class CompiledSkillEntryTest {
 

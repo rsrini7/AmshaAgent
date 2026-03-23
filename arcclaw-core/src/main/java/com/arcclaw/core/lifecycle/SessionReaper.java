@@ -7,23 +7,22 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.persistence.SqliteErrorStrings;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.quarkus.runtime.ShutdownEvent;
-import io.quarkus.runtime.StartupEvent;
-import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.persistence.SqliteErrorStrings;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
+import io.quarkus.scheduler.Scheduled;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.

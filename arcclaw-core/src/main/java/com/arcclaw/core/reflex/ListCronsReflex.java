@@ -1,14 +1,15 @@
 package com.arcclaw.core.reflex;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Fast-path reflex for listing a user's scheduled cron tasks.

@@ -1,10 +1,10 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.security.AutonomyLevel;
-
 import java.util.List;
 import java.util.Optional;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.security.AutonomyLevel;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.

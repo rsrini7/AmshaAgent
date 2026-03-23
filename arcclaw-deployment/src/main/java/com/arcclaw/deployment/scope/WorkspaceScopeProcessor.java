@@ -1,8 +1,7 @@
 package com.arcclaw.deployment.scope;
 
-import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
-
+import com.arcclaw.core.scope.WorkspaceScoped;
 import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem;
 import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem.ContextConfiguratorBuildItem;
 import io.quarkus.arc.deployment.CustomScopeBuildItem;

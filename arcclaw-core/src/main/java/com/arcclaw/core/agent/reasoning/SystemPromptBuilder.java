@@ -2,15 +2,14 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.time.Instant;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-import jakarta.enterprise.inject.Instance;
 import org.jboss.logging.Logger;
 
 /**

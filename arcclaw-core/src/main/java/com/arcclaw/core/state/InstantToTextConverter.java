@@ -1,11 +1,11 @@
 package com.arcclaw.core.state;
 
-import jakarta.persistence.AttributeConverter;
-import jakarta.persistence.Converter;
-
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
 
 /**
  * JPA converter for {@link Instant} ↔ SQLite TEXT.

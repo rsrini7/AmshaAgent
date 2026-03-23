@@ -1,19 +1,18 @@
 package com.arcclaw.core.security;
 
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 
-import org.jboss.logging.MDC;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.util.MdcKeys;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.annotation.PreDestroy;
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
-import java.util.concurrent.locks.ReentrantLock;
+import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {

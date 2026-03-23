@@ -2,12 +2,12 @@ package com.arcclaw.core.agent.persona;
 
 import java.util.Collections;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
  * Registry to look up the persona-specific system prompt from Agent CDI beans.

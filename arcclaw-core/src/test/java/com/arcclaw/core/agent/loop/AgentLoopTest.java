@@ -9,17 +9,15 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
-
 import dev.langchain4j.model.chat.ChatModel;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class AgentLoopTest {
 

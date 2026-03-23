@@ -1,10 +1,10 @@
 package com.arcclaw.core.agent.result;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.agent.loop.AgentLoop;
-import io.quarkus.qute.TemplateData;
-
 import java.util.List;
+
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import io.quarkus.qute.TemplateData;
 
 /**
  * Result of an {@link AgentLoop} execution.

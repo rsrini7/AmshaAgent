@@ -1,34 +1,33 @@
 package com.arcclaw.app.cli;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
-import java.time.Instant;
-import java.util.List;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.reflex.ReflexRegistry;
-import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
-
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "chat", description = "Start an interactive chat session with ArcClaw")

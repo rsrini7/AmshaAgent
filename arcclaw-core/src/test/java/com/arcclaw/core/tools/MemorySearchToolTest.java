@@ -1,19 +1,18 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import org.junit.jupiter.api.Test;
 
 class MemorySearchToolTest {
 

@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
 import com.arcclaw.core.reflex.ReflexResult;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 /**
  * Handles the {@code /skills} command.

@@ -1,8 +1,9 @@
 package com.arcclaw.core.pipeline.mock;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.channel.api.ChannelAllowlist;
 import io.quarkus.test.Mock;
-import jakarta.enterprise.context.ApplicationScoped;
 
 @Mock
 @ApplicationScoped

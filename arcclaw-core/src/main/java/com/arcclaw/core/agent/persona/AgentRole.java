@@ -1,7 +1,8 @@
 package com.arcclaw.core.agent.persona;
 
-import jakarta.inject.Qualifier;
 import java.lang.annotation.*;
+
+import jakarta.inject.Qualifier;
 
 /**
  * CDI qualifier to distinguish agent persona beans.

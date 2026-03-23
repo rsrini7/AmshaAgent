@@ -1,16 +1,14 @@
 package com.arcclaw.core.agent.result;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
-import com.arcclaw.core.agent.loop.AgentExecutionContext;
-
-import com.arcclaw.core.api.dto.RunAgentRequest;
-import com.arcclaw.core.security.AutonomyLevel;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.security.AutonomyLevel;
+import org.junit.jupiter.api.Test;
 
 class AgentStateTest {
 

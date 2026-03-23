@@ -7,9 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.channel.api.structured.SynthesisResult;
+import org.junit.jupiter.api.Test;
 
 class PermissiveJsonExtractorTest {
 

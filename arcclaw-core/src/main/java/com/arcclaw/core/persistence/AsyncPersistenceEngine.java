@@ -14,15 +14,13 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;
-
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
-
-import com.arcclaw.core.audit.ComplianceViolationException;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 
 /**
  * Asynchronous persistence engine using a single background Virtual Thread

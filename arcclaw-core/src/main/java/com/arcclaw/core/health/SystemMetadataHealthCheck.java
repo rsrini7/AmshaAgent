@@ -1,8 +1,9 @@
 package com.arcclaw.core.health;
 
-import com.arcclaw.core.config.SystemMetadataRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.config.SystemMetadataRegistry;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;

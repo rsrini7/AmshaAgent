@@ -1,8 +1,9 @@
 package com.arcclaw.mcp.tool;
 
-import com.arcclaw.core.tool.DynamicToolLookup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.tool.DynamicToolLookup;
 
 @ApplicationScoped
 public class DynamicToolLookupImpl implements DynamicToolLookup {

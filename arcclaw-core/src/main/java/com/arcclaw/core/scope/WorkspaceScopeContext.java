@@ -1,16 +1,17 @@
 package com.arcclaw.core.scope;
 
-import io.quarkus.arc.InjectableBean;
-import io.quarkus.arc.InjectableContext;
-import jakarta.enterprise.context.spi.Contextual;
-import jakarta.enterprise.context.spi.CreationalContext;
-
 import java.lang.annotation.Annotation;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+
+import jakarta.enterprise.context.spi.Contextual;
+import jakarta.enterprise.context.spi.CreationalContext;
+
+import io.quarkus.arc.InjectableBean;
+import io.quarkus.arc.InjectableContext;
 
 /**
  * Arc {@link InjectableContext} implementation for {@link WorkspaceScoped}.

@@ -4,16 +4,15 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
-
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class SkillApiTest {

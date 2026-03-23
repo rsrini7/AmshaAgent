@@ -1,17 +1,18 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.security.AutonomyLevel;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import com.arcclaw.core.state.StatefulAgentStore;
 import org.jboss.logging.Logger;
-
-import java.nio.charset.StandardCharsets;
-import java.util.UUID;
 
 /**
  * Resolves the session ID and autonomy level for the incoming message.

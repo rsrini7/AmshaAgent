@@ -1,9 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.reflex.PiiScanReflex;
-import com.arcclaw.core.reflex.PromptInjectionReflex;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.reflex.PiiScanReflex;
+import com.arcclaw.core.reflex.PromptInjectionReflex;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

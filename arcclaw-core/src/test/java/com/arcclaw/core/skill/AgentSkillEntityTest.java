@@ -1,14 +1,14 @@
 package com.arcclaw.core.skill;
 
-import org.junit.jupiter.api.Test;
-
-import jakarta.persistence.Table;
-import jakarta.persistence.Column;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
 
-import static org.junit.jupiter.api.Assertions.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Table;
+
+import org.junit.jupiter.api.Test;
 
 class AgentSkillEntityTest {
 

@@ -3,18 +3,18 @@ package com.arcclaw.app.mcp;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.hasKey;
+import static org.mockito.ArgumentMatchers.anyString;
 
-import org.junit.jupiter.api.Test;
+import java.util.Map;
 
+import com.arcclaw.app.security.ApiKeyRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import com.arcclaw.app.security.ApiKeyRegistry;
-import java.util.Map;
-import static org.mockito.ArgumentMatchers.anyString;
 
 @QuarkusTest
 @TestProfile(McpAdminResourceTest.EnabledMcpProfile.class)

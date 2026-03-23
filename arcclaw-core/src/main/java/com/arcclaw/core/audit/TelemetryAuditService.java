@@ -1,15 +1,15 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.persistence.AsyncPersistenceEngine;
-import com.arcclaw.core.persistence.PersistenceEvent;
+import java.math.BigDecimal;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.config.SystemMetadataRegistry;
-
-import java.math.BigDecimal;
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+import com.arcclaw.core.persistence.PersistenceEvent;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class TelemetryAuditService {

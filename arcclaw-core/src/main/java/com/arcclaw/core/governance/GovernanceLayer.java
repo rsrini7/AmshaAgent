@@ -1,12 +1,11 @@
 package com.arcclaw.core.governance;
 
-
 import java.util.concurrent.ConcurrentHashMap;
+
+import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Tracks AI consumption costs across all active sessions.

@@ -1,5 +1,8 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
@@ -9,9 +12,6 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

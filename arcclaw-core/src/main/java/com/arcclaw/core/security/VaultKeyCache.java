@@ -1,8 +1,10 @@
 package com.arcclaw.core.security;
 
-import com.arcclaw.core.scope.WorkspaceScoped;
-import jakarta.annotation.PreDestroy;
 import java.util.concurrent.locks.ReentrantLock;
+
+import jakarta.annotation.PreDestroy;
+
+import com.arcclaw.core.scope.WorkspaceScoped;
 
 /**
  * Caches the derived session key for the duration of a Workspace session.

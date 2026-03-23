@@ -1,19 +1,20 @@
 package com.arcclaw.core.state;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 @QuarkusTest
 public class PersistentChatMemoryStoreTest {

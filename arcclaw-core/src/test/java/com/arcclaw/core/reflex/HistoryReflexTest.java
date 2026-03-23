@@ -1,5 +1,20 @@
 package com.arcclaw.core.reflex;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import jakarta.inject.Inject;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import dev.langchain4j.data.message.AiMessage;
@@ -8,23 +23,8 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.pipeline.MessageContext;
-import java.time.Instant;
 
 @QuarkusTest
 public class HistoryReflexTest {
