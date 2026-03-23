@@ -472,6 +472,8 @@ mp:
           level: WARN
         "org.infinispan":
           level: WARN
+        "java.lang.ProcessBuilder":
+          level: WARN
     console:
       enabled: false
     live-reload:

@@ -5,9 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -23,10 +21,13 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 /**
  * Validates tool calls before invocation.
@@ -59,17 +60,10 @@ public class ToolInvocationGuard {
     public sealed interface GuardDecision
             permits GuardDecision.Allow, GuardDecision.Deduplicate,
             GuardDecision.PauseForApproval, GuardDecision.Blocked {
-        record Allow() implements GuardDecision {
-        }
-
-        record Deduplicate(String cachedObservation) implements GuardDecision {
-        }
-
-        record PauseForApproval(String toolName, String paramsJson) implements GuardDecision {
-        }
-
-        record Blocked(String observation) implements GuardDecision {
-        }
+        record Allow() implements GuardDecision {}
+        record Deduplicate(String cachedObservation) implements GuardDecision {}
+        record PauseForApproval(String toolName, String paramsJson) implements GuardDecision {}
+        record Blocked(String observation) implements GuardDecision {}
     }
 
     /**
@@ -126,7 +120,7 @@ public class ToolInvocationGuard {
                     for (ChatMessage msg : memory) {
                         if (msg instanceof AiMessage ai && ai.text() != null && ai.text().contains(matchPrefix)) {
                             log.debugf("[DEDUP-GUARD] Cross-loop github match for session %s. Allowing reuse.", sessionId);
-                            return new GuardDecision.Allow(); 
+                            return new GuardDecision.Allow();
                         }
                     }
                 }
@@ -179,6 +173,19 @@ public class ToolInvocationGuard {
         }
 
         // 3. HITL PRE-APPROVAL CHECK
+        //
+        // Gate logic: BOTH the role policy AND the tool's own declaration must agree
+        // that approval is needed. Using OR here would cause read-only tools (github
+        // view/list, requiresManualApproval=false) to still trigger HITL in SUPERVISED
+        // mode purely because the researcher role has requiresApprovalForTools=true —
+        // which defeats the purpose of the per-tool approval declaration.
+        //
+        // Decision table:
+        //   role=requiresApproval  tool=requiresApproval  → HITL?
+        //   true                   true                   → YES  (write ops, e.g. future gh create)
+        //   true                   false                  → NO   (read-only gh view/list)
+        //   false                  true                   → NO   (coordinator with write tool — role trusts itself)
+        //   false                  false                  → NO   (fully autonomous read)
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
@@ -187,7 +194,8 @@ public class ToolInvocationGuard {
                 .map(tool -> tool.requiresManualApproval(params))
                 .orElse(false);
 
-        if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
+        if (roleRegistry.requiresApprovalForTools(resolvedRole)
+                && toolRequiresApproval
                 && !isSchedulingTool
                 && !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())) {
 
