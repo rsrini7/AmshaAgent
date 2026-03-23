@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
@@ -8,9 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
 
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -34,6 +37,7 @@ import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
 import org.jboss.logging.Logger;
 
+
 /**
  * Handles individual step execution within the ReAct loop:
  * engine invocation, tool validation, and tool observation.
@@ -42,11 +46,14 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class AgentStepProcessor {
 
+
     private static final Logger log = Logger.getLogger(AgentStepProcessor.class);
+
 
     private static final Set<String> REACT_KEYWORDS = Set.of(
             "OBSERVE", "THINK", "ACT", "PLAN", "REASON", "THOUGHT"
     );
+
 
     @Inject ToolRegistry toolRegistry;
     @Inject StatefulAgentStore agentStore;
@@ -58,7 +65,9 @@ public class AgentStepProcessor {
     @Inject Instance<DynamicToolLookup> dynamicToolLookup;
 
 
-    // ── Engine step 
+
+    // ── Engine step
+
 
     /** Calls the reasoning engine for the next step, handles budget events and LLM exceptions. */
     StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
@@ -69,6 +78,7 @@ public class AgentStepProcessor {
             String currentGoal = transientError != null ? goal + "\n\n" + transientError : goal;
             step = engine.nextStep(sessionId, agentRole, currentGoal,
                     Collections.unmodifiableList(history));
+
 
             if (step != null) {
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
@@ -82,6 +92,7 @@ public class AgentStepProcessor {
                     }
                     return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
                 }
+
 
                 try {
                     governanceLayer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
@@ -107,6 +118,7 @@ public class AgentStepProcessor {
             return handleEngineException(e, sessionId, llmSchemaErrorCount, iteration, history);
         }
 
+
         if (step == null) {
             log.warn("ReasoningEngine returned null step — terminating");
             return StepDecision.terminal(AgentResult.failed(
@@ -117,19 +129,34 @@ public class AgentStepProcessor {
         return StepDecision.proceed(step);
     }
 
+
     /** Classifies and handles LLM-level exceptions: schema errors, rate limits, network faults. */
     private StepDecision handleEngineException(Exception e, String sessionId,
         int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
+
         boolean isSchemaError = e instanceof InvalidRequestException
                 || (e instanceof HttpException && ((HttpException) e).statusCode() == 400);
+
 
         if (isSchemaError) {
             log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, e.getMessage());
             boolean isToolUseFailed = e.getMessage() != null
                     && e.getMessage().contains("tool_use_failed");
 
+
             if (isToolUseFailed) {
+                // Before retrying, check if failed_generation contains a prose answer.
+                // Groq embeds the LLM's natural language response inside the error when
+                // it tried to answer in plain text instead of calling FINISH — extract
+                // and surface it directly rather than burning retry attempts.
+                String rawError = e.getMessage() != null ? e.getMessage() : "";
+                String failedGen = extractFailedGeneration(rawError);
+                if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
+                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose answer — extracting as FINISH", sessionId);
+                    return StepDecision.terminal(AgentResult.finished(failedGen, List.copyOf(history)));
+                }
+
                 llmSchemaErrorCount++;
                 if (llmSchemaErrorCount >= 2) {
                     log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
@@ -139,10 +166,8 @@ public class AgentStepProcessor {
                             AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                 }
 
+
                 // Build a targeted correction based on the actual violation type.
-                // Generic messages (e.g. "check boolean fields") confuse the LLM when
-                // the real error is unrelated — causing it to repeat the same mistake.
-                String rawError = e.getMessage() != null ? e.getMessage() : "";
                 String correction;
                 if (rawError.contains("expected string, but got null")) {
                     correction = "System: Your previous tool call failed because you included an " +
@@ -157,10 +182,12 @@ public class AgentStepProcessor {
                             + ". Review the tool schema carefully, correct the invalid fields, and retry.";
                 }
 
+
                 log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
                         sessionId, llmSchemaErrorCount);
                 return StepDecision.retryEngine(correction, llmSchemaErrorCount);
             }
+
 
             llmSchemaErrorCount++;
             if (llmSchemaErrorCount >= 2) {
@@ -170,11 +197,13 @@ public class AgentStepProcessor {
                         List.copyOf(history)));
             }
 
+
             return StepDecision.retryEngine(
                     "System: Your previous tool call was rejected. Error: " + e.getMessage() +
                     ". Please review the tool schema and correct your arguments.",
                     llmSchemaErrorCount);
         }
+
 
         if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
             String msg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
@@ -182,6 +211,7 @@ public class AgentStepProcessor {
             return StepDecision.terminal(AgentResult.failed(
                     msg, AgentResult.FailureCategory.RATE_LIMIT, List.copyOf(history)));
         }
+
 
         if (isNetworkError(e)) {
             log.errorf("ReasoningEngine network failure at iteration %d: %s", iteration, e.getMessage());
@@ -191,11 +221,61 @@ public class AgentStepProcessor {
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
 
+
         log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
         log.debugf(e, "Full stacktrace for ReasoningEngine failure in session %s", sessionId);
         return StepDecision.terminal(AgentResult.failed(
                 "ReasoningEngine error: " + e.getMessage(),
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+    }
+
+
+    /**
+     * Extracts the "failed_generation" field from a Groq tool_use_failed error JSON.
+     * Returns null if the field is absent or unparseable.
+     */
+    private String extractFailedGeneration(String rawError) {
+        if (rawError == null) return null;
+        try {
+            int idx = rawError.indexOf("\"failed_generation\"");
+            if (idx < 0) return null;
+            int start = rawError.indexOf('"', idx + "\"failed_generation\"".length() + 1);
+            if (start < 0) return null;
+            StringBuilder sb = new StringBuilder();
+            boolean escape = false;
+            for (int i = start + 1; i < rawError.length(); i++) {
+                char c = rawError.charAt(i);
+                if (escape) {
+                    if (c == 'n') sb.append('\n');
+                    else if (c == 't') sb.append('\t');
+                    else sb.append(c);
+                    escape = false;
+                } else if (c == '\\') {
+                    escape = true;
+                } else if (c == '"') {
+                    break;
+                } else {
+                    sb.append(c);
+                }
+            }
+            String result = sb.toString().strip();
+            return result.isBlank() ? null : result;
+        } catch (Exception e) {
+            log.debugf("extractFailedGeneration parse failed: %s", e.getMessage());
+            return null;
+        }
+    }
+
+
+    /**
+     * Returns true if the text looks like a natural language answer rather than
+     * a malformed tool call. Prose answers start with a letter, not a JSON delimiter.
+     */
+    private boolean looksLikeNaturalLanguage(String text) {
+        if (text == null || text.isBlank()) return false;
+        char first = text.stripLeading().charAt(0);
+        if (first == '{' || first == '[') return false;
+        return text.contains(" ");
     }
 
 
@@ -213,7 +293,9 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Tool validation 
+
+    // ── Tool validation
+
 
     /** Validates the tool name — rejects hallucinated tools and leaked ReAct keywords. */
     StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history,
@@ -222,11 +304,13 @@ public class AgentStepProcessor {
         if (toolRegistry.findTool(toolName).isPresent())
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
 
+
         if (!dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
             log.debugf("[AgentStepProcessor] '%s' resolved as dynamic MCP tool — proceeding", toolName);
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
         }
+
 
         if (REACT_KEYWORDS.contains(toolName.toUpperCase())) {
             log.warnf("[AgentStepProcessor] ReAct keyword '%s' used as tool name — ephemeral correction",
@@ -237,6 +321,7 @@ public class AgentStepProcessor {
                     toolName, toolRegistry.listTools()), 0);
         }
 
+
         String errorObs = String.format(
                 "Tool '%s' does not exist. Available tools: %s. " +
                 "Please choose a valid tool or use FINISH to complete.",
@@ -245,6 +330,7 @@ public class AgentStepProcessor {
         final ReasoningStep completedStep = step.withObservation(errorObs);
         history.add(completedStep);
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
+
 
         consecutiveFailures++;
         if (consecutiveFailures >= 2)
@@ -256,17 +342,21 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Tool invocation 
+
+    // ── Tool invocation
+
 
     /** Orchestrates the 4 phases: guard → invoke → observe → resolve outcome. */
     StepDecision invokeToolAndObserve(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
             int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
+
         // Phase 1 — Guard: dedup / block / pause for approval
         StepDecision guardDecision = evaluateGuard(
                 sessionId, agentRole, history, step, goal, skillSnapshot);
         if (guardDecision != null) return guardDecision;
+
 
         // Phase 2 — Invoke: call tool, catch approval interrupts
         String toolName = step.action();
@@ -278,6 +368,7 @@ public class AgentStepProcessor {
             return e.decision;
         }
 
+
         // Phase 3 — Observe: build observation string and persist to history
         String observation = buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation);
@@ -286,20 +377,24 @@ public class AgentStepProcessor {
         log.debugf("Observation for '%s': %s", toolName,
                 observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
 
+
         // Phase 4 — Resolve: fast-path exit or circuit breaker
         return resolveOutcome(sessionId, toolName, response, observation,
                 completedStep, history, consecutiveFailures);
     }
+
 
     /** Evaluates guard decisions — returns null if tool should proceed normally. */
     private StepDecision evaluateGuard(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
             String goal, List<CompiledSkillEntry> skillSnapshot) {
 
+
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 sessionId, agentRole, step.action(),
                 step.actionInput() != null ? step.actionInput() : Map.of(),
                 history, goal, skillSnapshot);
+
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
@@ -320,6 +415,7 @@ public class AgentStepProcessor {
         return null; // PROCEED
     }
 
+
     /** Invokes the tool — throws FastExitException if approval is required mid-invocation. */
     private ToolResponse invokeTool(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
@@ -333,6 +429,7 @@ public class AgentStepProcessor {
         }
     }
 
+
     /** Normalizes tool output into a consistent observation string. */
     private String buildObservation(ToolResponse response) {
         if (response.success()) return response.output();
@@ -340,6 +437,7 @@ public class AgentStepProcessor {
         if (out != null && out.startsWith("Tool execution failed:")) return out;
         return "Tool execution failed: " + out + " (exit=" + response.exitCode() + ")";
     }
+
 
     /**
      * Resolves the step outcome:
@@ -352,6 +450,7 @@ public class AgentStepProcessor {
             ReasoningStep completedStep, List<ReasoningStep> history,
             int consecutiveFailures) {
 
+
         // Fast-path: schedule tools always terminate immediately — no LLM reformulation needed
         if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
@@ -362,6 +461,7 @@ public class AgentStepProcessor {
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
         }
 
+
         // GitHub unavailable — surface directly without LLM reformulation
         if (!response.success()
                 && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
@@ -369,6 +469,7 @@ public class AgentStepProcessor {
             if (sessionId != null && !observation.isBlank()) writer.saveAnswer(sessionId, observation);
             return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
         }
+
 
         // Circuit breaker — trip after 2 consecutive tool failures
         if (!response.success()) {
@@ -385,11 +486,14 @@ public class AgentStepProcessor {
             consecutiveFailures = 0;
         }
 
+
         return StepDecision.proceedWithFailures(completedStep, consecutiveFailures);
     }
 
 
-    // ── Checkpoint 
+
+    // ── Checkpoint
+
 
     /**
      * Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult.
@@ -398,7 +502,7 @@ public class AgentStepProcessor {
      */
     AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,
                                         String toolName, String paramsJson,
-                                        List<ReasoningStep> history, String goal) {   // ← goal added
+                                        List<ReasoningStep> history, String goal) {
         AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
                 .orElseGet(() -> {
                     AgentCheckpoint c = new AgentCheckpoint();
@@ -409,7 +513,7 @@ public class AgentStepProcessor {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
-        cp.setOriginalGoal(goal);   // ← capture real user goal before it's replaced by sentinel
+        cp.setOriginalGoal(goal);
         cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s", sessionId, toolName);
@@ -417,7 +521,9 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Internal types 
+
+    // ── Internal types
+
 
     /** Unchecked signal to short-circuit invokeTool() when approval is required mid-call. */
     static class FastExitException extends RuntimeException {
