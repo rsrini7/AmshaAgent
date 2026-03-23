@@ -14,6 +14,8 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.util.Fts5QueryUtil;
+
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.jboss.logging.Logger;
 
@@ -87,10 +89,12 @@ public class MemorySearchTool implements AgentTool {
                 return ToolResponse.success("No query provided");
             }
 
+            String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
+
             // 4. Search
             List<CompactionSummaryEntity> results;
             try {
-                results = repository.searchMemory(userId, query, 5);
+                results = repository.searchMemory(userId, safeQuery, 5);
             } catch (Exception e) {
                 String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                 if (msg.contains("no such table") || msg.contains("fts")) {

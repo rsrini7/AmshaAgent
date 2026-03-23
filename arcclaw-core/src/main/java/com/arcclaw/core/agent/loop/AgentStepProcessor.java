@@ -58,8 +58,7 @@ public class AgentStepProcessor {
     @Inject Instance<DynamicToolLookup> dynamicToolLookup;
 
 
-    // ── Engine step ──────────────────────────────────────────────────────────
-
+    // ── Engine step 
 
     /** Calls the reasoning engine for the next step, handles budget events and LLM exceptions. */
     StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
@@ -200,8 +199,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Tool validation ──────────────────────────────────────────────────────
-
+    // ── Tool validation 
 
     /** Validates the tool name — rejects hallucinated tools and leaked ReAct keywords. */
     StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history,
@@ -244,8 +242,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Tool invocation ──────────────────────────────────────────────────────
-
+    // ── Tool invocation 
 
     /** Orchestrates the 4 phases: guard → invoke → observe → resolve outcome. */
     StepDecision invokeToolAndObserve(String sessionId, String agentRole,
@@ -378,8 +375,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Checkpoint ───────────────────────────────────────────────────────────
-
+    // ── Checkpoint 
 
     /** Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult. */
     AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,
@@ -402,8 +398,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Internal types ───────────────────────────────────────────────────────
-
+    // ── Internal types 
 
     /** Unchecked signal to short-circuit invokeTool() when approval is required mid-call. */
     static class FastExitException extends RuntimeException {

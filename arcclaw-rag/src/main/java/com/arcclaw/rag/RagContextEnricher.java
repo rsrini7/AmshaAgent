@@ -8,6 +8,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.Fts5QueryUtil;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -41,7 +43,7 @@ public class RagContextEnricher implements ContextEnricher {
             // an apostrophe opens an unterminated phrase literal → SQLITE_ERROR.
             // Phrase search is also semantically better for RAG — we want the
             // whole phrase matched, not individual unordered tokens.
-            String ftsQuery = toFts5Phrase(goal);
+            String ftsQuery = Fts5QueryUtil.toFts5Phrase(goal);
 
             List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks);
             if (chunks.isEmpty()) return basePrompt;
@@ -66,28 +68,6 @@ public class RagContextEnricher implements ContextEnricher {
                 sessionId, e.getMessage());
             return basePrompt;
         }
-    }
-
-    /**
-     * Sanitizes a raw user query for FTS5 MATCH parameter safety.
-     * <p>
-     * FTS5 parses the MATCH value as a query expression — special characters
-     * like {@code '}, {@code `}, {@code *}, {@code ^} etc. cause syntax errors.
-     * For RAG retrieval, punctuation carries no semantic value, so all
-     * non-word characters are replaced with spaces. The result is wrapped
-     * in double-quotes for FTS5 phrase search to prevent operator interpretation
-     * of any residual tokens.
-     */
-    private String toFts5Phrase(String input) {
-        if (input == null || input.isBlank()) return "\"\"";
-
-        // Replace all non-word, non-space characters with a space.
-        // \w = [a-zA-Z0-9_] — covers all FTS5 special chars comprehensively.
-        String sanitized = input.replaceAll("[^\\w\\s]", " ").trim();
-
-        if (sanitized.isBlank()) return "\"\"";
-
-        return "\"" + sanitized + "\"";
     }
 
 }
