@@ -4,9 +4,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.inject.Inject;
+import org.apache.camel.Exchange;
+import org.apache.camel.component.telegram.model.IncomingMessage;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -15,10 +16,10 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.apache.camel.Exchange;
-import org.apache.camel.component.telegram.model.IncomingMessage;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Arc;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class TelegramAgentHandler {
@@ -106,22 +107,25 @@ public class TelegramAgentHandler {
         queueForChat(chatId).submit(() -> processPipeline(context));
     }
 
-    @ActivateRequestContext
     void processPipeline(MessageContext context) {
+        var requestContext = Arc.container().requestContext();
+        requestContext.activate();
         try {
-           log.infof("[TELEGRAM-ROUTE] Message received, entering pipeline for chat=%s", context.getChatId());
+            log.infof("TELEGRAM-ROUTE Message received, entering pipeline for chat %s", context.getChatId());
             pipeline.process(context);
         } catch (Exception e) {
             if ("Pipeline crash".equals(e.getMessage())) {
                 log.warnf("Expected test exception in message pipeline for chat %s: %s", context.getChatId(), e.getMessage());
             } else {
-                log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId(),e.getMessage());
+                log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId());
+                try {
+                    context.getSender().sendRaw(context.getUser(), "Sorry, an internal error occurred while processing your message.");
+                } catch (Exception sendEx) {
+                    log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
+                }
             }
-            try {
-                context.getSender().sendRaw(context.getUser(), "⚠️ Sorry, an internal error occurred while processing your message.");
-            } catch (Exception sendEx) {
-                log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId(),e.getMessage());
-            }
+        } finally {
+            requestContext.terminate();   // ← always release, even on exception
         }
     }
 }

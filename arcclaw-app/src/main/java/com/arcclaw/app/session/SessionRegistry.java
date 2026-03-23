@@ -36,7 +36,6 @@ public class SessionRegistry implements SessionIdResolver {
 
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
     protected String lookupSession(String channelType, String channelId, String userId) {
         try {
             return em.createQuery(
@@ -52,7 +51,6 @@ public class SessionRegistry implements SessionIdResolver {
         }
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
     protected String insertSession(String channelType, String channelId, String userId, String newSessionId) {
         SessionRegistryEntry entry = new SessionRegistryEntry();
         entry.channelType = channelType;
@@ -66,6 +64,7 @@ public class SessionRegistry implements SessionIdResolver {
     }
 
     @Override
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public String resolveOrCreate(String channelType, String channelId, String userId) {
         String key = channelType + ":" + channelId + ":" + userId;
         ReentrantLock lock = userLocks.computeIfAbsent(key, k -> new ReentrantLock());

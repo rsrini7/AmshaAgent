@@ -24,7 +24,7 @@ public class CommandDispatchHandler implements MessageHandler {
 
     @Override
     public int priority() {
-        return 30;
+        return 45;
     }
 
     @Override
