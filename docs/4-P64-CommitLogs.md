@@ -71,3 +71,7 @@ Add two markdown reference files:
 These documents serve as developer references for common codebase search operations and test troubleshooting workflows.
 
 ---
+
+style: reorder imports to follow Java conventions
+
+Apply consistent import ordering across the codebase by moving static imports after non-static imports and grouping jakarta imports before other imports. This improves readability and aligns with standard Java style guidelines.
