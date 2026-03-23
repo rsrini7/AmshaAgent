@@ -142,6 +142,13 @@
       <version>9.2.1</version>
     </dependency>
 
+    <!-- HTML Escape -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-text</artifactId>
+      <version>1.15.0</version>
+    </dependency>
+
     <!-- Observability -->
     <dependency>
       <groupId>io.quarkus</groupId>

@@ -57,6 +57,8 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
+        log.infof("TELEGRAM-SEND to=%s text=[%s]", recipient.channelId(), text);
+
         if (recipient == null || recipient.channelId() == null) {
             log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
             return;

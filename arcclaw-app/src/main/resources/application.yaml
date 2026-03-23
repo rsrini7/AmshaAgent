@@ -405,8 +405,6 @@ mp:
       console:
         enable: false
       level: ERROR
-      console:
-        level: ERROR
       category:
         "io.quarkus":
           level: ERROR     # Silences "Started in...", "Installed features..."
