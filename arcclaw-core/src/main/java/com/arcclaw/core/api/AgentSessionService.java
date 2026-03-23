@@ -92,10 +92,10 @@ public class AgentSessionService {
         this.vThreads = vThreads;
     }
 
-    public String createSession() {
+    public String createSession(AutonomyLevel autonomyLevel) {
         String sessionId = UUID.randomUUID().toString();
-        log.infof("Creating new session:  %s", sessionId);
-        heartbeatTracker.recordHeartbeat(sessionId);
+        log.infof("Creating new session: %s (autonomy=%s)", sessionId, autonomyLevel);
+        heartbeatTracker.recordHeartbeat(sessionId, autonomyLevel != null ? autonomyLevel : AutonomyLevel.SUPERVISED);
         return sessionId;
     }
 
@@ -138,14 +138,22 @@ public class AgentSessionService {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 devSeeder.seedDevSecrets();
+                AutonomyLevel level = getOrDefaultAutonomy(sessionId);
+                
                 return WorkspaceContext.run(
-                        sessionId, "rest:api", sessionId, AutonomyLevel.SUPERVISED, request.agentRole(), ChannelType.REST_API, () -> {
+                        sessionId, "rest:api", sessionId, level, request.agentRole(), ChannelType.REST_API, () -> {
                             MessageContext context = createRestContext(sessionId, request.goal());
+                            context.setAutonomyLevel(level);
                             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations, context);
                             return responseMapper.mapResult(result, false);
                         }
                 );
             });
+        } catch (com.arcclaw.core.governance.BudgetExceededException e) {
+            return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
+        } catch (com.arcclaw.core.governance.BudgetWarningException e) {
+            // Treat warning as success for the call itself, with the message attached
+            return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
             log.errorf("Sync agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
             return Response.serverError()
@@ -192,10 +200,17 @@ public class AgentSessionService {
 
                 devSeeder.seedDevSecrets();
 
-                AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
+                AutonomyLevel sessionLevel = heartbeatTracker.getAutonomyLevel(sessionId);
+                if (sessionLevel == null) {
+                    log.warnf("No stored autonomy level found for session %s, defaulting to SUPERVISED", sessionId);
+                    sessionLevel = AutonomyLevel.SUPERVISED;
+                }
+
+                AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : sessionLevel;
 
                 WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, request.agentRole(), ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
+                    context.setAutonomyLevel(runLevel);
                     if (isApproval) {
                         context.setResumeSignal(true);
                     }
@@ -204,6 +219,10 @@ public class AgentSessionService {
                     response.resume(responseMapper.mapResult(result, true));
                 });
 
+            } catch (com.arcclaw.core.governance.BudgetExceededException e) {
+                response.resume(Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build());
+            } catch (com.arcclaw.core.governance.BudgetWarningException e) {
+                response.resume(Response.ok().entity(Map.of("warning", e.getMessage())).build());
             } catch (Exception e) {
                 log.errorf("Async agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
                 response.resume(Response.serverError()
@@ -241,6 +260,10 @@ public class AgentSessionService {
                     return responseMapper.mapResult(result, false);
                 });
             });
+        } catch (com.arcclaw.core.governance.BudgetExceededException e) {
+            return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
+        } catch (com.arcclaw.core.governance.BudgetWarningException e) {
+            return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
             log.errorf("Failed to approve session " + sessionId, e);
             return Response.serverError().entity(e.getMessage()).build();
@@ -379,6 +402,18 @@ public class AgentSessionService {
             log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage(), e);
             return Optional.empty(); // fall through to agent loop
         }
+    }
+
+    private AutonomyLevel getOrDefaultAutonomy(String sessionId) {
+        AutonomyLevel level = heartbeatTracker.getAutonomyLevel(sessionId);
+        if (level != null) return level;
+        
+        // Fallback to latest checkpoint for this session if heartbeat was lost
+        return agentStore.loadLatestAutonomyForSession(sessionId)
+                .orElseGet(() -> {
+                    log.warnf("No stored autonomy found for session %s, defaulting to SUPERVISED", sessionId);
+                    return AutonomyLevel.SUPERVISED;
+                });
     }
 
     private static class AwaitingApprovalException extends RuntimeException {

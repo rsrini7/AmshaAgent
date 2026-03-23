@@ -144,7 +144,8 @@ public class CronResultHandler {
     }
 
     private void fireCompletionEvent(AgentCronEntity job, String executionId, String answer, AgentResult.FailureCategory category) {
-        ChannelType chType = ChannelType.fromString(job.channelType);
+        // Fallback to TELEGRAM for legacy rows missing channelType
+        ChannelType chType = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
         String platformId = job.channelPlatformId != null ? job.channelPlatformId : job.chatId;
 
         try {

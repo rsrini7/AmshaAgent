@@ -49,10 +49,12 @@ public class ReasoningStepParser {
                     });
                 }
             } catch (Exception e) {
-                log.warn("LLM provided invalid JSON arguments: " + req.arguments());
-                return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, Map.of("error",
-                        "System Error: You provided invalid JSON formatting for the tool arguments. Please ensure strict JSON compliance without trailing commas."),
-                        inputTokens, outputTokens);
+                log.warnf("JSON parse error for session [%s]: %s", sessionId, e.getMessage());
+                // signal retry — NOT finish
+                return ReasoningStep.schemaError(
+                        "JSON parse error — respond with valid JSON: " + e.getMessage(),
+                        inputTokens, outputTokens
+                );
             }
             return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
         } else {

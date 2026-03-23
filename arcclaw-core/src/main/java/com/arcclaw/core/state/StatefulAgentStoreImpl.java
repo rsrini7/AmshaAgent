@@ -72,23 +72,27 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpoint checkpoint;
+        com.arcclaw.core.security.AutonomyLevel autonomy = com.arcclaw.core.scope.WorkspaceContext.autonomy();
+        
         if (existing.isPresent()) {
             checkpoint = existing.get();
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            log.debugf("Updated checkpoint for session=%s, role=%s", sessionId, agentRole);
+            checkpoint.setAutonomyLevel(autonomy);
+            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         } else {
             checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId(sessionId);
             checkpoint.setAgentRole(agentRole);
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+            checkpoint.setAutonomyLevel(autonomy);
             em.persist(checkpoint);
             
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
+            auditService.record(sessionId, userId, agentRole, com.arcclaw.core.audit.SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
             
-            log.infof("Created checkpoint for session=%s, role=%s", sessionId, agentRole);
+            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         }
         return checkpoint;
     }
@@ -119,6 +123,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setFailReason(checkpoint.getFailReason());
             managed.setPendingToolName(checkpoint.getPendingToolName());
             managed.setPendingToolParametersJson(checkpoint.getPendingToolParametersJson());
+            managed.setAutonomyLevel(checkpoint.getAutonomyLevel());
             return managed;
         }
     }
@@ -427,5 +432,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize reasoning steps", e);
         }
+    }
+
+    @Override
+    @Transactional
+    public Optional<com.arcclaw.core.security.AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
+        TypedQuery<com.arcclaw.core.security.AutonomyLevel> q = em.createQuery(
+                "SELECT c.autonomyLevel FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
+                com.arcclaw.core.security.AutonomyLevel.class
+        );
+        q.setParameter("sid", sessionId);
+        q.setMaxResults(1);
+        return q.getResultList().stream().findFirst();
     }
 }

@@ -328,6 +328,9 @@ arcclaw:
     gc-interval: "5m"
     heartbeat-interval: "60s"
 
+  recovery:
+    stalled-threshold-minutes: 15
+
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 
@@ -523,6 +526,9 @@ mp:
 
     cron:
       max-lookback-window: PT999H
+
+    recovery:
+      stalled-threshold-minutes: 15
 
 "%staging":
   quarkus:

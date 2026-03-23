@@ -24,7 +24,8 @@ public class ApprovalTimeoutNotifier {
                 return;
             }
 
-            ChannelType channelType = ChannelType.fromString(event.channelType());
+            // Fallback to TELEGRAM for notifications if type missing
+            ChannelType channelType = ChannelType.fromString(event.channelType()).orElse(ChannelType.TELEGRAM);
             ChannelUser recipient = new ChannelUser(
                     event.channelPlatformId(), "user", channelType);
 

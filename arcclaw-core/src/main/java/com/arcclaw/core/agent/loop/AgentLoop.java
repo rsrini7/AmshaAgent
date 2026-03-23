@@ -231,6 +231,11 @@ public class AgentLoop {
             result = AgentResult.failed(e.getMessage(), 
                     AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
+        } catch (com.arcclaw.core.governance.BudgetExceededException 
+                 | com.arcclaw.core.governance.BudgetWarningException e) {
+            // Re-throw so StructuredRetryLoop or higher-level components correctly
+            // see the hard stop signal.
+            throw e;
         } catch (ComplianceViolationException cve) {
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",
                     sessionId, cve.getEventType());
@@ -242,8 +247,9 @@ public class AgentLoop {
                     agentStore.save(cp);
                 });
             } catch (Exception ignored) {}
-            throw cve;
+            return result;
         } catch (Exception e) {
+            log.errorf("Agent execution failed for session %s: %s", sessionId, e.getMessage(), e);
             result = AgentResult.failed("SYSTEM_ERROR: " + e.getMessage(),
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
             try {
@@ -251,7 +257,7 @@ public class AgentLoop {
                     agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + e.getMessage())
                 );
             } catch (Exception ignored) {}
-            throw e;
+            return result;
         } finally {
             if (result != null) {
                 String goalHash = hashUtil.sha256hex(goal);

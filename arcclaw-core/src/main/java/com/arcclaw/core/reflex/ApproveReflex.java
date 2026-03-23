@@ -180,7 +180,8 @@ public class ApproveReflex implements AgentReflex {
             case AgentResult.LoopExceeded _ -> cronRepository.markFailed(cron.id, "Loop exceeded");
         }
 
-        ChannelType chType = ChannelType.fromString(cron.channelType);
+        // Fallback to TELEGRAM for legacy rows missing channelType
+        ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
 
         String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
 

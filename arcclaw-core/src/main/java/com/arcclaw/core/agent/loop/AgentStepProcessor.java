@@ -71,6 +71,18 @@ public class AgentStepProcessor {
                     Collections.unmodifiableList(history));
 
             if (step != null) {
+                if (ReasoningStep.OBSERVE.equals(step.action())) {
+                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", sessionId);
+                    llmSchemaErrorCount++;
+                    if (llmSchemaErrorCount >= 2) {
+                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                        return StepDecision.terminal(AgentResult.failed(
+                                "The agent could not complete this request due to repeated formatting errors.",
+                                AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
+                    }
+                    return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
+                }
+
                 try {
                     governanceLayer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
                     for (var observer : observers)

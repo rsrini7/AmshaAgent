@@ -50,8 +50,12 @@ public class CompactionHandler implements MessageHandler {
             if (compactionInFlight.compareAndSet(false, true)) {
                 compactionEvent.fireAsync(new CompactionRequest(sessionId, userId))
                         .toCompletableFuture()
+                        .thenRun(() -> {
+                            log.debugf("Compaction completed successfully for session %s — releasing inFlight lock", sessionId);
+                            compactionInFlight.set(false);
+                        })
                         .exceptionally(ex -> {
-                            log.errorf(ex, "Async compaction event delivery failed for session %s", sessionId);
+                            log.errorf(ex, "Async compaction event delivery failed for session %s — releasing inFlight lock", sessionId);
                             compactionInFlight.set(false);
                             return null;
                         });

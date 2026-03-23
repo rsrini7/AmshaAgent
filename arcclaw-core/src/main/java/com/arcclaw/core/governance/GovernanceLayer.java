@@ -55,6 +55,12 @@ public class GovernanceLayer {
         SessionBudget budget = budgets.computeIfAbsent(sessionId, k -> new SessionBudget(budgetUsd, WARNING_THRESHOLD));
         
         synchronized (budget) {
+            // Check if already exceeded before doing more work
+            if (budget.totalCost >= budget.hardLimit) {
+                throw new BudgetExceededException(
+                        String.format("Session budget of $%.2f already exceeded.", budget.hardLimit));
+            }
+
             budget.input += effectiveInput;
             budget.output += effectiveOutput;
             budget.totalCost += cost;
@@ -64,26 +70,26 @@ public class GovernanceLayer {
             log.debugf("Recorded LLM call for session %s: in=%d, out=%d, cost=$%.6f, total=$%.4f",
                     sessionId, inputTokens, outputTokens, cost, currentCost);
 
-            // 1. HARD LIMIT FIRST
-            if (currentCost > budget.hardLimit) {
-                log.warnf("Session %s EXCEEDED budget ($%.2f > $%.2f). Downgrading to READ_ONLY.",
-                        sessionId, currentCost, budgetUsd);
+            // 1. HARD LIMIT 
+            if (currentCost >= budget.hardLimit) {
+                log.warnf("Session %s EXCEEDED budget ($%.2f >= $%.2f).",
+                        sessionId, currentCost, budget.hardLimit);
 
                 throw new BudgetExceededException(
-                        String.format("Session budget of $%.2f exceeded. Total cost: $%.4f", budgetUsd,
+                        String.format("Session budget of $%.2f exceeded. Total cost: $%.4f", budget.hardLimit,
                                 currentCost));
             }
 
-            // 2. SOFT WARNING SECOND
+            // 2. SOFT WARNING 
             if (currentCost >= budget.warningLimit && !budget.warningSent) {
                 budget.warningSent = true;
                 log.warnf("Session %s approaching budget limit: $%.4f / $%.2f (%.0f%%)",
-                    sessionId, currentCost, budgetUsd,
-                    (currentCost / budgetUsd) * 100);
+                    sessionId, currentCost, budget.hardLimit,
+                    (currentCost / budget.hardLimit) * 100);
                 throw new BudgetWarningException(String.format(
                     "Session budget is %.0f%% consumed ($%.4f of $%.2f). " +
                     "Responses will be concise to conserve budget.",
-                    (currentCost / budgetUsd) * 100, currentCost, budgetUsd));
+                    (currentCost / budget.hardLimit) * 100, currentCost, budget.hardLimit));
             }
         }
     }

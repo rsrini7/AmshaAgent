@@ -69,13 +69,21 @@ public class AgentDispatchHandler implements MessageHandler {
         }
 
         final int resolvedMaxIterations = maxIterations;
+        
+        AutonomyLevel level = context.getAutonomyLevel().orElse(null);
+        if (level == null) {
+            log.warnf("No autonomy level found in MessageContext for session %s, defaulting to SUPERVISED", sessionId);
+            level = AutonomyLevel.SUPERVISED;
+        }
+
+        final AutonomyLevel finalLevel = level;
         AgentResult result;
         try {
             result = WorkspaceContext.run(
                 sessionId,
                 context.getUser().platformId(),
                 context.getChatId(),
-                AutonomyLevel.SUPERVISED,
+                finalLevel,
                 role,
                 () -> agentLoop.run(
                     sessionId,

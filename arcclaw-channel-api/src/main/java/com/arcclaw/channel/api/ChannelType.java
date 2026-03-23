@@ -1,5 +1,7 @@
 package com.arcclaw.channel.api;
 
+import java.util.Optional;
+
 /**
  * Identifies the originating channel for a message or command.
  * Used by {@link ChannelSender} and {@link ReplyRenderer} to dispatch to
@@ -14,16 +16,15 @@ public enum ChannelType {
     CLI;
 
     /**
-     * Safe parse from a DB-sourced string.
-     * Returns TELEGRAM if the value is null, blank, or unrecognized —
-     * prevents IllegalArgumentException on legacy rows.
+     * Parse from a string.
+     * Returns Optional.empty() if the value is null, blank, or unrecognized.
      */
-    public static ChannelType fromString(String value) {
-        if (value == null || value.isBlank()) return TELEGRAM;
+    public static Optional<ChannelType> fromString(String value) {
+        if (value == null || value.isBlank()) return Optional.empty();
         try {
-            return ChannelType.valueOf(value.toUpperCase());
+            return Optional.of(ChannelType.valueOf(value.toUpperCase()));
         } catch (IllegalArgumentException e) {
-            return TELEGRAM;
+            return Optional.empty();
         }
     }
 }

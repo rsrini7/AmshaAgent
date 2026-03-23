@@ -3,6 +3,7 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
+import com.arcclaw.core.security.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Column;
@@ -61,6 +62,10 @@ public class AgentCheckpoint {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CheckpointStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "autonomy_level", length = 20)
+    private AutonomyLevel autonomyLevel;
 
     /**
      * Jackson-serialized {@code List<ReasoningStep>}.
@@ -225,5 +230,13 @@ public class AgentCheckpoint {
 
     public void setStatus(CheckpointStatus status) {
         this.status = status;
+    }
+
+    public AutonomyLevel getAutonomyLevel() {
+        return autonomyLevel;
+    }
+
+    public void setAutonomyLevel(AutonomyLevel autonomyLevel) {
+        this.autonomyLevel = autonomyLevel;
     }
 }

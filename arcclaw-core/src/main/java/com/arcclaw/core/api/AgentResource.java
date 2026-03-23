@@ -33,9 +33,10 @@ public class AgentResource {
     AgentSessionService sessionService;
 
     @POST
-    public Response createSession() {
+    public Response createSession(@Valid com.arcclaw.core.api.dto.CreateSessionRequest request) {
+        var level = request != null ? request.autonomyLevel() : null;
         return Response.status(Response.Status.CREATED)
-                .entity(new CreateSessionResponse(sessionService.createSession()))
+                .entity(new CreateSessionResponse(sessionService.createSession(level)))
                 .build();
     }
 

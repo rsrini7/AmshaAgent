@@ -99,6 +99,7 @@ class AgentSessionServiceTest {
         // Ensure session exists by default so we don't return 404 in validateSession.
         // Marked lenient to avoid UnnecessaryStubbingException in tests that don't call validateSession.
         lenient().when(heartbeatTracker.exists(anyString())).thenReturn(true);
+        lenient().when(heartbeatTracker.getAutonomyLevel(anyString())).thenReturn(AutonomyLevel.SUPERVISED);
     }
 
     @AfterEach
@@ -109,9 +110,9 @@ class AgentSessionServiceTest {
 
     @Test
     void testCreateSession_recordsHeartbeatAndReturnsId() {
-        String sessionId = service.createSession();
+        String sessionId = service.createSession(AutonomyLevel.FULL);
         assertNotNull(sessionId);
-        verify(heartbeatTracker).recordHeartbeat(sessionId);
+        verify(heartbeatTracker).recordHeartbeat(sessionId, AutonomyLevel.FULL);
     }
 
     @Test

@@ -125,4 +125,72 @@ class CompactionHandlerTest {
             assertTimeout(Duration.ofMillis(100), () -> handler.handle(ctx));
         });
     }
+
+    // ── Phase 64-A: Component A6 — Compaction In-Flight Tests ────────────
+
+    @Test
+    void testCompactionInFlightReleasedOnObserverFailure() {
+        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
+            MessageContext ctx = mockContext("session1", "user1");
+            when(compactionService.shouldCompact("session1")).thenReturn(true);
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+
+            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future);
+
+            handler.handle(ctx);
+
+            // Trigger failure
+            future.completeExceptionally(new RuntimeException("Compaction failed"));
+
+            verify(compactionInFlight, timeout(1000)).set(false);
+        });
+    }
+
+    @Test
+    void testCompactionInFlightReleasedOnSuccess() {
+        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
+            MessageContext ctx = mockContext("session1", "user1");
+            when(compactionService.shouldCompact("session1")).thenReturn(true);
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+
+            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future);
+
+            handler.handle(ctx);
+
+            // Trigger success
+            future.complete(null);
+
+            verify(compactionInFlight, timeout(1000)).set(false);
+        });
+    }
+
+    @Test
+    void testSecondCompactionTriggeredAfterFirstFails() {
+        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
+            MessageContext ctx = mockContext("session1", "user1");
+            when(compactionService.shouldCompact("session1")).thenReturn(true);
+            
+            // First call
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            CompletableFuture<CompactionRequest> future1 = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future1);
+
+            handler.handle(ctx);
+            future1.completeExceptionally(new RuntimeException("First attempt failed"));
+            
+            // Wait for release
+            verify(compactionInFlight, timeout(1000)).set(false);
+
+            // Second call - should try again
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            CompletableFuture<CompactionRequest> future2 = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future2);
+
+            handler.handle(ctx);
+
+            verify(compactionEvent, times(2)).fireAsync(any());
+        });
+    }
 }

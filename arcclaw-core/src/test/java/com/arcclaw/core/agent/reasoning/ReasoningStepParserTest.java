@@ -39,7 +39,6 @@ class ReasoningStepParserTest {
                 .name("github")
                 .arguments("{\"repo\":\"arcclaw\"}")
                 .build();
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
@@ -59,7 +58,6 @@ class ReasoningStepParserTest {
     @Test
     void testParse_textResponse() {
         // Arrange
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         AiMessage aiMessage = AiMessage.aiMessage("Final Answer");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
@@ -74,14 +72,13 @@ class ReasoningStepParserTest {
     }
 
     @Test
-    void testParse_invalidJsonArgsFallsBackToFinish() {
+    void testParse_invalidJsonArgsReturnsObserve() {
         // Arrange
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_1")
                 .name("github")
                 .arguments("invalid json")
                 .build();
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
@@ -91,15 +88,14 @@ class ReasoningStepParserTest {
         ReasoningStep step = parser.parse("s1", "coordinator", response);
 
         // Assert
-        assertEquals(ReasoningStep.FINISH, step.action());
-        assertNotNull(step.actionInput().get("error"));
-        assertTrue(step.actionInput().get("error").toString().contains("invalid JSON"));
+        assertEquals(ReasoningStep.OBSERVE, step.action());
+        assertNotNull(step.observation());
+        assertTrue(step.observation().contains("JSON parse error"));
     }
 
     @Test
     void testParse_tokenUsagePopulated() {
         // Arrange
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         AiMessage aiMessage = AiMessage.aiMessage("OK");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
@@ -117,7 +113,6 @@ class ReasoningStepParserTest {
     @Test
     void testParse_nullTokenUsageDefaultsToZero() {
         // Arrange
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         AiMessage aiMessage = AiMessage.aiMessage("OK");
         ChatResponse response = ChatResponse.builder()
                 .aiMessage(aiMessage)
@@ -130,5 +125,26 @@ class ReasoningStepParserTest {
         // Assert
         assertEquals(0, step.inputTokens());
         assertEquals(0, step.outputTokens());
+    }
+
+    @Test
+    void testValidJsonParsesSuccessfully() {
+        // Arrange
+        ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
+                .id("call_1")
+                .name("search")
+                .arguments("{\"query\":\"test\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("Searching", Collections.singletonList(toolReq));
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(aiMessage)
+                .build();
+
+        // Act
+        ReasoningStep step = parser.parse("s1", "coordinator", response);
+
+        // Assert
+        assertEquals("search", step.action());
+        assertEquals("test", step.actionInput().get("query"));
     }
 }

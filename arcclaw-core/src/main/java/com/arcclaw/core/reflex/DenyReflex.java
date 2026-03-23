@@ -152,7 +152,8 @@ public class DenyReflex implements AgentReflex {
 
         cronRepository.markFailed(cron.id, "User denied tool execution.");
 
-        ChannelType chType = ChannelType.fromString(cron.channelType);
+        // Fallback to TELEGRAM for legacy rows missing channelType
+        ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
 
         String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
 

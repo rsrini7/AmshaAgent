@@ -6,6 +6,7 @@ import org.jboss.logging.Logger;
 
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
+import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -46,6 +47,10 @@ public class StructuredRetryLoop {
         try {
             // Attempt 1
             return executeWithBudgetGate(sessionId, call);
+        } catch (BudgetWarningException e1) {
+            log.warnf("Budget warning for session %s during %s: %s", sessionId, operationName, e1.getMessage());
+            // Absorb warning and proceed
+            return call.get();
         } catch (JsonExtractionException e1) {
             log.warnf("First extraction attempt failed for %s. Retrying...", operationName);
             
@@ -60,6 +65,9 @@ public class StructuredRetryLoop {
                         "Success after recovery: " + e1.getMessage());
                 
                 return result;
+            } catch (BudgetWarningException ew) {
+                log.warnf("Budget warning during retry for %s: %s", operationName, ew.getMessage());
+                return call.get();
             } catch (JsonExtractionException e2) {
                 log.errorf("Extraction failed after retry for %s. Raw: %s", operationName, e2.getRawResponse());
                 throw new StructuredOutputException("Failed to extract structured output after retry: " + e2.getMessage(), e2);
