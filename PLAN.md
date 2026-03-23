@@ -801,6 +801,53 @@ Complete post-mortem and resolution of critical blockers encountered *exclusivel
 
 ---
 
+# Phase 64-A — Governance & Error Handling (Tier A) ✅
+
+Hardened budget enforcement with atomic updates and fixed critical RAG/API bugs.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Atomic Budget Enforcement**: Budget updates in `GovernanceLayer` are now `synchronized` to prevent race conditions during concurrent LLM calls. The hard budget limit is checked **before** the soft warning to ensure immediate enforcement.
+
+> [!TIP]
+> **FTS5 Non-ASCII Indexing**: Switched to `unicode61` tokenizer with `remove_diacritics 2` for FTS5 tables. This fixes a silent failure where Japanese text or Emojis were ignored during semantic search indexing.
+
+> [!NOTE]
+> **REST Error Mapping**: `BudgetExceededException` is now explicitly caught in `AgentSessionService` and mapped to **HTTP 429** via `AgentResponseMapper`, providing clearer feedback to clients than a generic 500.
+
+## Completed Changes
+
+### Core Module — Governance & Persistence
+
+#### [MODIFY] [GovernanceLayer.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceLayer.java)
+- Reordered budget checks (Hard Limit > Soft Warning).
+- Added `synchronized` to `recordLlmCall` for atomic budget updates.
+
+#### [MODIFY] [CompactionSummaryRepository.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/persistence/CompactionSummaryRepository.java)
+- Explicitly configured FTS5 tokenizer: `tokenize = 'unicode61 remove_diacritics 2'`.
+
+### Core Module — API & Loop
+
+#### [MODIFY] [AgentResource.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResource.java)
+- Removed invalid `@DefaultValue` on `@POST` body.
+- Added null check for `CreateSessionRequest`.
+
+#### [MODIFY] [AgentSessionService.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentSessionService.java)
+- Added explicit catch blocks for `BudgetExceededException` (429) and `BudgetWarningException` (200).
+
+#### [MODIFY] [AgentLoop.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/AgentLoop.java)
+- Refactored exception handling to rethrow budget exceptions while converting others to `AgentResult.Failed`.
+
+## Verification
+
+- ✅ **`AgentResourceTest`**: Verified 429 on budget limit and correct error mapping.
+- ✅ **`DenyReflexTest`**: Verified `AgentRoleEnum.values()` iteration covers all roles.
+- ✅ **`AgentStateMachineRunnerTest`**: Verified ephemeral ReAct steps are not persisted.
+- ✅ **Manual FTS5 Check**: Japanese search results verified in SQLite.
+
+---
+
 # Phase 59 — MCP Server + Client Setup ✅
 
 Implemented the Model Context Protocol (MCP) server and client with dual-transport support (stdio/Podman and HTTP/SSE) and standardized tool integration.

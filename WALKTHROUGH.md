@@ -2415,3 +2415,40 @@ Hardened the security bootstrap and persistence layers by enforcing zero-on-use 
 - `Argon2idKeyDerivationTest` verified `pepperChars` are all zeros (`\0`) after call.
 - Zero raw literals remain for audit key name across the entire codebase.
 
+---
+
+## Phase 64-A — Governance & Error Handling (Tier A) ✅
+
+This phase addressed critical bugs in budget enforcement, FTS5 non-ASCII search, and REST API error mapping, ensuring the agent remains safe, responsive, and correct under edge-case conditions.
+
+### Key Features & Implementation:
+
+1. **Atomic Budget Enforcement**:
+   - Refactored `GovernanceLayer` to verify the **hard budget limit** before the soft warning threshold.
+   - Wrapped budget updates in a `synchronized` block to ensure thread-safety across concurrent agent sessions, preventing race conditions that could lead to budget overruns.
+
+2. **FTS5 Non-ASCII Indexing**:
+   - Modified `CompactionSummaryRepository` to explicitly use the `unicode61` tokenizer with `remove_diacritics 2` during FTS5 table creation.
+   - This ensures that non-ASCII characters (e.g., Japanese, Emojis) are correctly indexed and searchable, fixing a silent failure in the RAG layer.
+
+3. **REST API Resilience**:
+   - Resolved a **`ClassCastException`** in `AgentResource.createSession` caused by the misuse of `@DefaultValue` on a request body.
+   - Improved error mapping in `AgentSessionService` and `AgentLoop` to correctly propagate `BudgetExceededException` as an **HTTP 429 (Too Many Requests)** instead of a generic 500.
+
+4. **ReAct Loop Cleanliness**:
+   - Updated `AgentStepProcessor` to treat schema-correction `OBSERVE` steps as **ephemeral**. These steps are no longer persisted to the permanent chat history, keeping the agent's long-term memory clean and focused.
+
+5. **Exhaustive Role Iteration**:
+   - Fixed a bug in `DenyReflex` and `ApproveReflex` where only a subset of roles (`COORDINATOR`, `CODER`) were checked for checkpoints.
+   - Replaced the hardcoded list with `AgentRoleEnum.values()`, ensuring that roles like `ARCHITECT` are correctly handled in HITL approval flows.
+
+6. **Compaction Lock Safety**:
+   - Ensured that the `compactionInFlight` lock is always released in a `finally` block, preventing sessions from becoming permanently locked due to a compaction failure.
+
+**Verification Results**:
+- ✅ **Tests Run: 698 | Failures: 0 | Errors: 0**
+- ✅ `AgentResourceTest` verified: 429 for budget, 422 for user denial, 201 for session creation.
+- ✅ `DenyReflexTest` verified: `ARCHITECT` role now correctly handled.
+- ✅ `AgentStateMachineRunnerTest` verified: ReAct keywords no longer persist to history.
+- ✅ Japanese FTS5 search manually verified as working.
+
