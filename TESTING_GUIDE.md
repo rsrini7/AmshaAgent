@@ -18,7 +18,7 @@
 6. [Agent Runs — Core Interaction](#6-agent-runs--core-interaction)
 7. [Audit Log & HMAC Chain](#7-audit-log--hmac-chain)
 8. [Skills API](#8-skills-api)
-9. [MCP API](#9-mcp-api)
+9. [MCP API](#9-mcp-api) — includes [Skills & MCP ordered execution](#912-skills--ordered-test-execution-with-telegram-cross-checks)
 10. [Vault & Secrets](#10-vault--secrets)
 11. [Cron Scheduler](#11-cron-scheduler)
 12. [PII Redaction Tests](#12-pii-redaction-tests)
@@ -906,6 +906,98 @@ curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/does-not-exist \
 ```
 
 **Expect:** `404`
+
+---
+
+### 9.10 `11_skill.http` — file structure & prerequisite note
+
+> `11_skill.http` uses `@baseUrl = http://localhost:8080/api/v1` (includes the `/api/v1` path in the base variable). This is **inconsistent** with all other files which use `@baseUrl = http://localhost:8080`. Do not copy the `@baseUrl` line from this file into other files.
+
+The file is structured as five flows:
+
+| Flow | Coverage |
+|---|---|
+| **A** | `SKILL-1` — List existing skills |
+| **B** | `SKILL-2/3` — Create code-reviewer + researcher; `SKILL-5` — upsert code-reviewer with extra trigger |
+| **C** | `SKILL-14` — Force registry refresh |
+| **D** | `SKILL-11/12` — Delete researcher, verify gone |
+| **E** | `SKILL-ERR-1–6` — bad YAML, unknown capability, maxBudgetUsd rejection, 404, 401 |
+
+---
+
+### 9.11 `12_mcp.http` — file structure & critical prerequisite
+
+> **Always run `MCP-ADMIN-1` before any protocol flow.** If `serverEnabled:false` (or 404), `MCP-1` (initialize) returns 404 and you have no `Mcp-Session-Id` for any subsequent request. The entire protocol flow collapses silently.
+>
+> `12_mcp.http` uses **two** base variables:
+> - `@adminBase = http://localhost:8080/api/v1` — for REST admin endpoints
+> - `@mcpBase   = http://localhost:8080` — for the MCP JSON-RPC protocol endpoint at `/mcp`
+
+The file is structured as five flows:
+
+| Flow | Coverage |
+|---|---|
+| **A** | `MCP-ADMIN-1/2` — Status + tool list (run first as health check) |
+| **B** | `MCP-1 → MCP-5` — Full protocol: initialize → notifications/initialized → tools/list → memory_search → github |
+| **C** | `MCP-ERR-1–4` — Disallowed tool, missing session ID, stale session ID, unknown tool name |
+| **D** | `MCP-CLIENT-1–6` — Self-connect smoke test: connect → verify tools → list servers → disconnect → verify empty |
+| **E** | `MCP-CLIENT-ERR-1–5` — Missing url, unreachable server, disconnect 404, duplicate connect, 401 |
+
+---
+
+### 9.12 Skills — ordered test execution with Telegram cross-checks
+
+Run `11_skill.http` requests in this order. Telegram steps verify that the registry change is live without a restart.
+
+| # | What to run | What to verify |
+|---|---|---|
+| 1 | `SKILL-1` | Your existing DB-tier skills are listed; `source:"database"` for each |
+| 2 | `SKILL-2` + `SKILL-3` | Both return `201 {"message":"Skill saved and registry reloaded: ..."}` |
+| 3 | **Telegram**: `"review my code for security issues"` | `⏳` then code-reviewer-style response. Logs: `SkillReflex matched skill:code-reviewer` — **no** `IntentClassificationHandler` log |
+| 4 | **Telegram**: `"how does the sort algorithm work"` | Researcher persona response. Logs: `SkillReflex matched skill:researcher` |
+| 5 | `SKILL-5` (upsert code-reviewer) | Returns `201`, not a duplicate. `SKILL-6` confirms single entry with updated trigger count |
+| 6 | `SKILL-14` (force refresh) | Response shows `{"message":"Skill registry refreshed"}` |
+| 7 | `SKILL-11` (delete researcher) + `SKILL-12` (list) | Researcher gone from list |
+| 8 | **Telegram**: `"how does the sort algorithm work"` again | Now routes via Groq — `IntentClassificationHandler` log appears instead of `SkillReflex` |
+| 9 | `SKILL-ERR-1 → SKILL-ERR-6` | 400 (bad YAML), 201 with WARN log (unknown capability silently excluded), 400 or silent exclude (maxBudgetUsd), 404 (delete non-existent), 401 (missing key), 401 (no key on GET) |
+
+---
+
+### 9.13 MCP server (inbound) — ordered test execution with Telegram cross-checks
+
+Run `12_mcp.http` Flow A, then Flow B in strict order.
+
+| # | What to run | What to verify |
+|---|---|---|
+| 1 | `MCP-ADMIN-1` | `{"serverEnabled":true,"dynamicToolCount":0}` — if 404, check `.env` `ARCCLAW_MCP_SERVER_ENABLED` |
+| 2 | `MCP-ADMIN-2` | `exposedInternalTools` has github + memory_search; `registeredDynamicTools:[]` |
+| 3 | `MCP-1` (initialize) | `200`, `Mcp-Session-Id` header captured into `{{mcpSessionId}}` |
+| 4 | `MCP-2` (notifications/initialized) | `202` — handshake complete |
+| 5 | `MCP-3` (tools/list) | Both tools appear in the `tools` array |
+| 6 | `MCP-4` (memory_search call) | `result.content[0].text` populated; audit log shows `MCP_TOOL_INVOKED` |
+| 7 | `MCP-5` (github call) | Content block returned — or graceful error string if `GITHUB_TOKEN` not seeded; still HTTP 200 |
+| 8 | **Telegram**: `/mcp` | McpReflex shows: `Exposed internal tools (2): github, memory_search` and `Dynamic MCP tools: none connected` |
+| 9 | `MCP-ERR-1` | JSON-RPC error body for `sandbox_exec` (not in allowlist, removed from enum after Phase 64-D7) |
+| 10 | `MCP-ERR-2` | 4xx for missing `Mcp-Session-Id` header |
+
+---
+
+### 9.14 MCP client (outbound) — ordered self-connect smoke test
+
+No external MCP server required. ArcClaw connects to itself.
+
+| # | What to run | What to verify |
+|---|---|---|
+| 1 | `MCP-CLIENT-1` (self-connect) | `{"status":"connected","toolsRegistered":2}` — proves full outbound stack: `McpConnectResource → McpClientService → MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()` |
+| 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 2 entries; both `mcpServerName:"self"`, `transport:"HTTP_SSE"` |
+| 3 | `MCP-CLIENT-3` (list servers) | `{"connectedServers":[{"name":"self","toolCount":2}],"totalDynamicTools":2}` |
+| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools (2): github [self, HTTP_SSE], memory_search [self, HTTP_SSE]` |
+| 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":2}` |
+| 6 | `MCP-CLIENT-6` | `registeredDynamicTools:[]` — confirmed empty |
+| 7 | **Telegram**: `/mcp` | Back to `Dynamic MCP tools: none connected` |
+| 8 | `MCP-CLIENT-ERR-1–5` | `400` (missing url), `502` (unreachable), `404` (disconnect unknown), `409` or overwrite (duplicate connect), `401` (no key) |
+
+For a real external MCP server: uncomment `MCP-CLIENT-7` in `12_mcp.http`, fill in the live URL, then chat normally in Telegram — the LLM invokes dynamic tools exactly like built-in ones via `ExternalMcpToolAdapter`.
 
 ---
 
