@@ -29,7 +29,7 @@ class AllowlistHandlerTest {
         handler = new AllowlistHandler();
         handler.allowlist = allowlist;
 
-        ChannelUser user = new ChannelUser("123", "alice", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         context = new MessageContext("chat1", user, new ChannelMessage.CliMessage(user, "hi", "sid", Instant.now()), sender);
     }
 

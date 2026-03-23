@@ -346,7 +346,7 @@ public class AgentSessionService {
     }
 
     private MessageContext createRestContext(String sessionId, String goal) {
-        ChannelUser user = new ChannelUser("rest:api", "REST API User", ChannelType.REST_API);
+        ChannelUser user = new ChannelUser("rest:api", "rest:api", "REST API User", ChannelType.REST_API);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "rest-api-" + sessionId, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.REST_API; }

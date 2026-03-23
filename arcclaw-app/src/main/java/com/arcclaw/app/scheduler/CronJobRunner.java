@@ -94,7 +94,7 @@ public class CronJobRunner {
     }
 
     private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal) {
-        ChannelUser user = new ChannelUser(job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
+        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.REST_API; }

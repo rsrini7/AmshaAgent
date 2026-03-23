@@ -86,7 +86,7 @@ public class AskCommand implements Runnable {
     }
     
     private MessageContext createCliContext(String sessionId, String goal) {
-        ChannelUser user = new ChannelUser("cli-user", "CLI User", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, goal, sessionId, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.CLI; }

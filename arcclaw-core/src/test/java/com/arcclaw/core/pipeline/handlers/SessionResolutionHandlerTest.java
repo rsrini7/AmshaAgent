@@ -1,13 +1,12 @@
 package com.arcclaw.core.pipeline.handlers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -15,11 +14,12 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -32,39 +32,45 @@ class SessionResolutionHandlerTest {
     @Mock
     SessionHeartbeatTracker heartbeatTracker;
 
-    @InjectMocks
+    @Mock
+    SessionIdResolver sessionIdResolver;
+
     SessionResolutionHandler handler;
+
+    private static final String FIXED_SESSION_ID = "test-session-abc-123";
+
+    @BeforeEach
+    void setUp() {
+        handler = new SessionResolutionHandler(agentStore, heartbeatTracker, sessionIdResolver);
+        // All tests use the same fixed session ID from the mock resolver
+        when(sessionIdResolver.resolveOrCreate("TELEGRAM", "chat1", "u1"))
+            .thenReturn(FIXED_SESSION_ID);
+    }
 
     @Test
     void testSessionResolutionWithStoredAutonomy() {
-        ChannelUser user = new ChannelUser("u1", "User 1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
-        
         MessageContext context = new MessageContext("chat1", user, msg, sender);
-        
-        // Match the UUID v3 (MD5) of "chat1:u1"
-        String sessionId = UUID.nameUUIDFromBytes("chat1:u1".getBytes(StandardCharsets.UTF_8)).toString();
-        
-        when(heartbeatTracker.getAutonomyLevel(sessionId)).thenReturn(AutonomyLevel.FULL);
+
+        when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(AutonomyLevel.FULL);
 
         handler.handle(context);
 
-        assertEquals(sessionId, context.getSessionId().orElse(null));
+        assertEquals(FIXED_SESSION_ID, context.getSessionId().orElse(null));
         assertEquals(AutonomyLevel.FULL, context.getAutonomyLevel().orElse(null));
     }
 
     @Test
     void testSessionResolutionWithCheckpointFallback() {
-        ChannelUser user = new ChannelUser("u1", "User 1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
-        
         MessageContext context = new MessageContext("chat1", user, msg, sender);
-        String sessionId = UUID.nameUUIDFromBytes("chat1:u1".getBytes(StandardCharsets.UTF_8)).toString();
 
-        when(heartbeatTracker.getAutonomyLevel(sessionId)).thenReturn(null);
-        when(agentStore.loadLatestAutonomyForSession(sessionId)).thenReturn(Optional.of(AutonomyLevel.READONLY));
+        when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(null);
+        when(agentStore.loadLatestAutonomyForSession(FIXED_SESSION_ID)).thenReturn(Optional.of(AutonomyLevel.READONLY));
 
         handler.handle(context);
 
@@ -73,18 +79,33 @@ class SessionResolutionHandlerTest {
 
     @Test
     void testSessionResolutionDefaultsToSupervised() {
-        ChannelUser user = new ChannelUser("u1", "User 1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
-        
         MessageContext context = new MessageContext("chat1", user, msg, sender);
-        String sessionId = UUID.nameUUIDFromBytes("chat1:u1".getBytes(StandardCharsets.UTF_8)).toString();
 
-        when(heartbeatTracker.getAutonomyLevel(sessionId)).thenReturn(null);
-        when(agentStore.loadLatestAutonomyForSession(sessionId)).thenReturn(Optional.empty());
+        when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(null);
+        when(agentStore.loadLatestAutonomyForSession(FIXED_SESSION_ID)).thenReturn(Optional.empty());
 
         handler.handle(context);
 
         assertEquals(AutonomyLevel.SUPERVISED, context.getAutonomyLevel().orElse(null));
+    }
+
+    @Test
+    void testSessionIdComesFromResolver() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
+        ChannelSender sender = mock(ChannelSender.class);
+        MessageContext context = new MessageContext("chat1", user, msg, sender);
+
+        when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(AutonomyLevel.SUPERVISED);
+
+        handler.handle(context);
+
+        // Session ID must come from the resolver, not from MD5/UUID v3
+        String sessionId = context.getSessionId().orElse(null);
+        assertNotNull(sessionId);
+        assertEquals(FIXED_SESSION_ID, sessionId);
     }
 }

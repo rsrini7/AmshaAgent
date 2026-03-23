@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.jboss.logging.Logger;
 
@@ -32,6 +33,9 @@ public class AuditEventRepository {
     @Inject
     AuditHashUtil hashUtil;
 
+    @Inject
+    SessionAuditSequencer sequencer;
+
     /**
      * Persists an AuditEvent and computes its HMAC chain fields.
      * This method is deliberately NOT annotated with @Transactional.
@@ -39,31 +43,37 @@ public class AuditEventRepository {
      * REQUIRED transaction boundary.
      */
     public void record(AuditEvent event) {
-        // Step 1: assign monotonic sequence for this session
-        List<Long> maxSeqResult = em.createQuery(
-                "SELECT COALESCE(MAX(a.sequence), 0) FROM AuditEvent a WHERE a.sessionId = :sid",
-                Long.class)
-                .setParameter("sid", event.sessionId)
-                .getResultList();
-        event.sequence = (maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst()) + 1;
+        ReentrantLock lock = sequencer.lockFor(event.sessionId);
+        lock.lock();
+        try {
+            // Step 1: assign monotonic sequence for this session
+            List<Long> maxSeqResult = em.createQuery(
+                    "SELECT COALESCE(MAX(a.sequence), 0) FROM AuditEvent a WHERE a.sessionId = :sid",
+                    Long.class)
+                    .setParameter("sid", event.sessionId)
+                    .getResultList();
+            event.sequence = (maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst()) + 1;
 
-        // Step 2: chain to previous hash
-        String prevHash = findLatestHash(event.sessionId);
-        if (prevHash == null) {
-            prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
-        }
-        event.prevHash = prevHash;
-        
-        String payload = event.computePayloadStr();
-        event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
-        
-        if (event.hmacHash == null) {
-            Logger.getLogger(AuditEventRepository.class)
-                .errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.", event.sessionId);
-            event.hmacHash = "error-null-fallback-" + UUID.randomUUID();
-        }
+            // Step 2: chain to previous hash
+            String prevHash = findLatestHash(event.sessionId);
+            if (prevHash == null) {
+                prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
+            }
+            event.prevHash = prevHash;
+            
+            String payload = event.computePayloadStr();
+            event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
+            
+            if (event.hmacHash == null) {
+                Logger.getLogger(AuditEventRepository.class)
+                    .errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.", event.sessionId);
+                event.hmacHash = "error-null-fallback-" + UUID.randomUUID();
+            }
 
-        em.persist(event);
+            em.persist(event);
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**

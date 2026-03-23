@@ -65,7 +65,7 @@ class TelegramAgentHandlerTest {
     void testValidMessageDelegatesToPipeline() {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
+                new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
 
         handler.receiveMessage(exchange);
@@ -76,8 +76,26 @@ class TelegramAgentHandlerTest {
         MessageContext ctx = captor.getValue();
         assertEquals("chat123", ctx.getChatId());
         assertEquals("456", ctx.getUser().platformId());
+        assertEquals("chat123", ctx.getUser().channelId());
         assertEquals("alice", ctx.getUser().displayName());
         assertInstanceOf(ChannelMessage.TelegramMessage.class, ctx.getMessage());
+    }
+
+    @Test
+    void testTelegramChannelUserChannelIdEqualsChatId() {
+        Exchange exchange = createExchange("groupChat999", "123", "bob", "hello");
+        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
+                new ChannelUser("123", "groupChat999", "bob", ChannelType.TELEGRAM), "hello", "groupChat999", Instant.now());
+        when(mapper.map(eq("hello"), any(), eq("groupChat999"))).thenReturn(msg);
+
+        handler.receiveMessage(exchange);
+
+        ArgumentCaptor<MessageContext> captor = ArgumentCaptor.forClass(MessageContext.class);
+        verify(pipeline).process(captor.capture());
+
+        MessageContext ctx = captor.getValue();
+        assertEquals("123", ctx.getUser().platformId());
+        assertEquals("groupChat999", ctx.getUser().channelId(), "Channel ID must equal Chat ID");
     }
 
     @Test
@@ -107,7 +125,7 @@ class TelegramAgentHandlerTest {
     void testTextMessageProcessedNormally() {
         Exchange exchange = createExchange("chat123", "456", "alice", "valid text");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("456", "alice", ChannelType.TELEGRAM), "valid text", "chat123", Instant.now());
+                new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "valid text", "chat123", Instant.now());
         when(mapper.map(eq("valid text"), any(), eq("chat123"))).thenReturn(msg);
 
         handler.receiveMessage(exchange);
@@ -120,7 +138,7 @@ class TelegramAgentHandlerTest {
     void testExceptionInPipelineIsHandledGracefully() {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
+                new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
         doThrow(new RuntimeException("Pipeline crash")).when(pipeline).process(any());
 

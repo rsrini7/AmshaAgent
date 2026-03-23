@@ -70,7 +70,7 @@ public class TelegramAgentHandler {
                 String fallbackUserId = msg.getFrom() != null
                     ? String.valueOf(msg.getFrom().getId()) : "unknown";
                 ChannelUser fallbackUser = new ChannelUser(
-                    fallbackUserId, null, ChannelType.TELEGRAM);
+                    fallbackUserId, chatId, null, ChannelType.TELEGRAM);
 
                 queueForChat(chatId).submit(() ->
                     sender.sendRaw(fallbackUser,
@@ -84,7 +84,7 @@ public class TelegramAgentHandler {
         String username = msg.getFrom().getUsername();
         String text = msg.getText();
 
-        ChannelUser user = new ChannelUser(userId, username, ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser(userId, chatId, username, ChannelType.TELEGRAM);
         ChannelMessage channelMessage = messageMapper.map(text, user, chatId);
 
         if (channelMessage == null) {

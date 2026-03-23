@@ -103,7 +103,7 @@ class AgentDispatchHandlerTest {
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {
-        ChannelUser user = new ChannelUser("u1", "User 1", ChannelType.REST_API);
+        ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.REST_API);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, "test", "m1", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
         

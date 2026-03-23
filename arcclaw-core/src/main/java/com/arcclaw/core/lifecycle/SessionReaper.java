@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.persistence.SqliteErrorStrings;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -52,6 +53,9 @@ public class SessionReaper {
 
     @Inject
     Event<ApprovalTimedOutEvent> approvalTimedOutEvent;
+
+    @Inject
+    SessionAuditSequencer auditSequencer;
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
@@ -178,6 +182,7 @@ public class SessionReaper {
             log.warnf("GC sweep: session=%s expired", sessionId);
             workspaceManager.terminateSession(sessionId);
             heartbeatTracker.removeHeartbeat(sessionId);
+            auditSequencer.releaseStaleSession(sessionId);
         });
     }
 
@@ -247,5 +252,6 @@ public class SessionReaper {
 
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
+        auditSequencer.releaseStaleSession(cp.getSessionId());
     }
 }

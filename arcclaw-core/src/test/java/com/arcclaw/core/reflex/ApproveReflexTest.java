@@ -67,7 +67,7 @@ class ApproveReflexTest {
     }
 
     private MessageContext createContext(String input) {
-        ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("user-1", "user-1", "user-1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
         return new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
     }

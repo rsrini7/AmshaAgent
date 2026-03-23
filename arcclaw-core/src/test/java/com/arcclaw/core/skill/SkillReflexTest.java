@@ -33,7 +33,7 @@ class SkillReflexTest {
     }
 
     private MessageContext createContext(String input) {
-        ChannelUser user = new ChannelUser("user1", "user1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("user1", "user1", "user1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "session1", Instant.now());
         return new MessageContext("chat1", user, msg, mock(ChannelSender.class));
     }

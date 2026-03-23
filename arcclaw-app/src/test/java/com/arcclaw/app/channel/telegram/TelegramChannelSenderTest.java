@@ -31,7 +31,7 @@ class TelegramChannelSenderTest {
   @InjectMocks TelegramChannelSender sender;  // uses constructor injection
 
   private final ChannelUser user =
-      new ChannelUser("123", "alice", ChannelType.TELEGRAM);
+      new ChannelUser("123", "123", "alice", ChannelType.TELEGRAM);
 
   @Test
   void testSendWithNodesCallsSendRaw() {

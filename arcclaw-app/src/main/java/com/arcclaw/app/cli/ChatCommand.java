@@ -25,7 +25,6 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import picocli.CommandLine;
@@ -42,7 +41,6 @@ public class ChatCommand implements Runnable {
     @Inject WorkspaceManager workspaceManager;
     @Inject SessionHeartbeatTracker heartbeatTracker;
     @Inject ReflexRegistry reflexRegistry;
-    @Inject DevSecretSeeder devSeeder;
 
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
@@ -81,9 +79,7 @@ public class ChatCommand implements Runnable {
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> {
                     
-                    // Seed dev secrets so vault has GITHUB_TOKEN for this session
-                    devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
-
+                    // Seeding handled by DevSecretSeederStartup (build-profile guarded)
                     chatLoop(sessionId);
                     return null;
                 }
@@ -164,7 +160,7 @@ public class ChatCommand implements Runnable {
     }
 
     private MessageContext createCliContext(String sessionId, String input) {
-        ChannelUser user = new ChannelUser("cli-user", "CLI User", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.CLI; }

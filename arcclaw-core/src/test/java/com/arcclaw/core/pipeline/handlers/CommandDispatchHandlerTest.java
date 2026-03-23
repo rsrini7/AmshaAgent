@@ -34,7 +34,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testApproveWithCronIdStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
@@ -47,7 +47,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testApproveWithoutCronIdStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
@@ -60,7 +60,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testTextPassesThrough() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "Hello world", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
 
@@ -70,7 +70,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testDenyStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
 

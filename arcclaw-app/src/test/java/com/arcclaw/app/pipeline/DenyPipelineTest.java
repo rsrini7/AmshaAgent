@@ -53,7 +53,7 @@ public class DenyPipelineTest {
         // Mock allowlist to permit our test user
         when(allowlist.isAllowed(anyString(), anyString())).thenReturn(true);
 
-        user = new ChannelUser("user-123", "alice", ChannelType.CLI);
+        user = new ChannelUser("user-123", "user-123", "alice", ChannelType.CLI);
         sender = mock(ChannelSender.class);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "session-456", Instant.now());
         context = new MessageContext("chat-789", user, msg, sender);

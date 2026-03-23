@@ -12,8 +12,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.RagChunkEntity;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -27,7 +26,6 @@ public class GlobalKnowledgeBase {
     @Inject EntityManager em;
     @Inject EmbeddingModel embeddingModel;
     @Inject FtsConnectionInterceptor ftsInterceptor;
-    @Inject CompactionSummaryRepository compactionRepo;
 
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
@@ -50,13 +48,11 @@ public class GlobalKnowledgeBase {
                 .executeUpdate();
 
             // Persist raw text for hydration at search time.
-            // "rag:" prefix avoids PK collision with real session IDs.
-            var ragChunk = new CompactionSummaryEntity();
-            ragChunk.sessionId = "rag:" + chunkId;
-            ragChunk.summary = text;
+            var ragChunk = new RagChunkEntity();
+            ragChunk.chunkId = chunkId;
+            ragChunk.text = text;
+            ragChunk.source = "System"; // Example default source
             ragChunk.createdAt = Instant.now();
-            ragChunk.compactedAt = Instant.now();
-            ragChunk.messagesCompacted = 0;
             em.persist(ragChunk);
 
             return chunkId;
@@ -88,9 +84,8 @@ public class GlobalKnowledgeBase {
             for (Object[] row : rows) {
                 String chunkId = (String) row[0];
                 double score = 1.0 - ((Number) row[1]).doubleValue(); // cosine distance → similarity
-                String text = compactionRepo.findLatestBySessionId("rag:" + chunkId)
-                    .map(e -> e.summary)
-                    .orElse("");
+                RagChunkEntity chunkEntity = em.find(RagChunkEntity.class, chunkId);
+                String text = chunkEntity != null ? chunkEntity.text : "";
                 results.add(new ScoredChunk(chunkId, text, score));
             }
             return results;

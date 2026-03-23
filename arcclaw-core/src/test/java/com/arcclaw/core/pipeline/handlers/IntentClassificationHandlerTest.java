@@ -45,7 +45,7 @@ class IntentClassificationHandlerTest {
 
     @Test
     void testHandle_rateLimit_notifiesUserAndDefaultsToCoordinator() {
-        ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 
@@ -60,7 +60,7 @@ class IntentClassificationHandlerTest {
 
     @Test
     void testHandle_success_setsRole() {
-        ChannelUser user = new ChannelUser("u1", "user", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg, sender);
 

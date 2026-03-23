@@ -22,7 +22,7 @@ public class PromptInjectionReflexTest {
     PromptInjectionReflex reflex;
 
     private MessageContext createContext(String input) {
-        ChannelUser user = new ChannelUser("user", "user", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("user", "user", "user", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "sess", Instant.now());
         return new MessageContext("chat", user, msg, mock(ChannelSender.class));
     }

@@ -23,7 +23,7 @@ class MessagePipelineTest {
 
     @BeforeEach
     void setup() {
-        ChannelUser user = new ChannelUser("123", "alice", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
         context = new MessageContext("chat1", user, msg, sender);

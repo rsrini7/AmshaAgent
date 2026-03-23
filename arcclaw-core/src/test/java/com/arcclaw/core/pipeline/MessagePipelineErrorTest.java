@@ -27,7 +27,7 @@ class MessagePipelineErrorTest {
 
     @BeforeEach
     void setup() {
-        user = new ChannelUser("123", "alice", ChannelType.CLI);
+        user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         sender = mock(ChannelSender.class);
         context = new MessageContext("chat1", user, msg, sender);
