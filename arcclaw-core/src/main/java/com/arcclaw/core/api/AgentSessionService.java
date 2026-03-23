@@ -19,6 +19,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -53,6 +54,7 @@ public class AgentSessionService {
     private final SessionHeartbeatTracker heartbeatTracker;
     private final AgentResponseMapper responseMapper;
     private final ReflexRegistry reflexRegistry;
+    private final CheckpointResumeHandler checkpointResumeHandler;
     private final ExecutorService vThreads;
 
     protected AgentSessionService() {
@@ -64,6 +66,7 @@ public class AgentSessionService {
         this.heartbeatTracker = null;
         this.responseMapper = null;
         this.reflexRegistry = null;
+        this.checkpointResumeHandler = null;
         this.vThreads = null;        
     }
 
@@ -76,6 +79,7 @@ public class AgentSessionService {
                                SessionHeartbeatTracker heartbeatTracker,
                                AgentResponseMapper responseMapper,
                                ReflexRegistry reflexRegistry,
+                               CheckpointResumeHandler checkpointResumeHandler,
                                @VirtualThreads ExecutorService vThreads) {
         this.log = log;
         this.agentLoop = agentLoop;
@@ -85,6 +89,7 @@ public class AgentSessionService {
         this.heartbeatTracker = heartbeatTracker;
         this.responseMapper = responseMapper;
         this.reflexRegistry = reflexRegistry;
+        this.checkpointResumeHandler = checkpointResumeHandler;
         this.vThreads = vThreads;
     }
 
@@ -249,9 +254,10 @@ public class AgentSessionService {
 
                 MDC.put(MdcKeys.USER_ID, "rest:api");
                 return WorkspaceContext.run(sessionId, "rest:api", sessionId, AutonomyLevel.FULL, canonicalRole, ChannelType.REST_API, () -> {
-                    MessageContext context = createRestContext(sessionId, AgentSentinels.GOAL_RESUME_APPROVED);
+                    String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
+                    MessageContext context = createRestContext(sessionId, resumeGoal);
                     context.setResumeSignal(true);
-                    AgentResult result = agentLoop.run(sessionId, agentRole, AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 1, context);
+                    AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, 1, context);
                     return responseMapper.mapResult(result, false);
                 });
             });

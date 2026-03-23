@@ -85,6 +85,20 @@ public class AgentCheckpoint {
     @Column(name = "channel_type", length = 32)
     private String channelType;
 
+    /**
+     * The original user goal that triggered the agent loop which produced this
+     * checkpoint. Captured at {@code AWAITING_APPROVAL} transition time.
+     * <p>
+     * Used on resume so {@code RagContextEnricher} embeds the real user intent
+     * instead of the synthetic {@code AgentSentinels.GOAL_RESUME_APPROVED} string,
+     * which would produce semantically meaningless RAG query vectors.
+     * <p>
+     * Truncated to 2048 chars — goals longer than this are rare and SQLite TEXT
+     * has no hard limit, but the column bound prevents runaway input.
+     */
+    @Column(name = "original_goal", length = 2048)
+    private String originalGoal;
+
     /** Timestamp when a failure occurred (null if not failed). */
     private Instant failedAt;
 
@@ -167,6 +181,32 @@ public class AgentCheckpoint {
 
     public String getChannelType() { return channelType; }
     public void setChannelType(String channelType) { this.channelType = channelType; }
+
+    /**
+     * Returns the original user goal captured when this checkpoint was paused
+     * for human approval. Use this as the goal for {@code AgentStateMachineRunner}
+     * on resume — never use {@link com.arcclaw.core.agent.AgentSentinels#GOAL_RESUME_APPROVED}
+     * as the RAG query string.
+     */
+    public String getOriginalGoal() {
+        return originalGoal;
+    }
+
+    /**
+     * Sets the original user goal. Call this exactly once — inside
+     * {@code AgentStepProcessor.persistApprovalCheckpoint()} when the
+     * checkpoint transitions to {@code AWAITING_APPROVAL}.
+     * Never overwrite an already-set non-blank value.
+     */
+    public void setOriginalGoal(String originalGoal) {
+        // Guard: never overwrite a previously captured goal — the first
+        // real user intent is the one that matters for RAG on resume.
+        if (this.originalGoal == null || this.originalGoal.isBlank()) {
+            this.originalGoal = originalGoal != null && originalGoal.length() > 2048
+                    ? originalGoal.substring(0, 2048)
+                    : originalGoal;
+        }
+    }
 
     public Instant getFailedAt() {
         return failedAt;

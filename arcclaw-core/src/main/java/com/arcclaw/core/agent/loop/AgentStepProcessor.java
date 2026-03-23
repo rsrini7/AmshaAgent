@@ -273,7 +273,7 @@ public class AgentStepProcessor {
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
         ToolResponse response;
         try {
-            response = invokeTool(sessionId, agentRole, history, step, toolName, params);
+            response = invokeTool(sessionId, agentRole, history, step, toolName, params, goal);
         } catch (FastExitException e) {
             return e.decision;
         }
@@ -315,7 +315,7 @@ public class AgentStepProcessor {
         }
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
             return StepDecision.terminal(persistApprovalCheckpoint(
-                    sessionId, agentRole, p.toolName(), p.paramsJson(), history));
+                    sessionId, agentRole, p.toolName(), p.paramsJson(), history, goal));
         }
         return null; // PROCEED
     }
@@ -323,13 +323,13 @@ public class AgentStepProcessor {
     /** Invokes the tool — throws FastExitException if approval is required mid-invocation. */
     private ToolResponse invokeTool(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
-            String toolName, Map<String, Object> params) {
+            String toolName, Map<String, Object> params, String goal) {
         try {
             return invoker.invoke(toolName, params, sessionId);
         } catch (RequiresApprovalException e) {
             throw new FastExitException(StepDecision.terminal(
                     persistApprovalCheckpoint(sessionId, agentRole,
-                            e.getToolName(), e.getToolParametersJson(), history)));
+                            e.getToolName(), e.getToolParametersJson(), history, goal)));
         }
     }
 
@@ -391,9 +391,14 @@ public class AgentStepProcessor {
 
     // ── Checkpoint 
 
-    /** Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult. */
+    /**
+     * Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult.
+     * Captures the original user goal so RAG context enrichment on resume uses the
+     * correct embedding query instead of the synthetic resume sentinel string.
+     */
     AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,
-            String toolName, String paramsJson, List<ReasoningStep> history) {
+                                        String toolName, String paramsJson,
+                                        List<ReasoningStep> history, String goal) {   // ← goal added
         AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
                 .orElseGet(() -> {
                     AgentCheckpoint c = new AgentCheckpoint();
@@ -404,10 +409,10 @@ public class AgentStepProcessor {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
+        cp.setOriginalGoal(goal);   // ← capture real user goal before it's replaced by sentinel
         cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);
-        log.infof("[STATE-MACHINE] Pausing session %s for human approval of tool '%s'",
-                sessionId, toolName);
+        log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s", sessionId, toolName);
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
 
