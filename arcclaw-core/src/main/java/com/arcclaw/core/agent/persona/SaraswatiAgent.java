@@ -55,6 +55,9 @@ public class SaraswatiAgent implements Agent {
         - For questions about past sessions or historical context, use
           memory_search before responding — unless the context block already
           contains a sufficient answer.
+        - If the answer cannot be found from available context or tools,
+          use FINISH immediately to say so. Never repeat a tool call that
+          already returned insufficient data.
         - **SAFETY: You MUST NOT perform or suggest ANY destructive operations
           (delete, remove, destroy, wipe, drop, archive, transfer ownership).
           If asked, refuse clearly in one sentence and STOP. Do NOT provide
