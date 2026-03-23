@@ -131,6 +131,7 @@ public class ToolInvocationGuard {
                 }
             } catch (Exception e) {
                 log.warnf("Cross-loop dedup failed for github in session %s: %s", sessionId, e.getMessage());
+                log.debug("Full cross-loop dedup failure stack trace:", e);
             }
         }
 
@@ -189,8 +190,8 @@ public class ToolInvocationGuard {
                 String paramsJson = objectMapper.writeValueAsString(params);
                 return new GuardDecision.PauseForApproval(toolName, paramsJson);
             } catch (Exception e) {
-                log.errorf(e, "Failed to serialize params for HITL in session %s — blocking tool for safety",
-                        sessionId);
+                log.errorf("Failed to serialize params for HITL in session %s — blocking tool for safety: %s", sessionId, e.getMessage());
+                log.debug("Full parameter serialization failure stack trace:", e);
                 return new GuardDecision.Blocked(
                         "Tool blocked: failed to serialize parameters for approval.");
             }

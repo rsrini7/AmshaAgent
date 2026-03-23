@@ -150,12 +150,14 @@ public class SkillLoader {
                         LOG.warnf(w);
                         warnings.add(w);
                     } catch (Exception e) {
-                        LOG.warnf(e, "Failed to load static skill %s", resourcePath);
+                        LOG.warnf("Failed to load static skill %s: %s", resourcePath, e.getMessage());
+                        LOG.debug("Full static skill load failure stack trace:", e);
                     }
                 }
             }
         } catch (Exception e) {
-            LOG.errorf(e, "Fatal failure reading static skill index %s", INDEX_PATH);
+            LOG.errorf("Fatal failure reading static skill index %s: %s", INDEX_PATH, e.getMessage());
+            LOG.debug("Full static skill index failure stack trace:", e);
         }
         return warnings;
     }
@@ -174,11 +176,13 @@ public class SkillLoader {
                     LOG.warnf(w);
                     warnings.add(w);
                 } catch (Exception e) {
-                    LOG.warnf(e, "Failed to load database skill '%s'", entity.getName());
+                    LOG.warnf("Failed to load database skill '%s': %s", entity.getName(), e.getMessage());
+                    LOG.debug("Full database skill load failure stack trace:", e);
                 }
             }
         } catch (Exception e) {
-            LOG.error("Failed to query database skills", e);
+            LOG.errorf("Failed to query database skills: %s", e.getMessage());
+            LOG.debug("Full database skill query failure stack trace:", e);
         }
         return warnings;
     }

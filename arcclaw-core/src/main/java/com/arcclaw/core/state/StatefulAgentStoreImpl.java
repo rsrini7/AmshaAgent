@@ -335,7 +335,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(json, clazz);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize reasoning step component: %s", json);
+            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s", e.getMessage(), json);
+            log.debug("Full deserialization failure stack trace:", e);
             return null;
         }
     }
@@ -345,7 +346,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(json, typeRef);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize reasoning step component: %s", json);
+            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s", e.getMessage(), json);
+            log.debug("Full deserialization failure stack trace:", e);
             return null;
         }
     }

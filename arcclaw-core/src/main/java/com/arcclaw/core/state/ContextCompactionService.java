@@ -88,7 +88,8 @@ public class ContextCompactionService {
         try {
             compact(request.sessionId(), request.userId());
         } catch (Exception e) {
-            log.errorf(e, "Compaction failed for session %s", request.sessionId());
+            log.errorf("Compaction failed for session %s: %s", request.sessionId(), e.getMessage());
+            log.debug("Full compaction failure stack trace:", e);
         } finally {
             compactionInFlight.set(false);
         }

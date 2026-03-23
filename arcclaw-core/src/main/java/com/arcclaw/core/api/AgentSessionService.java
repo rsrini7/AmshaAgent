@@ -155,7 +155,8 @@ public class AgentSessionService {
             // Treat warning as success for the call itself, with the message attached
             return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
-            log.errorf("Sync agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
+            log.errorf("Sync agent run threw exception for session %s: %s", sessionId, e.getMessage());
+            log.debug("Full sync agent failure stack trace:", e);
             return Response.serverError()
                     .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
@@ -224,7 +225,8 @@ public class AgentSessionService {
             } catch (com.arcclaw.core.governance.BudgetWarningException e) {
                 response.resume(Response.ok().entity(Map.of("warning", e.getMessage())).build());
             } catch (Exception e) {
-                log.errorf("Async agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
+                log.errorf("Async agent run threw exception for session %s: %s", sessionId, e.getMessage());
+                log.debug("Full async agent failure stack trace:", e);
                 response.resume(Response.serverError()
                         .entity(Map.of("status", "ERROR", "message",
                             e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
@@ -265,7 +267,8 @@ public class AgentSessionService {
         } catch (com.arcclaw.core.governance.BudgetWarningException e) {
             return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
-            log.errorf("Failed to approve session " + sessionId, e);
+            log.errorf("Failed to approve session %s: %s", sessionId, e.getMessage());
+            log.debug("Full approval failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
             MDC.remove(MdcKeys.USER_ID);
@@ -294,7 +297,8 @@ public class AgentSessionService {
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
         } catch (Exception e) {
-            log.error("Failed to deny session " + sessionId, e);
+            log.errorf("Failed to deny session %s: %s", sessionId, e.getMessage());
+            log.debug("Full denial failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
             MDC.remove(MdcKeys.USER_ID);
@@ -315,8 +319,8 @@ public class AgentSessionService {
                             return Response.ok(new SessionStatusResponse(
                                     sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                         } catch (Exception e) {
-                            log.errorf("Failed to load steps for session %s: %s",
-                                    sessionId, e.getMessage(), e);
+                            log.errorf("Failed to load steps for session %s: %s", sessionId, e.getMessage());
+                            log.debug("Full load steps failure stack trace:", e);
                             return Response.serverError().entity(e.getMessage()).build();
                         }
                     })
@@ -399,7 +403,8 @@ public class AgentSessionService {
                     )).build());
 
         } catch (Exception e) {
-            log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage(), e);
+            log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage());
+            log.debug("Full slash command failure stack trace:", e);
             return Optional.empty(); // fall through to agent loop
         }
     }

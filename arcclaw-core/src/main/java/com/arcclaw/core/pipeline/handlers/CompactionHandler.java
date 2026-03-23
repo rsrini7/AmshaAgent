@@ -55,7 +55,8 @@ public class CompactionHandler implements MessageHandler {
                             compactionInFlight.set(false);
                         })
                         .exceptionally(ex -> {
-                            log.errorf(ex, "Async compaction event delivery failed for session %s — releasing inFlight lock", sessionId);
+                            log.errorf("Async compaction event delivery failed for session %s (Exception: %s) — releasing inFlight lock", sessionId, ex.getMessage());
+                            log.debug("Full compaction failure stack trace:", ex);
                             compactionInFlight.set(false);
                             return null;
                         });

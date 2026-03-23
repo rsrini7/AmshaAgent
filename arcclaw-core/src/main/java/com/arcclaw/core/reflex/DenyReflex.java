@@ -115,7 +115,8 @@ public class DenyReflex implements AgentReflex {
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
-            log.errorf("Failed to process denial for session %s: %s", sessionId, e.getMessage(), e);
+            log.errorf("Failed to process denial for session %s: %s", sessionId, e.getMessage());
+            log.debug("Full denial processing failure stack trace:", e);
             return ReflexResult.respond("❌ **Denial Error**: An internal fault occurred while terminating the task.", context);
         }
     }

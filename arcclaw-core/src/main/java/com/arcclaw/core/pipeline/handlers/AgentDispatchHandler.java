@@ -96,7 +96,8 @@ public class AgentDispatchHandler implements MessageHandler {
 
             );
         } catch (Exception e) {
-            log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage(), e);
+            log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());
+            log.debug("Full agent dispatch failure stack trace:", e);
             throw new RuntimeException(e.getMessage(), e);
         }
 

@@ -127,7 +127,8 @@ public class ApproveReflex implements AgentReflex {
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
-            log.errorf("Failed to process approval for session %s: %s", sessionId, e.getMessage(), e);
+            log.errorf("Failed to process approval for session %s: %s", sessionId, e.getMessage());
+            log.debug("Full approval processing failure stack trace:", e);
             return ReflexResult.respond("❌ **Approval Error**: An internal fault occurred while resuming the task.", context);
         }
     }

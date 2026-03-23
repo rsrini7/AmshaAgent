@@ -91,7 +91,8 @@ public class CommandDispatchHandler implements MessageHandler {
                             () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
                         );
                     } catch (Exception e) {
-                        log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage(), e);
+                        log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
+                        log.debug("Full command dispatch failure stack trace:", e);
                         yield HandleResult.STOP;
                     }
                     
@@ -129,7 +130,8 @@ public class CommandDispatchHandler implements MessageHandler {
                 () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context)
             );
         } catch (Exception e) {
-            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage(), e);
+            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage());
+            log.debug("Full command dispatch failure stack trace:", e);
             return;
         }
 
