@@ -88,7 +88,28 @@ class ReasoningStepParserTest {
         // Assert
         assertEquals(ReasoningStep.OBSERVE, step.action());
         assertNotNull(step.observation());
-        assertTrue(step.observation().contains("JSON parse error"));
+        assertTrue(step.observation().contains("invalid JSON"));
+    }
+
+    @Test
+    void malformedJsonToolArgsReturnsObserveNotFinish() {
+        // Arrange
+        ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
+                .id("call_invalid")
+                .name("sometool")
+                .arguments("{ broken json }")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(aiMessage)
+                .build();
+
+        // Act
+        ReasoningStep step = parser.parse("s1", "coordinator", response);
+
+        // Assert
+        assertEquals(ReasoningStep.OBSERVE, step.action());
+        assertTrue(step.observation().contains("JSON"));
     }
 
     @Test

@@ -13,7 +13,8 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
-import com.github.benmanes.caffeine.cache.Cache;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.arc.ClientProxy;
@@ -56,12 +57,18 @@ class TelegramAgentHandlerTest {
         // Inject the sync executor into the chatQueues cache via reflection
         // Since handler is a proxy, we must unwrap it
         TelegramAgentHandler target = ClientProxy.unwrap(handler);
-        Field queuesField = TelegramAgentHandler.class.getDeclaredField("chatQueues");
-        queuesField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Cache<String, ExecutorService> mockCache = mock(Cache.class);
-        when(mockCache.get(anyString(), any())).thenReturn(syncExecutor);
-        queuesField.set(target, mockCache);
+        
+        // 1. Stub the processingFlags to always return a fresh ready flag
+        Field flagsField = TelegramAgentHandler.class.getDeclaredField("processingFlags");
+        flagsField.setAccessible(true);
+        ConcurrentHashMap<String, AtomicBoolean> flags = new ConcurrentHashMap<>();
+        flagsField.set(target, flags);
+
+        // 2. Stub the ManagedExecutor to run synchronously
+        doAnswer(invocation -> {
+            ((Runnable) invocation.getArgument(0)).run();
+            return null;
+        }).when(executor).execute(any(Runnable.class));
     }
 
     @Test
@@ -147,8 +154,8 @@ class TelegramAgentHandlerTest {
 
         assertDoesNotThrow(() -> handler.receiveMessage(exchange));
         
-        // Verify notification was sent
-        verify(sender).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
+        // Verify notification was sent (ignoring the initial ⏳ acknowledgment)
+        verify(sender, atLeastOnce()).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
     }
 
     private Exchange createExchange(String chatId, String userId, String username, String text) {

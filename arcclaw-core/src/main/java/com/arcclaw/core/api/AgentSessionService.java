@@ -35,7 +35,6 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.MdcKeys;
@@ -52,7 +51,6 @@ public class AgentSessionService {
     private final StatefulAgentStore agentStore;
     private final WorkspaceManager workspaceManager;
     private final SessionHeartbeatTracker heartbeatTracker;
-    private final DevSecretSeeder devSeeder;
     private final AgentResponseMapper responseMapper;
     private final ReflexRegistry reflexRegistry;
     private final ExecutorService vThreads;
@@ -64,7 +62,6 @@ public class AgentSessionService {
         this.agentStore = null;
         this.workspaceManager = null;
         this.heartbeatTracker = null;
-        this.devSeeder = null;
         this.responseMapper = null;
         this.reflexRegistry = null;
         this.vThreads = null;        
@@ -77,7 +74,6 @@ public class AgentSessionService {
                                StatefulAgentStore agentStore,
                                WorkspaceManager workspaceManager,
                                SessionHeartbeatTracker heartbeatTracker,
-                               DevSecretSeeder devSeeder,
                                AgentResponseMapper responseMapper,
                                ReflexRegistry reflexRegistry,
                                @VirtualThreads ExecutorService vThreads) {
@@ -87,7 +83,6 @@ public class AgentSessionService {
         this.agentStore = agentStore;
         this.workspaceManager = workspaceManager;
         this.heartbeatTracker = heartbeatTracker;
-        this.devSeeder = devSeeder;
         this.responseMapper = responseMapper;
         this.reflexRegistry = reflexRegistry;
         this.vThreads = vThreads;
@@ -138,7 +133,6 @@ public class AgentSessionService {
 
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
-                devSeeder.seedDevSecrets();
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
                 
                 return WorkspaceContext.run(
@@ -199,8 +193,6 @@ public class AgentSessionService {
                             .build());
                     return;
                 }
-
-                devSeeder.seedDevSecrets();
 
                 AutonomyLevel sessionLevel = heartbeatTracker.getAutonomyLevel(sessionId);
                 if (sessionLevel == null) {

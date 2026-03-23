@@ -3,8 +3,10 @@ package com.arcclaw.core.agent.reasoning;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
@@ -443,5 +445,29 @@ class LangChainReasoningEngineTest {
             assertTrue(userRequestPresent,
                 "User message must pass through history reconstruction unchanged");
         });
+    }
+
+    @InjectMock
+    com.arcclaw.core.governance.GovernanceLayer governanceLayer;
+
+    @Test
+    void structuredOutputPathPropagatesBudgetWarning() throws Exception {
+        ChatResponse mockResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage("result"))
+                .tokenUsage(new TokenUsage(10, 20))
+                .build();
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(promptBuilder.build(any(), any(), any())).thenReturn("sys prompt");
+        
+        Mockito.doThrow(new com.arcclaw.core.governance.BudgetWarningException("budget low"))
+            .when(governanceLayer).recordLlmCall(anyString(), any(Integer.class), any(Integer.class));
+            
+        com.arcclaw.core.observability.AgentOtelContext mockOtelContext = Mockito.mock(com.arcclaw.core.observability.AgentOtelContext.class);
+        java.lang.reflect.Field field = LangChainReasoningEngine.class.getDeclaredField("otelContext");
+        field.setAccessible(true);
+        field.set(reasoningEngine, mockOtelContext);
+
+        assertThrows(com.arcclaw.core.governance.BudgetWarningException.class, () ->
+            ((LangChainReasoningEngine) reasoningEngine).chatForStructuredOutput("test-session", "coordinator", "{}"));
     }
 }

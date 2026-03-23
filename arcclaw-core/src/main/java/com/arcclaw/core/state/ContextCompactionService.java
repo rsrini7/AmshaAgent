@@ -158,12 +158,10 @@ public class ContextCompactionService {
 
     private String truncateSafely(String text) {
         if (text == null) return "";
-        long cpCount = text.codePoints().count();
-        if (cpCount <= MAX_SUMMARY_CODEPOINTS) return text;
-        return text.codePoints()
-                .limit(MAX_SUMMARY_CODEPOINTS)
-                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-                .append(TRUNCATION_SUFFIX)
-                .toString();
+        if (text.codePointCount(0, text.length()) > MAX_SUMMARY_CODEPOINTS) {
+            int cutOffset = text.offsetByCodePoints(0, MAX_SUMMARY_CODEPOINTS);
+            return text.substring(0, cutOffset) + TRUNCATION_SUFFIX;
+        }
+        return text;
     }
 }

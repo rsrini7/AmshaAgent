@@ -3,13 +3,12 @@ package com.arcclaw.core.agent.loop;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Pattern;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -17,16 +16,10 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tool.DynamicToolLookup;
-import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.tool.ToolGuardInterceptor;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 
 /**
@@ -40,16 +33,9 @@ public class ToolInvocationGuard {
 
     @Inject public RoleRegistry roleRegistry;
     @Inject public ObjectMapper objectMapper;
-    @Inject public StatefulAgentStore agentStore;
     @Inject public ToolRegistry toolRegistry;
     @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
-    @Inject public ChatMemoryStore chatMemoryStore;
-
-    // Use word boundaries (\b) so "pr" doesn't match "prepare" or "approve"
-    private static final Pattern GITHUB_TRIGGER_PATTERN = Pattern.compile(
-            "(?i)\\b(repo|repository|github|gh|fetch|gist|gists|clone|" +
-                    "pull\\s+request|pr|get|show|describe|description|desc|" +
-                    "star|fork|issue|commit|branch|tag|readme|release)\\b");
+    @Inject public Instance<ToolGuardInterceptor> interceptors;
 
     public sealed interface GuardDecision
             permits GuardDecision.Allow, GuardDecision.Deduplicate,
@@ -67,6 +53,18 @@ public class ToolInvocationGuard {
     public GuardDecision evaluate(String sessionId, String agentRole,
             String toolName, Map<String, Object> params,
             List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
+
+        // 0. RUN REGISTERED INTERCEPTORS (SPI)
+        for (ToolGuardInterceptor interceptor : interceptors) {
+            if (interceptor.handledToolNames().isEmpty()
+                    || interceptor.handledToolNames().contains(toolName)) {
+                Optional<GuardDecision> decision = interceptor.evaluate(
+                        sessionId, agentRole, toolName, params, history, goal, skillSnapshot);
+                if (decision.isPresent()) {
+                    return decision.get();
+                }
+            }
+        }
 
         // 1. DEDUPLICATION CHECK
         for (ReasoningStep past : history) {
@@ -100,34 +98,7 @@ public class ToolInvocationGuard {
             }
         }
 
-        // 1.1 CROSS-LOOP DEDUP (GitHub only)
-        // If ChatMemory already has a github result for the same args in this session,
-        // let the LLM reuse it instead of triggering a new HITL prompt.
-        if (GithubTool.NAME.equals(toolName)) {
-            try {
-                List<ChatMessage> memory = chatMemoryStore.getMessages(sessionId);
-                if (memory != null) {
-                    String currentArgsJson = objectMapper.writeValueAsString(params);
-                    // Match prefix to handle potential JSON field ordering or truncation differences
-                    String matchPrefix = currentArgsJson.substring(0, Math.min(20, currentArgsJson.length()));
-                    for (ChatMessage msg : memory) {
-                        if (msg instanceof AiMessage ai && ai.text() != null && ai.text().contains(matchPrefix)) {
-                            log.debugf("[DEDUP-GUARD] Cross-loop github match for session %s. Allowing reuse.", sessionId);
-                            return new GuardDecision.Allow();
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warnf("Cross-loop dedup failed for github in session %s: %s", sessionId, e.getMessage());
-                log.debug("Full cross-loop dedup failure stack trace:", e);
-            }
-        }
-
         // 1.5 DYNAMIC TOOL FALLBACK
-        // Only bypass for tools that are NOT registered as internal tools.
-        // Internal tools (github, memory_search) MUST still go through HITL.
-        // The self-MCP connection re-exposes internal tools as dynamic tools,
-        // so without this guard, isDynamicToolAllowed("github") bypasses HITL.
         boolean isInternalTool = toolRegistry.findTool(toolName).isPresent();
         if (!isInternalTool
                 && dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
@@ -135,67 +106,10 @@ public class ToolInvocationGuard {
             return new GuardDecision.Allow(); // permitted via dynamic MCP registry (external only)
         }
 
-        // 2. GITHUB INTENT GUARD
-        if (GithubTool.NAME.equals(toolName)) {
-            boolean isPreApproved = agentStore.load(sessionId, agentRole)
-                    .filter(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL
-                            && toolName.equals(cp.getPendingToolName()))
-                    .isPresent();
-
-            boolean isSentinelGoal = AgentSentinels.GOAL_TOOL_APPROVED.equals(goal)
-                    || AgentSentinels.GOAL_RESUME_APPROVED.equals(goal);
-
-            // Check current loop history first (fast path)
-            boolean hasRecentGithubContext = history.stream()
-                    .anyMatch(s -> GithubTool.NAME.equals(s.action())
-                            && s.observation() != null
-                            && !s.observation().isBlank());
-
-            // Cross-turn check: covers follow-ups like "top 2?" or "you try" where the
-            // user is continuing a github conversation from a prior turn whose result
-            // lives in ChatMemory, not in the current loop's history list.
-            if (!hasRecentGithubContext) {
-                try {
-                    List<ChatMessage> memory = chatMemoryStore.getMessages(sessionId);
-                    if (memory != null) {
-                        hasRecentGithubContext = memory.stream().anyMatch(msg ->
-                                msg instanceof ToolExecutionResultMessage term
-                                        && GithubTool.NAME.equals(term.toolName())
-                                || msg instanceof AiMessage ai
-                                        && ai.text() != null
-                                        && GITHUB_TRIGGER_PATTERN.matcher(ai.text()).find());
-                    }
-                } catch (Exception e) {
-                    log.debugf("Cross-turn github context check failed for session %s: %s",
-                            sessionId, e.getMessage());
-                }
-            }
-
-            if (!isPreApproved
-                    && !isSentinelGoal
-                    && !hasRecentGithubContext
-                    && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
-                String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
-                        "the user's request does not reference a GitHub resource. " +
-                        "Please answer the user's question using your own knowledge " +
-                        "and respond with FINISH. Do not call any tools.";
-                log.warnf("[TOOL-INTENT-GUARD] github blocked session=%s goal='%s'",
-                        sessionId, goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
-                return new GuardDecision.Blocked(guardObs);
-            }
-        }
-
         // 3. HITL PRE-APPROVAL CHECK
-        //
-        // Operator precedence note: && binds tighter than ||, so parentheses around
-        // the OR clause are REQUIRED. Without them:
-        //   rolePolicy || toolPolicy && !scheduling && !FULL
-        // evaluates as:
-        //   rolePolicy || (toolPolicy && !scheduling && !FULL)
-        // which bypasses the !scheduling and !FULL guards whenever rolePolicy=true.
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
+                | ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
         boolean toolRequiresApproval = toolRegistry.findTool(toolName)
                 .map(tool -> tool.requiresManualApproval(params))
@@ -219,3 +133,4 @@ public class ToolInvocationGuard {
         return new GuardDecision.Allow();
     }
 }
+

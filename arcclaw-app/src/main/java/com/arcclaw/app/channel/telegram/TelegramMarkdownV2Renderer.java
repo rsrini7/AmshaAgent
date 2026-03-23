@@ -74,28 +74,23 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
         };
     }
 
+    private static final java.util.Set<Character> ESCAPE_CHARS = java.util.Set.of(
+        '_', '*', '[', ']', '(', ')', '~', '`', '>',
+        '#', '+', '-', '=', '|', '{', '}', '.', '!'
+    );
+
     /**
      * Escapes mandatory characters for Telegram MarkdownV2.
      */
-    private String esc(String text) {
-        if (text == null) return "";
-        return text.replace("_", "\\_")
-                .replace("*", "\\*")
-                .replace("[", "\\[")
-                .replace("]", "\\]")
-                .replace("(", "\\(")
-                .replace(")", "\\)")
-                .replace("~", "\\~")
-                .replace("`", "\\`")
-                .replace(">", "\\>")
-                .replace("#", "\\#")
-                .replace("+", "\\+")
-                .replace("-", "\\-")
-                .replace("=", "\\=")
-                .replace("|", "\\|")
-                .replace("{", "\\{")
-                .replace("}", "\\}")
-                .replace(".", "\\.")
-                .replace("!", "\\!");
+    String esc(String text) {
+        if (text == null || text.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder(text.length() + 16);
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\\') { sb.append('\\').append('\\'); continue; }
+            if (ESCAPE_CHARS.contains(c)) sb.append('\\');
+            sb.append(c);
+        }
+        return sb.toString();
     }
 }

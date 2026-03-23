@@ -187,4 +187,17 @@ class ContextCompactionServiceTest {
         assertTrue(service.compact("session1", "test-user"));
         verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), contains("...[truncated]"), anyInt());
     }
+
+    @Test
+    void truncationIsCodepointSafeAndReturnsTruncationSuffix() throws Exception {
+        // 1984 'A's + 1 Emoji (2 chars, 1 codepoint) + 10 'B's
+        String input = "A".repeat(1984) + "\uD83D\uDE00" + "B".repeat(10);
+        
+        java.lang.reflect.Method m = ContextCompactionService.class.getDeclaredMethod("truncateSafely", String.class);
+        m.setAccessible(true);
+        String result = (String) m.invoke(service, input);
+        
+        String expected = "A".repeat(1984) + "\uD83D\uDE00...[truncated]";
+        assertEquals(expected, result);
+    }
 }

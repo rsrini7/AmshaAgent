@@ -48,16 +48,16 @@ public class ChatHistoryAssembler {
      * Updated per Phase 53.3: Authoritative version copied and then updated to cover
      * legacy manual checks.
      */
-    private static final Pattern COMPLIANCE_OVERRIDE_PATTERN =
-        Pattern.compile(
-            "(?i)(as per our agreement|" +
-            "as per your request[,]? i will provide|" +
-            "i'?ll provide .{0,30} instead of|" +
-            "i'?ll (give|provide) .{0,30} equivalent|" +
-            "i cannot provide information on|" +
-            "i will not (answer|write|discuss|provide).{0,40}questions|" +
-            "going forward i will only)"
-        );
+    static final Pattern COMPLIANCE_OVERRIDE_PATTERN = Pattern.compile(
+        "(?i)as per our (?:agreement|request,?) (?:i|i'm) (?:will provide|i'll provide)" +
+            ".{0,30}+instead of" +
+        "|as per our agreement i will provide" +
+        "|i'll (?:give|provide).{0,30}+equivalent" +
+        "|i cannot provide information on" +
+        "|i (?:will not|won't) (?:answer|write|discuss|provide).{0,40}+" +
+            "(?:questions) going forward" +
+        "|going forward[,]? i will only"
+    );
 
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
@@ -76,7 +76,7 @@ public class ChatHistoryAssembler {
                         String aiText = ai.text();
                         if (MessageTag.isTagged(aiText)) {
                             skip = true;
-                        } else if (aiText != null && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
+                        } else if (aiText != null && aiText.length() <= 4_000 && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
                             skip = true;
                         }
                     } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {

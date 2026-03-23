@@ -119,4 +119,12 @@ class ChatHistoryAssemblerTest {
         assertEquals(4000 + "... [TRUNCATED FOR LENGTH]".length(), obsMsg.text().length());
         assertTrue(obsMsg.text().endsWith("[TRUNCATED FOR LENGTH]"));
     }
+
+    @Test
+    void compliancePatternDoesNotBacktrackOnCraftedInput() {
+        String evil = "i will not ".repeat(200) + "discuss some questions going forward";
+
+        org.junit.jupiter.api.Assertions.assertTimeout(java.time.Duration.ofMillis(100),
+            () -> ChatHistoryAssembler.COMPLIANCE_OVERRIDE_PATTERN.matcher(evil).find());
+    }
 }

@@ -14,7 +14,6 @@ import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.agent.role.RoleRegistry;
-import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,23 +25,25 @@ class ToolInvocationGuardDynamicTest {
     private DynamicToolLookup mockLookup;
     private Instance<DynamicToolLookup> mockInstance;
     private ToolRegistry mockToolRegistry;
+    private Instance<ToolGuardInterceptor> mockInterceptors;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         guard = new ToolInvocationGuard();
         mockLookup = mock(DynamicToolLookup.class);
-        @SuppressWarnings("unchecked")
-        Instance<DynamicToolLookup> mocked = mock(Instance.class);
-        this.mockInstance = mocked;
+        this.mockInstance = mock(Instance.class);
+        this.mockInterceptors = mock(Instance.class);
+        when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
 
         mockToolRegistry = mock(ToolRegistry.class);
 
         // Manual injection for unit test
         guard.dynamicToolLookup = mockInstance;
-        guard.agentStore = mock(StatefulAgentStore.class);
         guard.roleRegistry = mock(RoleRegistry.class);
         guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = mockToolRegistry;
+        guard.interceptors = mockInterceptors;
     }
 
     @Test
@@ -50,12 +51,12 @@ class ToolInvocationGuardDynamicTest {
         when(mockInstance.isUnsatisfied()).thenReturn(true);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
-        // Should fall through to normal logic (e.g. block github if intent missing)
+        // Should fall through to normal logic (returns Allow because no HITL/DEDUP applies)
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 "s1", "coordinator", "github", Map.of("op", "search"),
                 Collections.emptyList(), "just a question", List.of());
 
-        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
     }
 
     @Test
@@ -79,11 +80,13 @@ class ToolInvocationGuardDynamicTest {
         when(mockLookup.isDynamicToolAllowed("github")).thenReturn(false);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
-        // Should fall through to GITHUB_TRIGGER_PATTERN and hit intent block
+        // Should fall through and reach HITL or Allow. 
+        // In this unit test setup, it should return Allow.
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "github", Map.of(),
+                "s1", "coordinator", "some_tool", Map.of(),
                 Collections.emptyList(), "just a question", List.of());
 
-        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
     }
 }
+

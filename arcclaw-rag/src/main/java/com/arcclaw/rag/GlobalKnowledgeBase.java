@@ -43,7 +43,7 @@ public class GlobalKnowledgeBase {
             em.createNativeQuery(
                 "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?1, ?2)")
                 .setParameter(1, chunkId)
-                .setParameter(2, toVecLiteral(vector))
+                .setParameter(2, floatArrayToJson(vector))
                 .executeUpdate();
 
             // Persist raw text for hydration at search time.
@@ -75,7 +75,7 @@ public class GlobalKnowledgeBase {
                 "FROM fts.vec_global " +
                 "ORDER BY distance ASC " +
                 "LIMIT ?2")
-                .setParameter(1, toVecLiteral(vector))
+                .setParameter(1, floatArrayToJson(vector))
                 .setParameter(2, topN)
                 .getResultList();
 
@@ -94,11 +94,13 @@ public class GlobalKnowledgeBase {
         }
     }
 
-    private static String toVecLiteral(float[] vector) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vector.length; i++) {
+    static String floatArrayToJson(float[] embedding) {
+        if (embedding == null || embedding.length == 0) return "[]";
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < embedding.length; i++) {
             if (i > 0) sb.append(',');
-            sb.append(String.format(java.util.Locale.ROOT, "%f", vector[i]));
+            sb.append(Float.toString(embedding[i]));
         }
         sb.append(']');
         return sb.toString();

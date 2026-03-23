@@ -7,6 +7,7 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -72,6 +73,9 @@ public class SessionResolutionHandler implements MessageHandler {
 
         context.setAutonomyLevel(level);
         log.debugf("Set autonomy level %s for session %s", level, sessionId);
+
+        SessionContext sc = new SessionContext(sessionId, context.getUser(), level, context.isResumeSignal());
+        context.setSessionContext(sc);
 
         return HandleResult.CONTINUE;
     }

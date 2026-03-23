@@ -18,7 +18,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.DevSecretSeeder;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -54,9 +54,6 @@ public class AskCommand implements Runnable {
     @Inject
     ReasoningEngine reasoningEngine;
 
-    @Inject
-    DevSecretSeeder devSeeder;
-
     @Override
     @ActivateRequestContext
     public void run() {
@@ -65,7 +62,7 @@ public class AskCommand implements Runnable {
             WorkspaceScopeHolder.run(sessionId, () -> {
                 ScopedValue.where(CliAgentObserver.ENABLED, true).run(() -> {
                     // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
-                    devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
+                    // Dev seeding handled by DevSecretSeederStartup (@IfBuildProfile("dev") — compile-time excluded from prod builds).
 
                     MessageContext context = createCliContext(sessionId, goal);
                     AgentResult result = agentLoop.run(sessionId, role, goal,

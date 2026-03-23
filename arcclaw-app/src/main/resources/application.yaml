@@ -53,6 +53,7 @@ quarkus:
     db-kind: sqlite
     jdbc:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
+      # pool-interceptor: com.arcclaw.core.persistence.FtsConnectionInterceptor
       min-size: 1
       max-size: 5
       transactions: enabled

@@ -10,6 +10,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -47,8 +48,13 @@ public class AgentDispatchHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
-        String sessionId = context.getSessionId()
-                .orElseThrow(() -> new IllegalStateException("Session ID is required for agent dispatch"));
+        SessionContext session = context.getSessionContext()
+            .orElseThrow(() -> new IllegalStateException(
+                "AgentDispatchHandler requires SessionContext to be populated " +
+                "by SessionResolutionHandler (priority 40) first. " +
+                "Check handler priority ordering."));
+        
+        String sessionId = session.sessionId();
         String role = context.getAgentRole()
                 .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
         String goal = context.getMessage() != null ? context.getMessage().text() : "";
@@ -69,13 +75,7 @@ public class AgentDispatchHandler implements MessageHandler {
 
         final int resolvedMaxIterations = maxIterations;
         
-        AutonomyLevel level = context.getAutonomyLevel().orElse(null);
-        if (level == null) {
-            log.warnf("No autonomy level found in MessageContext for session %s, defaulting to SUPERVISED", sessionId);
-            level = AutonomyLevel.SUPERVISED;
-        }
-
-        final AutonomyLevel finalLevel = level;
+        final AutonomyLevel finalLevel = session.autonomyLevel();
         AgentResult result;
         try {
             result = WorkspaceContext.run(

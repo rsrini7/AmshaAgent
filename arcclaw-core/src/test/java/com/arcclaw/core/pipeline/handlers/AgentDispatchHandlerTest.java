@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
+import com.arcclaw.core.pipeline.SessionContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -111,6 +112,12 @@ class AgentDispatchHandlerTest {
         context.setSessionId("sess123");
         context.setAutonomyLevel(level);
         context.setAgentRole("coordinator");
+        
+        // Populate SessionContext as required by AgentDispatchHandler
+        AutonomyLevel finalLevel = level != null ? level : AutonomyLevel.SUPERVISED;
+        SessionContext sessionContext = new SessionContext("sess123", user, finalLevel, false);
+        context.setSessionContext(sessionContext);
+        
         return context;
     }
 }

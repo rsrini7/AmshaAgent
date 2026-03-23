@@ -195,4 +195,26 @@ class GlobalKnowledgeBaseTest {
             java.util.Locale.setDefault(defaultLocale);
         }
     }
+
+    @Test
+    void embeddingSerializationIsLocaleInvariant() {
+        float[] embedding = {0.1f, 0.2f, 0.33f};
+        java.util.Locale original = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY);
+            String json = GlobalKnowledgeBase.floatArrayToJson(embedding);
+            
+            // German locale would produce "0,1" and "0,2".
+            // Array separator produces ",0" but we must not match that.
+            // We check for the presence of the decimal comma specifically.
+            assertFalse(json.contains("0,1") || json.contains("0,2"), 
+                "Locale leaked into float format (decimal comma found) — got: " + json);
+            
+            assertTrue(json.contains("0.1") && json.contains("0.2"), 
+                "Expected dot decimal separator — got: " + json);
+            assertEquals("[0.1,0.2,0.33]", json);
+        } finally {
+            java.util.Locale.setDefault(original);
+        }
+    }
 }

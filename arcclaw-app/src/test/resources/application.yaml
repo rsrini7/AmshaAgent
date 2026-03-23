@@ -93,3 +93,7 @@ quarkus:
         level: "OFF"
       "org.jboss.threads.errors":
         level: "OFF"
+      "org.apache.camel.component.telegram.TelegramConsumer":
+        level: "OFF"
+      "com.arcclaw.app.channel.telegram.TelegramAgentHandler":
+        level: "OFF"

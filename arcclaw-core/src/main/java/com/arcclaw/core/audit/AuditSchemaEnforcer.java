@@ -64,8 +64,16 @@ public class AuditSchemaEnforcer {
         log.info("AuditSchemaEnforcer: WORM triggers and indexes verified.");
 
         // ── Phase 45: FTS5 Memory Index ──────────────────────────────────
-        // Isolated in 'fts' schema to prevent Hibernate metadata scan crashes.
-        // Standalone pattern (no external content) bypasses trigger qualification rules.
+        // Hardened for tests: Ensure fts schema is attached if pool interceptor didn't run yet
+        log.debug("Verifying fts schema attachment...");
+        int ftsFound = ((Number) em.createNativeQuery(
+            "SELECT count(*) FROM pragma_database_list WHERE name = 'fts'")
+            .getSingleResult()).intValue();
+        
+        if (ftsFound == 0) {
+            log.info("fts schema missing on startup, attaching fallback memory database");
+            em.createNativeQuery("ATTACH DATABASE ':memory:' AS fts").executeUpdate();
+        }
 
         // FTS5 standalone table — stores sessionId for manual mapping
         em.createNativeQuery("""

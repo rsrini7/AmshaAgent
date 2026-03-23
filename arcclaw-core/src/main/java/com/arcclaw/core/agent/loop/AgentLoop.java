@@ -203,19 +203,7 @@ public class AgentLoop {
             if (result instanceof AgentResult.AwaitingApproval awaiting) {
                 log.debugf("Session %s paused, waiting for human approval — tool=%s",
                         sessionId, awaiting.toolName());
-
-                if (context != null && context.getUser() != null) {
-                    agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
-                        cp.setChannelPlatformId(context.getUser().platformId());
-                        cp.setChannelType(context.getUser().channel().name());
-                        agentStore.save(cp);
-                        log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
-                                sessionId, context.getUser().channel(), context.getUser().platformId());
-                    });
-                } else {
-                    log.warnf("No MessageContext user for session=%s — approval timeout notification will be skipped",
-                            sessionId);
-                }
+                tryStampChannelInfo(sessionId, canonicalRole, context);
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
                 if (result instanceof AgentResult.Finished) {
                     agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED);
@@ -272,6 +260,30 @@ public class AgentLoop {
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.AGENT_ROLE);
             otelContext.endSessionSpan(sessionId);
+        }
+    }
+
+    private void tryStampChannelInfo(String sessionId, String canonicalRole,
+                                  MessageContext context) {
+        if (context == null || context.getUser() == null) {
+            log.warnf("No MessageContext user for session %s — " +
+                      "approval timeout notification will be skipped.", sessionId);
+            return;
+        }
+        try {
+            agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                cp.setChannelPlatformId(context.getUser().platformId());
+                cp.setChannelType(context.getUser().channel().name());
+                agentStore.save(cp);
+            });
+            log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
+                       sessionId, context.getUser().channel(), context.getUser().platformId());
+        } catch (Exception e) {
+            log.warnf("Failed to stamp channel info for session %s — " +
+                      "timeout notification may be skipped. Cause: %s",
+                      sessionId, e.getMessage());
+            // Never re-throw — channel stamping must not corrupt the
+            // AwaitingApproval result.
         }
     }
 

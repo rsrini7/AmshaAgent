@@ -167,11 +167,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                 } catch (BudgetWarningException w) {
                     log.warnf("Budget warning for session %s structured call: %s", sessionId, w.getMessage());
-                    // LLM call succeeded — absorb soft warning and return normally
+                    throw w;
+                } catch (com.arcclaw.core.governance.BudgetExceededException be) {
+                    log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, be.getMessage());
+                    throw be;
                 }
             }
 
             return response.aiMessage().text();
+        } catch (BudgetWarningException | com.arcclaw.core.governance.BudgetExceededException e) {
+            throw e;
         } catch (Exception e) {
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             throw new RuntimeException("Structured output LLM call failed: " + clean, e);
