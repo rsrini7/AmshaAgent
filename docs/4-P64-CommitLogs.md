@@ -75,3 +75,24 @@ These documents serve as developer references for common codebase search operati
 style: reorder imports to follow Java conventions
 
 Apply consistent import ordering across the codebase by moving static imports after non-static imports and grouping jakarta imports before other imports. This improves readability and aligns with standard Java style guidelines.
+
+---
+
+feat: add channel-aware session resolution and observability
+
+- Add mandatory channelId field to ChannelUser for proper session resolution
+- Replace legacy MD5 session IDs with persistent SessionRegistry (UUID v4)
+- Introduce SessionIdResolver interface with production (SessionRegistry) and fallback (UUID v3) implementations
+- Add OpenTelemetry dependency for observability
+- Implement atomic audit sequencing with SessionAuditSequencer to prevent TOCTOU races
+- Create extensible ChannelJobNotifier interface for multi-channel cron/approval notifications
+- Replace hardcoded Telegram observers with generic dispatchers (ChannelCronNotificationDispatcher, ChannelApprovalTimeoutDispatcher)
+- Add RagChunkEntity for standalone RAG storage separate from compaction summaries
+- Guard DevSecretSeeder with @IfBuildProfile("dev") to prevent production exposure
+- Update all tests to use new ChannelUser constructor with channelId parameter
+
+---
+
+docs: update project documentation for phases 64-A, 64-B, and 64-C
+
+Add comprehensive documentation for the recently completed phases covering governance, security, and architectural improvements. The TASKS.md file is updated to mark all steps as completed. PLAN.md includes detailed design decisions and proposed changes for each phase. WALKTHROUGH.md provides implementation summaries and verification results. TROUBLESHOOTING.md adds detailed remediation guides for security vulnerabilities and migration notes.

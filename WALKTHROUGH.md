@@ -2452,3 +2452,53 @@ This phase addressed critical bugs in budget enforcement, FTS5 non-ASCII search,
 - ✅ `AgentStateMachineRunnerTest` verified: ReAct keywords no longer persist to history.
 - ✅ Japanese FTS5 search manually verified as working.
 
+---
+
+## Phase 64-B — Security Gap Remediation (Tier B) ✅
+
+Addressed critical security vulnerabilities related to audit integrity, secret seeding, and session ID generation.
+
+### Key Features & Implementation:
+
+1. **Audit HMAC Chain TOCTOU Race**:
+   - Identified a Time-of-Check to Time-of-Use (TOCTOU) vulnerability where multiple concurrent virtual threads could read the same "last audit hash" from the database, leading to a fork in the HMAC audit chain.
+   - **Resolution**: Implemented `SessionAuditSequencer` which uses a per-session `ReentrantLock` and a volatile memory cache for the `lastAuditHash`. This ensures that every thread in a session receives a unique, monotonic sequence ID and a correct parent hash, preserving the immutable WORM (Write-Once-Read-Many) guarantee.
+
+2. **DevSecretSeeder Production Hardening**:
+   - The `DevSecretSeeder` bean, intended only for local development, was being eagerly initialized and injected into `ChatCommand` in the production classpath.
+   - **Resolution**: Removed the direct dependency from `ChatCommand`. The seeder is now strictly controlled by the `DevSecretSeederStartup` class, which is annotated with `@IfBuildProfile("dev")`. This ensures that development-time secret injection is completely physically absent from the production build artifacts.
+
+3. **Session ID Migration (UUID v4)**:
+   - Deprecated the use of MD5-based UUID v3 for Telegram sessions, which had a high collision risk and was semantically weak.
+   - **Resolution**: Introduced `SessionRegistryEntry` and a dedicated `SessionRegistry`. All new sessions now use cryptographically strong UUID v4. The registry maps the multi-tenant triplet `(channelType, channelId, userId)` to a stable, persistent UUID. Existing sessions will seamlessly "reset" and provision a new v4 ID upon their first interaction post-deployment.
+
+**Verification Results**:
+- ✅ **Audit Chain Integrity**: Verified via `AuditConcurrencyTest` that 50 parallel threads produce a perfectly linear, sequential HMAC chain without collisions.
+- ✅ **Profile Safety**: Confirmed via `StartupSecurityValidatorTest` that `prod` profile boot fails if the seeder is present.
+- ✅ **Session Persistence**: Verified that `SessionRegistry` correctly reloads the same UUID v4 for the same user-triplet across JVM restarts.
+
+---
+
+## Phase 64-C — Architectural Unblocks (Tier C) ✅
+
+Cleaned up legacy RAG data handling and genericized the channel notification system to support a multi-channel future.
+
+### Key Features & Implementation:
+
+1. **Dedicated RAG Storage (`RagChunkEntity`)**:
+   - Historically, RAG chunks were stored in `compaction_summary` using an ugly `"rag:"` prefix hack. This polluted actual conversation history and corrupted LLM context math.
+   - **Resolution**: Created a dedicated `rag_chunk` table explicitly for RAG documents via `RagChunkEntity`. `GlobalKnowledgeBase` was refactored to read and write directly to this new entity, improving query performance (via dedicated indices) and data cleanliness.
+
+2. **Generic Channel Dispatcher**:
+   - Refactored the hardcoded Telegram notification logic (`TelegramCronNotificationObserver`) into a generic `ChannelJobNotifier` interface.
+   - **Resolution**: Implemented `ChannelCronNotificationDispatcher` and `ChannelApprovalTimeoutDispatcher`. These dispatchers use CDI `Instance<ChannelJobNotifier>` to dynamically route events to any registered channel (Telegram, Discord, Slack) without requiring code changes to the core scheduling engine.
+
+3. **RAG Search Resilience**:
+   - Updated `TwoTierMemoryService` to gracefully handle the transition to the new `RagChunkEntity` schema.
+   - **Resolution**: Added null-safe checks for the `source` and `text` fields during RRF (Reciprocal Rank Fusion) merging, ensuring that any orphaned legacy data does not crash the search pipeline.
+
+**Verification Results**:
+- ✅ **RAG Isolation**: Verified that `RagChunkEntity` saves correctly and does NOT appear in `ChatMemoryStore` history.
+- ✅ **Multi-Channel Dispatch**: Verified via `ChannelNotificationTest` that events are successfully routed to both a Mock channel and the real Telegram implementation simultaneously.
+- ✅ **RAG Math**: Confirmed that RRF scores remain consistent post-migration.
+

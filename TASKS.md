@@ -1172,3 +1172,20 @@
 - [x] Step 8: Fix `DenyReflex` and `ApproveReflex` to iterate over all `AgentRoleEnum.values()`. <!-- id: 560 -->
 - [x] Step 9: Wrap `CompactionHandler` lock with `try-finally` block to prevent session lock leaks. <!-- id: 561 -->
 - [x] Step 10: Verify build and test suite: `mvn clean test` (698 tests pass). <!-- id: 562 -->
+
+---
+
+## Phase 64-B — Security Gap Remediation (Tier B) ✅
+- [x] Step 1: Fix Audit HMAC Chain TOCTOU Race in `AuditEventRepository`. <!-- id: 563 -->
+- [x] Step 2: Remove `DevSecretSeeder` from Production injection path. <!-- id: 564 -->
+- [x] Step 3: Replace UUID v3 Session IDs with UUID v4 via `SessionRegistry`. <!-- id: 565 -->
+- [x] Step 4: Verify session persistence across reloads. <!-- id: 566 -->
+
+---
+
+## Phase 64-C — Architectural Unblocks (Tier C) ✅
+- [x] Step 1: Implement `RagChunkEntity` for dedicated RAG storage. <!-- id: 567 -->
+- [x] Step 2: Update `GlobalKnowledgeBase` to use `RagChunkEntity` (dropping "rag:" prefix). <!-- id: 568 -->
+- [x] Step 3: Implement `ChannelJobNotifier` for multi-channel event dispatch. <!-- id: 569 -->
+- [x] Step 4: Refactor `TelegramChannelRoute` to use generic dispatchers. <!-- id: 570 -->
+- [x] Step 5: Final verification of all RAG and Session tests. <!-- id: 571 -->

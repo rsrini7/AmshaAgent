@@ -3548,3 +3548,80 @@ If you want to avoid nested-class escaping, a simple alternative is to refactor 
 **Root Cause**: The `compactionInFlight` lock was not released in a `finally` block during asynchronous execution.
 **Resolution**: Wrapped the compaction logic in a `try-finally` block to ensure the lock is always released, even if the LLM call or SQLite write fails.
 
+
+---
+
+## Phase 64-B: Security Gap Remediation
+
+### B1 — Audit HMAC Chain TOCTOU Race (AuditEventRepository)
+
+**Symptom**: Under concurrent tool executions in the same session, consecutive audit events could share the same `sequence` number, permanently forking the HMAC chain. Running `AuditVerifier.verify(sessionId)` would return `false` for any session that had concurrent tool calls.
+
+**Root Cause**: `AuditEventRepository.record()` executed `MAX(sequence)` query, HMAC computation, and `em.persist()` without any per-session serialization. Two concurrent threads for the same session would both read the same `MAX(sequence)`, assign the same sequence, and produce duplicate entries — breaking the WORM audit guarantee.
+
+**How to Detect Affected Sessions**: `SELECT session_id, sequence, COUNT(*) FROM audit_event GROUP BY session_id, sequence HAVING COUNT(*) > 1`. Any row indicates a forked HMAC chain.
+
+**Resolution**: Introduced `SessionAuditSequencer` — a new `@ApplicationScoped` bean with a `ConcurrentHashMap<String, ReentrantLock>` keyed by session ID. All five operations (MAX query, prevHash lookup, HMAC compute, sequence assign, persist) in `AuditEventRepository.record()` are now wrapped in a single `lock.lock() ... finally { lock.unlock() }` block per session. `SessionReaper` calls `releaseStaleSession(sessionId)` on GC and approval timeout to prevent unbounded map growth.
+
+**Files Changed**: `SessionAuditSequencer.java` (new), `AuditEventRepository.java`, `SessionReaper.java`
+
+---
+
+### B2 — DevSecretSeeder Injectable Into Production via Config Flag
+
+**Symptom**: A production deployment with `arcclaw.auto-seed-secrets=true` accidentally set would silently call `DevSecretSeeder.seedDevSecrets()`, seeding `GITHUB_TOKEN` and other dev credentials into the production vault.
+
+**Root Cause**: `ChatCommand` directly injected `DevSecretSeeder` and called `seedDevSecrets()` on every session start, guarded only by a runtime config flag — which can be overridden by environment variables.
+
+**Why `@IfBuildProfile("dev")` vs Config Flag**: A config flag is a runtime guard that can be accidentally overridden. `@IfBuildProfile("dev")` is a compile-time exclusion: the bean is completely absent from the CDI container in non-dev builds. No config change can activate it.
+
+**Resolution**: Removed injection from `ChatCommand`. Created `DevSecretSeederStartup` (`@ApplicationScoped`, `@IfBuildProfile("dev")`), which observes `StartupEvent` at `@Priority(150)` — completely absent from test/staging/prod builds.
+
+**Files Changed**: `ChatCommand.java`, `DevSecretSeederStartup.java` (new, dev-only)
+
+---
+
+### B3 — Session ID Uses UUID v3 (MD5) — Replaced With Persistent Registry
+
+**Symptom**: Session IDs were derived via `UUID.nameUUIDFromBytes((chatId + ":" + userId).getBytes())` — MD5 internally (UUID v3). This was inconsistent with the AES-GCM-SIV + Argon2id security posture and lacked a `channelType` component, meaning two different channels sharing a `chatId` would collide to the same session.
+
+**Root Cause**: Deterministic stateless session derivation — convenient but cryptographically weak and multi-channel unsafe.
+
+**⚠️ One-Time Breaking Change — Session Migration**: Existing Telegram sessions have MD5-derived IDs. On first message post-deploy, `session_registry` will not find the old MD5 ID and creates a new UUID v4 session. **All existing users lose session context on their first message after the upgrade.** This is expected and documented. Do NOT attempt to migrate old session IDs.
+
+**Resolution**: New `SessionRegistryEntry` `@Entity` maps `(channelType, channelId, userId)` → stable UUID v4. New `SessionRegistry` provides `resolveOrCreate(...)` with `REQUIRES_NEW` transactions and race-safe insert fallback to lookup. New `SessionIdResolver` interface in `arcclaw-core` allows `SessionResolutionHandler` to call the registry without circular module dependencies. `FallbackSessionIdResolver` (`@Priority(0)`) lives in `arcclaw-core` to satisfy CDI in core-only tests; `SessionRegistry` (`@Priority(10)`) always wins in production.
+
+**Files Changed**: `SessionIdResolver.java` (new interface), `FallbackSessionIdResolver.java` (new fallback), `SessionResolutionHandler.java`, `SessionRegistryEntry.java` (new entity), `SessionRegistry.java` (new), `application.yaml`
+
+---
+
+## Phase 64-C: Architectural Unblocks
+
+### RAG Chunk Migration Note & Cleanup
+
+**Symptom**: RAG chunks were historically stored in `compaction_summary` using a `"rag:"` prefix hack (`sessionId = "rag:" + chunkId`). This polluted actual session memory and semantically corrupted compaction metadata (e.g., `messagesCompacted=0`).
+
+**Resolution**: Introduced a dedicated `rag_chunk` table explicitly for RAG documents via `RagChunkEntity`. `GlobalKnowledgeBase` was updated to read and write directly to this new entity, completely dropping the prefix hack.
+
+**Action Required**: Any `"rag:"`-prefixed rows remaining in `compaction_summary` are now orphaned. They are completely harmless and will not cause errors, but if you wish to clean them up, you can manually run this in the SQLite CLI:
+```sql
+DELETE FROM compaction_summary WHERE session_id LIKE 'rag:%';
+```
+This is an optional cleanup step, not functionally required.
+
+---
+
+### Session ID Migration Note (Cross-Reference from 64-B)
+
+**Symptom**: Existing Telegram sessions previously derived their IDs via MD5 hashing. With the new Phase 64-B/C `SessionRegistry`, multi-tenant triplet enforcement `(channelType, channelId, userId)` is now the standard.
+
+**Resolution**: Existing telegram sessions will essentially restart. The very first message sent post-deployment will not match the old MD5 hash and will seamlessly provision a new UUIDv4 session via `SessionRegistry`. Context prior to this deployment is "lost" from the agent's perspective. 
+
+---
+
+### Channel Notification Dispatcher (Handling New Channels)
+
+**Symptom**: Adding a new channel (e.g., Discord) previously required duplicating `TelegramCronNotificationObserver` and `ApprovalTimeoutNotifier` and hardcoding the channel types, leading to duplicated dispatch mechanisms for every new integration.
+
+**Resolution**: Abstracted all channel callbacks into the `ChannelJobNotifier` interface. Replaced individual hardcoded observers with `ChannelCronNotificationDispatcher` and `ChannelApprovalTimeoutDispatcher` that dynamically filter and route events.
+**How to add a new channel (e.g., Discord)**: Simply create a single class `DiscordJobNotifier implements ChannelJobNotifier` and mark it `@ApplicationScoped`. Zero changes are needed to the dispatchers; CDI will automatically pick it up and route events to it when `channelType == DISCORD`.

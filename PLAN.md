@@ -4253,3 +4253,55 @@ Final hardening of the security and persistence layers based on post-implementat
 - ✅ `VaultKeyCacheTest`: Verified `ReentrantLock` placement inside the critical section.
 - ✅ `ChatMemoryWriterTest`: Pinning tests for `SKIP_GOALS`.
 
+---
+
+# Phase 64-A — Governance & Error Handling (Tier A) ✅
+
+Harden the application's runtime safety, budget enforcement, and search indexing capabilities.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Atomic Budget Enforcement**: Transitioned budget state updates from `AtomicInteger` to a synchronized block in `recordLlmCall` to ensure the Soft Warning never fires after a Hard Limit has been breached.
+
+## Proposed Changes
+
+- **AgentResource**: Added null check for `agentRole` and removed redundant `@DefaultValue("{}")`.
+- **GovernanceLayer**: Implemented hard-limit priority over soft-warning.
+- **CompactionSummaryRepository**: Switched FTS5 to `unicode61` with `remove_diacritics 2` for multi-lingual RAG indexing.
+- **AgentStepProcessor**: Marked schema-correction `OBSERVE` steps as ephemeral.
+
+---
+
+# Phase 64-B — Security Gap Remediation (Tier B) ✅
+
+Address concurrency-based security flaws and replace legacy session ID generation.
+
+## Design Decisions
+
+> [!CAUTION]
+> **Audit TOCTOU Race**: Multiple virtual threads could concurrently read the "last hash" in the audit link, leading to diverging chains. Added `SessionAuditSequencer` to provide stable monotonic IDs and strict synchronization.
+
+## Proposed Changes
+
+- **AuditEventRepository**: Synchronized `persistSynchronously` via a per-session lock.
+- **DevSecretSeeder**: Removed from the shared production path; now strictly localized to dev/test profiles.
+- **SessionRegistry**: Introduced stable UUID v4 mapping for `(channel, user, id)` triplets, replacing the MD5-based weak session IDs.
+
+---
+
+# Phase 64-C — Architectural Unblocks (Tier C) ✅
+
+Clean up RAG data storage and genericize channel event dispatching.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Dedicated RAG Schema**: Migrated RAG chunks out of `compaction_summary` (which polluted session history) into `RagChunkEntity`, allowing high-volume document ingestion without impacting agent context window math.
+
+## Proposed Changes
+
+- **RagChunkEntity**: New dedicated JPA entity for RAG documents.
+- **ChannelJobNotifier**: Abstracted channel-specific callbacks (Telegram) into a generic interface, allowing for future Discord/Slack integration without modifying the core scheduler.
+- **ChannelCronNotificationDispatcher**: New dispatcher that routes events based on `ChannelJobNotifier` discovery.
+
