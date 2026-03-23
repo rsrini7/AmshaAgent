@@ -23,6 +23,11 @@ import picocli.CommandLine.Command;
  * <strong>Data-dir lifecycle:</strong> The static {@code main()} method
  * provisions {@code ARCCLAW_DATA_DIR} <em>before</em> {@code Quarkus.run()}
  * is called, ensuring the directory exists before Hibernate boots.
+ * The raw value is resolved to an absolute, normalised path and written
+ * back into {@code System.setProperty} so that every
+ * {@code ${ARCCLAW_DATA_DIR:./data}} expression in {@code application.yaml}
+ * (datasource URL, arcclaw.data-dir, workspace root, etc.) resolves to the
+ * same absolute location regardless of the JVM launch directory.
  * <p>
  * <strong>Config validation lifecycle:</strong> {@link CliUtils#validateRequiredEnvVars}
  * also runs before {@code Quarkus.run()} so the user sees one clear actionable
@@ -42,9 +47,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
     @Inject
     CommandLine.IFactory factory;
 
-    // -------------------------------------------------------------------------
     // Static bootstrap — runs BEFORE Quarkus CDI container starts
-    // -------------------------------------------------------------------------
 
     public static void main(String... args) {
 
@@ -54,12 +57,25 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         CliUtils.validateRequiredEnvVars(args);
 
         // 2. Provision data directory before Hibernate starts.
+        //
+        //    IMPORTANT: resolve to absolute path here so that the
+        //    ${ARCCLAW_DATA_DIR:./data} expressions in application.yaml
+        //    (datasource URL, arcclaw.data-dir, workspace root-dir, etc.)
+        //    all expand to the same location regardless of the JVM launch
+        //    directory (IDE, quarkus:dev, JAR from any working directory).
+        //    Without this, "./data" resolves relative to the launch dir and
+        //    produces stray data/ folders inside arcclaw-app/ or quarkus-app/.
         try {
-            String dataDir = System.getProperty("ARCCLAW_DATA_DIR",
+            String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR",
                     System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
-            Path dirPath = Path.of(dataDir);
+
+            Path dirPath = Path.of(rawDataDir).toAbsolutePath().normalize();
             Files.createDirectories(dirPath);
             Files.createDirectories(dirPath.resolve("workspaces"));
+
+            // Pin the resolved absolute path back so Quarkus config picks it up.
+            System.setProperty("ARCCLAW_DATA_DIR", dirPath.toString());
+
         } catch (Exception e) {
             System.err.println("[ArcClaw] ❌ FATAL: Failed to create data directory.");
             System.err.println("[ArcClaw]    Path: " + System.getProperty("ARCCLAW_DATA_DIR",
@@ -73,9 +89,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         Quarkus.run(ArcClawCli.class, args);
     }
 
-    // -------------------------------------------------------------------------
     // QuarkusApplication — runs AFTER CDI container is ready
-    // -------------------------------------------------------------------------
 
     @Override
     public int run(String... args) {
@@ -83,13 +97,10 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         return exitCode;
     }
 
-    // -------------------------------------------------------------------------
     // Default action (no subcommand) — print help
-    // -------------------------------------------------------------------------
 
     @Override
     public void run() {
         new CommandLine(this, factory).usage(System.out);
     }
-
 }
