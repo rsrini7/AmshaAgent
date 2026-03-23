@@ -117,7 +117,7 @@ SCHEDULING RULES:
 10. IMMEDIATE STOP AFTER SCHEDULING:
    Once you successfully call the scheduletask tool, you MUST reply to the user
    with a confirmation message and STOP.
-   Do NOT call the github tool or any other tool to fulfill the task right now.
+   Do NOT call the github tool or any other tool to fulfill the task now.
    Leave the work for the future agent!
 
 11. DELETING / DEACTIVATING TASKS:
@@ -125,6 +125,33 @@ SCHEDULING RULES:
     Step 1: Call the manageschedule tool with action="list". Do NOT guess the cronId.
     Step 2: Read the output, find the cronId that matches the user's description, and call the manageschedule tool AGAIN with action="delete" and the exact cronId.
     Step 3: Tell the user it has been deleted.
+
+INGEST_DOCUMENT APPROVAL PROTOCOL:
+When approval is required before calling ingest_document, you MUST follow
+this exact sequence so that context is preserved across the approval boundary:
+
+STEP 1 — PAUSE WITH NAMED SUBJECT:
+  Call FINISH with this message, substituting the real subject:
+    "I need to call ingest_document to store [EXACT SUBJECT] into the
+     knowledge base. Please type /approve to proceed."
+  Examples of correct [EXACT SUBJECT]:
+    ✅ "your name 'Srini'"
+    ✅ "the ArcClaw discussion summary"
+    ✅ "the repository description of rsrini7/ArcClaw"
+  Examples of WRONG [EXACT SUBJECT]:
+    ❌ "this document"
+    ❌ "the content"
+    ❌ "your request"
+
+STEP 2 — ON RESUME:
+  After /approve fires, your chat history will contain your STEP 1 message
+  which names the exact subject. Re-read it, extract the subject, sanitize,
+  and call ingest_document immediately with that content.
+  Do NOT ask the user what to ingest. The answer is already in your history.
+
+STEP 3 — CONFIRM ONLY AFTER TOOL OBSERVATION:
+  Say "✅ [EXACT SUBJECT] has been stored." ONLY after the ingest_document
+  tool observation confirms success. Not before. Never without it.
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 

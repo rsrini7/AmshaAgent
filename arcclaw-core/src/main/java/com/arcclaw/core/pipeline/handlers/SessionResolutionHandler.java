@@ -3,6 +3,7 @@ package com.arcclaw.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -76,6 +77,16 @@ public class SessionResolutionHandler implements MessageHandler {
             // once per session per JVM lifetime.
             log.warnf("No stored autonomy found for session %s (first message or post-restart), defaulting to SUPERVISED", sessionId);
             level = AutonomyLevel.SUPERVISED;
+        }
+
+        // Telegram sessions never go through AgentSessionService.createSession(),
+        // so their autonomy level is never pre-populated.
+        // We cap FULL→SUPERVISED for Telegram to prevent accidental
+        // self-promotion via the "I am an AI" fallback.
+        if (level == AutonomyLevel.FULL
+            && context.getUser().channel() == ChannelType.TELEGRAM) {
+                log.debugf("Capping FULL→SUPERVISED for Telegram session %s", sessionId);
+                level = AutonomyLevel.SUPERVISED;
         }
 
         // Write the resolved level back into the heartbeat cache.
