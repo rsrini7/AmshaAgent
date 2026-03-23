@@ -14,7 +14,7 @@ All bugs below exist today. No architectural changes. Surgical fixes only.
 ---
 
 ## Architecture Context
-*(paste your full Architecture Context block here)*
+Refer @Architecture_Nuances.md
 
 ---
 
