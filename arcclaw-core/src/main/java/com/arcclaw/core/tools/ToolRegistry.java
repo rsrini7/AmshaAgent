@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -54,17 +55,10 @@ public class ToolRegistry {
 
     private static final Logger log = Logger.getLogger(ToolRegistry.class);
 
-    @Inject
-    Instance<AgentTool> discoveredTools;
-
-    @Inject
-    ObjectMapper objectMapper;
-
-    @Inject
-    ProcessIsolationExecutor isolationExecutor;
-
-    @Inject
-    AuditService auditService;
+    @Inject Instance<AgentTool> discoveredTools;
+    @Inject ObjectMapper objectMapper;
+    @Inject ProcessIsolationExecutor isolationExecutor;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -131,9 +125,7 @@ public class ToolRegistry {
                     log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
                             agentRole, toolName);
                     auditService.record(
-                            WorkspaceContext.requireSessionId(),
-                            resolveUserId(),
-                            agentRole,
+                            WorkspaceContext.requireSessionId(), resolveUserId(), agentRole,
                             SecurityEventType.TOOL_BLOCKED,
                             "tool=" + toolName + " reason=ROLE_CAPABILITY_MISMATCH role=" + agentRole);
                     return ToolResponse.failure(403,
@@ -147,17 +139,15 @@ public class ToolRegistry {
             }
         }
 
-        // Autonomy governance check 
-        var level = WorkspaceContext.autonomy();
+        // Autonomy governance check
+        var level      = WorkspaceContext.autonomy();
         var requiredOp = tool.requiredOperation();
 
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
-            // Sprint 2B: Approval interception for SUPERVISED level sensitive operations
             if (level == AutonomyLevel.SUPERVISED &&
                     (requiredOp == ToolOperation.NETWORK_OUTBOUND
                             || requiredOp == ToolOperation.VAULT_ACCESS
                             || requiredOp == ToolOperation.EXECUTE_SHELL)) {
-
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
                 try {
                     String paramsJson = objectMapper.writeValueAsString(params);
@@ -169,14 +159,10 @@ public class ToolRegistry {
 
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
-
             auditService.record(
-                    WorkspaceContext.requireSessionId(),
-                    resolveUserId(),
-                    WorkspaceContext.agentRole(),
+                    WorkspaceContext.requireSessionId(), resolveUserId(), WorkspaceContext.agentRole(),
                     SecurityEventType.TOOL_BLOCKED,
                     "tool=" + toolName + " op=" + requiredOp);
-
             throw new SecurityException(
                     "Operation " + requiredOp + " not permitted at autonomy level " + level);
         }
@@ -186,19 +172,29 @@ public class ToolRegistry {
         // Sandbox path
         if (tool.requiresSandbox()) {
             var requiredSecrets = extractRequiredSecrets(tool.getClass(), "sandboxCommand");
-            var workspaceRoot = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
+            var workspaceRoot   = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
 
             try {
                 if (!Files.exists(workspaceRoot)) {
                     Files.createDirectories(workspaceRoot);
                 }
 
-                var command = tool.sandboxCommand(params);
+                // NULL PARAM STRIP 
+                // Some LLMs send optional fields as explicit null (e.g. "ref": null)
+                // instead of omitting them. Groq's strict schema validator rejects
+                // null for declared string fields with a 400 tool_use_failed error.
+                // Strip all null-valued entries here before they reach sandboxCommand()
+                // or the external API validator.
+                Map<String, Object> sanitizedParams = params.entrySet().stream()
+                        .filter(e -> e.getValue() != null)
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                
+                var command = tool.sandboxCommand(sanitizedParams);
 
                 String initialOutput = isolationExecutor.executeSandboxed(
                         WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
 
-                String postProcessedOutput = tool.postProcessOutput(initialOutput, params);
+                String postProcessedOutput = tool.postProcessOutput(initialOutput, sanitizedParams);
 
                 recordToolAudit(toolName, true);
                 return ToolResponse.success(postProcessedOutput);
@@ -266,9 +262,7 @@ public class ToolRegistry {
      */
     private void recordToolAudit(String toolName, boolean success) {
         auditService.record(
-                WorkspaceContext.requireSessionId(),
-                resolveUserId(),
-                WorkspaceContext.agentRole(),
+                WorkspaceContext.requireSessionId(), resolveUserId(), WorkspaceContext.agentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName + " success=" + success);
     }

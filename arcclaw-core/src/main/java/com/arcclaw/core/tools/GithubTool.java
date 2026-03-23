@@ -54,7 +54,7 @@ public class GithubTool implements AgentTool {
                 "1. 'action': ONLY 'repo' or 'gist' — no other values are valid. " +
                 "2. 'command': ONLY 'view' or 'list' — NEVER use 'delete', 'create', 'remove', or any other value. " +
                 "3. 'target': (Optional) The target owner or owner/repo path. " +
-                "4. 'ref': (Optional) Branch, tag, or commit SHA for README fetch.";
+                "4. 'ref': (Optional) Branch, tag, or commit SHA for README fetch. OMIT if not needed.";
     }
 
     @Override
@@ -196,7 +196,9 @@ public class GithubTool implements AgentTool {
                 .addStringProperty("ref",
                         "Optional branch, tag, or commit SHA. Pass EXACTLY as-is including hyphens. " +
                                 "Examples: Phase-63, main, v1.0.0, feature/my-branch. " +
-                                "Only valid when action=repo and command=view. Omit for list operations.")
+                                "Only valid when action=repo and command=view. " +
+                                "**OMIT THIS FIELD ENTIRELY when not needed — do NOT pass null, " +
+                                "empty string, or any placeholder value.**")
                 .required("action", "command")
                 .build();
     }
