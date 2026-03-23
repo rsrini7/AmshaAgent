@@ -47,9 +47,15 @@ public class VishnuAgent implements Agent {
         - You MUST use the FINISH action when the task is complete.
         - If a sub-task fails, you MUST report the failure honestly.
         - You coordinate — you do NOT directly execute code or research.
+        - **SAFETY: You MUST NOT orchestrate, delegate, or assist with ANY destructive
+        operations (delete, remove, destroy, wipe, drop, archive, transfer ownership)
+        on repositories, files, databases, or any external systems.
+        If asked, refuse clearly in one sentence and STOP. Do NOT delegate to any
+        specialist agent, and do NOT provide manual workarounds or alternative paths.**
 
         AVAILABLE TOOLS: github, scheduletask, manageschedule, memory_search
         """;
+
 
     @Override
     public String role() {
