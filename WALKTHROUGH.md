@@ -2502,3 +2502,28 @@ Cleaned up legacy RAG data handling and genericized the channel notification sys
 - ✅ **Multi-Channel Dispatch**: Verified via `ChannelNotificationTest` that events are successfully routed to both a Mock channel and the real Telegram implementation simultaneously.
 - ✅ **RAG Math**: Confirmed that RRF scores remain consistent post-migration.
 
+---
+
+## Phase 64-D — Code Quality & Cleanup (Tier D) ✅
+
+Deduplicated LLM model production logic and hardened SQLite retry mechanisms across core services.
+
+### Key Features & Implementation:
+
+1. **Centralized LLM Factory (`LlmModelFactory`)**:
+   - Identified redundant provider-switching logic between `ModelProducer` (main agent) and `CompactionModelProducer` (summarization).
+   - **Resolution**: Created `LlmModelFactory` to consolidate model instantiation for Groq, OpenAI, and Ollama. This ensures consistent configuration (timeouts, model names) and simplifies the addition of new providers in the future.
+
+2. **Unified SQLite Retries (`SqliteRetryTemplate`)**:
+   - Multiple core services were implementing manual exponential backoff loops for `SQLITE_BUSY` errors, leading to "maintenance debt".
+   - **Resolution**: Implemented `SqliteRetryTemplate`, a generic wrapper for database operations with built-in jitter and backoff. Migrated `SessionReaper`, `WorkspaceManager`, and `StatefulAgentStoreImpl` to this template, ensuring uniform resilience across the persistence layer.
+
+3. **HITL Security Enforcement (`requiresManualApproval`)**:
+   - Addressed a security gap where certain high-risk tool operations (e.g., GitHub PR creation) only triggered manual approval if the role's autonomy level was specifically set to `SUPERVISED`.
+   - **Resolution**: Added `requiresManualApproval(params)` to the `AgentTool` interface. `GithubTool` now explicitly flags sensitive commands (like `create`, `delete`, `pr` actions) as requiring human intervention. `ToolInvocationGuard` was updated to enforce these tool-mandated approvals regardless of the global autonomy level.
+
+**Verification Results**:
+- ✅ **LLM Factory Integrity**: Verified via `LlmModelFactoryTest` that correct models are provisioned for all three supported providers.
+- ✅ **Retry Resilience**: Confirmed via `SqliteRetryTemplateTest` that operations correctly back off and eventually succeed under simulated database contention.
+- ✅ **Security Hardening**: Verified that `GithubTool` operations like `pr create` now trigger a `RequiresApprovalException` even when the agent is in `AUTONOMOUS` mode if the specific tool mandates it.
+- ✅ **Locale Safety**: Verified that `GlobalKnowledgeBase` correctly serializes vectors using `Locale.ROOT`, preventing corruption on non-US locales.

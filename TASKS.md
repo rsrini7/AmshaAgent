@@ -1189,3 +1189,16 @@
 - [x] Step 3: Implement `ChannelJobNotifier` for multi-channel event dispatch. <!-- id: 569 -->
 - [x] Step 4: Refactor `TelegramChannelRoute` to use generic dispatchers. <!-- id: 570 -->
 - [x] Step 5: Final verification of all RAG and Session tests. <!-- id: 571 -->
+---
+
+## Phase 64-D — Code Quality & Cleanup (Tier D) ✅
+- [x] Step 1: Create `LlmModelFactory.java` to centralize provider switching logic. <!-- id: 572 -->
+- [x] Step 2: Refactor `ModelProducer.java` to use `LlmModelFactory`. <!-- id: 573 -->
+- [x] Step 3: Refactor `CompactionModelProducer.java` to use `LlmModelFactory`. <!-- id: 574 -->
+- [x] Step 4: Create `SqliteRetryTemplate.java` for unified `SQLITE_BUSY` handling. <!-- id: 575 -->
+- [x] Step 5: Migrate `SessionReaper`, `WorkspaceManager`, and `StatefulAgentStoreImpl` to use `SqliteRetryTemplate`. <!-- id: 576 -->
+- [x] Step 6: Update `SqliteErrorStrings.isBusy` to include Hibernate lock exceptions. <!-- id: 577 -->
+- [x] Step 7: Fix `GlobalKnowledgeBase` vector literal to use `Locale.ROOT`. <!-- id: 578 -->
+- [x] Step 8: Implement `requiresManualApproval` in `AgentTool` and `GithubTool`. <!-- id: 579 -->
+- [x] Step 9: Update `ToolInvocationGuard` to enforce tool-specific manual approvals. <!-- id: 580 -->
+- [x] Step 10: Run full test suite: `mvn clean verify` (382/382 tests green). <!-- id: 581 -->

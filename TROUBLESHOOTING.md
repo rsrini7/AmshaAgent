@@ -3625,3 +3625,40 @@ This is an optional cleanup step, not functionally required.
 
 **Resolution**: Abstracted all channel callbacks into the `ChannelJobNotifier` interface. Replaced individual hardcoded observers with `ChannelCronNotificationDispatcher` and `ChannelApprovalTimeoutDispatcher` that dynamically filter and route events.
 **How to add a new channel (e.g., Discord)**: Simply create a single class `DiscordJobNotifier implements ChannelJobNotifier` and mark it `@ApplicationScoped`. Zero changes are needed to the dispatchers; CDI will automatically pick it up and route events to it when `channelType == DISCORD`.
+---
+
+## Phase 64-D: Code Quality & Cleanup
+
+### D1 — `IllegalState: Unable to locate CDIProvider` in `LlmModelFactoryTest`
+
+**Symptom**: Running `mvn test` on the newly created `LlmModelFactoryTest` fails with `java.lang.IllegalStateException: Unable to locate CDIProvider`.
+
+**Root Cause**: The `LlmModelFactory` produces `ChatLanguageModel` instances that are often tied to Quarkus-managed LLM extensions (Groq, OpenAI). When a plain JUnit 5 test tries to instantiate the factory or interact with these models, the underlying LangChain4j/Quarkus integration attempts to look up the CDI container to resolve configuration or internal beans. Since a plain unit test does not boot the Arc container, the lookup fails.
+
+**Resolution**: Converted the test from a plain JUnit test to a `@QuarkusTest`. Instead of manual instantiation, the factory is now `@Inject`ed into the test. This ensures the full CDI environment and configuration properties (e.g., `quarkus.langchain4j.openai.api-key`) are available during model creation.
+
+**Files Changed**: `LlmModelFactoryTest.java`
+
+---
+
+### D2 — `GithubTool` Manual Approval Bypass (Security Gap)
+
+**Symptom**: Sensitive GitHub operations (like `pr create` or `repo delete`) were successfully executing in `AUTONOMOUS` mode without prompting the user for approval, leading to potentially destructive unintended actions.
+
+**Root Cause**: The `ToolInvocationGuard` only checked the agent role's `autonomyLevel`. It did not have a mechanism for tools to "veto" autonomy and force a manual approval for specific high-risk commands.
+
+**Resolution**: Added `requiresManualApproval(parameters)` to the `AgentTool` interface (defaulting to `false`). Implemented this check in `GithubTool.java` to flag commands like `create`, `delete`, and `pr` actions as requiring HITL intervention. Updated `ToolInvocationGuard.evaluate()` to check both the role's autonomy AND the tool's manual approval flag, ensuring a "fail-supervised" posture for sensitive operations.
+
+**Files Changed**: `AgentTool.java`, `GithubTool.java`, `ToolInvocationGuard.java`
+
+---
+
+### D3 — `SQLITE_BUSY` Redundancy & Logic Drift
+
+**Symptom**: `SQLITE_BUSY` retry logic was duplicated across `StatefulAgentStoreImpl`, `SessionReaper`, and `WorkspaceManager`. Over time, the backoff intervals and jitter logic started to drift, leading to inconsistent resilience performance across different parts of the application.
+
+**Root Cause**: Lack of a centralized template for database operations that requires high concurrency resilience.
+
+**Resolution**: Created `SqliteRetryTemplate`. This component encapsulates the "Gold Standard" retry logic (exponential backoff with jitter and canonical `isSqliteBusy` checks). Core services were refactored to wrap their `EntityManager` operations in `retryTemplate.execute()`, ensuring a single, hardened point of maintenance for persistence resilience.
+
+**Files Changed**: `SqliteRetryTemplate.java` (new), `StatefulAgentStoreImpl.java`, `SessionReaper.java`, `WorkspaceManager.java`

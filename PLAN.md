@@ -4305,3 +4305,49 @@ Clean up RAG data storage and genericize channel event dispatching.
 - **ChannelJobNotifier**: Abstracted channel-specific callbacks (Telegram) into a generic interface, allowing for future Discord/Slack integration without modifying the core scheduler.
 - **ChannelCronNotificationDispatcher**: New dispatcher that routes events based on `ChannelJobNotifier` discovery.
 
+---
+
+# Phase 64-D — Code Quality & Cleanup (Tier D) ✅
+
+Deduplicate LLM model production logic and harden SQLite retry mechanisms across core services.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Centralized LLM Factory**: Introduced `LlmModelFactory` to consolidate the provider-switching logic (Groq, OpenAI, Ollama). This eliminates code duplication between `ModelProducer` and `CompactionModelProducer` and ensures consistent model configuration across the application.
+
+> [!NOTE]
+> **Unified SQLite Retries**: Created `SqliteRetryTemplate` to encapsulate the exponential backoff and jitter logic for `SQLITE_BUSY` errors. This allowed for the removal of manual retry loops in `SessionReaper`, `WorkspaceManager`, and `StatefulAgentStoreImpl`.
+
+> [!TIP]
+> **HITL Security Enforcement**: Added `requiresManualApproval(params)` to the `AgentTool` interface, allowing tools to explicitly signal when an operation (like `gh pr create`) requires human intervention, regardless of the role's default autonomy level.
+
+## Completed Changes
+
+#### [NEW] [LlmModelFactory.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/LlmModelFactory.java)
+- Centralized factory for creating `ChatModel` instances based on provider type and configuration.
+
+#### [NEW] [SqliteRetryTemplate.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/persistence/SqliteRetryTemplate.java)
+- Generic template for executing database operations with built-in SQLite retry logic.
+
+#### [MODIFY] [AgentTool.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java)
+- Added `requiresManualApproval` default method to force HITL for high-risk operations.
+
+#### [MODIFY] [GithubTool.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
+- Implemented `requiresManualApproval` for sensitive operations like `create`, `delete`, and `pr` actions.
+- Expanded `ALLOWED_ACTIONS` to include `pr` and `ALLOWED_COMMANDS` to include `create` and `status`.
+
+#### [MODIFY] [ToolInvocationGuard.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvocationGuard.java)
+- Updated to check `AgentTool.requiresManualApproval` during pre-invocation validation.
+
+#### [MODIFY] [ModelProducer.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/ModelProducer.java) / [CompactionModelProducer.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/compaction/CompactionModelProducer.java)
+- Refactored to use `LlmModelFactory` for model instantiation, significantly reducing boilerplate.
+
+#### [MODIFY] [StatefulAgentStoreImpl.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java) / [SessionReaper.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java) / [WorkspaceManager.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/WorkspaceManager.java)
+- Migrated manual retry logic to `SqliteRetryTemplate`.
+
+## Verification
+- ✅ `LlmModelFactoryTest`: Verified correct model instantiation for different providers.
+- ✅ `SqliteRetryTemplateTest`: Verified retry logic and backoff behavior.
+- ✅ `GlobalKnowledgeBaseTest`: Verified locale-safe vector serialization.
+- ✅ Full `mvn clean verify`: 382/382 tests passing.
