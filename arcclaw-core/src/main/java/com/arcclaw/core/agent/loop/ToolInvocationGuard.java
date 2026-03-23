@@ -183,7 +183,11 @@ public class ToolInvocationGuard {
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
-        if (roleRegistry.requiresApprovalForTools(resolvedRole)
+        boolean toolRequiresApproval = toolRegistry.findTool(toolName)
+                .map(tool -> tool.requiresManualApproval(params))
+                .orElse(false);
+
+        if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
                 && !isSchedulingTool
                 && !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())) {
 

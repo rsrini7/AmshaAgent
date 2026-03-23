@@ -30,7 +30,7 @@ class FtsConnectionInterceptorVecFallbackTest {
         // this should be false but the app should NOT have crashed.
         // We just verify it doesn't throw and state is tracked.
         boolean enabled = ftsInterceptor.isVectorSearchEnabled();
-        System.out.println("Vector Search Enabled: " + enabled);
+        Assertions.assertFalse(enabled);
         
         // We can't strictly assert false because the user might have the lib,
         // but we assert the interceptor is injected and alive.

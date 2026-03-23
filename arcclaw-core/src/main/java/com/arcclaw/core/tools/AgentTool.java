@@ -101,4 +101,15 @@ public interface AgentTool {
     default String postProcessOutput(String rawOutput, Map<String, Object> params) {
         return rawOutput;
     }
+
+    /**
+     * Whether this specific tool invocation requires manual approval regardless of the autonomy level.
+     * This is used for high-risk operations like 'gh pr create' or 'rm -rf'.
+     *
+     * @param params Tool-specific parameters.
+     * @return true if approval is required.
+     */
+    default boolean requiresManualApproval(Map<String, Object> params) {
+        return false;
+    }
 }

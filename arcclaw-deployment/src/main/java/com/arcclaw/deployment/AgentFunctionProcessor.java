@@ -30,9 +30,6 @@ import org.jboss.jandex.Type;
  * Generates JSON schema from the SAM's return type using Jandex.
  */
 public class AgentFunctionProcessor {
-    static {
-        System.out.println("[AgentFunctionProcessor] CLASS LOADED");
-    }
 
     private static final DotName AGENT_FUNCTION = DotName.createSimple(AgentFunction.class.getName());
     private static final DotName JSON_PROPERTY = DotName.createSimple(JsonProperty.class.getName());
@@ -46,11 +43,8 @@ public class AgentFunctionProcessor {
                                BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws IOException {
 
         IndexView index = indexBuildItem.getIndex();
-        System.out.println("[AgentFunctionProcessor] Processing agent functions...");
-        System.out.println("[AgentFunctionProcessor] All annotations in index: " + index.getAnnotations(AGENT_FUNCTION).size());
 
         for (AnnotationInstance ai : index.getAnnotations(AGENT_FUNCTION)) {
-            System.out.println("[AgentFunctionProcessor] Found @AgentFunction on: " + ai.target().asClass().name());
             ClassInfo interfaceInfo = ai.target().asClass();
             
             // 1. Find the Single Abstract Method (SAM)

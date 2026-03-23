@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ThreadLocalRandom;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -17,14 +16,13 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.persistence.SqliteErrorStrings;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.hibernate.exception.LockAcquisitionException;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -51,11 +49,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Inject
     EntityManager em;
-
     @Inject
     AuditService auditService;
 
-    private static final long BACKOFF_BASE_MS = 50;
+    @Inject
+    SqliteRetryTemplate retryTemplate;
 
     @Inject
     StatefulAgentStoreImpl self;
@@ -363,56 +361,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     private <T> T withRetry(Callable<T> task, String operation) {
-        int maxRetries = 5;
-        Exception lastEx = null;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                return task.call();
-            } catch (Exception e) {
-                lastEx = e;
-                if (isSqliteBusy(e)) {
-                    // Exponential backoff with jitter prevents thundering herd:
-                    // base * 2^attempt + random(0..50ms)
-                    long delay = (BACKOFF_BASE_MS * (1L << attempt))
-                            + ThreadLocalRandom.current().nextInt(50);
-                    log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
-                            operation, attempt, maxRetries, delay);
-                    try {
-                        Thread.sleep(delay);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException(ie);
-                    }
-                } else {
-                    throw (e instanceof RuntimeException re) ? re : new RuntimeException(e);
-                }
-            }
+        try {
+            return retryTemplate.execute(operation, 5, 50, task);
+        } catch (Exception e) {
+            throw (e instanceof RuntimeException re) ? re : new RuntimeException("Action failed after retries for " + operation, e);
         }
-        throw new RuntimeException("Action failed after " + maxRetries + " retries for " + operation, lastEx);
-    }
-
-    private boolean isSqliteBusy(Throwable e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            String canonicalName = t.getClass().getName();
-            if (canonicalName.equals(LockAcquisitionException.class.getName()) ||
-                canonicalName.equals("jakarta.persistence.OptimisticLockException") ||
-                canonicalName.contains(SqliteErrorStrings.SQLITE_EXCEPTION)) {
-                return true;
-            }
-
-            String msg = t.getMessage();
-            if (msg != null) {
-                String lower = msg.toLowerCase();
-                if (lower.contains(SqliteErrorStrings.BUSY) || 
-                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
-                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
-                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {

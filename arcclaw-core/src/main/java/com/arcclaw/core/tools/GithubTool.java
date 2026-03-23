@@ -25,8 +25,8 @@ public class GithubTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(GithubTool.class);
 
-    private static final Set<String> ALLOWED_ACTIONS = Set.of("repo", "gist");
-    private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
+    private static final Set<String> ALLOWED_ACTIONS = Set.of("repo", "gist", "pr");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list", "create", "status");
 
     public static final String NAME = ToolCapability.GITHUB.toolName();
 
@@ -147,6 +147,22 @@ public class GithubTool implements AgentTool {
             }
         }
         return rawOutput;
+    }
+
+    @Override
+    public boolean requiresManualApproval(Map<String, Object> params) {
+        String action = (String) params.getOrDefault("action", "repo");
+        String command = (String) params.getOrDefault("command", "view");
+
+        // Commands that modify state or are public-facing
+        Set<String> unsafeCommands = Set.of("create", "delete", "edit", "comment", "merge", "close", "reopen");
+        
+        // GH PR operations are generally treated with higher sensitivity
+        if ("pr".equals(action)) {
+            return !Set.of("list", "view", "status").contains(command);
+        }
+
+        return unsafeCommands.contains(command);
     }
 
     @Override

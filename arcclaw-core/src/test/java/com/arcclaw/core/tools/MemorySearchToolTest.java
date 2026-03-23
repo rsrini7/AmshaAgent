@@ -50,7 +50,7 @@ class MemorySearchToolTest {
         e2.summary = "Reviewed blockchain consensus algorithms";
         e2.createdAt = Instant.parse("2026-02-21T14:00:00Z");
 
-        when(repository.searchMemory("user-42", "blockchain", 5))
+        when(repository.searchMemory("user-42", "\"blockchain\"", 5))
                 .thenReturn(List.of(e1, e2));
 
         ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 

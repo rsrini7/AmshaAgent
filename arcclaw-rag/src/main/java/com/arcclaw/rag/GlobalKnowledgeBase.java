@@ -2,7 +2,6 @@ package com.arcclaw.rag;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -44,7 +43,7 @@ public class GlobalKnowledgeBase {
             em.createNativeQuery(
                 "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?1, ?2)")
                 .setParameter(1, chunkId)
-                .setParameter(2, Arrays.toString(vector))
+                .setParameter(2, toVecLiteral(vector))
                 .executeUpdate();
 
             // Persist raw text for hydration at search time.
@@ -76,7 +75,7 @@ public class GlobalKnowledgeBase {
                 "FROM fts.vec_global " +
                 "ORDER BY distance ASC " +
                 "LIMIT ?2")
-                .setParameter(1, Arrays.toString(vector))
+                .setParameter(1, toVecLiteral(vector))
                 .setParameter(2, topN)
                 .getResultList();
 
@@ -93,5 +92,15 @@ public class GlobalKnowledgeBase {
             log.warnf("GlobalKnowledgeBase search failed: %s", e.getMessage());
             return List.of();
         }
+    }
+
+    private static String toVecLiteral(float[] vector) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(String.format(java.util.Locale.ROOT, "%f", vector[i]));
+        }
+        sb.append(']');
+        return sb.toString();
     }
 }

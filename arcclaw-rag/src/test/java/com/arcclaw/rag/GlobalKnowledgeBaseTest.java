@@ -165,4 +165,34 @@ class GlobalKnowledgeBaseTest {
         List<ScoredChunk> results = knowledgeBase.search("query", 10);
         assertTrue(results.isEmpty());
     }
+
+    @Test
+    void testVectorSerializationUsesRootLocale() throws Exception {
+        java.util.Locale defaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMAN);
+            
+            when(ftsInterceptor.isVectorSearchEnabled()).thenReturn(true);
+            float[] vector = new float[]{0.1f, 0.2f};
+            when(embeddingModel.embed(anyString())).thenReturn(new Response<>(Embedding.from(vector)));
+
+            Query nativeQuery = mock(Query.class);
+            when(em.createNativeQuery(anyString())).thenReturn(nativeQuery);
+            when(nativeQuery.setParameter(anyInt(), anyString())).thenReturn(nativeQuery);
+            when(nativeQuery.executeUpdate()).thenReturn(1);
+
+            knowledgeBase.ingest("Test locale");
+
+            ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(nativeQuery).setParameter(eq(2), captor.capture());
+            String vectorString = captor.getValue();
+            
+            // Should contain "0.1" not "0,1"
+            assertTrue(vectorString.contains("0.1"), "Vector serialization must use dot separator even in German locale, found: " + vectorString);
+            assertFalse(vectorString.contains("0,1"), "Vector serialization must not use comma separator: " + vectorString);
+            
+        } finally {
+            java.util.Locale.setDefault(defaultLocale);
+        }
+    }
 }
