@@ -57,11 +57,20 @@ public class TelegramAgentHandler {
 
     public void receiveMessage(Exchange exchange) {
         IncomingMessage msg = exchange.getIn().getBody(IncomingMessage.class);
-        String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
 
         if (msg == null) {
             log.warn("Received null message body from Telegram");
             return; // no chatId to reply to
+        }
+
+        String chatId = msg.getChat() != null 
+            ? String.valueOf(msg.getChat().getId())
+            : exchange.getIn().getHeader("CamelTelegramChatId", String.class);
+
+        // The fallback block also uses chatId — protect it too:
+        if (chatId == null || chatId.isBlank()) {
+            log.warnf("No chatId for exchange, dropping message");
+            return;
         }
 
         if (msg.getText() == null) {

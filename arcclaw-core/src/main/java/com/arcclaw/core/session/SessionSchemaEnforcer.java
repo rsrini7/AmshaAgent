@@ -23,7 +23,7 @@ public class SessionSchemaEnforcer {
         em.createNativeQuery("""
             CREATE TABLE IF NOT EXISTS session_registry (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                channel_type T  EXT NOT NULL,
+                channel_type TEXT NOT NULL,
                 channel_id   TEXT NOT NULL,
                 user_id      TEXT NOT NULL,
                 session_id   TEXT NOT NULL UNIQUE,
