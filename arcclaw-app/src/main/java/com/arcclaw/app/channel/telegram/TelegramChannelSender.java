@@ -38,11 +38,11 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
-        if (recipient == null || recipient.platformId() == null) {
-            log.warn("TELEGRAM-SEND: recipient or platformId is null — dropping");
+        if (recipient == null || recipient.channelId() == null) {
+            log.warn("TELEGRAM-SEND: recipient or channelId is null — dropping");
             return;
         }
-        String chatId = recipient.platformId();
+        String chatId = recipient.channelId();  // ← was platformId()
         if (nodes == null || nodes.isEmpty()) {
             sendRaw(chatId, "(No response generated)");
             return;
@@ -57,11 +57,11 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
-        if (recipient == null || recipient.platformId() == null) {
-            log.warn("TELEGRAM-SENDRAW: recipient or platformId is null — dropping");
+        if (recipient == null || recipient.channelId() == null) {
+            log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
             return;
         }
-        sendRaw(recipient.platformId(), text);
+        sendRaw(recipient.channelId(), text);  // ← was platformId()
     }
 
     private void sendRaw(String chatId, String text) {

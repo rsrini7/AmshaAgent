@@ -457,7 +457,7 @@ mp:
         "com.arcclaw":
           level: DEBUG                      # all arcclaw packages
         "org.apache.camel.component.telegram":
-          level: DEBUG                      # camel telegram consumer messages
+          level: INFO                      # camel telegram consumer messages
         "org.apache.camel":
           level: INFO                       # camel internals — keep quiet
         "io.quarkus":

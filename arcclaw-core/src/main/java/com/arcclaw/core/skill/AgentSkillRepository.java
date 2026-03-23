@@ -1,6 +1,7 @@
 package com.arcclaw.core.skill;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -43,6 +44,7 @@ public class AgentSkillRepository {
         return em.createQuery("SELECT s FROM AgentSkillEntity s WHERE s.name = :name", AgentSkillEntity.class)
                 .setParameter("name", name)
                 .getResultStream()
+                .filter(Objects::nonNull)
                 .findFirst();
     }
 

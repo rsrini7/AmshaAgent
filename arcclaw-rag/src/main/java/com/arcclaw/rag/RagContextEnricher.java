@@ -35,7 +35,15 @@ public class RagContextEnricher implements ContextEnricher {
         }
 
         try {
-            List<ScoredChunk> chunks = memoryService.search(goal, userId, contextChunks);
+            // Wrap in FTS5 phrase quotes to handle apostrophes and special characters
+            // (e.g. "today's news" → "\"today's news\"").
+            // Without quoting, FTS5 parses the value as a query expression and
+            // an apostrophe opens an unterminated phrase literal → SQLITE_ERROR.
+            // Phrase search is also semantically better for RAG — we want the
+            // whole phrase matched, not individual unordered tokens.
+            String ftsQuery = toFts5Phrase(goal);
+
+            List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks);
             if (chunks.isEmpty()) return basePrompt;
 
             String context = chunks.stream()
@@ -58,5 +66,17 @@ public class RagContextEnricher implements ContextEnricher {
                 sessionId, e.getMessage());
             return basePrompt;
         }
+    }
+
+    /**
+     * Wraps a raw user query in FTS5 double-quote phrase syntax.
+     * <p>
+     * FTS5 treats the MATCH parameter as a query expression, not a plain string,
+     * so special characters like {@code '} cause parse errors. Double-quoting
+     * produces an exact phrase search and escapes any embedded double quotes by
+     * doubling them per FTS5 spec.
+     */
+    private String toFts5Phrase(String input) {
+        return "\"" + input.replace("\"", "\"\"") + "\"";
     }
 }

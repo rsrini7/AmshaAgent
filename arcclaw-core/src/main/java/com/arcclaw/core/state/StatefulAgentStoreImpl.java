@@ -199,7 +199,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
 
         q.setMaxResults(1);
-        return q.getResultList().stream().findFirst();
+        return q.getResultList().stream().filter(Objects::nonNull).findFirst();
     }
 
     private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {
@@ -446,6 +446,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         );
         q.setParameter("sid", sessionId);
         q.setMaxResults(1);
-        return q.getResultList().stream().findFirst();
+        return q.getResultList().stream().filter(Objects::nonNull).findFirst();
     }
 }
