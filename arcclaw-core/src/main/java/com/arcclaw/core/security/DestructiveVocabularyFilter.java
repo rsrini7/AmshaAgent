@@ -22,7 +22,7 @@ public class DestructiveVocabularyFilter {
 
     // Single-word destructive tokens — word boundary anchoring is reliable here
     private static final Pattern DESTRUCTIVE_WORDS = Pattern.compile(
-            "(?i)\\b(delete|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+            "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
     );
 
     // rm -rf variants — word boundary unreliable for multi-word tokens
