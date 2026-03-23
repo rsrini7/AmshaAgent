@@ -4334,8 +4334,7 @@ Deduplicate LLM model production logic and harden SQLite retry mechanisms across
 - Added `requiresManualApproval` default method to force HITL for high-risk operations.
 
 #### [MODIFY] [GithubTool.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/tools/GithubTool.java)
-- Implemented `requiresManualApproval` for sensitive operations like `create`, `delete`, and `pr` actions.
-- Expanded `ALLOWED_ACTIONS` to include `pr` and `ALLOWED_COMMANDS` to include `create` and `status`.
+- Implemented `requiresManualApproval` for sensitive operations.
 
 #### [MODIFY] [ToolInvocationGuard.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolInvocationGuard.java)
 - Updated to check `AgentTool.requiresManualApproval` during pre-invocation validation.

@@ -3647,7 +3647,7 @@ This is an optional cleanup step, not functionally required.
 
 **Root Cause**: The `ToolInvocationGuard` only checked the agent role's `autonomyLevel`. It did not have a mechanism for tools to "veto" autonomy and force a manual approval for specific high-risk commands.
 
-**Resolution**: Added `requiresManualApproval(parameters)` to the `AgentTool` interface (defaulting to `false`). Implemented this check in `GithubTool.java` to flag commands like `create`, `delete`, and `pr` actions as requiring HITL intervention. Updated `ToolInvocationGuard.evaluate()` to check both the role's autonomy AND the tool's manual approval flag, ensuring a "fail-supervised" posture for sensitive operations.
+**Resolution**: Added `requiresManualApproval(parameters)` to the `AgentTool` interface (defaulting to `false`). Implemented this check in `GithubTool.java` to flag High Risk actions as requiring HITL intervention. Updated `ToolInvocationGuard.evaluate()` to check both the role's autonomy AND the tool's manual approval flag, ensuring a "fail-supervised" posture for sensitive operations.
 
 **Files Changed**: `AgentTool.java`, `GithubTool.java`, `ToolInvocationGuard.java`
 

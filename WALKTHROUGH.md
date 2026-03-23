@@ -2520,7 +2520,7 @@ Deduplicated LLM model production logic and hardened SQLite retry mechanisms acr
 
 3. **HITL Security Enforcement (`requiresManualApproval`)**:
    - Addressed a security gap where certain high-risk tool operations (e.g., GitHub PR creation) only triggered manual approval if the role's autonomy level was specifically set to `SUPERVISED`.
-   - **Resolution**: Added `requiresManualApproval(params)` to the `AgentTool` interface. `GithubTool` now explicitly flags sensitive commands (like `create`, `delete`, `pr` actions) as requiring human intervention. `ToolInvocationGuard` was updated to enforce these tool-mandated approvals regardless of the global autonomy level.
+   - **Resolution**: Added `requiresManualApproval(params)` to the `AgentTool` interface. `GithubTool` now explicitly flags sensitive commands as requiring human intervention. `ToolInvocationGuard` was updated to enforce these tool-mandated approvals regardless of the global autonomy level.
 
 **Verification Results**:
 - ✅ **LLM Factory Integrity**: Verified via `LlmModelFactoryTest` that correct models are provisioned for all three supported providers.
