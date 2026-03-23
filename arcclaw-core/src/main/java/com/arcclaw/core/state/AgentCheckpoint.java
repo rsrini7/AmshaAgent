@@ -199,13 +199,9 @@ public class AgentCheckpoint {
      * Never overwrite an already-set non-blank value.
      */
     public void setOriginalGoal(String originalGoal) {
-        // Guard: never overwrite a previously captured goal — the first
-        // real user intent is the one that matters for RAG on resume.
-        if (this.originalGoal == null || this.originalGoal.isBlank()) {
-            this.originalGoal = originalGoal != null && originalGoal.length() > 2048
-                    ? originalGoal.substring(0, 2048)
-                    : originalGoal;
-        }
+        this.originalGoal = (originalGoal != null && originalGoal.length() > 2048)
+            ? originalGoal.substring(0, 2048)
+            : originalGoal;
     }
 
     public Instant getFailedAt() {
