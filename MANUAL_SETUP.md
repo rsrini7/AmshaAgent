@@ -693,7 +693,7 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-export SQLITE_VEC_PATH=./lib/vec0
+export ARCCLAW_SQLITE_VEC_PATH=./lib/vec0
 export ARCCLAW_DATA_DIR=./data
 
 ./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
@@ -703,7 +703,7 @@ export ARCCLAW_DATA_DIR=./data
 #### macOS
 
 ```bash
-export SQLITE_VEC_PATH=./lib/vec0
+export ARCCLAW_SQLITE_VEC_PATH=./lib/vec0
 export ARCCLAW_DATA_DIR=./data
 
 ./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
@@ -712,7 +712,7 @@ export ARCCLAW_DATA_DIR=./data
 #### Windows PowerShell
 
 ```powershell
-$env:SQLITE_VEC_PATH = './lib/vec0'
+$env:ARCCLAW_SQLITE_VEC_PATH = './lib/vec0'
 $env:ARCCLAW_DATA_DIR = './data'
 
 .\arcclaw-app\target\arcclaw-app-1.0.0-SNAPSHOT-runner.exe serve
@@ -932,7 +932,7 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | attach only | — | Comma-separated numeric IDs. |
 | `ARCCLAW_TELEGRAM_ALLOWED_USERS` | attach only | — | Comma-separated usernames (no @). |
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
-| `SQLITE_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
+| `ARCCLAW_SQLITE_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
 | `ARCCLAW_DEBUG_LLM` | Optional | `false` | Log full LLM request/response. Do NOT enable in prod. |
 | `ARCCLAW_SANDBOX_ENABLED` | Optional | `true` | Enable Podman sandbox. |

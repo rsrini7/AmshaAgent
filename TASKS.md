@@ -1008,7 +1008,7 @@
 - [x] Create `TwoTierMemoryService` with Reciprocal Rank Fusion (RRF) logic <!-- id: 465 -->
 - [x] Integrate `RagContextEnricher` into `LangChainReasoningEngine` <!-- id: 466 -->
 - [x] Register RAG classes for reflection in `AppReflectionConfig` <!-- id: 467 -->
-- [x] Add `SQLITE_VEC_PATH` to `.env.example` and `application.yaml` <!-- id: 468 -->
+- [x] Add `ARCCLAW_SQLITE_VEC_PATH` to `.env.example` and `application.yaml` <!-- id: 468 -->
 - [x] Implement `IngestDocumentTool` for agent-driven ingestion <!-- id: 469 -->
 - [x] Verify: `TwoTierMemoryServiceRrfTest` passes math validation <!-- id: 470 -->
 - [x] Verify: Manual test with `vec0.dll` confirm semantic search is active <!-- id: 471 -->

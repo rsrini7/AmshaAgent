@@ -55,7 +55,7 @@ public class RagSchemaInitializer {
         log.infof("═══ RAG STATUS ═══ vec0=%s | FTS5=enabled | dims=%d | path=%s",
             vecLoaded ? "✓ LOADED" : "✗ degraded (FTS5-only)",
             embedDimensions,
-            vecLoaded ? "active" : "check SQLITE_VEC_PATH");
+            vecLoaded ? "active" : "check ARCCLAW_SQLITE_VEC_PATH");
 
         if (!vecLoaded) return;
 
