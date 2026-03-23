@@ -69,14 +69,25 @@ public class RagContextEnricher implements ContextEnricher {
     }
 
     /**
-     * Wraps a raw user query in FTS5 double-quote phrase syntax.
+     * Sanitizes a raw user query for FTS5 MATCH parameter safety.
      * <p>
-     * FTS5 treats the MATCH parameter as a query expression, not a plain string,
-     * so special characters like {@code '} cause parse errors. Double-quoting
-     * produces an exact phrase search and escapes any embedded double quotes by
-     * doubling them per FTS5 spec.
+     * FTS5 parses the MATCH value as a query expression — special characters
+     * like {@code '}, {@code `}, {@code *}, {@code ^} etc. cause syntax errors.
+     * For RAG retrieval, punctuation carries no semantic value, so all
+     * non-word characters are replaced with spaces. The result is wrapped
+     * in double-quotes for FTS5 phrase search to prevent operator interpretation
+     * of any residual tokens.
      */
     private String toFts5Phrase(String input) {
-        return "\"" + input.replace("\"", "\"\"") + "\"";
+        if (input == null || input.isBlank()) return "\"\"";
+
+        // Replace all non-word, non-space characters with a space.
+        // \w = [a-zA-Z0-9_] — covers all FTS5 special chars comprehensively.
+        String sanitized = input.replaceAll("[^\\w\\s]", " ").trim();
+
+        if (sanitized.isBlank()) return "\"\"";
+
+        return "\"" + sanitized + "\"";
     }
+
 }
