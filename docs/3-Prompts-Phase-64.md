@@ -824,7 +824,7 @@ Refer @arcclaw_rg_cheatsheet.md
 2. Every change must leave all existing tests green and must not require new infrastructure.
 3. Nuance #3: All `Pattern` objects must be `static final`. Any new regex introduced here must comply.
 4. No new external dependencies.
-5. All existing 698 tests must remain green throughout.
+5. All existing 717+ tests must remain green throughout.
 6. Each component is independent — they can be done in any order.
 
 ---
@@ -1111,53 +1111,6 @@ Use whichever approach is less disruptive to the existing `StructuredRetryLoop` 
 *(create or update)*
 
 - Add: `testBudgetWarningIsNotSilentlySwallowed()` — mock the LLM to throw `BudgetWarningException` during structured output; assert the caller (or result wrapper) receives the warning signal and it does not disappear.
-
----
-
-### Component D7 — Dead code cleanup
-
-**Files:**  
-`arcclaw-core/src/main/java/com/arcclaw/core/tool/ToolCapability.java`  
-`arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentResult.java`  
-*(locate by searching for `SANDBOX_EXEC`, `RATE_LIMIT`, `System.out.println`)*  
-`arcclaw-deployment/src/main/java/com/arcclaw/deployment/AgentFunctionProcessor.java`
-
-**Items to remove:**
-
-**D7a — `ToolCapability.SANDBOX_EXEC`:**
-
-The `SANDBOX_EXEC` enum constant is marked "Phase 48 deferred" and is never used in any live code path. It appears in `toolName()` switch expressions and may appear in tool capability sets. Remove the constant. If any role's `Set<ToolCapability>` contains it, remove from that set too.
-
-Check: if removing `SANDBOX_EXEC` causes any exhaustive switch to fail to compile (the safety net, per Global Requirement #12) — that is a discovery that some switch was not exhaustive. Fix those switches.
-
-**D7b — `AgentResult.FailureCategory.RATE_LIMIT`:**
-
-Search the entire codebase for assignments of `FailureCategory.RATE_LIMIT`. If none exist (the rate-limit path in `IntentClassificationHandler` absorbs the exception and routes to the coordinator without creating a `Failed` result), remove the enum constant. If any code path does assign it, wire it up properly instead of removing.
-
-**D7c — `System.out.println` in `AgentFunctionProcessor`:**
-
-```java
-System.out.println("AgentFunctionProcessor CLASS LOADED");
-System.out.println("AgentFunctionProcessor: Processing agent functions...");
-```
-
-These print to `stdout` during native image compilation — they are build-time processor side effects visible in CI output. Replace with proper JBoss logging:
-
-```java
-private static final Logger log = Logger.getLogger(AgentFunctionProcessor.class);
-// then:
-log.debug("AgentFunctionProcessor: processing agent functions...");
-```
-
-Note: build-time processors use JBoss logging via `org.jboss.logging.Logger` — NOT `java.util.logging` or SLF4J.
-
-**TEST:** No new tests needed for D7. Verify existing tests remain green (the dead code removal is pure deletion — no behavior change). Run:
-
-```powershell
-.\mvnw.cmd clean test -pl arcclaw-core -am -DskipTests=false
-```
-
-Assert: compilation succeeds (no `SANDBOX_EXEC` reference compile errors), all tests pass.
 
 ---
 
