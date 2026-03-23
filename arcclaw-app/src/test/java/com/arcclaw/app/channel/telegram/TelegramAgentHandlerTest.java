@@ -14,6 +14,9 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.github.benmanes.caffeine.cache.Cache;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.InjectMock;
+import io.quarkus.arc.ClientProxy;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
@@ -23,27 +26,26 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@QuarkusTest
 class TelegramAgentHandlerTest {
 
-    private TelegramAgentHandler handler;
-    private MessagePipeline pipeline;
-    private ManagedExecutor executor;
-    private TelegramMessageMapper mapper;
-    private TelegramChannelSender sender;
+    @jakarta.inject.Inject
+    TelegramAgentHandler handler;
+
+    @InjectMock
+    MessagePipeline pipeline;
+
+    @InjectMock
+    ManagedExecutor executor;
+
+    @InjectMock
+    TelegramMessageMapper mapper;
+
+    @InjectMock
+    TelegramChannelSender sender;
 
     @BeforeEach
     void setup() throws Exception {
-        pipeline = mock(MessagePipeline.class);
-        executor = mock(ManagedExecutor.class);
-        mapper = mock(TelegramMessageMapper.class);
-        sender = mock(TelegramChannelSender.class);
-
-        handler = new TelegramAgentHandler();
-        handler.pipeline = pipeline;
-        handler.executor = executor;
-        handler.messageMapper = mapper;
-        handler.sender = sender;
-
         // Stub a mock executor to run immediately in the same thread
         ExecutorService syncExecutor = mock(ExecutorService.class);
         doAnswer(invocation -> {
@@ -52,13 +54,14 @@ class TelegramAgentHandlerTest {
         }).when(syncExecutor).submit(any(Runnable.class));
 
         // Inject the sync executor into the chatQueues cache via reflection
+        // Since handler is a proxy, we must unwrap it
+        TelegramAgentHandler target = ClientProxy.unwrap(handler);
         Field queuesField = TelegramAgentHandler.class.getDeclaredField("chatQueues");
         queuesField.setAccessible(true);
         @SuppressWarnings("unchecked")
-        Cache<String, ExecutorService> mockCache = 
-            mock(Cache.class);
+        Cache<String, ExecutorService> mockCache = mock(Cache.class);
         when(mockCache.get(anyString(), any())).thenReturn(syncExecutor);
-        queuesField.set(handler, mockCache);
+        queuesField.set(target, mockCache);
     }
 
     @Test
@@ -140,7 +143,7 @@ class TelegramAgentHandlerTest {
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
                 new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
-        doThrow(new RuntimeException("Pipeline crash")).when(pipeline).process(any());
+        doThrow(new RuntimeException("Real crash")).when(pipeline).process(any());
 
         assertDoesNotThrow(() -> handler.receiveMessage(exchange));
         
