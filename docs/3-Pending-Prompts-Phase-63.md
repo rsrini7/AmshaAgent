@@ -5,7 +5,6 @@ Task: Phase 65-Prep — Close all remaining Phase 64 partials, quality sweeps,
 and reviewer findings before the ChannelPlugin SPI phase begins.
 All items are confirmed defects, partial implementations, or missed improvements.
 Surgical fixes only unless stated. No D8 (SPI). No D9 (MCP SDK).
-SANDBOX_EXEC and RATE_LIMIT are used elsewhere — do NOT remove them.
 
 ---
 
@@ -26,8 +25,6 @@ Refer @arcclaw_rg_cheatsheet.md
 5. All fixes must be safe under JDK 25 (no preview features).
 6. Test commands always use `clean` to prevent stale class false-negatives.
 7. Components marked [NO NEW TEST NEEDED] must update an existing test instead.
-8. Do NOT remove `ToolCapability.SANDBOX_EXEC` or
-   `AgentResult.FailureCategory.RATE_LIMIT` — both are intentionally retained.
 
 ### Execution Gate
 
@@ -1287,8 +1284,6 @@ Expected outcomes:
 |---|---|
 | D8 — ChannelPlugin SPI | Phase 65 — requires Discord proof-of-concept first |
 | D9 — MCP Java SDK migration | Phase 65+ — awaiting SDK stability |
-| ToolCapability.SANDBOX_EXEC removal | Used in multiple places — retained |
-| AgentResult.FailureCategory.RATE_LIMIT removal | Used in multiple places — retained |
 | R9 — AgentRoleEnum OCP | Rolls into Phase 65 RoleDefinition provider work |
 | MessageContext full immutability | Phase 66 — R8 is the typed-view first step |
 

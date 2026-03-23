@@ -1077,17 +1077,6 @@ return switch (provider.toLowerCase().trim()) {
 ```
 Adding a new provider (Voyage, Cohere, etc.) requires modifying this class. The standard fix is a `EmbeddingProviderFactory` interface with `@Named` CDI producers per provider, discovered via Instance<EmbeddingProviderFactory>.
 
-**YAGNI: `ToolCapability.SANDBOX_EXEC` defined but never used**
-
-```java
-// SANDBOX_EXEC deferred to Phase 48
-```
-If Phase 48 is speculative, remove it. Phantom capabilities in the enum create the appearance of permissions that don't exist, confuse future readers, and appear in `toolNames()` sets that could leak into prompts.
-
-**YAGNI: `AgentResult.FailureCategory.RATE_LIMIT` never set**
-
-The enum value exists, but searching the codebase for where `FailureCategory.RATE_LIMIT` is assigned produces nothing — the rate limit path in `IntentClassificationHandler` absorbs the exception and routes to coordinator, never creating a `Failed` result. Dead enum values are maintenance risk.
-
 ---
 
 ### 8. CompactionSummaryEntity — Public Fields on JPA Entity
@@ -1194,7 +1183,6 @@ Here are the highest-leverage changes:
 - `EmbeddingModelProducer`: introduce `EmbeddingProviderFactory` SPI.
 - `StartupSecurityValidator` fields: `private final` + constructor injection.
 - `AgentResult.FailureCategory`: remove `RATE_LIMIT` if unused, or wire it up properly.
-- Remove `ToolCapability.SANDBOX_EXEC` until Phase 48 is real.
 
 **Low** — operational hardening:
 - Pin `alpine:latest` → `alpine:3.20` in `Dockerfile.toolrunner`.

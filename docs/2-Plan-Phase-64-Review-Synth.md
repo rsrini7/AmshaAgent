@@ -444,16 +444,6 @@ One allocation per call instead of 18.
 
 ---
 
-### D7 — Dead code cleanup
-
-| Item | Location | Action |
-|------|----------|--------|
-| `ToolCapability.SANDBOX_EXEC` | `ToolCapability` enum | Remove — Phase 48 deferred indefinitely |
-| `AgentResult.FailureCategory.RATE_LIMIT` | `AgentResult` | Remove — never assigned anywhere in the codebase |
-| `System.out.println(...)` | `AgentFunctionProcessor` | Replace with JBoss Logger — appears in native image compilation output |
-
----
-
 ### D8 — ChannelPlugin SPI full refactor (Phase 65+)
 
 All five LLMs recommended this as the headline change. It's the right long-term architecture.
