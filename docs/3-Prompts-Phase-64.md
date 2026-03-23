@@ -13,8 +13,9 @@ All bugs below exist today. No architectural changes. Surgical fixes only.
 
 ---
 
-## Architecture Context
+## Architecture Context and Other References
 Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -24,7 +25,7 @@ Refer @Architecture_Nuances.md
 
 1. Every fix must be accompanied by a test that proves the bug existed and now does not.
 2. No new dependencies. No structural package changes.
-3. All existing 535 tests must remain green after every component.
+3. All existing 698 tests must remain green after every component.
 4. Use `static final Pattern` for any new regex — never compiled inline.
 5. All fixes must be safe under JDK 25 (no preview features).
 6. Test commands always use `clean` to prevent stale class false-negatives.
@@ -322,8 +323,9 @@ Task: Phase 64-B — Close 3 confirmed security gaps. All exist in production to
 
 ---
 
-## Architecture Context
-*(paste your full Architecture Context block here)*
+## Architecture Context and Other References
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -336,7 +338,7 @@ Task: Phase 64-B — Close 3 confirmed security gaps. All exist in production to
 3. Nuance #10: No `ALTER TABLE`. New tables require `@Entity` (standard) or raw DDL (virtual tables, indexes, triggers only).
 4. Nuance #35: Vault pepper is `char[]`, zeroed after use. Never `String`.
 5. Nuance #29: `EntityManager` inside `QuarkusTransaction.requiringNew()` — extract into `@Transactional(TxType.REQUIRES_NEW)` methods.
-6. All existing 535 tests must remain green.
+6. All existing 698 tests must remain green.
 
 ---
 
@@ -556,8 +558,9 @@ Task: Phase 64-C — 3 targeted architectural changes required before any new ch
 
 ---
 
-## Architecture Context
-*(paste your full Architecture Context block here)*
+## Architecture Context and Other References
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -570,7 +573,7 @@ Task: Phase 64-C — 3 targeted architectural changes required before any new ch
 3. Nuance #10: No `ALTER TABLE`. New tables via `@Entity` or raw DDL for virtual/index only.
 4. Nuance #17: Raw `EntityManager` in all repository classes in `arcclaw-core`.
 5. These changes build on top of Tier B (B3 introduces the `SessionRegistryEntry` with `channelType`) — Tier B must be merged first.
-6. All existing 535 tests must remain green throughout.
+6. All existing 698 tests must remain green throughout.
 
 ---
 
@@ -807,8 +810,9 @@ Task: Phase 64-D — 7 code quality improvements and dead code cleanup. No corre
 
 ---
 
-## Architecture Context
-*(paste your full Architecture Context block here)*
+## Architecture Context and Other References
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -820,7 +824,7 @@ Task: Phase 64-D — 7 code quality improvements and dead code cleanup. No corre
 2. Every change must leave all existing tests green and must not require new infrastructure.
 3. Nuance #3: All `Pattern` objects must be `static final`. Any new regex introduced here must comply.
 4. No new external dependencies.
-5. All existing 535 tests must remain green throughout.
+5. All existing 698 tests must remain green throughout.
 6. Each component is independent — they can be done in any order.
 
 ---
