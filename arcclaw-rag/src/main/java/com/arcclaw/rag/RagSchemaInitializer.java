@@ -52,7 +52,7 @@ public class RagSchemaInitializer {
         }
 
         boolean vecLoaded = ftsInterceptor.isVectorSearchEnabled();
-        log.infof("═══ RAG STATUS ═══ vec0=%s | FTS5=enabled | dims=%d | path=%s",
+        log.infof("RAG STATUS vec0=%s | FTS5=enabled | dims=%d | path=%s",
             vecLoaded ? "✓ LOADED" : "✗ degraded (FTS5-only)",
             embedDimensions,
             vecLoaded ? "active" : "check ARCCLAW_SQLITE_VEC_PATH");

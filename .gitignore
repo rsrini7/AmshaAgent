@@ -37,7 +37,7 @@ quarkus-app/
 Thumbs.db
 
 # Project Specific
-*.log
+*.log*
 test-output.log
 api-surface*.txt
 workspaces/

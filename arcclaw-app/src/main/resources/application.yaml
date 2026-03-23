@@ -453,6 +453,15 @@ mp:
         path: ./arcclaw-dev.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        category:
+          "com.arcclaw":
+            level: DEBUG
+          "org.apache.camel":
+            level: DEBUG
+          "com.arcclaw.app.channel":
+            level: DEBUG
+          "com.arcclaw.core.pipeline":
+            level: DEBUG
         rotation:
           max-file-size: 20M
           max-backup-index: 3
