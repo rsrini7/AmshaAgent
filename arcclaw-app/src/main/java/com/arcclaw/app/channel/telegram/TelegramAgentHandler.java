@@ -80,6 +80,8 @@ public class TelegramAgentHandler {
             return;
         }
 
+        log.debugf("Received message from chat %s: %s", chatId, msg.getText());
+
         String userId = String.valueOf(msg.getFrom().getId());
         String username = msg.getFrom().getUsername();
         String text = msg.getText();
@@ -91,6 +93,8 @@ public class TelegramAgentHandler {
             return;
         }
 
+        log.debugf("Mapped message for chat %s: %s", chatId, channelMessage);
+
         MessageContext context = new MessageContext(chatId, user, channelMessage, sender);
         
         // Immediate acknowledgment for non-command messages
@@ -98,23 +102,25 @@ public class TelegramAgentHandler {
             sender.sendRaw(user, "⏳");
         }
 
+        log.debugf("Processing message for chat %s", chatId);
         queueForChat(chatId).submit(() -> processPipeline(context));
     }
 
     @ActivateRequestContext
     void processPipeline(MessageContext context) {
         try {
+           log.infof("[TELEGRAM-ROUTE] Message received, entering pipeline for chat=%s", context.getChatId());
             pipeline.process(context);
         } catch (Exception e) {
             if ("Pipeline crash".equals(e.getMessage())) {
                 log.warnf("Expected test exception in message pipeline for chat %s: %s", context.getChatId(), e.getMessage());
             } else {
-                log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId());
+                log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId(),e.getMessage());
             }
             try {
                 context.getSender().sendRaw(context.getUser(), "⚠️ Sorry, an internal error occurred while processing your message.");
             } catch (Exception sendEx) {
-                log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
+                log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId(),e.getMessage());
             }
         }
     }

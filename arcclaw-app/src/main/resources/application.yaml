@@ -441,30 +441,40 @@ mp:
       enabled: false        
 
 "%dev":
-  camel:
-    main:
-      jmx-enabled: false
   quarkus:
     log:
+      level: DEBUG                          # single root block — no duplicate
       console:
-        enable: false 
+        enable: false
       file:
         enable: true
         path: ./arcclaw-dev.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
-        category:
-          "com.arcclaw":
-            level: DEBUG
-          "org.apache.camel":
-            level: DEBUG
-          "com.arcclaw.app.channel":
-            level: DEBUG
-          "com.arcclaw.core.pipeline":
-            level: DEBUG
         rotation:
           max-file-size: 20M
           max-backup-index: 3
+      category:
+        "com.arcclaw":
+          level: DEBUG                      # all arcclaw packages
+        "org.apache.camel.component.telegram":
+          level: DEBUG                      # camel telegram consumer messages
+        "org.apache.camel":
+          level: INFO                       # camel internals — keep quiet
+        "io.quarkus":
+          level: INFO
+        "io.netty":
+          level: WARN                       # suppress netty allocator spam
+        "jdk.event.security":
+          level: "OFF"                      # suppress SSL cert flood you're seeing
+        "jak.json.spi":
+          level: "OFF"                      # suppress FINE JSON provider logs
+        "io.opentelemetry":
+          level: "OFF"                      # suppress OTel FINE logs
+        "org.hibernate":
+          level: WARN
+        "org.infinispan":
+          level: WARN
     console:
       enabled: false
     live-reload:
