@@ -19,14 +19,26 @@ import org.jboss.logging.Logger;
  * Reference tool implementation: GitHub CLI operations via sandboxed execution.
  * Supports 'repo' and 'gist' subcommands, plus branch/tag README fetching via
  * the 'ref' parameter.
+ *
+ * <p>Security model:
+ * <ul>
+ *   <li>ALLOWED_ACTIONS and ALLOWED_COMMANDS are the single source of truth for
+ *       what the LLM schema advertises and what the runtime guard enforces.
+ *       They must always be in sync.</li>
+ *   <li>Destructive commands (delete, destroy, remove, etc.) are intentionally
+ *       absent from both sets and must never be added without a formal review.</li>
+ * </ul>
  */
 @ApplicationScoped
 public class GithubTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(GithubTool.class);
 
-    private static final Set<String> ALLOWED_ACTIONS = Set.of("repo", "gist", "pr");
-    private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list", "create", "status");
+    // ── SINGLE SOURCE OF TRUTH 
+    // Keep ALLOWED_ACTIONS, ALLOWED_COMMANDS, description(), and parametersSchema()
+    // perfectly in sync. Any divergence will cause the LLM to hallucinate values.
+    private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
     public static final String NAME = ToolCapability.GITHUB.toolName();
 
@@ -37,10 +49,10 @@ public class GithubTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Interact with GitHub using the gh CLI. " +
+        return "Interact with GitHub using the gh CLI. Read-only access only. " +
                 "Parameters: " +
-                "1. 'action': 'repo' or 'gist'. " +
-                "2. 'command': 'view' or 'list'. " +
+                "1. 'action': ONLY 'repo' or 'gist' — no other values are valid. " +
+                "2. 'command': ONLY 'view' or 'list' — NEVER use 'delete', 'create', 'remove', or any other value. " +
                 "3. 'target': (Optional) The target owner or owner/repo path. " +
                 "4. 'ref': (Optional) Branch, tag, or commit SHA for README fetch.";
     }
@@ -58,12 +70,14 @@ public class GithubTool implements AgentTool {
     @Override
     @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
     public List<String> sandboxCommand(Map<String, Object> params) {
-        String action = (String) params.getOrDefault("action", "repo");
+        String action  = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");
-        String target = (String) params.get("target");
-        String ref = (String) params.get("ref");
+        String target  = (String) params.get("target");
+        String ref     = (String) params.get("ref");
 
-        // ── ALLOWLIST GUARD ────────────────────────────────────────────────
+        // ── ALLOWLIST GUARD 
+        // This is the hard runtime enforcement. Must always match ALLOWED_ACTIONS
+        // and ALLOWED_COMMANDS above and the schema advertised to the LLM.
         if (!ALLOWED_ACTIONS.contains(action)) {
             throw new IllegalArgumentException(
                     "Action '" + action + "' is not permitted. Only 'repo' and 'gist' are supported.");
@@ -72,9 +86,8 @@ public class GithubTool implements AgentTool {
             throw new IllegalArgumentException(
                     "Command '" + command + "' is not permitted. Only 'view' and 'list' are supported.");
         }
-        // ── END ALLOWLIST GUARD ────────────────────────────────────────────
-
-        // ── SMART GUARDRAILS ───────────────────────────────────────────────
+        
+        //SMART GUARDRAILS 
         if ("repo".equals(action)) {
             if ("view".equals(command) && (target == null || !target.contains("/"))) {
                 throw new IllegalArgumentException(
@@ -96,9 +109,8 @@ public class GithubTool implements AgentTool {
                         "To 'view' a gist, provide the Gist ID or URL as 'target'.");
             }
         }
-        // ── END SMART GUARDRAILS ───────────────────────────────────────────
 
-        // ── REF / README BRANCH FETCH ──────────────────────────────────────
+        // REF / README BRANCH FETCH 
         // gh api returns base64-encoded content; postProcessOutput() decodes it.
         if ("repo".equals(action) && "view".equals(command)
                 && ref != null && !ref.isBlank()) {
@@ -107,7 +119,6 @@ public class GithubTool implements AgentTool {
                     "repos/" + target + "/readme?ref=" + ref.trim(),
                     "--jq", ".content");
         }
-        // ── END REF / README BRANCH FETCH ─────────────────────────────────
 
         List<String> cmd = new ArrayList<>();
         cmd.add("gh");
@@ -127,9 +138,9 @@ public class GithubTool implements AgentTool {
      */
     @Override
     public String postProcessOutput(String rawOutput, Map<String, Object> params) {
-        String action = (String) params.getOrDefault("action", "repo");
+        String action  = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");
-        String ref = (String) params.get("ref");
+        String ref     = (String) params.get("ref");
 
         boolean isReadmeApiCall = "repo".equals(action)
                 && "view".equals(command)
@@ -142,27 +153,23 @@ public class GithubTool implements AgentTool {
                         StandardCharsets.UTF_8);
             } catch (Exception e) {
                 log.errorf("Failed to base64-decode README output for ref='%s': %s", ref, e.getMessage());
-                // Return raw output rather than losing it entirely
                 return rawOutput;
             }
         }
         return rawOutput;
     }
 
+    /**
+     * Only read-only commands are auto-approved.
+     * Write commands require explicit human approval.
+     * Destructive commands are not in ALLOWED_COMMANDS and never reach this method.
+     */
     @Override
     public boolean requiresManualApproval(Map<String, Object> params) {
-        String action = (String) params.getOrDefault("action", "repo");
-        String command = (String) params.getOrDefault("command", "view");
-
-        // Commands that modify state or are public-facing
-        Set<String> unsafeCommands = Set.of("create", "delete", "edit", "comment", "merge", "close", "reopen");
-        
-        // GH PR operations are generally treated with higher sensitivity
-        if ("pr".equals(action)) {
-            return !Set.of("list", "view", "status").contains(command);
-        }
-
-        return unsafeCommands.contains(command);
+        // All currently allowed commands (view, list) are read-only and safe.
+        // If write commands are ever added to ALLOWED_COMMANDS in future,
+        // they must be listed here for approval gating.
+        return false;
     }
 
     @Override
@@ -174,12 +181,13 @@ public class GithubTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addEnumProperty("action", List.of("repo", "gist"),
-                        "Action to perform")
+                        "Action to perform. ONLY 'repo' or 'gist' are valid.")
                 .addEnumProperty("command", List.of("view", "list"),
                         "Command to run. Use 'view' to get description and README " +
                                 "(supply 'ref' to target a specific branch, tag, or commit). " +
                                 "Use 'list' to enumerate items. " +
-                                "NEVER use 'desc', 'info', or any other value — ONLY 'view' and 'list' are valid.")
+                                "NEVER use 'delete', 'create', 'remove', 'destroy', or any other value — " +
+                                "ONLY 'view' and 'list' are valid.")
                 .addStringProperty("target",
                         "For 'repo view', use 'owner/repo'. " +
                                 "For 'repo list', use 'owner'. " +
