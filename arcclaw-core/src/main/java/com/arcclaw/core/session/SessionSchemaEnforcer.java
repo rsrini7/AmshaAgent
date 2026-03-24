@@ -7,6 +7,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.interceptor.Interceptor;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
@@ -19,7 +20,7 @@ public class SessionSchemaEnforcer {
     EntityManager em;
 
     @Transactional
-    void onStart(@Observes @Priority(90) StartupEvent ev) {
+    void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 90) StartupEvent ev) {
         em.createNativeQuery("""
             CREATE TABLE IF NOT EXISTS session_registry (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
