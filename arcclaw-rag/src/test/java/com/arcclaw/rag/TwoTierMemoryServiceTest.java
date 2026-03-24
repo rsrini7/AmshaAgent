@@ -38,11 +38,11 @@ class TwoTierMemoryServiceTest {
         when(ftsInterceptor.isVectorSearchEnabled()).thenReturn(false);
 
         CompactionSummaryEntity e1 = new CompactionSummaryEntity();
-        e1.sessionId = "id-1";
-        e1.summary = "text-1";
+        e1.setSessionId("id-1");
+        e1.setSummary("text-1");
         CompactionSummaryEntity e2 = new CompactionSummaryEntity();
-        e2.sessionId = "id-2";
-        e2.summary = "text-2";
+        e2.setSessionId("id-2");
+        e2.setSummary("text-2");
 
         // searchMemory called with topK * 2
         when(compactionRepo.searchMemory(eq("user-1"), eq("query-1"), anyInt()))

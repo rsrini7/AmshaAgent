@@ -4,6 +4,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -100,10 +102,14 @@ public class AgentDispatchHandler implements MessageHandler {
                     context
                 )
             );
+        } catch (BudgetExceededException | BudgetWarningException e) {
+            throw e;   // propagate typed — caller maps to 429
         } catch (Exception e) {
             log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());
             log.debug("Full agent dispatch failure stack trace:", e);
-            throw new RuntimeException(e.getMessage(), e);
+            context.getSender().sendRaw(context.getUser(),
+                "❌ An internal error occurred. Please try again.");
+            return HandleResult.STOP;  // stop pipeline gracefully — do not throw
         }
 
         String output = CronResultFormatter.format(result);

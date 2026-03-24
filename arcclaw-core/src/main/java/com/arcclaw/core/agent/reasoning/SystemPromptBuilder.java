@@ -10,6 +10,7 @@ import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.core.state.CompactionSummaryEntity;
 import org.jboss.logging.Logger;
 
 /**
@@ -239,7 +240,7 @@ public class SystemPromptBuilder {
         // Build compaction summary for template injection
         String compactionSummary = (sessionId != null)
                 ? compactionSummaryRepository.findLatestBySessionId(sessionId)
-                .map(s -> s.summary).orElse(null)
+                .map(CompactionSummaryEntity::getSummary).orElse(null)
                 : null;
 
         // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)

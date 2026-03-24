@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +18,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -101,6 +103,18 @@ class AgentDispatchHandlerTest {
 
         mockedContext.verify(() -> WorkspaceContext.run(
                 eq("sess123"), anyString(), anyString(), eq(AutonomyLevel.SUPERVISED), anyString(), any(Callable.class)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testBudgetExceededPropagatesToCaller() throws Exception {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        
+        mockedContext.when(() -> WorkspaceContext.run(
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(Callable.class)))
+                .thenThrow(new BudgetExceededException("Budget exceeded for sess123"));
+
+        assertThrows(BudgetExceededException.class, () -> handler.handle(context));
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {

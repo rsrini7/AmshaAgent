@@ -16,7 +16,8 @@ public enum AgentRoleEnum {
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
             7,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH),
+            Set.of("brihaspati", "brahaspati")
     )),
 
     COORDINATOR("coordinator", new RoleDefinition(
@@ -25,7 +26,8 @@ public enum AgentRoleEnum {
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
             7,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT)
+            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT),
+            Set.of("vishnu")
     )),
 
     RESEARCHER("researcher", new RoleDefinition(
@@ -34,7 +36,8 @@ public enum AgentRoleEnum {
             "Perform information retrieval, web searches, and documentation lookups.",
             10,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH),
+            Set.of("saraswati")
     )),
 
     CODER("coder", new RoleDefinition(
@@ -43,7 +46,8 @@ public enum AgentRoleEnum {
             "Writes new architectural code, features from scratch, and logic implementations.",
             3,
             false,
-            Set.of() // SANDBOX_EXEC deferred to Phase 48
+            Set.of(), // SANDBOX_EXEC deferred to Phase 48
+            Set.of("brahma")
     )),
 
     DEBUGGER("debugger", new RoleDefinition(
@@ -52,7 +56,8 @@ public enum AgentRoleEnum {
             "Analyzes stack traces, finds bugs, and fixes broken code.",
             3,
             false,
-            Set.of(ToolCapability.GITHUB)
+            Set.of(ToolCapability.GITHUB),
+            Set.of("shiva")
     )),
 
     SYNTHESIZER("synthesizer", new RoleDefinition(
@@ -65,7 +70,8 @@ public enum AgentRoleEnum {
             true,
             Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
                              ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE,
-                             ToolCapability.INGEST_DOCUMENT)
+                             ToolCapability.INGEST_DOCUMENT),
+            Set.of("dattatreya", "datta")
     ));
 
     private final String canonicalName;

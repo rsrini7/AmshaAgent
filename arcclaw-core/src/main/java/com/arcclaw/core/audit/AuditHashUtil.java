@@ -79,9 +79,9 @@ public class AuditHashUtil {
      * inputs.
      * 
      * @param input The raw input to hash (e.g., user goal, reflex input)
-     * @return 64-character hex string representing the SHA-256 hash, "null" if
-     *         input is null,
-     *         or "hash-error" if SHA-256 is unavailable.
+     * @return 64-character hex string representing the SHA-256 hash,
+     *         "genesis-fallback-null-input" if input is null.
+     * @throws IllegalStateException if SHA-256 is unavailable (JVM is broken).
      */
     public String sha256hex(String input) {
         if (input == null) {
@@ -93,8 +93,8 @@ public class AuditHashUtil {
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (Exception e) {
-            // SHA-256 must never be null for audit chaining; use hardcoded fallback
-            return "genesis-fallback-sha256-error";
+            // SHA-256 must be available for audit chaining — failure means the JVM is broken
+            throw new IllegalStateException("SHA-256 unavailable — JVM is broken", e);
         }
     }
 

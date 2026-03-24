@@ -4,8 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -19,10 +18,11 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Orchestrates the execution of a single cron job, managing the workspace context,
@@ -39,9 +39,6 @@ public class CronJobRunner {
 
     @Inject
     CronResultHandler resultHandler;
-
-    @Inject
-    DevSecretSeeder devSeeder;
 
     @Inject
     AgentCronRepository cronRepository;
@@ -61,9 +58,6 @@ public class CronJobRunner {
         String cronSessionId = "cron-" + job.id + "-" + executionId;
         
         try {
-            // Seed development secrets for this isolated background thread
-            devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
-
             String effectiveGoal = job.goal + 
                 "\n[SYSTEM CONSTRAINT: Do NOT call scheduletask. Execute the goal directly.]";
 

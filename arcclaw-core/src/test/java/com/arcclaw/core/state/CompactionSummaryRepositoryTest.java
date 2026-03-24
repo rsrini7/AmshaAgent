@@ -41,10 +41,10 @@ class CompactionSummaryRepositoryTest {
         Optional<CompactionSummaryEntity> result = repository.findLatestBySessionId(sessionId);
         assertTrue(result.isPresent());
         CompactionSummaryEntity entity = result.get();
-        assertEquals(sessionId, entity.sessionId);
-        assertEquals("summary-1", entity.summary);
-        assertEquals(3, entity.messagesCompacted);
-        assertNotNull(entity.compactedAt);
+        assertEquals(sessionId, entity.getSessionId());
+        assertEquals("summary-1", entity.getSummary());
+        assertEquals(3, entity.getMessagesCompacted());
+        assertNotNull(entity.getCompactedAt());
     }
 
     @Test
@@ -55,17 +55,17 @@ class CompactionSummaryRepositoryTest {
         em.flush();
         em.clear();
 
-        Instant firstCompactedAt = repository.findLatestBySessionId(sessionId).orElseThrow().compactedAt;
+        Instant firstCompactedAt = repository.findLatestBySessionId(sessionId).orElseThrow().getCompactedAt();
 
         repository.upsertSummary(sessionId, "test-user", "summary-2", 4);
         em.flush();
         em.clear();
 
         CompactionSummaryEntity updated = repository.findLatestBySessionId(sessionId).orElseThrow();
-        assertEquals("summary-2", updated.summary);
-        assertEquals(4, updated.messagesCompacted);
-        assertNotNull(updated.compactedAt);
-        assertFalse(updated.compactedAt.isBefore(firstCompactedAt));
+        assertEquals("summary-2", updated.getSummary());
+        assertEquals(4, updated.getMessagesCompacted());
+        assertNotNull(updated.getCompactedAt());
+        assertFalse(updated.getCompactedAt().isBefore(firstCompactedAt));
     }
 
     @Test
@@ -99,8 +99,8 @@ class CompactionSummaryRepositoryTest {
         List<CompactionSummaryEntity> results = repository.searchMemory(userId, "blockchain", 5);
 
         assertFalse(results.isEmpty(), "FTS5 search should return matching results");
-        assertEquals(sessionId, results.get(0).sessionId);
-        assertTrue(results.get(0).summary.contains("blockchain"));
+        assertEquals(sessionId, results.get(0).getSessionId());
+        assertTrue(results.get(0).getSummary().contains("blockchain"));
     }
 
     @Test
@@ -122,12 +122,12 @@ class CompactionSummaryRepositoryTest {
         // User A should only see their own results
         List<CompactionSummaryEntity> resultsA = repository.searchMemory(userA, "quantum", 5);
         assertEquals(1, resultsA.size(), "User A should only see their own sessions");
-        assertEquals(userA, resultsA.get(0).userId);
+        assertEquals(userA, resultsA.get(0).getUserId());
 
         // User B should only see their own results
         List<CompactionSummaryEntity> resultsB = repository.searchMemory(userB, "quantum", 5);
         assertEquals(1, resultsB.size(), "User B should only see their own sessions");
-        assertEquals(userB, resultsB.get(0).userId);
+        assertEquals(userB, resultsB.get(0).getUserId());
     }
 
     // ── Phase 64-A: Component A3 — Non-ASCII FTS5 Search Tests ──────────
@@ -146,7 +146,7 @@ class CompactionSummaryRepositoryTest {
 
         List<CompactionSummaryEntity> results = repository.searchMemory(userId, "富士山", 5);
         assertFalse(results.isEmpty(), "Japanese query should return results");
-        assertEquals(sessionId, results.get(0).sessionId);
+        assertEquals(sessionId, results.get(0).getSessionId());
     }
 
     @Test
@@ -163,7 +163,7 @@ class CompactionSummaryRepositoryTest {
 
         List<CompactionSummaryEntity> results = repository.searchMemory(userId, "الذكاء", 5);
         assertFalse(results.isEmpty(), "Arabic query should return results");
-        assertEquals(sessionId, results.get(0).sessionId);
+        assertEquals(sessionId, results.get(0).getSessionId());
     }
 
     @Test

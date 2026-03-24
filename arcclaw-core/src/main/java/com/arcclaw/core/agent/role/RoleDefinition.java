@@ -27,7 +27,8 @@ public record RoleDefinition(
         String intentDescription,
         int maxIterations,
         boolean requiresApproval,
-        Set<ToolCapability> capabilities
+        Set<ToolCapability> capabilities,
+        Set<String> aliases
 ) {
     /**
      * Compact constructor enforcing non-null/non-blank rules and deep immutability.
@@ -42,7 +43,8 @@ public record RoleDefinition(
         if (intentDescription == null) {
             intentDescription = "";
         }
-        capabilities = capabilities == null ? Set.of() : Set.copyOf(capabilities);
+        capabilities = (capabilities == null) ? Set.of() : Set.copyOf(capabilities);
+        aliases = (aliases == null) ? Set.of() : Set.copyOf(aliases);
     }
 
     /**

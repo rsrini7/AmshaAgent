@@ -1,6 +1,7 @@
 package com.arcclaw.core.audit;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -82,6 +83,7 @@ public class AuditEventRepository {
             event.hmacHash = hmac;
 
             // Step 4: persist
+            Objects.requireNonNull(event.prevHash, "prevHash must not be null — chain integrity failure");
             em.persist(event);
         } finally {
             lock.unlock();

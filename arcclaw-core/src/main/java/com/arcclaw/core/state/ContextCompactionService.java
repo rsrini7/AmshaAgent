@@ -117,7 +117,7 @@ public class ContextCompactionService {
         List<ChatMessage> toKeep = nonSystemMessages.subList(size - keepRecent, size);
 
         Optional<CompactionSummaryEntity> existingSummaryOpt = summaryRepository.findLatestBySessionId(sessionId);
-        String existingSummaryText = existingSummaryOpt.map(s -> s.summary).orElse("");
+        String existingSummaryText = existingSummaryOpt.map(CompactionSummaryEntity::getSummary).orElse("");
 
         String messagesToCompactStr = toCompact.stream()
                 .map(ChatMessage::toString)

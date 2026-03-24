@@ -2,10 +2,23 @@ package com.arcclaw.core.pipeline.handlers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.Callable;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.stubbing.OngoingStubbing;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -15,15 +28,15 @@ import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 
 class CommandDispatchHandlerTest {
 
     private CommandDispatchHandler handler;
     private ReflexRegistry reflexRegistry;
     private ChannelSender sender;
+    private MockedStatic<WorkspaceContext> mockedContext;
 
     @BeforeEach
     void setup() {
@@ -31,6 +44,24 @@ class CommandDispatchHandlerTest {
         sender = mock(ChannelSender.class);
         handler = new CommandDispatchHandler();
         handler.reflexRegistry = reflexRegistry;
+        mockedContext = mockStatic(WorkspaceContext.class);
+        
+        @SuppressWarnings("unchecked")
+        OngoingStubbing<Object> stub = mockedContext
+            .when(() -> WorkspaceContext.run(
+                anyString(), anyString(), anyString(),
+                any(AutonomyLevel.class), anyString(), any(Callable.class)
+            ));
+
+        stub.thenAnswer(inv -> {
+            Callable<?> task = inv.getArgument(5);
+            return task.call();
+        });
+    }
+
+    @AfterEach
+    void tearDown() {
+        mockedContext.close();
     }
 
     @Test
@@ -43,10 +74,7 @@ class CommandDispatchHandlerTest {
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve cron123"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approving cron task..."), "/approve cron123"));
 
-        WorkspaceScopeHolder.call("test-session", "1", "1", () -> {
-            assertEquals(HandleResult.STOP, handler.handle(ctx));
-            return null;
-        });
+        assertEquals(HandleResult.STOP, handler.handle(ctx));
 
         verify(sender).sendRaw(user, "Approving cron task...");
     }
@@ -61,10 +89,7 @@ class CommandDispatchHandlerTest {
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approving session..."), "/approve"));
 
-        WorkspaceScopeHolder.call("test-session", "1", "1", () -> {
-            assertEquals(HandleResult.STOP, handler.handle(ctx));
-            return null;
-        });
+        assertEquals(HandleResult.STOP, handler.handle(ctx));
 
         verify(sender).sendRaw(user, "Approving session...");
     }
@@ -90,6 +115,20 @@ class CommandDispatchHandlerTest {
 
         assertEquals(HandleResult.STOP, handler.handle(ctx));
         verify(sender, never()).sendRaw(any(), any());
+    }
+
+    @Test
+    void testDispatchExceptionSendsErrorToUser() {
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", Instant.now());
+        MessageContext ctx = createCtx(user, msg);
+
+        // Mock reflexRegistry to throw RuntimeException
+        when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Something went wrong"));
+
+        assertEquals(HandleResult.STOP, handler.handle(ctx));
+        verify(sender).sendRaw(user, "⚠️ Command failed due to an internal error. Please try again.");
     }
 
     private MessageContext createCtx(ChannelUser user, ChannelMessage msg) {

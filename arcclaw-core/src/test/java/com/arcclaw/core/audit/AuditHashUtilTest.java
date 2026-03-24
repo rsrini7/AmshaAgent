@@ -104,4 +104,27 @@ public class AuditHashUtilTest {
         assertEquals(expected, util.sha256hex(input));
         assertEquals("genesis-fallback-null-input", util.sha256hex(null));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testSha256HexNeverReturnsNull() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        when(vault.retrieveSystemKey(anyString())).thenReturn(Optional.of(new VaultKey(new byte[32])));
+
+        Instance<SecretVault> vaultInstance = Mockito.mock(Instance.class);
+        when(vaultInstance.get()).thenReturn(vault);
+
+        AuditHashUtil util = new AuditHashUtil(vaultInstance);
+
+        String result = util.sha256hex("test");
+        assertNotNull(result);
+        assertEquals(64, result.length(), "SHA-256 hex string should be 64 characters");
+
+        // Concurrent invocation
+        java.util.stream.IntStream.range(0, 100).parallel().forEach(i -> {
+            String r = util.sha256hex("test-" + i);
+            assertNotNull(r);
+            assertEquals(64, r.length());
+        });
+    }
 }

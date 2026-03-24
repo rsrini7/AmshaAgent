@@ -224,7 +224,8 @@ public class SkillLoader {
                     def.description(),
                     def.maxIterations(),
                     false,   // Skills do not require HITL approval by default
-                    toolsResult.valid()
+                    toolsResult.valid(),
+                    Set.of(def.name().toLowerCase())
             );
 
             map.put(def.name(), new CompiledSkillEntry(def, compiledPatterns, roleDef, source));

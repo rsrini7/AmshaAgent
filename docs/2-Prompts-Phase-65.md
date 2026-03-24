@@ -22,9 +22,6 @@ Now the prompts:
 
 # PROMPT — PHASE 65-A: Correctness & Runtime Stability (Tier A)
 
-```markdown
-# PROMPT — PHASE 65-A: Correctness & Runtime Stability (Tier A)
-
 Role: Senior Java Architect, Bug Fixer & Senior Java Developer
 Task: Phase 65-A — Fix 5 confirmed correctness defects in live production code.
 All bugs below exist today and have been observed in production logs or test runs.
@@ -35,6 +32,8 @@ No architectural changes. Surgical fixes only.
 ## Architecture Context
 Refer @TROUBLESHOOTING.md §26 (Phase 64 section) for prior audit chain fixes.
 Refer @PLAN.md Phase 64-A/B for GovernanceLayer and AuditEventRepository context.
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 

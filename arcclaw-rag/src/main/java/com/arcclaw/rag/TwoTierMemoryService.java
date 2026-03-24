@@ -136,7 +136,7 @@ public class TwoTierMemoryService {
         List<ScoredChunk> result = new ArrayList<>();
         for (int i = 0; i < entities.size(); i++) {
             var e = entities.get(i);
-            result.add(new ScoredChunk(e.sessionId, e.summary, 1.0 / (i + 1)));
+            result.add(new ScoredChunk(e.getSessionId(), e.getSummary(), 1.0 / (i + 1)));
         }
         return result;
     }

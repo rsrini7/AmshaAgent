@@ -13,20 +13,20 @@ import jakarta.persistence.Table;
 public class CompactionSummaryEntity {
 
     @Id
-    public String sessionId;
+    private String sessionId;
 
     @Column(columnDefinition = "TEXT", nullable = false)
-    public String summary;
+    private String summary;
 
-    public Instant compactedAt;
+    private Instant compactedAt;
 
-    public int messagesCompacted;
+    private int messagesCompacted;
 
     @Column(name = "user_id")
-    public String userId;
+    private String userId;
 
     @Column(name = "created_at")
-    public Instant createdAt;
+    private Instant createdAt;
 
     public CompactionSummaryEntity() {
     }
@@ -40,6 +40,24 @@ public class CompactionSummaryEntity {
         this.userId = userId;
         this.createdAt = createdAt;
     }
+
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
+
+    public Instant getCompactedAt() { return compactedAt; }
+    public void setCompactedAt(Instant compactedAt) { this.compactedAt = compactedAt; }
+
+    public int getMessagesCompacted() { return messagesCompacted; }
+    public void setMessagesCompacted(int messagesCompacted) { this.messagesCompacted = messagesCompacted; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 
     @PrePersist
     void onPrePersist() {

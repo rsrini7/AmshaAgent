@@ -22,7 +22,7 @@ public class RoleDefinitionTest {
 
     @Test
     void testToolNamesNeverNull() {
-        RoleDefinition def = new RoleDefinition("test", "Test", null, 1, false, null);
+        RoleDefinition def = new RoleDefinition("test", "Test", null, 1, false, null, null);
         assertNotNull(def.capabilities(), "Capabilities should default to empty set");
         assertNotNull(def.toolNames(), "Tool names should default to empty set");
         assertTrue(def.toolNames().isEmpty());
@@ -33,7 +33,7 @@ public class RoleDefinitionTest {
         Set<ToolCapability> mutableSet = new HashSet<>();
         mutableSet.add(ToolCapability.GITHUB);
 
-        RoleDefinition def = new RoleDefinition("test", "Test", "Desc", 1, false, mutableSet);
+        RoleDefinition def = new RoleDefinition("test", "Test", "Desc", 1, false, mutableSet, null);
 
         // Modifying original set does not affect record
         mutableSet.add(ToolCapability.MEMORY_SEARCH);

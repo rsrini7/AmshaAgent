@@ -33,10 +33,10 @@ public class CompactionSummaryRepository {
         CompactionSummaryEntity existing = em.find(CompactionSummaryEntity.class, sessionId);
 
         if (existing != null) {
-            existing.summary = summaryText;
-            existing.messagesCompacted = compactedCount;
-            existing.compactedAt = Instant.now();
-            if (userId != null) existing.userId = userId;
+            existing.setSummary(summaryText);
+            existing.setMessagesCompacted(compactedCount);
+            existing.setCompactedAt(Instant.now());
+            if (userId != null) existing.setUserId(userId);
             em.merge(existing);
         } else {
             CompactionSummaryEntity newEntity = new CompactionSummaryEntity(

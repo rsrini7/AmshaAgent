@@ -11,7 +11,7 @@ import org.jboss.logging.Logger;
 public class ToolObservationSanitizer {
 
     private static final Logger LOG = Logger.getLogger(ToolObservationSanitizer.class);
-    private static final int MAX_OBSERVATION_BYTES = 16 * 1024;
+    private static final int MAX_OBSERVATION_CODEPOINTS = 16 * 1024;
     private static final String TRUNCATION_MARKER = "\n[OBSERVATION TRUNCATED — exceeds 16 KiB limit]";
 
     @Inject
@@ -38,10 +38,12 @@ public class ToolObservationSanitizer {
 
         // Step 1: hard length cap
         String truncated;
-        if (rawObservation.length() > MAX_OBSERVATION_BYTES) {
-            LOG.warnf("Tool '%s' observation truncated from %d to %d bytes",
-                toolName, rawObservation.length(), MAX_OBSERVATION_BYTES);
-            truncated = rawObservation.substring(0, MAX_OBSERVATION_BYTES) + TRUNCATION_MARKER;
+        if (rawObservation.codePointCount(0, rawObservation.length()) > MAX_OBSERVATION_CODEPOINTS) {
+            int safeOffset = rawObservation.offsetByCodePoints(0, MAX_OBSERVATION_CODEPOINTS);
+            LOG.warnf("Tool '%s' observation truncated from %d to %d codepoints",
+                toolName, rawObservation.codePointCount(0, rawObservation.length()),
+                MAX_OBSERVATION_CODEPOINTS);
+            truncated = rawObservation.substring(0, safeOffset) + TRUNCATION_MARKER;
         } else {
             truncated = rawObservation;
         }

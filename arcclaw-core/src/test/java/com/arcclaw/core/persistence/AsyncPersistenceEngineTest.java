@@ -310,4 +310,15 @@ class AsyncPersistenceEngineTest {
         assertEquals(1, (int) registry.counter("arcclaw.audit.drain.hmac_failure").count(), 
             "Failure counter must be incremented once");
     }
+
+    @Test
+    void testDrainThreadsAreDaemon() {
+        // Virtual threads are always daemon in Java 21+. 
+        // This test verifies that no non-daemon threads with the signature name are alive.
+        boolean anyNonDaemonAuditThread = Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> t.getName().contains("arcclaw-audit"))
+                .anyMatch(t -> !t.isDaemon());
+        
+        assertFalse(anyNonDaemonAuditThread, "Found non-daemon arcclaw-audit threads — all drain threads must be daemon to allow clean JVM exit");
+    }
 }

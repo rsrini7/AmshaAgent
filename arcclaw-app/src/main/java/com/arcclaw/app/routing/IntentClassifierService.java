@@ -138,14 +138,16 @@ public class IntentClassifierService implements IntentClassifier {
 
     private String sanitize(String raw) {
         String lowerRaw = raw.toLowerCase();
-        if (lowerRaw.contains("shiva") || lowerRaw.contains(AgentRoleEnum.DEBUGGER.toScopedName())) return AgentRoleEnum.DEBUGGER.toScopedName();
-        if (lowerRaw.contains("brahma") || lowerRaw.contains(AgentRoleEnum.CODER.toScopedName())) return AgentRoleEnum.CODER.toScopedName();
-        if (lowerRaw.contains("saraswati") || lowerRaw.contains(AgentRoleEnum.RESEARCHER.toScopedName())) return AgentRoleEnum.RESEARCHER.toScopedName();
-        if (lowerRaw.contains(AgentRoleEnum.ARCHITECT.toScopedName()) || lowerRaw.contains("brihaspati")
-                || lowerRaw.contains("brahaspati")) return AgentRoleEnum.ARCHITECT.toScopedName();
-        if (lowerRaw.contains("synthesizer") || lowerRaw.contains(AgentRoleEnum.SYNTHESIZER.toScopedName())
-                || lowerRaw.contains("datta")) return AgentRoleEnum.SYNTHESIZER.toScopedName();
-        return AgentRoleEnum.COORDINATOR.toScopedName();
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            // Match canonical name (e.g. "debugger")
+            if (lowerRaw.contains(role.toScopedName())) return role.toScopedName();
+            
+            // Match registered aliases (deity names and common misspellings)
+            for (String alias : role.definition().aliases()) {
+                if (lowerRaw.contains(alias)) return role.toScopedName();
+            }
+        }
+        return AgentRoleEnum.COORDINATOR.toScopedName(); // safe default
     }
 }
 

@@ -44,14 +44,14 @@ class MemorySearchToolTest {
         MemorySearchTool tool = createTool();
 
         CompactionSummaryEntity e1 = new CompactionSummaryEntity();
-        e1.sessionId = "session-1";
-        e1.summary = "Discussed blockchain architecture";
-        e1.createdAt = Instant.parse("2026-02-20T10:00:00Z");
+        e1.setSessionId("session-1");
+        e1.setSummary("Discussed blockchain architecture");
+        e1.setCreatedAt(Instant.parse("2026-02-20T10:00:00Z"));
 
         CompactionSummaryEntity e2 = new CompactionSummaryEntity();
-        e2.sessionId = "session-2";
-        e2.summary = "Reviewed blockchain consensus algorithms";
-        e2.createdAt = Instant.parse("2026-02-21T14:00:00Z");
+        e2.setSessionId("session-2");
+        e2.setSummary("Reviewed blockchain consensus algorithms");
+        e2.setCreatedAt(Instant.parse("2026-02-21T14:00:00Z"));
 
         when(repository.searchMemory("user-42", "\"blockchain\"", 5))
                 .thenReturn(List.of(e1, e2));

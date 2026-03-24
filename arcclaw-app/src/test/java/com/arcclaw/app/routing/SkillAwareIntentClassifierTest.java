@@ -46,7 +46,7 @@ class SkillAwareIntentClassifierTest {
     void testFastPathRoutesToSkillAndBypassesLLM() {
         SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, "p");
         RoleDefinition roleDefinition = new RoleDefinition(
-                "skill:code-reviewer", "Code Reviewer", "desc", 5, false, Set.of());
+                "skill:code-reviewer", "Code Reviewer", "desc", 5, false, Set.of(), Set.of());
         CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[] { Pattern.compile(".*review.*code.*") },
                 roleDefinition, "db");
 
