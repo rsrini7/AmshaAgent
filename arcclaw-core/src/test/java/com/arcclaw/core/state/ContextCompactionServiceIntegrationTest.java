@@ -47,7 +47,7 @@ class ContextCompactionServiceIntegrationTest {
     }
 
     @Inject
-    ContextCompactionService service;
+    CompactionService service;
 
     @Inject
     PersistentChatMemoryStore chatMemoryStore;

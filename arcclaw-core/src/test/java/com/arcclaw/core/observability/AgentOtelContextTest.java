@@ -32,6 +32,7 @@ class AgentOtelContextTest {
     Scope scope;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         spanBuilder = mock(SpanBuilder.class);
         span = mock(Span.class);
@@ -40,6 +41,7 @@ class AgentOtelContextTest {
         when(tracer.spanBuilder(anyString())).thenReturn(spanBuilder);
         when(spanBuilder.setAttribute(anyString(), anyString())).thenReturn(spanBuilder);
         when(spanBuilder.setAttribute(anyString(), anyLong())).thenReturn(spanBuilder);
+        when(spanBuilder.setAttribute(any(io.opentelemetry.api.common.AttributeKey.class), any())).thenReturn(spanBuilder);
         when(spanBuilder.setParent(any())).thenReturn(spanBuilder);
         when(spanBuilder.startSpan()).thenReturn(span);
         when(span.makeCurrent()).thenReturn(scope);
@@ -116,7 +118,7 @@ class AgentOtelContextTest {
         assertNotNull(iterSpan);
 
         verify(tracer).spanBuilder(AgentOTelConstants.SPAN_AGENT_ITERATION);
-        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
+        verify(spanBuilder, times(2)).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
         verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_AGENT_ROLE, "coder");
         verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_ITERATION, 1L);
         verify(spanBuilder).setParent((Context) any());
@@ -137,7 +139,7 @@ class AgentOtelContextTest {
         assertNotNull(toolSpan);
 
         verify(tracer).spanBuilder(AgentOTelConstants.SPAN_TOOL_CALL);
-        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
+        verify(spanBuilder, times(2)).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
         verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, "github");
         verify(spanBuilder).setAttribute("tool.operation", "invoke");
         verify(spanBuilder).setParent((Context) any());

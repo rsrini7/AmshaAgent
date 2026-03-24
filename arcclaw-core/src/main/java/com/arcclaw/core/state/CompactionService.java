@@ -4,24 +4,28 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.ObservesAsync;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.compaction.CompactionInFlightFlag;
-import com.arcclaw.core.compaction.CompactionRequest;
+
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
+/**
+ * Business logic for summarizing conversation history (compaction).
+ * <p>
+ * Replaces {@code ContextCompactionService} by extracting the core algorithm
+ * away from the async event bridge.
+ */
 @ApplicationScoped
-public class ContextCompactionService {
+public class CompactionService {
     
     private static final int MAX_SUMMARY_CODEPOINTS = 1985;
     private static final String TRUNCATION_SUFFIX = "...[truncated]";
@@ -48,7 +52,7 @@ public class ContextCompactionService {
     @ConfigProperty(name = "arcclaw.memory.compaction.keep-recent", defaultValue = "6")
     int keepRecent;
 
-    private static final Logger log = Logger.getLogger(ContextCompactionService.class);
+    private static final Logger log = Logger.getLogger(CompactionService.class);
 
     private static final String PROMPT_TEMPLATE = """
         You are a context summarizer for an AI agent session.
@@ -76,9 +80,6 @@ public class ContextCompactionService {
         --- END ---
         """;
 
-    @Inject
-    CompactionInFlightFlag compactionInFlight;
-
     public boolean shouldCompact(String sessionId) {
         if (!enabled) return false;
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
@@ -88,17 +89,11 @@ public class ContextCompactionService {
         return count >= threshold;
     }
 
-    public void onCompactionRequested(@ObservesAsync CompactionRequest request) {
-        try {
-            compact(request.sessionId(), request.userId());
-        } catch (Exception e) {
-            log.errorf("Compaction failed for session %s: %s", request.sessionId(), e.getMessage());
-            log.debug("Full compaction failure stack trace:", e);
-        } finally {
-            compactionInFlight.set(false);
-        }
-    }
-
+    /**
+     * Executes the compaction algorithm.
+     *
+     * @return true if compaction was successfully completed, false otherwise.
+     */
     public boolean compact(String sessionId, String userId) {
         if (!enabled) return false;
 
@@ -127,7 +122,6 @@ public class ContextCompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         String newSummary = compactionModel.chat(UserMessage.userMessage(prompt))
                 .aiMessage().text().trim();
 
@@ -144,7 +138,6 @@ public class ContextCompactionService {
                 .filter(m -> !(m instanceof SystemMessage))
                 .toList();
         
-        // Pass only the filtered Keep list to the store
         chatMemoryStore.updateMessages(sessionId, filteredKeep);
 
         String detail = String.format("{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
