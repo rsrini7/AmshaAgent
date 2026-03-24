@@ -205,31 +205,31 @@ public class AsyncPersistenceEngine {
     private void drainCritical() {
         PersistenceEvent event = null;
         while (running.get() && !Thread.currentThread().isInterrupted()) {
-
             try {
-                event = criticalQueue.take();
+                // Poll with timeout so we can see running=false and exit
+                event = criticalQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (event == null) {
+                    continue;
+                }
 
-                if (event != null) {
-                    processingCritical.set(true);
-                    try {
-                        processEvent(event); // retry logic for HMAC is now in persistSynchronously called here
-                    } catch (ComplianceViolationException e) {
-                        // persistSynchronously() or executeWithRetry() exhausted all retries.
-                        // We log and keep the drain thread alive.
-                        Throwable cause = e.getCause();
-                        if (cause instanceof IllegalStateException && cause.getMessage() != null
-                                && cause.getMessage().contains("HMAC key unavailable")) {
-                            registry.counter("arcclaw.audit.drain.hmac_failure").increment();
-                        }
-                        log.errorf("Critical audit event lost — check persistence health. Event type: %s, Error: %s",
-                                event.getEventType(), e.getMessage());
-                        log.debugf(e, "Full stacktrace for critical audit failure");
-                        if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
-                            event.getFuture().completeExceptionally(e);
-                        }
-                    } finally {
-                        processingCritical.set(false);
+                processingCritical.set(true);
+                try {
+                    processEvent(event);
+                } catch (ComplianceViolationException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof IllegalStateException
+                            && cause.getMessage() != null
+                            && cause.getMessage().contains("HMAC key unavailable")) {
+                        registry.counter("arcclaw.audit.drain.hmac_failure").increment();
                     }
+                    log.errorf("Critical audit event lost — check persistence health. Event type: %s, Error: %s",
+                            event.getEventType(), e.getMessage());
+                    log.debugf(e, "Full stacktrace for critical audit failure");
+                    if (event.getFuture() != null && !event.getFuture().isDone()) {
+                        event.getFuture().completeExceptionally(e);
+                    }
+                } finally {
+                    processingCritical.set(false);
                 }
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
@@ -239,7 +239,6 @@ public class AsyncPersistenceEngine {
                     log.errorf("[AsyncPersistenceEngine] Unexpected error in critical drain: %s", e.getMessage());
                     log.debugf(e, "Full stacktrace for unexpected critical drain error");
                 }
-                // Safety net: ensure the future is never left hanging
                 if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
                     event.getFuture().completeExceptionally(e);
                 }
