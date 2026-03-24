@@ -108,3 +108,24 @@ inline string literal `"SYSTEM"`.
 All beans that depend on secrets seeded by `DevSecretSeeder` must observe
 `StartupEvent` at a higher number (e.g., no `@Priority` = default APPLICATION 2000,
 or explicit value > 100). Lower number fires first.
+
+**Nuance #38** — `WorkspaceContext` vs `WorkspaceScopeHolder` ScopedValue binding — TWO SEPARATE INSTANCES, never interchangeable:
+
+| Bound by | Read via | Used in |
+|---|---|---|
+| `WorkspaceContext.run()` | `WorkspaceContext.userId()`, `.chatId()`, `.requireSessionId()`, `.autonomy()`, `.agentRole()` | All tools, agent loop, business logic |
+| `WorkspaceScopeHolder.call()` | `WorkspaceScopeHolder.USER_ID.get()`, `.CHAT_ID.get()` | Reflexes only (`CommandDispatchHandler` path) |
+
+**Rule:** Any class reachable via `AgentDispatchHandler → AgentLoop → ToolRegistry → tool.execute()` MUST use `WorkspaceContext.*()` accessors — NEVER `WorkspaceScopeHolder.USER_ID/CHAT_ID.get()`. Those ScopedValues are NOT bound on the agent execution path.
+
+**Only two legitimate exceptions:**
+1. `ToolRegistry.resolveUserId()` — audit drain virtual thread fallback, intentional
+2. Reflex classes (`ListCronsReflex`, `DeleteCronReflex`, etc.) — `CommandDispatchHandler` binds `WorkspaceScopeHolder` directly
+
+**Diagnostic:** If `tenant context not bound` or `SESSION_ID is unbound` appears in a tool:
+```bash
+rg "WorkspaceScopeHolder\.(USER_ID|CHAT_ID|SESSION_ID)\.get" --type java -n
+```
+Any hit inside a `Tool` class is the bug — replace with `WorkspaceContext.*()` accessor.
+
+**Test rule:** Tests for tools must use `WorkspaceContext.run(...)` as wrapper. Tests for reflexes must use `WorkspaceScopeHolder.call(...)`. To test the unbound/403 path, pass blank userId: `WorkspaceContext.run("session", "", "chat", ...)` — never leave the context entirely unbound in tool tests.
