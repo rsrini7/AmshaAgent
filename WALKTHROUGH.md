@@ -2653,3 +2653,50 @@ Standardized the system's diagnostic layers for consistent tracing and logging a
 **Verification Results**:
 - ✅ **OTel Alignment**: `AgentOtelContextTest` now validates compliance with unified semantic conventions.
 - ✅ **Correlation Integrity**: MDC propagation verified through `mvn test` in core module.
+
+---
+
+## Phase 65-D: Quality, Maintainability & SPI Completion ✅
+
+Completed the final tier of Phase 65 — three refactorings that close the SPI architecture and eliminate maintenance debt.
+
+### D1 — Compaction SRP Split
+
+**Problem**: `ContextCompactionService` served dual purposes — (1) CDI async event observer via `@ObservesAsync CompactionRequest`, and (2) the compaction business logic (`compact()`, `shouldCompact()`, `truncateSafely()`). This coupling made the algorithm impossible to unit test without CDI event infrastructure.
+
+**Solution**: Split into two focused classes:
+- **`CompactionService`** — Pure business logic. Can be tested by directly calling `compact()` with mocked dependencies. No event observation, no `CompactionInFlightFlag` dependency.
+- **`CompactionEventBridge`** — Thin CDI observer that delegates to `CompactionService.compact()` and owns the `CompactionInFlightFlag` lifecycle in a `finally` block.
+
+**Impact on `CompactionHandler`**: Simplified significantly — no longer manages `.thenRun()`/`.exceptionally()` callbacks for lock release. Just fires the async event and moves on; the bridge handles cleanup.
+
+### D2 — EmbeddingModelProducer SPI
+
+**Problem**: `EmbeddingModelProducer.embeddingModel()` used a hardcoded `switch` over provider names (`"openai"`, `"jina"`, `"ollama"`). Adding a new embedding provider (Cohere, Mistral Embed, Voyage AI) required modifying this switch — same OCP violation that `LlmModelFactory` was introduced to fix for chat models.
+
+**Solution**: Applied the identical CDI pattern:
+1. **`EmbeddingProviderFactory`** interface — `providerId()` + `create(EmbeddingModelConfig)`.
+2. **`EmbeddingModelConfig`** record — immutable configuration bundle (`providerId`, `modelName`, `baseUrl`, `apiKey`, `timeout`).
+3. **Three factory beans**: `OpenAiEmbeddingProviderFactory`, `JinaEmbeddingProviderFactory`, `OllamaEmbeddingProviderFactory`.
+4. **`EmbeddingModelProducer`** refactored to use `@Any Instance<EmbeddingProviderFactory>` discovery with dynamic error messages listing available providers.
+
+**Adding a new provider now**: Implement `EmbeddingProviderFactory`, annotate with `@ApplicationScoped`. Zero changes to `EmbeddingModelProducer`.
+
+### D3 — AuditEventRepository Pre-Persist Validation
+
+**Problem**: Even after A1's fix (making `sha256hex()` throw instead of returning null), the `record()` method contained two null-fallback hacks that masked failures:
+- `prevHash = "prevhash-fallback-" + event.sessionId` — a fake hash that would corrupt the audit chain silently.
+- `hmac = "error-null-fallback-" + UUID.randomUUID()` — a fake HMAC that would pass the NOT NULL constraint but produce an unverifiable chain.
+
+**Solution**:
+- Removed both fallback blocks entirely.
+- Added `validateBeforePersist(AuditEvent)` called immediately before `em.persist()`.
+- Validates: `sessionId` not null/blank, `prevHash` not null/blank, `hmacHash` not null/blank, `sequence >= 0`.
+- Throws `IllegalStateException` with a clear message identifying exactly which field failed.
+
+**Verification Results**:
+- ✅ `CompactionServiceTest`: 7 tests pass — algorithm works standalone.
+- ✅ `CompactionEventBridgeTest`: 2 tests verify delegation and lock safety.
+- ✅ `CompactionHandlerTest`: 5 tests updated for new dependency.
+- ✅ `EmbeddingModelProducerTest`: 2 tests verify SPI discovery and error handling.
+- ✅ `AuditEventRepositoryTest`: 4 new validation guard tests pass.

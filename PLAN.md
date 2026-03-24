@@ -4542,3 +4542,76 @@ Unified diagnostic context propagation and modernized OpenTelemetry instrumentat
 ## Verification
 - ✅ `AgentOtelContextTest`: Updated to verify unified span names and attribute keys.
 - ✅ Full `mvn compile` green after constant migration.
+
+---
+
+# Phase 65-D: Quality, Maintainability & SPI Completion ✅
+
+Completed the final tier of Phase 65 — three quality improvements that complete the SPI architecture and reduce long-term maintenance burden.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Compaction SRP Split (D1)**: `ContextCompactionService` was handling dual responsibilities — CDI async event observation AND the compaction algorithm. Split into `CompactionService` (pure business logic) and `CompactionEventBridge` (async CDI observer). This makes the compaction algorithm unit-testable without CDI event infrastructure.
+
+> [!NOTE]
+> **Embedding SPI (D2)**: Replaced the hardcoded `switch` in `EmbeddingModelProducer` with a CDI `@Any Instance<EmbeddingProviderFactory>` pattern — identical to the established `LlmModelFactory` and `ChannelDaemon` SPI patterns. Adding a new embedding provider (Cohere, Voyage AI) now requires only implementing `EmbeddingProviderFactory` as a CDI bean.
+
+> [!TIP]
+> **Audit Pre-Persist Validation (D3)**: Removed the null-fallback hacks (`"prevhash-fallback-"`, `"error-null-fallback-"`) that papered over real failures. With A1 having fixed `sha256hex()` to throw instead of returning null, these code paths were dead. Replaced with a `validateBeforePersist()` method that catches any future regression at the persist boundary with clear error messages.
+
+## Completed Changes
+
+### Component D1 — ContextCompactionService SRP Split
+
+#### [DELETE] `ContextCompactionService.java`
+- Removed monolithic class that mixed event observation with business logic.
+
+#### [CREATE] [CompactionService.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionService.java)
+- Pure business logic: `shouldCompact()`, `compact()`, `truncateSafely()`, prompt template.
+- No CDI event infrastructure, no `CompactionInFlightFlag` — those belong in the bridge.
+
+#### [CREATE] [CompactionEventBridge.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionEventBridge.java)
+- Async CDI observer that delegates to `CompactionService.compact()`.
+- Owns the `CompactionInFlightFlag` lifecycle — always releases in `finally`.
+
+#### [MODIFY] [CompactionHandler.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/CompactionHandler.java)
+- Switched from `ContextCompactionService` to `CompactionService`.
+- Removed redundant `.thenRun()`/`.exceptionally()` lock management — bridge handles it.
+
+### Component D2 — EmbeddingModelProducer SPI
+
+#### [CREATE] [EmbeddingProviderFactory.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingProviderFactory.java)
+- SPI interface with `providerId()` and `create(EmbeddingModelConfig)`.
+- Includes `requireApiKey()` default method for shared validation.
+
+#### [CREATE] [EmbeddingModelConfig.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingModelConfig.java)
+- Immutable config record: `providerId`, `modelName`, `baseUrl`, `apiKey`, `timeout`.
+
+#### [CREATE] Provider Factories
+- `OpenAiEmbeddingProviderFactory.java` — OpenAI text-embedding models.
+- `JinaEmbeddingProviderFactory.java` — Jina AI (OpenAI-compatible adapter).
+- `OllamaEmbeddingProviderFactory.java` — Local Ollama models.
+
+#### [MODIFY] [EmbeddingModelProducer.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingModelProducer.java)
+- Replaced hardcoded `switch` with `@Any Instance<EmbeddingProviderFactory>` discovery.
+- Error message now lists available providers dynamically.
+
+### Component D3 — AuditEventRepository SHA-256 Hardening
+
+#### [MODIFY] [AuditEventRepository.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEventRepository.java)
+- Removed null-fallback hack for `prevHash` (`"prevhash-fallback-"` string).
+- Removed null-fallback hack for `hmacHash` (`"error-null-fallback-"` + UUID).
+- Added `validateBeforePersist(AuditEvent)` — validates `sessionId`, `prevHash`, `hmacHash`, `sequence` before `em.persist()`.
+
+## Verification
+- ✅ `CompactionServiceTest`: All 7 tests pass — algorithm works in isolation without CDI.
+- ✅ `CompactionEventBridgeTest`: Verifies delegation and lock release on success/failure.
+- ✅ `CompactionHandlerTest`: Updated for new `CompactionService` dependency.
+- ✅ `EmbeddingModelProducerTest`: Verifies factory discovery and delegation.
+- ✅ `AuditEventRepositoryTest`: 4 new validation tests (null prevHash, null hmacHash, null sessionId, valid event).
+
+## Migration Notes
+- **Deleted files**: `ContextCompactionService.java`, `ContextCompactionServiceTest.java`, `ContextCompactionServiceIntegrationTest.java`
+- **Renamed**: `CompactionServiceIntegrationTest.java` replaces the integration test.
+- **No config changes**: All existing config keys remain unchanged.

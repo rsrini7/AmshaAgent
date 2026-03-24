@@ -1256,3 +1256,22 @@
 - [x] Step 4: Add `CHAT_ID` to `MdcKeys`. <!-- id: 614 -->
 - [x] Step 5: Update `WorkspaceScopeHolder` to propagate `CHAT_ID` in MDC and ScopedValue. <!-- id: 615 -->
 - [x] Step 6: Verify OTel and MDC consistency via tests and logs. <!-- id: 616 -->
+
+---
+
+## Phase 65-D: Quality, Maintainability & SPI Completion ✅
+- [x] D1-Step 1: Create `CompactionService` with extracted business logic. <!-- id: 617 -->
+- [x] D1-Step 2: Create `CompactionEventBridge` for async CDI observer. <!-- id: 618 -->
+- [x] D1-Step 3: Update `CompactionHandler` to use `CompactionService`. <!-- id: 619 -->
+- [x] D1-Step 4: Create `CompactionServiceTest` and `CompactionEventBridgeTest`. <!-- id: 620 -->
+- [x] D1-Step 5: Create `CompactionServiceIntegrationTest` to replace old integration test. <!-- id: 621 -->
+- [x] D1-Step 6: Delete `ContextCompactionService`, `ContextCompactionServiceTest`, `ContextCompactionServiceIntegrationTest`. <!-- id: 622 -->
+- [x] D2-Step 1: Create `EmbeddingProviderFactory` interface and `EmbeddingModelConfig` record. <!-- id: 623 -->
+- [x] D2-Step 2: Create `OpenAiEmbeddingProviderFactory`. <!-- id: 624 -->
+- [x] D2-Step 3: Create `JinaEmbeddingProviderFactory`. <!-- id: 625 -->
+- [x] D2-Step 4: Create `OllamaEmbeddingProviderFactory`. <!-- id: 626 -->
+- [x] D2-Step 5: Refactor `EmbeddingModelProducer` to use SPI discovery. <!-- id: 627 -->
+- [x] D2-Step 6: Create `EmbeddingModelProducerTest`. <!-- id: 628 -->
+- [x] D3-Step 1: Add `validateBeforePersist()` to `AuditEventRepository`. <!-- id: 629 -->
+- [x] D3-Step 2: Remove null-fallback hacks for `prevHash` and `hmacHash`. <!-- id: 630 -->
+- [x] D3-Step 3: Add validation tests to `AuditEventRepositoryTest`. <!-- id: 631 -->

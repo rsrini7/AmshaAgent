@@ -77,39 +77,6 @@ a 64-character hex string and never null, even under concurrent invocation.
 
 ---
 
-### Component A2 — AsyncPersistenceEngine Drain Thread Not Daemon
-
-**File**: `arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java`
-**Symptom**: After test suite completion, JVM hangs for 30 seconds before Surefire force-kills it:
-```
-WARN: [AsyncPersistenceEngine] Telemetry drain interrupted — shutting down.
-[ERROR] Surefire is going to kill self fork JVM. The exit has elapsed 30 seconds after System.exit(0).
-```
-**Root cause**: The drain virtual thread is started with `Thread.ofVirtual().name(...).start(...)` without
-`.daemon(true)`. Non-daemon threads prevent JVM exit. When `System.exit(0)` fires at test end, the JVM
-waits for all non-daemon threads to finish before terminating.
-
-**Fix**:
-In `AsyncPersistenceEngine.startDrainThreads()`, mark both drain threads as daemon:
-```java
-Thread.ofVirtual()
-    .name("arcclaw-audit-telemetry-drain")
-    .daemon(true)          // ← add this to BOTH drain threads
-    .start(() -> drainTelemetry());
-
-Thread.ofVirtual()
-    .name("arcclaw-audit-compliance-drain")
-    .daemon(true)          // ← add this
-    .start(() -> drainCompliance());
-```
-Daemon virtual threads are killed automatically when all non-daemon threads exit. No data loss risk:
-the `@PreDestroy` method already calls `drainRemaining()` synchronously for graceful shutdown.
-
-**Test**: `AsyncPersistenceEngineTest.testDrainThreadsAreDaemon()` — after `@PostConstruct`, verify
-that no non-daemon threads with name containing `"arcclaw-audit"` are alive via `Thread.getAllStackTraces()`.
-
----
-
 ### Component A3 — AgentDispatchHandler Erases Exception Type
 
 **File**: `arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/AgentDispatchHandler.java`
