@@ -119,22 +119,24 @@ public enum AgentRoleEnum {
 
         String normalized = roleStr.trim().toLowerCase();
 
-        // Skill roles produced by SkillAwareIntentClassifier (e.g. "skill:code-reviewer").
-        // Use RESEARCHER as the base role — provides GITHUB + MEMORY_SEARCH which matches
-        // current skill tool-capability declarations. SystemPromptBuilder replaces the
-        // persona prompt with the skill's own system prompt before the LLM call.
+        // Skill-based dynamic routing
         if (normalized.startsWith("skill:")) {
             return RESEARCHER;
         }
 
-        return switch (normalized) {
-            case "architect", "brihaspati", "brahaspati" -> ARCHITECT;
-            case "coordinator", "vishnu" -> COORDINATOR;
-            case "researcher", "saraswati" -> RESEARCHER;
-            case "coder", "brahma" -> CODER;
-            case "debugger", "shiva" -> DEBUGGER;
-            case "synthesizer", "dattatreya", "datta" -> SYNTHESIZER;
-            default -> throw new IllegalArgumentException("Unknown AgentRole: " + roleStr);
-        };
+        for (AgentRoleEnum role : values()) {
+            // Match canonical name
+            if (role.canonicalName.equalsIgnoreCase(normalized)) {
+                return role;
+            }
+            // Match registered aliases (deities, etc.)
+            for (String alias : role.definition.aliases()) {
+                if (alias.equalsIgnoreCase(normalized)) {
+                    return role;
+                }
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown AgentRole: " + roleStr);
     }
 }

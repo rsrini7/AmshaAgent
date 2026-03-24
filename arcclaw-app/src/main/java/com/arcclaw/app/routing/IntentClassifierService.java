@@ -142,9 +142,17 @@ public class IntentClassifierService implements IntentClassifier {
             // Match canonical name (e.g. "debugger")
             if (lowerRaw.contains(role.toScopedName())) return role.toScopedName();
             
+            // Match deity name from displayName — extract first word before " ("
+            // e.g. "Brahaspati" from "Brahaspati (Architect)"
+            String displayName = role.definition().displayName();
+            String deityName = displayName.contains("(")
+                ? displayName.substring(0, displayName.indexOf("(")).trim().toLowerCase()
+                : displayName.toLowerCase();
+            if (!deityName.isBlank() && lowerRaw.contains(deityName)) return role.toScopedName();
+
             // Match registered aliases (deity names and common misspellings)
             for (String alias : role.definition().aliases()) {
-                if (lowerRaw.contains(alias)) return role.toScopedName();
+                if (lowerRaw.contains(alias.toLowerCase())) return role.toScopedName();
             }
         }
         return AgentRoleEnum.COORDINATOR.toScopedName(); // safe default
