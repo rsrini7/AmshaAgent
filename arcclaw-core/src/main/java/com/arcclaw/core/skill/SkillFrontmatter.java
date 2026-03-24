@@ -1,8 +1,8 @@
 package com.arcclaw.core.skill;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Intermediate Jackson DTO representing the YAML frontmatter of a skill definition file.

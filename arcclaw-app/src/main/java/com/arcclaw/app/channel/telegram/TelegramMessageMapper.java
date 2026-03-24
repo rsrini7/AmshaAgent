@@ -1,10 +1,11 @@
 package com.arcclaw.app.channel.telegram;
 
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelUser;
+import java.time.Instant;
+
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.time.Instant;
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelUser;
 
 @ApplicationScoped
 public class TelegramMessageMapper {

@@ -2415,3 +2415,115 @@ Hardened the security bootstrap and persistence layers by enforcing zero-on-use 
 - `Argon2idKeyDerivationTest` verified `pepperChars` are all zeros (`\0`) after call.
 - Zero raw literals remain for audit key name across the entire codebase.
 
+---
+
+## Phase 64-A — Governance & Error Handling (Tier A) ✅
+
+This phase addressed critical bugs in budget enforcement, FTS5 non-ASCII search, and REST API error mapping, ensuring the agent remains safe, responsive, and correct under edge-case conditions.
+
+### Key Features & Implementation:
+
+1. **Atomic Budget Enforcement**:
+   - Refactored `GovernanceLayer` to verify the **hard budget limit** before the soft warning threshold.
+   - Wrapped budget updates in a `synchronized` block to ensure thread-safety across concurrent agent sessions, preventing race conditions that could lead to budget overruns.
+
+2. **FTS5 Non-ASCII Indexing**:
+   - Modified `CompactionSummaryRepository` to explicitly use the `unicode61` tokenizer with `remove_diacritics 2` during FTS5 table creation.
+   - This ensures that non-ASCII characters (e.g., Japanese, Emojis) are correctly indexed and searchable, fixing a silent failure in the RAG layer.
+
+3. **REST API Resilience**:
+   - Resolved a **`ClassCastException`** in `AgentResource.createSession` caused by the misuse of `@DefaultValue` on a request body.
+   - Improved error mapping in `AgentSessionService` and `AgentLoop` to correctly propagate `BudgetExceededException` as an **HTTP 429 (Too Many Requests)** instead of a generic 500.
+
+4. **ReAct Loop Cleanliness**:
+   - Updated `AgentStepProcessor` to treat schema-correction `OBSERVE` steps as **ephemeral**. These steps are no longer persisted to the permanent chat history, keeping the agent's long-term memory clean and focused.
+
+5. **Exhaustive Role Iteration**:
+   - Fixed a bug in `DenyReflex` and `ApproveReflex` where only a subset of roles (`COORDINATOR`, `CODER`) were checked for checkpoints.
+   - Replaced the hardcoded list with `AgentRoleEnum.values()`, ensuring that roles like `ARCHITECT` are correctly handled in HITL approval flows.
+
+6. **Compaction Lock Safety**:
+   - Ensured that the `compactionInFlight` lock is always released in a `finally` block, preventing sessions from becoming permanently locked due to a compaction failure.
+
+**Verification Results**:
+- ✅ **Tests Run: 698 | Failures: 0 | Errors: 0**
+- ✅ `AgentResourceTest` verified: 429 for budget, 422 for user denial, 201 for session creation.
+- ✅ `DenyReflexTest` verified: `ARCHITECT` role now correctly handled.
+- ✅ `AgentStateMachineRunnerTest` verified: ReAct keywords no longer persist to history.
+- ✅ Japanese FTS5 search manually verified as working.
+
+---
+
+## Phase 64-B — Security Gap Remediation (Tier B) ✅
+
+Addressed critical security vulnerabilities related to audit integrity, secret seeding, and session ID generation.
+
+### Key Features & Implementation:
+
+1. **Audit HMAC Chain TOCTOU Race**:
+   - Identified a Time-of-Check to Time-of-Use (TOCTOU) vulnerability where multiple concurrent virtual threads could read the same "last audit hash" from the database, leading to a fork in the HMAC audit chain.
+   - **Resolution**: Implemented `SessionAuditSequencer` which uses a per-session `ReentrantLock` and a volatile memory cache for the `lastAuditHash`. This ensures that every thread in a session receives a unique, monotonic sequence ID and a correct parent hash, preserving the immutable WORM (Write-Once-Read-Many) guarantee.
+
+2. **DevSecretSeeder Production Hardening**:
+   - The `DevSecretSeeder` bean, intended only for local development, was being eagerly initialized and injected into `ChatCommand` in the production classpath.
+   - **Resolution**: Removed the direct dependency from `ChatCommand`. The seeder is now strictly controlled by the `DevSecretSeederStartup` class, which is annotated with `@IfBuildProfile("dev")`. This ensures that development-time secret injection is completely physically absent from the production build artifacts.
+
+3. **Session ID Migration (UUID v4)**:
+   - Deprecated the use of MD5-based UUID v3 for Telegram sessions, which had a high collision risk and was semantically weak.
+   - **Resolution**: Introduced `SessionRegistryEntry` and a dedicated `SessionRegistry`. All new sessions now use cryptographically strong UUID v4. The registry maps the multi-tenant triplet `(channelType, channelId, userId)` to a stable, persistent UUID. Existing sessions will seamlessly "reset" and provision a new v4 ID upon their first interaction post-deployment.
+
+**Verification Results**:
+- ✅ **Audit Chain Integrity**: Verified via `AuditConcurrencyTest` that 50 parallel threads produce a perfectly linear, sequential HMAC chain without collisions.
+- ✅ **Profile Safety**: Confirmed via `StartupSecurityValidatorTest` that `prod` profile boot fails if the seeder is present.
+- ✅ **Session Persistence**: Verified that `SessionRegistry` correctly reloads the same UUID v4 for the same user-triplet across JVM restarts.
+
+---
+
+## Phase 64-C — Architectural Unblocks (Tier C) ✅
+
+Cleaned up legacy RAG data handling and genericized the channel notification system to support a multi-channel future.
+
+### Key Features & Implementation:
+
+1. **Dedicated RAG Storage (`RagChunkEntity`)**:
+   - Historically, RAG chunks were stored in `compaction_summary` using an ugly `"rag:"` prefix hack. This polluted actual conversation history and corrupted LLM context math.
+   - **Resolution**: Created a dedicated `rag_chunk` table explicitly for RAG documents via `RagChunkEntity`. `GlobalKnowledgeBase` was refactored to read and write directly to this new entity, improving query performance (via dedicated indices) and data cleanliness.
+
+2. **Generic Channel Dispatcher**:
+   - Refactored the hardcoded Telegram notification logic (`TelegramCronNotificationObserver`) into a generic `ChannelJobNotifier` interface.
+   - **Resolution**: Implemented `ChannelCronNotificationDispatcher` and `ChannelApprovalTimeoutDispatcher`. These dispatchers use CDI `Instance<ChannelJobNotifier>` to dynamically route events to any registered channel (Telegram, Discord, Slack) without requiring code changes to the core scheduling engine.
+
+3. **RAG Search Resilience**:
+   - Updated `TwoTierMemoryService` to gracefully handle the transition to the new `RagChunkEntity` schema.
+   - **Resolution**: Added null-safe checks for the `source` and `text` fields during RRF (Reciprocal Rank Fusion) merging, ensuring that any orphaned legacy data does not crash the search pipeline.
+
+**Verification Results**:
+- ✅ **RAG Isolation**: Verified that `RagChunkEntity` saves correctly and does NOT appear in `ChatMemoryStore` history.
+- ✅ **Multi-Channel Dispatch**: Verified via `ChannelNotificationTest` that events are successfully routed to both a Mock channel and the real Telegram implementation simultaneously.
+- ✅ **RAG Math**: Confirmed that RRF scores remain consistent post-migration.
+
+---
+
+## Phase 64-D — Code Quality & Cleanup (Tier D) ✅
+
+Deduplicated LLM model production logic and hardened SQLite retry mechanisms across core services.
+
+### Key Features & Implementation:
+
+1. **Centralized LLM Factory (`LlmModelFactory`)**:
+   - Identified redundant provider-switching logic between `ModelProducer` (main agent) and `CompactionModelProducer` (summarization).
+   - **Resolution**: Created `LlmModelFactory` to consolidate model instantiation for Groq, OpenAI, and Ollama. This ensures consistent configuration (timeouts, model names) and simplifies the addition of new providers in the future.
+
+2. **Unified SQLite Retries (`SqliteRetryTemplate`)**:
+   - Multiple core services were implementing manual exponential backoff loops for `SQLITE_BUSY` errors, leading to "maintenance debt".
+   - **Resolution**: Implemented `SqliteRetryTemplate`, a generic wrapper for database operations with built-in jitter and backoff. Migrated `SessionReaper`, `WorkspaceManager`, and `StatefulAgentStoreImpl` to this template, ensuring uniform resilience across the persistence layer.
+
+3. **HITL Security Enforcement (`requiresManualApproval`)**:
+   - Addressed a security gap where certain high-risk tool operations (e.g., GitHub PR creation) only triggered manual approval if the role's autonomy level was specifically set to `SUPERVISED`.
+   - **Resolution**: Added `requiresManualApproval(params)` to the `AgentTool` interface. `GithubTool` now explicitly flags sensitive commands as requiring human intervention. `ToolInvocationGuard` was updated to enforce these tool-mandated approvals regardless of the global autonomy level.
+
+**Verification Results**:
+- ✅ **LLM Factory Integrity**: Verified via `LlmModelFactoryTest` that correct models are provisioned for all three supported providers.
+- ✅ **Retry Resilience**: Confirmed via `SqliteRetryTemplateTest` that operations correctly back off and eventually succeed under simulated database contention.
+- ✅ **Security Hardening**: Verified that `GithubTool` operations like `pr create` now trigger a `RequiresApprovalException` even when the agent is in `AUTONOMOUS` mode if the specific tool mandates it.
+- ✅ **Locale Safety**: Verified that `GlobalKnowledgeBase` correctly serializes vectors using `Locale.ROOT`, preventing corruption on non-US locales.

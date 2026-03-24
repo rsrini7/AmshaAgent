@@ -9,23 +9,22 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.List;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.governance.GovernanceLayer;
-import com.arcclaw.core.persistence.SqliteErrorStrings;
-import com.arcclaw.core.scope.WorkspaceScopeContext;
-import com.arcclaw.core.scope.WorkspaceScoped;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import com.arcclaw.core.scope.WorkspaceScopeContext;
+import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import io.quarkus.arc.Arc;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Lifecycle orchestrator for workspace session termination and disk management.
@@ -56,16 +55,18 @@ public class WorkspaceManager {
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
+    @Inject
+    SqliteRetryTemplate retryTemplate;
+
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
     @ConfigProperty(name = "arcclaw.chat-memory.max-messages", defaultValue = "100")
     int maxMessages;
 
-    // -------------------------------------------------------------------------
+    
     // Session Termination
-    // -------------------------------------------------------------------------
-
+    
     /**
      * Terminate a workspace session completely.
      */
@@ -161,34 +162,16 @@ public class WorkspaceManager {
     }
 
     void markCheckpointsFailed(String sessionId) {
-        int maxRetries = 5;
-        long backoffMs = 50;
-        Exception lastEx = null;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
+        try {
+            retryTemplate.executeVoid("markFailed-" + sessionId, 5, 50, () -> {
                 self.doMarkCheckpointsFailedRequiresNew(sessionId);
-                return; // success
-            } catch (Exception e) {
-                lastEx = e;
-                if (SqliteErrorStrings.isBusy(e)) {
-                    log.warnf("SQLite BUSY on markCheckpointsFailed attempt %d/%d for session=%s — retrying in %dms",
-                            attempt, maxRetries, sessionId, backoffMs * attempt);
-                    try { Thread.sleep(backoffMs * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
-                } else {
-                    log.errorf("Non-retryable error marking checkpoints FAILED for session=%s: %s", sessionId, e.getMessage());
-                    log.debugf(e, "Full stacktrace for non-retryable error in markCheckpointsFailed for session=%s", sessionId);
-                    throw e;
-                }
-            }
+            });
+        } catch (Exception e) {
+            log.errorf("Failed to mark checkpoints FAILED after retries for session=%s: %s", sessionId, e.getMessage());
+            log.debugf(e, "Full stacktrace for retry exhaustion in markCheckpointsFailed for session=%s", sessionId);
+            throw (e instanceof RuntimeException re) ? re : new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, e);
         }
-        log.errorf("Failed to mark checkpoints FAILED after %d retries for session=%s: %s", maxRetries, sessionId, 
-                lastEx != null ? lastEx.getMessage() : "unknown");
-        log.debugf(lastEx, "Full stacktrace for retry exhaustion in markCheckpointsFailed for session=%s", sessionId);
-        if (lastEx != null) throw new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, lastEx);
     }
-
-
 
     private void wipeWorkspaceDir(String sessionId) {
         Path workspaceDir = Path.of(workspaceRootDir, sessionId);

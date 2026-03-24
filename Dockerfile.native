@@ -52,7 +52,7 @@ ENV LD_PRELOAD=/lib64/libm.so.6
 # Absolute path to the vec0 extension — no extension suffix needed, SQLite
 # appends .so automatically on Linux.
 # Must be absolute so it resolves correctly regardless of working directory.
-ENV SQLITE_VEC_PATH=/app/lib/vec0
+ENV ARCCLAW_SQLITE_VEC_PATH=/app/lib/vec0
 
 EXPOSE 8080
 

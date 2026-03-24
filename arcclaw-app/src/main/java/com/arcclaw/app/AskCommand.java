@@ -1,8 +1,11 @@
 package com.arcclaw.app;
 
-import java.util.UUID;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
+
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -10,15 +13,12 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.DevSecretSeeder;
-
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.inject.Inject;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -86,7 +86,7 @@ public class AskCommand implements Runnable {
     }
     
     private MessageContext createCliContext(String sessionId, String goal) {
-        ChannelUser user = new ChannelUser("cli-user", "CLI User", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, goal, sessionId, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.CLI; }

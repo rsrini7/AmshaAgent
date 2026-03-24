@@ -17,8 +17,8 @@ import com.arcclaw.core.pipeline.MessagePipeline;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
+import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
@@ -56,12 +56,22 @@ public class TelegramAgentHandler {
     }
 
     public void receiveMessage(Exchange exchange) {
+        log.infof("TELEGRAM-RECV raw exchange received");
         IncomingMessage msg = exchange.getIn().getBody(IncomingMessage.class);
-        String chatId = exchange.getIn().getHeader("CamelTelegramChatId", String.class);
 
         if (msg == null) {
             log.warn("Received null message body from Telegram");
             return; // no chatId to reply to
+        }
+
+        String chatId = msg.getChat() != null 
+            ? String.valueOf(msg.getChat().getId())
+            : exchange.getIn().getHeader("CamelTelegramChatId", String.class);
+
+        // The fallback block also uses chatId — protect it too:
+        if (chatId == null || chatId.isBlank()) {
+            log.warnf("No chatId for exchange, dropping message");
+            return;
         }
 
         if (msg.getText() == null) {
@@ -71,7 +81,7 @@ public class TelegramAgentHandler {
                 String fallbackUserId = msg.getFrom() != null
                     ? String.valueOf(msg.getFrom().getId()) : "unknown";
                 ChannelUser fallbackUser = new ChannelUser(
-                    fallbackUserId, null, ChannelType.TELEGRAM);
+                    fallbackUserId, chatId, null, ChannelType.TELEGRAM);
 
                 queueForChat(chatId).submit(() ->
                     sender.sendRaw(fallbackUser,
@@ -81,16 +91,20 @@ public class TelegramAgentHandler {
             return;
         }
 
+        log.debugf("Received message from chat %s: %s", chatId, msg.getText());
+
         String userId = String.valueOf(msg.getFrom().getId());
         String username = msg.getFrom().getUsername();
         String text = msg.getText();
 
-        ChannelUser user = new ChannelUser(userId, username, ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser(userId, chatId, username, ChannelType.TELEGRAM);
         ChannelMessage channelMessage = messageMapper.map(text, user, chatId);
 
         if (channelMessage == null) {
             return;
         }
+
+        log.debugf("Mapped message for chat %s: %s", chatId, channelMessage);
 
         MessageContext context = new MessageContext(chatId, user, channelMessage, sender);
         
@@ -99,24 +113,29 @@ public class TelegramAgentHandler {
             sender.sendRaw(user, "⏳");
         }
 
+        log.debugf("Processing message for chat %s", chatId);
         queueForChat(chatId).submit(() -> processPipeline(context));
     }
 
-    @ActivateRequestContext
     void processPipeline(MessageContext context) {
+        var requestContext = Arc.container().requestContext();
+        requestContext.activate();
         try {
+            log.infof("TELEGRAM-ROUTE Message received, entering pipeline for chat %s", context.getChatId());
             pipeline.process(context);
         } catch (Exception e) {
             if ("Pipeline crash".equals(e.getMessage())) {
                 log.warnf("Expected test exception in message pipeline for chat %s: %s", context.getChatId(), e.getMessage());
             } else {
                 log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId());
+                try {
+                    context.getSender().sendRaw(context.getUser(), "Sorry, an internal error occurred while processing your message.");
+                } catch (Exception sendEx) {
+                    log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
+                }
             }
-            try {
-                context.getSender().sendRaw(context.getUser(), "⚠️ Sorry, an internal error occurred while processing your message.");
-            } catch (Exception sendEx) {
-                log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
-            }
+        } finally {
+            requestContext.terminate();   // ← always release, even on exception
         }
     }
 }

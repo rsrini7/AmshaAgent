@@ -1,20 +1,20 @@
 package com.arcclaw.core.pipeline;
 
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.stream.Stream;
 
 import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 class MessagePipelineTest {
 
@@ -23,7 +23,7 @@ class MessagePipelineTest {
 
     @BeforeEach
     void setup() {
-        ChannelUser user = new ChannelUser("123", "alice", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
         context = new MessageContext("chat1", user, msg, sender);

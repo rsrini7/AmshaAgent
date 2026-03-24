@@ -2,15 +2,15 @@ package com.arcclaw.app.channel.telegram;
 
 import java.util.List;
 
-import org.apache.camel.ProducerTemplate;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.apache.camel.ProducerTemplate;
+import org.jboss.logging.Logger;
 
 /**
  * Telegram implementation of ChannelSender.
@@ -38,11 +38,11 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
-        if (recipient == null || recipient.platformId() == null) {
-            log.warn("TELEGRAM-SEND: recipient or platformId is null — dropping");
+        if (recipient == null || recipient.channelId() == null) {
+            log.warn("TELEGRAM-SEND: recipient or channelId is null — dropping");
             return;
         }
-        String chatId = recipient.platformId();
+        String chatId = recipient.channelId();  // ← was platformId()
         if (nodes == null || nodes.isEmpty()) {
             sendRaw(chatId, "(No response generated)");
             return;
@@ -57,11 +57,13 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
-        if (recipient == null || recipient.platformId() == null) {
-            log.warn("TELEGRAM-SENDRAW: recipient or platformId is null — dropping");
+        log.infof("TELEGRAM-SEND to=%s text=[%s]", recipient.channelId(), text);
+
+        if (recipient == null || recipient.channelId() == null) {
+            log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
             return;
         }
-        sendRaw(recipient.platformId(), text);
+        sendRaw(recipient.channelId(), text);  // ← was platformId()
     }
 
     private void sendRaw(String chatId, String text) {

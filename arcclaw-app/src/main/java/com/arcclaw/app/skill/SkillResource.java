@@ -4,13 +4,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.arcclaw.core.skill.AgentSkillEntity;
-import com.arcclaw.core.skill.AgentSkillRepository;
-import com.arcclaw.core.skill.SkillDefinitionParser;
-import com.arcclaw.core.skill.SkillLoader;
-import com.arcclaw.core.skill.SkillRegistry;
-
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -23,6 +16,13 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import com.arcclaw.core.skill.AgentSkillEntity;
+import com.arcclaw.core.skill.AgentSkillRepository;
+import com.arcclaw.core.skill.SkillDefinitionParser;
+import com.arcclaw.core.skill.SkillLoader;
+import com.arcclaw.core.skill.SkillRegistry;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @ApplicationScoped
 @Path("/skills")

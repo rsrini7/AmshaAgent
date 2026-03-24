@@ -1,20 +1,20 @@
 package com.arcclaw.mcp.bridge;
 
-import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.mcp.config.McpToolAllowlist;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
- import com.arcclaw.core.scope.WorkspaceContext;
-    import com.arcclaw.core.security.AutonomyLevel;
-    import com.arcclaw.core.agent.role.AgentRoleEnum;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.mcp.config.McpToolAllowlist;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class McpToolBridge {

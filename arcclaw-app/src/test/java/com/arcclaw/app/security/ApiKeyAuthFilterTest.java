@@ -1,13 +1,18 @@
 package com.arcclaw.app.security;
 
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.Mockito.when;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class ApiKeyAuthFilterTest {
@@ -64,7 +69,7 @@ class ApiKeyAuthFilterTest {
           .when().get("/api/v1/sessions/fake-id/status/COORDINATOR")
           .then()
              // It shouldn't be 401 or 429
-             .statusCode(org.hamcrest.Matchers.allOf(org.hamcrest.Matchers.not(401), org.hamcrest.Matchers.not(429)));
+             .statusCode(Matchers.allOf(Matchers.not(401), Matchers.not(429)));
     }
 
     @Test
@@ -78,12 +83,12 @@ class ApiKeyAuthFilterTest {
 
     @Test
     void testFilterHasNoPathMatchingLogic() throws Exception {
-        java.nio.file.Path sourceFile = java.nio.file.Path.of("src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java");
-        if (java.nio.file.Files.exists(sourceFile)) {
-            String content = java.nio.file.Files.readString(sourceFile);
-            org.junit.jupiter.api.Assertions.assertFalse(content.contains(".startsWith(\"/q/"), "Filter should not have Quarkus path matching logic");
-            org.junit.jupiter.api.Assertions.assertFalse(content.contains(".contains(\"/q/"), "Filter should not have Quarkus path matching logic");
-            org.junit.jupiter.api.Assertions.assertTrue(content.contains(".startsWith(\"/info\")"), "Filter should allow /info");
+        Path sourceFile = Path.of("src/main/java/com/arcclaw/app/security/ApiKeyAuthFilter.java");
+        if (Files.exists(sourceFile)) {
+            String content = Files.readString(sourceFile);
+            Assertions.assertFalse(content.contains(".startsWith(\"/q/"), "Filter should not have Quarkus path matching logic");
+            Assertions.assertFalse(content.contains(".contains(\"/q/"), "Filter should not have Quarkus path matching logic");
+            Assertions.assertTrue(content.contains(".startsWith(\"/info\")"), "Filter should allow /info");
         }
     }
 }

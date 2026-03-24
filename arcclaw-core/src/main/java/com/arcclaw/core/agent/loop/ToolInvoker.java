@@ -1,18 +1,18 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.Map;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.governance.RequiresApprovalException;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
-
-import com.arcclaw.core.observability.AgentOtelContext;
-
-import java.util.Map;
 
 /**
  * Standardized executor for tool calls.

@@ -1,11 +1,12 @@
 package com.arcclaw.core.security;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import jakarta.enterprise.context.ApplicationScoped;
-import org.jboss.logging.Logger;
-
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import org.jboss.logging.Logger;
 
 /**
  * Filters agent routing based on destructive vocabulary.

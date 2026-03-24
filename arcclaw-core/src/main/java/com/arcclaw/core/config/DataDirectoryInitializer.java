@@ -1,11 +1,12 @@
 package com.arcclaw.core.config;
 
-import io.quarkus.runtime.StartupEvent;
+import java.io.File;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.io.File;
+import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class DataDirectoryInitializer {

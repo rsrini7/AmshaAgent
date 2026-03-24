@@ -2,7 +2,9 @@ package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -16,10 +18,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.CronResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Handles the outcomes of cron job executions: updates database state,
@@ -144,7 +143,8 @@ public class CronResultHandler {
     }
 
     private void fireCompletionEvent(AgentCronEntity job, String executionId, String answer, AgentResult.FailureCategory category) {
-        ChannelType chType = ChannelType.fromString(job.channelType);
+        // Fallback to TELEGRAM for legacy rows missing channelType
+        ChannelType chType = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
         String platformId = job.channelPlatformId != null ? job.channelPlatformId : job.chatId;
 
         try {

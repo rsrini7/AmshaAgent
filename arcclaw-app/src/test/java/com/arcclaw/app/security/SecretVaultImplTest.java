@@ -13,7 +13,10 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.OptimisticLockException;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -22,11 +25,8 @@ import com.arcclaw.core.security.EncryptedSecret;
 import com.arcclaw.core.security.EncryptedSecretRepository;
 import com.arcclaw.core.security.SecretVaultImpl;
 import com.arcclaw.core.security.VaultKey;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class SecretVaultImplTest {
@@ -185,7 +185,7 @@ public class SecretVaultImplTest {
                 });
             } catch (Exception e) {
                 // We assert no OptimisticLockException is thrown
-                if (e instanceof jakarta.persistence.OptimisticLockException) {
+                if (e instanceof OptimisticLockException) {
                     fail("Should not throw OptimisticLockException when Hibernate manages version: " + e.getMessage());
                 }
                 e.printStackTrace();
@@ -202,7 +202,7 @@ public class SecretVaultImplTest {
                 });
             } catch (Exception e) {
                 // We assert no OptimisticLockException is thrown
-                if (e instanceof jakarta.persistence.OptimisticLockException) {
+                if (e instanceof OptimisticLockException) {
                     fail("Should not throw OptimisticLockException when Hibernate manages version: " + e.getMessage());
                 }
                 e.printStackTrace();

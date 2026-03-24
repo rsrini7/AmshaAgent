@@ -3,8 +3,6 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,6 +15,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+
+import com.arcclaw.core.security.AutonomyLevel;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * JPA entity for persisting agent reasoning loop state.
@@ -61,6 +62,10 @@ public class AgentCheckpoint {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CheckpointStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "autonomy_level", length = 20)
+    private AutonomyLevel autonomyLevel;
 
     /**
      * Jackson-serialized {@code List<ReasoningStep>}.
@@ -225,5 +230,13 @@ public class AgentCheckpoint {
 
     public void setStatus(CheckpointStatus status) {
         this.status = status;
+    }
+
+    public AutonomyLevel getAutonomyLevel() {
+        return autonomyLevel;
+    }
+
+    public void setAutonomyLevel(AutonomyLevel autonomyLevel) {
+        this.autonomyLevel = autonomyLevel;
     }
 }

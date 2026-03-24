@@ -6,14 +6,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
-import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -23,12 +26,8 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
-import com.arcclaw.core.governance.GovernanceLayer;
-import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class LangChainReasoningEngine implements ReasoningEngine {

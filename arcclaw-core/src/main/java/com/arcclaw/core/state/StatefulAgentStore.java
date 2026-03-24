@@ -1,9 +1,10 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
 import java.util.List;
 import java.util.Optional;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.security.AutonomyLevel;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.
@@ -101,4 +102,9 @@ public interface StatefulAgentStore {
      * with the given cronId. Matches sessionId pattern: "cron-{cronId}-%".
      */
     Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId);
+
+    /**
+     * Load the most recent autonomy level for a session from its checkpoints.
+     */
+    Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId);
 }

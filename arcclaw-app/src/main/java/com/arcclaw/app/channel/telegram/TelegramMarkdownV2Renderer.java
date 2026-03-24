@@ -1,12 +1,13 @@
 package com.arcclaw.app.channel.telegram;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
-import jakarta.enterprise.context.ApplicationScoped;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Renders a list of {@link ReplyNode} into Telegram's MarkdownV2 format.
@@ -37,10 +38,9 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
     private String renderNode(ReplyNode node) {
         return switch (node) {
             case ReplyNode.Text t -> esc(t.content());
-            case ReplyNode.Heading h -> {
-                String hashes = "#".repeat(Math.max(1, Math.min(6, h.level())));
-                yield esc(hashes + " " + h.text());
-            }
+            case ReplyNode.Heading h -> h.level() == 1
+                    ? "*__" + esc(h.text()) + "__*"
+                    : "*" + esc(h.text()) + "*";
             case ReplyNode.CodeBlock cb -> {
                 // Language identifier is NOT MarkdownV2 content — do NOT escape it.
                 // Telegram uses it as a literal syntax hint: ```java, ```c++, etc.

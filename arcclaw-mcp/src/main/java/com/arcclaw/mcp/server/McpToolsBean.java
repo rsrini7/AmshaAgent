@@ -1,15 +1,15 @@
 package com.arcclaw.mcp.server;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditEventRepository;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.mcp.bridge.McpToolBridge;
-
 import io.quarkiverse.mcp.server.Tool;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class McpToolsBean {

@@ -1,10 +1,11 @@
 package com.arcclaw.core.agent.persona;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-
-import org.junit.jupiter.api.Test;
-import java.util.HashSet;
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.HashSet;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import org.junit.jupiter.api.Test;
 
 class DattatreyaAgentTest {
 

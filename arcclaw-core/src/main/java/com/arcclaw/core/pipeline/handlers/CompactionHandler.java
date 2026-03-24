@@ -1,17 +1,18 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
-import com.arcclaw.core.state.ContextCompactionService;
-import com.arcclaw.core.scope.WorkspaceScoped;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.core.state.ContextCompactionService;
+import org.jboss.logging.Logger;
 
 /**
  * compacts conversation history if necessary before passing to the agent.
@@ -50,8 +51,13 @@ public class CompactionHandler implements MessageHandler {
             if (compactionInFlight.compareAndSet(false, true)) {
                 compactionEvent.fireAsync(new CompactionRequest(sessionId, userId))
                         .toCompletableFuture()
+                        .thenRun(() -> {
+                            log.debugf("Compaction completed successfully for session %s — releasing inFlight lock", sessionId);
+                            compactionInFlight.set(false);
+                        })
                         .exceptionally(ex -> {
-                            log.errorf(ex, "Async compaction event delivery failed for session %s", sessionId);
+                            log.errorf("Async compaction event delivery failed for session %s (Exception: %s) — releasing inFlight lock", sessionId, ex.getMessage());
+                            log.debug("Full compaction failure stack trace:", ex);
                             compactionInFlight.set(false);
                             return null;
                         });

@@ -1,7 +1,8 @@
 package com.arcclaw.core.compaction;
 
-import com.arcclaw.core.scope.WorkspaceScoped;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.arcclaw.core.scope.WorkspaceScoped;
 
 /**
  * A per-session flag that prevents concurrent compaction for the same session.

@@ -1,20 +1,19 @@
 package com.arcclaw.app.security;
 
-import io.quarkus.runtime.StartupEvent;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Optional;
+
 import com.arcclaw.core.security.SecretVault;
+import io.quarkus.runtime.StartupEvent;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class StartupSecurityValidatorTest {
 

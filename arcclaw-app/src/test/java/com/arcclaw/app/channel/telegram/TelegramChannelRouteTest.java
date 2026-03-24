@@ -5,15 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Map;
 
-import org.apache.camel.CamelContext;
-import org.apache.camel.Route;
-import org.apache.camel.builder.AdviceWith;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
+import org.apache.camel.CamelContext;
+import org.apache.camel.Route;
+import org.apache.camel.builder.AdviceWith;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(TelegramChannelRouteTest.TelegramEnabledProfile.class)

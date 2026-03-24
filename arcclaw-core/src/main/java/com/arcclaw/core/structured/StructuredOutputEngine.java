@@ -4,12 +4,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import org.jboss.logging.Logger;
 
 /**
  * Entry point for structured output calls.

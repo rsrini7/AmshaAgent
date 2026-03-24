@@ -1,19 +1,18 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import org.junit.jupiter.api.Test;
 
 class MemorySearchToolTest {
 
@@ -51,7 +50,7 @@ class MemorySearchToolTest {
         e2.summary = "Reviewed blockchain consensus algorithms";
         e2.createdAt = Instant.parse("2026-02-21T14:00:00Z");
 
-        when(repository.searchMemory("user-42", "blockchain", 5))
+        when(repository.searchMemory("user-42", "\"blockchain\"", 5))
                 .thenReturn(List.of(e1, e2));
 
         ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 

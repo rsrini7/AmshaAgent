@@ -1,26 +1,30 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import io.smallrye.common.annotation.Identifier;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import dev.langchain4j.data.message.UserMessage;
-import jakarta.enterprise.event.ObservesAsync;
-import com.arcclaw.core.compaction.CompactionRequest;
-import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.ObservesAsync;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.compaction.CompactionInFlightFlag;
+import com.arcclaw.core.compaction.CompactionRequest;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.common.annotation.Identifier;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 @ApplicationScoped
 public class ContextCompactionService {
+    
+    private static final int MAX_SUMMARY_CODEPOINTS = 1985;
+    private static final String TRUNCATION_SUFFIX = "...[truncated]";
 
     @Inject
     PersistentChatMemoryStore chatMemoryStore;
@@ -88,7 +92,8 @@ public class ContextCompactionService {
         try {
             compact(request.sessionId(), request.userId());
         } catch (Exception e) {
-            log.errorf(e, "Compaction failed for session %s", request.sessionId());
+            log.errorf("Compaction failed for session %s: %s", request.sessionId(), e.getMessage());
+            log.debug("Full compaction failure stack trace:", e);
         } finally {
             compactionInFlight.set(false);
         }
@@ -131,9 +136,7 @@ public class ContextCompactionService {
             return false;
         }
 
-        if (newSummary.length() > 2000) {
-            newSummary = newSummary.substring(0, 1985) + "...[truncated]";
-        }
+        newSummary = truncateSafely(newSummary);
 
         summaryRepository.upsertSummary(sessionId, userId, newSummary, toCompact.size());
 
@@ -151,5 +154,16 @@ public class ContextCompactionService {
 
         log.infof("Context compacted for session %s. Compacted %d messages, kept %d.", sessionId, toCompact.size(), filteredKeep.size());
         return true;
+    }
+
+    private String truncateSafely(String text) {
+        if (text == null) return "";
+        long cpCount = text.codePoints().count();
+        if (cpCount <= MAX_SUMMARY_CODEPOINTS) return text;
+        return text.codePoints()
+                .limit(MAX_SUMMARY_CODEPOINTS)
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .append(TRUNCATION_SUFFIX)
+                .toString();
     }
 }

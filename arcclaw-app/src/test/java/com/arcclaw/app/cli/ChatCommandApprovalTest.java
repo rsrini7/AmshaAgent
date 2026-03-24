@@ -15,22 +15,21 @@ import java.io.PrintStream;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.reflex.ReflexRegistry;
+import com.arcclaw.core.reflex.ReflexResult;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.reflex.ReflexRegistry;
-import com.arcclaw.core.reflex.ReflexResult;
-
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 
 @QuarkusTest
 public class ChatCommandApprovalTest {

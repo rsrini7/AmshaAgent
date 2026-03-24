@@ -1,11 +1,12 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.time.Instant;
 
 @Entity
 @Table(name = "compaction_summary")

@@ -22,6 +22,13 @@ public final class SqliteErrorStrings {
      */
     public static boolean isBusy(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
+            String canonicalName = t.getClass().getName();
+            if (canonicalName.contains(LOCK_ACQUISITION_EXCEPTION) ||
+                canonicalName.contains(OPTIMISTIC_LOCK_EXCEPTION) ||
+                canonicalName.contains(SQLITE_EXCEPTION)) {
+                return true;
+            }
+
             String msg = t.getMessage();
             if (msg != null) {
                 String lower = msg.toLowerCase(Locale.ROOT);
@@ -31,15 +38,6 @@ public final class SqliteErrorStrings {
                     lower.contains(SNAPSHOT)) {
                     return true;
                 }
-            }
-            if (t.getClass().getSimpleName().equals(SQLITE_EXCEPTION)) {
-                try {
-                    var method = t.getClass().getMethod("getResultCode");
-                    Object code = method.invoke(t);
-                    if (code instanceof Integer rc) {
-                        if (rc == 5 || rc == 6 || rc == 261) return true;
-                    }
-                } catch (Exception ignored) { }
             }
         }
         return false;

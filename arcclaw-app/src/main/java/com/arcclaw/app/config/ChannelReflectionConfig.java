@@ -4,7 +4,6 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.structured.AgentContribution;
 import com.arcclaw.channel.api.structured.ConflictSummary;
 import com.arcclaw.channel.api.structured.SynthesisResult;
-
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(

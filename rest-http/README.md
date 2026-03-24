@@ -27,7 +27,7 @@ ARCCLAW_API_KEY_INTERNAL=key-internal-changeme
 ARCCLAW_API_KEY_CI=key-ci-changeme
 ARCCLAW_VAULT_PEPPER=<32+ char string>
 ARCCLAW_AUDIT_HMAC_KEY=<32+ char string>
-SQLITE_VEC_PATH=../lib/vec0         # dev mode
+ARCCLAW_SQLITE_VEC_PATH=../lib/vec0         # dev mode
 ```
 
 ### Optional (for tool tests)

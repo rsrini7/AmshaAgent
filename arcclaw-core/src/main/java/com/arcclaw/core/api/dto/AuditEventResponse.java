@@ -1,11 +1,11 @@
 package com.arcclaw.core.api.dto;
 
-import com.arcclaw.core.audit.AuditOutcome;
-import com.arcclaw.core.audit.SecurityEventType;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.arcclaw.core.audit.AuditOutcome;
+import com.arcclaw.core.audit.SecurityEventType;
 
 public record AuditEventResponse(
         UUID id,

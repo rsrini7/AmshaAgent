@@ -1,8 +1,8 @@
 package com.arcclaw.core.config;
 
-import org.eclipse.microprofile.config.spi.Converter;
-
 import jakarta.annotation.Priority;
+
+import org.eclipse.microprofile.config.spi.Converter;
 
 @Priority(200)
 public class CharArrayConverter implements Converter<char[]> {

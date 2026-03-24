@@ -1,8 +1,9 @@
 package com.arcclaw.app;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.observability.AgentObserver;
-import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * CLI-only observer — prints step-level events to stdout during

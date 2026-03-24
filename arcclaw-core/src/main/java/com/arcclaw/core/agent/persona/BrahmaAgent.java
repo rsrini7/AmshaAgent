@@ -2,9 +2,9 @@ package com.arcclaw.core.agent.persona;
 
 import java.util.List;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
  * Brahma — Math/Code Creator and Logic Expert agent.

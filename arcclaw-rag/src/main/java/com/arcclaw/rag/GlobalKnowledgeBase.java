@@ -2,23 +2,20 @@ package com.arcclaw.rag;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.state.RagChunkEntity;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class GlobalKnowledgeBase {
@@ -28,7 +25,6 @@ public class GlobalKnowledgeBase {
     @Inject EntityManager em;
     @Inject EmbeddingModel embeddingModel;
     @Inject FtsConnectionInterceptor ftsInterceptor;
-    @Inject CompactionSummaryRepository compactionRepo;
 
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
@@ -47,17 +43,15 @@ public class GlobalKnowledgeBase {
             em.createNativeQuery(
                 "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?1, ?2)")
                 .setParameter(1, chunkId)
-                .setParameter(2, Arrays.toString(vector))
+                .setParameter(2, toVecLiteral(vector))
                 .executeUpdate();
 
             // Persist raw text for hydration at search time.
-            // "rag:" prefix avoids PK collision with real session IDs.
-            var ragChunk = new CompactionSummaryEntity();
-            ragChunk.sessionId = "rag:" + chunkId;
-            ragChunk.summary = text;
+            var ragChunk = new RagChunkEntity();
+            ragChunk.chunkId = chunkId;
+            ragChunk.text = text;
+            ragChunk.source = "System"; // Example default source
             ragChunk.createdAt = Instant.now();
-            ragChunk.compactedAt = Instant.now();
-            ragChunk.messagesCompacted = 0;
             em.persist(ragChunk);
 
             return chunkId;
@@ -81,7 +75,7 @@ public class GlobalKnowledgeBase {
                 "FROM fts.vec_global " +
                 "ORDER BY distance ASC " +
                 "LIMIT ?2")
-                .setParameter(1, Arrays.toString(vector))
+                .setParameter(1, toVecLiteral(vector))
                 .setParameter(2, topN)
                 .getResultList();
 
@@ -89,9 +83,8 @@ public class GlobalKnowledgeBase {
             for (Object[] row : rows) {
                 String chunkId = (String) row[0];
                 double score = 1.0 - ((Number) row[1]).doubleValue(); // cosine distance → similarity
-                String text = compactionRepo.findLatestBySessionId("rag:" + chunkId)
-                    .map(e -> e.summary)
-                    .orElse("");
+                RagChunkEntity chunkEntity = em.find(RagChunkEntity.class, chunkId);
+                String text = chunkEntity != null ? chunkEntity.text : "";
                 results.add(new ScoredChunk(chunkId, text, score));
             }
             return results;
@@ -99,5 +92,15 @@ public class GlobalKnowledgeBase {
             log.warnf("GlobalKnowledgeBase search failed: %s", e.getMessage());
             return List.of();
         }
+    }
+
+    private static String toVecLiteral(float[] vector) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(String.format(java.util.Locale.ROOT, "%f", vector[i]));
+        }
+        sb.append(']');
+        return sb.toString();
     }
 }

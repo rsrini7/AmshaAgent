@@ -12,13 +12,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import com.arcclaw.core.security.SecretVault;
-import com.arcclaw.core.security.VaultKey;
 
 public class SandboxSecretResolverTest {
 

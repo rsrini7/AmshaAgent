@@ -7,40 +7,41 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.core.api.dto.RunAgentRequest;
-import com.arcclaw.core.api.dto.SessionStatusResponse;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
-import io.quarkus.virtual.threads.VirtualThreads;
 import com.arcclaw.core.util.MdcKeys;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.ws.rs.container.AsyncResponse;
-import jakarta.ws.rs.core.Response;
+import io.quarkus.virtual.threads.VirtualThreads;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class AgentSessionService {
@@ -92,10 +93,10 @@ public class AgentSessionService {
         this.vThreads = vThreads;
     }
 
-    public String createSession() {
+    public String createSession(AutonomyLevel autonomyLevel) {
         String sessionId = UUID.randomUUID().toString();
-        log.infof("Creating new session:  %s", sessionId);
-        heartbeatTracker.recordHeartbeat(sessionId);
+        log.infof("Creating new session: %s (autonomy=%s)", sessionId, autonomyLevel);
+        heartbeatTracker.recordHeartbeat(sessionId, autonomyLevel != null ? autonomyLevel : AutonomyLevel.SUPERVISED);
         return sessionId;
     }
 
@@ -138,16 +139,25 @@ public class AgentSessionService {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 devSeeder.seedDevSecrets();
+                AutonomyLevel level = getOrDefaultAutonomy(sessionId);
+                
                 return WorkspaceContext.run(
-                        sessionId, "rest:api", sessionId, AutonomyLevel.SUPERVISED, request.agentRole(), ChannelType.REST_API, () -> {
+                        sessionId, "rest:api", sessionId, level, request.agentRole(), ChannelType.REST_API, () -> {
                             MessageContext context = createRestContext(sessionId, request.goal());
+                            context.setAutonomyLevel(level);
                             AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations, context);
                             return responseMapper.mapResult(result, false);
                         }
                 );
             });
+        } catch (BudgetExceededException e) {
+            return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
+        } catch (BudgetWarningException e) {
+            // Treat warning as success for the call itself, with the message attached
+            return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
-            log.errorf("Sync agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
+            log.errorf("Sync agent run threw exception for session %s: %s", sessionId, e.getMessage());
+            log.debug("Full sync agent failure stack trace:", e);
             return Response.serverError()
                     .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
                     .build();
@@ -192,10 +202,17 @@ public class AgentSessionService {
 
                 devSeeder.seedDevSecrets();
 
-                AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : AutonomyLevel.SUPERVISED;
+                AutonomyLevel sessionLevel = heartbeatTracker.getAutonomyLevel(sessionId);
+                if (sessionLevel == null) {
+                    log.warnf("No stored autonomy level found for session %s, defaulting to SUPERVISED", sessionId);
+                    sessionLevel = AutonomyLevel.SUPERVISED;
+                }
+
+                AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : sessionLevel;
 
                 WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, request.agentRole(), ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
+                    context.setAutonomyLevel(runLevel);
                     if (isApproval) {
                         context.setResumeSignal(true);
                     }
@@ -204,8 +221,13 @@ public class AgentSessionService {
                     response.resume(responseMapper.mapResult(result, true));
                 });
 
+            } catch (BudgetExceededException e) {
+                response.resume(Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build());
+            } catch (BudgetWarningException e) {
+                response.resume(Response.ok().entity(Map.of("warning", e.getMessage())).build());
             } catch (Exception e) {
-                log.errorf("Async agent run threw exception for session  %s:  %s", sessionId, e.getMessage(), e);
+                log.errorf("Async agent run threw exception for session %s: %s", sessionId, e.getMessage());
+                log.debug("Full async agent failure stack trace:", e);
                 response.resume(Response.serverError()
                         .entity(Map.of("status", "ERROR", "message",
                             e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
@@ -241,8 +263,13 @@ public class AgentSessionService {
                     return responseMapper.mapResult(result, false);
                 });
             });
+        } catch (BudgetExceededException e) {
+            return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
+        } catch (BudgetWarningException e) {
+            return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
-            log.errorf("Failed to approve session " + sessionId, e);
+            log.errorf("Failed to approve session %s: %s", sessionId, e.getMessage());
+            log.debug("Full approval failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
             MDC.remove(MdcKeys.USER_ID);
@@ -271,7 +298,8 @@ public class AgentSessionService {
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
         } catch (Exception e) {
-            log.error("Failed to deny session " + sessionId, e);
+            log.errorf("Failed to deny session %s: %s", sessionId, e.getMessage());
+            log.debug("Full denial failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
         } finally {
             MDC.remove(MdcKeys.USER_ID);
@@ -292,8 +320,8 @@ public class AgentSessionService {
                             return Response.ok(new SessionStatusResponse(
                                     sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                         } catch (Exception e) {
-                            log.errorf("Failed to load steps for session %s: %s",
-                                    sessionId, e.getMessage(), e);
+                            log.errorf("Failed to load steps for session %s: %s", sessionId, e.getMessage());
+                            log.debug("Full load steps failure stack trace:", e);
                             return Response.serverError().entity(e.getMessage()).build();
                         }
                     })
@@ -318,7 +346,7 @@ public class AgentSessionService {
     }
 
     private MessageContext createRestContext(String sessionId, String goal) {
-        ChannelUser user = new ChannelUser("rest:api", "REST API User", ChannelType.REST_API);
+        ChannelUser user = new ChannelUser("rest:api", "rest:api", "REST API User", ChannelType.REST_API);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "rest-api-" + sessionId, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.REST_API; }
@@ -376,9 +404,22 @@ public class AgentSessionService {
                     )).build());
 
         } catch (Exception e) {
-            log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage(), e);
+            log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage());
+            log.debug("Full slash command failure stack trace:", e);
             return Optional.empty(); // fall through to agent loop
         }
+    }
+
+    private AutonomyLevel getOrDefaultAutonomy(String sessionId) {
+        AutonomyLevel level = heartbeatTracker.getAutonomyLevel(sessionId);
+        if (level != null) return level;
+        
+        // Fallback to latest checkpoint for this session if heartbeat was lost
+        return agentStore.loadLatestAutonomyForSession(sessionId)
+                .orElseGet(() -> {
+                    log.warnf("No stored autonomy found for session %s, defaulting to SUPERVISED", sessionId);
+                    return AutonomyLevel.SUPERVISED;
+                });
     }
 
     private static class AwaitingApprovalException extends RuntimeException {

@@ -15,17 +15,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
-
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Tests for {@link AgentCronScheduler}.
@@ -113,7 +113,7 @@ class AgentCronSchedulerTest {
 
         scheduler.pollAndDispatch();
 
-        verify(cronRepository).reclaimStaleCrons(org.mockito.ArgumentMatchers.argThat(t ->
+        verify(cronRepository).reclaimStaleCrons(ArgumentMatchers.argThat(t ->
                 t.isAfter(Instant.now().minus(6, ChronoUnit.MINUTES)) &&
                 t.isBefore(Instant.now().minus(4, ChronoUnit.MINUTES))));
     }

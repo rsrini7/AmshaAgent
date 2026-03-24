@@ -2,9 +2,6 @@ package com.arcclaw.core.api;
 
 import java.util.Map;
 
-import com.arcclaw.core.api.dto.CreateSessionResponse;
-import com.arcclaw.core.api.dto.RunAgentRequest;
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -22,6 +19,11 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.dto.CreateSessionRequest;
+import com.arcclaw.core.api.dto.CreateSessionResponse;
+import com.arcclaw.core.api.dto.RunAgentRequest;
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @ApplicationScoped
 @Path("/sessions")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -33,9 +35,10 @@ public class AgentResource {
     AgentSessionService sessionService;
 
     @POST
-    public Response createSession() {
+    public Response createSession(@Valid CreateSessionRequest request) {
+        var level = request != null ? request.autonomyLevel() : null;
         return Response.status(Response.Status.CREATED)
-                .entity(new CreateSessionResponse(sessionService.createSession()))
+                .entity(new CreateSessionResponse(sessionService.createSession(level)))
                 .build();
     }
 

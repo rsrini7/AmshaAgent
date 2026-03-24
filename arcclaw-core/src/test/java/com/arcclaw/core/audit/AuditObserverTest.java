@@ -1,13 +1,14 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.agent.result.AgentResult;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.result.AgentResult;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class AuditObserverTest {

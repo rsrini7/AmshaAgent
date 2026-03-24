@@ -1,10 +1,11 @@
 package com.arcclaw.core.audit;
 
-import com.arcclaw.core.agent.result.AgentResult;
+import java.math.BigDecimal;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.math.BigDecimal;
+import com.arcclaw.core.agent.result.AgentResult;
 
 @ApplicationScoped
 public class AuditService {

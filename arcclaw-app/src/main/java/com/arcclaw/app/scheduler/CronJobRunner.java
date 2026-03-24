@@ -1,29 +1,28 @@
 package com.arcclaw.app.scheduler;
 
-import java.util.UUID;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Orchestrates the execution of a single cron job, managing the workspace context,
@@ -95,7 +94,7 @@ public class CronJobRunner {
     }
 
     private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal) {
-        ChannelUser user = new ChannelUser(job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
+        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, Instant.now());
         ChannelSender noOpSender = new ChannelSender() {
             @Override public ChannelType supports() { return ChannelType.REST_API; }

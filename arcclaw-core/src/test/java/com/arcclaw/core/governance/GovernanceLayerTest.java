@@ -6,16 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class GovernanceLayerTest {
@@ -71,13 +72,13 @@ class GovernanceLayerTest {
     void testBudgetExceededTriggersDowngradeAndException() {
         WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
             // Budget is $10.00. 
-            // 1st massive call triggers WARNING first (Stage 1)
+            // 1st call triggers WARNING (Stage 1) - Total: $8.10
             assertThrows(BudgetWarningException.class,
-                    () -> governanceLayer.recordLlmCall(sessionId, 1000000, 1000000));
+                    () -> governanceLayer.recordLlmCall(sessionId, 700000, 400000));
 
-            // 2nd call triggers EXCEEDED (Stage 2)
+            // 2nd call triggers EXCEEDED (Stage 2) - Total: $10.20
             BudgetExceededException ex = assertThrows(BudgetExceededException.class,
-                    () -> governanceLayer.recordLlmCall(sessionId, 1, 1));
+                    () -> governanceLayer.recordLlmCall(sessionId, 200000, 100000));
 
             assertTrue(ex.getMessage().contains("exceeded"));
         });
@@ -88,14 +89,14 @@ class GovernanceLayerTest {
         String sessionB = UUID.randomUUID().toString();
         
         WorkspaceContext.run(sessionB, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
-            // Stage 1: Warning
+            // Stage 1: Warning (Total $8.10)
             try {
-                governanceLayer.recordLlmCall(sessionB, 1000000, 1000000);
+                governanceLayer.recordLlmCall(sessionB, 700000, 400000);
             } catch (BudgetWarningException _) {}
             
-            // Stage 2: Exceeded
+            // Stage 2: Exceeded (Total $10.20)
             try {
-                governanceLayer.recordLlmCall(sessionB, 1, 1);
+                governanceLayer.recordLlmCall(sessionB, 200000, 100000);
             } catch (BudgetExceededException _) {}
         });
 
@@ -139,6 +140,43 @@ class GovernanceLayerTest {
             assertEquals(0.0045, governanceLayer.getSessionCost(sessionId), 0.0001);
             assertEquals(500, governanceLayer.getSessionInputTokens(sessionId));
             assertEquals(200, governanceLayer.getSessionOutputTokens(sessionId));
+        });
+    }
+
+    @Test
+    void testHardLimitEnforcedOnSingleMassiveCall() {
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
+            // Budget is $10.00. 10 million input tokens = $30.00. 
+            // This exceeds both warning ($8.00) and hard limit ($10.00).
+            // It MUST throw BudgetExceededException, not BudgetWarningException.
+            assertThrows(BudgetExceededException.class,
+                    () -> governanceLayer.recordLlmCall(sessionId, 10_000_000, 0));
+        });
+    }
+
+    @Inject
+    ManagedExecutor managedExecutor;
+
+    @Test
+    void testConcurrentCostAccumulationIsAtomic() throws Exception {
+        WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {
+            // Each call adds $0.018 (1k in, 1k out). 
+            // 10 concurrent calls should result in exactly $0.18.
+            int concurrency = 10;
+            CompletableFuture<?>[] futures = new CompletableFuture[concurrency];
+            
+            for (int i = 0; i < concurrency; i++) {
+                futures[i] = managedExecutor.supplyAsync(() -> {
+                    governanceLayer.recordLlmCall(sessionId, 1000, 1000);
+                    return null;
+                });
+            }
+            
+            CompletableFuture.allOf(futures).join();
+            
+            assertEquals(0.18, governanceLayer.getSessionCost(sessionId), 0.0001);
+            assertEquals(1000 * concurrency, governanceLayer.getSessionInputTokens(sessionId));
+            assertEquals(1000 * concurrency, governanceLayer.getSessionOutputTokens(sessionId));
         });
     }
 }

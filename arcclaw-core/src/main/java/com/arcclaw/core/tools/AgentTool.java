@@ -1,11 +1,11 @@
 package com.arcclaw.core.tools;
 
-import com.arcclaw.core.security.ToolOperation;
-
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-
 import java.util.List;
 import java.util.Map;
+
+import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.security.ToolOperation;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
  * Contract for all ArcClaw agent tools.
@@ -21,7 +21,7 @@ import java.util.Map;
  * </ul>
  * <p>
  * Tools requiring vault secrets must annotate {@link #execute(Map)} with
- * {@link com.arcclaw.core.security.RequiresSecret @RequiresSecret}.
+ * {@link RequiresSecret @RequiresSecret}.
  * The registry reads these annotations reflectively to build the secrets map
  * before delegating to the sandbox executor.
  */
@@ -100,5 +100,16 @@ public interface AgentTool {
      */
     default String postProcessOutput(String rawOutput, Map<String, Object> params) {
         return rawOutput;
+    }
+
+    /**
+     * Whether this specific tool invocation requires manual approval regardless of the autonomy level.
+     * This is used for high-risk operations like 'gh pr create' or 'rm -rf'.
+     *
+     * @param params Tool-specific parameters.
+     * @return true if approval is required.
+     */
+    default boolean requiresManualApproval(Map<String, Object> params) {
+        return false;
     }
 }

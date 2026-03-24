@@ -1,12 +1,12 @@
 package com.arcclaw.core.skill;
 
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-
-import java.time.Instant;
 
 import com.arcclaw.core.state.InstantToTextConverter;
 

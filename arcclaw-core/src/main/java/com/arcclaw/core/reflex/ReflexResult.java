@@ -1,7 +1,8 @@
 package com.arcclaw.core.reflex;
 
-import com.arcclaw.core.pipeline.MessageContext;
 import java.util.Optional;
+
+import com.arcclaw.core.pipeline.MessageContext;
 
 public record ReflexResult(
     Optional<String> commandResponse,

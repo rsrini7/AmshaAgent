@@ -13,25 +13,25 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.Optional;
-import com.arcclaw.core.audit.AuditHashUtil;
 
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class ReflexRegistryTest {
@@ -54,7 +54,7 @@ class ReflexRegistryTest {
     @InjectMock
     AuditHashUtil hashUtil;
     
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void setupMocks() {
         when(hashUtil.sha256hex(anyString())).thenReturn("mock-sha256");
         when(hashUtil.hmacHex(anyString())).thenReturn("mock-hmac");
@@ -63,7 +63,7 @@ class ReflexRegistryTest {
     // ── Helpers ─────────────────────────────────────────────────────────────
     
     private MessageContext createContext(String input) {
-        ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("user-1", "user-1", "user-1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
         return new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
     }

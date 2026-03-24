@@ -1,22 +1,22 @@
 package com.arcclaw.core.pipeline;
 
-import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-
-import java.time.Instant;
-import java.util.stream.Stream;
-
-import jakarta.enterprise.inject.Instance;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+
+import java.time.Instant;
+import java.util.stream.Stream;
+
+import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class MessagePipelineErrorTest {
 
@@ -27,7 +27,7 @@ class MessagePipelineErrorTest {
 
     @BeforeEach
     void setup() {
-        user = new ChannelUser("123", "alice", ChannelType.CLI);
+        user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         sender = mock(ChannelSender.class);
         context = new MessageContext("chat1", user, msg, sender);

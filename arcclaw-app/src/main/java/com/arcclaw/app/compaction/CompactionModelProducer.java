@@ -1,15 +1,16 @@
 package com.arcclaw.app.compaction;
 
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import io.smallrye.common.annotation.Identifier;
+import java.time.Duration;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
+import com.arcclaw.app.routing.LlmModelFactory;
+
+import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-
-import java.time.Duration;
 
 @ApplicationScoped
 public class CompactionModelProducer {
@@ -41,37 +42,16 @@ public class CompactionModelProducer {
                     defaultValue = "llama3.2")
     String ollamaModelId;
 
+    @Inject
+    LlmModelFactory modelFactory;
+
     @Produces
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {
         log.infof("CompactionModelProducer: provider=%s model=%s", provider, modelId);
-        return switch (provider.toLowerCase()) {
-            case "groq" -> OpenAiChatModel.builder()
-                    .baseUrl(compactionBaseUrl)
-                    .apiKey(compactionApiKey)
-                    .modelName(modelId)
-                    .maxTokens(compactionMaxTokens)
-                    .timeout(Duration.ofSeconds(10))
-                    .logRequests(false)
-                    .logResponses(false)
-                    .build();
-            case "openai" -> OpenAiChatModel.builder()
-                    .baseUrl(compactionBaseUrl)
-                    .apiKey(compactionApiKey)
-                    .modelName(modelId)
-                    .maxTokens(compactionMaxTokens)
-                    .timeout(Duration.ofSeconds(10))
-                    .logRequests(false)
-                    .logResponses(false)
-                    .build();
-            case "ollama" -> OllamaChatModel.builder()
-                    .baseUrl(ollamaBaseUrl)
-                    .modelName(ollamaModelId)
-                    .build();
-            default -> throw new IllegalStateException(
-                    "Unknown LLM provider: " + provider +
-                    ". Supported: groq | openai | ollama");
-        };
+        return modelFactory.createModel(
+                provider, compactionBaseUrl, compactionApiKey, modelId, compactionMaxTokens,
+                Duration.ofSeconds(10), ollamaBaseUrl, ollamaModelId);
     }
 }

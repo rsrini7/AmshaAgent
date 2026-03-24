@@ -3,29 +3,28 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.Objects;
-
-import org.hibernate.exception.LockAcquisitionException;
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
-
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.persistence.SqliteErrorStrings;
-import com.arcclaw.core.util.MdcKeys;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.MdcKeys;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 /**
  * JPA EntityManager-based implementation of {@link StatefulAgentStore}.
@@ -50,11 +49,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Inject
     EntityManager em;
-
     @Inject
     AuditService auditService;
 
-    private static final long BACKOFF_BASE_MS = 50;
+    @Inject
+    SqliteRetryTemplate retryTemplate;
 
     @Inject
     StatefulAgentStoreImpl self;
@@ -72,23 +71,27 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpoint checkpoint;
+        AutonomyLevel autonomy = WorkspaceContext.autonomy();
+        
         if (existing.isPresent()) {
             checkpoint = existing.get();
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            log.debugf("Updated checkpoint for session=%s, role=%s", sessionId, agentRole);
+            checkpoint.setAutonomyLevel(autonomy);
+            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         } else {
             checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId(sessionId);
             checkpoint.setAgentRole(agentRole);
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+            checkpoint.setAutonomyLevel(autonomy);
             em.persist(checkpoint);
             
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
+            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
             
-            log.infof("Created checkpoint for session=%s, role=%s", sessionId, agentRole);
+            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         }
         return checkpoint;
     }
@@ -119,6 +122,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setFailReason(checkpoint.getFailReason());
             managed.setPendingToolName(checkpoint.getPendingToolName());
             managed.setPendingToolParametersJson(checkpoint.getPendingToolParametersJson());
+            managed.setAutonomyLevel(checkpoint.getAutonomyLevel());
             return managed;
         }
     }
@@ -193,7 +197,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
 
         q.setMaxResults(1);
-        return q.getResultList().stream().findFirst();
+        return q.getResultList().stream().filter(Objects::nonNull).findFirst();
     }
 
     private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {
@@ -330,7 +334,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(json, clazz);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize reasoning step component: %s", json);
+            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s", e.getMessage(), json);
+            log.debug("Full deserialization failure stack trace:", e);
             return null;
         }
     }
@@ -340,7 +345,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(json, typeRef);
         } catch (JsonProcessingException e) {
-            log.errorf(e, "Failed to deserialize reasoning step component: %s", json);
+            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s", e.getMessage(), json);
+            log.debug("Full deserialization failure stack trace:", e);
             return null;
         }
     }
@@ -355,56 +361,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     private <T> T withRetry(Callable<T> task, String operation) {
-        int maxRetries = 5;
-        Exception lastEx = null;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                return task.call();
-            } catch (Exception e) {
-                lastEx = e;
-                if (isSqliteBusy(e)) {
-                    // Exponential backoff with jitter prevents thundering herd:
-                    // base * 2^attempt + random(0..50ms)
-                    long delay = (BACKOFF_BASE_MS * (1L << attempt))
-                            + ThreadLocalRandom.current().nextInt(50);
-                    log.warnf("SQLite BUSY on %s attempt %d/%d — retrying in %dms",
-                            operation, attempt, maxRetries, delay);
-                    try {
-                        Thread.sleep(delay);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException(ie);
-                    }
-                } else {
-                    throw (e instanceof RuntimeException re) ? re : new RuntimeException(e);
-                }
-            }
+        try {
+            return retryTemplate.execute(operation, 5, 50, task);
+        } catch (Exception e) {
+            throw (e instanceof RuntimeException re) ? re : new RuntimeException("Action failed after retries for " + operation, e);
         }
-        throw new RuntimeException("Action failed after " + maxRetries + " retries for " + operation, lastEx);
-    }
-
-    private boolean isSqliteBusy(Throwable e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            String canonicalName = t.getClass().getName();
-            if (canonicalName.equals(LockAcquisitionException.class.getName()) ||
-                canonicalName.equals("jakarta.persistence.OptimisticLockException") ||
-                canonicalName.contains(SqliteErrorStrings.SQLITE_EXCEPTION)) {
-                return true;
-            }
-
-            String msg = t.getMessage();
-            if (msg != null) {
-                String lower = msg.toLowerCase();
-                if (lower.contains(SqliteErrorStrings.BUSY) || 
-                    lower.contains(SqliteErrorStrings.DATABASE_LOCKED) || 
-                    lower.contains(SqliteErrorStrings.SQLITE_BUSY) ||
-                    lower.contains(SqliteErrorStrings.SNAPSHOT)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
@@ -427,5 +388,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize reasoning steps", e);
         }
+    }
+
+    @Override
+    @Transactional
+    public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
+        TypedQuery<AutonomyLevel> q = em.createQuery(
+                "SELECT c.autonomyLevel FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
+                AutonomyLevel.class
+        );
+        q.setParameter("sid", sessionId);
+        q.setMaxResults(1);
+        return q.getResultList().stream().filter(Objects::nonNull).findFirst();
     }
 }

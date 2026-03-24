@@ -1,12 +1,12 @@
 package com.arcclaw.app.channel.telegram;
 
-import com.arcclaw.channel.api.ReplyNode;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.arcclaw.channel.api.ReplyNode;
+import org.junit.jupiter.api.Test;
 
 class TelegramMarkdownV2RendererTest {
 
@@ -105,5 +105,29 @@ class TelegramMarkdownV2RendererTest {
     void testSeparatorOutput() {
         String output = renderer.render(List.<ReplyNode>of(new ReplyNode.Separator()));
         assertEquals("———", output);
+    }
+
+    @Test
+    void testH1RendersAsBoldUnderline() {
+        String output = renderer.render(List.of(new ReplyNode.Heading("Title", 1)));
+        assertEquals("*__Title__*", output);
+    }
+
+    @Test
+    void testH2RendersAsBold() {
+        String output = renderer.render(List.of(new ReplyNode.Heading("Section", 2)));
+        assertEquals("*Section*", output);
+    }
+
+    @Test
+    void testH3ThroughH6RendersAsBold() {
+        assertEquals("*H3*", renderer.render(List.of(new ReplyNode.Heading("H3", 3))));
+        assertEquals("*H6*", renderer.render(List.of(new ReplyNode.Heading("H6", 6))));
+    }
+
+    @Test
+    void testHeadingContentIsStillEscaped() {
+        String output = renderer.render(List.of(new ReplyNode.Heading("H1_With_Underscore", 1)));
+        assertEquals("*__H1\\_With\\_Underscore__*", output);
     }
 }

@@ -42,7 +42,13 @@ public final class AgentErrorMessageUtil {
         if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
             return "⏳ I'm temporarily throttled. Please try again in " + extractWaitTime(apiMessage) + ".";
         }
+
+        // Handle Groq "over capacity" errors
+        if (apiMessage.contains("over capacity")) {
+            return "⚠️ The AI service is currently over capacity and cannot process requests. Please try again in a few minutes.";
+        }
         
+        // Let tool parse errors show the actual message if it contains "invalid_request_error"
         if (apiMessage.contains("tool call validation failed") || apiMessage.contains("SCHEMA_ERROR")) {
             return "❌ Tool execution error: The agent generated an invalid request.";
         }

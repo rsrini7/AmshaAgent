@@ -1,14 +1,15 @@
 package com.arcclaw.mcp.bridge;
 
+import java.time.Duration;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.mcp.tool.DynamicToolCapability;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.mcp.transport.PodmanMcpTransport;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
-
-import java.time.Duration;
 
 @ApplicationScoped
 public class ExternalMcpToolAdapter {

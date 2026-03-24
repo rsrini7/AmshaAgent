@@ -1,10 +1,11 @@
 package com.arcclaw.core.state;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 
 public class AgentCheckpointTest {
 

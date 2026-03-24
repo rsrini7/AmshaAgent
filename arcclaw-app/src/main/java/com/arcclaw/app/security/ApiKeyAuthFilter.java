@@ -1,7 +1,7 @@
 package com.arcclaw.app.security;
 
-import com.arcclaw.core.util.HttpConstants;
-import com.arcclaw.core.util.MdcKeys;
+import java.time.Clock;
+
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
@@ -12,10 +12,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.Provider;
-import org.jboss.logging.Logger;
-import io.vertx.core.http.HttpServerRequest;
 
-import java.time.Clock;
+import com.arcclaw.core.util.HttpConstants;
+import com.arcclaw.core.util.MdcKeys;
+import io.vertx.core.http.HttpServerRequest;
+import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 @Provider

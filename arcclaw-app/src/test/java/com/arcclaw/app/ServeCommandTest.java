@@ -1,15 +1,17 @@
 package com.arcclaw.app;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.Arrays;
+import java.util.Map;
+
+import jakarta.inject.Inject;
+
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
 import org.apache.camel.CamelContext;
 import org.junit.jupiter.api.Test;
-
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 @TestProfile(ServeCommandTest.Profile.class)
@@ -36,7 +38,7 @@ class ServeCommandTest {
     @Test
     void testServeCommandHasNoCamelInjection() throws Exception {
         // Verify ServeCommand no longer injects CamelContext or TelegramChannelRoute
-        long camelFields = java.util.Arrays.stream(ServeCommand.class.getDeclaredFields())
+        long camelFields = Arrays.stream(ServeCommand.class.getDeclaredFields())
             .filter(f -> f.getType().equals(CamelContext.class) ||
                          f.getType().getName().contains("TelegramChannelRoute"))
             .count();

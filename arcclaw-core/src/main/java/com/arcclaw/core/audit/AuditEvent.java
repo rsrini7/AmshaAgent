@@ -1,9 +1,10 @@
 package com.arcclaw.core.audit;
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import jakarta.persistence.*;
 
 /**
  * Immutable WORM audit record. Insert-only — no update or delete operations permitted.

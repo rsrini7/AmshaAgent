@@ -1,16 +1,16 @@
 package com.arcclaw.core.reflex;
 
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
+import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.pipeline.MessageContext;
-
-import java.util.Optional;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class ReflexRegistry {

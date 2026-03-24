@@ -1,18 +1,19 @@
 package com.arcclaw.core.reflex;
 
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
+
+import java.time.Instant;
+
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
-import java.time.Instant;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class PromptInjectionReflexTest {
@@ -21,7 +22,7 @@ public class PromptInjectionReflexTest {
     PromptInjectionReflex reflex;
 
     private MessageContext createContext(String input) {
-        ChannelUser user = new ChannelUser("user", "user", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("user", "user", "user", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "sess", Instant.now());
         return new MessageContext("chat", user, msg, mock(ChannelSender.class));
     }

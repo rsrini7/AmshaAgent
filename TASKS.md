@@ -1008,7 +1008,7 @@
 - [x] Create `TwoTierMemoryService` with Reciprocal Rank Fusion (RRF) logic <!-- id: 465 -->
 - [x] Integrate `RagContextEnricher` into `LangChainReasoningEngine` <!-- id: 466 -->
 - [x] Register RAG classes for reflection in `AppReflectionConfig` <!-- id: 467 -->
-- [x] Add `SQLITE_VEC_PATH` to `.env.example` and `application.yaml` <!-- id: 468 -->
+- [x] Add `ARCCLAW_SQLITE_VEC_PATH` to `.env.example` and `application.yaml` <!-- id: 468 -->
 - [x] Implement `IngestDocumentTool` for agent-driven ingestion <!-- id: 469 -->
 - [x] Verify: `TwoTierMemoryServiceRrfTest` passes math validation <!-- id: 470 -->
 - [x] Verify: Manual test with `vec0.dll` confirm semantic search is active <!-- id: 471 -->
@@ -1158,3 +1158,47 @@
 - [x] Fix visibility of `ChatMemoryWriter.SKIP_GOALS` for pinning tests. <!-- id: 550 -->
 - [x] Resolve `AsyncPersistenceEngineTest` race condition using localized polling. <!-- id: 551 -->
 - [x] Verify: All component tests (Argon2, Audit, Persistence, Vault) pass with zero raw literals. <!-- id: 552 -->
+
+---
+
+## Phase 64-A — Governance & Error Handling (Tier A) ✅
+- [x] Step 1: Fix `AgentResource.createSession` — remove `@DefaultValue("{}")` and add null check. <!-- id: 553 -->
+- [x] Step 2: Implement atomic budget enforcement in `GovernanceLayer.recordLlmCall()` with `synchronized` block. <!-- id: 554 -->
+- [x] Step 3: Reorder budget checks in `GovernanceLayer`: Hard Limit > Soft Warning. <!-- id: 555 -->
+- [x] Step 4: Fix FTS5 Non-ASCII indexing in `CompactionSummaryRepository`: use `unicode61` with `remove_diacritics 2`. <!-- id: 556 -->
+- [x] Step 5: Implement 429 Error Mapping for `BudgetExceededException` in `AgentSessionService` and `AgentResponseMapper`. <!-- id: 557 -->
+- [x] Step 6: Update `AgentLoop.runWithRole()` exception handling to rethrow budget exceptions. <!-- id: 558 -->
+- [x] Step 7: Update `AgentStepProcessor` to treat schema-correction `OBSERVE` steps as ephemeral (not persisted to history). <!-- id: 559 -->
+- [x] Step 8: Fix `DenyReflex` and `ApproveReflex` to iterate over all `AgentRoleEnum.values()`. <!-- id: 560 -->
+- [x] Step 9: Wrap `CompactionHandler` lock with `try-finally` block to prevent session lock leaks. <!-- id: 561 -->
+- [x] Step 10: Verify build and test suite: `mvn clean test` (698 tests pass). <!-- id: 562 -->
+
+---
+
+## Phase 64-B — Security Gap Remediation (Tier B) ✅
+- [x] Step 1: Fix Audit HMAC Chain TOCTOU Race in `AuditEventRepository`. <!-- id: 563 -->
+- [x] Step 2: Remove `DevSecretSeeder` from Production injection path. <!-- id: 564 -->
+- [x] Step 3: Replace UUID v3 Session IDs with UUID v4 via `SessionRegistry`. <!-- id: 565 -->
+- [x] Step 4: Verify session persistence across reloads. <!-- id: 566 -->
+
+---
+
+## Phase 64-C — Architectural Unblocks (Tier C) ✅
+- [x] Step 1: Implement `RagChunkEntity` for dedicated RAG storage. <!-- id: 567 -->
+- [x] Step 2: Update `GlobalKnowledgeBase` to use `RagChunkEntity` (dropping "rag:" prefix). <!-- id: 568 -->
+- [x] Step 3: Implement `ChannelJobNotifier` for multi-channel event dispatch. <!-- id: 569 -->
+- [x] Step 4: Refactor `TelegramChannelRoute` to use generic dispatchers. <!-- id: 570 -->
+- [x] Step 5: Final verification of all RAG and Session tests. <!-- id: 571 -->
+---
+
+## Phase 64-D — Code Quality & Cleanup (Tier D) ✅
+- [x] Step 1: Create `LlmModelFactory.java` to centralize provider switching logic. <!-- id: 572 -->
+- [x] Step 2: Refactor `ModelProducer.java` to use `LlmModelFactory`. <!-- id: 573 -->
+- [x] Step 3: Refactor `CompactionModelProducer.java` to use `LlmModelFactory`. <!-- id: 574 -->
+- [x] Step 4: Create `SqliteRetryTemplate.java` for unified `SQLITE_BUSY` handling. <!-- id: 575 -->
+- [x] Step 5: Migrate `SessionReaper`, `WorkspaceManager`, and `StatefulAgentStoreImpl` to use `SqliteRetryTemplate`. <!-- id: 576 -->
+- [x] Step 6: Update `SqliteErrorStrings.isBusy` to include Hibernate lock exceptions. <!-- id: 577 -->
+- [x] Step 7: Fix `GlobalKnowledgeBase` vector literal to use `Locale.ROOT`. <!-- id: 578 -->
+- [x] Step 8: Implement `requiresManualApproval` in `AgentTool` and `GithubTool`. <!-- id: 579 -->
+- [x] Step 9: Update `ToolInvocationGuard` to enforce tool-specific manual approvals. <!-- id: 580 -->
+- [x] Step 10: Run full test suite: `mvn clean verify` (382/382 tests green). <!-- id: 581 -->

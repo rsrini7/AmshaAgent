@@ -5,7 +5,6 @@ import com.arcclaw.app.mcp.McpConnectResource;
 import com.arcclaw.app.security.AuthErrorResponse;
 import com.arcclaw.app.security.RateLimitErrorResponse;
 import com.arcclaw.app.skill.SkillResource;
-
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(

@@ -9,26 +9,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-import java.util.Optional;
-
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class DenyPipelineTest {
@@ -54,7 +53,7 @@ public class DenyPipelineTest {
         // Mock allowlist to permit our test user
         when(allowlist.isAllowed(anyString(), anyString())).thenReturn(true);
 
-        user = new ChannelUser("user-123", "alice", ChannelType.CLI);
+        user = new ChannelUser("user-123", "user-123", "alice", ChannelType.CLI);
         sender = mock(ChannelSender.class);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "session-456", Instant.now());
         context = new MessageContext("chat-789", user, msg, sender);

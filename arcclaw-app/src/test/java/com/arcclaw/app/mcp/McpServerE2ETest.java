@@ -1,5 +1,10 @@
 package com.arcclaw.app.mcp;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+
+import java.util.Map;
+
 import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -12,11 +17,6 @@ import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.*;
 import org.mockito.Mockito;
-
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 
 @QuarkusTest
 @TestProfile(McpServerE2ETest.McpE2EProfile.class)

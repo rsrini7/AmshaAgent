@@ -1,12 +1,13 @@
 package com.arcclaw.core.sandbox;
 
-import com.arcclaw.core.security.SecretVault;
-import com.arcclaw.core.security.VaultKey;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultKey;
 
 @ApplicationScoped
 public class SandboxSecretResolver {

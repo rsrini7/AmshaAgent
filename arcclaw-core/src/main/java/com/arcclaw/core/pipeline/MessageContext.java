@@ -1,11 +1,12 @@
 package com.arcclaw.core.pipeline;
 
+import java.util.Optional;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.result.AgentState;
-
-import java.util.Optional;
+import com.arcclaw.core.security.AutonomyLevel;
 
 /**
  * Context for a message passing through the pipeline.
@@ -23,6 +24,7 @@ public final class MessageContext {
     private AgentState initialState;
     private String goal;
     private boolean resumeSignal = false;
+    private AutonomyLevel autonomyLevel;
 
     public MessageContext(String chatId, ChannelUser user, ChannelMessage message, ChannelSender sender) {
         this.chatId = chatId;
@@ -50,5 +52,8 @@ public final class MessageContext {
 
     public String getGoal() { return goal; }
     public void setGoal(String goal) { this.goal = goal; }
+
+    public Optional<AutonomyLevel> getAutonomyLevel() { return Optional.ofNullable(autonomyLevel); }
+    public void setAutonomyLevel(AutonomyLevel autonomyLevel) { this.autonomyLevel = autonomyLevel; }
 }
 

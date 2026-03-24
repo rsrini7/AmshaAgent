@@ -1,14 +1,15 @@
 package com.arcclaw.rag;
 
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.CompactionSummaryRepository;
-import com.arcclaw.core.state.CompactionSummaryEntity;
+import java.util.*;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
-import java.util.*;
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
+import org.jboss.logging.Logger;
 
 /**
  * Merges FTS5 keyword results and sqlite-vec vector results using

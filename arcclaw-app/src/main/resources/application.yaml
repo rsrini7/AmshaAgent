@@ -68,6 +68,7 @@ quarkus:
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
       - com.arcclaw.core.skill
+      - com.arcclaw.app.session
     log:
       sql: false
 
@@ -235,11 +236,13 @@ smallrye:
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
       darken: 0
     file:
-      enabled: "${ARCCLAW_LOG_FILE_ENABLE:false}"
-      path: "${ARCCLAW_LOG_DIR:./logs}/arcclaw.log"
+      enable: true
+      path: "./arcclaw.log"
+      level: DEBUG
+      format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
       rotation:
-        max-file-size: 50M
-        max-backup-index: 5
+        max-file-size: 20M
+        max-backup-index: 3
 
 # =============================================================================
 # ARCCLAW APPLICATION CONFIG
@@ -258,7 +261,7 @@ arcclaw:
     embed-timeout-seconds: 30
     # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
     embed-dimensions: ${ARCCLAW_EMBED_DIMENSIONS:768}
-    vec-extension-path: "${SQLITE_VEC_PATH:./lib/vec0}"
+    vec-extension-path: "${ARCCLAW_SQLITE_VEC_PATH:./lib/vec0}"
   auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true
@@ -328,6 +331,9 @@ arcclaw:
     gc-interval: "5m"
     heartbeat-interval: "60s"
 
+  recovery:
+    stalled-threshold-minutes: 15
+
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 
@@ -395,16 +401,10 @@ mp:
 
 "%cli":
   quarkus:
-    banner:
-      enabled: false
-    mcp:
-      server:
-        stdio:
-          enabled: false
     log:
-      level: ERROR
       console:
-        level: ERROR
+        enable: false
+      level: ERROR
       category:
         "io.quarkus":
           level: ERROR     # Silences "Started in...", "Installed features..."
@@ -416,6 +416,20 @@ mp:
           level: ERROR     # Silences WorkspaceManager and SqliteWalConfigurer
         "org.hibernate":
           level: ERROR
+      file:
+        enable: true
+        path: ./arcclaw-cli.log
+        level: DEBUG
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        rotation:
+          max-file-size: 20M
+          max-backup-index: 3
+    banner:
+      enabled: false
+    mcp:
+      server:
+        stdio:
+          enabled: false
     hibernate-orm:
       log:
         sql: false # Forces SQL logging off even if global dev is true
@@ -424,10 +438,42 @@ mp:
       enabled: false        
 
 "%dev":
-  camel:
-    main:
-      jmx-enabled: false
   quarkus:
+    log:
+      level: DEBUG                          # single root block — no duplicate
+      console:
+        enable: false
+      file:
+        enable: true
+        path: ./arcclaw-dev.log
+        level: DEBUG
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        rotation:
+          max-file-size: 20M
+          max-backup-index: 3
+      category:
+        "com.arcclaw":
+          level: DEBUG                      # all arcclaw packages
+        "org.apache.camel.component.telegram":
+          level: INFO                      # camel telegram consumer messages
+        "org.apache.camel":
+          level: INFO                       # camel internals — keep quiet
+        "io.quarkus":
+          level: INFO
+        "io.netty":
+          level: WARN                       # suppress netty allocator spam
+        "jdk.event.security":
+          level: "OFF"                      # suppress SSL cert flood you're seeing
+        "jak.json.spi":
+          level: "OFF"                      # suppress FINE JSON provider logs
+        "io.opentelemetry":
+          level: "OFF"                      # suppress OTel FINE logs
+        "org.hibernate":
+          level: WARN
+        "org.infinispan":
+          level: WARN
+        "java.lang.ProcessBuilder":
+          level: WARN
     console:
       enabled: false
     live-reload:
@@ -523,6 +569,9 @@ mp:
 
     cron:
       max-lookback-window: PT999H
+
+    recovery:
+      stalled-threshold-minutes: 15
 
 "%staging":
   quarkus:

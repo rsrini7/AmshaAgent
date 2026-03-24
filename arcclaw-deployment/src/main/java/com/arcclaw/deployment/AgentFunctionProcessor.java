@@ -5,6 +5,17 @@ import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.arcclaw.channel.api.structured.AgentFunction;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
@@ -14,27 +25,11 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.RecordComponentInfo;
 import org.jboss.jandex.Type;
 
-import com.arcclaw.channel.api.structured.AgentFunction;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import io.quarkus.deployment.annotations.BuildProducer;
-import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-
 /**
  * Processes @AgentFunction interfaces at build time.
  * Generates JSON schema from the SAM's return type using Jandex.
  */
 public class AgentFunctionProcessor {
-    static {
-        System.out.println("[AgentFunctionProcessor] CLASS LOADED");
-    }
 
     private static final DotName AGENT_FUNCTION = DotName.createSimple(AgentFunction.class.getName());
     private static final DotName JSON_PROPERTY = DotName.createSimple(JsonProperty.class.getName());
@@ -48,11 +43,8 @@ public class AgentFunctionProcessor {
                                BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws IOException {
 
         IndexView index = indexBuildItem.getIndex();
-        System.out.println("[AgentFunctionProcessor] Processing agent functions...");
-        System.out.println("[AgentFunctionProcessor] All annotations in index: " + index.getAnnotations(AGENT_FUNCTION).size());
 
         for (AnnotationInstance ai : index.getAnnotations(AGENT_FUNCTION)) {
-            System.out.println("[AgentFunctionProcessor] Found @AgentFunction on: " + ai.target().asClass().name());
             ClassInfo interfaceInfo = ai.target().asClass();
             
             // 1. Find the Single Abstract Method (SAM)

@@ -8,15 +8,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.jupiter.api.Test;
+import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.ScopedCounter;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.scope.WorkspaceScoped;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 /**
  * Verifies {@link WorkspaceScoped} CDI scope behavior:

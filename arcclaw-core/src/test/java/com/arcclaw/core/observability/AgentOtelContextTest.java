@@ -1,20 +1,22 @@
 package com.arcclaw.core.observability;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+import jakarta.inject.Inject;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.*;
 
 @QuarkusTest
 class AgentOtelContextTest {
@@ -101,7 +103,7 @@ class AgentOtelContextTest {
         // Assert: verify setParent was called on the spanBuilder.
         // Note: Context.current().with(mockSpan) returns null in tests because Mockito mocks
         // don't implement OTel's ImplicitContextKeyed. We verify setParent was called (any arg).
-        verify(spanBuilder).setParent((io.opentelemetry.context.Context) any());
+        verify(spanBuilder).setParent((Context) any());
         verify(tracer).spanBuilder("test.operation");
     }
 
@@ -117,7 +119,7 @@ class AgentOtelContextTest {
         verify(spanBuilder).setAttribute("session.id", sessionId);
         verify(spanBuilder).setAttribute("agent.role", "coder");
         verify(spanBuilder).setAttribute("iteration", 1L);
-        verify(spanBuilder).setParent((io.opentelemetry.context.Context) any());
+        verify(spanBuilder).setParent((Context) any());
     }
 
     @Test
@@ -138,7 +140,7 @@ class AgentOtelContextTest {
         verify(spanBuilder).setAttribute("session.id", sessionId);
         verify(spanBuilder).setAttribute("tool.name", "github");
         verify(spanBuilder).setAttribute("tool.operation", "invoke");
-        verify(spanBuilder).setParent((io.opentelemetry.context.Context) any());
+        verify(spanBuilder).setParent((Context) any());
     }
 
     @Test

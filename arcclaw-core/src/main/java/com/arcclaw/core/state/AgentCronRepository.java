@@ -1,13 +1,13 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
+import java.util.List;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
-
-import java.time.Instant;
-import java.util.List;
 
 /**
  * Repository for {@link AgentCronEntity} with SQLite WAL-friendly

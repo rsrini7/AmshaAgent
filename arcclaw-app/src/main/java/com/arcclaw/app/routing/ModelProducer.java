@@ -1,11 +1,11 @@
 package com.arcclaw.app.routing;
 
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import io.smallrye.common.annotation.Identifier;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
+
+import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -36,37 +36,17 @@ public class ModelProducer {
                     defaultValue = "llama3.2")
     String ollamaModelId;
 
+    @Inject
+    LlmModelFactory modelFactory;
+
     @Produces
     @ApplicationScoped
     @Identifier("intent-classifier")
     public ChatModel intentClassifierModel() {
         log.infof("ModelProducer: intent-classifier provider=%s model=%s",
                   provider, intentModelName);
-        return switch (provider.toLowerCase()) {
-            case "groq" -> OpenAiChatModel.builder()
-                    .baseUrl(openaiBaseUrl)
-                    .apiKey(openaiApiKey)
-                    .modelName(intentModelName)
-                    .temperature(0.0)
-                    .maxTokens(10)
-                    .logRequests(false)
-                    .logResponses(false)
-                    .build();
-            case "openai" -> OpenAiChatModel.builder()
-                    .apiKey(openaiApiKey)
-                    .modelName(intentModelName)
-                    .temperature(0.0)
-                    .maxTokens(10)
-                    .logRequests(false)
-                    .logResponses(false)
-                    .build();
-            case "ollama" -> OllamaChatModel.builder()
-                    .baseUrl(ollamaBaseUrl)
-                    .modelName(ollamaModelId)
-                    .build();
-            default -> throw new IllegalStateException(
-                    "Unknown LLM provider: " + provider +
-                    ". Supported: groq | openai | ollama");
-        };
+        return modelFactory.createModel(
+                provider, openaiBaseUrl, openaiApiKey, intentModelName, 10, null,
+                ollamaBaseUrl, ollamaModelId);
     }
 }

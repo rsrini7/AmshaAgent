@@ -17,19 +17,18 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
-
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 /**
  * Concurrency-specific tests for {@link AgentCronScheduler}.
@@ -125,7 +124,7 @@ class AgentCronSchedulerConcurrencyTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testSemaphoreReleasedAfterSuccessfulCompletion() throws Exception {
         AgentCronEntity job1 = createDueJob(true);
         AgentCronEntity job2 = createDueJob(true);
@@ -182,7 +181,7 @@ class AgentCronSchedulerConcurrencyTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testSemaphoreReleasedAfterInnerException() throws Exception {
         AgentCronEntity job1 = createDueJob(true);
         AgentCronEntity job2 = createDueJob(true);

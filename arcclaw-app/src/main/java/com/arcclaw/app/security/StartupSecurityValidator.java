@@ -1,18 +1,17 @@
 package com.arcclaw.app.security;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import java.util.List;
+import java.util.Optional;
 
-import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.DeploymentException;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
-
-import jakarta.inject.Inject;
-import java.util.List;
-import java.util.Optional;
+import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class StartupSecurityValidator {

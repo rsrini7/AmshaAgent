@@ -1,16 +1,16 @@
 package com.arcclaw.core.agent.reasoning;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.Instant;
+
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class PromptTemplateEngineTest {

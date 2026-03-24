@@ -2,14 +2,14 @@ package com.arcclaw.app.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.jupiter.api.Test;
+import java.util.Map;
+
+import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
-
-import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(ApiKeyRegistryVaryingLengthKeyTest.VaryingLengthKeyProfile.class)

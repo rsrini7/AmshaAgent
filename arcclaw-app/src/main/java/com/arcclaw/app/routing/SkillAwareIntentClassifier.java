@@ -2,14 +2,14 @@ package com.arcclaw.app.routing;
 
 import java.util.List;
 
-import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.skill.CompiledSkillEntry;
-import com.arcclaw.core.skill.SkillRegistry;
-
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
-import jakarta.annotation.Priority;
+
+import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.skill.CompiledSkillEntry;
+import com.arcclaw.core.skill.SkillRegistry;
 
 /**
  * An alternative intent classifier that sits in front of the default

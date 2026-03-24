@@ -7,23 +7,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
-import com.arcclaw.core.persistence.SqliteErrorStrings;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.quarkus.runtime.ShutdownEvent;
-import io.quarkus.runtime.StartupEvent;
-import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import com.arcclaw.core.audit.SessionAuditSequencer;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
+import io.quarkus.scheduler.Scheduled;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.
@@ -54,6 +54,12 @@ public class SessionReaper {
     @Inject
     Event<ApprovalTimedOutEvent> approvalTimedOutEvent;
 
+    @Inject
+    SessionAuditSequencer auditSequencer;
+
+    @Inject
+    SqliteRetryTemplate retryTemplate;
+
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
 
@@ -69,38 +75,14 @@ public class SessionReaper {
      * checkpoints from a previous JVM crash and mark them as FAILED.
      */
     public void onStartup(@Observes StartupEvent event) {
-        int maxRetries = 5;
-        long backoffMs = 50;
-        Exception lastEx = null;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                QuarkusTransaction.requiringNew().run(() -> {
-                    doRecoverZombies();
-                });
-                return;
-            } catch (Exception e) {
-                lastEx = e;
-                if (SqliteErrorStrings.isBusy(e)) {
-                    log.warnf("SQLite BUSY on onStartup attempt %d/%d — retrying in %dms",
-                            attempt, maxRetries, backoffMs * attempt);
-                    try {
-                        Thread.sleep(backoffMs * attempt);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                } else {
-                    log.errorf("Non-retryable error during onStartup zombie recovery: %s",
-                            e.getMessage());
-                    log.debugf(e, "Full stacktrace for non-retryable error in onStartup zombie recovery");
-                    return;
-                }
-            }
+        try {
+            retryTemplate.executeVoid("onStartup-zombies", 5, 50, () -> {
+                QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
+            });
+        } catch (Exception e) {
+            log.errorf("Failed onStartup zombie recovery after retries: %s", e.getMessage());
+            log.debugf(e, "Full stacktrace for onStartup zombie recovery failure");
         }
-        log.errorf("Failed onStartup zombie recovery after %d retries: %s",
-                maxRetries, lastEx != null ? lastEx.getMessage() : "unknown");
-        log.debugf(lastEx, "Full stacktrace for retry exhaustion in onStartup zombie recovery");
     }
 
     private void doRecoverZombies() {
@@ -179,6 +161,7 @@ public class SessionReaper {
             log.warnf("GC sweep: session=%s expired", sessionId);
             workspaceManager.terminateSession(sessionId);
             heartbeatTracker.removeHeartbeat(sessionId);
+            auditSequencer.releaseStaleSession(sessionId);
         });
     }
 
@@ -248,5 +231,6 @@ public class SessionReaper {
 
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
+        auditSequencer.releaseStaleSession(cp.getSessionId());
     }
 }

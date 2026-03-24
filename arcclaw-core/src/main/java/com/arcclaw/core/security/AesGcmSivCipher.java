@@ -1,14 +1,15 @@
 package com.arcclaw.core.security;
 
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+
 import jakarta.enterprise.context.ApplicationScoped;
+
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.GCMSIVBlockCipher;
 import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
-
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 
 /**
  * Encryption engine using AES-GCM-SIV (RFC 8452).

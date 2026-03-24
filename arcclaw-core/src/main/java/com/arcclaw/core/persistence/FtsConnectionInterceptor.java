@@ -5,13 +5,13 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-import org.sqlite.SQLiteConnection;
+import jakarta.inject.Singleton;
 
 import io.agroal.api.AgroalPoolInterceptor;
 import io.quarkus.arc.Arc;
-import jakarta.inject.Singleton;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+import org.sqlite.SQLiteConnection;
 
 /**
  * Hardens SQLite FTS5 connection pooling by verifying/attaching the fts schema
@@ -78,7 +78,7 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 }
             }
         } catch (Exception e) {
-            if (io.quarkus.arc.Arc.container() != null) {
+            if (Arc.container() != null) {
                 log.warnf("FtsConnectionInterceptor: Failed to verify/attach fts schema: %s", e.getMessage());
                 log.debugf(e, "Full stacktrace for fts attachment failure");
             }

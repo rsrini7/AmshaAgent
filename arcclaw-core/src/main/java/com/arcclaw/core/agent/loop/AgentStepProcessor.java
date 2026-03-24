@@ -1,12 +1,16 @@
 package com.arcclaw.core.agent.loop;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -26,12 +30,9 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Handles individual step execution within the ReAct loop:
@@ -57,8 +58,7 @@ public class AgentStepProcessor {
     @Inject Instance<DynamicToolLookup> dynamicToolLookup;
 
 
-    // ── Engine step ──────────────────────────────────────────────────────────
-
+    // ── Engine step 
 
     /** Calls the reasoning engine for the next step, handles budget events and LLM exceptions. */
     StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
@@ -71,6 +71,18 @@ public class AgentStepProcessor {
                     Collections.unmodifiableList(history));
 
             if (step != null) {
+                if (ReasoningStep.OBSERVE.equals(step.action())) {
+                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", sessionId);
+                    llmSchemaErrorCount++;
+                    if (llmSchemaErrorCount >= 2) {
+                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                        return StepDecision.terminal(AgentResult.failed(
+                                "The agent could not complete this request due to repeated formatting errors.",
+                                AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
+                    }
+                    return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
+                }
+
                 try {
                     governanceLayer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
                     for (var observer : observers)
@@ -107,7 +119,7 @@ public class AgentStepProcessor {
 
     /** Classifies and handles LLM-level exceptions: schema errors, rate limits, network faults. */
     private StepDecision handleEngineException(Exception e, String sessionId,
-            int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
+        int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
         boolean isSchemaError = e instanceof InvalidRequestException
                 || (e instanceof HttpException && ((HttpException) e).statusCode() == 400);
@@ -126,15 +138,28 @@ public class AgentStepProcessor {
                             "Try rephrasing your goal.",
                             AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                 }
-                
+
+                // Build a targeted correction based on the actual violation type.
+                // Generic messages (e.g. "check boolean fields") confuse the LLM when
+                // the real error is unrelated — causing it to repeat the same mistake.
+                String rawError = e.getMessage() != null ? e.getMessage() : "";
+                String correction;
+                if (rawError.contains("expected string, but got null")) {
+                    correction = "System: Your previous tool call failed because you included an " +
+                            "optional field with a null value. " +
+                            "RULE: When you have no value for an optional field (such as 'ref' or 'target'), " +
+                            "OMIT THE FIELD COMPLETELY — do not include it as null or as an empty string, " +
+                            "simply leave it out of the tool call entirely. " +
+                            "Retry now with only the fields that have real values.";
+                } else {
+                    correction = "System: Your previous tool call was rejected due to a schema validation error: "
+                            + rawError
+                            + ". Review the tool schema carefully, correct the invalid fields, and retry.";
+                }
+
                 log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
                         sessionId, llmSchemaErrorCount);
-                return StepDecision.retryEngine(
-                        "System: Your previous tool call was rejected due to a schema type mismatch: " +
-                        e.getMessage() +
-                        ". Ensure boolean fields use literal true/false (not \"true\"/\"false\" as strings). " +
-                        "Correct the types and retry.",
-                        llmSchemaErrorCount);
+                return StepDecision.retryEngine(correction, llmSchemaErrorCount);
             }
 
             llmSchemaErrorCount++;
@@ -173,12 +198,13 @@ public class AgentStepProcessor {
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
     }
 
+
     /** Returns true if the exception is a transient network connectivity fault. */
     private boolean isNetworkError(Exception e) {
-        if (e instanceof java.net.ConnectException
-                || e instanceof java.net.SocketTimeoutException) return true;
-        if (e.getCause() instanceof java.net.ConnectException
-                || e.getCause() instanceof java.net.SocketTimeoutException) return true;
+        if (e instanceof ConnectException
+                || e instanceof SocketTimeoutException) return true;
+        if (e.getCause() instanceof ConnectException
+                || e.getCause() instanceof SocketTimeoutException) return true;
         String msg = e.getMessage();
         return msg != null && (msg.contains("ConnectTimeoutException")
                 || msg.contains("connection timed out")
@@ -187,8 +213,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Tool validation ──────────────────────────────────────────────────────
-
+    // ── Tool validation 
 
     /** Validates the tool name — rejects hallucinated tools and leaked ReAct keywords. */
     StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history,
@@ -231,8 +256,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Tool invocation ──────────────────────────────────────────────────────
-
+    // ── Tool invocation 
 
     /** Orchestrates the 4 phases: guard → invoke → observe → resolve outcome. */
     StepDecision invokeToolAndObserve(String sessionId, String agentRole,
@@ -365,8 +389,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Checkpoint ───────────────────────────────────────────────────────────
-
+    // ── Checkpoint 
 
     /** Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult. */
     AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,
@@ -389,8 +412,7 @@ public class AgentStepProcessor {
     }
 
 
-    // ── Internal types ───────────────────────────────────────────────────────
-
+    // ── Internal types 
 
     /** Unchecked signal to short-circuit invokeTool() when approval is required mid-call. */
     static class FastExitException extends RuntimeException {

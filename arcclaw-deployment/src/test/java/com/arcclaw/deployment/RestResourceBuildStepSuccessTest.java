@@ -1,15 +1,30 @@
 package com.arcclaw.deployment;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.persistence.EntityManager;
+import jakarta.ws.rs.Path;
+
+import com.arcclaw.channel.api.ChannelAllowlist;
+import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.audit.AuditSchemaEnforcer;
+import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.ChatModel;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.quarkus.qute.Template;
 import io.quarkus.test.QuarkusUnitTest;
+import io.smallrye.common.annotation.Identifier;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.ws.rs.Path;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+import org.mockito.Mockito;
 
 public class RestResourceBuildStepSuccessTest {
 
@@ -17,8 +32,8 @@ public class RestResourceBuildStepSuccessTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
             .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class,
-                com.arcclaw.core.persistence.FtsConnectionInterceptor.class,
-                com.arcclaw.core.audit.AuditSchemaEnforcer.class))
+                FtsConnectionInterceptor.class,
+                AuditSchemaEnforcer.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
         .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
@@ -44,47 +59,47 @@ public class RestResourceBuildStepSuccessTest {
         // No JPA fields, should be ignored by build step
     }
 
-    @jakarta.enterprise.context.Dependent
+    @Dependent
     public static class TestProducers {
-        @jakarta.enterprise.inject.Produces
-        @jakarta.enterprise.context.ApplicationScoped
-        public com.fasterxml.jackson.databind.ObjectMapper mapper() {
-            return new com.fasterxml.jackson.databind.ObjectMapper();
+        @Produces
+        @ApplicationScoped
+        public ObjectMapper mapper() {
+            return new ObjectMapper();
         }
 
-        @jakarta.enterprise.inject.Produces
-        @jakarta.enterprise.context.ApplicationScoped
-        public io.micrometer.core.instrument.MeterRegistry registry() {
-            return new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        @Produces
+        @ApplicationScoped
+        public MeterRegistry registry() {
+            return new SimpleMeterRegistry();
         }
 
-        @jakarta.enterprise.inject.Produces
-        @jakarta.enterprise.context.ApplicationScoped
-        @jakarta.inject.Named("compaction") // Or @Identifier if using that
-        @io.smallrye.common.annotation.Identifier("compaction")
-        public dev.langchain4j.model.chat.ChatModel compactionModel() {
-            return mock(dev.langchain4j.model.chat.ChatModel.class);
+        @Produces
+        @ApplicationScoped
+        @Named("compaction") // Or @Identifier if using that
+        @Identifier("compaction")
+        public ChatModel compactionModel() {
+            return mock(ChatModel.class);
         }
 
-        @jakarta.enterprise.inject.Produces
-        public io.quarkus.qute.Template dummyTemplate() {
-            return mock(io.quarkus.qute.Template.class);
+        @Produces
+        public Template dummyTemplate() {
+            return mock(Template.class);
         }
         
-        @jakarta.enterprise.inject.Produces
-        @jakarta.enterprise.context.ApplicationScoped
-        public com.arcclaw.channel.api.ChannelAllowlist allowlist() {
-            return mock(com.arcclaw.channel.api.ChannelAllowlist.class);
+        @Produces
+        @ApplicationScoped
+        public ChannelAllowlist allowlist() {
+            return mock(ChannelAllowlist.class);
         }
 
-        @jakarta.enterprise.inject.Produces
-        @jakarta.enterprise.context.ApplicationScoped
-        public com.arcclaw.channel.api.IntentClassifier classifier() {
-            return mock(com.arcclaw.channel.api.IntentClassifier.class);
+        @Produces
+        @ApplicationScoped
+        public IntentClassifier classifier() {
+            return mock(IntentClassifier.class);
         }
 
         private <T> T mock(Class<T> clazz) {
-            return org.mockito.Mockito.mock(clazz);
+            return Mockito.mock(clazz);
         }
     }
 }

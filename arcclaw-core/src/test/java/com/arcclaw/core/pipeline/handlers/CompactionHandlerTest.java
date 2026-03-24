@@ -9,14 +9,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
+import jakarta.enterprise.event.Event;
 
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
@@ -26,8 +19,14 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.ContextCompactionService;
-
-import jakarta.enterprise.event.Event;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -123,6 +122,74 @@ class CompactionHandlerTest {
             });
 
             assertTimeout(Duration.ofMillis(100), () -> handler.handle(ctx));
+        });
+    }
+
+    // ── Phase 64-A: Component A6 — Compaction In-Flight Tests ────────────
+
+    @Test
+    void testCompactionInFlightReleasedOnObserverFailure() {
+        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
+            MessageContext ctx = mockContext("session1", "user1");
+            when(compactionService.shouldCompact("session1")).thenReturn(true);
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+
+            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future);
+
+            handler.handle(ctx);
+
+            // Trigger failure
+            future.completeExceptionally(new RuntimeException("Compaction failed"));
+
+            verify(compactionInFlight, timeout(1000)).set(false);
+        });
+    }
+
+    @Test
+    void testCompactionInFlightReleasedOnSuccess() {
+        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
+            MessageContext ctx = mockContext("session1", "user1");
+            when(compactionService.shouldCompact("session1")).thenReturn(true);
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+
+            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future);
+
+            handler.handle(ctx);
+
+            // Trigger success
+            future.complete(null);
+
+            verify(compactionInFlight, timeout(1000)).set(false);
+        });
+    }
+
+    @Test
+    void testSecondCompactionTriggeredAfterFirstFails() {
+        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
+            MessageContext ctx = mockContext("session1", "user1");
+            when(compactionService.shouldCompact("session1")).thenReturn(true);
+            
+            // First call
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            CompletableFuture<CompactionRequest> future1 = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future1);
+
+            handler.handle(ctx);
+            future1.completeExceptionally(new RuntimeException("First attempt failed"));
+            
+            // Wait for release
+            verify(compactionInFlight, timeout(1000)).set(false);
+
+            // Second call - should try again
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            CompletableFuture<CompactionRequest> future2 = new CompletableFuture<>();
+            when(compactionEvent.fireAsync(any())).thenReturn(future2);
+
+            handler.handle(ctx);
+
+            verify(compactionEvent, times(2)).fireAsync(any());
         });
     }
 }

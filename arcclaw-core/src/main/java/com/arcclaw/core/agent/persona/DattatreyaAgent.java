@@ -1,15 +1,16 @@
 package com.arcclaw.core.agent.persona;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.structured.StructuredOutputEngine;
-import com.arcclaw.channel.api.structured.SynthesisResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
+import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import com.arcclaw.channel.api.structured.SynthesisResult;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.structured.StructuredOutputEngine;
 import org.jboss.logging.Logger;
-import java.util.List;
 
 /**
  * Dattatreya — The Synthesizer and Avadhuta.

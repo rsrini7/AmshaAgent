@@ -1,22 +1,22 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.audit.AuditService;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.chat.ChatModel;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import com.arcclaw.core.audit.AuditService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ContextCompactionServiceTest {
 
@@ -98,5 +98,93 @@ class ContextCompactionServiceTest {
 
         assertFalse(service.compact("session1", "test-user"));
         verify(mockRepo, never()).upsertSummary(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void testTruncationPreservesSurrogatePairs() {
+        // Construct a string of 2000 ASCII chars followed by a 4-byte emoji (surrogate pair)
+        StringBuilder sb = new StringBuilder();
+        sb.append("A".repeat(2000));
+        sb.append("\uD83D\uDE00"); // 😀
+        String longText = sb.toString();
+        
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage(longText))
+                .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        // Capture the summary passed to upsertSummary
+        org.mockito.ArgumentCaptor<String> captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), captor.capture(), anyInt());
+        
+        String truncated = captor.getValue();
+        assertTrue(truncated.endsWith("...[truncated]"));
+        // Check that we didn't slice mid-surrogate-pair
+        // The last char of the truncated message (before suffix) should be "A" (the 1985th char)
+        char lastChar = truncated.charAt(1984);
+        assertEquals('A', lastChar);
+        assertFalse(Character.isSurrogate(lastChar));
+        
+        // Let's test a more specific case where the surrogate pair is AT the boundary
+        sb = new StringBuilder();
+        sb.append("A".repeat(1984));
+        sb.append("\uD83D\uDE00"); // 😀 at 1985th codepoint
+        sb.append("extra");
+        longText = sb.toString();
+        
+        reset(mockRepo);
+        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage(longText))
+                .build());
+        
+        assertTrue(service.compact("session1", "test-user"));
+        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), captor.capture(), anyInt());
+        truncated = captor.getValue();
+        
+        // 1984 'A's + 1 Emoji = 1985 codepoints. 
+        // limit(1985) should take 1984 'A's and 1 Emoji.
+        assertTrue(truncated.contains("\uD83D\uDE00...[truncated]"));
+        int emojiStart = truncated.indexOf("\uD83D\uDE00");
+        assertEquals(1984, emojiStart);
+        // Verify no malformed surrogates
+        assertTrue(Character.isHighSurrogate(truncated.charAt(1984)));
+        assertTrue(Character.isLowSurrogate(truncated.charAt(1985)));
+    }
+
+    private List<ChatMessage> createMessages(int count) {
+        List<ChatMessage> msgs = new ArrayList<>();
+        for (int i=0; i<count; i++) {
+            msgs.add(UserMessage.userMessage("Msg" + i));
+        }
+        return msgs;
+    }
+
+    @Test
+    void testShortTextIsNotTruncated() {
+        String shortText = "A".repeat(1985);
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage(shortText))
+                .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), eq(shortText), anyInt());
+    }
+
+    @Test
+    void testTruncationSuffixPresent() {
+        String longText = "A".repeat(1986);
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage(longText))
+                .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), contains("...[truncated]"), anyInt());
     }
 }

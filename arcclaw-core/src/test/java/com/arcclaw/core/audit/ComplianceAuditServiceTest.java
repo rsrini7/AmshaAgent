@@ -8,15 +8,14 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+import com.arcclaw.core.persistence.PersistenceEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.persistence.AsyncPersistenceEngine;
-import com.arcclaw.core.persistence.PersistenceEvent;
 
 @ExtendWith(MockitoExtension.class)
 class ComplianceAuditServiceTest {

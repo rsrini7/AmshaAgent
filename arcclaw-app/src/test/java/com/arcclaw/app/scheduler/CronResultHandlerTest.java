@@ -9,11 +9,7 @@ import static org.mockito.Mockito.verify;
 import java.time.Instant;
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import jakarta.enterprise.event.Event;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
@@ -22,8 +18,12 @@ import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-
-import jakarta.enterprise.event.Event;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CronResultHandlerTest {
@@ -69,7 +69,7 @@ class CronResultHandlerTest {
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
                 eq(SecurityEventType.CRONFIRED),
-                org.mockito.ArgumentMatchers.contains("runOnce=true"));
+                ArgumentMatchers.contains("runOnce=true"));
     }
 
     @Test
@@ -86,7 +86,7 @@ class CronResultHandlerTest {
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
                 eq(SecurityEventType.CRONFIRED),
-                org.mockito.ArgumentMatchers.contains("runOnce=false"));
+                ArgumentMatchers.contains("runOnce=false"));
     }
 
     @Test
@@ -101,7 +101,7 @@ class CronResultHandlerTest {
 
         verify(auditService).record(anyString(), eq(job.userId), anyString(),
             eq(SecurityEventType.LOOP_AWAITING_APPROVAL),
-            org.mockito.ArgumentMatchers.contains("pendingTool=tool"));
+            ArgumentMatchers.contains("pendingTool=tool"));
     }
 
     @Test

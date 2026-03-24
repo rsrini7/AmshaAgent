@@ -9,12 +9,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.time.Instant;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -31,11 +31,11 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
+import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class DenyReflexTest {
@@ -58,14 +58,14 @@ class DenyReflexTest {
     @BeforeEach
     void setup() {
         DenyReflex instance = denyReflex;
-        if (denyReflex instanceof io.quarkus.arc.ClientProxy) {
-            instance = (DenyReflex) ((io.quarkus.arc.ClientProxy) denyReflex).arc_contextualInstance();
+        if (denyReflex instanceof ClientProxy) {
+            instance = (DenyReflex) ((ClientProxy) denyReflex).arc_contextualInstance();
         }
         instance.jobCompletedEvent = jobCompletedEventMock;
     }
 
     private MessageContext createContext(String input) {
-        ChannelUser user = new ChannelUser("user-1", "user-1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("user-1", "user-1", "user-1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
         return new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
     }

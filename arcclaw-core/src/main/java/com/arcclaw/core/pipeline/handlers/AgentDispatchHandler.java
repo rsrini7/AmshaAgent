@@ -1,11 +1,12 @@
 package com.arcclaw.core.pipeline.handlers;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
@@ -13,9 +14,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.util.CronResultFormatter;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Dispatches the enriched request to the Agent State Machine.
@@ -69,13 +68,21 @@ public class AgentDispatchHandler implements MessageHandler {
         }
 
         final int resolvedMaxIterations = maxIterations;
+        
+        AutonomyLevel level = context.getAutonomyLevel().orElse(null);
+        if (level == null) {
+            log.warnf("No autonomy level found in MessageContext for session %s, defaulting to SUPERVISED", sessionId);
+            level = AutonomyLevel.SUPERVISED;
+        }
+
+        final AutonomyLevel finalLevel = level;
         AgentResult result;
         try {
             result = WorkspaceContext.run(
                 sessionId,
                 context.getUser().platformId(),
                 context.getChatId(),
-                AutonomyLevel.SUPERVISED,
+                finalLevel,
                 role,
                 () -> agentLoop.run(
                     sessionId,
@@ -88,7 +95,8 @@ public class AgentDispatchHandler implements MessageHandler {
 
             );
         } catch (Exception e) {
-            log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage(), e);
+            log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());
+            log.debug("Full agent dispatch failure stack trace:", e);
             throw new RuntimeException(e.getMessage(), e);
         }
 

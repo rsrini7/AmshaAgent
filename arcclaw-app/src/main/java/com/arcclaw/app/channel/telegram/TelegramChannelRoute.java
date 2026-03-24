@@ -1,13 +1,14 @@
 package com.arcclaw.app.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
+import io.quarkus.runtime.StartupEvent;
 import org.apache.camel.CamelContext;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.telegram.TelegramComponent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import io.quarkus.runtime.StartupEvent;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

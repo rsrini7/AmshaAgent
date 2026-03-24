@@ -10,6 +10,9 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ReplyNode;
 import org.apache.camel.ProducerTemplate;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Test;
@@ -18,10 +21,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ReplyNode;
 
 @ExtendWith(MockitoExtension.class)
 class TelegramChannelSenderTest {
@@ -32,7 +31,7 @@ class TelegramChannelSenderTest {
   @InjectMocks TelegramChannelSender sender;  // uses constructor injection
 
   private final ChannelUser user =
-      new ChannelUser("123", "alice", ChannelType.TELEGRAM);
+      new ChannelUser("123", "123", "alice", ChannelType.TELEGRAM);
 
   @Test
   void testSendWithNodesCallsSendRaw() {

@@ -1,5 +1,8 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
@@ -9,9 +12,6 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -24,7 +24,7 @@ public class CommandDispatchHandler implements MessageHandler {
 
     @Override
     public int priority() {
-        return 30;
+        return 45;
     }
 
     @Override
@@ -91,7 +91,8 @@ public class CommandDispatchHandler implements MessageHandler {
                             () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
                         );
                     } catch (Exception e) {
-                        log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage(), e);
+                        log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
+                        log.debug("Full command dispatch failure stack trace:", e);
                         yield HandleResult.STOP;
                     }
                     
@@ -129,7 +130,8 @@ public class CommandDispatchHandler implements MessageHandler {
                 () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context)
             );
         } catch (Exception e) {
-            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage(), e);
+            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage());
+            log.debug("Full command dispatch failure stack trace:", e);
             return;
         }
 

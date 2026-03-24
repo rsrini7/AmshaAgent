@@ -1,15 +1,23 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.regex.Pattern;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
+
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class CompactionSummaryRepository {
+
+    private static final Logger log = Logger.getLogger(CompactionSummaryRepository.class);
+
+    private static final Pattern FTS5_SPECIAL = Pattern.compile("([\"*^()\\-])");
 
     @Inject
     EntityManager em;
@@ -75,8 +83,11 @@ public class CompactionSummaryRepository {
     @Transactional
     public List<CompactionSummaryEntity> searchMemory(String userId, String query, int limit) {
         // Sanitize query to prevent FTS5 syntax errors
-        String sanitized = query.replaceAll("[^a-zA-Z0-9 ]", "").trim();
-        if (sanitized.isBlank()) return List.of();
+        String sanitized = sanitizeForFts5(query);
+        if (sanitized == null) {
+            log.trace("Search query is blank or null — returning empty list");
+            return List.of();
+        }
         
         // Use native query to leverage FTS5 MATCH operator on the isolated 'fts' schema
         // Join on sessionId since standalone table handles it
@@ -95,5 +106,21 @@ public class CompactionSummaryRepository {
                 .getResultList();
 
         return results;
+    }
+
+    private String sanitizeForFts5(String query) {
+        if (query == null || query.isBlank()) return null;
+        // Escape FTS5 special characters by wrapping them in double quotes.
+        // Also double-up any existing double quotes for safety.
+        String sanitized = query.trim().replace("\"", "\"\"");
+        String escaped = FTS5_SPECIAL.matcher(sanitized).replaceAll("\"$1\"");
+        
+        // Append * for prefix matching. This is critical for CJK languages (like Japanese)
+        // where tokens aren't space-separated, and for improved partial-word recall.
+        if (!escaped.endsWith("*")) {
+            escaped = escaped + "*";
+        }
+        
+        return escaped.isBlank() ? null : escaped;
     }
 }

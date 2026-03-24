@@ -1,11 +1,10 @@
 package com.arcclaw.core.scope;
 
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
+import java.util.concurrent.Callable;
 
 import com.arcclaw.core.util.MdcKeys;
-import java.lang.ScopedValue;
-import java.util.concurrent.Callable;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 /**
  * Scoped value holder for the current workspace session ID.

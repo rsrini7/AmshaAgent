@@ -1,17 +1,5 @@
 package com.arcclaw.mcp.transport;
 
-import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
-import com.arcclaw.mcp.tool.DynamicToolCapability;
-import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
-import com.arcclaw.mcp.tool.McpTransportType;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.smallrye.mutiny.Uni;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -25,6 +13,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
+import com.arcclaw.mcp.tool.DynamicToolCapability;
+import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
+import com.arcclaw.mcp.tool.McpTransportType;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.smallrye.mutiny.Uni;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class PodmanMcpTransport {

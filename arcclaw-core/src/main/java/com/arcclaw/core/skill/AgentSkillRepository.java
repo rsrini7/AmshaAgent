@@ -1,12 +1,13 @@
 package com.arcclaw.core.skill;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Repository for {@link AgentSkillEntity} interacting with the underlying SQLite database.
@@ -43,6 +44,7 @@ public class AgentSkillRepository {
         return em.createQuery("SELECT s FROM AgentSkillEntity s WHERE s.name = :name", AgentSkillEntity.class)
                 .setParameter("name", name)
                 .getResultStream()
+                .filter(Objects::nonNull)
                 .findFirst();
     }
 

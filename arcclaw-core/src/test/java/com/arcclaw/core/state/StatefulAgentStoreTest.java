@@ -1,20 +1,20 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Integration tests for the stateful agent store — checkpoint persistence,

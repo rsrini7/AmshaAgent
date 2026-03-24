@@ -1,19 +1,21 @@
 package com.arcclaw.app.security;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.when;
+
+import java.util.Map;
+
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.security.SecretVault;
+import io.quarkus.arc.ClientProxy;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import com.arcclaw.core.security.SecretVault;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import static org.mockito.Mockito.when;
-
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 @QuarkusTest
 @TestProfile(StartupSecurityValidatorProdSafeTest.Profile.class)
@@ -43,7 +45,7 @@ class StartupSecurityValidatorProdSafeTest {
     @Test
     void testProdWithSafeSecretsDoesNotThrow() {
         // Booted with test profile, but we can unwrap and set to prod safe state
-        StartupSecurityValidator real = io.quarkus.arc.ClientProxy.unwrap(validator);
+        StartupSecurityValidator real = ClientProxy.unwrap(validator);
         real.profile = "prod";
         real.pepper = "prod-secure-pepper-0000000000000000";
 

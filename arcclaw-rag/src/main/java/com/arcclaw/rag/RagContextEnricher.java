@@ -1,14 +1,17 @@
 package com.arcclaw.rag;
 
-import com.arcclaw.core.agent.reasoning.ContextEnricher;
-import com.arcclaw.core.scope.WorkspaceContext;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-
 import java.util.List;
 import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.ContextEnricher;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.Fts5QueryUtil;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class RagContextEnricher implements ContextEnricher {
@@ -34,7 +37,15 @@ public class RagContextEnricher implements ContextEnricher {
         }
 
         try {
-            List<ScoredChunk> chunks = memoryService.search(goal, userId, contextChunks);
+            // Wrap in FTS5 phrase quotes to handle apostrophes and special characters
+            // (e.g. "today's news" → "\"today's news\"").
+            // Without quoting, FTS5 parses the value as a query expression and
+            // an apostrophe opens an unterminated phrase literal → SQLITE_ERROR.
+            // Phrase search is also semantically better for RAG — we want the
+            // whole phrase matched, not individual unordered tokens.
+            String ftsQuery = Fts5QueryUtil.toFts5Phrase(goal);
+
+            List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks);
             if (chunks.isEmpty()) return basePrompt;
 
             String context = chunks.stream()
@@ -58,4 +69,5 @@ public class RagContextEnricher implements ContextEnricher {
             return basePrompt;
         }
     }
+
 }

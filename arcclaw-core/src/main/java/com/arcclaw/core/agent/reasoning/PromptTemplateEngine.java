@@ -6,15 +6,14 @@ import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
-
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Builds role-specific system prompt section using Qute templates.

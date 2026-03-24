@@ -1,10 +1,11 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import java.time.Instant;
 import java.util.Optional;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -14,10 +15,8 @@ import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class CommandDispatchHandlerTest {
 
@@ -35,7 +34,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testApproveWithCronIdStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
@@ -48,7 +47,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testApproveWithoutCronIdStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         
@@ -61,7 +60,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testTextPassesThrough() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "Hello world", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
 
@@ -71,7 +70,7 @@ class CommandDispatchHandlerTest {
 
     @Test
     void testDenyStopsPipeline() {
-        ChannelUser user = new ChannelUser("1", "user", ChannelType.CLI);
+        ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
 

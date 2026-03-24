@@ -1,5 +1,11 @@
 package com.arcclaw.rag;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import jakarta.annotation.PreDestroy;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.scope.WorkspaceScoped;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
@@ -8,12 +14,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
-import jakarta.annotation.PreDestroy;
-import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @WorkspaceScoped
 public class SessionKnowledgeBase {

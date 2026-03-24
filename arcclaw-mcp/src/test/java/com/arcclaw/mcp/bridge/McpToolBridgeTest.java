@@ -9,12 +9,11 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.mcp.config.McpToolAllowlist;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class McpToolBridgeTest {
 
@@ -44,7 +43,7 @@ class McpToolBridgeTest {
     @Test
     void testMatchingUsesToolNameNotEnumName() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("memory_search"));
-        List<com.arcclaw.mcp.bridge.McpToolDescriptor> tools = bridge.getExposedTools();
+        List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
         assertEquals("memory_search", tools.get(0).name()); // must NOT be "MEMORY_SEARCH"
     }

@@ -31,6 +31,9 @@ public record ReasoningStep(
     /** Action value indicating the loop should terminate with a final answer. */
     public static final String FINISH = "FINISH";
 
+    /** Action value indicating a system-level observation (e.g. error) needs LLM correction. */
+    public static final String OBSERVE = "OBSERVE";
+
     /**
      * Create a step with no observation yet (pre-execution). Tokens are typically 0
      * until known.
@@ -43,6 +46,11 @@ public record ReasoningStep(
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput, int inputTk,
             int outputTk) {
         return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk);
+    }
+
+    /** Create a step representing a schema/parsing error to trigger LLM retry. */
+    public static ReasoningStep schemaError(String observation, int inputTk, int outputTk) {
+        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk);
     }
 
     /** Create a copy of this step with the observation filled in. */

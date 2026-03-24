@@ -1,18 +1,18 @@
 package com.arcclaw.rag;
 
-import io.agroal.api.AgroalDataSource;
-import io.quarkus.runtime.StartupEvent;
+import java.sql.Connection;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-
-import java.sql.Connection;
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class RagSchemaInitializer {
@@ -52,10 +52,10 @@ public class RagSchemaInitializer {
         }
 
         boolean vecLoaded = ftsInterceptor.isVectorSearchEnabled();
-        log.infof("═══ RAG STATUS ═══ vec0=%s | FTS5=enabled | dims=%d | path=%s",
+        log.infof("RAG STATUS vec0=%s | FTS5=enabled | dims=%d | path=%s",
             vecLoaded ? "✓ LOADED" : "✗ degraded (FTS5-only)",
             embedDimensions,
-            vecLoaded ? "active" : "check SQLITE_VEC_PATH");
+            vecLoaded ? "active" : "check ARCCLAW_SQLITE_VEC_PATH");
 
         if (!vecLoaded) return;
 

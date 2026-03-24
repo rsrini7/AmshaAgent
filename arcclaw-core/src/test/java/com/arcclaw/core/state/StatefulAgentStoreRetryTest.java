@@ -11,9 +11,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.hibernate.exception.LockAcquisitionException;
 import org.junit.jupiter.api.Test;
 
+import com.arcclaw.core.persistence.SqliteErrorStrings;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
+
 class StatefulAgentStoreRetryTest {
 
-    private final StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
+    private final StatefulAgentStoreImpl store = createStore();
+
+    private StatefulAgentStoreImpl createStore() {
+        StatefulAgentStoreImpl s = new StatefulAgentStoreImpl();
+        try {
+            var field = StatefulAgentStoreImpl.class.getDeclaredField("retryTemplate");
+            field.setAccessible(true);
+            field.set(s, new SqliteRetryTemplate());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return s;
+    }
 
     @Test
     void testExponentialBackoffDelayIncreases() throws Exception {
@@ -33,33 +48,20 @@ class StatefulAgentStoreRetryTest {
 
         long elapsed = System.currentTimeMillis() - start;
 
-        // With BACKOFF_BASE_MS = 50:
-        // Attempt 1: fail -> sleep 50 * 2^1 = 100ms + jitter
-        // Attempt 2: fail -> sleep 50 * 2^2 = 200ms + jitter
-        // Total expected >= 100 + 200 = 300ms
-        // The floor is 100ms for the first failure. 
-        // Let's be conservative as per user request (>= BACKOFF_BASE_MS * 2 = 100ms) 
-        // but actually 2 failures should be ~300ms.
-        assertTrue(elapsed >= 100, "Total elapsed time should be at least 100ms (floor of first backoff), but was " + elapsed);
+        // With BACKOFF_BASE_MS = 50 in StatefulAgentStoreImpl:
+        // Attempt 1: fail -> sleep 50 * 2^1 = 100ms
+        // Attempt 2: fail -> sleep 50 * 2^2 = 200ms
+        // Total expected >= 300ms
+        assertTrue(elapsed >= 300, "Total elapsed time should be at least 300ms (100+200), but was " + elapsed);
     }
 
     @Test
-    void testIsSqliteBusyDetectsLockAcquisitionException() throws Exception {
-        Method isSqliteBusy = StatefulAgentStoreImpl.class.getDeclaredMethod("isSqliteBusy", Throwable.class);
-        isSqliteBusy.setAccessible(true);
-
+    void testIsBusyDetection() {
+        // Now using central utility
         Exception ex = new RuntimeException(new LockAcquisitionException("busy", new SQLException("database is locked"), "SELECT 1"));
-        boolean result = (boolean) isSqliteBusy.invoke(store, ex);
-        assertTrue(result, "Should detect LockAcquisitionException as SQLite busy");
-    }
+        assertTrue(SqliteErrorStrings.isBusy(ex), "Should detect LockAcquisitionException as SQLite busy");
 
-    @Test
-    void testIsSqliteBusyIgnoresUnrelatedExceptions() throws Exception {
-        Method isSqliteBusy = StatefulAgentStoreImpl.class.getDeclaredMethod("isSqliteBusy", Throwable.class);
-        isSqliteBusy.setAccessible(true);
-
-        Exception ex = new RuntimeException("connection reset");
-        boolean result = (boolean) isSqliteBusy.invoke(store, ex);
-        assertFalse(result, "Should NOT detect 'connection reset' as SQLite busy");
+        Exception unrelated = new RuntimeException("connection reset");
+        assertFalse(SqliteErrorStrings.isBusy(unrelated), "Should NOT detect 'connection reset' as SQLite busy");
     }
 }
