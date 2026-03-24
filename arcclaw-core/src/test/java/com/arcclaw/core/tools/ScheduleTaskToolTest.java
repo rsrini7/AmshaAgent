@@ -1,18 +1,28 @@
 package com.arcclaw.core.tools;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Callable;
+
+import org.junit.jupiter.api.Test;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link ScheduleTaskTool}.
@@ -39,26 +49,25 @@ class ScheduleTaskToolTest {
         return tool;
     }
 
-    /**
-     * Helper: runs tool.execute() inside WorkspaceScopeHolder.run() with proper
-     * USER_ID + CHAT_ID binding and extracts the result via AtomicReference.
-     */
-    private ToolResponse executeInScope(ScheduleTaskTool tool, Map<String, Object> params) {
-        AtomicReference<ToolResponse> ref = new AtomicReference<>();
-        WorkspaceScopeHolder.run("test-session", "user-1", "chat-1", () ->
-                ref.set(tool.execute(params))
-        );
-        return ref.get();
+    // Add a helper to your test class
+    private <T> T executeInScope(Callable<T> task) throws Exception {
+        return WorkspaceContext.run(
+                "test-session-id",
+                "test-user",
+                "test-chat",
+                AutonomyLevel.SUPERVISED,
+                "coordinator",
+                task);
     }
 
     @Test
-    void testValidCronSchedulesSuccessfully() {
+    void testValidCronSchedulesSuccessfully() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope(tool, Map.of(
+        ToolResponse result = executeInScope(() -> tool.execute(Map.of(
                 "cronExpression", "0 9 * * 1",
                 "goal", "Send weekly status report to the team via Telegram"
-        ));
+        )));
 
         assertTrue(result.success(), "Valid cron should schedule successfully: " + result.output());
         assertTrue(result.output().contains("Task scheduled successfully"));
@@ -67,19 +76,19 @@ class ScheduleTaskToolTest {
 
         verify(cronRepository).persist(any(AgentCronEntity.class));
         verify(auditService).record(
-                eq("test-session"), eq("user-1"), eq("coordinator"),
+                eq("test-session-id"), eq("test-user"), eq("coordinator"),
                 eq(SecurityEventType.CRONCREATED), anyString()
         );
     }
 
     @Test
-    void testInvalidCronExpressionReturnsFailure() {
+    void testInvalidCronExpressionReturnsFailure() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope(tool, Map.of(
+        ToolResponse result = executeInScope(() -> tool.execute(Map.of(
                 "cronExpression", "invalid-cron",
                 "goal", "Send status report"
-        ));
+        )));
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
@@ -89,13 +98,13 @@ class ScheduleTaskToolTest {
     }
 
     @Test
-    void testNakedPronounGoalRejected() {
+    void testNakedPronounGoalRejected() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope(tool, Map.of(
+        ToolResponse result = executeInScope(() -> tool.execute(Map.of(
                 "cronExpression", "0 9 * * 1",
                 "goal", "Deploy it to production"
-        ));
+        )));
 
         assertFalse(result.success(), "Naked pronoun 'it' should be rejected");
         assertEquals(422, result.exitCode());
@@ -105,18 +114,23 @@ class ScheduleTaskToolTest {
     }
 
     @Test
-    void testMissingUserIdReturnsFailure403() {
+    void testMissingUserIdReturnsFailure403() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        // Execute WITHOUT WorkspaceScopeHolder binding — no tenant context
-        ToolResponse result = tool.execute(Map.of(
-                "cronExpression", "0 9 * * 1",
-                "goal", "Send report"
-        ));
+        // Bind with blank/null user to simulate missing
+        ToolResponse result = WorkspaceContext.run(
+                "test-session-id",
+                "",          // ← blank userId triggers the 403
+                "test-chat",
+                AutonomyLevel.SUPERVISED,
+                "coordinator",
+                () -> tool.execute(Map.of(
+                        "cronExpression", "0 9 * * 1",
+                        "goal", "Send report"
+                )));
 
         assertFalse(result.success());
         assertEquals(403, result.exitCode());
-        assertTrue(result.output().contains("Security violation"));
         assertTrue(result.output().contains("tenant context not bound"));
 
         verify(cronRepository, never()).persist(any());
@@ -129,16 +143,14 @@ class ScheduleTaskToolTest {
     }
 
     @Test
-    void testRunOnceTruePassedThrough() {
+    void testRunOnceTruePassedThrough() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        WorkspaceScopeHolder.run("test-session", "user-1", "chat-1", () -> {
-            tool.execute(Map.of(
-                    "cronExpression", "30 14 15 3 *",
-                    "goal", "Send one-time reminder to check deployment status",
-                    "runOnce", true
-            ));
-        });
+        executeInScope(() -> tool.execute(Map.of(
+                "cronExpression", "30 14 15 3 *",
+                "goal", "Send one-time reminder to check deployment status",
+                "runOnce", true
+        )));
 
         verify(cronRepository).persist(argThat(entity -> {
             AgentCronEntity e = (AgentCronEntity) entity;

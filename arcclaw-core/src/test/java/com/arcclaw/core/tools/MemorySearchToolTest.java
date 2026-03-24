@@ -1,6 +1,9 @@
 package com.arcclaw.core.tools;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
@@ -65,11 +68,15 @@ class MemorySearchToolTest {
     }
 
     @Test
-    void testThrowsSecurityExceptionWhenUserIdNotBound() {
+    void testThrowsSecurityExceptionWhenUserIdNotBound() throws Exception {
         MemorySearchTool tool = createTool();
 
-        assertThrows(SecurityException.class, () ->
+        ToolResponse response = WorkspaceScopeHolder.call("test-session", "", null, () -> 
                 tool.execute(Map.of("query", "test")));
+        
+        assertFalse(response.success());
+        assertEquals(403, response.exitCode());
+        assertTrue(response.output().contains("USER_ID not bound"));
     }
 
     @Test

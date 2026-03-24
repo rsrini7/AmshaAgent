@@ -15,6 +15,8 @@ import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,28 +35,38 @@ class CommandDispatchHandlerTest {
     }
 
     @Test
-    void testApproveWithCronIdStopsPipeline() {
+    void testApproveWithCronIdStopsPipeline() throws Exception {
         ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
+        ctx.setSessionId("test-session");
         
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve cron123"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approving cron task..."), "/approve cron123"));
 
-        assertEquals(HandleResult.STOP, handler.handle(ctx));
+        WorkspaceScopeHolder.call("test-session", "1", "1", () -> {
+            assertEquals(HandleResult.STOP, handler.handle(ctx));
+            return null;
+        });
+
         verify(sender).sendRaw(user, "Approving cron task...");
     }
 
     @Test
-    void testApproveWithoutCronIdStopsPipeline() {
+    void testApproveWithoutCronIdStopsPipeline() throws Exception {
         ChannelUser user = new ChannelUser("1", "1", "user", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
+        ctx.setSessionId("test-session");
         
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approving session..."), "/approve"));
 
-        assertEquals(HandleResult.STOP, handler.handle(ctx));
+        WorkspaceScopeHolder.call("test-session", "1", "1", () -> {
+            assertEquals(HandleResult.STOP, handler.handle(ctx));
+            return null;
+        });
+
         verify(sender).sendRaw(user, "Approving session...");
     }
 
