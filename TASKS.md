@@ -1246,3 +1246,13 @@
 - [x] Step 5: Convert `ChannelType` enum to record for SPI extensibility. <!-- id: 608 -->
 - [x] Step 6: Update `ChannelSenderRegistry` and `TelegramJobNotifier` for record-based comparison. <!-- id: 609 -->
 - [x] Step 7: Verify all SPI-based channel tests pass. <!-- id: 610 -->
+
+---
+
+## Phase 65-D — Observability & Diagnostics Unification ✅
+- [x] Step 1: Create `AgentOTelConstants` with unified span/attribute names. <!-- id: 611 -->
+- [x] Step 2: Refactor `AgentOtelContext` to use `AgentOTelConstants`. <!-- id: 612 -->
+- [x] Step 3: Create `CommandResponse` record with metadata map support. <!-- id: 613 -->
+- [x] Step 4: Add `CHAT_ID` to `MdcKeys`. <!-- id: 614 -->
+- [x] Step 5: Update `WorkspaceScopeHolder` to propagate `CHAT_ID` in MDC and ScopedValue. <!-- id: 615 -->
+- [x] Step 6: Verify OTel and MDC consistency via tests and logs. <!-- id: 616 -->

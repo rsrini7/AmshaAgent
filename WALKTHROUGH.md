@@ -2629,3 +2629,27 @@ Transitioned the channel management architecture to a pluggable SPI model and mo
 - ✅ **SPI Discovery**: `ChannelDaemonSpiTest` confirmed Telegram is dynamically loaded.
 - ✅ **CLI Flexibility**: `AttachCommandTest` verified the dynamic available-channel listing.
 - ✅ **Type Stability**: `ChannelTypeTest` confirmed that record-based types correctly handle case-insensitive normalization and equality.
+
+---
+
+## Phase 65-D — Observability & Diagnostics Unification ✅
+
+Standardized the system's diagnostic layers for consistent tracing and logging across the agent lifecycle.
+
+### Key Features & Implementation:
+
+1. **Semantic OpenTelemetry**:
+   - Trace names were previously inconsistent between the core loop and tool invocations.
+   - **Resolution**: Implemented `AgentOTelConstants` to define a unified internal schema. Updated `AgentOtelContext` to use strictly semantic keys (e.g. `arcclaw.session.id` instead of `sessionId`).
+
+2. **Unified Diagnostic Context (MDC)**:
+   - Logging correlation for `CHAT_ID` was missing from several entry points despite being present in the `WorkspaceContext`.
+   - **Resolution**: Updated `WorkspaceScopeHolder` to ensure `CHAT_ID` is placed in the MDC (for logs) and the ScopedValue (for context propagation) simultaneously whenever a session is bound.
+
+3. **Future-Proof Command Responses**:
+   - Reflex command results were limited to raw `String` feedback.
+   - **Resolution**: Created the `CommandResponse` record. This allows commands to return structured metadata to the channel adapters, enabling richer UI feedback in future phases.
+
+**Verification Results**:
+- ✅ **OTel Alignment**: `AgentOtelContextTest` now validates compliance with unified semantic conventions.
+- ✅ **Correlation Integrity**: MDC propagation verified through `mvn test` in core module.

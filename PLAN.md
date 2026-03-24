@@ -4504,3 +4504,41 @@ Extracted channel-specific background management into a pluggable SPI and modern
 - ✅ `ChannelDaemonSpiTest`: Verified CDI discovery of Telegram adapter.
 - ✅ `ChannelTypeTest`: Verified custom channel type creation and record equality.
 - ✅ Full `mvn compile` green across core/app modules.
+
+---
+
+# Phase 65-D — Observability & Diagnostics Unification ✅
+
+Unified diagnostic context propagation and modernized OpenTelemetry instrumentation across the agent loop.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Semantic Span Unification**: Standardized OTel span names (e.g., `agent.iteration`, `tool.call`) and attribute keys (e.g., `arcclaw.session.id`, `arcclaw.tool.name`) into a centralized `AgentOTelConstants` registry. This ensures consistent dashboarding and alerting across all ArcClaw deployments.
+
+> [!NOTE]
+> **Full-Context Logger Correlation**: Enhanced MDC (Mapped Diagnostic Context) to consistently propagate `CHAT_ID` alongside `SESSION_ID` and `USER_ID`. This allows log aggregation tools to filter by chat session, user, or workspace with equal precision.
+
+> [!TIP]
+> **Structured Command Feedback**: Introduced the `CommandResponse` record which includes a `metadata` map. This enables deterministic commands (like `/approve`) to return not just text, but structured data (IDs, timing) back to bridge layers.
+
+## Completed Changes
+
+#### [CREATE] [AgentOTelConstants.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOTelConstants.java)
+- Centralized registry for OTel semantic conventions.
+
+#### [CREATE] [CommandResponse.java](file:///arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/CommandResponse.java)
+- Record supporting typed metadata for reflex command results.
+
+#### [MODIFY] [AgentOtelContext.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Refactored to use `AgentOTelConstants` for all span and attribute operations.
+
+#### [MODIFY] [MdcKeys.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/util/MdcKeys.java)
+- Added `CHAT_ID` constant for unified logging.
+
+#### [MODIFY] [WorkspaceScopeHolder.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java)
+- Ensured `CHAT_ID` is bound to both MDC and ScopedValue in `run` and `call` entry points.
+
+## Verification
+- ✅ `AgentOtelContextTest`: Updated to verify unified span names and attribute keys.
+- ✅ Full `mvn compile` green after constant migration.
