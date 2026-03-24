@@ -1235,3 +1235,14 @@
 - [x] Step 6: Refactor `IntentClassifierService.sanitize()` to use dynamic `displayName` deity extraction. <!-- id: 601 -->
 - [x] Step 7: Transition `AgentRoleEnum.fromString()` to dynamic alias matching. <!-- id: 602 -->
 - [x] Step 8: Verify all new security and concurrency tests pass. <!-- id: 603 -->
+
+---
+
+## Phase 65-C — Architectural Unblocks & SPI Completion ✅
+- [x] Step 1: Ensure `CompactionSummaryEntity` fields are private. <!-- id: 604 -->
+- [x] Step 2: Create `ChannelDaemon` interface in `arcclaw-core`. <!-- id: 605 -->
+- [x] Step 3: Implement `TelegramChannelDaemon` in `arcclaw-app`. <!-- id: 606 -->
+- [x] Step 4: Refactor `AttachCommand` to use CDI-based discovery. <!-- id: 607 -->
+- [x] Step 5: Convert `ChannelType` enum to record for SPI extensibility. <!-- id: 608 -->
+- [x] Step 6: Update `ChannelSenderRegistry` and `TelegramJobNotifier` for record-based comparison. <!-- id: 609 -->
+- [x] Step 7: Verify all SPI-based channel tests pass. <!-- id: 610 -->

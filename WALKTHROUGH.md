@@ -2605,3 +2605,27 @@ Eliminated production security risks and addressed race conditions in the MCP to
 - ✅ **Security Gate**: `CronJobRunnerTest.testDevSecretSeederNotInvocable()` passed.
 - ✅ **Concurrency Stress**: `DynamicToolCapabilityRegistryTest.testConcurrentRegisterAndDeregisterNoCme()` passed with 5,000 operations.
 - ✅ **Intent Fidelity**: `IntentClassifierServiceTest.testSanitizeResolvesAllRolesByDeityName()` confirmed 100% coverage.
+
+---
+
+## Phase 65-C — Architectural Unblocks & SPI Completion ✅
+
+Transitioned the channel management architecture to a pluggable SPI model and modernized core data structures.
+
+### Key Features & Implementation:
+
+1. **Pluggable Channel Daemons**:
+   - The CLI `attach` command was previously hardcoded with a `switch` statement for every supported channel.
+   - **Resolution**: Introduced the `ChannelDaemon` SPI in `arcclaw-core`. Created `TelegramChannelDaemon` as a CDI bean in the app layer. `AttachCommand` now injects all available daemons, allowing new adapters (Discord, Slack) to be added without changing the command's source code.
+
+2. **Extensible `ChannelType`**:
+   - `ChannelType` was an enum, which meant new platforms (like WhatsApp or Teams) couldn't be added without recompiling the `arcclaw-channel-api`.
+   - **Resolution**: Converted `ChannelType` to an immutable `record`. Maintained constants (TELEGRAM, DISCORD, etc.) for existing code and added a `name()` method to preserve compatibility with enum-based calls. `fromString()` now supports arbitrary custom IDs.
+
+3. **Registry Modernization**:
+   - Updated `ChannelSenderRegistry` and `TelegramJobNotifier` to use `.equals()` for comparing channel types, ensuring robust behavior with the new record model.
+
+**Verification Results**:
+- ✅ **SPI Discovery**: `ChannelDaemonSpiTest` confirmed Telegram is dynamically loaded.
+- ✅ **CLI Flexibility**: `AttachCommandTest` verified the dynamic available-channel listing.
+- ✅ **Type Stability**: `ChannelTypeTest` confirmed that record-based types correctly handle case-insensitive normalization and equality.

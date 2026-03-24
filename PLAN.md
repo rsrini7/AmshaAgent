@@ -4464,3 +4464,43 @@ Hardened secret seeding lifecycle and stabilized concurrent MCP tool registratio
 - ✅ `DynamicToolCapabilityRegistryTest`: Verified safe concurrent register/iterate with 50 threads.
 - ✅ `IntentClassifierServiceTest`: Verified dynamic deity name resolution for all roles.
 - ✅ Full `mvn clean verify` is green.
+
+---
+
+# Phase 65-C — Architectural Unblocks & SPI Completion ✅
+
+Extracted channel-specific background management into a pluggable SPI and modernized the core channel type model.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Extensible Channel Types**: Transitioned `ChannelType` from a static enum to an immutable record. This allows ArcClaw and its extensions to define custom channel types (e.g. "whatsapp", "teams") at runtime without modifying the core API, fulfilling the Open/Closed Principle.
+
+> [!NOTE]
+> **CDI-Based Discovery**: Implemented `ChannelDaemon` SPI to decouple the `attach` CLI command from specific adapter implementations. The command now dynamically discovers available channel daemons via CDI, enabling clean separation between `arcclaw-core` management and `arcclaw-app` adapters.
+
+> [!TIP]
+> **Backward Compatibility**: Preserved the `name()` method on the `ChannelType` record to maintain compatibility with existing enum-style callers in the monitoring and logging layers.
+
+## Completed Changes
+
+#### [CREATE] [ChannelDaemon.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/pipeline/ChannelDaemon.java)
+- Core interface for background channel lifecycle management.
+
+#### [CREATE] [TelegramChannelDaemon.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelDaemon.java)
+- CDI implementation that bridges the `attach telegram` command to Camel route lifecycle.
+
+#### [MODIFY] [AttachCommand.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java)
+- Refactored to inject `Instance<ChannelDaemon>` and route requests dynamically.
+
+#### [MODIFY] [ChannelType.java](file:///arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/ChannelType.java)
+- Converted to record; added constants and `name()` method; updated `fromString()` to be non-exclusive.
+
+#### [MODIFY] [ChannelSenderRegistry.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/ChannelSenderRegistry.java)
+- Switched to `.equals()` for robust record-based comparison.
+
+## Verification
+- ✅ `AttachCommandTest`: Verified dynamic channel listing and error handling.
+- ✅ `ChannelDaemonSpiTest`: Verified CDI discovery of Telegram adapter.
+- ✅ `ChannelTypeTest`: Verified custom channel type creation and record equality.
+- ✅ Full `mvn compile` green across core/app modules.
