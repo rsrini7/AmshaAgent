@@ -2700,3 +2700,23 @@ Completed the final tier of Phase 65 — three refactorings that close the SPI a
 - ✅ `CompactionHandlerTest`: 5 tests updated for new dependency.
 - ✅ `EmbeddingModelProducerTest`: 2 tests verify SPI discovery and error handling.
 - ✅ `AuditEventRepositoryTest`: 4 new validation guard tests pass.
+
+---
+
+# Phase 66 — SPI Consolidation & Zero-Setup RAG ✅
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **SPI** | [LlmProviderFactory.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/LlmProviderFactory.java) | Pluggable LLM providers (Groq, OpenAI, Ollama). |
+| **SPI** | [AgentRoleRegistry.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/persona/AgentRoleRegistry.java) | Dynamic agent discovery via CDI. |
+| **SPI** | [ChannelPlugin.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/ChannelPlugin.java) | Composite SPI for unified channel management. |
+| **RAG** | [Vec0NativeLibraryInstaller.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/config/Vec0NativeLibraryInstaller.java) | Zero-setup `sqlite-vec` extraction. |
+| **Markdown** | [TelegramMarkdownV2Renderer.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/util/TelegramMarkdownV2Renderer.java) | Corrected escaping for pre-formatted tool outputs. |
+
+**Key Wins:**
+- ✅ **Pluggability**: Channels, agents, and providers are now fully modular SPIs.
+- ✅ **Zero-Setup**: Native binaries are auto-managed via early bootstrap in `ArcClawCli`.
+- ✅ **Isolation**: JUnit-built `data/` and `lib/` are redirected to `target/` to keep module roots clean.
+- ✅ **Documentation**: New `CHANNEL_SPI.md` provides a developer guide for new communication adapters.
+
+**Verification**: All 832 tests passed green.

@@ -1275,3 +1275,23 @@
 - [x] D3-Step 1: Add `validateBeforePersist()` to `AuditEventRepository`. <!-- id: 629 -->
 - [x] D3-Step 2: Remove null-fallback hacks for `prevHash` and `hmacHash`. <!-- id: 630 -->
 - [x] D3-Step 3: Add validation tests to `AuditEventRepositoryTest`. <!-- id: 631 -->
+
+---
+
+---
+
+## Phase 66 — SPI Consolidation & Zero-Setup RAG ✅
+- [x] Step 1: Convert `AgentRoleEnum` to record and implement `AgentRoleRegistry`. <!-- id: 632 -->
+- [x] Step 2: Create `LlmProviderFactory` SPI and refactor `LlmModelFactory` to use CDI-discovered instances. <!-- id: 633 -->
+- [x] Step 3: Implement `GroqLlmProviderFactory`, `OpenAiLlmProviderFactory`, and `OllamaLlmProviderFactory`. <!-- id: 634 -->
+- [x] Step 4: Extract `GovernanceStrategy` interface and refactor `GovernanceLayer` for pluggable policies. <!-- id: 635 -->
+- [x] Step 5: Implement `ChannelPlugin` composite SPI bundling 5 legacy interfaces. <!-- id: 636 -->
+- [x] Step 6: Create `ChannelPluginRegistry` and implement `TelegramChannelPlugin` reference implementation. <!-- id: 637 -->
+- [x] Step 7: Fix `TelegramMarkdownV2Renderer` with two-pass strip-and-escape logic. <!-- id: 638 -->
+- [x] Step 8: Implement `Vec0NativeLibraryInstaller` for cross-platform resource extraction. <!-- id: 639 -->
+- [x] Step 9: Update `ArcClawCli` bootstrap to extract `sqlite-vec` before Quarkus/Hibernate boot. <!-- id: 640 -->
+- [x] Step 10: Pin `ARCCLAW_DATA_DIR` and `ARCCLAW_SQLITE_VEC_PATH` to absolute paths in bootstrap. <!-- id: 641 -->
+- [x] Step 11: Create `CHANNEL_SPI.md` documentation. <!-- id: 642 -->
+- [x] Step 12: Override `%test` data/lib paths in `application.yaml` to use `target/`. <!-- id: 643 -->
+- [x] Step 13: Rename deprecated Quarkus log properties in `application.yaml`. <!-- id: 644 -->
+- [x] Step 14: Final verification build: `mvn clean verify` passes (832/832 tests green). <!-- id: 645 -->
