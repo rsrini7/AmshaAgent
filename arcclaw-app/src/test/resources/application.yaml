@@ -1,4 +1,6 @@
 arcclaw:
+  skills:
+    hot-reload: false
   auto-seed-secrets: false
   api:
     keys:
@@ -17,6 +19,14 @@ arcclaw:
     max-lookback-window: PT999H
       
 quarkus:
+  mcp:
+    server:
+      stdio:
+        enabled: false
+  opentelemetry:
+    enabled: false
+  smallrye-fault-tolerance:
+    enabled: false
   index-dependency:
     arcclaw-core:
       group-id: com.arcclaw

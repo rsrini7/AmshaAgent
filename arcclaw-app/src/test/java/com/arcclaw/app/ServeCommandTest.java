@@ -1,28 +1,43 @@
 package com.arcclaw.app;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Arrays;
 import java.util.Map;
 
-import jakarta.inject.Inject;
+import org.apache.camel.CamelContext;
+import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.apache.camel.CamelContext;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 @QuarkusTest
 @TestProfile(ServeCommandTest.Profile.class)
 class ServeCommandTest {
+
+    // @AfterAll
+    // static void dumpThreads() {
+    //     Thread.getAllStackTraces().forEach((t, st) -> {
+    //         System.err.println("THREAD: " + t.getName() + " daemon=" + t.isDaemon());
+    //         for (StackTraceElement e : st) {
+    //             System.err.println("  at " + e);
+    //         }
+    //         System.err.println();
+    //     });
+    // }
 
     public static class Profile implements QuarkusTestProfile {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
                 "arcclaw.channel.telegram.enabled", "true",
-                "arcclaw.channel.telegram.bot-token", "mock-token-test"
+                "arcclaw.channel.telegram.bot-token", "mock-token-test",
+                "quarkus.mcp.server.stdio.enabled", "false",
+                "quarkus.opentelemetry.enabled", "false"
             );
         }
     }
