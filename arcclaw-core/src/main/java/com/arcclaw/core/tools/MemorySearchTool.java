@@ -71,13 +71,11 @@ public class MemorySearchTool implements AgentTool {
     public ToolResponse execute(Map<String, Object> params) {
         try {
             // 1. Extract userId from ScopedValue — hard tenant boundary
-            String userId;
-            if (!WorkspaceScopeHolder.USER_ID.isBound()) {
-                throw new SecurityException("memory_search: USER_ID not bound in current scope");
-            }
-            userId = WorkspaceScopeHolder.USER_ID.get();
+            String userId = WorkspaceScopeHolder.USER_ID.get();
+
             if (userId == null || userId.isBlank()) {
-                throw new SecurityException("memory_search: USER_ID not bound in current scope");
+                return ToolResponse.failure(403,
+            "Security violation: memory_search: USER_ID not bound in current scope");
             }
 
             // 2. Extract sessionId for audit

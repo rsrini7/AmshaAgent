@@ -133,7 +133,7 @@ public class ScheduleTaskTool implements AgentTool {
         String chatId    = WorkspaceContext.chatId();
         String sessionId = WorkspaceContext.requireSessionId();
 
-        if (userId.isBlank()) {
+        if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403,
                     "Security violation: tenant context not bound. Operation rejected.");
         }
