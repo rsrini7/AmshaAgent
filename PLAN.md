@@ -4388,3 +4388,43 @@ Resolve intermittent test failures in `ReasoningStepParser` and ensure stable `S
 - ✅ `ChatHistoryAssemblerTest`: Verified compliance redaction regex.
 - ✅ Full `mvn clean verify`: All tests PASS.
 
+---
+
+# Phase 65-A — Correctness & Runtime Stability ✅
+
+Refactor entity encapsulation and dynamic role resolution to improve persistence reliability and intent classification flexibility.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Strict Encapsulation**: Transitioned `CompactionSummaryEntity` to private fields with standard getters/setters. This ensures Hibernate consistently detects changes and correctly manages the persistent state across transaction boundaries.
+
+> [!NOTE]
+> **Dynamic Alias Resolution**: Integrated a new `aliases` field into `RoleDefinition`, allowing roles (including skills) to register synonyms and variant spellings (e.g., "brahaspati" -> architect). This removes hardcoded logic from the classifier.
+
+> [!TIP]
+> **Skill Auto-Discovery**: The `SkillLoader` now automatically registers skill names as aliases. This allows the `IntentClassifierService` to route to specialized skills based on semantic matching or direct name mentions without manual routing updates.
+
+## Completed Changes
+
+#### [MODIFY] [CompactionSummaryEntity.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryEntity.java)
+- Encapsulated all persistent fields (private) and added standard Java Bean accessors.
+- Updated all references in `arcclaw-core` and `arcclaw-rag` to use the new getters/setters.
+
+#### [MODIFY] [RoleDefinition.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/RoleDefinition.java) / [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java)
+- Added `aliases` Set to `RoleDefinition`.
+- Updated `AgentRoleEnum` to include deity synonyms and intent-triggering aliases.
+
+#### [MODIFY] [IntentClassifierService.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Refactored `sanitize()` to match against the dynamic aliases from `RoleDefinition`.
+
+#### [MODIFY] [SkillLoader.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillLoader.java)
+- Updated skill registration to include the skill name in the role's aliases list.
+
+#### [MODIFY] [CronJobRunner.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/scheduler/CronJobRunner.java)
+- Removed redundant `DevSecretSeeder` injection to prevent unnecessary overhead during background job execution.
+
+## Verification
+- ✅ `IntentClassifierServiceTest`: Verified "brahaspati" specifically maps to the architect role.
+- ✅ `RoleDefinitionTest`: Verified alias registration and immutability.
+- ✅ Full `mvn clean verify`: 782/782 tests PASS.

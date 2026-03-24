@@ -1212,3 +1212,15 @@
 - [x] Step 4: Refine `ChatHistoryAssembler` compliance regex (case-insensitive "i"). <!-- id: 585 -->
 - [x] Step 5: Verify full test suite: `mvn clean verify` passes (400/400 tests green). <!-- id: 586 -->
 
+---
+
+## Phase 65-A — Correctness & Runtime Stability ✅
+- [x] Step 1: Encapsulate `CompactionSummaryEntity` with private fields and getters/setters. <!-- id: 587 -->
+- [x] Step 2: Systematically update all `CompactionSummaryEntity` references across `arcclaw-core` and `arcclaw-rag` components (Reflexes, Memory, Builders). <!-- id: 588 -->
+- [x] Step 3: Add `aliases` field to `RoleDefinition` and update its compact constructor to enforce immutability. <!-- id: 589 -->
+- [x] Step 4: Populate `AgentRoleEnum` with deity synonyms (e.g., "brahaspati") through the new `aliases` set. <!-- id: 590 -->
+- [x] Step 5: Refactor `IntentClassifierService.sanitize()` to use the new dynamic aliases. <!-- id: 591 -->
+- [x] Step 6: Modify `SkillLoader.java` to include skill names in the dynamic role aliases. <!-- id: 592 -->
+- [x] Step 7: Clean up `CronJobRunner` by removing redundant `DevSecretSeeder` injection. <!-- id: 593 -->
+- [x] Step 8: Systematically update all unit and integration test constructors for `RoleDefinition` to include the `aliases` parameter. <!-- id: 594 -->
+- [x] Step 9: Verify build and test suite performance: 782/782 tests green. <!-- id: 595 -->

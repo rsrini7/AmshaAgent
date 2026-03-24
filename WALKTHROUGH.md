@@ -2553,3 +2553,31 @@ Addressed intermittent test failures in the reasoning engine and hardened the se
 - ✅ **Middleware Ordering**: Verified `AgentDispatchHandlerTest` now passes reliably on parallel virtual threads.
 - ✅ **Redaction Fidelity**: Confirmed `ChatHistoryAssemblerTest` correctly handles mixed-case compliance flags.
 
+---
+
+## Phase 65-A — Correctness & Runtime Stability ✅
+
+Addressed Hibernate persistence integrity and modernized the agent role resolution system.
+
+### Key Features & Implementation:
+
+1. **Strict Entity Encapsulation (`CompactionSummaryEntity`)**:
+   - Identified that public fields on persistent entities can lead to missing Hibernate dirty-checking when fields are modified through certain bytecode-enhanced proxies.
+   - **Resolution**: Refactored `CompactionSummaryEntity` to use private fields with standard Java Bean accessors (getters/setters). Updated all consuming services (including `TwoTierMemoryService` and `RagChunkEntity` wrappers) to use these accessors, guaranteeing reliable state persistence and visibility across sessions.
+
+2. **Metadata-Driven Role Aliasing (`RoleDefinition`)**:
+   - Historically, role synonyms like "brahaspati" were hardcoded directly into the `IntentClassifierService.sanitize()` method, creating a maintenance burden.
+   - **Resolution**: Added an `aliases` Set to `RoleDefinition`. `AgentRoleEnum` now populates these aliases for all core roles (e.g., matching "brahaspati", "brihaspati", "vishnu", etc.). The classifier now iterates over these dynamic registry entries, allowing for new roles and synonyms to be added without modifying the core routing logic.
+
+3. **Skill Intent Integration (`SkillLoader`)**:
+   - Integrated dynamic skills into the alias system to allow direct intent matching by skill name.
+   - **Resolution**: Updated `SkillLoader` to include the skill's name in its role's alias set during compilation. If a user's intent contains a skill name (e.g., "code-reviewer"), the `IntentClassifierService` now automatically routes the request to that specific skill's role.
+
+4. **Background Job Optimization (`CronJobRunner`)**:
+   - Removed redundant instantiation of `DevSecretSeeder` from the background cron path.
+   - **Resolution**: Ensured that the seeder runs strictly during application startup via `DevSecretSeederStartup`, reducing the overhead and dependency graph of the `CronJobRunner`.
+
+**Verification Results**:
+- ✅ **Persistence Stability**: Verified via full test suite that all `CompactionSummaryEntity` updates are correctly persisted and retrieved.
+- ✅ **Dynamic Routing**: Verified via `IntentClassifierServiceTest` that variant deity spellings ("brahaspati") and skill names now route correctly using the unified alias registry.
+- ✅ **Regression Analysis**: Final build verification confirms **782/782 tests PASS**.
