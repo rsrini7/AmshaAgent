@@ -53,8 +53,8 @@ class AgentOtelContextTest {
         Span rootSpan = agentOtelContext.startSessionSpan(sessionId);
         assertNotNull(rootSpan);
 
-        verify(tracer).spanBuilder("arcclaw.session");
-        verify(spanBuilder).setAttribute("sessionId", sessionId);
+        verify(tracer).spanBuilder(AgentOTelConstants.SPAN_SESSION);
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
         verify(spanBuilder).startSpan();
         verify(span).makeCurrent();
 
@@ -115,10 +115,10 @@ class AgentOtelContextTest {
         Span iterSpan = agentOtelContext.startIterationSpan(sessionId, 1, "coder");
         assertNotNull(iterSpan);
 
-        verify(tracer).spanBuilder("agent.iteration");
-        verify(spanBuilder).setAttribute("session.id", sessionId);
-        verify(spanBuilder).setAttribute("agent.role", "coder");
-        verify(spanBuilder).setAttribute("iteration", 1L);
+        verify(tracer).spanBuilder(AgentOTelConstants.SPAN_AGENT_ITERATION);
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_AGENT_ROLE, "coder");
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_ITERATION, 1L);
         verify(spanBuilder).setParent((Context) any());
     }
 
@@ -136,9 +136,9 @@ class AgentOtelContextTest {
         Span toolSpan = agentOtelContext.startToolSpan(sessionId, "github", "invoke");
         assertNotNull(toolSpan);
 
-        verify(tracer).spanBuilder("agent.tool");
-        verify(spanBuilder).setAttribute("session.id", sessionId);
-        verify(spanBuilder).setAttribute("tool.name", "github");
+        verify(tracer).spanBuilder(AgentOTelConstants.SPAN_TOOL_CALL);
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, "github");
         verify(spanBuilder).setAttribute("tool.operation", "invoke");
         verify(spanBuilder).setParent((Context) any());
     }
