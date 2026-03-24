@@ -14,8 +14,6 @@ import static org.mockito.Mockito.verify;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -23,6 +21,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link ScheduleTaskTool}.

@@ -7,13 +7,29 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
 
+import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.model.chat.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,15 +97,15 @@ class AgentLoopTest {
         void channelStampFailureDoesNotCorruptAwaitingApprovalResult() throws Exception {
                 AgentLoop loop = new AgentLoop();
 
-                com.arcclaw.core.state.StatefulAgentStore agentStore = mock(
-                                com.arcclaw.core.state.StatefulAgentStore.class);
+                StatefulAgentStore agentStore = mock(
+                                StatefulAgentStore.class);
                 AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
                 CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
-                com.arcclaw.core.observability.AgentOtelContext otelContext = mock(
-                                com.arcclaw.core.observability.AgentOtelContext.class);
-                com.arcclaw.core.audit.AuditHashUtil hashUtil = mock(com.arcclaw.core.audit.AuditHashUtil.class);
+                AgentOtelContext otelContext = mock(
+                                AgentOtelContext.class);
+                AuditHashUtil hashUtil = mock(AuditHashUtil.class);
                 @SuppressWarnings("unchecked")
-                jakarta.enterprise.inject.Instance<Object> observers = mock(jakarta.enterprise.inject.Instance.class);
+                Instance<Object> observers = mock(Instance.class);
 
                 setField(loop, "agentStore", agentStore);
                 setField(loop, "stateMachineRunner", stateMachineRunner);
@@ -98,28 +114,28 @@ class AgentLoopTest {
                 setField(loop, "hashUtil", hashUtil);
                 setField(loop, "observers", observers);
 
-                com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("foo", "bar", "disp",
-                                com.arcclaw.channel.api.ChannelType.TELEGRAM);
-                com.arcclaw.channel.api.ChannelMessage msg = new com.arcclaw.channel.api.ChannelMessage.TelegramMessage(
+                ChannelUser user = new ChannelUser("foo", "bar", "disp",
+                                ChannelType.TELEGRAM);
+                ChannelMessage msg = new ChannelMessage.TelegramMessage(
                                 user,
-                                "h", "foo", java.time.Instant.now());
-                com.arcclaw.core.pipeline.MessageContext ctx = new com.arcclaw.core.pipeline.MessageContext("foo", user,
+                                "h", "foo", Instant.now());
+                MessageContext ctx = new MessageContext("foo", user,
                                 msg,
-                                mock(com.arcclaw.channel.api.ChannelSender.class));
+                                mock(ChannelSender.class));
 
-                com.arcclaw.core.state.AgentCheckpoint checkpoint = mock(com.arcclaw.core.state.AgentCheckpoint.class);
-                when(checkpoint.getStatus()).thenReturn(com.arcclaw.core.state.CheckpointStatus.IN_PROGRESS);
+                AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
+                when(checkpoint.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);
 
-                when(agentStore.load(any(), any())).thenReturn(java.util.Optional.of(checkpoint));
+                when(agentStore.load(any(), any())).thenReturn(Optional.of(checkpoint));
                 when(agentStore.save(any())).thenThrow(new RuntimeException("SQLITE_BUSY"));
 
-                com.arcclaw.core.agent.result.AgentResult approval = com.arcclaw.core.agent.result.AgentResult
-                                .awaitingApproval("mytool", "{}", "s1", java.util.Collections.emptyList());
+                AgentResult approval = AgentResult
+                                .awaitingApproval("mytool", "{}", "s1", Collections.emptyList());
                 when(stateMachineRunner.run(any(), any(), any())).thenReturn(approval);
 
-                com.arcclaw.core.agent.result.AgentResult result = loop.runWithRole("s1", "coord", "goal", engine, 5,
+                AgentResult result = loop.runWithRole("s1", "coord", "goal", engine, 5,
                                 ctx);
 
-                assertTrue(result instanceof com.arcclaw.core.agent.result.AgentResult.AwaitingApproval);
+                assertTrue(result instanceof AgentResult.AwaitingApproval);
         }
 }

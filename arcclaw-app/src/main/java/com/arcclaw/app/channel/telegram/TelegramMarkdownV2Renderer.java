@@ -1,6 +1,7 @@
 package com.arcclaw.app.channel.telegram;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -74,7 +75,7 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
         };
     }
 
-    private static final java.util.Set<Character> ESCAPE_CHARS = java.util.Set.of(
+    private static final Set<Character> ESCAPE_CHARS = Set.of(
         '_', '*', '[', ']', '(', ')', '~', '`', '>',
         '#', '+', '-', '=', '|', '{', '}', '.', '!'
     );

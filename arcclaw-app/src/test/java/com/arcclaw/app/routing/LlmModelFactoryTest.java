@@ -1,10 +1,12 @@
 package com.arcclaw.app.routing;
 
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.Test;
-import io.quarkus.test.junit.QuarkusTest;
+
 import jakarta.inject.Inject;
+
 import dev.langchain4j.model.chat.ChatModel;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class LlmModelFactoryTest {

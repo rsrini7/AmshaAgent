@@ -3,6 +3,7 @@ package com.arcclaw.app.session;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -24,7 +25,7 @@ class SessionRegistryTest {
         assertNotNull(sessionId);
         assertFalse(sessionId.isBlank());
         // Must be a valid UUID
-        assertDoesNotThrow(() -> java.util.UUID.fromString(sessionId));
+        assertDoesNotThrow(() -> UUID.fromString(sessionId));
     }
 
     @Test

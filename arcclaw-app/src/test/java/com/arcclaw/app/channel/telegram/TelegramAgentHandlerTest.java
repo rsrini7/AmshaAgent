@@ -6,18 +6,20 @@ import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.ConcurrentHashMap;
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.InjectMock;
 import io.quarkus.arc.ClientProxy;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
@@ -30,7 +32,7 @@ import org.mockito.ArgumentCaptor;
 @QuarkusTest
 class TelegramAgentHandlerTest {
 
-    @jakarta.inject.Inject
+    @Inject
     TelegramAgentHandler handler;
 
     @InjectMock

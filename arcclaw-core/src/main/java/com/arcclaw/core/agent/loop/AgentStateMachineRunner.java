@@ -22,7 +22,6 @@ import com.arcclaw.core.skill.SkillRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-
 import org.apache.commons.text.StringEscapeUtils;
 import org.jboss.logging.Logger;
 

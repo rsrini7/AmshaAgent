@@ -9,6 +9,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,9 +20,6 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sqlite.SQLiteConnection;
 import org.sqlite.core.DB;
-
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
 
 /**
  * Unit tests for {@link FtsConnectionInterceptor}.

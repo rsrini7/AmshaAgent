@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.security.SecretVault;
+import io.quarkus.arc.Arc;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,7 @@ public class DevSecretSeederTest {
     }
     @Test
     void testDevSeederNotAccessibleInTestProfile() {
-        assertFalse(io.quarkus.arc.Arc.container().instance(DevSecretSeederStartup.class).isAvailable(),
+        assertFalse(Arc.container().instance(DevSecretSeederStartup.class).isAvailable(),
             "DevSecretSeederStartup should not be accessible in the test profile");
     }
 }

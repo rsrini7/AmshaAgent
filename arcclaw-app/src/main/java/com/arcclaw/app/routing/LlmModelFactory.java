@@ -1,7 +1,9 @@
 package com.arcclaw.app.routing;
 
 import java.time.Duration;
+
 import jakarta.enterprise.context.ApplicationScoped;
+
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;

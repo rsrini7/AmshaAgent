@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentOtelContext;
@@ -168,14 +169,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 } catch (BudgetWarningException w) {
                     log.warnf("Budget warning for session %s structured call: %s", sessionId, w.getMessage());
                     throw w;
-                } catch (com.arcclaw.core.governance.BudgetExceededException be) {
+                } catch (BudgetExceededException be) {
                     log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, be.getMessage());
                     throw be;
                 }
             }
 
             return response.aiMessage().text();
-        } catch (BudgetWarningException | com.arcclaw.core.governance.BudgetExceededException e) {
+        } catch (BudgetWarningException | BudgetExceededException e) {
             throw e;
         } catch (Exception e) {
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());

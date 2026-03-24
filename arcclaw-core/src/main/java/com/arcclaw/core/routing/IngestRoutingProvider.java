@@ -1,9 +1,11 @@
 package com.arcclaw.core.routing;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 @ApplicationScoped

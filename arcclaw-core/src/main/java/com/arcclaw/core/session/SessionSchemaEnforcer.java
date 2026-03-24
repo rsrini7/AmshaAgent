@@ -1,8 +1,5 @@
 package com.arcclaw.core.session;
 
-import org.jboss.logging.Logger;
-
-import io.quarkus.runtime.StartupEvent;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -10,6 +7,9 @@ import jakarta.inject.Inject;
 import jakarta.interceptor.Interceptor;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import io.quarkus.runtime.StartupEvent;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class SessionSchemaEnforcer {

@@ -1,19 +1,15 @@
 package com.arcclaw.core.agent.loop;
 
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-
 import jakarta.enterprise.inject.Instance;
-
 
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -38,7 +34,6 @@ import dev.langchain4j.exception.InvalidRequestException;
 import io.opentelemetry.api.trace.Span;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 
 class AgentStateMachineRunnerTest {
 

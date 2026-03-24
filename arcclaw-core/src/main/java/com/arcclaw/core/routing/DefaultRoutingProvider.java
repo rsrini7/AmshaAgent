@@ -1,10 +1,11 @@
 package com.arcclaw.core.routing;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class DefaultRoutingProvider implements IntentRoutingProvider {

@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.IntentClassifier;
@@ -30,7 +31,7 @@ public class IntentClassifierService implements IntentClassifier {
     DestructiveVocabularyFilter destructiveFilter;
 
     @Inject
-    jakarta.enterprise.inject.Instance<IntentRoutingProvider> providers;
+    Instance<IntentRoutingProvider> providers;
 
     private static final Logger Log = Logger.getLogger(IntentClassifierService.class);
 

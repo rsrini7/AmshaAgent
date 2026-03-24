@@ -1,6 +1,5 @@
 package com.arcclaw.core.util;
 
-
 public final class Fts5QueryUtil {
 
     private Fts5QueryUtil() {}

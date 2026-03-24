@@ -1,25 +1,28 @@
 package com.arcclaw.app.channel.telegram;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.InjectMock;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.arcclaw.core.pipeline.handlers.AgentDispatchHandler;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.channel.api.ChannelUser;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicReference;
+
+import jakarta.inject.Inject;
+
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelSender;
-import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.pipeline.SessionContext;
+import com.arcclaw.core.pipeline.handlers.AgentDispatchHandler;
 import com.arcclaw.core.scope.WorkspaceContext;
-
-import java.util.Collections;
-import java.time.Instant;
+import com.arcclaw.core.security.AutonomyLevel;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class AgentDispatchHandlerAutonomyTest {
@@ -37,10 +40,10 @@ class AgentDispatchHandlerAutonomyTest {
         MessageContext ctx = new MessageContext("chat-full", user, msg, mock(ChannelSender.class));
         ctx.setSessionId("session-full");
         ctx.setAutonomyLevel(AutonomyLevel.FULL);
-        ctx.setSessionContext(new com.arcclaw.core.pipeline.SessionContext(
+        ctx.setSessionContext(new SessionContext(
             "session-full", user, AutonomyLevel.FULL, false));
 
-        java.util.concurrent.atomic.AtomicReference<AutonomyLevel> captured = new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-full"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
                 .thenAnswer(inv -> {
                     captured.set(WorkspaceContext.autonomy());
@@ -62,10 +65,10 @@ class AgentDispatchHandlerAutonomyTest {
         ctx.setSessionId("session-supervised");
         // Explicitly null autonomy
         ctx.setAutonomyLevel(null);
-        ctx.setSessionContext(new com.arcclaw.core.pipeline.SessionContext(
+        ctx.setSessionContext(new SessionContext(
             "session-supervised", user, null, false));
 
-        java.util.concurrent.atomic.AtomicReference<AutonomyLevel> captured = new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-supervised"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
                 .thenAnswer(inv -> {
                     captured.set(WorkspaceContext.autonomy());

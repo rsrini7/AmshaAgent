@@ -4,6 +4,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +73,7 @@ public class ToolRegistry {
 
     @PostConstruct
     void buildSecretsCache() {
-        Map<String, Map<String, String>> cache = new java.util.HashMap<>();
+        Map<String, Map<String, String>> cache = new HashMap<>();
         for (AgentTool tool : discoveredTools) {
             cache.put(tool.name(), extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
         }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +16,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -124,7 +126,7 @@ class ChatHistoryAssemblerTest {
     void compliancePatternDoesNotBacktrackOnCraftedInput() {
         String evil = "i will not ".repeat(200) + "discuss some questions going forward";
 
-        org.junit.jupiter.api.Assertions.assertTimeout(java.time.Duration.ofMillis(100),
+        Assertions.assertTimeout(Duration.ofMillis(100),
             () -> ChatHistoryAssembler.COMPLIANCE_OVERRIDE_PATTERN.matcher(evil).find());
     }
 }
