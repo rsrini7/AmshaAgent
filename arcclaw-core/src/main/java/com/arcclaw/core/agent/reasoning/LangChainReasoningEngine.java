@@ -14,7 +14,7 @@ import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -62,7 +62,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     ReasoningStepParser stepParser;
 
     @Inject
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @Inject
     AgentOtelContext otelContext;

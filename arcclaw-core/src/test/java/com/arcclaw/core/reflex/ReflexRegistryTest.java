@@ -21,7 +21,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.audit.AuditHashUtil;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -49,7 +49,7 @@ class ReflexRegistryTest {
     ChatMemoryStore chatMemoryStore;
 
     @InjectMock
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @InjectMock
     AuditHashUtil hashUtil;

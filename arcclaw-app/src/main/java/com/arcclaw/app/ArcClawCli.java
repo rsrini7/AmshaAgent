@@ -85,7 +85,28 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
             System.exit(1);
         }
 
-        // 3. Boot Quarkus — config system, CDI, and all extensions start here.
+        // 3. Provision vec0 native library before Hibernate starts.
+        //    Must fire earlier than CDI StartupEvent to ensure Agroal connection
+        //    pooling doesn't fail on first boot when Interceptors try to load it.
+        try {
+            String vecPath = System.getProperty("ARCCLAW_SQLITE_VEC_PATH",
+                    System.getenv().getOrDefault("ARCCLAW_SQLITE_VEC_PATH", "./lib/vec0"));
+
+            Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
+            if (vecPath.endsWith("vec0")) { // it's a directory link-base
+                 // The performInstallation method expects the base without extension
+                 com.arcclaw.app.config.Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
+            }
+
+            // Pin the absolute path so Quarkus config picks it up uniformly.
+            System.setProperty("ARCCLAW_SQLITE_VEC_PATH", absVecPath.toString());
+
+        } catch (Exception e) {
+            System.err.println("[ArcClaw] ⚠️  WARNING: Failed to auto-install sqlite-vec.");
+            System.err.println("[ArcClaw]    RAG will degrade to FTS5. Cause: " + e.getMessage());
+        }
+
+        // 4. Boot Quarkus — config system, CDI, and all extensions start here.
         Quarkus.run(ArcClawCli.class, args);
     }
 

@@ -14,7 +14,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
@@ -47,7 +47,7 @@ public class WorkspaceManager {
     WorkspaceManager self;
 
     @Inject
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @Inject
     ChatMemoryStore chatMemoryStore;

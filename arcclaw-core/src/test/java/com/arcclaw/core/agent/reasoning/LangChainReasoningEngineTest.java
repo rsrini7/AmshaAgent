@@ -21,7 +21,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.tools.AgentTool;
@@ -452,7 +452,7 @@ class LangChainReasoningEngineTest {
     }
 
     @InjectMock
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @Test
     void structuredOutputPathPropagatesBudgetWarning() throws Exception {

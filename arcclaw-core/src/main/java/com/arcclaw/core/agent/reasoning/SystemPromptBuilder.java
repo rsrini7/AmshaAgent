@@ -216,7 +216,7 @@ public class SystemPromptBuilder {
                 "\n\n";
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (roleEnum == AgentRoleEnum.COORDINATOR && !agentRole.startsWith(SKILL_PREFIX)) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && (agentRole == null || !agentRole.startsWith(SKILL_PREFIX))) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main

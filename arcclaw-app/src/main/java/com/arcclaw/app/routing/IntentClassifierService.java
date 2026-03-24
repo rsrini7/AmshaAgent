@@ -11,6 +11,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.persona.AgentRoleRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.routing.IntentRoutingProvider;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
@@ -32,6 +33,9 @@ public class IntentClassifierService implements IntentClassifier {
 
     @Inject
     Instance<IntentRoutingProvider> providers;
+
+    @Inject
+    AgentRoleRegistry agentRoleRegistry;
 
     private static final Logger Log = Logger.getLogger(IntentClassifierService.class);
 
@@ -55,14 +59,7 @@ public class IntentClassifierService implements IntentClassifier {
                 Roles:
                 """);
 
-        List<AgentRoleEnum> roles = List.of(
-                AgentRoleEnum.CODER,
-                AgentRoleEnum.DEBUGGER,
-                AgentRoleEnum.RESEARCHER,
-                AgentRoleEnum.COORDINATOR,
-                AgentRoleEnum.ARCHITECT,
-                AgentRoleEnum.SYNTHESIZER
-        );
+        List<AgentRoleEnum> roles = agentRoleRegistry.allRoles();
 
         for (AgentRoleEnum role : roles) {
             String desc = role.definition().intentDescription().replace("%", "%%");
@@ -138,7 +135,7 @@ public class IntentClassifierService implements IntentClassifier {
 
     private String sanitize(String raw) {
         String lowerRaw = raw.toLowerCase();
-        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+        for (AgentRoleEnum role : agentRoleRegistry.allRoles()) {
             // Match canonical name (e.g. "debugger")
             if (lowerRaw.contains(role.toScopedName())) return role.toScopedName();
             

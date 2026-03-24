@@ -88,7 +88,23 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
         StringBuilder sb = new StringBuilder(text.length() + 16);
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            if (c == '\\') { sb.append('\\').append('\\'); continue; }
+            
+            // Check if this is an existing escape sequence
+            if (c == '\\' && i + 1 < text.length()) {
+                char next = text.charAt(i + 1);
+                if (ESCAPE_CHARS.contains(next) || next == '\\') {
+                    sb.append('\\').append(next);
+                    i++; // skip the escaped character
+                    continue;
+                }
+            }
+            
+            // If it's a lone backslash, escape it
+            if (c == '\\') { 
+                sb.append('\\').append('\\'); 
+                continue; 
+            }
+            
             if (ESCAPE_CHARS.contains(c)) sb.append('\\');
             sb.append(c);
         }
