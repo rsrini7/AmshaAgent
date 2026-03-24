@@ -10,6 +10,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -47,14 +48,18 @@ public class AgentDispatchHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
-        String sessionId = context.getSessionId()
-                .orElseThrow(() -> new IllegalStateException("Session ID is required for agent dispatch"));
+        SessionContext session = context.getSessionContext()
+            .orElseThrow(() -> new IllegalStateException(
+                "AgentDispatchHandler requires SessionContext to be populated " +
+                "by SessionResolutionHandler (priority 40) first. " +
+                "Check handler priority ordering."));
+
+        String sessionId = session.sessionId();
         String role = context.getAgentRole()
                 .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
         String goal = context.getMessage() != null ? context.getMessage().text() : "";
 
-        // Resolve maxIterations: use the skill's configured value when routing to a skill,
-        // otherwise fall back to the default of 5.
+        // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
         if (role.startsWith(SKILL_PREFIX)) {
             String skillName = role.substring(SKILL_PREFIX.length());
@@ -62,26 +67,28 @@ public class AgentDispatchHandler implements MessageHandler {
                     .map(entry -> entry.definition().maxIterations())
                     .orElse(DEFAULT_MAX_ITERATIONS);
             log.infof("Dispatching message for session %s to skill '%s' (maxIterations=%d)",
-                      sessionId, skillName, maxIterations);
+                    sessionId, skillName, maxIterations);
         } else {
             log.infof("Dispatching message for session %s to agent %s", sessionId, role);
         }
 
         final int resolvedMaxIterations = maxIterations;
-        
-        AutonomyLevel level = context.getAutonomyLevel().orElse(null);
-        if (level == null) {
-            log.warnf("No autonomy level found in MessageContext for session %s, defaulting to SUPERVISED", sessionId);
-            level = AutonomyLevel.SUPERVISED;
-        }
+        final AutonomyLevel finalLevel = session.autonomyLevel();
 
-        final AutonomyLevel finalLevel = level;
+        // getChatId() can be null on some Telegram paths — fall back to channelId
+        String chatId = context.getChatId();
+        if (chatId == null || chatId.isBlank()) {
+            chatId = context.getUser().channelId();
+            log.debugf("[AgentDispatch] getChatId() was null — falling back to channelId=%s", chatId);
+        }
+        final String resolvedChatId = chatId;
+
         AgentResult result;
         try {
             result = WorkspaceContext.run(
                 sessionId,
                 context.getUser().platformId(),
-                context.getChatId(),
+                resolvedChatId,
                 finalLevel,
                 role,
                 () -> agentLoop.run(
@@ -92,7 +99,6 @@ public class AgentDispatchHandler implements MessageHandler {
                     resolvedMaxIterations,
                     context
                 )
-
             );
         } catch (Exception e) {
             log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());

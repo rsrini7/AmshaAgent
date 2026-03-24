@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.observability.AgentOtelContext;
@@ -167,11 +168,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                 } catch (BudgetWarningException w) {
                     log.warnf("Budget warning for session %s structured call: %s", sessionId, w.getMessage());
-                    // LLM call succeeded — absorb soft warning and return normally
+                    throw w;
+                } catch (BudgetExceededException be) {
+                    log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, be.getMessage());
+                    throw be;
                 }
             }
 
             return response.aiMessage().text();
+        } catch (BudgetWarningException | BudgetExceededException e) {
+            throw e;
         } catch (Exception e) {
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             throw new RuntimeException("Structured output LLM call failed: " + clean, e);

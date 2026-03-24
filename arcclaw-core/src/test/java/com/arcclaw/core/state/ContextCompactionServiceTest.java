@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +18,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ContextCompactionServiceTest {
 
@@ -117,7 +119,7 @@ class ContextCompactionServiceTest {
         assertTrue(service.compact("session1", "test-user"));
 
         // Capture the summary passed to upsertSummary
-        org.mockito.ArgumentCaptor<String> captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), captor.capture(), anyInt());
         
         String truncated = captor.getValue();
@@ -186,5 +188,18 @@ class ContextCompactionServiceTest {
 
         assertTrue(service.compact("session1", "test-user"));
         verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), contains("...[truncated]"), anyInt());
+    }
+
+    @Test
+    void truncationIsCodepointSafeAndReturnsTruncationSuffix() throws Exception {
+        // 1984 'A's + 1 Emoji (2 chars, 1 codepoint) + 10 'B's
+        String input = "A".repeat(1984) + "\uD83D\uDE00" + "B".repeat(10);
+        
+        Method m = ContextCompactionService.class.getDeclaredMethod("truncateSafely", String.class);
+        m.setAccessible(true);
+        String result = (String) m.invoke(service, input);
+        
+        String expected = "A".repeat(1984) + "\uD83D\uDE00...[truncated]";
+        assertEquals(expected, result);
     }
 }

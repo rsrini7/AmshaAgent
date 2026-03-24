@@ -4350,3 +4350,41 @@ Deduplicate LLM model production logic and harden SQLite retry mechanisms across
 - ✅ `SqliteRetryTemplateTest`: Verified retry logic and backoff behavior.
 - ✅ `GlobalKnowledgeBaseTest`: Verified locale-safe vector serialization.
 - ✅ Full `mvn clean verify`: 382/382 tests passing.
+
+---
+
+# Phase 64-E — Test Resilience & Context Hardening ✅
+
+Resolve intermittent test failures in `ReasoningStepParser` and ensure stable `SessionContext` propagation in `AgentDispatchHandler`.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Defensive JSON Parsing**: Updated `ReasoningStepParser` to explicitly return `ReasoningStep.schemaError` when the LLM emits malformed JSON. This prevents the agent loop from hanging on "pending" states and forces a structured observation that the LLM can use for self-correction.
+
+> [!NOTE]
+> **Deterministic Test Context**: Standardized the `createTestContext` helper in `AgentDispatchHandlerTest` to ensure `SessionContext` is always populated before the handler (priority 50) executes. This mirrors the production pipeline where `SessionResolutionHandler` (priority 40) runs first.
+
+> [!TIP]
+> **Regex Accuracy**: Refined the `COMPLIANCE_OVERRIDE_PATTERN` in `ChatHistoryAssembler` to correctly handle case-insensitive "i" and redundant punctuation, fixing false negatives in compliance redaction tests.
+
+## Completed Changes
+
+#### [MODIFY] [ReasoningStepParser.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java)
+- Improved exception handling to return `schemaError` with "invalid JSON" message instead of generic warning logs.
+
+#### [MODIFY] [ReasoningStepParserTest.java](file:///arcclaw-core/src/test/java/com/arcclaw/core/agent/reasoning/ReasoningStepParserTest.java)
+- Updated assertion to match new "invalid JSON" error string.
+
+#### [MODIFY] [AgentDispatchHandlerTest.java](file:///arcclaw-core/src/test/java/com/arcclaw/core/handler/AgentDispatchHandlerTest.java)
+- Hardened test context initialization to ensure `SessionContext` presence.
+
+#### [MODIFY] [ChatHistoryAssembler.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java)
+- Updated compliance override regex for better tolerance of whitespace and case variants.
+
+## Verification
+- ✅ `ReasoningStepParserTest`: Verified "invalid JSON" observation mapping.
+- ✅ `AgentDispatchHandlerTest`: Verified session-isolated dispatch logic.
+- ✅ `ChatHistoryAssemblerTest`: Verified compliance redaction regex.
+- ✅ Full `mvn clean verify`: All tests PASS.
+

@@ -60,7 +60,7 @@ Now I have rich data on every project. Here is the full expanded comparison:
 
 | Agent | Language | Philosophy | Sandbox | Memory | Audit | Secret Mgmt |
 |---|---|---|---|---|---|---|
-| **ArcClaw**  [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt) | Java/Quarkus | Enterprise-grade governed agent kernel | ✅ Podman per-tool | ✅ SQLite FTS5 + vec0 RAG  | ✅ OTel + AuditService  | ✅ `@RequiresSecret` ephemeral env-file  [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt) |
+| **ArcClaw**   | Java/Quarkus | Enterprise-grade governed agent kernel | ✅ Podman per-tool | ✅ SQLite FTS5 + vec0 RAG  | ✅ OTel + AuditService  | ✅ `@RequiresSecret` ephemeral env-file   |
 | **OpenClaw**  [mindstudio](https://www.mindstudio.ai/blog/what-is-openclaw-ai-agent/) | Node.js | Original viral hit; features > security | ✅ (basic) | ✅ SQLite vector | ❌ | ✅ Aquaman proxy |
 | **IronClaw** (NEAR AI)  [mexc](https://www.mexc.co/en-IN/news/788052) | Rust | TEE + cryptographic proof of execution | ✅ Isolated tools | ✅ PostgreSQL AES-256 | ✅ Full tool activity log | ✅ Runtime credential injection |
 | **NanoClaw**  [dextralabs](https://dextralabs.com/blog/top-openclaw-alternatives/) | Docker-first | "If it breaks, breaks inside a container" | ✅ Docker per-task | ❌ | ❌ | ❌ |
@@ -82,12 +82,12 @@ Now I have rich data on every project. Here is the full expanded comparison:
 
 ## Where ArcClaw Stands Alone
 
-These capabilities exist **only in ArcClaw** across the entire ecosystem: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+These capabilities exist **only in ArcClaw** across the entire ecosystem: 
 
-- **Per-session USD hard + soft budget governance** with floor enforcement for zero-token reports — no other framework does this [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
-- **JVM crash recovery** via `SessionReaper` zombie detection for `INPROGRESS`/`AWAITING_APPROVAL` checkpoints [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
-- **CDI-scoped tenant isolation** — `WorkspaceScoped`, `ScopedValue`-bound `USERID` hard boundary that LLM parameters cannot override [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
-- **Role-based HITL approval workflows** with per-tool `RequiresApprovalException` + approval timeout sweep [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **Per-session USD hard + soft budget governance** with floor enforcement for zero-token reports — no other framework does this 
+- **JVM crash recovery** via `SessionReaper` zombie detection for `INPROGRESS`/`AWAITING_APPROVAL` checkpoints 
+- **CDI-scoped tenant isolation** — `WorkspaceScoped`, `ScopedValue`-bound `USERID` hard boundary that LLM parameters cannot override 
+- **Role-based HITL approval workflows** with per-tool `RequiresApprovalException` + approval timeout sweep 
 - **OTel traced audit** with `AuditService` across security events per session and agent role
 
 ## ArcClaw's Closest Rival Per Dimension
@@ -1077,17 +1077,6 @@ return switch (provider.toLowerCase().trim()) {
 ```
 Adding a new provider (Voyage, Cohere, etc.) requires modifying this class. The standard fix is a `EmbeddingProviderFactory` interface with `@Named` CDI producers per provider, discovered via Instance<EmbeddingProviderFactory>.
 
-**YAGNI: `ToolCapability.SANDBOX_EXEC` defined but never used**
-
-```java
-// SANDBOX_EXEC deferred to Phase 48
-```
-If Phase 48 is speculative, remove it. Phantom capabilities in the enum create the appearance of permissions that don't exist, confuse future readers, and appear in `toolNames()` sets that could leak into prompts.
-
-**YAGNI: `AgentResult.FailureCategory.RATE_LIMIT` never set**
-
-The enum value exists, but searching the codebase for where `FailureCategory.RATE_LIMIT` is assigned produces nothing — the rate limit path in `IntentClassificationHandler` absorbs the exception and routes to coordinator, never creating a `Failed` result. Dead enum values are maintenance risk.
-
 ---
 
 ### 8. CompactionSummaryEntity — Public Fields on JPA Entity
@@ -1194,7 +1183,6 @@ Here are the highest-leverage changes:
 - `EmbeddingModelProducer`: introduce `EmbeddingProviderFactory` SPI.
 - `StartupSecurityValidator` fields: `private final` + constructor injection.
 - `AgentResult.FailureCategory`: remove `RATE_LIMIT` if unused, or wire it up properly.
-- Remove `ToolCapability.SANDBOX_EXEC` until Phase 48 is real.
 
 **Low** — operational hardening:
 - Pin `alpine:latest` → `alpine:3.20` in `Dockerfile.toolrunner`.

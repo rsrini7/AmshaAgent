@@ -55,5 +55,9 @@ public final class MessageContext {
 
     public Optional<AutonomyLevel> getAutonomyLevel() { return Optional.ofNullable(autonomyLevel); }
     public void setAutonomyLevel(AutonomyLevel autonomyLevel) { this.autonomyLevel = autonomyLevel; }
+
+    private SessionContext sessionContext;
+    public Optional<SessionContext> getSessionContext() { return Optional.ofNullable(sessionContext); }
+    public void setSessionContext(SessionContext sessionContext) { this.sessionContext = sessionContext; }
 }
 

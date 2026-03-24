@@ -1,25 +1,21 @@
 package com.arcclaw.app.channel.telegram;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.camel.Exchange;
-import org.apache.camel.component.telegram.model.IncomingMessage;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-
 import io.quarkus.arc.Arc;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.apache.camel.Exchange;
+import org.apache.camel.component.telegram.model.IncomingMessage;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class TelegramAgentHandler {
@@ -38,22 +34,7 @@ public class TelegramAgentHandler {
     @Inject
     TelegramChannelSender sender;
 
-    private final Cache<String, ExecutorService> chatQueues = Caffeine.newBuilder()
-                    .maximumSize(10_000)
-                    .expireAfterAccess(30, TimeUnit.MINUTES)
-                    .<String, ExecutorService>removalListener((chatId, executor, cause) -> {
-                        if (executor != null) executor.shutdown();
-                    })
-                    .build();
-
-    private ExecutorService queueForChat(String chatId) {
-        return chatQueues.get(chatId, id ->
-            Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "chat-queue-" + id);
-                t.setDaemon(true);
-                return t;
-            }));
-    }
+    private final ConcurrentHashMap<String, AtomicBoolean> processingFlags = new ConcurrentHashMap<>();
 
     public void receiveMessage(Exchange exchange) {
         log.infof("TELEGRAM-RECV raw exchange received");
@@ -83,10 +64,9 @@ public class TelegramAgentHandler {
                 ChannelUser fallbackUser = new ChannelUser(
                     fallbackUserId, chatId, null, ChannelType.TELEGRAM);
 
-                queueForChat(chatId).submit(() ->
-                    sender.sendRaw(fallbackUser,
-                        "⚠️ I can only process text messages. "
-                        + "Images, documents, stickers, and voice notes are not supported yet."));
+                sender.sendRaw(fallbackUser,
+                    "⚠️ I can only process text messages. "
+                    + "Images, documents, stickers, and voice notes are not supported yet.");
             }
             return;
         }
@@ -114,7 +94,21 @@ public class TelegramAgentHandler {
         }
 
         log.debugf("Processing message for chat %s", chatId);
-        queueForChat(chatId).submit(() -> processPipeline(context));
+        AtomicBoolean flag = processingFlags.computeIfAbsent(chatId, id -> new AtomicBoolean(false));
+
+        if (!flag.compareAndSet(false, true)) {
+            sender.sendRaw(user, "⏳ Still processing your previous message. Please wait.");
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                processPipeline(context);
+            } finally {
+                flag.set(false);
+                processingFlags.remove(chatId, flag);
+            }
+        });
     }
 
     void processPipeline(MessageContext context) {

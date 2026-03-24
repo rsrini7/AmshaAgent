@@ -1202,3 +1202,13 @@
 - [x] Step 8: Implement `requiresManualApproval` in `AgentTool` and `GithubTool`. <!-- id: 579 -->
 - [x] Step 9: Update `ToolInvocationGuard` to enforce tool-specific manual approvals. <!-- id: 580 -->
 - [x] Step 10: Run full test suite: `mvn clean verify` (382/382 tests green). <!-- id: 581 -->
+
+---
+
+## Phase 64-E — Test Resilience & Context Hardening ✅
+- [x] Step 1: Fix `ReasoningStepParser` to return `schemaError` on JSON failure. <!-- id: 582 -->
+- [x] Step 2: Update `ReasoningStepParserTest` assertion to match "invalid JSON". <!-- id: 583 -->
+- [x] Step 3: Harden `AgentDispatchHandlerTest` to ensure `SessionContext` population. <!-- id: 584 -->
+- [x] Step 4: Refine `ChatHistoryAssembler` compliance regex (case-insensitive "i"). <!-- id: 585 -->
+- [x] Step 5: Verify full test suite: `mvn clean verify` passes (400/400 tests green). <!-- id: 586 -->
+

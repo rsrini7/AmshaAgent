@@ -123,6 +123,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setPendingToolName(checkpoint.getPendingToolName());
             managed.setPendingToolParametersJson(checkpoint.getPendingToolParametersJson());
             managed.setAutonomyLevel(checkpoint.getAutonomyLevel());
+            managed.setOriginalGoal(checkpoint.getOriginalGoal());
             return managed;
         }
     }

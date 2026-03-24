@@ -78,11 +78,16 @@ public sealed interface ChannelCommand
             case "reset"   -> new Reset();
             case "history" -> new History();
             case "crons"    -> new CronTasks();
-            case "cron"     -> "delete".equalsIgnoreCase(arg)
-                        ? new DeleteCron(Optional.ofNullable(
-                              text.trim().split("\\s+").length > 2
-                              ? text.trim().split("\\s+")[2] : null))
-                        : new CronTasks();
+            case "cron" -> {
+                String[] parts = text.trim().split("\\s+");
+                if ("delete".equalsIgnoreCase(arg)) {
+                    String cronId = parts.length > 2 ? parts[2].strip() : null;
+                    yield new DeleteCron(
+                        Optional.ofNullable(cronId == null || cronId.isBlank()
+                            ? null : cronId));
+                }
+                yield new CronTasks();
+            }
             case "deletecron" -> new DeleteCron(optArg);
             case "listtask", "listtasks", "crontask", "crontasks" -> new CronTasks();
             default -> new Unknown(text);

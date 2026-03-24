@@ -140,4 +140,19 @@ class ChannelCommandParseTest {
         assertFalse(new ChannelCommand.CronTasks().isControlCommand());
         assertFalse(new ChannelCommand.Unknown("raw").isControlCommand());
     }
+
+    @Test
+    void doubleSpaceCronDeleteExtractsCronId() {
+        var cmd = ChannelCommand.parse("/cron  delete  abc-123");
+        assertInstanceOf(ChannelCommand.DeleteCron.class, cmd);
+        assertEquals(Optional.of("abc-123"),
+            ((ChannelCommand.DeleteCron) cmd).cronId());
+    }
+
+    @Test
+    void missingCronIdYieldsEmptyOptional() {
+        var cmd = ChannelCommand.parse("/cron delete");
+        assertInstanceOf(ChannelCommand.DeleteCron.class, cmd);
+        assertTrue(((ChannelCommand.DeleteCron) cmd).cronId().isEmpty());
+    }
 }

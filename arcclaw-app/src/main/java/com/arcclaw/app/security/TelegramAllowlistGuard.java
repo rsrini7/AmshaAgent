@@ -30,7 +30,6 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
 
     @Override
     public boolean isAllowed(String userIdStr, String username) {
-        log.infof("DEBUG allowedUserIds=%s allowedUsers=%s", allowedUserIds, allowedUsers);
         // 1. Check strict numeric IDs first (Phase 46)
         boolean hasNumericIds = allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty();
         

@@ -2,6 +2,7 @@ package com.arcclaw.core.pipeline.handlers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,18 +44,21 @@ class SessionResolutionHandlerTest {
     void setUp() {
         handler = new SessionResolutionHandler(agentStore, heartbeatTracker, sessionIdResolver);
         // All tests use the same fixed session ID from the mock resolver
-        when(sessionIdResolver.resolveOrCreate("TELEGRAM", "chat1", "u1"))
+        lenient().when(sessionIdResolver.resolveOrCreate("TELEGRAM", "chat1", "u1"))
             .thenReturn(FIXED_SESSION_ID);
     }
 
     @Test
     void testSessionResolutionWithStoredAutonomy() {
-        ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.SLACK);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
         ChannelSender sender = mock(ChannelSender.class);
         MessageContext context = new MessageContext("chat1", user, msg, sender);
 
-        when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(AutonomyLevel.FULL);
+        when(sessionIdResolver.resolveOrCreate("SLACK", "chat1", "u1"))
+            .thenReturn(FIXED_SESSION_ID);
+        when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(null);
+        when(agentStore.loadLatestAutonomyForSession(FIXED_SESSION_ID)).thenReturn(Optional.of(AutonomyLevel.FULL));
 
         handler.handle(context);
 

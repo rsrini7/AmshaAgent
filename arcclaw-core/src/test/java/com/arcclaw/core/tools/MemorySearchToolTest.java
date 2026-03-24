@@ -1,6 +1,9 @@
 package com.arcclaw.core.tools;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
@@ -9,7 +12,8 @@ import java.util.Map;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import org.junit.jupiter.api.Test;
@@ -21,7 +25,6 @@ class MemorySearchToolTest {
 
     private MemorySearchTool createTool() {
         MemorySearchTool tool = new MemorySearchTool();
-        // Inject mocks via field access (fields are package-private CDI injection points)
         try {
             var repoField = MemorySearchTool.class.getDeclaredField("repository");
             repoField.setAccessible(true);
@@ -53,8 +56,9 @@ class MemorySearchToolTest {
         when(repository.searchMemory("user-42", "\"blockchain\"", 5))
                 .thenReturn(List.of(e1, e2));
 
-        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
-                tool.execute(Map.of("query", "blockchain")));
+        ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "blockchain")));
 
         assertTrue(result.success());
         assertTrue(result.output().contains("session-1"));
@@ -65,33 +69,41 @@ class MemorySearchToolTest {
     }
 
     @Test
-    void testThrowsSecurityExceptionWhenUserIdNotBound() {
+    void testThrowsSecurityExceptionWhenUserIdNotBound() throws Exception {
         MemorySearchTool tool = createTool();
 
-        assertThrows(SecurityException.class, () ->
-                tool.execute(Map.of("query", "test")));
+        // Blank userId — intentionally triggers the 403 tenant boundary check
+        ToolResponse response = WorkspaceContext.run("test-session", "", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "test")));
+
+        assertFalse(response.success());
+        assertEquals(403, response.exitCode());
+        assertTrue(response.output().contains("USER_ID not bound"));
     }
 
     @Test
     void testBlankQueryReturnsEmptyGracefully() throws Exception {
         MemorySearchTool tool = createTool();
 
-        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
-                tool.execute(Map.of("query", "   ")));
+        ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "   ")));
 
         assertTrue(result.success());
         assertEquals("No query provided", result.output());
     }
 
     @Test
-    void testSearchAuditedWithToolInvoked() {
+    void testSearchAuditedWithToolInvoked() throws Exception {
         MemorySearchTool tool = createTool();
 
         when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
                 .thenReturn(List.of());
 
-        WorkspaceScopeHolder.run("test-session", "user-42", null, () -> 
-                tool.execute(Map.of("query", "architecture")));
+        WorkspaceContext.run("test-session", "user-42", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "architecture")));
 
         verify(auditService).record(
                 eq("test-session"),
@@ -108,11 +120,13 @@ class MemorySearchToolTest {
         when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
                 .thenReturn(List.of());
 
-        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
-                tool.execute(Map.of("query", "unknown topic")));
+        ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "unknown topic")));
 
         assertTrue(result.success());
-        assertEquals("No relevant memory found for query: unknown topic. Proceed with current context only.", result.output());
+        assertEquals("No relevant memory found for query: unknown topic. Proceed with current context only.",
+                result.output());
     }
 
     @Test
@@ -122,11 +136,13 @@ class MemorySearchToolTest {
         when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
                 .thenThrow(new RuntimeException("no such table: fts.compaction_summary_fts"));
 
-        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
-                tool.execute(Map.of("query", "blockchain")));
+        ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "blockchain")));
 
         assertTrue(result.success());
-        assertEquals("Memory index temporarily unavailable. Proceed with current context.", result.output());
+        assertEquals("Memory index temporarily unavailable. Proceed with current context.",
+                result.output());
     }
 
     @Test
@@ -136,8 +152,9 @@ class MemorySearchToolTest {
         when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
                 .thenThrow(new RuntimeException("connection reset"));
 
-        ToolResponse result = WorkspaceScopeHolder.call("test-session", "user-42", null, () -> 
-                tool.execute(Map.of("query", "blockchain")));
+        ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
+                AutonomyLevel.SUPERVISED, "tool",
+                () -> tool.execute(Map.of("query", "blockchain")));
 
         assertFalse(result.success());
         assertEquals(500, result.exitCode());

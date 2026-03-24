@@ -2,18 +2,20 @@ package com.arcclaw.core.audit;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.jboss.logging.Logger;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import java.util.concurrent.locks.ReentrantLock;
-
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class AuditEventRepository {
+
+    private static final Logger log = Logger.getLogger(AuditEventRepository.class);
 
     @Inject
     EntityManager em;
@@ -24,7 +26,7 @@ public class AuditEventRepository {
         // This prevents ANTLR cold-start under Narayana transaction timeout in native mode
         try {
             em.createNamedQuery("AuditEvent.recordInsert", AuditEvent.class)
-                .setMaxResults(1);
+              .setMaxResults(1);
         } catch (Exception ignored) {
             // Best-effort warmup; real queries will still work
         }
@@ -38,38 +40,48 @@ public class AuditEventRepository {
 
     /**
      * Persists an AuditEvent and computes its HMAC chain fields.
-     * This method is deliberately NOT annotated with @Transactional.
+     * This method is deliberately NOT annotated with @Transactional in the Javadoc,
+     * but in practice uses REQUIRED semantics here to ensure an active transaction.
      * It relies on the caller (AuditService) to provide the appropriate
      * REQUIRED transaction boundary.
      */
+    @Transactional
     public void record(AuditEvent event) {
         ReentrantLock lock = sequencer.lockFor(event.sessionId);
         lock.lock();
         try {
-            // Step 1: assign monotonic sequence for this session
+            // Step 1: assign monotonic sequence
             List<Long> maxSeqResult = em.createQuery(
                     "SELECT COALESCE(MAX(a.sequence), 0) FROM AuditEvent a WHERE a.sessionId = :sid",
                     Long.class)
-                    .setParameter("sid", event.sessionId)
-                    .getResultList();
-            event.sequence = (maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst()) + 1;
+                .setParameter("sid", event.sessionId)
+                .getResultList();
+            long currentMax = maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst();
+            event.sequence = currentMax + 1;
 
-            // Step 2: chain to previous hash
+            // Step 2: compute prevHash (genesis-safe, never null)
             String prevHash = findLatestHash(event.sessionId);
             if (prevHash == null) {
                 prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
             }
-            event.prevHash = prevHash;
-            
-            String payload = event.computePayloadStr();
-            event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
-            
-            if (event.hmacHash == null) {
-                Logger.getLogger(AuditEventRepository.class)
-                    .errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.", event.sessionId);
-                event.hmacHash = "error-null-fallback-" + UUID.randomUUID();
+            if (prevHash == null) {
+                // Absolute last resort — must not violate NOT NULL
+                prevHash = "prevhash-fallback-" + event.sessionId;
             }
+            event.prevHash = prevHash;
 
+            // Step 3: compute HMAC (never null at DB layer)
+            String payload = event.computePayloadStr();
+            String hmac = hashUtil.hmacHex(prevHash + "|" + payload);
+
+            if (hmac == null) {
+                log.errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.",
+                        event.sessionId);
+                hmac = "error-null-fallback-" + UUID.randomUUID();
+            }
+            event.hmacHash = hmac;
+
+            // Step 4: persist
             em.persist(event);
         } finally {
             lock.unlock();
@@ -87,10 +99,9 @@ public class AuditEventRepository {
                 .setParameter("sid", sessionId)
                 .setMaxResults(1)
                 .getResultList();
-        
+
         return results.isEmpty() ? null : results.getFirst();
     }
-
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<AuditEvent> findBySessionId(String sessionId) {

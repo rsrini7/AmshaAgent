@@ -1,7 +1,9 @@
 package com.arcclaw.core.persistence;
 
 import java.util.concurrent.Callable;
+
 import jakarta.enterprise.context.ApplicationScoped;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

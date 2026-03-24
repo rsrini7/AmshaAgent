@@ -8,11 +8,10 @@ import java.sql.SQLException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.hibernate.exception.LockAcquisitionException;
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.persistence.SqliteErrorStrings;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import org.hibernate.exception.LockAcquisitionException;
+import org.junit.jupiter.api.Test;
 
 class StatefulAgentStoreRetryTest {
 

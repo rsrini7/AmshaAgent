@@ -84,16 +84,20 @@ public class AuditHashUtil {
      *         or "hash-error" if SHA-256 is unavailable.
      */
     public String sha256hex(String input) {
-        if (input == null)
-            return "null";
+        if (input == null) {
+            // Never propagate null into prevHash — use explicit sentinel
+            return "genesis-fallback-null-input";
+        }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (Exception e) {
-            return "hash-error";
+            // SHA-256 must never be null for audit chaining; use hardcoded fallback
+            return "genesis-fallback-sha256-error";
         }
     }
+
 
     public String hmacHex(String data) {
         try {

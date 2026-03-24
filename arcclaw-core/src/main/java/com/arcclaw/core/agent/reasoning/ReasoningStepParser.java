@@ -48,10 +48,10 @@ public class ReasoningStepParser {
                     });
                 }
             } catch (Exception e) {
-                log.warnf("JSON parse error for session [%s]: %s", sessionId, e.getMessage());
-                // signal retry — NOT finish
+                log.warnf("JSON parse error for session %s: %s", sessionId, e.getMessage());
                 return ReasoningStep.schemaError(
-                        "JSON parse error — respond with valid JSON: " + e.getMessage(),
+                        "System: Your previous response contained invalid JSON. " +
+                                "Correct the format and retry. Error: " + e.getMessage(),
                         inputTokens, outputTokens
                 );
             }

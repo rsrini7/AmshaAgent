@@ -3,10 +3,13 @@ package com.arcclaw.core.agent.reasoning;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +20,9 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.governance.BudgetWarningException;
+import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -443,5 +449,29 @@ class LangChainReasoningEngineTest {
             assertTrue(userRequestPresent,
                 "User message must pass through history reconstruction unchanged");
         });
+    }
+
+    @InjectMock
+    GovernanceLayer governanceLayer;
+
+    @Test
+    void structuredOutputPathPropagatesBudgetWarning() throws Exception {
+        ChatResponse mockResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage("result"))
+                .tokenUsage(new TokenUsage(10, 20))
+                .build();
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(promptBuilder.build(any(), any(), any())).thenReturn("sys prompt");
+        
+        Mockito.doThrow(new BudgetWarningException("budget low"))
+            .when(governanceLayer).recordLlmCall(anyString(), any(Integer.class), any(Integer.class));
+            
+        AgentOtelContext mockOtelContext = Mockito.mock(AgentOtelContext.class);
+        Field field = LangChainReasoningEngine.class.getDeclaredField("otelContext");
+        field.setAccessible(true);
+        field.set(reasoningEngine, mockOtelContext);
+
+        assertThrows(BudgetWarningException.class, () ->
+            ((LangChainReasoningEngine) reasoningEngine).chatForStructuredOutput("test-session", "coordinator", "{}"));
     }
 }

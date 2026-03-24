@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 class AgentStateMachineRunnerTest {
 
+
     private AgentStateMachineRunner runner;
     private AgentStepProcessor stepProcessor;
     private LangChainReasoningEngine engine;
@@ -50,13 +51,17 @@ class AgentStateMachineRunnerTest {
     private PiiScanReflex piiScanReflex;
     private AgentOtelContext agentOtelContext;
 
+
     @SuppressWarnings("unchecked")
     private Instance<DynamicToolLookup> dynamicToolLookup = mock(Instance.class);
+
 
     @SuppressWarnings("unchecked")
     Instance<AgentObserver> observers = mock(Instance.class);
 
+
     DestructiveVocabularyFilter destructiveFilter = mock(DestructiveVocabularyFilter.class);
+
 
     @BeforeEach
     void setUp() {
@@ -71,15 +76,35 @@ class AgentStateMachineRunnerTest {
         piiScanReflex    = mock(PiiScanReflex.class);
         agentOtelContext = mock(AgentOtelContext.class);
 
+
+        // Wire ApprovalCheckpointManager
+        ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager();
+        checkpointManager.agentStore = agentStore;
+
+
+        // Wire EngineStepHandler
+        EngineStepHandler engineStepHandler = new EngineStepHandler();
+        engineStepHandler.governanceLayer = governanceLayer;
+        engineStepHandler.observers       = observers;
+
+
+        // Wire ToolStepHandler
+        ToolStepHandler toolStepHandler = new ToolStepHandler();
+        toolStepHandler.toolRegistry      = toolRegistry;
+        toolStepHandler.observers         = observers;
+        toolStepHandler.guard             = guard;
+        toolStepHandler.invoker           = invoker;
+        toolStepHandler.writer            = writer;
+        toolStepHandler.dynamicToolLookup = dynamicToolLookup;
+        toolStepHandler.checkpointManager = checkpointManager;
+
+
+        // Wire facade
         stepProcessor = new AgentStepProcessor();
-        stepProcessor.toolRegistry    = toolRegistry;
-        stepProcessor.agentStore      = agentStore;
-        stepProcessor.governanceLayer = governanceLayer;
-        stepProcessor.observers       = observers;
-        stepProcessor.guard           = guard;
-        stepProcessor.invoker         = invoker;
-        stepProcessor.writer          = writer;
-        stepProcessor.dynamicToolLookup = dynamicToolLookup; // ← THE FIX
+        stepProcessor.engineStepHandler = engineStepHandler;
+        stepProcessor.toolStepHandler   = toolStepHandler;
+        stepProcessor.checkpointManager = checkpointManager;
+
 
         runner = new AgentStateMachineRunner();
         runner.stepProcessor    = stepProcessor;
@@ -89,8 +114,10 @@ class AgentStateMachineRunnerTest {
         runner.piiScanReflex    = piiScanReflex;
         runner.agentOtelContext = agentOtelContext;
 
+
         when(observers.iterator()).thenReturn(Collections.emptyIterator());
         when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+
 
         Span invalidSpan = Span.getInvalid();
         when(agentOtelContext.startIterationSpan(anyString(), anyInt(), anyString()))
@@ -98,18 +125,22 @@ class AgentStateMachineRunnerTest {
         when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString()))
                 .thenReturn(invalidSpan);
 
+
         when(dynamicToolLookup.isUnsatisfied()).thenReturn(true);
+
 
         when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
         when(destructiveFilter.filter(anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
     }
 
+
     private AgentExecutionContext createCtx() {
         return new AgentExecutionContext(
                 "session-1", "user-1", "chat-1", "coordinator",
                 "goal", AutonomyLevel.FULL, 5);
     }
+
 
     @Test
     void testFinishOnFirstStep() {
@@ -118,12 +149,15 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenReturn(finishStep);
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("Hello", ((AgentResult.Finished) result).answer());
         verify(engine, times(1)).nextStep(any(), any(), any(), any());
     }
+
 
     @Test
     void testLoopExceededAfterMaxIterations() {
@@ -136,13 +170,16 @@ class AgentStateMachineRunnerTest {
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(0, "output", true));
 
+
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2);
         AgentResult result = runner.run(ctx, engine, List.of());
 
+
         assertInstanceOf(AgentResult.LoopExceeded.class, result);
         assertEquals(2, ((AgentResult.LoopExceeded) result).maxIterations());
     }
+
 
     @Test
     void testHallucinatedToolIntercepted() {
@@ -151,18 +188,22 @@ class AgentStateMachineRunnerTest {
         ReasoningStep finishStep = ReasoningStep.pending(
                 "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 0, 0);
 
+
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenReturn(hallucinatedStep)
                 .thenReturn(finishStep);
         when(toolRegistry.findTool("fake-tool")).thenReturn(Optional.empty());
         when(toolRegistry.listTools()).thenReturn(List.of("valid-tool"));
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("fixed", ((AgentResult.Finished) result).answer());
         verify(engine, times(2)).nextStep(any(), any(), any(), any());
     }
+
 
     @Test
     void testBudgetExceededAborts() throws Exception {
@@ -172,13 +213,16 @@ class AgentStateMachineRunnerTest {
         doThrow(new BudgetExceededException("Budget blown"))
                 .when(governanceLayer).recordLlmCall(anyString(), anyInt(), anyInt());
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Failed.class, result);
         assertEquals(AgentResult.FailureCategory.BUDGET_EXCEEDED,
                 ((AgentResult.Failed) result).category());
         assertTrue(((AgentResult.Failed) result).reason().contains("Budget blown"));
     }
+
 
     @Test
     void testAwaitingApprovalPausesLoop() {
@@ -196,9 +240,11 @@ class AgentStateMachineRunnerTest {
             when(agentStore.load(anyString(), anyString()))
                     .thenReturn(Optional.of(new AgentCheckpoint()));
 
+
             AgentExecutionContext ctx = new AgentExecutionContext(
                     "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5);
             AgentResult result = runner.run(ctx, engine, List.of());
+
 
             assertInstanceOf(AgentResult.AwaitingApproval.class, result);
             assertEquals("protected-tool",
@@ -206,6 +252,7 @@ class AgentStateMachineRunnerTest {
             verify(agentStore).save(any(AgentCheckpoint.class));
         });
     }
+
 
     @Test
     void testCircuitBreakerTripsAfter2Failures() {
@@ -223,12 +270,15 @@ class AgentStateMachineRunnerTest {
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(1, "error", false));
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
         verify(invoker, times(2)).invoke(anyString(), anyMap(), anyString());
     }
+
 
     @Test
     void testSchemaErrorSelfHealsOnce() {
@@ -236,16 +286,20 @@ class AgentStateMachineRunnerTest {
         ReasoningStep finishStep = ReasoningStep.pending(
                 "done", ReasoningStep.FINISH, Map.of("answer", "healed"), 0, 0);
 
+
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenThrow(ex)
                 .thenReturn(finishStep);
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("healed", ((AgentResult.Finished) result).answer());
         verify(engine, times(2)).nextStep(any(), any(), any(), any());
     }
+
 
     @Test
     void testSchedulingToolFastPathExits() {
@@ -260,7 +314,9 @@ class AgentStateMachineRunnerTest {
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(new ToolResponse(0, "Scheduled cleaning", true));
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("Scheduled cleaning"));
@@ -268,19 +324,23 @@ class AgentStateMachineRunnerTest {
         verify(writer).saveAnswer(anyString(), anyString());
     }
 
+
     @Test
     void testRateLimitReturnsRateLimitCategory() {
         HttpException ex = new HttpException(429, "Rate limit reached");
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenThrow(ex);
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Failed.class, result);
         assertEquals(AgentResult.FailureCategory.RATE_LIMIT,
                 ((AgentResult.Failed) result).category());
         assertTrue(((AgentResult.Failed) result).reason().contains("⏳"));
     }
+
 
     @Test
     void testReactKeywordDoesNotPersistToHistory() {
@@ -289,13 +349,16 @@ class AgentStateMachineRunnerTest {
         ReasoningStep finishStep = ReasoningStep.pending(
                 "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 0, 0);
 
+
         when(engine.nextStep(any(), any(), any(), anyList()))
                 .thenReturn(reactStep)
                 .thenReturn(finishStep);
         when(toolRegistry.findTool("OBSERVE")).thenReturn(Optional.empty());
         when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search"));
 
+
         AgentResult result = runner.run(createCtx(), engine, List.of());
+
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("fixed", ((AgentResult.Finished) result).answer());

@@ -11,6 +11,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
@@ -75,9 +76,8 @@ public class ManageScheduleTool implements AgentTool {
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         // Tenant context validation — fail-closed
-        String userId = WorkspaceScopeHolder.USER_ID.isBound()
-                ? WorkspaceScopeHolder.USER_ID.get() : null;
-        if (userId == null) {
+        String userId =  WorkspaceContext.userId();
+        if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403,
                     "Security violation: tenant context not bound. Operation rejected.");
         }

@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -168,9 +169,9 @@ class GlobalKnowledgeBaseTest {
 
     @Test
     void testVectorSerializationUsesRootLocale() throws Exception {
-        java.util.Locale defaultLocale = java.util.Locale.getDefault();
+        Locale defaultLocale = Locale.getDefault();
         try {
-            java.util.Locale.setDefault(java.util.Locale.GERMAN);
+            Locale.setDefault(Locale.GERMAN);
             
             when(ftsInterceptor.isVectorSearchEnabled()).thenReturn(true);
             float[] vector = new float[]{0.1f, 0.2f};
@@ -192,7 +193,29 @@ class GlobalKnowledgeBaseTest {
             assertFalse(vectorString.contains("0,1"), "Vector serialization must not use comma separator: " + vectorString);
             
         } finally {
-            java.util.Locale.setDefault(defaultLocale);
+            Locale.setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    void embeddingSerializationIsLocaleInvariant() {
+        float[] embedding = {0.1f, 0.2f, 0.33f};
+        Locale original = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.GERMANY);
+            String json = GlobalKnowledgeBase.floatArrayToJson(embedding);
+            
+            // German locale would produce "0,1" and "0,2".
+            // Array separator produces ",0" but we must not match that.
+            // We check for the presence of the decimal comma specifically.
+            assertFalse(json.contains("0,1") || json.contains("0,2"), 
+                "Locale leaked into float format (decimal comma found) — got: " + json);
+            
+            assertTrue(json.contains("0.1") && json.contains("0.2"), 
+                "Expected dot decimal separator — got: " + json);
+            assertEquals("[0.1,0.2,0.33]", json);
+        } finally {
+            Locale.setDefault(original);
         }
     }
 }

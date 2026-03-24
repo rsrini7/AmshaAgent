@@ -7,6 +7,8 @@ import java.util.List;
 
 import com.arcclaw.channel.api.ReplyNode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class TelegramMarkdownV2RendererTest {
 
@@ -129,5 +131,27 @@ class TelegramMarkdownV2RendererTest {
     void testHeadingContentIsStillEscaped() {
         String output = renderer.render(List.of(new ReplyNode.Heading("H1_With_Underscore", 1)));
         assertEquals("*__H1\\_With\\_Underscore__*", output);
+    }
+
+    // All 18 special characters must be escaped with a backslash prefix.
+    @ParameterizedTest
+    @ValueSource(chars = {'_','*','[',']','(',')',
+        '~','`','>','#','+','-','=','|','{','}','.','!'})
+    void escapesSingleSpecialChar(char specialChar) {
+        String input = String.valueOf(specialChar);
+        String result = renderer.esc(input);
+        assertEquals("\\" + specialChar, result);
+    }
+
+    // Backslash itself must be escaped first (\\)
+    @Test
+    void escapesBackslash() {
+        assertEquals("\\\\", renderer.esc("\\"));
+    }
+
+    // Normal ASCII must pass through unchanged
+    @Test
+    void normalTextPassesThrough() {
+        assertEquals("hello world", renderer.esc("hello world"));
     }
 }

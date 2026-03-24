@@ -42,10 +42,10 @@
     </dependency>
 
     <!-- WebSocket -->
-    <dependency>
+    <!-- <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-websockets-next</artifactId>
-    </dependency>
+    </dependency> -->
 
     <!-- Vert.x async -->
     <dependency>

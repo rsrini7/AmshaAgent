@@ -2527,3 +2527,29 @@ Deduplicated LLM model production logic and hardened SQLite retry mechanisms acr
 - ✅ **Retry Resilience**: Confirmed via `SqliteRetryTemplateTest` that operations correctly back off and eventually succeed under simulated database contention.
 - ✅ **Security Hardening**: Verified that `GithubTool` operations like `pr create` now trigger a `RequiresApprovalException` even when the agent is in `AUTONOMOUS` mode if the specific tool mandates it.
 - ✅ **Locale Safety**: Verified that `GlobalKnowledgeBase` correctly serializes vectors using `Locale.ROOT`, preventing corruption on non-US locales.
+
+---
+
+## Phase 64-E — Test Resilience & Context Hardening ✅
+
+Addressed intermittent test failures in the reasoning engine and hardened the session context propagation in the dispatch layer.
+
+### Key Features & Implementation:
+
+1. **Defensive JSON Reasoning (`ReasoningStepParser`)**:
+   - Identified that certain LLM outputs could contain invalid JSON in the `args` field, leading to generic null-pointer warnings or "stuck" sessions.
+   - **Resolution**: Updated `ReasoningStepParser` to catch `JsonParseException` and explicitly return a `ReasoningStep.schemaError` with "invalid JSON" content. This allows the reasoning loop to observe the failure and attempt self-correction.
+
+2. **Deterministic Dispatcher Context (`AgentDispatchHandlerTest`)**:
+   - Some tests in `AgentDispatchHandlerTest` were failing because the `SessionContext` was missing from the thread-local state during the handler execution.
+   - **Resolution**: Refactored the test setup to ensure that `SessionResolutionHandler` (or its mock equivalent) always populates the `SessionContext` before the `AgentDispatchHandler` is invoked. This aligns the test harness with the real-world middleware priority ordering.
+
+3. **Robust Compliance Redaction (`ChatHistoryAssembler`)**:
+   - The compliance override regex pattern was too sensitive to casing and punctuation, leading to test failures when "Override" was present without an exact case match for "i".
+   - **Resolution**: Rebuilt the regex with `(?i)` flag and improved boundary handling to ensure consistent redaction of sensitive message blocks.
+
+**Verification Results**:
+- ✅ **Reasoning Fault Tolerance**: Confirmed `ReasoningStepParserTest` correctly maps malformed input to a schema error.
+- ✅ **Middleware Ordering**: Verified `AgentDispatchHandlerTest` now passes reliably on parallel virtual threads.
+- ✅ **Redaction Fidelity**: Confirmed `ChatHistoryAssemblerTest` correctly handles mixed-case compliance flags.
+

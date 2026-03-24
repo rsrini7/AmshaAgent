@@ -25,6 +25,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -71,7 +72,7 @@ class DenyReflexTest {
     }
 
     @Test
-    void testCronIdDenialResumesAndMarksFailed() {
+    void testCronIdDenialResumesAndMarksFailed() throws Exception {
         String cronId = "cron-123";
         String userId = "user-1";
         
@@ -82,12 +83,19 @@ class DenyReflexTest {
         cron.lastDeliveryId = "dlv-1";
         cron.chatId = "chat-1";
 
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId("cron-session-1");
+        when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
+
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
         when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_RESUME_DENIED), any(), eq(1), any()))
                 .thenReturn(AgentResult.finished("Denial Ack", List.of()));
 
         MessageContext ctx = createContext("/deny " + cronId);
-        ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny " + cronId, ctx);
+        
+        ReflexResult result = WorkspaceScopeHolder.call("session-1", userId, "chat-1", () -> 
+                denyReflex.execute("session-1", userId, "chat-1", "/deny " + cronId, ctx));
+        
         String resultText = result.commandResponse().get();
 
         assertTrue(resultText.contains("denied and cancelled"));

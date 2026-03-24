@@ -7,18 +7,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+
+import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.tool.ToolGuardInterceptor;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,21 +30,23 @@ class ToolInvocationGuardTest {
     private ToolInvocationGuard guard;
     private RoleRegistry roleRegistry;
     private ObjectMapper objectMapper;
-    private StatefulAgentStore agentStore;
     private ToolRegistry mockToolRegistry;
+    private Instance<ToolGuardInterceptor> mockInterceptors;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         guard = new ToolInvocationGuard();
         roleRegistry = mock(RoleRegistry.class);
         objectMapper = new ObjectMapper();
-        agentStore = mock(StatefulAgentStore.class);
         mockToolRegistry = mock(ToolRegistry.class);
+        mockInterceptors = mock(Instance.class);
+        when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
 
         guard.roleRegistry = roleRegistry;
         guard.objectMapper = objectMapper;
-        guard.agentStore = agentStore;
         guard.toolRegistry = mockToolRegistry;
+        guard.interceptors = mockInterceptors;
     }
 
     @Test
@@ -73,35 +76,6 @@ class ToolInvocationGuardTest {
     }
 
     @Test
-    void testGithubBlockedWhenGoalHasNoKeywords() {
-        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
-        when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
-
-        ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
-
-        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
-        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result).observation().contains("blocked by the Tool Intent Guard"));
-    }
-
-    @Test
-    void testGithubPreApprovedReturnsAllow() {
-        AgentCheckpoint cp = new AgentCheckpoint();
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(GithubTool.NAME);
-        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
-        when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
-
-        // Wrap in scope — after GitHub guard passes, evaluate() reaches HITL step
-        // which calls WorkspaceContext.autonomy() (ScopedValue — must be bound)
-        workspaceRun("s1", AutonomyLevel.FULL, () -> {
-            ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
-            assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
-        });
-    }
-
-    @Test
     void testHitlPauseForApproval() {
         workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
@@ -127,7 +101,24 @@ class ToolInvocationGuardTest {
         });
     }
 
+    @Test
+    void testInterceptorCanBlockTool() {
+        ToolGuardInterceptor interceptor = mock(ToolGuardInterceptor.class);
+        when(interceptor.handledToolNames()).thenReturn(Set.of("guarded-tool"));
+        when(interceptor.evaluate(anyString(), anyString(), anyString(), any(), any(), anyString(), any()))
+                .thenReturn(Optional.of(new ToolInvocationGuard.GuardDecision.Blocked("interceptor-blocked")));
+        
+        when(mockInterceptors.iterator()).thenReturn(List.of(interceptor).iterator());
+
+        ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                "s1", "coordinator", "guarded-tool", Map.of(), List.of(), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
+        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result).observation().contains("interceptor-blocked"));
+    }
+
     private void workspaceRun(String sessionId, AutonomyLevel level, Runnable runnable) {
         WorkspaceContext.run(sessionId, "user", "chat", level, "coordinator", runnable);
     }
 }
+

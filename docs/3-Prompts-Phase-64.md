@@ -1134,6 +1134,5 @@ Use whichever approach is less disruptive to the existing `StructuredRetryLoop` 
 ## Once all done, update the following md files
 
 **TROUBLESHOOTING.md** — add a "Phase 64-D" section documenting:
-- `SANDBOX_EXEC` removal: if any third-party skill YAML references `sandboxexec` as a tool capability, it will now be rejected at skill load time with an `IllegalArgumentException`. Expected behavior — update the skill YAML.
 - Locale-safe vector serialization: if vectors ingest on a non-English CI runner looked correct before but returned no results, this is the cause. The fix is D2.
 - `SqliteRetryTemplate` default values: the consolidated defaults used (attempts, backoff) — document so they can be tuned via config in a future phase.

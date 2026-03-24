@@ -32,6 +32,7 @@ quarkus:
   datasource:
     jdbc:
       url: "jdbc:sqlite:./target/core-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      # pool-interceptor: com.arcclaw.core.persistence.FtsConnectionInterceptor
       additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 4

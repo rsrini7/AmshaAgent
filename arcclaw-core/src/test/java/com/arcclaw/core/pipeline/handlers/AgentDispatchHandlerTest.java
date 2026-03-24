@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -111,6 +112,12 @@ class AgentDispatchHandlerTest {
         context.setSessionId("sess123");
         context.setAutonomyLevel(level);
         context.setAgentRole("coordinator");
+        
+        // Populate SessionContext as required by AgentDispatchHandler
+        AutonomyLevel finalLevel = level != null ? level : AutonomyLevel.SUPERVISED;
+        SessionContext sessionContext = new SessionContext("sess123", user, finalLevel, false);
+        context.setSessionContext(sessionContext);
+        
         return context;
     }
 }

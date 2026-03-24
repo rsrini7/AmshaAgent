@@ -134,7 +134,14 @@ public class DenyReflex implements AgentReflex {
             return "❌ This task is not awaiting approval (status=" + cron.status.name() + ").";
         }
 
-        String cronSessionId = "cron-" + cron.id + "-" + cron.lastDeliveryId;
+        var pendingCheckpoint = statefulAgentStore
+                .findLatestAwaitingApprovalForCron(cronId)
+                .orElse(null);
+
+        if (pendingCheckpoint == null) {
+            return "❌ No pending checkpoint found for this task. It may have already been processed.";
+        }
+        String cronSessionId = pendingCheckpoint.getSessionId();
 
         context.setResumeSignal(true);
         context.setGoal(AgentSentinels.GOAL_RESUME_DENIED);

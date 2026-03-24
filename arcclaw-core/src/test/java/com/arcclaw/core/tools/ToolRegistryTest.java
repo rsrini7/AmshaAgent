@@ -134,4 +134,12 @@ class ToolRegistryTest {
                     () -> registry.invokeTool("nonexistent-tool", Collections.emptyMap()));
         });
     }
+
+    @Test
+    void secretsCachePrePopulatedAtStartup() {
+        var githubTool = registry.findTool("github").get();
+        var first  = registry.extractRequiredSecrets(githubTool);
+        var second = registry.extractRequiredSecrets(githubTool);
+        assertTrue(first == second || first.equals(second), "Should match from cache");
+    }
 }

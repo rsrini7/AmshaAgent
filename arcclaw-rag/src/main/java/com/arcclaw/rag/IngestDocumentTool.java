@@ -68,13 +68,19 @@ public class IngestDocumentTool implements AgentTool {
             return ToolResponse.failure(400, "text parameter is required.");
         }
 
+        text = sanitize(text);  // ← sanitize before blank re-check
+
+        if (text.isBlank()) {
+            return ToolResponse.failure(400,
+                "text is empty after sanitization — nothing to ingest.");
+        }
+
         String label = params.containsKey("label")
             ? (String) params.get("label") : "unlabeled";
 
         String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) sessionId = "no-session";
 
-        // Ingest into both tiers
         String chunkId = globalKb.ingest(text);
         sessionKb.ingest(chunkId != null ? chunkId : "session-" + label, text);
 
@@ -88,5 +94,24 @@ public class IngestDocumentTool implements AgentTool {
             chunkId != null
                 ? "Document ingested successfully. chunkId: " + chunkId
                 : "Document stored in session memory (persistent vector store unavailable).");
+    }
+
+    /**
+     * Sanitizes raw text before ingestion.
+     * Groq's function-call validator rejects payloads containing
+     * consecutive dashes, raw markdown, or control characters.
+     * This also produces cleaner embedding vectors — stripped text
+     * embeds on semantic content, not formatting noise.
+     */
+    private String sanitize(String raw) {
+        return raw
+            .replaceAll("-{2,}", "-")
+            .replaceAll("={2,}", "")
+            .replaceAll("\\*{2,}", "")
+            .replaceAll("(?m)^```.*$", "")
+            .replaceAll("(?m)^#{1,6}\\s+", "")
+            .replaceAll("(?m)(\\n\\s*){3,}", "\n\n")
+            .replaceAll("[\\p{Cntrl}&&[^\n\t]]", "") // control chars except \n and \t
+            .strip();
     }
 }

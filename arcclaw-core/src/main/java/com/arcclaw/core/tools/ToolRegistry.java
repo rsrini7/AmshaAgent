@@ -4,6 +4,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -66,6 +68,17 @@ public class ToolRegistry {
     // Stateless — no CDI needed. Can be swapped to @Inject if custom policies are
     // required later.
     private final AutonomyPolicy autonomyPolicy = new AutonomyPolicy.Default();
+
+    private Map<String, Map<String, String>> secretsCache;
+
+    @PostConstruct
+    void buildSecretsCache() {
+        Map<String, Map<String, String>> cache = new HashMap<>();
+        for (AgentTool tool : discoveredTools) {
+            cache.put(tool.name(), extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+        }
+        this.secretsCache = Collections.unmodifiableMap(cache);
+    }
 
     /**
      * Lists all discovered tool names.
@@ -171,7 +184,7 @@ public class ToolRegistry {
 
         // Sandbox path
         if (tool.requiresSandbox()) {
-            var requiredSecrets = extractRequiredSecrets(tool.getClass(), "sandboxCommand");
+            var requiredSecrets = extractRequiredSecrets(tool);
             var workspaceRoot   = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
 
             try {
@@ -249,6 +262,16 @@ public class ToolRegistry {
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Failed to deserialize tool parameters for " + toolName, e);
         }
+    }
+
+    /**
+     * Extracts required secrets either from cache (eagerly populated at startup) or directly via reflection.
+     */
+    public Map<String, String> extractRequiredSecrets(AgentTool tool) {
+        Map<String, String> cached = secretsCache.get(tool.name());
+        if (cached != null) return cached;
+        // Dynamic / MCP tool not in cache — fall back to live reflection
+        return extractRequiredSecrets(tool.getClass(), "sandboxCommand");
     }
 
     // Private helpers

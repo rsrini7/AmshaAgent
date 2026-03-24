@@ -191,6 +191,21 @@ public class IntentClassifierServiceTest {
     }
 
     @Test
+    void testPromptContainsDirectivesFromProviders() {
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(classifierModel.chat(promptCaptor.capture())).thenReturn("coordinator");
+
+        service.classify("tell me about the repo");
+
+        String prompt = promptCaptor.getValue();
+        // Check for directives from our providers
+        Assertions.assertTrue(prompt.contains("SCHEDULING IS ABSOLUTE PRIORITY"), "Prompt missing scheduling directive");
+        Assertions.assertTrue(prompt.contains("brahma/coder"), "Prompt missing coder directive");
+        Assertions.assertTrue(prompt.contains("ingest"), "Prompt missing ingest directive");
+        Assertions.assertTrue(prompt.contains("GitHub"), "Prompt missing GitHub directive (default)");
+    }
+
+    @Test
     void testBrahaspatiSpellingStillMapsToArchitect() {
         when(classifierModel.chat(anyString())).thenReturn("brahaspati");
         String role = service.classify("plan the database schema");

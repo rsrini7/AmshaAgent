@@ -3,10 +3,12 @@ package com.arcclaw.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -59,19 +61,45 @@ public class SessionResolutionHandler implements MessageHandler {
         context.setSessionId(sessionId);
         log.debugf("Resolved session %s for [%s/%s/%s]", sessionId, channelType, channelId, userId);
 
-        // Load stored autonomy level
+        // Load stored autonomy level — three-tier resolution:
+        // 1. In-memory heartbeat (fastest, lost on restart)
+        // 2. Latest checkpoint in DB (survives restarts, set by AgentLoop per turn)
+        // 3. Default SUPERVISED (first-ever Telegram message or post-restart cold start)
         AutonomyLevel level = heartbeatTracker.getAutonomyLevel(sessionId);
         if (level == null) {
             level = agentStore.loadLatestAutonomyForSession(sessionId).orElse(null);
         }
 
         if (level == null) {
-            log.warnf("No stored autonomy found for session %s (first message?), defaulting to SUPERVISED", sessionId);
+            // Expected only on the very first Telegram message for a session,
+            // or after a server restart before any checkpoint has been written.
+            // The level is written back to heartbeat below, so this fires at most
+            // once per session per JVM lifetime.
+            log.warnf("No stored autonomy found for session %s (first message or post-restart), defaulting to SUPERVISED", sessionId);
             level = AutonomyLevel.SUPERVISED;
         }
 
+        // Telegram sessions never go through AgentSessionService.createSession(),
+        // so their autonomy level is never pre-populated.
+        // We cap FULL→SUPERVISED for Telegram to prevent accidental
+        // self-promotion via the "I am an AI" fallback.
+        if (level == AutonomyLevel.FULL
+            && context.getUser().channel() == ChannelType.TELEGRAM) {
+                log.debugf("Capping FULL→SUPERVISED for Telegram session %s", sessionId);
+                level = AutonomyLevel.SUPERVISED;
+        }
+
+        // Write the resolved level back into the heartbeat cache.
+        // This ensures the WARN above fires at most once per session per JVM lifetime
+        // rather than on every message. Telegram sessions never go through
+        // AgentSessionService.createSession(), so heartbeat is not pre-populated.
+        heartbeatTracker.recordHeartbeat(sessionId, level);
+
         context.setAutonomyLevel(level);
         log.debugf("Set autonomy level %s for session %s", level, sessionId);
+
+        SessionContext sc = new SessionContext(sessionId, context.getUser(), level, context.isResumeSignal());
+        context.setSessionContext(sc);
 
         return HandleResult.CONTINUE;
     }

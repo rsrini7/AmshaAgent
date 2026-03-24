@@ -19,6 +19,7 @@ import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
@@ -28,7 +29,6 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -59,14 +59,15 @@ class AgentSessionServiceTest {
     @Mock
     SessionHeartbeatTracker heartbeatTracker;
 
-    @Mock
-    DevSecretSeeder devSeeder;
 
     @Mock
     AgentResponseMapper responseMapper;
 
     @Mock
     ReflexRegistry reflexRegistry;
+
+    @Mock
+    CheckpointResumeHandler checkpointResumeHandler;
 
     @Mock
     ExecutorService vThreads;
@@ -83,7 +84,7 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, devSeeder, responseMapper, reflexRegistry, vThreads);
+                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, vThreads);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);

@@ -13,6 +13,7 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -60,6 +61,14 @@ public class ApproveReflex implements AgentReflex {
     @Inject
     WorkspaceManager workspaceManager;
 
+    /**
+     * Resolves the original user goal from a paused checkpoint so
+     * {@code RagContextEnricher} embeds the real user intent on resume
+     * instead of the synthetic {@link AgentSentinels#GOAL_RESUME_APPROVED} string.
+     */
+    @Inject
+    CheckpointResumeHandler checkpointResumeHandler;
+
     @Override
     public boolean matches(String input) {
         ChannelCommand cmd = ChannelCommand.parse(input);
@@ -93,14 +102,19 @@ public class ApproveReflex implements AgentReflex {
 
                 if (activeRole != null) {
                     log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
-                    
-                    context.setResumeSignal(true);
-                    context.setGoal(AgentSentinels.GOAL_RESUME_APPROVED);
 
+                    // Resolve the original user goal from the checkpoint.
+                    // Using GOAL_RESUME_APPROVED here would cause RagContextEnricher to
+                    // embed a semantically meaningless string, returning irrelevant chunks.
                     final String finalRole = activeRole;
+                    final String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, finalRole);
+
+                    context.setResumeSignal(true);
+                    context.setGoal(resumeGoal);
+
                     AgentResult result = WorkspaceContext.runWithFullAutonomy(
                             sessionId, userId, chatId, finalRole,
-                            () -> agentLoop.run(sessionId, finalRole, AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 5, context)
+                            () -> agentLoop.run(sessionId, finalRole, resumeGoal, reasoningEngine, 5, context)
                     );
                     return CronResultFormatter.format(result);
                 }
@@ -157,16 +171,19 @@ public class ApproveReflex implements AgentReflex {
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId(); // ← actual sessionId
+        String cronRole = AgentRoleEnum.COORDINATOR.toScopedName();
+
+        // Resolve the original user goal from the cron checkpoint so
+        // RagContextEnricher embeds the real cron goal on resume.
+        final String resumeGoal = checkpointResumeHandler.resolveResumeGoal(cronSessionId, cronRole);
 
         context.setResumeSignal(true);
-        context.setGoal(AgentSentinels.GOAL_RESUME_APPROVED);
+        context.setGoal(resumeGoal);
 
         AgentResult result = WorkspaceContext.run(
                 cronSessionId, cron.userId, cron.chatId,
-                AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> agentLoop.run(
-                        cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        AgentSentinels.GOAL_RESUME_APPROVED, reasoningEngine, 5, context)
+                AutonomyLevel.BACKGROUND, cronRole,
+                () -> agentLoop.run(cronSessionId, cronRole, resumeGoal, reasoningEngine, 5, context)
         );
 
         // Exhaustive status transition
@@ -195,7 +212,7 @@ public class ApproveReflex implements AgentReflex {
         } catch (Exception e) {
             log.warnf("Failed to terminate cron session %s after approval: %s",
                     cronSessionId, e.getMessage());
-        }                
+        }
 
         return "";
     }
