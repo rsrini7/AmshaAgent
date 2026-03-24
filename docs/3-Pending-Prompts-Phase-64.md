@@ -509,7 +509,7 @@ found" error rather than using the user's intended ID.
 case "cron" -> delete.equalsIgnoreCase(arg)
     ? new DeleteCron(Optional.ofNullable(
         text.trim().split(" ").length > 2
-            ? text.trim().split(" ") : null)) [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/c49f785d-6096-47be-b9f5-a516b4954e91/1-Review-Post-Phase-63-2.md)
+            ? text.trim().split(" ") : null)) 
     : new CronTasks();
 ```
 
@@ -518,7 +518,7 @@ case "cron" -> delete.equalsIgnoreCase(arg)
 case "cron" -> {
     String[] parts = text.trim().split("\\s+");
     if (delete.equalsIgnoreCase(arg)) {
-        String cronId = parts.length > 2 ? parts.strip() : null; [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/85542380/c49f785d-6096-47be-b9f5-a516b4954e91/1-Review-Post-Phase-63-2.md)
+        String cronId = parts.length > 2 ? parts.strip() : null; 
         yield new DeleteCron(
             Optional.ofNullable(cronId == null || cronId.isBlank()
                 ? null : cronId));

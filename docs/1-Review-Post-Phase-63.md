@@ -60,7 +60,7 @@ Now I have rich data on every project. Here is the full expanded comparison:
 
 | Agent | Language | Philosophy | Sandbox | Memory | Audit | Secret Mgmt |
 |---|---|---|---|---|---|---|
-| **ArcClaw**  [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt) | Java/Quarkus | Enterprise-grade governed agent kernel | ✅ Podman per-tool | ✅ SQLite FTS5 + vec0 RAG  | ✅ OTel + AuditService  | ✅ `@RequiresSecret` ephemeral env-file  [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt) |
+| **ArcClaw**   | Java/Quarkus | Enterprise-grade governed agent kernel | ✅ Podman per-tool | ✅ SQLite FTS5 + vec0 RAG  | ✅ OTel + AuditService  | ✅ `@RequiresSecret` ephemeral env-file   |
 | **OpenClaw**  [mindstudio](https://www.mindstudio.ai/blog/what-is-openclaw-ai-agent/) | Node.js | Original viral hit; features > security | ✅ (basic) | ✅ SQLite vector | ❌ | ✅ Aquaman proxy |
 | **IronClaw** (NEAR AI)  [mexc](https://www.mexc.co/en-IN/news/788052) | Rust | TEE + cryptographic proof of execution | ✅ Isolated tools | ✅ PostgreSQL AES-256 | ✅ Full tool activity log | ✅ Runtime credential injection |
 | **NanoClaw**  [dextralabs](https://dextralabs.com/blog/top-openclaw-alternatives/) | Docker-first | "If it breaks, breaks inside a container" | ✅ Docker per-task | ❌ | ❌ | ❌ |
@@ -82,12 +82,12 @@ Now I have rich data on every project. Here is the full expanded comparison:
 
 ## Where ArcClaw Stands Alone
 
-These capabilities exist **only in ArcClaw** across the entire ecosystem: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+These capabilities exist **only in ArcClaw** across the entire ecosystem: 
 
-- **Per-session USD hard + soft budget governance** with floor enforcement for zero-token reports — no other framework does this [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
-- **JVM crash recovery** via `SessionReaper` zombie detection for `INPROGRESS`/`AWAITING_APPROVAL` checkpoints [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
-- **CDI-scoped tenant isolation** — `WorkspaceScoped`, `ScopedValue`-bound `USERID` hard boundary that LLM parameters cannot override [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
-- **Role-based HITL approval workflows** with per-tool `RequiresApprovalException` + approval timeout sweep [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/64700306/ed1c4f27-7c43-4889-9f43-ded2658d96f3/rsrini7-arcclawinternal-8a5edab282632443.txt)
+- **Per-session USD hard + soft budget governance** with floor enforcement for zero-token reports — no other framework does this 
+- **JVM crash recovery** via `SessionReaper` zombie detection for `INPROGRESS`/`AWAITING_APPROVAL` checkpoints 
+- **CDI-scoped tenant isolation** — `WorkspaceScoped`, `ScopedValue`-bound `USERID` hard boundary that LLM parameters cannot override 
+- **Role-based HITL approval workflows** with per-tool `RequiresApprovalException` + approval timeout sweep 
 - **OTel traced audit** with `AuditService` across security events per session and agent role
 
 ## ArcClaw's Closest Rival Per Dimension
