@@ -229,14 +229,9 @@ After all 5 fixes:
 ./mvnw clean test -pl arcclaw-core,arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tail -5
 ```
 Expected: 777+ tests, 0 failures, JVM exits cleanly (no 30s Surefire kill).
-```
-```
 
 ---
 
-# PROMPT — PHASE 65-B: Security & Concurrency Hardening (Tier B)
-
-```markdown
 # PROMPT — PHASE 65-B: Security & Concurrency Hardening (Tier B)
 
 Role: Senior Java Architect & Security Engineer
@@ -249,6 +244,8 @@ security leakage under production load or future code changes.
 ## Architecture Context
 Refer @TROUBLESHOOTING.md §25 (Phase 63-U) for DevSecretSeeder production path history.
 Refer @PLAN.md Phase 64-B for SessionRegistry and DevSecretSeederStartup context.
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -361,14 +358,9 @@ automatically recognizes both its canonical name and its deity alias — no code
   -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tail -5
 ```
 Expected: 777+ tests, 0 failures.
-```
-```
 
 ---
 
-# PROMPT — PHASE 65-C: Architectural Unblocks & SPI Completion (Tier C)
-
-```markdown
 # PROMPT — PHASE 65-C: Architectural Unblocks & SPI Completion (Tier C)
 
 Role: Senior Java Architect & Platform Engineer
@@ -382,6 +374,8 @@ same CDI pattern already established by ChannelJobNotifier and IntentRoutingProv
 Refer @PLAN.md Phase 64-C for ChannelJobNotifier SPI precedent.
 Refer @TROUBLESHOOTING.md §43 (Phase 47) for IntentRoutingProvider SPI precedent.
 All new SPIs must follow the same CDI @Any Instance<T> discovery pattern already in use.
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -614,14 +608,9 @@ expected `id()` value.
 Expected: 777+ tests, 0 failures.
 Note: C3 will produce compilation errors in all modules that switch on `ChannelType` enum —
 fix each one by migrating to `switch (channelType.id())` as shown above.
-```
-```
 
 ---
 
-# PROMPT — PHASE 65-D: Quality & Maintainability (Tier D)
-
-```markdown
 # PROMPT — PHASE 65-D: Quality, Maintainability & SPI Completion (Tier D)
 
 Role: Senior Java Architect & Platform Engineer
@@ -633,6 +622,8 @@ and reduce long-term maintenance burden.
 ## Architecture Context
 Refer @PLAN.md Phase 64-C for ContextCompactionService history and CompactionRequest event design.
 Refer @PLAN.md Phase 65-C for EmbeddingModelProducer context (C3 established LlmModelFactory pattern).
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -828,8 +819,6 @@ After all 4 tiers (A+B+C+D) are complete:
 Expected: 800+ tests (Phase 65 adds ~30 new tests), 0 failures, JVM exits cleanly.
 
 Update PLAN.md, TASKS.md, TROUBLESHOOTING.md, and WALKTHROUGH.md to mark Phase 65 complete.
-```
-```
 
 ---
 
