@@ -2581,3 +2581,27 @@ Addressed Hibernate persistence integrity and modernized the agent role resoluti
 - ✅ **Persistence Stability**: Verified via full test suite that all `CompactionSummaryEntity` updates are correctly persisted and retrieved.
 - ✅ **Dynamic Routing**: Verified via `IntentClassifierServiceTest` that variant deity spellings ("brahaspati") and skill names now route correctly using the unified alias registry.
 - ✅ **Regression Analysis**: Final build verification confirms **782/782 tests PASS**.
+---
+
+## Phase 65-B — Security & Concurrency Hardening ✅
+
+Eliminated production security risks and addressed race conditions in the MCP tool registry.
+
+### Key Features & Implementation:
+
+1. **Secret Seeding Isolation**:
+   - Identified a security "landmine" where `CronJobRunner` was attempting to seed development secrets during background job execution.
+   - **Resolution**: Removed the `DevSecretSeeder` injection from `CronJobRunner`. Seeding is now strictly the responsibility of `DevSecretSeederStartup`, which is physically excluded from production builds via the `@IfBuildProfile("dev")` annotation. Verified this isolation with a reflective unit test.
+
+2. **Thread-Safe MCP Discovery (`DynamicToolCapabilityRegistry`)**:
+   - Addressed a potential `ConcurrentModificationException` during MCP handshakes where tools were being registered while the list of all tools was being iterated.
+   - **Resolution**: Ensured the internal registry uses `ConcurrentHashMap`. Added a high-concurrency unit test that spawns 50 virtual threads performing simultaneous registrations and stream-based iterations, verifying zero modification failures.
+
+3. **Dynamic Intent & Role Mapping**:
+   - Eliminated the last remnants of hardcoded routing in `IntentClassifierService` and `AgentRoleEnum`.
+   - **Resolution**: The `sanitize()` and `fromString()` methods now use a unified dynamic lookup strategy. The classifier extracts deity aliases directly from the `RoleDefinition.displayName()` (e.g., "Brahaspati" from "Brahaspati (Architect)"), ensuring that adding new agent personas requires zero logic changes in the core routing engine.
+
+**Verification Results**:
+- ✅ **Security Gate**: `CronJobRunnerTest.testDevSecretSeederNotInvocable()` passed.
+- ✅ **Concurrency Stress**: `DynamicToolCapabilityRegistryTest.testConcurrentRegisterAndDeregisterNoCme()` passed with 5,000 operations.
+- ✅ **Intent Fidelity**: `IntentClassifierServiceTest.testSanitizeResolvesAllRolesByDeityName()` confirmed 100% coverage.

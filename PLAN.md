@@ -4428,3 +4428,39 @@ Refactor entity encapsulation and dynamic role resolution to improve persistence
 - ✅ `IntentClassifierServiceTest`: Verified "brahaspati" specifically maps to the architect role.
 - ✅ `RoleDefinitionTest`: Verified alias registration and immutability.
 - ✅ Full `mvn clean verify`: 782/782 tests PASS.
+---
+
+# Phase 65-B — Security & Concurrency Hardening ✅
+
+Hardened secret seeding lifecycle and stabilized concurrent MCP tool registration while modernizing intent classification.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Orchestrated Seeding**: Decentralized secret seeding from the cron execution path. By moving `DevSecretSeeder` control exclusively to `DevSecretSeederStartup` (@IfBuildProfile("dev")), we ensure development secrets are never accidentally invocable in production environments.
+
+> [!NOTE]
+> **Concurrent Readiness**: Guaranteed thread-safety for MCP dynamic tool discovery using `ConcurrentHashMap`. This ensures that multiple simultaneous MCP handshakes or tool lookups never trigger `ConcurrentModificationException`.
+
+> [!TIP]
+> **Unified Dynamic Resolution**: Eliminated OCP violations in both the intent classifier and the role enum. Role resolution is now entirely meta-data driven, leveraging `RoleDefinition` aliases and `displayName` parsing to determine routing.
+
+## Completed Changes
+
+#### [MODIFY] [CronJobRunner.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/scheduler/CronJobRunner.java)
+- Removed direct injection and call to `DevSecretSeeder` to prevent security leakage.
+
+#### [MODIFY] [IntentClassifierService.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Optimized `sanitize()` to use dynamic deity name extraction from `displayName` in addition to explicit aliases.
+
+#### [MODIFY] [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java)
+- Refactored `fromString()` to use dynamic alias lookup instead of a hardcoded switch statement.
+
+#### [MODIFY] [DynamicToolCapabilityRegistry.java](file:///arcclaw-mcp/src/main/java/com/arcclaw/mcp/tool/DynamicToolCapabilityRegistry.java)
+- Confirmed `ConcurrentHashMap` for thread-safe tool registration.
+
+## Verification
+- ✅ `CronJobRunnerTest`: Verified via reflection that `DevSecretSeeder` is no longer injected.
+- ✅ `DynamicToolCapabilityRegistryTest`: Verified safe concurrent register/iterate with 50 threads.
+- ✅ `IntentClassifierServiceTest`: Verified dynamic deity name resolution for all roles.
+- ✅ Full `mvn clean verify` is green.

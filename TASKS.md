@@ -1224,3 +1224,14 @@
 - [x] Step 7: Clean up `CronJobRunner` by removing redundant `DevSecretSeeder` injection. <!-- id: 593 -->
 - [x] Step 8: Systematically update all unit and integration test constructors for `RoleDefinition` to include the `aliases` parameter. <!-- id: 594 -->
 - [x] Step 9: Verify build and test suite performance: 782/782 tests green. <!-- id: 595 -->
+---
+
+## Phase 65-B — Security & Concurrency Hardening ✅
+- [x] Step 1: Remove `DevSecretSeeder` injection from `CronJobRunner.java`. <!-- id: 596 -->
+- [x] Step 2: Create `CronJobRunnerTest` to verify the absence of dev-injection via reflection. <!-- id: 597 -->
+- [x] Step 3: Verify `AgentSessionService` does not trigger secret seeding. <!-- id: 598 -->
+- [x] Step 4: Confirm `DynamicToolCapabilityRegistry` uses thread-safe internal collections. <!-- id: 599 -->
+- [x] Step 5: Add concurrent stress test to `DynamicToolCapabilityRegistryTest` (50 threads). <!-- id: 600 -->
+- [x] Step 6: Refactor `IntentClassifierService.sanitize()` to use dynamic `displayName` deity extraction. <!-- id: 601 -->
+- [x] Step 7: Transition `AgentRoleEnum.fromString()` to dynamic alias matching. <!-- id: 602 -->
+- [x] Step 8: Verify all new security and concurrency tests pass. <!-- id: 603 -->
