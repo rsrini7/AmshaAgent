@@ -825,7 +825,9 @@ Long-term memory search merges results from **two** retrieval tiers using **Reci
 
 **Graceful degradation**: If `FtsConnectionInterceptor.isVectorSearchEnabled()` returns `false` (sqlite-vec extension unavailable), `TwoTierMemoryService` skips the RRF merge entirely and returns FTS5 results directly — no error, no downtime.
 
-The `vec0.so` native extension (sqlite-vec) must be present for vector search. In the native Docker image it is copied to `/app/lib/vec0.so` and requires `LD_PRELOAD=/lib64/libm.so.6` (for `sqrtf` symbol resolution on UBI/RHEL). In dev mode, set `-Darcclaw.rag.vec-extension-path=../lib/vec0`.
+The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`).
+
+In the native Docker image, it is pre-copied to `/app/lib/vec0.so` and requires `LD_PRELOAD=/lib64/libm.so.6` (for `sqrtf` symbol resolution on UBI/RHEL). In dev mode, the installer automatically detects the environment and extracts the library if missing.
 
 ### Long-Term Memory (`MemorySearchTool`)
 

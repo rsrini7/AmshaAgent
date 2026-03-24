@@ -225,9 +225,9 @@ ArcClaw/
 ├── mise.toml            ← single unified config — all tasks, all platforms (pwsh)
 ├── mvnw / mvnw.cmd
 ├── lib/
-│   ├── vec0.dll         ← Windows  (download once — gitignored)
-│   ├── vec0.so          ← Linux    (download once — gitignored)
-│   └── vec0.dylib       ← macOS    (download once — gitignored)
+│   ├── vec0.dll         ← Windows  (Auto-installed on first boot)
+│   ├── vec0.so          ← Linux    (Auto-installed on first boot)
+│   └── vec0.dylib       ← macOS    (Auto-installed on first boot)
 ├── dist/                ← produced by: mise run dist  (gitignored)
 └── arcclaw-app/
     └── target/
@@ -451,24 +451,17 @@ cd dist && ./run.sh serve
 cd dist; ./run.ps1 serve
 ```
 
-### sqlite-vec (vec0) — one-time download
+### sqlite-vec (vec0) — auto-install
 
-```bash
-# Linux
-curl -L https://github.com/asg017/sqlite-vec/releases/download/v0.1.6/sqlite-vec-v0.1.6-loadable-linux-x86_64.zip \
-    -o vec0.zip && unzip vec0.zip -d lib/ && rm vec0.zip
+ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_SQLITE_VEC_PATH`).
 
-# macOS
-curl -L https://github.com/asg017/sqlite-vec/releases/download/v0.1.6/sqlite-vec-v0.1.6-loadable-macos-aarch64.zip \
-    -o vec0.zip && unzip vec0.zip -d lib/ && rm vec0.zip
-```
+Manual download is **no longer required**, but you can override the auto-installed binary by placing your own build in `lib/`.
 
-```powershell
-# Windows
-Invoke-WebRequest "https://github.com/asg017/sqlite-vec/releases/download/v0.1.6/sqlite-vec-v0.1.6-loadable-windows-x86_64.zip" -OutFile vec0.zip
-Expand-Archive vec0.zip -DestinationPath lib/
-Remove-Item vec0.zip
-```
+| Platform | Runtime Path | Source Archive (v0.1.6) |
+|---|---|---|
+| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-0.1.6-loadable-linux-x86_64.tar.gz` |
+| macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.6-loadable-macos-aarch64.tar.gz` |
+| Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
 
 ***
 
@@ -659,10 +652,10 @@ mise run setup:env-check
 
 ### sqlite-vec not loading
 
-```bash
-mise run db:vec-check
-# Then restart ArcClaw — vec0 is loaded at boot, not lazily
-```
+1. Check logs for "Vec0 binary installed to [...]" or "Vec0 binary already present".
+2. If failed, manually place the extension: `lib/vec0.so` (Linux), `lib/vec0.dylib` (macOS), `lib/vec0.dll` (Windows).
+3. Verify FTS5 is available: `mise run db:fts-check`.
+4. Then restart ArcClaw — vec0 is loaded at boot, not lazily.
 
 ### Native exe exits immediately (Windows)
 

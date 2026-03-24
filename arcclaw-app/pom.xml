@@ -285,6 +285,7 @@
           --initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder,
           --initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$SnakeCaseObjectMapperHolder
         </quarkus.native.additional-build-args>
+        <quarkus.native.resources.includes>native/vec0/*</quarkus.native.resources.includes>
       </properties>
     </profile>
 

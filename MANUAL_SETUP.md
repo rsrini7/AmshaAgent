@@ -350,18 +350,20 @@ podman images | grep arcclaw-tool-runner
 
 ### 6.3 sqlite-vec Extension (RAG Vector Search)
 
-Download from [github.com/asg017/sqlite-vec/releases/tag/v0.1.6](https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6) and place in `lib/`:
+ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_SQLITE_VEC_PATH`).
 
-| Platform | File | Archive |
+You can manually override this by placing your own build in `lib/`:
+
+| Platform | Runtime Path | Source Archive (v0.1.6) |
 |---|---|---|
-| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-v0.1.6-loadable-linux-x86_64.zip` |
-| macOS | `lib/vec0.dylib` | `sqlite-vec-v0.1.6-loadable-macos-aarch64.zip` |
-| Windows | `lib/vec0.dll` | `sqlite-vec-v0.1.6-loadable-windows-x86_64.zip` |
+| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-0.1.6-loadable-linux-x86_64.tar.gz` |
+| macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.6-loadable-macos-aarch64.tar.gz` |
+| Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
 
 SQLite appends the platform suffix automatically — always pass the path **without** extension:
-`-Darcclaw.rag.vec-extension-path=../lib/vec0`
+`ARCCLAW_SQLITE_VEC_PATH=./lib/vec0`
 
-If the extension is missing, ArcClaw degrades gracefully to FTS5-only search.
+If the extension is missing from resources and the filesystem, ArcClaw degrades gracefully to FTS5-only search.
 
 ---
 
