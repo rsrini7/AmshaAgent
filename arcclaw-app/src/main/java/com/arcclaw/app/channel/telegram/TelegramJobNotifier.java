@@ -23,7 +23,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
 
     @Override
     public boolean supports(ChannelType channelType) {
-        return channelType == ChannelType.TELEGRAM;
+        return ChannelType.TELEGRAM.equals(channelType);
     }
 
     @Override

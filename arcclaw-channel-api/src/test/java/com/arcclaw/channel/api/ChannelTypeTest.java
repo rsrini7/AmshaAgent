@@ -17,19 +17,28 @@ class ChannelTypeTest {
 
     @Test
     void testFromString_invalidReturnsEmpty() {
-        assertTrue(ChannelType.fromString("UNKNOWN").isEmpty());
+        // Now any string is valid as a custom channel type
+        assertTrue(ChannelType.fromString("custom").isPresent());
+        assertEquals(new ChannelType("custom"), ChannelType.fromString("CUSTOM").get());
+        
         assertTrue(ChannelType.fromString(null).isEmpty());
         assertTrue(ChannelType.fromString("").isEmpty());
         assertTrue(ChannelType.fromString("  ").isEmpty());
     }
 
     @Test
+    void testCustomChannelTypeCreatable() {
+        ChannelType custom = new ChannelType("whatsapp");
+        assertEquals("whatsapp", custom.id());
+        
+        ChannelType alsoCustom = ChannelType.fromString("WHATSAPP").get();
+        assertEquals(custom, alsoCustom);
+    }
+
+    @Test
     void testFallbackPattern() {
         // This simulates how we use it in the app for legacy rows
         ChannelType ch = ChannelType.fromString(null).orElse(ChannelType.TELEGRAM);
-        assertEquals(ChannelType.TELEGRAM, ch);
-
-        ch = ChannelType.fromString("garbage").orElse(ChannelType.TELEGRAM);
         assertEquals(ChannelType.TELEGRAM, ch);
     }
 }

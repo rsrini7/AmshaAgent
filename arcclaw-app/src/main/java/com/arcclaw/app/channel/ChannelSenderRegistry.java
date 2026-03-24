@@ -51,7 +51,7 @@ public class ChannelSenderRegistry {
 
     private ChannelSender senderFor(ChannelType type) {
         return senders.stream()
-                .filter(s -> s.supports() == type)
+                .filter(s -> s.supports().equals(type))
                 .findFirst()
                 .orElseThrow(() -> new UnsupportedOperationException(
                         "No ChannelSender for: " + type));
@@ -59,7 +59,7 @@ public class ChannelSenderRegistry {
 
     private ReplyRenderer rendererFor(ChannelType type) {
         return renderers.stream()
-                .filter(r -> r.supports() == type)
+                .filter(r -> r.supports().equals(type))
                 .findFirst()
                 .orElseThrow(() -> new UnsupportedOperationException(
                         "No ReplyRenderer for: " + type));
