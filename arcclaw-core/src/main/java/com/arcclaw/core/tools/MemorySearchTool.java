@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CompactionSummaryEntity;
@@ -17,7 +17,8 @@ import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.util.Fts5QueryUtil;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Agent tool for searching user's long-term memory (past session summaries)
@@ -71,7 +72,7 @@ public class MemorySearchTool implements AgentTool {
     public ToolResponse execute(Map<String, Object> params) {
         try {
             // 1. Extract userId from ScopedValue — hard tenant boundary
-            String userId = WorkspaceScopeHolder.USER_ID.get();
+            String userId = WorkspaceContext.userId();
 
             if (userId == null || userId.isBlank()) {
                 return ToolResponse.failure(403,
