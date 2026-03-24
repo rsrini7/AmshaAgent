@@ -53,14 +53,13 @@ public class AgentDispatchHandler implements MessageHandler {
                 "AgentDispatchHandler requires SessionContext to be populated " +
                 "by SessionResolutionHandler (priority 40) first. " +
                 "Check handler priority ordering."));
-        
+
         String sessionId = session.sessionId();
         String role = context.getAgentRole()
                 .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
         String goal = context.getMessage() != null ? context.getMessage().text() : "";
 
-        // Resolve maxIterations: use the skill's configured value when routing to a skill,
-        // otherwise fall back to the default of 5.
+        // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
         if (role.startsWith(SKILL_PREFIX)) {
             String skillName = role.substring(SKILL_PREFIX.length());
@@ -68,20 +67,28 @@ public class AgentDispatchHandler implements MessageHandler {
                     .map(entry -> entry.definition().maxIterations())
                     .orElse(DEFAULT_MAX_ITERATIONS);
             log.infof("Dispatching message for session %s to skill '%s' (maxIterations=%d)",
-                      sessionId, skillName, maxIterations);
+                    sessionId, skillName, maxIterations);
         } else {
             log.infof("Dispatching message for session %s to agent %s", sessionId, role);
         }
 
         final int resolvedMaxIterations = maxIterations;
-        
         final AutonomyLevel finalLevel = session.autonomyLevel();
+
+        // getChatId() can be null on some Telegram paths — fall back to channelId
+        String chatId = context.getChatId();
+        if (chatId == null || chatId.isBlank()) {
+            chatId = context.getUser().channelId();
+            log.debugf("[AgentDispatch] getChatId() was null — falling back to channelId=%s", chatId);
+        }
+        final String resolvedChatId = chatId;
+
         AgentResult result;
         try {
             result = WorkspaceContext.run(
                 sessionId,
                 context.getUser().platformId(),
-                context.getChatId(),
+                resolvedChatId,
                 finalLevel,
                 role,
                 () -> agentLoop.run(
@@ -92,7 +99,6 @@ public class AgentDispatchHandler implements MessageHandler {
                     resolvedMaxIterations,
                     context
                 )
-
             );
         } catch (Exception e) {
             log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());

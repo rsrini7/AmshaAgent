@@ -7,15 +7,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -26,9 +22,12 @@ import com.cronutils.model.CronType;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.model.time.ExecutionTime;
 import com.cronutils.parser.CronParser;
+
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Agent tool for scheduling autonomous future tasks via cron expressions.
@@ -127,18 +126,21 @@ public class ScheduleTaskTool implements AgentTool {
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         // Step 1 — Extract and validate tenant context
-        String userId = WorkspaceScopeHolder.USER_ID.isBound()
-                ? WorkspaceScopeHolder.USER_ID.get() : null;
-        String chatId = WorkspaceScopeHolder.CHAT_ID.isBound()
-                ? WorkspaceScopeHolder.CHAT_ID.get() : null;
-        String sessionId = WorkspaceScopeHolder.getIfActive();
+        // Read from WorkspaceContext ScopedValues — these are what WorkspaceContext.run()
+        // actually binds. WorkspaceScopeHolder.USER_ID/CHAT_ID are separate ScopedValue
+        // instances and are NOT bound by WorkspaceContext.run().
+        String userId    = WorkspaceContext.userId();
+        String chatId    = WorkspaceContext.chatId();
+        String sessionId = WorkspaceContext.requireSessionId();
 
-
-        if (userId == null || chatId == null) {
+        if (userId.isBlank()) {
             return ToolResponse.failure(403,
                     "Security violation: tenant context not bound. Operation rejected.");
         }
-
+        
+        if (chatId.isBlank()) {
+            chatId = userId; // REST/CLI fallback
+        }
 
         String cronExpression = (String) params.get("cronExpression");
         String goal           = (String) params.get("goal");
