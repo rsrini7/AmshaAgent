@@ -84,7 +84,33 @@ After a thorough end-to-end analysis of the entire codebase (core, channel API, 
 
 ---
 
-### **3. Suggestions for Phase 67**
+### What’s Complete
+
+| Aspect | Status |
+|--------|--------|
+| **Zombie recovery** – marks `IN_PROGRESS` and `AWAITING_APPROVAL` checkpoints as `FAILED` on startup, using retry template and micro‑transactions. | ✅ Done |
+| **GC sweep** – terminates sessions whose heartbeat has exceeded the TTL, while skipping `AWAITING_APPROVAL` sessions. | ✅ Done |
+| **Approval timeout sweep** – finds checkpoints that have been `AWAITING_APPROVAL` for longer than the configured timeout, marks them `FAILED`, fires a notification event, and terminates the session. | ✅ Done |
+| **Transaction isolation** – uses `@Transactional(NOT_SUPPORTED)` for reads and `@Transactional(REQUIRED)` for writes, avoiding SQLite lock contention. | ✅ Done |
+| **Graceful shutdown** – a `shuttingDown` flag prevents scheduled sweeps during shutdown. | ✅ Done |
+
+### Potential Improvements for Phase 67
+
+1. **Optimistic Locking for Approval Timeout**  
+   The `markApprovalTimedOut` method directly updates the checkpoint without checking if it still is `AWAITING_APPROVAL`. If an approval happens between the query and the update, the status might have changed to `COMPLETED` and would be incorrectly overwritten with `FAILED`.  
+   **Fix**: Add a version check (e.g., compare the `status` again inside the write transaction) or rely on Hibernate’s `@Version` and a `SELECT ... FOR UPDATE` (though SQLite’s concurrency model is limited). A simple solution: in the write transaction, reload the entity and only proceed if its status is still `AWAITING_APPROVAL`.
+
+2. **Use `Instant` Instead of `LocalDateTime`**  
+   The `updatedAt` field in `AgentCheckpoint` is stored as `LocalDateTime`. This is tied to the JVM’s default time zone. If the server’s time zone ever changes (e.g., due to daylight saving or admin mistake), time comparisons become unreliable. Switching to `Instant` (and storing as ISO‑8601 strings) would eliminate time zone ambiguity. This is a low‑priority, but good practice.
+
+3. **Expose a Manual Cleanup Endpoint**  
+   For testing or administrative purposes, it would be useful to have a REST endpoint (e.g., `POST /api/v1/admin/cleanup`) that triggers a sweep immediately. This could help in debugging or when you need to force cleanup without waiting for the scheduled interval.
+
+4. **Add Metrics for Sweep Operations**  
+   Counters for sessions terminated by GC, approvals timed out, and zombie recoveries would help monitoring. These could be exposed via Micrometer.
+
+5. **Sweep of Heartbeats Only**  
+   Currently the GC sweep reads the list of `AWAITING_APPROVAL` session IDs once, then loops over expired heartbeats. If the list is large (e.g., many sessions), the memory overhead is small. However, the `findAwaitingApprovalIds` query is executed every sweep, even if no sessions are expired. A small optimization: only execute it if there are expired sessions. Not critical.
 
 #### **3.1 Finish Missing Channels**
 - Implement **Discord** and **Slack** using the existing SPI. This will validate the abstraction and provide more deployment options.
