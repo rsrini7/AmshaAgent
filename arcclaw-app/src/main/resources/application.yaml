@@ -196,6 +196,7 @@ smallrye:
         - "META-INF/native-image/**"
         - "skills/index.txt"
         - "skills/**.md"
+        # - "*.yaml" 
 
   # ---------------------------------------------------------------------------
   # LOGGING
