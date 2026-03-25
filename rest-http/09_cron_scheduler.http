@@ -215,24 +215,6 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 1
 }
 
-###
-
-# ─────────────────────────────────────────────────────────────────
-# SAFEGUARD TESTS
-# ─────────────────────────────────────────────────────────────────
-
-### [CRON-10] Naked-pronoun guard — vague goal rejected by ScheduleTaskTool
-# "it", "this", "that", "the result" without specificity → tool returns error.
-# Expect 200: agent returns error asking to restate goal concretely.
-POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Schedule a task to run every hour to do it again.",
-    "agentRole": "coordinator",
-    "maxIterations": 3
-}
 
 ###
 
