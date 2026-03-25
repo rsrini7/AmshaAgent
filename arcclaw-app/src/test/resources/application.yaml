@@ -1,4 +1,7 @@
 arcclaw:
+  data-dir: "target/data"
+  rag:
+    vec-extension-path: "target/lib/vec0"
   skills:
     hot-reload: false
   auto-seed-secrets: false
