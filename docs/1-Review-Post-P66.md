@@ -304,9 +304,6 @@ Based on the end-to-end analysis of the file structure, `Architecture_Nuances.md
 **The "Hidden" Problem:**
 While the `ChannelPlugin` interface exists, the implementation is still "semi-coupled." `TelegramChannelDaemon` and `TelegramChannelRoute` are inside `arcclaw-app`. This creates a **deployment monolith**. To add Slack, you currently have to open `arcclaw-app`, add classes, and risk breaking Telegram. This violates the **Open/Closed Principle**.
 
-**The "Persona" Debt:**
-Nuance #22 clarifies the `AgentRoleEnum` (Functional names) vs. Display Names (Mythological names). However, the file structure still shows concrete classes: `BrahmaAgent.java`, `ShivaAgent.java`. The existence of these classes alongside a `RoleRegistry` suggests **duplication of logic**. If `AgentRoleEnum` drives the behavior, `BrahmaAgent` classes are likely unnecessary boilerplate serving only as "configuration holders," which belongs in YAML/JSON, not Java.
-
 ---
 
 ### 2. Comparative Review: Previous vs. Current
@@ -314,7 +311,6 @@ Nuance #22 clarifies the `AgentRoleEnum` (Functional names) vs. Display Names (M
 | Feature | Previous State (P65-) | Current State (P66) | Verdict & Pending Work |
 | :--- | :--- | :--- | :--- |
 | **Channel Modularity** | Hardcoded Telegram logic in app. | **Improved:** `ChannelPlugin`, `ChannelPluginRegistry` added. | **Good Start.** <br>**Pending:** Concrete implementations (`telegram` package) are still inside `arcclaw-app`. They need to be moved to `arcclaw-channel-telegram` module. |
-| **Agent Personas** | Hardcoded classes. | **Improved:** `AgentRoleEnum` decouples logic from names (Nuance #22). | **Confusing.** <br>**Pending:** `BrahmaAgent.java` files still exist. They contradict the Enum-driven approach. Delete them and move logic to `RoleDefinition` data objects. |
 | **Testing Strategy** | Ad-hoc. | **Mature:** Nuance #18 (Test Isolation) & #24 (Camel Lifecycle) show deep maturity. | **Excellent.** Maintain these strict rules. |
 | **Persistence** | Basic Panache usage. | **Refactored:** Raw `EntityManager` (Nuance #17) fixes cross-module issues. | **Solid.** No changes needed, strictly follow the Nuance. |
 | **Native Image** | Fragile. | **Hardened:** Nuance #21 (Qute `@TemplateData`) & #26 (Schema Gen) address specific failures. | **Stable.** Automate verification of these nuances in build steps. |
@@ -334,17 +330,8 @@ The goal of Phase 67 is **"Decoupling & Data-Driven Personas"**. We move from "C
     4.  `arcclaw-app` will only contain `ChannelPluginRegistry` and inject `Instance<ChannelPlugin>`.
 *   **Result:** Adding a channel becomes a Maven dependency addition, not a code change.
 
-#### Priority 2: Eradicate "Concrete Persona Classes"
-**Objective:** Remove `BrahmaAgent.java`, `ShivaAgent.java`, etc.
-**Reasoning:** Nuance #22 proves you have a functional mapping (`CODER` -> `Vishnu`). The class `VishnuAgent.java` is likely just holding a prompt or tool list.
-*   **Action:**
-    1.  Delete all classes in `agent/persona/` (keep `Agent.java` interface if generic, or delete all).
-    2.  Create `PersonaConfig.yaml` or DB table `agent_personas`.
-    3.  Load these at startup into `RoleRegistry`.
-    4.  `PromptTemplateEngine` (Nuance #22) should pull from Registry, not switch on hardcoded class types.
-*   **Result:** Non-code contributors can tune Agent behavior.
 
-#### Priority 3: Native Image Hardening (Qute Audit)
+#### Priority 2: Native Image Hardening (Qute Audit)
 **Objective:** Prevent runtime `TemplateException` in Native mode.
 *   **Action:**
     1.  Write a Unit Test (or ArchUnit test) that scans all Qute templates.
@@ -374,21 +361,7 @@ Here are the complete prompts to execute Phase 67. You can feed these to another
 >
 > **Output:** Provide the `pom.xml` snippet for the new module and the refactored `ChannelPluginRegistry` and `TelegramChannelPlugin` classes.
 
-#### Prompt 2: Data-Driven Persona Refactoring
-
-> **Role:** Senior Gen AI Architect.
->
-> **Context:** The project currently has concrete classes for Agents (`BrahmaAgent.java`, `ShivaAgent.java`) which contradicts the Enum-based role system established in `Architecture_Nuances.md` (Nuance #22). We want Agents to be defined by configuration (Prompts/Tools), not Java classes.
->
-> **Task:**
-> 1.  Design a `PersonaDefinition` record/class that holds: `AgentRoleEnum role`, `String systemPrompt`, `List<ToolCapability> allowedTools`.
-> 2.  Refactor `AgentPersonaRegistry` to load these definitions from `application.yaml` or a JSON file instead of instantiating concrete classes like `BrahmaAgent.class`.
-> 3.  Demonstrate how to delete `BrahmaAgent.java`, `VishnuAgent.java`, etc., replacing their logic with the registry lookup.
-> 4.  Ensure `PromptTemplateEngine` utilizes the new Registry.
->
-> **Output:** Provide the `PersonaDefinition` class, the updated `AgentPersonaRegistry`, and a sample `application.yaml` configuration defining the "Coordinator" (Brihaspati) persona.
-
-#### Prompt 3: Native Image Safety Enforcement (Build-Time Check)
+#### Prompt 2: Native Image Safety Enforcement (Build-Time Check)
 
 > **Role:** Quarkus Native Specialist.
 >
