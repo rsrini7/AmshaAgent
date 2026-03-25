@@ -116,17 +116,23 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 4. Build tool specifications
         Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
-        boolean isCronFired = sessionId != null && sessionId.startsWith("cron-");
+        
+        // Extended: also treat goals with CRON: prefix as cron-fired even on REST sessions.
+        // This ensures schedule_task is never available when the goal originated from the scheduler,
+        // regardless of how the session was created.
+        boolean isCronFired = (sessionId != null && sessionId.toLowerCase().startsWith("cron-"))
+                || (goal != null && goal.toUpperCase().startsWith("CRON:"));
+        
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
-                .filter(allowedTools::contains)
-                .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName()) && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
-                .map(name -> toolRegistry.findTool(name).orElseThrow())
-                .map(tool -> ToolSpecification.builder()
-                        .name(tool.name())
-                        .description(tool.description())
-                        .parameters(tool.parametersSchema())
-                        .build())
-                .collect(Collectors.toList());
+        .filter(allowedTools::contains)
+        .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName()) && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
+        .map(name -> toolRegistry.findTool(name).orElseThrow())
+        .map(tool -> ToolSpecification.builder()
+                .name(tool.name())
+                .description(tool.description())
+                .parameters(tool.parametersSchema())
+                .build())
+        .collect(Collectors.toList());
 
         // 5. Build ChatRequest and call LLM
         ChatRequest request = toolSpecifications.isEmpty()

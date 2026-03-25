@@ -122,6 +122,17 @@ public class AgentSessionService {
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) return roleError.get();
 
+        // Fork-bomb guard: CRON: prefix is reserved for AgentCronScheduler internally.
+        // Legitimate cron sessions have sessionId starting with "cron-", not a REST UUID.
+        if (request.goal() != null && request.goal().startsWith("CRON:")) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of(
+                        "error", "Goals prefixed with 'CRON:' are reserved for the internal scheduler.",
+                        "code",  "FORK_BOMB_REJECTED"
+                    ))
+                    .build();
+        }
+
         var commandResponse = handleSlashCommand(sessionId, request);
         if (commandResponse.isPresent()) return commandResponse.get();
 
@@ -179,6 +190,18 @@ public class AgentSessionService {
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) { response.resume(roleError.get()); return; }
+
+        // Fork-bomb guard: CRON: prefix is reserved for AgentCronScheduler internally.
+        // Legitimate cron sessions have sessionId starting with "cron-", not a REST UUID.
+        if (request.goal() != null && request.goal().startsWith("CRON:")) {
+            response.resume(Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of(
+                        "error", "Goals prefixed with 'CRON:' are reserved for the internal scheduler.",
+                        "code",  "FORK_BOMB_REJECTED"
+                    ))
+                    .build());
+            return;
+        }
 
         var commandResponse = handleSlashCommand(sessionId, request);
         if (commandResponse.isPresent()) { response.resume(commandResponse.get()); return; }
