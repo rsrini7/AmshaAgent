@@ -103,6 +103,20 @@ public record AgentRoleEnum(String id) {
         return new AgentRoleEnum(normalized);
     }
 
+    /** Returns true only if the role string maps to a known built-in role. */
+    public static boolean isKnownRole(String roleStr) {
+        if (roleStr == null || roleStr.isBlank()) return false;
+        String normalized = roleStr.trim().toLowerCase();
+        if (normalized.startsWith("skill:")) return true;
+        for (AgentRoleEnum builtIn : BUILT_IN) {
+            RoleDefinition def = DEFINITIONS.get(builtIn.id());
+            if (def.canonicalName().equals(normalized) || def.aliases().contains(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Drop-in replacement for the enum-generated values() calls. */
     public static List<AgentRoleEnum> values() {
         return BUILT_IN;

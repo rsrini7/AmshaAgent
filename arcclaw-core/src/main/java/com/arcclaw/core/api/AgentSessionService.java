@@ -361,14 +361,12 @@ public class AgentSessionService {
     }
 
     private Optional<Response> validateRole(String role) {
-        try {
-            AgentRoleEnum.fromString(role);
-            return Optional.empty();
-        } catch (IllegalArgumentException e) {
+        if (!AgentRoleEnum.isKnownRole(role)) {
             return Optional.of(Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
+                    .entity(Map.of("error", "Unknown agent role: " + role, "code", "INVALID_ROLE"))
                     .build());
         }
+        return Optional.empty();
     }
 
     private Optional<Response> validateSession(String sessionId) {
