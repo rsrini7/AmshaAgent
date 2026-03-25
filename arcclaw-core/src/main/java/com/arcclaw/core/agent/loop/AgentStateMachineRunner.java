@@ -108,7 +108,7 @@ public class AgentStateMachineRunner {
 
                 StepDecision invocationDecision = stepProcessor.invokeToolAndObserve(
                         context.sessionId(), context.agentRole(), history, step,
-                        consecutiveFailures, context.goal(), skillSnapshot);
+                        consecutiveFailures, context.goal(), skillSnapshot, context.autonomyLevel());
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
                 consecutiveFailures = invocationDecision.consecutiveFailures();
 

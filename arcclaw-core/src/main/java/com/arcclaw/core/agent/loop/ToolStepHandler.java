@@ -14,6 +14,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -86,10 +87,10 @@ public class ToolStepHandler {
     /** Orchestrates the 4 phases: guard → invoke → observe → resolve outcome. */
     StepDecision invokeToolAndObserve(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
-            int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot) {
+            int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot, AutonomyLevel autonomy) {
 
         // Phase 1 — Guard
-        StepDecision guardDecision = evaluateGuard(sessionId, agentRole, history, step, goal, skillSnapshot);
+        StepDecision guardDecision = evaluateGuard(sessionId, agentRole, history, step, goal, skillSnapshot, autonomy);
         if (guardDecision != null) return guardDecision;
 
         // Phase 2 — Invoke
@@ -117,7 +118,20 @@ public class ToolStepHandler {
 
     private StepDecision evaluateGuard(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
-            String goal, List<CompiledSkillEntry> skillSnapshot) {
+            String goal, List<CompiledSkillEntry> skillSnapshot, AutonomyLevel autonomy) {
+
+        // READONLY: block all tool calls inline — no persistence, no approval pause
+        if (autonomy == AutonomyLevel.READONLY) {
+            log.infof("[ToolStepHandler] READONLY session %s — blocking tool '%s' inline",
+                    sessionId, step.action());
+            final ReasoningStep blockedStep = step.withObservation(
+                    "Tool execution is not permitted in READONLY mode. " +
+                    "Answer using only your existing knowledge. " +
+                    "Do not attempt to call any tools.");
+            history.add(blockedStep);
+            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
+            return StepDecision.retryValidation(0);
+        }
 
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 sessionId, agentRole, step.action(),
