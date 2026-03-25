@@ -116,8 +116,9 @@ public class AgentSessionService {
         var commandResponse = handleSlashCommand(sessionId, request);
         if (commandResponse.isPresent()) return commandResponse.get();
 
+        String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+
         try {
-            String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
             agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
                 if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                     throw new AwaitingApprovalException(sessionId);
@@ -140,10 +141,10 @@ public class AgentSessionService {
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
                 
                 return WorkspaceContext.run(
-                        sessionId, "rest:api", sessionId, level, request.agentRole(), ChannelType.REST_API, () -> {
+                        sessionId, "rest:api", sessionId, level, canonicalRole, ChannelType.REST_API, () -> {
                             MessageContext context = createRestContext(sessionId, request.goal());
                             context.setAutonomyLevel(level);
-                            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations, context);
+                            AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
                             return responseMapper.mapResult(result, false);
                         }
                 );
@@ -206,13 +207,15 @@ public class AgentSessionService {
 
                 AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : sessionLevel;
 
-                WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, request.agentRole(), ChannelType.REST_API, () -> {
+                String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+
+                WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, canonicalRole, ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     context.setAutonomyLevel(runLevel);
                     if (isApproval) {
                         context.setResumeSignal(true);
                     }
-                    AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                    AgentResult result = agentLoop.run(sessionId, canonicalRole,
                             request.goal(), reasoningEngine, maxIterations, context);
                     response.resume(responseMapper.mapResult(result, true));
                 });
@@ -387,9 +390,11 @@ public class AgentSessionService {
         MessageContext context = createRestContext(sessionId, goal);
 
         try {
+            String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+
             ReflexResult result = WorkspaceContext.run(
                 sessionId, "rest:api", sessionId, AutonomyLevel.FULL,
-                request.agentRole(), ChannelType.REST_API,
+                canonicalRole, ChannelType.REST_API,
                 () -> reflexRegistry.processIfReflex(
                     sessionId, "rest:api", sessionId, goal, context)
             );
