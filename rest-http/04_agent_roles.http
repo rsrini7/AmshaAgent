@@ -129,7 +129,6 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [ROLE-6a] Coder: CANNOT use github tool — empty schema structural guarantee
 # Even if asked directly to use github, the tool is not in Brahma's schema.
 # Expect 200: agent explains it cannot access external systems or use tools,
-# OR it answers the coding question directly without attempting a tool call.
 # Confirm in audit: NO TOOL_INVOKED event appears for this session.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
