@@ -3,10 +3,10 @@ package com.arcclaw.app.channel.telegram;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.app.channel.ChannelPlugin;
 import com.arcclaw.app.channel.ChannelJobNotifier;
-import com.arcclaw.channel.api.*;
+import com.arcclaw.app.channel.ChannelPlugin;
 import com.arcclaw.app.security.TelegramAllowlistGuard;
+import com.arcclaw.channel.api.*;
 import com.arcclaw.core.pipeline.ChannelDaemon;
 
 /**

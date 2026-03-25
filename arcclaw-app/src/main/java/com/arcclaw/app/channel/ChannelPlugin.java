@@ -2,6 +2,7 @@ package com.arcclaw.app.channel;
 
 import com.arcclaw.channel.api.*;
 import com.arcclaw.core.pipeline.ChannelDaemon;
+
 /**
  * Composite SPI contract for a full channel implementation.
  * <p>

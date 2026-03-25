@@ -1,10 +1,10 @@
 package com.arcclaw.rag;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
-import jakarta.enterprise.context.ApplicationScoped;
+import org.jboss.logging.Logger;
 
 /**
  * Jina AI implementation of the EmbeddingProvider SPI.

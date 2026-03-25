@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
+import com.arcclaw.app.config.Vec0NativeLibraryInstaller;
 import com.arcclaw.app.util.CliUtils;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -95,7 +96,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
             Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
             if (vecPath.endsWith("vec0")) { // it's a directory link-base
                  // The performInstallation method expects the base without extension
-                 com.arcclaw.app.config.Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
+                 Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
             }
 
             // Pin the absolute path so Quarkus config picks it up uniformly.

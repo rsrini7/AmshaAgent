@@ -1,6 +1,7 @@
 package com.arcclaw.rag;
 
 import jakarta.enterprise.context.ApplicationScoped;
+
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import org.jboss.logging.Logger;

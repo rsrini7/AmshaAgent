@@ -4,7 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelSender;
@@ -20,9 +21,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Orchestrates the execution of a single cron job, managing the workspace context,

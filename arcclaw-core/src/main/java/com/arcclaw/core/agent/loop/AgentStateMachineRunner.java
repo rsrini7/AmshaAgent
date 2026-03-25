@@ -20,7 +20,6 @@ import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
-
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;

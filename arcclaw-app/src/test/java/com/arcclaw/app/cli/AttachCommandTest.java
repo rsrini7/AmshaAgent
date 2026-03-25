@@ -3,11 +3,11 @@ package com.arcclaw.app.cli;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
 @QuarkusTest

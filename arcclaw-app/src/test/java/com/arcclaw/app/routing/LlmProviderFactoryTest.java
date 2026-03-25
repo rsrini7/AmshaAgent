@@ -1,5 +1,8 @@
 package com.arcclaw.app.routing;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.inject.Any;
@@ -8,9 +11,6 @@ import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 class LlmProviderFactoryTest {

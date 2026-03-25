@@ -9,8 +9,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
 import org.jboss.logging.Logger;
 
 /**

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -121,7 +122,7 @@ public class AuditHashUtilTest {
         assertEquals(64, result.length(), "SHA-256 hex string should be 64 characters");
 
         // Concurrent invocation
-        java.util.stream.IntStream.range(0, 100).parallel().forEach(i -> {
+        IntStream.range(0, 100).parallel().forEach(i -> {
             String r = util.sha256hex("test-" + i);
             assertNotNull(r);
             assertEquals(64, r.length());

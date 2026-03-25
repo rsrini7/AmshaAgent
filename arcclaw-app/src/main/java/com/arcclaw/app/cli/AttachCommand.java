@@ -1,5 +1,13 @@
 package com.arcclaw.app.cli;
 
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.pipeline.ChannelDaemon;
 import picocli.CommandLine;
 
 /**
@@ -14,21 +22,21 @@ public class AttachCommand implements Runnable {
     @CommandLine.Parameters(paramLabel = "<channel>", description = "Channel to service: telegram, discord")
     String channel;
 
-    @jakarta.inject.Inject
-    @jakarta.enterprise.inject.Any
-    jakarta.enterprise.inject.Instance<com.arcclaw.core.pipeline.ChannelDaemon> daemons;
+    @Inject
+    @Any
+    Instance<ChannelDaemon> daemons;
 
     @Override
     public void run() {
         String target = channel.toLowerCase();
-        java.util.Optional<com.arcclaw.core.pipeline.ChannelDaemon> daemon = daemons.stream()
+        Optional<ChannelDaemon> daemon = daemons.stream()
             .filter(d -> d.channelId().equalsIgnoreCase(target))
             .findFirst();
 
         if (daemon.isEmpty()) {
             System.out.printf("❌ Unknown channel '%s'. Available: %s%n",
                 channel,
-                daemons.stream().map(com.arcclaw.core.pipeline.ChannelDaemon::channelId).collect(java.util.stream.Collectors.joining(", ")));
+                daemons.stream().map(ChannelDaemon::channelId).collect(Collectors.joining(", ")));
             return;
         }
 

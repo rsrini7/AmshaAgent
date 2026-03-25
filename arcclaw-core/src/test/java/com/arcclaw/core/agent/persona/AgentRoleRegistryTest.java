@@ -1,5 +1,9 @@
 package com.arcclaw.core.agent.persona;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -8,10 +12,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 class AgentRoleRegistryTest {
