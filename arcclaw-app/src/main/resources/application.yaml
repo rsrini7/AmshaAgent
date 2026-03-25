@@ -234,6 +234,8 @@ smallrye:
         level: INFO
       "io.netty.handler.ssl":
         level: INFO
+      "org.apache.camel.component.telegram.TelegramConsumer":
+        level: ERROR
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
