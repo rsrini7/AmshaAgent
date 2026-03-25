@@ -255,9 +255,6 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 2
 }
 
-
-
-
 ###
 
 GET {{baseUrl}}/api/v1/audit/session/{{loopMaxSession.response.body.sessionId}}
@@ -343,70 +340,118 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is virtual threading?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is virtual threading?", 
+    "agentRole": "coordinator", "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is SQLite WAL?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is SQLite WAL?", 
+    "agentRole": "coordinator", "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is Podman?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is Podman?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is LangChain4j?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is LangChain4j?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is AES-GCM-SIV?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is AES-GCM-SIV?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is Argon2id?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is Argon2id?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is GraalVM native image?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is GraalVM native image?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is Apache Camel?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is Apache Camel?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is OpenTelemetry?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is OpenTelemetry?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{compactAuditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "What is MicroProfile?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "What is MicroProfile?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
