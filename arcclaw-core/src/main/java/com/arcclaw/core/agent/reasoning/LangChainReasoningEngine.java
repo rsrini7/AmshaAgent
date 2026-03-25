@@ -151,7 +151,28 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 throw e;
             }
 
-            if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {
+            if (msg.contains("tool_use_failed") || msg.contains("was not in request.tools")) {
+
+                // Distinguish prose-generation failure from nonexistent-tool failure.
+                // Groq rejects raw markdown prose with tool_use_failed when tools are present.
+                // The failed_generation field contains the prose — detect by checking it
+                // looks like text (starts with a letter/markdown marker) rather than JSON.
+                if (isProseGenerationFailure(msg)) {
+                    log.warnf("[LangChainReasoningEngine] LLM generated prose instead of " +
+                            "structured output — injecting FINISH correction");
+                    return ReasoningStep.pending(
+                            "Generated raw text instead of structured FINISH call",
+                            "OBSERVE",
+                            Map.of(),
+                            0, 0
+                    ).withObservation(
+                            "Do NOT output raw markdown or plain text directly. " +
+                            "You MUST use FINISH to provide your answer. " +
+                            "Format: FINISH[answer=<your full answer here>]. " +
+                            "Place the entire article content inside the answer field."
+                    );
+                }
+
                 log.warnf("[LangChainReasoningEngine] LLM called unavailable tool — " +
                         "injecting inline correction: %s", msg);
                 return ReasoningStep.pending(
@@ -186,6 +207,25 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 6. Parse response
         return stepParser.parse(sessionId, agentRole, response);
+    }
+
+    /**
+     * Returns true when Groq's tool_use_failed rejection contains prose in
+     * failed_generation rather than a malformed tool call JSON.
+     * Prose responses start with markdown markers (**,#,*) or plain letters,
+     * never with '{' which would indicate a tool call attempt.
+     */
+    private boolean isProseGenerationFailure(String message) {
+        if (message == null) return false;
+        int idx = message.indexOf("\"failed_generation\":\"");
+        if (idx == -1) return false;
+        int start = idx + 21;
+        if (start >= message.length()) return false;
+        // Skip leading whitespace/escape sequences
+        String snippet = message.substring(start).stripLeading()
+                .replace("\\n", "").replace("\\r", "").stripLeading();
+        // Tool call JSON starts with '[' or '{'; prose starts with text/markdown
+        return !snippet.startsWith("[") && !snippet.startsWith("{");
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
