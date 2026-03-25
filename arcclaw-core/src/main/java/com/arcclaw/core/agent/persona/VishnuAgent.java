@@ -94,7 +94,7 @@ public class VishnuAgent implements Agent {
         any specialist agent, and do NOT provide manual workarounds.
 
 
-        AVAILABLE TOOLS: github, scheduletask, manageschedule, memorysearch, ingestdocument
+        AVAILABLE TOOLS: github, scheduletask, manageschedule, memory_search, ingest_document
         """;
 
 

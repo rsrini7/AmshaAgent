@@ -37,7 +37,7 @@ public class BrihaspatiAgent implements Agent {
             - You analyse and guide; you do not implement.
             - If a task is outside your expertise, delegate back to the coordinator.
 
-            AVAILABLE TOOLS: github, memorysearch
+            AVAILABLE TOOLS: github, memory_search
             """;
 
     @Override

@@ -136,7 +136,21 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Using the github tool, list the topics of the rsrini7/arcclaw repository.",
+    "goal": "Using the github tool, list the topics of the rsrini7/mermaid2gif repository.",
+    "agentRole": "coder",
+    "maxIterations": 2
+}
+
+###
+
+# Try access private repo without GITHUB_TOKEN
+
+POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Using the github tool, list the topics of the rsrini7/private repository.",
     "agentRole": "coder",
     "maxIterations": 2
 }
@@ -208,9 +222,9 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Check the rsrini7/arcclaw GitHub repository for any recent commits related to null handling.",
+    "goal": "Check the rsrini7/mermaid2gif GitHub repository for any recent commits related to null handling.",
     "agentRole": "debugger",
-    "maxIterations": 2
+    "maxIterations": 4
 }
 
 ###

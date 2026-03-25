@@ -11,4 +11,6 @@ with 2-3 sentences maximum and stop. Do not elaborate unless asked.
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
+{#include prompts/github-tool-rules /}
+{#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}
