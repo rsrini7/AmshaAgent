@@ -30,7 +30,11 @@ public class ListCronsReflex implements AgentReflex {
             || trimmed.equals("/list crons")
             || trimmed.startsWith("/jobs")
             || trimmed.startsWith("/schedule")
-            || trimmed.startsWith("list my cron");
+            || trimmed.startsWith("list my cron")
+            || trimmed.equals("list tasks")
+            || trimmed.equals("list crons")
+            || trimmed.equals("show cron")
+            || trimmed.equals("my crons");
     }
 
     @Override
