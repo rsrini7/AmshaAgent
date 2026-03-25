@@ -142,6 +142,13 @@ RULE 2 — HONESTY ABOUT TOOL RESULTS:
   unless a real `ingest_document` observation appears in your reasoning
   history above. If no observation exists, it did NOT happen.
 
+RULE 3 — USER-FACING RESPONSE AFTER INGEST:
+  After ingest_document observation appears in reasoning history,
+  respond EXACTLY: "Document ingested successfully."
+  Do NOT include chunkId, jobId, or any UUID in the user reply.
+  Do NOT say "Task scheduled" — ingest_document is NOT scheduling.
+  The chunkId in the tool observation is an internal vector ID, not a task ID.
+
 SANITIZATION (before every ingest_document call):
   - Strip all special characters (---, --, ===, ***, etc.)
   - Normalize whitespace — no consecutive blank lines
