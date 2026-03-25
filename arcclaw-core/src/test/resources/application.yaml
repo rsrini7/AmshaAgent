@@ -5,7 +5,7 @@ arcclaw:
   vault:
     pepper: "test-pepper-value-not-used-in-tests"
     master-key: "test-master-key-32-chars-padded!"
-  data-dir: ":memory:"
+  data-dir: "target/data"
   channel:
     telegram:
       bot-token: "test-bot-token"

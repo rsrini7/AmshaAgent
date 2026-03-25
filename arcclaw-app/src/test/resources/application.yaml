@@ -17,7 +17,6 @@ arcclaw:
   vault:
     pepper: "test-pepper"
     master-key: "test-master-key-32-chars-padded!"
-  data-dir: ":memory:"
   cron:
     max-lookback-window: PT999H
       
