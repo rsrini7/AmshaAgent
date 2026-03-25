@@ -101,7 +101,20 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-SETUP-5] GitHub tool → emits TOOL_INVOKED (mandatory) — requires GITHUB_TOKEN
+POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+
+###
+
+### [AUDIT-SETUP-5] GitHub tool → emits TOOL_INVOKED (mandatory) — optional GITHUB_TOKEN
 # Only runs the tool if GITHUB_TOKEN is in the vault and user approves.
 # Uses run-async so the test continues without blocking on approval.
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run-async
@@ -113,6 +126,12 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 3
 }
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
 
 ###
 
@@ -196,6 +215,22 @@ POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
+{
+    "autonomyLevel": "FULL"
+}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{loopMaxSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Search memory for 'project goals', then search again for 'agent configuration', then search again for 'tool registry'.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{loopMaxSession.response.body.sessionId}}/run
@@ -207,6 +242,21 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 1
 }
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{loopMaxSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "List all repositories for GitHub user rsrini7, then for each one fetch its README and summarise it.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+
+
 
 ###
 
