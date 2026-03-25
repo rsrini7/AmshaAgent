@@ -158,18 +158,27 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 // The failed_generation field contains the prose — detect by checking it
                 // looks like text (starts with a letter/markdown marker) rather than JSON.
                 if (isProseGenerationFailure(msg)) {
-                    log.warnf("[LangChainReasoningEngine] LLM generated prose instead of " +
-                            "structured output — injecting FINISH correction");
+                    String extractedProse = extractProseFromFailedGeneration(msg);
+                    if (extractedProse != null && !extractedProse.isBlank()) {
+                        log.infof("[LangChainReasoningEngine] Prose extracted directly from " +
+                                "failed_generation — returning as FINISH (0 extra LLM calls)");
+                        return ReasoningStep.pending(
+                                "LLM generated valid prose — extracted from failed_generation",
+                                "FINISH",
+                                Map.of("answer", extractedProse),
+                                0, 0
+                        );
+                    }
+                    // Extraction failed — last-resort fallback: strip tools on retry by re-throwing
+                    // as a schema error so the state machine injects a tool-free correction context
+                    log.warnf("[LangChainReasoningEngine] Prose detected but extraction failed " +
+                            "— falling back to correction");
                     return ReasoningStep.pending(
                             "Generated raw text instead of structured FINISH call",
-                            "OBSERVE",
-                            Map.of(),
-                            0, 0
+                            "OBSERVE", Map.of(), 0, 0
                     ).withObservation(
-                            "Do NOT output raw markdown or plain text directly. " +
-                            "You MUST use FINISH to provide your answer. " +
-                            "Format: FINISH[answer=<your full answer here>]. " +
-                            "Place the entire article content inside the answer field."
+                            "You must respond using FINISH[answer=<content>]. " +
+                            "Do NOT output raw markdown or plain text outside of a FINISH call."
                     );
                 }
 
@@ -207,6 +216,29 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 6. Parse response
         return stepParser.parse(sessionId, agentRole, response);
+    }
+
+    /**
+     * Extracts the prose content from Groq's failed_generation field.
+     * Unescapes \\n → newline and \\\" → quote so the extracted text
+     * is clean markdown ready for direct delivery to the user.
+     */
+    private String extractProseFromFailedGeneration(String message) {
+        int start = message.indexOf("\"failed_generation\":\"");
+        if (start == -1) return null;
+        start += 21;
+
+        // Find the closing "}}" that terminates the error JSON —
+        // the failed_generation value ends just before it
+        int end = message.lastIndexOf("\"}}");
+        if (end <= start) return null;
+
+        return message.substring(start, end)
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+                .trim();
     }
 
     /**
