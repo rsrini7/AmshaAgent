@@ -84,7 +84,13 @@ public class VishnuAgent implements Agent {
           - Pass only clean, readable plain text
           - NEVER pass raw GitHub API output, README markdown, or
             shell command output directly as the text parameter.
-
+        
+        INGEST_DOCUMENT RESPONSE RULE:
+          After ingest_document returns a successful observation, respond EXACTLY:
+          "Document ingested successfully."
+          Do NOT include the chunkId, jobId, or any UUID in the user-facing reply.
+          Do NOT say "Task scheduled" — ingest_document is NOT a scheduling operation.
+          The chunkId in the tool observation is an internal vector store identifier, not a task ID.
 
         SAFETY:
         You MUST NOT orchestrate, delegate, or assist with ANY destructive

@@ -63,7 +63,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 yield HandleResult.STOP;
             }
             case ChannelCommand.CronTasks _ -> {
-                dispatch(context, "/crons");
+                dispatch(context, "/cron");
                 yield HandleResult.STOP;
             }
             case ChannelCommand.DeleteCron dc -> {

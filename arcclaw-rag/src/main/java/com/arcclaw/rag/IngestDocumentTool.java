@@ -2,18 +2,17 @@ package com.arcclaw.rag;
 
 import java.util.Map;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolResponse;
+
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class IngestDocumentTool implements AgentTool {
@@ -83,12 +82,6 @@ public class IngestDocumentTool implements AgentTool {
 
         String chunkId = globalKb.ingest(text);
         sessionKb.ingest(chunkId != null ? chunkId : "session-" + label, text);
-
-        auditService.record(sessionId, userId, "tool",
-            SecurityEventType.TOOL_INVOKED,
-            "tool=ingest_document label=" + label +
-            " chars=" + text.length() +
-            (chunkId != null ? " chunkId=" + chunkId : " vec=degraded"));
 
         return ToolResponse.success(
             chunkId != null
