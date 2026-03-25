@@ -21,6 +21,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -49,7 +50,7 @@ class ReflexRegistryTest {
     ChatMemoryStore chatMemoryStore;
 
     @InjectMock
-    GovernanceStrategy governanceLayer;
+    GovernanceLayer governanceLayer;
 
     @InjectMock
     AuditHashUtil hashUtil;
@@ -116,9 +117,10 @@ class ReflexRegistryTest {
                 "session-reset", "user-1","chat-1", "/reset", createContext("/reset"));
 
         assertTrue(result.commandResponse().isPresent());
-        assertTrue(result.commandResponse().get().contains("wiped"));
-        verify(workspaceManager).terminateSession("session-reset");
-        verify(chatMemoryStore).deleteMessages("session-reset");
+        assertTrue(result.commandResponse().get().contains("cleared"));
+        verify(workspaceManager).resetSessionState("session-reset");
+        // Reset must NOT wipe chat memory — preserved in soft-reset
+        verifyNoInteractions(chatMemoryStore);
     }
 
     @Test
@@ -175,7 +177,7 @@ class ReflexRegistryTest {
                 "session-new", "user-1","chat-1", "/status", createContext("/status"));
 
         assertTrue(result.commandResponse().isPresent());
-        assertTrue(result.commandResponse().get().contains("NO_ACTIVE_STATE"));
+        assertTrue(result.commandResponse().get().contains("NOT_STARTED"));
     }
 
     // ── DenyReflex ──────────────────────────────────────────────────────────
@@ -215,7 +217,7 @@ class ReflexRegistryTest {
     void testReflexExceptionReturnsErrorStringSafely() {
         // ResetReflex will throw because workspaceManager throws
         doThrow(new RuntimeException("DB connection lost"))
-                .when(workspaceManager).terminateSession(anyString());
+                .when(workspaceManager).resetSessionState(anyString());
 
         ReflexResult result = reflexRegistry.processIfReflex(
                 "session-err", "user-1","chat-1", "/reset", createContext("/reset"));
