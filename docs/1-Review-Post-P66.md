@@ -175,17 +175,12 @@ Based on the full codebase provided, here is the maturity assessment:
 
 ## 2. Critical Architectural Risks (Honest Feedback)
 
-### A. Java 25 Dependency (High Risk)
-*   **Issue:** You are heavily invested in `ScopedValue` (Java 25).
-*   **Risk:** Java 25 is not LTS. If you deploy to a standard LTS (Java 21/25 LTS later), you may face compatibility issues or API shifts.
-*   **Mitigation:** Ensure your build pipeline locks the JDK version strictly. Consider abstracting `WorkspaceScopeHolder` behind an interface that could swap to `ThreadLocal` if needed for compatibility (though performance would drop).
-
-### B. SQLite Scaling Ceiling
+### A. SQLite Scaling Ceiling
 *   **Issue:** `arcclaw-meta.db` is SQLite.
 *   **Risk:** SQLite is single-writer. Under high concurrent write load (many agents auditing simultaneously), you will hit `SQLITE_BUSY` despite WAL mode.
 *   **Mitigation:** For Phase 67, introduce an **AbstractPersistenceLayer**. Allow swapping SQLite for PostgreSQL in production while keeping SQLite for dev/test.
 
-### C. Native Extension Fragility
+### B. Native Extension Fragility
 *   **Issue:** `sqlite-vec` and `vec0` are native binaries.
 *   **Risk:** Native Image + Native SQLite Extensions = High complexity in debugging. If `vec0` fails to load, RAG degrades silently (handled gracefully, but still a risk).
 *   **Mitigation:** Add a startup health check that **fails hard** if `vec0` is required but missing, rather than degrading silently.
@@ -239,12 +234,7 @@ For Phase 67, I recommend shifting focus from **Core Stability** (Phases 60-64) 
 
 ## 5. Specific Refactoring Needs (Immediate)
 
-### A. `WorkspaceScopeHolder` Complexity
-*   **Current:** Mixes `ScopedValue` and `ThreadLocal` (for MicroProfile Context Propagation).
-*   **Refactor:** Consolidate. If MicroProfile Context Propagation is required, ensure it wraps `ScopedValue` cleanly without exposing the `ThreadLocal` bridge to application code.
-*   **Pattern:** **Facade Pattern**.
-
-### B. `ToolRegistry` God Class
+### A. `ToolRegistry` God Class
 *   **Current:** `ToolRegistry` handles discovery, security, sandbox execution, and auditing.
 *   **Refactor:** Split into:
     *   `ToolDiscoveryService` (CDI lookup)
@@ -252,12 +242,12 @@ For Phase 67, I recommend shifting focus from **Core Stability** (Phases 60-64) 
     *   `ToolExecutionEngine` (Sandbox/Direct)
 *   **Pattern:** **Single Responsibility Principle**.
 
-### C. `AgentLoop` Cognitive Load
+### B. `AgentLoop` Cognitive Load
 *   **Current:** `AgentLoop` is dense with lifecycle management.
 *   **Refactor:** Extract `SessionLifecycleManager` to handle checkpoint save/load/terminate. `AgentLoop` should only orchestrate the reasoning steps.
 *   **Pattern:** **Separation of Concerns**.
 
-### D. `FtsConnectionInterceptor`
+### C. `FtsConnectionInterceptor`
 *   **Current:** Loads `vec0` on every connection acquire (with checks).
 *   **Refactor:** Move extension loading to a **Startup Singleton** that validates the extension once, then flags the pool as "Ready" or "Failed".
 *   **Why:** Reduces connection acquisition overhead.
