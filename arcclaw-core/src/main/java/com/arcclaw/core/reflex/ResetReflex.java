@@ -64,6 +64,11 @@ public class ResetReflex implements AgentReflex {
             });
         }
 
+        // deletes checkpoint (StatusReflex shows NOT_STARTED = NO_ACTIVE_STATE)
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            statefulAgentStore.deleteCheckpoint(sessionId, role.toScopedName());
+        }
+
         // 4. Clear stale cron jobs — session-scoped only, NOT user-scoped
         long deletedCrons = cronRepository.deleteAllBySessionId(sessionId);
 

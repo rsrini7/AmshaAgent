@@ -153,6 +153,18 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
 # ─────────────────────────────────────────────────────────────────
 # /CRONS, /CRON, /LIST CRONS — list scheduled tasks (no LLM)
 # All three aliases call ListCronsReflex → AgentCronRepository.findByUserId()
@@ -286,6 +298,21 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 1
 }
 
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+
 ###
 
 ### [REFLEX-12a] store with JWT-like value — PII scan must NOT redact
@@ -301,6 +328,20 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 1
 }
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
 
 ###
 
@@ -326,7 +367,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-14] Status after halt → NO_ACTIVE_STATE or 404
+### [REFLEX-14] Status after halt → SESSION_NOT_FOUND
 # Workspace is wiped. Checkpoint lookup finds nothing.
 GET {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
