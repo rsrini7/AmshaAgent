@@ -4615,3 +4615,78 @@ Completed the final tier of Phase 65 — three quality improvements that complet
 - **Deleted files**: `ContextCompactionService.java`, `ContextCompactionServiceTest.java`, `ContextCompactionServiceIntegrationTest.java`
 - **Renamed**: `CompactionServiceIntegrationTest.java` replaces the integration test.
 - **No config changes**: All existing config keys remain unchanged.
+
+---
+
+# Phase 66 — SPI Consolidation & Zero-Setup RAG ✅
+
+Finalized the SPI-based architecture for LLM providers, Agent roles, and Channels, while automating the `sqlite-vec` native binary management.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **LLM Provider SPI (T3)**: Converted `LlmModelFactory` from a hardcoded `switch` to a CDI-discovered `Instance<LlmProviderFactory>` SPI. This mirrors the `EmbeddingProviderFactory` pattern, allowing new providers (Anthropic, DeepSeek) to be added without modifying core app code.
+
+> [!NOTE]
+> **Agent Role Record (T2)**: Replaced the `AgentRoleEnum` with an open `AgentRoleEnum` record and `AgentRoleRegistry`. This removes the "enum lock" that prevented third-party agents from being registered.
+
+> [!TIP]
+> **Channel Plugin Composite SPI (T5)**: Bundled the five disjoint channel interfaces (`ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) into a single `ChannelPlugin` composite SPI. This simplifies channel registration to a single CDI bean.
+
+> [!IMPORTANT]
+> **Zero-Setup Sqlite-vec (T8)**: Automated the native extension lifecycle. Binaries for Linux, macOS, and Windows are bundled in resources and auto-extracted to `target/lib/vec0` (tests) or `./lib/vec0` (prod/dev) during early bootstrap. `ArcClawCli` ensures extraction happens *before* Hibernate/Agroal starts to avoid first-boot race conditions.
+
+## Completed Changes
+
+### Component T2/T3 — SPI Modernization
+
+#### [MODIFY] [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java)
+- Converted from `enum` to `record` to support dynamic roles.
+
+#### [CREATE] [AgentRoleRegistry.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/persona/AgentRoleRegistry.java)
+- CDI-driven discovery of all registered `Agent` beans.
+
+#### [MODIFY] [LlmModelFactory.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/LlmModelFactory.java)
+- Replaced `switch` with `@Any Instance<LlmProviderFactory>`.
+
+#### [CREATE] Llm Provider Factories
+- `GroqLlmProviderFactory.java`, `OpenAiLlmProviderFactory.java`, `OllamaLlmProviderFactory.java`.
+
+### Component T5 — Channel Plugin SPI
+
+#### [CREATE] [ChannelPlugin.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/ChannelPlugin.java)
+- Composite SPI interface for full channel implementations.
+
+#### [CREATE] [ChannelPluginRegistry.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/ChannelPluginRegistry.java)
+- Registry for all discovered `ChannelPlugin` beans.
+
+#### [CREATE] [TelegramChannelPlugin.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelPlugin.java)
+- Reference implementation bundling all Telegram capabilities.
+
+### Component T8 — Sqlite-vec Automation
+
+#### [CREATE] [Vec0NativeLibraryInstaller.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/config/Vec0NativeLibraryInstaller.java)
+- Static/CDI utility for resource extraction based on OS/Arch.
+
+#### [MODIFY] [ArcClawCli.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/ArcClawCli.java)
+- Added early bootstrap step to extract `sqlite-vec` before Quarkus starts.
+- Pinned `ARCCLAW_DATA_DIR` and `ARCCLAW_SQLITE_VEC_PATH` to absolute paths.
+
+### Documentation & Cleanup
+
+#### [CREATE] [CHANNEL_SPI.md](file:///CHANNEL_SPI.md)
+- Root-level guide for developing new communication channels.
+
+#### [DELETE] `ApprovalTimeoutNotifier.java`
+- Removed dead code (D4).
+
+#### [MODIFY] `application.yaml`
+- Renamed deprecated log properties (`enable` -> `enabled`).
+- Overrode `%test` data/lib paths to `target/` to keep module roots clean.
+
+## Verification
+- ✅ `LlmProviderFactoryTest`: Confirmed dynamic discovery and error handling.
+- ✅ `ChannelPluginRegistryTest`: Verified Telegram plugin registration and capability wiring.
+- ✅ `AgentRoleRegistryTest`: Confirmed six built-in roles plus dynamic role support.
+- ✅ `Vec0NativeLibraryInstallerTest`: Verified extraction logic across OS/Arch keys.
+- ✅ `arcclaw-dev.log`: Confirmed successful `sqlite-vec` loading and auto-install during boot.

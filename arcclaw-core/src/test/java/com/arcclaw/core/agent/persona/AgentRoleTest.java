@@ -22,25 +22,27 @@ class AgentRoleTest {
 
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource({
-        "vishnu,   COORDINATOR",
-        "saraswati,RESEARCHER",
-        "brahma,   CODER",
-        "shiva,    DEBUGGER"
+        "vishnu,   coordinator",
+        "saraswati,researcher",
+        "brahma,   coder",
+        "shiva,    debugger"
     })
     void testFromStringDeityAliases(String alias, String expectedName) {
-        AgentRoleEnum expected = AgentRoleEnum.valueOf(expectedName);
+        AgentRoleEnum expected = AgentRoleEnum.fromString(expectedName);
         assertEquals(expected, AgentRoleEnum.fromString(alias));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"unknown", "kali", "", " "})
-    void testFromStringUnknownThrows(String bad) {
-        assertThrows(IllegalArgumentException.class, () -> AgentRoleEnum.fromString(bad));
+    @ValueSource(strings = {"unknown", "kali"})
+    void testFromStringUnknownReturnsDynamicRole(String bad) {
+        AgentRoleEnum role = AgentRoleEnum.fromString(bad);
+        assertEquals(bad, role.id());
     }
 
     @Test
-    void testFromStringNullThrows() {
-        assertThrows(IllegalArgumentException.class, () -> AgentRoleEnum.fromString(null));
+    void testFromStringNullReturnsCoordinator() {
+        assertEquals(AgentRoleEnum.COORDINATOR, AgentRoleEnum.fromString(null));
+        assertEquals(AgentRoleEnum.COORDINATOR, AgentRoleEnum.fromString(" "));
     }
 
     @Test
@@ -64,7 +66,6 @@ class AgentRoleTest {
             var tools = registry.permittedTools(role);
             assertNotNull(tools);
 
-            // boolean — just calling, any value is acceptable
             registry.requiresApprovalForTools(role);
         }
     }

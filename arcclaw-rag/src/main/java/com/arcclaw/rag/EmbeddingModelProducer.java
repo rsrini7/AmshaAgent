@@ -4,14 +4,14 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
+
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * CDI producer for EmbeddingModel.

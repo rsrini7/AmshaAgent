@@ -1,14 +1,13 @@
 package com.arcclaw.app.scheduler;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
+import com.arcclaw.core.security.DevSecretSeeder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import com.arcclaw.core.security.DevSecretSeeder;
 
 class CronJobRunnerTest {
 

@@ -9,6 +9,7 @@ import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 
 /**
@@ -36,9 +37,9 @@ public class AgentStepProcessor {
 
     StepDecision invokeToolAndObserve(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step,
-            int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot) {
+            int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot, AutonomyLevel autonomy) {
         return toolStepHandler.invokeToolAndObserve(
-                sessionId, agentRole, history, step, consecutiveFailures, goal, skillSnapshot);
+                sessionId, agentRole, history, step, consecutiveFailures, goal, skillSnapshot, autonomy);
     }
 
     AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,

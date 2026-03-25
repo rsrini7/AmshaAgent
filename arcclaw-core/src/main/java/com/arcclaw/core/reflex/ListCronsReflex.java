@@ -1,6 +1,7 @@
 package com.arcclaw.core.reflex;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,16 +22,21 @@ public class ListCronsReflex implements AgentReflex {
     @Inject
     AgentCronRepository cronRepository;
 
+    private static final Set<String> EXACT_MATCHES = Set.of(
+        "/cron", "/crons", "/list crons", "list crons",
+        "list tasks", "show cron", "my crons", "list my crons"
+    );
+
+    private static final List<String> PREFIX_MATCHES = List.of(
+        "/jobs", "/schedule", "list my cron"
+    );
+
     @Override
     public boolean matches(String input) {
         if (input == null) return false;
         String trimmed = input.trim().toLowerCase();
-        return trimmed.equals("/crons")
-            || trimmed.equals("/cron")
-            || trimmed.equals("/list crons")
-            || trimmed.startsWith("/jobs")
-            || trimmed.startsWith("/schedule")
-            || trimmed.startsWith("list my cron");
+        return EXACT_MATCHES.contains(trimmed)
+            || PREFIX_MATCHES.stream().anyMatch(trimmed::startsWith);
     }
 
     @Override

@@ -4,6 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Collection;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -75,9 +80,9 @@ class DynamicToolCapabilityRegistryTest {
     @DisplayName("Verify no CME occurs when registering and iterating concurrently (B2 Hardening)")
     void testConcurrentRegisterAndDeregisterNoCme() throws InterruptedException {
         int threads = 50;
-        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threads);
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(threads);
-        java.util.concurrent.atomic.AtomicInteger failures = new java.util.concurrent.atomic.AtomicInteger(0);
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch latch = new CountDownLatch(threads);
+        AtomicInteger failures = new AtomicInteger(0);
 
         for (int i = 0; i < threads; i++) {
             final int idx = i;
@@ -101,7 +106,7 @@ class DynamicToolCapabilityRegistryTest {
             });
         }
 
-        boolean finished = latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+        boolean finished = latch.await(10, TimeUnit.SECONDS);
         executor.shutdown();
         
         assertTrue(finished, "Test timed out");

@@ -1,12 +1,15 @@
 package com.arcclaw.app.routing;
 
 import java.time.Duration;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 
 /**
  * Common factory for creating LangChain4j ChatModels based on provider configuration.
@@ -15,27 +18,33 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 @ApplicationScoped
 public class LlmModelFactory {
 
+    @Inject @Any Instance<LlmProviderFactory> factories;
+
     public ChatModel createModel(String provider, String baseUrl, String apiKey,
-                                String modelName, Integer maxTokens, Duration timeout,
-                                String ollamaBaseUrl, String ollamaModelId) {
-        return switch (provider.toLowerCase()) {
-            case "groq", "openai" -> OpenAiChatModel.builder()
-                    .baseUrl(baseUrl)
-                    .apiKey(apiKey)
-                    .modelName(modelName)
-                    .maxTokens(maxTokens)
-                    .timeout(timeout)
-                    .temperature(0.0)
-                    .logRequests(false)
-                    .logResponses(false)
-                    .build();
-            case "ollama" -> OllamaChatModel.builder()
-                    .baseUrl(ollamaBaseUrl)
-                    .modelName(ollamaModelId)
-                    .build();
-            default -> throw new IllegalStateException(
-                    "Unknown LLM provider: " + provider +
-                    ". Supported: groq | openai | ollama");
-        };
+                                 String modelName, Integer maxTokens, Duration timeout,
+                                 String ollamaBaseUrl, String ollamaModelId) {
+
+        String effectiveBaseUrl = "ollama".equalsIgnoreCase(provider) ? ollamaBaseUrl : baseUrl;
+        String effectiveModel   = "ollama".equalsIgnoreCase(provider) ? ollamaModelId : modelName;
+
+        LlmProviderFactory factory = factories.stream()
+            .filter(f -> f.providerId().equalsIgnoreCase(provider))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException(
+                "No LlmProviderFactory registered for provider: [" + provider +
+                "]. Registered: " + factories.stream()
+                    .map(LlmProviderFactory::providerId)
+                    .collect(Collectors.joining(", "))));
+
+        LlmModelConfig config = new LlmModelConfig(
+            provider.toLowerCase(),
+            effectiveModel,
+            effectiveBaseUrl,
+            Optional.ofNullable(apiKey).filter(k -> !k.isBlank()),
+            Optional.ofNullable(maxTokens),
+            Optional.ofNullable(timeout)
+        );
+
+        return factory.create(config);
     }
 }

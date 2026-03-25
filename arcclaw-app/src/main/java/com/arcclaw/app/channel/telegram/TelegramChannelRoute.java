@@ -55,7 +55,7 @@ public class TelegramChannelRoute extends RouteBuilder {
 
         log.info("Telegram Route initializing endpoint");
 
-        from("telegram:bots")
+        from("telegram:bots?timeout=10")
                 .routeId("telegram-bot")
                 .bean(telegramAgentHandler, "receiveMessage");
     }

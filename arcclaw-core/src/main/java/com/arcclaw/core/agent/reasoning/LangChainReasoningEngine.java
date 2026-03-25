@@ -14,7 +14,7 @@ import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -43,6 +43,40 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 || message.contains("errors:");
     }
 
+    /**
+     * Checks whether a message string signals a Groq rate-limit rejection.
+     * Covers both TPM (tokens-per-minute) and TPD (tokens-per-day) variants.
+     */
+    private boolean isRateLimitError(String message) {
+        if (message == null) return false;
+        return message.contains("rate_limit_exceeded")
+                || message.contains("tokens per minute")
+                || message.contains("tokens per day")
+                || message.contains("TPM")
+                || message.contains("TPD")
+                || message.contains("Rate limit");
+    }
+
+    /**
+     * Walks the full exception cause chain looking for a rate-limit signal.
+     * Returns the first message that contains a Groq rate-limit indicator,
+     * or null if none is found.
+     *
+     * This is necessary because the Quarkus REST client sometimes wraps
+     * the original HttpException inside a NumberFormatException when it fails
+     * to parse the Retry-After header value (e.g. "570m") as a plain integer.
+     * Without cause-chain inspection, the generic catch only sees
+     * "For input string: \"570m\"" and loses the rate-limit context entirely.
+     */
+    private String findRateLimitMessage(Throwable e) {
+        Throwable t = e;
+        while (t != null) {
+            if (isRateLimitError(t.getMessage())) return t.getMessage();
+            t = t.getCause();
+        }
+        return null;
+    }
+
     @Inject
     ChatModel chatModel;
 
@@ -62,7 +96,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     ReasoningStepParser stepParser;
 
     @Inject
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @Inject
     AgentOtelContext otelContext;
@@ -77,23 +111,28 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 3. Prepend SystemMessage + build full message list
         List<ChatMessage> messages = new ArrayList<>();
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         messages.add(SystemMessage.systemMessage(systemPrompt));
         messages.addAll(assembled);
 
         // 4. Build tool specifications
         Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
-        boolean isCronFired = sessionId != null && sessionId.startsWith("cron-");
+        
+        // Extended: also treat goals with CRON: prefix as cron-fired even on REST sessions.
+        // This ensures schedule_task is never available when the goal originated from the scheduler,
+        // regardless of how the session was created.
+        boolean isCronFired = (sessionId != null && sessionId.toLowerCase().startsWith("cron-"))
+                || (goal != null && goal.toUpperCase().startsWith("CRON:"));
+        
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
-                .filter(allowedTools::contains)
-                .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName()) && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
-                .map(name -> toolRegistry.findTool(name).orElseThrow())
-                .map(tool -> ToolSpecification.builder()
-                        .name(tool.name())
-                        .description(tool.description())
-                        .parameters(tool.parametersSchema())
-                        .build())
-                .collect(Collectors.toList());
+        .filter(allowedTools::contains)
+        .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName()) && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
+        .map(name -> toolRegistry.findTool(name).orElseThrow())
+        .map(tool -> ToolSpecification.builder()
+                .name(tool.name())
+                .description(tool.description())
+                .parameters(tool.parametersSchema())
+                .build())
+        .collect(Collectors.toList());
 
         // 5. Build ChatRequest and call LLM
         ChatRequest request = toolSpecifications.isEmpty()
@@ -106,19 +145,43 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         } catch (InvalidRequestException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
 
-            // Schema validation error (e.g. Groq rejects bad parameter values).
-            // Re-throw so AgentStateMachineRunner.processEngineStep handles it
-            // via llmSchemaErrorCount + retryEngine — which already injects the
-            // correct transient correction. Do NOT catch it here.
             if (isSchemaValidationError(msg)) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
                         "re-throwing to state machine for retry handling: %s", msg);
                 throw e;
             }
 
-            // Tool truly absent from request.tools (different condition).
-            // Return an inline correction — this is the original intended path.
-            if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {
+            if (msg.contains("tool_use_failed") || msg.contains("was not in request.tools")) {
+
+                // Distinguish prose-generation failure from nonexistent-tool failure.
+                // Groq rejects raw markdown prose with tool_use_failed when tools are present.
+                // The failed_generation field contains the prose — detect by checking it
+                // looks like text (starts with a letter/markdown marker) rather than JSON.
+                if (isProseGenerationFailure(msg)) {
+                    String extractedProse = extractProseFromFailedGeneration(msg);
+                    if (extractedProse != null && !extractedProse.isBlank()) {
+                        log.infof("[LangChainReasoningEngine] Prose extracted directly from " +
+                                "failed_generation — returning as FINISH (0 extra LLM calls)");
+                        return ReasoningStep.pending(
+                                "LLM generated valid prose — extracted from failed_generation",
+                                "FINISH",
+                                Map.of("answer", extractedProse),
+                                0, 0
+                        );
+                    }
+                    // Extraction failed — last-resort fallback: strip tools on retry by re-throwing
+                    // as a schema error so the state machine injects a tool-free correction context
+                    log.warnf("[LangChainReasoningEngine] Prose detected but extraction failed " +
+                            "— falling back to correction");
+                    return ReasoningStep.pending(
+                            "Generated raw text instead of structured FINISH call",
+                            "OBSERVE", Map.of(), 0, 0
+                    ).withObservation(
+                            "You must respond using FINISH[answer=<content>]. " +
+                            "Do NOT output raw markdown or plain text outside of a FINISH call."
+                    );
+                }
+
                 log.warnf("[LangChainReasoningEngine] LLM called unavailable tool — " +
                         "injecting inline correction: %s", msg);
                 return ReasoningStep.pending(
@@ -134,6 +197,19 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
             throw e;
         } catch (Exception e) {
+            // Walk the full cause chain first — the Quarkus REST client can wrap the
+            // original Groq HttpException inside a NumberFormatException when it fails
+            // to parse the Retry-After header (e.g. "570m") as a plain integer.
+            // Without this check, the generic path would surface "For input string: \"570m\""
+            // to the user instead of the proper rate-limit message.
+            String rateLimitMsg = findRateLimitMessage(e);
+            if (rateLimitMsg != null) {
+                log.warnf("[LangChainReasoningEngine] Rate limit detected in cause chain — " +
+                        "surfacing clean message: %s", rateLimitMsg);
+                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
+                throw new RuntimeException(clean, e);
+            }
+
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             throw new RuntimeException(clean, e);
         }
@@ -142,25 +218,63 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         return stepParser.parse(sessionId, agentRole, response);
     }
 
+    /**
+     * Extracts the prose content from Groq's failed_generation field.
+     * Unescapes \\n → newline and \\\" → quote so the extracted text
+     * is clean markdown ready for direct delivery to the user.
+     */
+    private String extractProseFromFailedGeneration(String message) {
+        int start = message.indexOf("\"failed_generation\":\"");
+        if (start == -1) return null;
+        start += 21;
+
+        // Find the closing "}}" that terminates the error JSON —
+        // the failed_generation value ends just before it
+        int end = message.lastIndexOf("\"}}");
+        if (end <= start) return null;
+
+        return message.substring(start, end)
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+                .trim();
+    }
+
+    /**
+     * Returns true when Groq's tool_use_failed rejection contains prose in
+     * failed_generation rather than a malformed tool call JSON.
+     * Prose responses start with markdown markers (**,#,*) or plain letters,
+     * never with '{' which would indicate a tool call attempt.
+     */
+    private boolean isProseGenerationFailure(String message) {
+        if (message == null) return false;
+        int idx = message.indexOf("\"failed_generation\":\"");
+        if (idx == -1) return false;
+        int start = idx + 21;
+        if (start >= message.length()) return false;
+        // Skip leading whitespace/escape sequences
+        String snippet = message.substring(start).stripLeading()
+                .replace("\\n", "").replace("\\r", "").stripLeading();
+        // Tool call JSON starts with '[' or '{'; prose starts with text/markdown
+        return !snippet.startsWith("[") && !snippet.startsWith("{");
+    }
+
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
         Span span = otelContext.childSpan(sessionId, "structured_output_generation");
         try {
-            // 1. Build system prompt with empty goal to avoid ReAct contamination
             String systemPrompt = promptBuilder.build(agentRole, sessionId, "");
 
-            // 2. Build message list: SystemPrompt + UserMessage(schemaPrompt)
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(SystemMessage.systemMessage(systemPrompt));
             messages.add(UserMessage.userMessage(schemaPrompt));
 
-            // 3. Build ChatRequest and call LLM (JSON MODE is NOT set globally)
             ChatRequest request = ChatRequest.builder()
                     .messages(messages)
                     .build();
 
             ChatResponse response = chatModel.chat(request);
 
-            // 4. Record consumption
             TokenUsage usage = response.tokenUsage();
             if (usage != null) {
                 try {
@@ -179,6 +293,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         } catch (BudgetWarningException | BudgetExceededException e) {
             throw e;
         } catch (Exception e) {
+            // Same cause-chain check for structured output path
+            String rateLimitMsg = findRateLimitMessage(e);
+            if (rateLimitMsg != null) {
+                log.warnf("[LangChainReasoningEngine] Rate limit in structured output — %s", rateLimitMsg);
+                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
+                throw new RuntimeException("Structured output LLM call failed: " + clean, e);
+            }
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             throw new RuntimeException("Structured output LLM call failed: " + clean, e);
         } finally {

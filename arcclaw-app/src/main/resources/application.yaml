@@ -132,7 +132,8 @@ quarkus:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
         protocol: grpc
     resource:
-      attributes: "deployment.environment=${ARCCLAW_ENV:development}"
+      attributes:
+        - deployment.environment: "${ARCCLAW_ENV:development}"
     traces:
       enabled: true
       sampler: always_on
@@ -195,6 +196,7 @@ smallrye:
         - "META-INF/native-image/**"
         - "skills/index.txt"
         - "skills/**.md"
+        # - "*.yaml" 
 
   # ---------------------------------------------------------------------------
   # LOGGING
@@ -232,12 +234,14 @@ smallrye:
         level: INFO
       "io.netty.handler.ssl":
         level: INFO
+      "org.apache.camel.component.telegram.TelegramConsumer":
+        level: ERROR
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
       darken: 0
     file:
-      enable: true
+      enabled: true
       path: "./arcclaw.log"
       level: DEBUG
       format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
@@ -293,7 +297,9 @@ arcclaw:
       requests-per-minute: 20
 
   mcp:
-    exposed-tools: github,memory_search
+    exposed-tools:
+      - github
+      - memory_search
     server-enabled: true
 
   cron:
@@ -548,6 +554,9 @@ mp:
           log-responses: false
 
   arcclaw:
+    data-dir: "target/data"
+    rag:
+      vec-extension-path: "target/lib/vec0"
     skills:
       hot-reload: false
     memory:

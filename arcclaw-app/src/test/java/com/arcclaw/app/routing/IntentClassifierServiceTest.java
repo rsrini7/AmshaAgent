@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 @QuarkusTest
 public class IntentClassifierServiceTest {

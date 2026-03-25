@@ -3735,3 +3735,31 @@ RoleDefinition def = new RoleDefinition("id", "Name", "Desc", 5, false, Set.of()
 **Symptom:** Intents mentioning roles like "Brahaspati" are incorrectly routed to the default `coordinator` role, causing failures in `IntentClassifierServiceTest`.
 **Root Cause:** The `IntentClassifierService.sanitize()` logic was previously relying on hardcoded keyword matching or specific `displayName` substrings. Spelling variants or synonyms that weren't explicitly handled were silently failing over to the default role.
 **Resolution:** Refactored the classifier to use the new `RoleDefinition.aliases()` registry. By populating the registry (e.g., "brahaspati", "brihaspati" -> ARCHITECT), the router now correctly maps synonyms and variant spellings to their intended roles dynamically.
+
+---
+
+---
+
+## Phase 66 Troubleshooting & Post-Mortem ✅
+
+### 1. Vector Search unavailable on first boot
+**Symptom**: `FtsConnectionInterceptor: sqlite-vec unavailable at path './lib/vec0'` warning in logs during the very first startup.
+**Cause**: Hibernate/Agroal connection pool warms up before the CDI `StartupEvent` fires, meaning the native library hasn't been extracted yet.
+**Fix**: Moved extraction logic to a static `performInstallation()` method and called it from `ArcClawCli.main()` *before* invoking `Quarkus.run()`. This ensures files exist before the first DB connection is made.
+
+### 2. YAML Validation: "Incorrect type. Expected array" (ID 5bf8e4a1)
+**Symptom**: IDE shows red underlines inside `application.yaml` for OTel attributes or MCP exposed-tools.
+**Cause**: The YAML schema for Quarkus OTel `resource.attributes` and MCP `exposed-tools` can be sensitive to CSV vs Array formats in certain IDE versions.
+**Fix**:
+1. Converted `mcp.exposed-tools` to a proper YAML list.
+2. Converted `otel.resource.attributes` to a list of one-key maps:
+   ```yaml
+   attributes:
+     - deployment.environment: "${ARCCLAW_ENV:development}"
+   ```
+This provides the most compatible structure for both the IDE and the Quarkus runtime.
+
+### 3. Module Root Pollution during Tests
+**Symptom**: Stray `data/` and `lib/` folders appearing in the `arcclaw-app` module root after running JUnit tests.
+**Cause**: Default configuration uses `./data` and `./lib/vec0` which resolve relative to the launch directory.
+**Fix**: Implemented `%test` profile overrides in `application.yaml` to redirect these to `target/data` and `target/lib/vec0`. Combined with absolute path pinning in `ArcClawCli`, this ensures the workspace remains clean.

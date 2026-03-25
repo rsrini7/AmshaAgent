@@ -402,4 +402,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         q.setMaxResults(1);
         return q.getResultList().stream().filter(Objects::nonNull).findFirst();
     }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void deleteCheckpoint(String sessionId, String role) {
+        em.createQuery(
+            "DELETE FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role")
+        .setParameter("sid", sessionId)
+        .setParameter("role", role)
+        .executeUpdate();
+    }
 }

@@ -15,7 +15,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
@@ -31,7 +31,7 @@ public class EngineStepHandler {
 
     private static final Logger log = Logger.getLogger(EngineStepHandler.class);
 
-    @Inject GovernanceLayer governanceLayer;
+    @Inject GovernanceStrategy governanceLayer;
     @Inject Instance<AgentObserver> observers;
 
     StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,

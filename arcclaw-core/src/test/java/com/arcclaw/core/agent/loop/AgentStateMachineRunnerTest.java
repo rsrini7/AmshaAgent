@@ -15,7 +15,7 @@ import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.BudgetExceededException;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.reflex.PiiScanReflex;
@@ -43,7 +43,7 @@ class AgentStateMachineRunnerTest {
     private LangChainReasoningEngine engine;
     private ToolRegistry toolRegistry;
     private StatefulAgentStore agentStore;
-    private GovernanceLayer governanceLayer;
+    private GovernanceStrategy governanceLayer;
     private ToolInvocationGuard guard;
     private ToolInvoker invoker;
     private ChatMemoryWriter writer;
@@ -68,7 +68,7 @@ class AgentStateMachineRunnerTest {
         engine           = mock(LangChainReasoningEngine.class);
         toolRegistry     = mock(ToolRegistry.class);
         agentStore       = mock(StatefulAgentStore.class);
-        governanceLayer  = mock(GovernanceLayer.class);
+        governanceLayer  = mock(GovernanceStrategy.class);
         guard            = mock(ToolInvocationGuard.class);
         invoker          = mock(ToolInvoker.class);
         writer           = mock(ChatMemoryWriter.class);
@@ -304,10 +304,10 @@ class AgentStateMachineRunnerTest {
     @Test
     void testSchedulingToolFastPathExits() {
         ReasoningStep scheduleStep = ReasoningStep.pending(
-                "planning", "scheduletask", Map.of("task", "clean"), 0, 0);
+                "planning", "schedule_task", Map.of("task", "clean"), 0, 0);
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenReturn(scheduleStep);
-        when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(mock(AgentTool.class)));
+        when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());

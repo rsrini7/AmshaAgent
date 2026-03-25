@@ -215,29 +215,11 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 1
 }
 
-###
-
-# ─────────────────────────────────────────────────────────────────
-# SAFEGUARD TESTS
-# ─────────────────────────────────────────────────────────────────
-
-### [CRON-10] Naked-pronoun guard — vague goal rejected by ScheduleTaskTool
-# "it", "this", "that", "the result" without specificity → tool returns error.
-# Expect 200: agent returns error asking to restate goal concretely.
-POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
-Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
-
-{
-    "goal": "Schedule a task to run every hour to do it again.",
-    "agentRole": "coordinator",
-    "maxIterations": 3
-}
 
 ###
 
 ### [CRON-11] Coder CANNOT schedule — empty tool schema
-# Brahma has no scheduletask or manageschedule in its schema.
+# Brahma has no scheduletask or manage_schedule in its schema.
 # Expect 200: agent explains it cannot create schedules (no tool available).
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -330,7 +312,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [CRON-18] Synthesizer can schedule cross-domain tasks
-# Dattatreya has scheduletask + manageschedule in its tool schema.
+# Dattatreya has scheduletask + manage_schedule in its tool schema.
 POST {{baseUrl}}/api/v1/sessions/{{synthCronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}

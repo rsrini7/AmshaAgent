@@ -860,7 +860,7 @@ Refer `@arcclaw_rg_cheatsheet.md`
 ## IMPLEMENTATION REQUIREMENTS
 
 ### Common Requirements
-1. **Exception to the "no new dependencies" rule:** This task requires `org.commonmark:commonmark:0.22.0` added to `arcclaw-app/pom.xml`. This is the **only** new dependency permitted in P66.
+1. **Exception to the "no new dependencies" rule:** This task requires `org.commonmark:commonmark:0.27.1` added to `arcclaw-app/pom.xml`. This is the **only** new dependency permitted in P66.
 2. All 800+ existing tests must remain green.
 3. The existing `render(List<ReplyNode> nodes)` public API signature must not change.
 4. The fix applies only inside `esc()` — the `renderNode()` switch stays structurally unchanged.

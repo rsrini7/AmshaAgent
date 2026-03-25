@@ -14,7 +14,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
@@ -47,7 +47,7 @@ public class WorkspaceManager {
     WorkspaceManager self;
 
     @Inject
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @Inject
     ChatMemoryStore chatMemoryStore;
@@ -113,16 +113,30 @@ public class WorkspaceManager {
      * Reset the session state while keeping the session record (WORM compliance).
      */
     public void resetSessionState(String sessionId) {
-        log.infof("Resetting session state for: %s", sessionId);
-        
-        clearInMemoryChatMemory(sessionId);
-        
+        log.infof("Soft-resetting session state for: %s", sessionId);
+
+        // Chat memory intentionally NOT cleared here.
+        // Soft reset preserves the conversation window so the user
+        // can continue the same dialogue after /reset.
+        // Only checkpoint state, workspace artifacts, and CDI scope are wiped.
+
+        // Stale workspace artifacts
+        wipeWorkspaceDir(sessionId);
+
+        // CDI scope — destroy so @WorkspaceScoped beans re-init on next bind
         try {
-            chatMemoryStore.deleteMessages(sessionId);
-            log.debugf("Chat memory deleted for session=%s", sessionId);
+            var context = (WorkspaceScopeContext) Arc.container()
+                    .getActiveContext(WorkspaceScoped.class);
+            if (context != null) {
+                context.destroySession(sessionId);
+            }
         } catch (Exception e) {
-            log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
+            log.warnf("CDI scope reset failed for session=%s: %s", sessionId, e.getMessage());
         }
+
+        // heartbeatTracker — NOT touched ✅
+        // governanceLayer   — NOT touched ✅ (budget survives per REFLEX-5)
+        // chatMemoryStore   — NOT touched ✅ (conversation window survives soft reset)
     }
 
     private void clearInMemoryChatMemory(String sessionId) {

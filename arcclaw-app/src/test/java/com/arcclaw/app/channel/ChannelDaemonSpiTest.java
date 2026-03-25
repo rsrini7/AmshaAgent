@@ -3,11 +3,12 @@ package com.arcclaw.app.channel;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.arcclaw.core.pipeline.ChannelDaemon;
-import io.quarkus.test.junit.QuarkusTest;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.pipeline.ChannelDaemon;
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

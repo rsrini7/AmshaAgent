@@ -6,12 +6,12 @@
 ###
 ### Role → Deity        → Tools available
 ### ────────────────────────────────────────────────────────────
-### coordinator → Vishnu     → github, scheduletask, manageschedule, memorysearch
-### researcher  → Saraswati  → github, memorysearch
+### coordinator → Vishnu     → github, schedule_task, manage_schedule, memory_search
+### researcher  → Saraswati  → github, memory_search
 ### coder       → Brahma     → NONE (intentionally empty — structural guarantee)
 ### debugger    → Shiva      → github ONLY
-### architect   → Brihaspati → github, memorysearch (NOT scheduletask)
-### synthesizer → Dattatreya → github, scheduletask, manageschedule, memorysearch
+### architect   → Brihaspati → github, memory_search (NOT schedule_task)
+### synthesizer → Dattatreya → github, schedule_task, manage_schedule, memory_search
 ###
 ### IMPORTANT — coder vs debugger tool schema:
 ###   coder:   EMPTY schema. Structurally cannot invoke ANY tool regardless of prompt.
@@ -66,7 +66,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # RESEARCHER — Saraswati (facts, knowledge retrieval, no fabrication)
-# Has: github, memorysearch. Strict no-hallucination rule.
+# Has: github, memory_search. Strict no-hallucination rule.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-3] Create session for researcher
@@ -129,14 +129,27 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [ROLE-6a] Coder: CANNOT use github tool — empty schema structural guarantee
 # Even if asked directly to use github, the tool is not in Brahma's schema.
 # Expect 200: agent explains it cannot access external systems or use tools,
-# OR it answers the coding question directly without attempting a tool call.
 # Confirm in audit: NO TOOL_INVOKED event appears for this session.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Using the github tool, list the topics of the rsrini7/arcclaw repository.",
+    "goal": "Using the github tool, list the topics of the rsrini7/mermaid2gif repository.",
+    "agentRole": "coder",
+    "maxIterations": 2
+}
+
+###
+
+# Try access private repo without GITHUB_TOKEN
+
+POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "Using the github tool, list the topics of the rsrini7/private repository.",
     "agentRole": "coder",
     "maxIterations": 2
 }
@@ -173,7 +186,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 # DEBUGGER — Shiva (bug analysis, stack traces, security audits)
 # Contrarian persona — challenges assumptions, surfaces blind spots.
-# Has: github ONLY (not scheduletask, not memorysearch).
+# Has: github ONLY (not schedule_task, not memory_search).
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-8] Create session for debugger
@@ -208,9 +221,9 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Check the rsrini7/arcclaw GitHub repository for any recent commits related to null handling.",
+    "goal": "Check the rsrini7/mermaid2gif GitHub repository for any recent commits related to null handling.",
     "agentRole": "debugger",
-    "maxIterations": 2
+    "maxIterations": 4
 }
 
 ###
@@ -229,7 +242,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # ARCHITECT — Brihaspati (system design, ADRs, trade-off analysis)
-# Has: github, memorysearch. Does NOT have scheduletask.
+# Has: github, memory_search. Does NOT have schedule_task.
 # Will NOT write production code — delegates to Brahma.
 # ─────────────────────────────────────────────────────────────────
 
@@ -256,7 +269,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-11a] Architect CANNOT schedule tasks (no scheduletask in schema)
+### [ROLE-11a] Architect CANNOT schedule tasks (no schedule_task in schema)
 # Expect 200: agent explains it cannot schedule tasks (tool not available),
 # OR the response is architectural advice without any tool call.
 # Confirm in audit: NO CRONCREATED event.

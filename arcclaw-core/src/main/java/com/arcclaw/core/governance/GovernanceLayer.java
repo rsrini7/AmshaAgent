@@ -12,7 +12,7 @@ import org.jboss.logging.Logger;
  * Implements hard financial limits and downgrades autonomy when exceeded.
  */
 @ApplicationScoped
-public class GovernanceLayer {
+public class GovernanceLayer implements GovernanceStrategy {
 
     private static final Logger log = Logger.getLogger(GovernanceLayer.class);
 

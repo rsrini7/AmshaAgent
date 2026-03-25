@@ -19,6 +19,7 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.structured.StructuredOutputException;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -63,9 +64,22 @@ public class AgentStateMachineRunner {
 
                 List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
 
-                StepDecision engineDecision = stepProcessor.processEngineStep(
-                        context.sessionId(), context.goal(), engine, history,
-                        context.agentRole(), transientError, llmSchemaErrorCount, iteration);
+                StepDecision engineDecision;
+                try {
+                    engineDecision =  stepProcessor.processEngineStep(
+                                        context.sessionId(), context.goal(), engine, history,
+                                        context.agentRole(), transientError, llmSchemaErrorCount, iteration);
+                } catch (StructuredOutputException soe) {
+                    // Schema self-correction budget exhausted inside EngineStepHandler.
+                    // If we are also at/beyond maxIterations, surface LoopExceeded (not SCHEMA)
+                    // so LOOP_MAX_ITERATIONS audit event fires correctly.
+                    log.warnf(
+                        "StateMachine schema self-correction exhausted at iteration %d/%d for session %s — " +
+                        "treating as loop exceeded to preserve LOOP_MAX_ITERATIONS audit semantics.",
+                        iteration, context.maxIterations(), context.sessionId()
+                    );
+                    return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+                }
 
                 if (engineDecision.type() == DecisionType.TERMINAL) return engineDecision.result();
                 if (engineDecision.type() == DecisionType.CONTINUE) {
@@ -93,7 +107,7 @@ public class AgentStateMachineRunner {
 
                 StepDecision invocationDecision = stepProcessor.invokeToolAndObserve(
                         context.sessionId(), context.agentRole(), history, step,
-                        consecutiveFailures, context.goal(), skillSnapshot);
+                        consecutiveFailures, context.goal(), skillSnapshot, context.autonomyLevel());
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
                 consecutiveFailures = invocationDecision.consecutiveFailures();
 

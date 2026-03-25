@@ -57,8 +57,8 @@ A production-grade, enterprise AI Agent Kernel built with:
     maxIterations, requiresApproval, Set<ToolCapability>)
   - ToolCapability enum constants (with underscores, exactly as shown):
     GITHUB, MEMORY_SEARCH, SCHEDULE_TASK, MANAGE_SCHEDULE, SANDBOX_EXEC
-  - ToolCapability.toolName() returns lowercase strings: "github", "memorysearch",
-    "scheduletask", "manageschedule", "sandboxexec"
+  - ToolCapability.toolName() returns lowercase strings: "github", "memory_search",
+    "schedule_task", "manage_schedule", "sandbox_exec"
   - ToolRegistry.invokeTool() uses String keys via ToolCapability.toolName()
   - ToolInvocationGuard: checks AutonomyLevel + ToolOperation before dispatch
   - SandboxCircuitBreaker: guards Podman process launches (CLOSED/OPEN state).
@@ -194,7 +194,7 @@ A production-grade, enterprise AI Agent Kernel built with:
 
 **Nuance #11** — `SkillAwareIntentClassifier` checks `SkillRegistry` FIRST, then falls through to the LLM-based `IntentClassifierService`. Never invert this order.
 
-**Nuance #12** — `ToolCapability` enum constants use underscores: `GITHUB`, `MEMORY_SEARCH`, `SCHEDULE_TASK`, `MANAGE_SCHEDULE`, `SANDBOX_EXEC`. `ToolCapability.toolName()` returns the lowercase no-underscore form: `"github"`, `"memorysearch"`, etc. `McpToolAllowlist @WithDefault` uses `toolName()` values (lowercase), NOT the enum constant names, because it is matched against external MCP server tool names which are always lowercase.
+**Nuance #12** — `ToolCapability` enum constants use underscores: `GITHUB`, `MEMORY_SEARCH`, `SCHEDULE_TASK`, `MANAGE_SCHEDULE`, `SANDBOX_EXEC`. `ToolCapability.toolName()` returns the lowercase no-underscore form: `"github"`, `"memory_search"`, etc. `McpToolAllowlist @WithDefault` uses `toolName()` values (lowercase), NOT the enum constant names, because it is matched against external MCP server tool names which are always lowercase.
 
 **Nuance #13** — `maxBudgetUsd` is EXPLICITLY EXCLUDED from skill frontmatter.
 

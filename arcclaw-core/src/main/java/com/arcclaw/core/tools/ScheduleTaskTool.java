@@ -25,7 +25,6 @@ import com.cronutils.model.CronType;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.model.time.ExecutionTime;
 import com.cronutils.parser.CronParser;
-import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 
@@ -38,14 +37,13 @@ import dev.langchain4j.model.chat.request.json.JsonStringSchema;
  *   <li>Tenant context must be bound (fail-closed on missing userId/chatId)</li>
  *   <li>Naked pronoun guard rejects vague goals with unresolved references</li>
  *   <li>Goal is prefixed with "CRON: " to enable fork bomb structural exclusion</li>
+ *   <li>runOnce=true normalizes dom/month to wildcards — server always enforces single-fire</li>
  * </ul>
  */
 @ApplicationScoped
 public class ScheduleTaskTool implements AgentTool {
 
-
     public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();
-
 
     /**
      * Rejects vague goals with unresolved references (zero LLM cost — pure regex).
@@ -56,20 +54,16 @@ public class ScheduleTaskTool implements AgentTool {
             Pattern.CASE_INSENSITIVE
     );
 
-
     @Inject
     AgentCronRepository cronRepository;
 
-
     @Inject
     AuditService auditService;
-
 
     @Override
     public String name() {
         return NAME;
     }
-
 
     @Override
     public String description() {
@@ -77,58 +71,62 @@ public class ScheduleTaskTool implements AgentTool {
                 "The task will execute at the specified time(s) without user interaction. " +
                 "Parameters: " +
                 "1. 'cronExpression' - Standard UNIX 5-field cron (minute hour dom month dow). " +
-                        "Example: '0 9 * * 1-5' = weekdays 9 AM, '30 14 15 3 *' = March 15 at 14:30. " +
+                        "For runOnce=true, ALWAYS use wildcards for dom and month: 'minute hour * * *'. " +
+                        "Example: '53 5 * * *' = next occurrence of 05:53. " +
+                        "Example: '0 9 * * 1-5' = every weekday at 9 AM (recurring). " +
                 "2. 'goal' - Fully self-contained instructions. Must describe ONLY the final action. " +
                         "Do NOT include time references or re-scheduling instructions in the goal. " +
+                        "NEVER use pronouns — replace 'it/this/that' with the explicit noun. " +
                 "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
-                "4. 'runOnce' - true for one-time tasks, false for recurring. " +
-                "SCHEDULING RULE: To compute the cron minute for 'after N minutes', " +
-                "take current UTC minute + N (mod 60). Adjust hour if minute wraps past 59. " +
-                "English words (one=1, two=2, five=5, ten=10) are equivalent to their digits. " +
-                "Always use '* *' for dom and month fields when runOnce=true — never pin the date. " +
+                "4. 'runOnce' - Boolean (NOT a string). Use JSON literal true or false, " +
+                "never \"true\" or \"false\". true for one-time tasks, false for recurring. "+
+                "CRON ARITHMETIC: To compute minute for 'in N minutes': " +
+                "target_minute = (current_minute + N) mod 60. " +
+                "Increment hour by 1 if target_minute < current_minute (wrap). " +
+                "Show your arithmetic before generating the cronExpression. " +
+                "English words (one=1, two=2, five=5, ten=10) equal their digits. " +
+                "NEVER use '* * * * *' — this fires every minute forever. " +
                 "Returns the scheduled task ID immediately. Does NOT execute the goal now.";
     }
-
 
     @Override
     public ToolOperation requiredOperation() {
         return ToolOperation.SCHEDULE_AUTONOMOUS;
     }
 
-
     @Override
     public boolean requiresSandbox() {
         return false;
     }
 
-
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addProperty("cronExpression", JsonStringSchema.builder()
-                        .description("Standard 5-field UNIX cron expression (minute hour dom month dow). " +
-                                "For runOnce=true tasks always use '* *' for dom and month — e.g. '26 15 * * *'.")
+                        .description("Standard 5-field UNIX cron (minute hour dom month dow). " +
+                                "For runOnce=true always use wildcards: 'minute hour * * *'. " +
+                                "Example: '53 5 * * *' for a one-shot at 05:53.")
                         .build())
                 .addProperty("goal", JsonStringSchema.builder()
-                        .description("Fully self-contained action description for the future agent")
+                        .description("Fully self-contained action for the future agent. " +
+                                "No pronouns, no time references, no re-scheduling instructions.")
                         .build())
                 .addProperty("timezone", JsonStringSchema.builder()
-                        .description("IANA timezone (default: UTC)")
+                        .description("IANA timezone for cron interpretation (default: UTC). " +
+                                "Example: 'Asia/Kolkata', 'America/New_York'.")
                         .build())
-                .addProperty("runOnce", JsonBooleanSchema.builder()
-                        .description("true for one-time tasks, false for recurring (default: false)")
+                .addProperty("runOnce", JsonStringSchema.builder()
+                        .description("Whether this is a one-time task. " +
+                                        "Use exactly the string \"true\" for one-time tasks, " +
+                                        "or \"false\" for recurring tasks. Default: \"false\".")
                         .build())
                 .required("cronExpression", "goal")
                 .build();
     }
 
-
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         // Step 1 — Extract and validate tenant context
-        // Read from WorkspaceContext ScopedValues — these are what WorkspaceContext.run()
-        // actually binds. WorkspaceScopeHolder.USER_ID/CHAT_ID are separate ScopedValue
-        // instances and are NOT bound by WorkspaceContext.run().
         String userId    = WorkspaceContext.userId();
         String chatId    = WorkspaceContext.chatId();
         String sessionId = WorkspaceContext.requireSessionId();
@@ -137,7 +135,7 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(403,
                     "Security violation: tenant context not bound. Operation rejected.");
         }
-        
+
         if (chatId.isBlank()) {
             chatId = userId; // REST/CLI fallback
         }
@@ -154,7 +152,6 @@ public class ScheduleTaskTool implements AgentTool {
             default        -> false;
         };
 
-
         if (cronExpression == null || cronExpression.isBlank()) {
             return ToolResponse.failure(400, "cronExpression is required.");
         }
@@ -165,7 +162,6 @@ public class ScheduleTaskTool implements AgentTool {
         // Only flag "it" if the entire goal is under 6 words — likely no context
         boolean hasNakedIt = goal.split("\\s+").length < 6
                 && goal.toLowerCase().matches(".*\\bit\\b.*");
-
         boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
 
         // Step 2 — Naked pronoun guard
@@ -177,7 +173,6 @@ public class ScheduleTaskTool implements AgentTool {
                     "to production via gh workflow run deploy.yml'.");
         }
 
-
         // Step 3 — RunOnce normalization: strip dom/month pinning.
         // LLM sometimes generates "54 15 3 3 *" for one-shot tasks.
         // runOnce=true already guarantees single-fire — dom/month are always redundant
@@ -188,7 +183,6 @@ public class ScheduleTaskTool implements AgentTool {
                 cronExpression = fields[0] + " " + fields[1] + " * * *";
             }
         }
-
 
         // Step 4 — Validate and compute nextFireTime via cron-utils
         Instant nextFireTime;
@@ -209,25 +203,22 @@ public class ScheduleTaskTool implements AgentTool {
                     ". Use 5-field UNIX format: minute hour dom month dow");
         }
 
-
         // Step 5 — Build and persist entity
         AgentCronEntity entity = new AgentCronEntity();
         entity.id             = UUID.randomUUID().toString();
         entity.sessionId      = sessionId;
         entity.userId         = userId;
         entity.chatId         = chatId;
-        entity.channelType = WorkspaceContext.channelType(); // "CLI" from ChatCommand, "TELEGRAM" everywhere else
+        entity.channelType    = WorkspaceContext.channelType();
         entity.cronExpression = cronExpression;
         entity.timezone       = timezone;
         entity.runOnce        = runOnce;
-        entity.goal           = "CRON: " + goal;   // Prefix to prevent fork bomb
+        entity.goal           = "CRON: " + goal;
         entity.nextFireTime   = nextFireTime;
         entity.status         = CronStatus.ACTIVE;
         entity.createdAt      = Instant.now();
 
-
         cronRepository.persist(entity);
-
 
         // Step 6 — Audit
         auditService.record(sessionId, userId,
@@ -235,7 +226,6 @@ public class ScheduleTaskTool implements AgentTool {
                 SecurityEventType.CRONCREATED,
                 "cronId=" + entity.id + " expression=" + cronExpression
                 + " tz=" + entity.timezone + " runOnce=" + runOnce);
-
 
         return ToolResponse.success("Task scheduled successfully. " +
                 "ID: " + entity.id + " | Next fire: " +

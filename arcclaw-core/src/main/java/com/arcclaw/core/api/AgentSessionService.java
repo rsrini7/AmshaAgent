@@ -56,6 +56,15 @@ public class AgentSessionService {
     private final CheckpointResumeHandler checkpointResumeHandler;
     private final ExecutorService vThreads;
 
+    /**
+     * Non-slash reflex prefixes that must bypass the agent loop and route
+     * directly to the reflex pipeline. Add new prefixes here as reflexes
+     * are introduced — keeps the routing logic in one place.
+     */
+    private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of(
+            "deletecron"
+    );
+
     protected AgentSessionService() {
         this.log = null;
         this.agentLoop = null;
@@ -66,7 +75,7 @@ public class AgentSessionService {
         this.responseMapper = null;
         this.reflexRegistry = null;
         this.checkpointResumeHandler = null;
-        this.vThreads = null;        
+        this.vThreads = null;
     }
 
     @Inject
@@ -113,11 +122,23 @@ public class AgentSessionService {
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) return roleError.get();
 
+        // Fork-bomb guard: CRON: prefix is reserved for AgentCronScheduler internally.
+        // Legitimate cron sessions have sessionId starting with "cron-", not a REST UUID.
+        if (request.goal() != null && request.goal().startsWith("CRON:")) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of(
+                        "error", "Goals prefixed with 'CRON:' are reserved for the internal scheduler.",
+                        "code",  "FORK_BOMB_REJECTED"
+                    ))
+                    .build();
+        }
+
         var commandResponse = handleSlashCommand(sessionId, request);
         if (commandResponse.isPresent()) return commandResponse.get();
 
+        String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+
         try {
-            String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
             agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
                 if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                     throw new AwaitingApprovalException(sessionId);
@@ -138,12 +159,12 @@ public class AgentSessionService {
         try {
             return WorkspaceScopeHolder.call(sessionId, () -> {
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
-                
+
                 return WorkspaceContext.run(
-                        sessionId, "rest:api", sessionId, level, request.agentRole(), ChannelType.REST_API, () -> {
+                        sessionId, "rest:api", sessionId, level, canonicalRole, ChannelType.REST_API, () -> {
                             MessageContext context = createRestContext(sessionId, request.goal());
                             context.setAutonomyLevel(level);
-                            AgentResult result = agentLoop.run(sessionId, request.agentRole(), request.goal(), reasoningEngine, maxIterations, context);
+                            AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
                             return responseMapper.mapResult(result, false);
                         }
                 );
@@ -151,7 +172,6 @@ public class AgentSessionService {
         } catch (BudgetExceededException e) {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
         } catch (BudgetWarningException e) {
-            // Treat warning as success for the call itself, with the message attached
             return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
             log.errorf("Sync agent run threw exception for session %s: %s", sessionId, e.getMessage());
@@ -170,7 +190,19 @@ public class AgentSessionService {
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) { response.resume(roleError.get()); return; }
-        
+
+        // Fork-bomb guard: CRON: prefix is reserved for AgentCronScheduler internally.
+        // Legitimate cron sessions have sessionId starting with "cron-", not a REST UUID.
+        if (request.goal() != null && request.goal().startsWith("CRON:")) {
+            response.resume(Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of(
+                        "error", "Goals prefixed with 'CRON:' are reserved for the internal scheduler.",
+                        "code",  "FORK_BOMB_REJECTED"
+                    ))
+                    .build());
+            return;
+        }
+
         var commandResponse = handleSlashCommand(sessionId, request);
         if (commandResponse.isPresent()) { response.resume(commandResponse.get()); return; }
 
@@ -206,13 +238,15 @@ public class AgentSessionService {
 
                 AutonomyLevel runLevel = isApproval ? AutonomyLevel.FULL : sessionLevel;
 
-                WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, request.agentRole(), ChannelType.REST_API, () -> {
+                String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+
+                WorkspaceContext.run(sessionId, "rest:api", sessionId, runLevel, canonicalRole, ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     context.setAutonomyLevel(runLevel);
                     if (isApproval) {
                         context.setResumeSignal(true);
                     }
-                    AgentResult result = agentLoop.run(sessionId, request.agentRole(),
+                    AgentResult result = agentLoop.run(sessionId, canonicalRole,
                             request.goal(), reasoningEngine, maxIterations, context);
                     response.resume(responseMapper.mapResult(result, true));
                 });
@@ -303,7 +337,6 @@ public class AgentSessionService {
         }
     }
 
-
     public Response getStatus(String sessionId, String role) {
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
@@ -328,13 +361,12 @@ public class AgentSessionService {
                             "status", CheckpointStatus.NOT_STARTED.name(),
                             "steps", List.of()
                     )).build());
-            } catch (IllegalArgumentException e) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
-                    .build();
-            }
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
+                .build();
+        }
     }
-
 
     public Response terminateSession(String sessionId) {
         log.infof("Terminating session:  %s", sessionId);
@@ -358,14 +390,12 @@ public class AgentSessionService {
     }
 
     private Optional<Response> validateRole(String role) {
-        try {
-            AgentRoleEnum.fromString(role);
-            return Optional.empty();
-        } catch (IllegalArgumentException e) {
+        if (!AgentRoleEnum.isKnownRole(role)) {
             return Optional.of(Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
+                    .entity(Map.of("error", "Unknown agent role: " + role, "code", "INVALID_ROLE"))
                     .build());
         }
+        return Optional.empty();
     }
 
     private Optional<Response> validateSession(String sessionId) {
@@ -380,16 +410,33 @@ public class AgentSessionService {
         return Optional.empty();
     }
 
+    /**
+     * Routes slash commands AND non-slash reflex prefixes (e.g. "deletecron")
+     * directly to the reflex pipeline, bypassing the agent loop entirely.
+     *
+     * Previously only slash-prefixed goals were checked here, causing reflexes
+     * like DeleteCronReflex (which match "deletecron <id>" without a slash) to
+     * be silently skipped and handed to the LLM instead.
+     */
     private Optional<Response> handleSlashCommand(String sessionId, RunAgentRequest request) {
         String goal = request.goal();
-        if (goal == null || !goal.startsWith("/")) return Optional.empty();
+        if (goal == null) return Optional.empty();
+
+        String lower = goal.trim().toLowerCase();
+        boolean isSlash = lower.startsWith("/");
+        boolean isNonSlashReflex = NON_SLASH_REFLEX_PREFIXES.stream()
+                .anyMatch(lower::startsWith);
+
+        if (!isSlash && !isNonSlashReflex) return Optional.empty();
 
         MessageContext context = createRestContext(sessionId, goal);
 
         try {
+            String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+
             ReflexResult result = WorkspaceContext.run(
                 sessionId, "rest:api", sessionId, AutonomyLevel.FULL,
-                request.agentRole(), ChannelType.REST_API,
+                canonicalRole, ChannelType.REST_API,
                 () -> reflexRegistry.processIfReflex(
                     sessionId, "rest:api", sessionId, goal, context)
             );
@@ -410,8 +457,7 @@ public class AgentSessionService {
     private AutonomyLevel getOrDefaultAutonomy(String sessionId) {
         AutonomyLevel level = heartbeatTracker.getAutonomyLevel(sessionId);
         if (level != null) return level;
-        
-        // Fallback to latest checkpoint for this session if heartbeat was lost
+
         return agentStore.loadLatestAutonomyForSession(sessionId)
                 .orElseGet(() -> {
                     log.warnf("No stored autonomy found for session %s, defaulting to SUPERVISED", sessionId);
@@ -424,5 +470,4 @@ public class AgentSessionService {
             super("Session awaiting approval: " + sessionId);
         }
     }
-
 }

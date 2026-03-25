@@ -217,7 +217,7 @@ graph TD
 
     subgraph Strict Tool Binding per Role
         AI -->|agentRole filter| Schema{Schema Filter<br/>getPermittedToolNames}
-        Schema -->|coordinator / synthesizer| ST[scheduletask + manageschedule]
+        Schema -->|coordinator / synthesizer| ST[schedule_task + manage_schedule]
         Schema -->|coordinator / researcher / architect / synthesizer| MS[memory_search]
         Schema -->|coordinator / researcher / architect / debugger / synthesizer| GT[github]
         Schema -->|coder| NoTool[empty schema<br/>tool bias impossible]
@@ -345,12 +345,12 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 
 | Role | Deity | Canonical Name | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | coordinator | `github`, `scheduletask`, `manageschedule`, `memory_search` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
+| `coordinator` | **Vishnu** | coordinator | `github`, `schedule_task`, `manage_schedule`, `memory_search` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
 | `researcher` | **Saraswati** | researcher | `github`, `memory_search` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
 | `coder` | **Brahma** | coder | *(none — empty schema)* | The Creator. Pure logic and engineering brain; refuses conversational tasks |
 | `debugger` | **Shiva** | debugger | `github` | The Transformer. Contrarian balance expert; finds blind spots and challenges assumptions |
 | `architect` | **Brihaspati** | architect | `github`, `memory_search` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
-| `synthesizer` | **Dattatreya** | synthesizer | `github`, `scheduletask`, `manageschedule`, `memory_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
+| `synthesizer` | **Dattatreya** | synthesizer | `github`, `schedule_task`, `manage_schedule`, `memory_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
 
 > [!NOTE]
 > The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `debugger` has access to `github` for code inspection but no scheduling or memory tools. The `architect` and `synthesizer` roles are additional personas beyond the default four; they can be invoked via the REST API using their canonical role names.
@@ -374,8 +374,8 @@ graph LR
     subgraph TOOLS["🛠️ TOOLS"]
         direction TB
         T1["🐙 github<br/>GH CLI via Podman sandbox<br/>GH_TOKEN injected via tmpfs"]:::tool
-        T2["⏰ scheduletask<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
-        T3["📋 manageschedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
+        T2["⏰ schedule_task<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
+        T3["📋 manage_schedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
         T4["🔍 memory_search<br/>SQLite FTS5 + sqlite-vec<br/>Past compaction summaries"]:::tool
         T5["🌐 ExternalMcpTool<br/>Dynamic tools from MCP servers<br/>HTTP_SSE transport"]:::tool
     end
@@ -617,8 +617,8 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | Tool | Name | Operation | Sandbox | Description |
 |---|---|---|---|---|
 | `GithubTool` | `github` | `NETWORK_OUTBOUND` | ✅ Podman | GitHub CLI (`gh repo view/list`, `gh gist view/list`) with `GH_TOKEN` secret injection via tmpfs |
-| `ScheduleTaskTool` | `scheduletask` | `SCHEDULE_AUTONOMOUS` | ❌ In-memory | Schedule a future autonomous task with a 5-field UNIX cron expression; naked-pronoun guard + fork-bomb exclusion |
-| `ManageScheduleTool` | `manageschedule` | `READ_FS` | ❌ In-memory | List or delete the current user's scheduled cron jobs; tenant-isolated via `WorkspaceScopeHolder.USER_ID` |
+| `ScheduleTaskTool` | `schedule_task` | `SCHEDULE_AUTONOMOUS` | ❌ In-memory | Schedule a future autonomous task with a 5-field UNIX cron expression; naked-pronoun guard + fork-bomb exclusion |
+| `ManageScheduleTool` | `manage_schedule` | `READ_FS` | ❌ In-memory | List or delete the current user's scheduled cron jobs; tenant-isolated via `WorkspaceScopeHolder.USER_ID` |
 | `MemorySearchTool` | `memory_search` | `READ_FS` | ❌ In-memory | Two-tier RAG: FTS5 full-text + sqlite-vec vector search of past session compaction summaries |
 | `IngestDocumentTool` | `ingest_document` | `READ_FS` | ❌ In-memory | Ingest a document into the global or session knowledge base for future vector retrieval |
 | `ExternalMcpToolAdapter` | *(dynamic name)* | Varies | ❌ In-process | Wraps tools from connected external MCP servers; registered dynamically via `DynamicToolCapabilityRegistry` |
@@ -825,7 +825,9 @@ Long-term memory search merges results from **two** retrieval tiers using **Reci
 
 **Graceful degradation**: If `FtsConnectionInterceptor.isVectorSearchEnabled()` returns `false` (sqlite-vec extension unavailable), `TwoTierMemoryService` skips the RRF merge entirely and returns FTS5 results directly — no error, no downtime.
 
-The `vec0.so` native extension (sqlite-vec) must be present for vector search. In the native Docker image it is copied to `/app/lib/vec0.so` and requires `LD_PRELOAD=/lib64/libm.so.6` (for `sqrtf` symbol resolution on UBI/RHEL). In dev mode, set `-Darcclaw.rag.vec-extension-path=../lib/vec0`.
+The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`).
+
+In the native Docker image, it is pre-copied to `/app/lib/vec0.so` and requires `LD_PRELOAD=/lib64/libm.so.6` (for `sqrtf` symbol resolution on UBI/RHEL). In dev mode, the installer automatically detects the environment and extracts the library if missing.
 
 ### Long-Term Memory (`MemorySearchTool`)
 
@@ -877,7 +879,7 @@ sequenceDiagram
     participant TN as 📬 CronNotificationObserver<br/>Telegram / CLI
 
     U->>AL: "remind me every day at 9am to check alerts"
-    AL->>ST: scheduletask(cronExpression="0 9 * * *",<br/>goal="Check alerts...", runOnce=false)
+    AL->>ST: schedule_task(cronExpression="0 9 * * *",<br/>goal="Check alerts...", runOnce=false)
     ST->>DB: INSERT agent_cron<br/>status=PENDING · nextFireTime calculated
     ST-->>AL: ✅ Scheduled — cronId=abc-123
     AL-->>U: Cron job created successfully

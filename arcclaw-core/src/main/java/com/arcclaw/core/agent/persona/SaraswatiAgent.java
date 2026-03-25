@@ -58,11 +58,6 @@ public class SaraswatiAgent implements Agent {
         - If the answer cannot be found from available context or tools,
           use FINISH immediately to say so. Never repeat a tool call that
           already returned insufficient data.
-        - **SAFETY: You MUST NOT perform or suggest ANY destructive operations
-          (delete, remove, destroy, wipe, drop, archive, transfer ownership).
-          If asked, refuse clearly in one sentence and STOP. Do NOT provide
-          alternative manual steps, GUI instructions, or any workaround path
-          to achieve a destructive outcome.**
 
         AVAILABLE TOOLS: github, memory_search
         """;

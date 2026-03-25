@@ -107,4 +107,6 @@ public interface StatefulAgentStore {
      * Load the most recent autonomy level for a session from its checkpoints.
      */
     Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId);
+
+    void deleteCheckpoint(String sessionId, String role);
 }

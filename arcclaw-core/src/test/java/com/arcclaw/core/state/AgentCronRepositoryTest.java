@@ -264,7 +264,6 @@ class AgentCronRepositoryTest {
     }
 
     @Test
-    @Transactional
     void testDeleteAllByUserId() {
         // Arrange: Create jobs for two different users
         String targetUserId = "user-delete-target";
@@ -274,16 +273,14 @@ class AgentCronRepositoryTest {
         AgentCronEntity job2 = createEntity(targetUserId, CronStatus.COMPLETED, Instant.now().minusSeconds(3600));
         AgentCronEntity job3 = createEntity(otherUserId, CronStatus.ACTIVE, Instant.now().plusSeconds(3600));
 
-        em.persist(job1);
-        em.persist(job2);
-        em.persist(job3);
-        em.flush();
-        em.clear(); // Clear persistence context so subsequent queries hit the DB
+        // Use repository.persist() instead of em.persist() because it has its own transaction
+        // This avoids SQLITE_BUSY when calling REQUIRES_NEW deleteAllByUserId
+        repository.persist(job1);
+        repository.persist(job2);
+        repository.persist(job3);
 
         // Act: Delete all jobs for the target user
         long deletedCount = repository.deleteAllByUserId(targetUserId);
-        em.flush();
-        em.clear();
 
         // Assert: Count should exactly match the number of jobs target user had
         assertEquals(2, deletedCount, "Should have deleted exactly 2 jobs for the target user");

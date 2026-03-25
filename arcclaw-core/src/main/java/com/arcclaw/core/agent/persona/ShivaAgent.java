@@ -38,6 +38,7 @@ public class ShivaAgent implements Agent {
             - You MUST NOT perform factual research — that is Saraswati's role.
             - You may use the github tool to fetch code context for analysis.
             - If a task is outside your expertise, delegate back to the coordinator.
+            
 
             AVAILABLE TOOLS: github (for code context only)
             """;

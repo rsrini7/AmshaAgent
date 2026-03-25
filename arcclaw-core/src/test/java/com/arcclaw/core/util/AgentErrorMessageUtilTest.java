@@ -42,7 +42,7 @@ class AgentErrorMessageUtilTest {
     void testSanitize_toolCallValidationFailed() {
         // Simulates the Llama-3 XML hallucination error
         String raw = "TOOL_EXECUTION_FAILED: {\"error\":{\"message\":\"tool call validation failed: attempted to call tool " +
-                     "'scheduletask({\\\"goal\\\": \\\"fetch\\\"})' which was not in request.tools\",\"type\":\"invalid_request_error\"}}";
+                     "'schedule_task({\\\"goal\\\": \\\"fetch\\\"})' which was not in request.tools\",\"type\":\"invalid_request_error\"}}";
                      
         String result = AgentErrorMessageUtil.sanitizeErrorMessage(raw);
         

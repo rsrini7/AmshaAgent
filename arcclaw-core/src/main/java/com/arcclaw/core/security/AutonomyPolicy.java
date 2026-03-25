@@ -23,7 +23,6 @@ public interface AutonomyPolicy {
             return switch (level) {
                 case FULL -> true;
                 case SUPERVISED -> operation == ToolOperation.READ_FS
-                        || operation == ToolOperation.NETWORK_OUTBOUND
                         || operation == ToolOperation.SCHEDULE_AUTONOMOUS;
                 case BACKGROUND -> operation == ToolOperation.READ_FS
                         || operation == ToolOperation.NETWORK_OUTBOUND;

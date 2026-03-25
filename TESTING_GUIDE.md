@@ -234,7 +234,7 @@ curl -s http://localhost:8080/api/v1/info | jq .
   "profile": "dev",
   "sandboxStrategy": "NONE",
   "agents": ["coordinator", "researcher", "coder", "debugger", "architect", "synthesizer"],
-  "tools": ["github", "scheduletask", "manageschedule", "memorysearch", "ingest_document"],
+  "tools": ["github", "schedule_task", "manage_schedule", "memory_search", "ingest_document"],
   "buildTime": "2026-03-17T10:00:00Z"
 }
 ```
@@ -1086,7 +1086,7 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_B/run" \
 
 ## 11. Cron Scheduler
 
-Only `coordinator` and `synthesizer` roles have `scheduletask` and `manageschedule` in their tool schema. `coder`, `debugger`, `researcher`, and `architect` cannot schedule.
+Only `coordinator` and `synthesizer` roles have `schedule_task` and `manage_schedule` in their tool schema. `coder`, `debugger`, `researcher`, and `architect` cannot schedule.
 
 ### 11.1 Schedule a recurring task
 

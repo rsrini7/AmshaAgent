@@ -907,22 +907,20 @@ Copy-Item $src "$distDir/$exeName"
 Copy-Item '.env.example' "$distDir/.env.example"
 
 $vec0Copied = 0
-@( @('lib/vec0.so',    "$distDir/lib/vec0.so",    'Linux'),
-   @('lib/vec0.dylib', "$distDir/lib/vec0.dylib", 'macOS'),
-   @('lib/vec0.dll',   "$distDir/lib/vec0.dll",   'Windows') ) | ForEach-Object {
+# Note: we use the internal resource path as the source of truth for distribution
+@( @("arcclaw-app/src/main/resources/native/vec0/vec0-linux-x86_64.so",    "$distDir/lib/vec0.so",    'Linux'),
+   @("arcclaw-app/src/main/resources/native/vec0/vec0-macos-aarch64.dylib", "$distDir/lib/vec0.dylib", 'macOS'),
+   @("arcclaw-app/src/main/resources/native/vec0/vec0-windows-x86_64.dll",   "$distDir/lib/vec0.dll",   'Windows') ) | ForEach-Object {
     $s, $dst, $plat = $_
     if (Test-Path $s) {
         Copy-Item $s $dst
-        Write-Host "✅  $dst copied ($plat)"
+        Write-Host "✅  $dst copied ($plat) [from resources]"
         $vec0Copied++
     }
 }
 if ($vec0Copied -eq 0) {
-    Write-Host '⚠️   No vec0 extension found in lib/ — vector search will degrade to FTS5.'
-    Write-Host '    Download from: https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6'
-    Write-Host '    Linux  : sqlite-vec-v0.1.6-loadable-linux-x86_64.zip   -> vec0.so    -> lib/'
-    Write-Host '    macOS  : sqlite-vec-v0.1.6-loadable-macos-aarch64.zip  -> vec0.dylib -> lib/'
-    Write-Host '    Windows: sqlite-vec-v0.1.6-loadable-windows-x86_64.zip -> vec0.dll   -> lib/'
+    Write-Host '⚠️   No vec0 extension found in resources — vector search will degrade to FTS5.'
+    Write-Host '    Ensure binaries exist in: arcclaw-app/src/main/resources/native/vec0/'
 }
 
 Write-Host ''

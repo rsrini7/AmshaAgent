@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.governance.BudgetWarningException;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.opentelemetry.api.trace.Span;
@@ -23,7 +23,7 @@ public class StructuredRetryLoop {
     private static final Logger log = Logger.getLogger(StructuredRetryLoop.class);
 
     @Inject
-    GovernanceLayer governanceLayer;
+    GovernanceStrategy governanceLayer;
 
     @Inject
     TelemetryAuditService auditService;

@@ -7,13 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.util.Arrays;
 import java.util.Map;
 
-import org.apache.camel.CamelContext;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import jakarta.inject.Inject;
+import org.apache.camel.CamelContext;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(ServeCommandTest.Profile.class)

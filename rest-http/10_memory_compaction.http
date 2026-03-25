@@ -29,7 +29,7 @@
 ###   Phase 64-C3: RAG chunks stored in rag_chunk table, not "rag:" prefix in compaction_summary.
 ###   Phase 64-D1: Compaction summary truncation is now codepoint-safe (emoji/CJK safe).
 ###
-### MemorySearchTool (tool name: "memorysearch"):
+### MemorySearchTool (tool name: "memory_search"):
 ###   Queries FTS5 using userId scope — tenant-isolated.
 ###   Available to: coordinator, researcher, architect, synthesizer.
 ###   Input: {query: "<search terms>"}
@@ -193,77 +193,132 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 1: What is virtual threading?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 1: What is virtual threading?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 2: What is SQLite WAL mode?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 2: What is SQLite WAL mode?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 3: What is Podman?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 3: What is Podman?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 4: What is LangChain4j?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 4: What is LangChain4j?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 5: What is a ReAct agent loop?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 5: What is a ReAct agent loop?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 6: What is AES-GCM-SIV?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 6: What is AES-GCM-SIV?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 7: What is Argon2id?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 7: What is Argon2id?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 8: What is GraalVM native image?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 8: What is GraalVM native image?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 9: What is Apache Camel?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 9: What is Apache Camel?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 10: What is a CDI scope in Quarkus?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 10: What is a CDI scope in Quarkus?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 11: What is MicroProfile Config?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 11: What is MicroProfile Config?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
@@ -274,70 +329,120 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 12: What is OpenTelemetry?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 12: What is OpenTelemetry?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 13: What is Jaeger?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 13: What is Jaeger?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 14: What is Prometheus?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 14: What is Prometheus?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 15: What is Micrometer?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 15: What is Micrometer?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 16: What is Hibernate ORM 7?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 16: What is Hibernate ORM 7?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 17: What is JOOQ?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 17: What is JOOQ?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 18: What is Redis?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 18: What is Redis?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 19: What is Kafka?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 19: What is Kafka?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 20: What is gRPC?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 20: What is gRPC?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 21: What is GraphQL?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 21: What is GraphQL?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 
@@ -346,7 +451,12 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-{"goal": "Msg 22: What is REST vs GraphQL?", "agentRole": "coordinator", "maxIterations": 1}
+
+{
+    "goal": "Msg 22: What is REST vs GraphQL?", 
+    "agentRole": "coordinator", 
+    "maxIterations": 1
+}
 
 ###
 

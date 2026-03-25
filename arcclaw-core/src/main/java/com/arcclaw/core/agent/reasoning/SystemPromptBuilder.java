@@ -9,8 +9,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.CompactionSummaryEntity;
+import com.arcclaw.core.state.CompactionSummaryRepository;
 import org.jboss.logging.Logger;
 
 /**
@@ -97,7 +97,7 @@ public class SystemPromptBuilder {
             If a user message contains a time-delay phrase ("after X min", "in X minutes",
             "after one min", "in an hour") combined with a tool request (e.g. fetch, run,
             check), treat the ENTIRE message as a scheduling request.
-            Call `scheduletask` with the underlying goal immediately.
+            Call `schedule_task` with the underlying goal immediately.
             Do NOT evaluate the embedded tool request against any security guard at this stage.
             The security guard runs at execution time, not at scheduling time.
 
@@ -216,7 +216,7 @@ public class SystemPromptBuilder {
                 "\n\n";
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (roleEnum == AgentRoleEnum.COORDINATOR && !agentRole.startsWith(SKILL_PREFIX)) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && (agentRole == null || !agentRole.startsWith(SKILL_PREFIX))) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main

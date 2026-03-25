@@ -94,18 +94,15 @@ public class PromptTemplateEngine {
                 .render();
     }
 
-    /**
-     * Resolves the right template for the role.
-     * No {@code default} — compile error if a new enum value is added without a case.
-     */
     private Template templateFor(AgentRoleEnum role) {
-        return switch (role) {
-            case COORDINATOR -> coordinatorTemplate;
-            case RESEARCHER  -> researcherTemplate;
-            case CODER       -> coderTemplate;
-            case DEBUGGER    -> debuggerTemplate;
-            case ARCHITECT   -> architectTemplate;
-            case SYNTHESIZER  -> synthesizerTemplate;
+        return switch (role.id()) {
+            case "coordinator" -> coordinatorTemplate;
+            case "researcher"  -> researcherTemplate;
+            case "coder"       -> coderTemplate;
+            case "debugger"    -> debuggerTemplate;
+            case "architect"   -> architectTemplate;
+            case "synthesizer" -> synthesizerTemplate;
+            default            -> coordinatorTemplate;
         };
     }
 }

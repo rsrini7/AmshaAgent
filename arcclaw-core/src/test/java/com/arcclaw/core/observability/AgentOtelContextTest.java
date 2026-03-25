@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 
 import jakarta.inject.Inject;
 
+import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.Tracer;
@@ -41,7 +42,7 @@ class AgentOtelContextTest {
         when(tracer.spanBuilder(anyString())).thenReturn(spanBuilder);
         when(spanBuilder.setAttribute(anyString(), anyString())).thenReturn(spanBuilder);
         when(spanBuilder.setAttribute(anyString(), anyLong())).thenReturn(spanBuilder);
-        when(spanBuilder.setAttribute(any(io.opentelemetry.api.common.AttributeKey.class), any())).thenReturn(spanBuilder);
+        when(spanBuilder.setAttribute(any(AttributeKey.class), any())).thenReturn(spanBuilder);
         when(spanBuilder.setParent(any())).thenReturn(spanBuilder);
         when(spanBuilder.startSpan()).thenReturn(span);
         when(span.makeCurrent()).thenReturn(scope);

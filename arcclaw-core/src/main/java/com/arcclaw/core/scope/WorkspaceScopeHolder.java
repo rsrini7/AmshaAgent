@@ -74,8 +74,10 @@ public final class WorkspaceScopeHolder {
 
     public static void run(String sessionId, String userId, String chatId, Runnable runnable) {
         validate(sessionId);
-        LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
+        if (userId != null || chatId != null) {
+            LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
                 sessionId, userId, chatId, Thread.currentThread());
+        }
         
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
@@ -103,8 +105,10 @@ public final class WorkspaceScopeHolder {
 
     public static <T> T call(String sessionId, String userId, String chatId, Callable<T> callable) throws Exception {
         validate(sessionId);
-        LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
+        if (userId != null || chatId != null) {
+            LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
                 sessionId, userId, chatId, Thread.currentThread());
+        }
         
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);

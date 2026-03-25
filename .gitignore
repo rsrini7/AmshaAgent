@@ -42,6 +42,7 @@ test-output.log
 api-surface*.txt
 workspaces/
 data/
+lib/
 
 # Environment Variables
 .env
