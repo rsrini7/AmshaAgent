@@ -4388,3 +4388,230 @@ Resolve intermittent test failures in `ReasoningStepParser` and ensure stable `S
 - ✅ `ChatHistoryAssemblerTest`: Verified compliance redaction regex.
 - ✅ Full `mvn clean verify`: All tests PASS.
 
+---
+
+# Phase 65-A — Correctness & Runtime Stability ✅
+
+Refactor entity encapsulation and dynamic role resolution to improve persistence reliability and intent classification flexibility.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Strict Encapsulation**: Transitioned `CompactionSummaryEntity` to private fields with standard getters/setters. This ensures Hibernate consistently detects changes and correctly manages the persistent state across transaction boundaries.
+
+> [!NOTE]
+> **Dynamic Alias Resolution**: Integrated a new `aliases` field into `RoleDefinition`, allowing roles (including skills) to register synonyms and variant spellings (e.g., "brahaspati" -> architect). This removes hardcoded logic from the classifier.
+
+> [!TIP]
+> **Skill Auto-Discovery**: The `SkillLoader` now automatically registers skill names as aliases. This allows the `IntentClassifierService` to route to specialized skills based on semantic matching or direct name mentions without manual routing updates.
+
+## Completed Changes
+
+#### [MODIFY] [CompactionSummaryEntity.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionSummaryEntity.java)
+- Encapsulated all persistent fields (private) and added standard Java Bean accessors.
+- Updated all references in `arcclaw-core` and `arcclaw-rag` to use the new getters/setters.
+
+#### [MODIFY] [RoleDefinition.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/RoleDefinition.java) / [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java)
+- Added `aliases` Set to `RoleDefinition`.
+- Updated `AgentRoleEnum` to include deity synonyms and intent-triggering aliases.
+
+#### [MODIFY] [IntentClassifierService.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Refactored `sanitize()` to match against the dynamic aliases from `RoleDefinition`.
+
+#### [MODIFY] [SkillLoader.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/skill/SkillLoader.java)
+- Updated skill registration to include the skill name in the role's aliases list.
+
+#### [MODIFY] [CronJobRunner.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/scheduler/CronJobRunner.java)
+- Removed redundant `DevSecretSeeder` injection to prevent unnecessary overhead during background job execution.
+
+## Verification
+- ✅ `IntentClassifierServiceTest`: Verified "brahaspati" specifically maps to the architect role.
+- ✅ `RoleDefinitionTest`: Verified alias registration and immutability.
+- ✅ Full `mvn clean verify`: 782/782 tests PASS.
+---
+
+# Phase 65-B — Security & Concurrency Hardening ✅
+
+Hardened secret seeding lifecycle and stabilized concurrent MCP tool registration while modernizing intent classification.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Orchestrated Seeding**: Decentralized secret seeding from the cron execution path. By moving `DevSecretSeeder` control exclusively to `DevSecretSeederStartup` (@IfBuildProfile("dev")), we ensure development secrets are never accidentally invocable in production environments.
+
+> [!NOTE]
+> **Concurrent Readiness**: Guaranteed thread-safety for MCP dynamic tool discovery using `ConcurrentHashMap`. This ensures that multiple simultaneous MCP handshakes or tool lookups never trigger `ConcurrentModificationException`.
+
+> [!TIP]
+> **Unified Dynamic Resolution**: Eliminated OCP violations in both the intent classifier and the role enum. Role resolution is now entirely meta-data driven, leveraging `RoleDefinition` aliases and `displayName` parsing to determine routing.
+
+## Completed Changes
+
+#### [MODIFY] [CronJobRunner.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/scheduler/CronJobRunner.java)
+- Removed direct injection and call to `DevSecretSeeder` to prevent security leakage.
+
+#### [MODIFY] [IntentClassifierService.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/routing/IntentClassifierService.java)
+- Optimized `sanitize()` to use dynamic deity name extraction from `displayName` in addition to explicit aliases.
+
+#### [MODIFY] [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java)
+- Refactored `fromString()` to use dynamic alias lookup instead of a hardcoded switch statement.
+
+#### [MODIFY] [DynamicToolCapabilityRegistry.java](file:///arcclaw-mcp/src/main/java/com/arcclaw/mcp/tool/DynamicToolCapabilityRegistry.java)
+- Confirmed `ConcurrentHashMap` for thread-safe tool registration.
+
+## Verification
+- ✅ `CronJobRunnerTest`: Verified via reflection that `DevSecretSeeder` is no longer injected.
+- ✅ `DynamicToolCapabilityRegistryTest`: Verified safe concurrent register/iterate with 50 threads.
+- ✅ `IntentClassifierServiceTest`: Verified dynamic deity name resolution for all roles.
+- ✅ Full `mvn clean verify` is green.
+
+---
+
+# Phase 65-C — Architectural Unblocks & SPI Completion ✅
+
+Extracted channel-specific background management into a pluggable SPI and modernized the core channel type model.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Extensible Channel Types**: Transitioned `ChannelType` from a static enum to an immutable record. This allows ArcClaw and its extensions to define custom channel types (e.g. "whatsapp", "teams") at runtime without modifying the core API, fulfilling the Open/Closed Principle.
+
+> [!NOTE]
+> **CDI-Based Discovery**: Implemented `ChannelDaemon` SPI to decouple the `attach` CLI command from specific adapter implementations. The command now dynamically discovers available channel daemons via CDI, enabling clean separation between `arcclaw-core` management and `arcclaw-app` adapters.
+
+> [!TIP]
+> **Backward Compatibility**: Preserved the `name()` method on the `ChannelType` record to maintain compatibility with existing enum-style callers in the monitoring and logging layers.
+
+## Completed Changes
+
+#### [CREATE] [ChannelDaemon.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/pipeline/ChannelDaemon.java)
+- Core interface for background channel lifecycle management.
+
+#### [CREATE] [TelegramChannelDaemon.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/TelegramChannelDaemon.java)
+- CDI implementation that bridges the `attach telegram` command to Camel route lifecycle.
+
+#### [MODIFY] [AttachCommand.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/cli/AttachCommand.java)
+- Refactored to inject `Instance<ChannelDaemon>` and route requests dynamically.
+
+#### [MODIFY] [ChannelType.java](file:///arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/ChannelType.java)
+- Converted to record; added constants and `name()` method; updated `fromString()` to be non-exclusive.
+
+#### [MODIFY] [ChannelSenderRegistry.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/ChannelSenderRegistry.java)
+- Switched to `.equals()` for robust record-based comparison.
+
+## Verification
+- ✅ `AttachCommandTest`: Verified dynamic channel listing and error handling.
+- ✅ `ChannelDaemonSpiTest`: Verified CDI discovery of Telegram adapter.
+- ✅ `ChannelTypeTest`: Verified custom channel type creation and record equality.
+- ✅ Full `mvn compile` green across core/app modules.
+
+---
+
+# Phase 65-D — Observability & Diagnostics Unification ✅
+
+Unified diagnostic context propagation and modernized OpenTelemetry instrumentation across the agent loop.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Semantic Span Unification**: Standardized OTel span names (e.g., `agent.iteration`, `tool.call`) and attribute keys (e.g., `arcclaw.session.id`, `arcclaw.tool.name`) into a centralized `AgentOTelConstants` registry. This ensures consistent dashboarding and alerting across all ArcClaw deployments.
+
+> [!NOTE]
+> **Full-Context Logger Correlation**: Enhanced MDC (Mapped Diagnostic Context) to consistently propagate `CHAT_ID` alongside `SESSION_ID` and `USER_ID`. This allows log aggregation tools to filter by chat session, user, or workspace with equal precision.
+
+> [!TIP]
+> **Structured Command Feedback**: Introduced the `CommandResponse` record which includes a `metadata` map. This enables deterministic commands (like `/approve`) to return not just text, but structured data (IDs, timing) back to bridge layers.
+
+## Completed Changes
+
+#### [CREATE] [AgentOTelConstants.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOTelConstants.java)
+- Centralized registry for OTel semantic conventions.
+
+#### [CREATE] [CommandResponse.java](file:///arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/CommandResponse.java)
+- Record supporting typed metadata for reflex command results.
+
+#### [MODIFY] [AgentOtelContext.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/observability/AgentOtelContext.java)
+- Refactored to use `AgentOTelConstants` for all span and attribute operations.
+
+#### [MODIFY] [MdcKeys.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/util/MdcKeys.java)
+- Added `CHAT_ID` constant for unified logging.
+
+#### [MODIFY] [WorkspaceScopeHolder.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/scope/WorkspaceScopeHolder.java)
+- Ensured `CHAT_ID` is bound to both MDC and ScopedValue in `run` and `call` entry points.
+
+## Verification
+- ✅ `AgentOtelContextTest`: Updated to verify unified span names and attribute keys.
+- ✅ Full `mvn compile` green after constant migration.
+
+---
+
+# Phase 65-D: Quality, Maintainability & SPI Completion ✅
+
+Completed the final tier of Phase 65 — three quality improvements that complete the SPI architecture and reduce long-term maintenance burden.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Compaction SRP Split (D1)**: `ContextCompactionService` was handling dual responsibilities — CDI async event observation AND the compaction algorithm. Split into `CompactionService` (pure business logic) and `CompactionEventBridge` (async CDI observer). This makes the compaction algorithm unit-testable without CDI event infrastructure.
+
+> [!NOTE]
+> **Embedding SPI (D2)**: Replaced the hardcoded `switch` in `EmbeddingModelProducer` with a CDI `@Any Instance<EmbeddingProviderFactory>` pattern — identical to the established `LlmModelFactory` and `ChannelDaemon` SPI patterns. Adding a new embedding provider (Cohere, Voyage AI) now requires only implementing `EmbeddingProviderFactory` as a CDI bean.
+
+> [!TIP]
+> **Audit Pre-Persist Validation (D3)**: Removed the null-fallback hacks (`"prevhash-fallback-"`, `"error-null-fallback-"`) that papered over real failures. With A1 having fixed `sha256hex()` to throw instead of returning null, these code paths were dead. Replaced with a `validateBeforePersist()` method that catches any future regression at the persist boundary with clear error messages.
+
+## Completed Changes
+
+### Component D1 — ContextCompactionService SRP Split
+
+#### [DELETE] `ContextCompactionService.java`
+- Removed monolithic class that mixed event observation with business logic.
+
+#### [CREATE] [CompactionService.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionService.java)
+- Pure business logic: `shouldCompact()`, `compact()`, `truncateSafely()`, prompt template.
+- No CDI event infrastructure, no `CompactionInFlightFlag` — those belong in the bridge.
+
+#### [CREATE] [CompactionEventBridge.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/state/CompactionEventBridge.java)
+- Async CDI observer that delegates to `CompactionService.compact()`.
+- Owns the `CompactionInFlightFlag` lifecycle — always releases in `finally`.
+
+#### [MODIFY] [CompactionHandler.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/CompactionHandler.java)
+- Switched from `ContextCompactionService` to `CompactionService`.
+- Removed redundant `.thenRun()`/`.exceptionally()` lock management — bridge handles it.
+
+### Component D2 — EmbeddingModelProducer SPI
+
+#### [CREATE] [EmbeddingProviderFactory.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingProviderFactory.java)
+- SPI interface with `providerId()` and `create(EmbeddingModelConfig)`.
+- Includes `requireApiKey()` default method for shared validation.
+
+#### [CREATE] [EmbeddingModelConfig.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingModelConfig.java)
+- Immutable config record: `providerId`, `modelName`, `baseUrl`, `apiKey`, `timeout`.
+
+#### [CREATE] Provider Factories
+- `OpenAiEmbeddingProviderFactory.java` — OpenAI text-embedding models.
+- `JinaEmbeddingProviderFactory.java` — Jina AI (OpenAI-compatible adapter).
+- `OllamaEmbeddingProviderFactory.java` — Local Ollama models.
+
+#### [MODIFY] [EmbeddingModelProducer.java](file:///arcclaw-rag/src/main/java/com/arcclaw/rag/EmbeddingModelProducer.java)
+- Replaced hardcoded `switch` with `@Any Instance<EmbeddingProviderFactory>` discovery.
+- Error message now lists available providers dynamically.
+
+### Component D3 — AuditEventRepository SHA-256 Hardening
+
+#### [MODIFY] [AuditEventRepository.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditEventRepository.java)
+- Removed null-fallback hack for `prevHash` (`"prevhash-fallback-"` string).
+- Removed null-fallback hack for `hmacHash` (`"error-null-fallback-"` + UUID).
+- Added `validateBeforePersist(AuditEvent)` — validates `sessionId`, `prevHash`, `hmacHash`, `sequence` before `em.persist()`.
+
+## Verification
+- ✅ `CompactionServiceTest`: All 7 tests pass — algorithm works in isolation without CDI.
+- ✅ `CompactionEventBridgeTest`: Verifies delegation and lock release on success/failure.
+- ✅ `CompactionHandlerTest`: Updated for new `CompactionService` dependency.
+- ✅ `EmbeddingModelProducerTest`: Verifies factory discovery and delegation.
+- ✅ `AuditEventRepositoryTest`: 4 new validation tests (null prevHash, null hmacHash, null sessionId, valid event).
+
+## Migration Notes
+- **Deleted files**: `ContextCompactionService.java`, `ContextCompactionServiceTest.java`, `ContextCompactionServiceIntegrationTest.java`
+- **Renamed**: `CompactionServiceIntegrationTest.java` replaces the integration test.
+- **No config changes**: All existing config keys remain unchanged.

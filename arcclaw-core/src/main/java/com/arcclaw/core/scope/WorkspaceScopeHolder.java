@@ -79,6 +79,7 @@ public final class WorkspaceScopeHolder {
         
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
+        if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
@@ -92,6 +93,7 @@ public final class WorkspaceScopeHolder {
         } finally {
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
+            MDC.remove(MdcKeys.CHAT_ID);
         }
     }
 
@@ -106,11 +108,15 @@ public final class WorkspaceScopeHolder {
         
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
+        if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
                 scope = scope.where(USER_ID, userId);
+            }
+            if (chatId != null) {
+                scope = scope.where(CHAT_ID, chatId);
             }
 
             return scope.call(new ScopedValue.CallableOp<T, Exception>() {
@@ -122,6 +128,7 @@ public final class WorkspaceScopeHolder {
         } finally {
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
+            MDC.remove(MdcKeys.CHAT_ID);
         }
     }
 

@@ -40,8 +40,8 @@ public class AgentOtelContext implements AgentObserver {
     public Span startSessionSpan(String sessionId) {
         if (sessionId == null)
             return null;
-        Span span = tracer.spanBuilder("arcclaw.session")
-                .setAttribute("sessionId", sessionId)
+        Span span = tracer.spanBuilder(AgentOTelConstants.SPAN_SESSION)
+                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .startSpan();
         rootSpans.put(sessionId, span);
         rootScopes.put(sessionId, span.makeCurrent());
@@ -118,11 +118,11 @@ public class AgentOtelContext implements AgentObserver {
             return Span.getInvalid();
         }
         Context parentContext = Context.current().with(parent);
-        return tracer.spanBuilder("agent.iteration")
+        return tracer.spanBuilder(AgentOTelConstants.SPAN_AGENT_ITERATION)
                 .setParent(parentContext)
-                .setAttribute("session.id", sessionId)
-                .setAttribute("agent.role", agentRole)
-                .setAttribute("iteration", (long) iteration)
+                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
+                .setAttribute(AgentOTelConstants.ATTR_AGENT_ROLE, agentRole)
+                .setAttribute(AgentOTelConstants.ATTR_ITERATION, (long) iteration)
                 .startSpan();
     }
 
@@ -140,10 +140,10 @@ public class AgentOtelContext implements AgentObserver {
             return Span.getInvalid();
         }
         Context parentContext = Context.current().with(parent);
-        return tracer.spanBuilder("agent.tool")
+        return tracer.spanBuilder(AgentOTelConstants.SPAN_TOOL_CALL)
                 .setParent(parentContext)
-                .setAttribute("session.id", sessionId)
-                .setAttribute("tool.name", toolName)
+                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
+                .setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, toolName)
                 .setAttribute("tool.operation", toolOperation)
                 .startSpan();
     }

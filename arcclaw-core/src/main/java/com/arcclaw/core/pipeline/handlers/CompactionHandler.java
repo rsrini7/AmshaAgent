@@ -11,7 +11,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
-import com.arcclaw.core.state.ContextCompactionService;
+import com.arcclaw.core.state.CompactionService;
 import org.jboss.logging.Logger;
 
 /**
@@ -22,7 +22,7 @@ public class CompactionHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(CompactionHandler.class);
 
     @Inject
-    ContextCompactionService compactionService;
+    CompactionService compactionService;
 
     @Inject
     Event<CompactionRequest> compactionEvent;
@@ -49,18 +49,8 @@ public class CompactionHandler implements MessageHandler {
 
         if (compactionService.shouldCompact(sessionId)) {
             if (compactionInFlight.compareAndSet(false, true)) {
-                compactionEvent.fireAsync(new CompactionRequest(sessionId, userId))
-                        .toCompletableFuture()
-                        .thenRun(() -> {
-                            log.debugf("Compaction completed successfully for session %s — releasing inFlight lock", sessionId);
-                            compactionInFlight.set(false);
-                        })
-                        .exceptionally(ex -> {
-                            log.errorf("Async compaction event delivery failed for session %s (Exception: %s) — releasing inFlight lock", sessionId, ex.getMessage());
-                            log.debug("Full compaction failure stack trace:", ex);
-                            compactionInFlight.set(false);
-                            return null;
-                        });
+                // Bridge (CompactionEventBridge) is responsible for releasing the lock in its finally block.
+                compactionEvent.fireAsync(new CompactionRequest(sessionId, userId));
                 log.debugf("Async compaction triggered for session %s", sessionId);
             } else {
                 log.debugf("Compaction already in-flight for session %s — skipping trigger", sessionId);

@@ -1212,3 +1212,66 @@
 - [x] Step 4: Refine `ChatHistoryAssembler` compliance regex (case-insensitive "i"). <!-- id: 585 -->
 - [x] Step 5: Verify full test suite: `mvn clean verify` passes (400/400 tests green). <!-- id: 586 -->
 
+---
+
+## Phase 65-A — Correctness & Runtime Stability ✅
+- [x] Step 1: Encapsulate `CompactionSummaryEntity` with private fields and getters/setters. <!-- id: 587 -->
+- [x] Step 2: Systematically update all `CompactionSummaryEntity` references across `arcclaw-core` and `arcclaw-rag` components (Reflexes, Memory, Builders). <!-- id: 588 -->
+- [x] Step 3: Add `aliases` field to `RoleDefinition` and update its compact constructor to enforce immutability. <!-- id: 589 -->
+- [x] Step 4: Populate `AgentRoleEnum` with deity synonyms (e.g., "brahaspati") through the new `aliases` set. <!-- id: 590 -->
+- [x] Step 5: Refactor `IntentClassifierService.sanitize()` to use the new dynamic aliases. <!-- id: 591 -->
+- [x] Step 6: Modify `SkillLoader.java` to include skill names in the dynamic role aliases. <!-- id: 592 -->
+- [x] Step 7: Clean up `CronJobRunner` by removing redundant `DevSecretSeeder` injection. <!-- id: 593 -->
+- [x] Step 8: Systematically update all unit and integration test constructors for `RoleDefinition` to include the `aliases` parameter. <!-- id: 594 -->
+- [x] Step 9: Verify build and test suite performance: 782/782 tests green. <!-- id: 595 -->
+---
+
+## Phase 65-B — Security & Concurrency Hardening ✅
+- [x] Step 1: Remove `DevSecretSeeder` injection from `CronJobRunner.java`. <!-- id: 596 -->
+- [x] Step 2: Create `CronJobRunnerTest` to verify the absence of dev-injection via reflection. <!-- id: 597 -->
+- [x] Step 3: Verify `AgentSessionService` does not trigger secret seeding. <!-- id: 598 -->
+- [x] Step 4: Confirm `DynamicToolCapabilityRegistry` uses thread-safe internal collections. <!-- id: 599 -->
+- [x] Step 5: Add concurrent stress test to `DynamicToolCapabilityRegistryTest` (50 threads). <!-- id: 600 -->
+- [x] Step 6: Refactor `IntentClassifierService.sanitize()` to use dynamic `displayName` deity extraction. <!-- id: 601 -->
+- [x] Step 7: Transition `AgentRoleEnum.fromString()` to dynamic alias matching. <!-- id: 602 -->
+- [x] Step 8: Verify all new security and concurrency tests pass. <!-- id: 603 -->
+
+---
+
+## Phase 65-C — Architectural Unblocks & SPI Completion ✅
+- [x] Step 1: Ensure `CompactionSummaryEntity` fields are private. <!-- id: 604 -->
+- [x] Step 2: Create `ChannelDaemon` interface in `arcclaw-core`. <!-- id: 605 -->
+- [x] Step 3: Implement `TelegramChannelDaemon` in `arcclaw-app`. <!-- id: 606 -->
+- [x] Step 4: Refactor `AttachCommand` to use CDI-based discovery. <!-- id: 607 -->
+- [x] Step 5: Convert `ChannelType` enum to record for SPI extensibility. <!-- id: 608 -->
+- [x] Step 6: Update `ChannelSenderRegistry` and `TelegramJobNotifier` for record-based comparison. <!-- id: 609 -->
+- [x] Step 7: Verify all SPI-based channel tests pass. <!-- id: 610 -->
+
+---
+
+## Phase 65-D — Observability & Diagnostics Unification ✅
+- [x] Step 1: Create `AgentOTelConstants` with unified span/attribute names. <!-- id: 611 -->
+- [x] Step 2: Refactor `AgentOtelContext` to use `AgentOTelConstants`. <!-- id: 612 -->
+- [x] Step 3: Create `CommandResponse` record with metadata map support. <!-- id: 613 -->
+- [x] Step 4: Add `CHAT_ID` to `MdcKeys`. <!-- id: 614 -->
+- [x] Step 5: Update `WorkspaceScopeHolder` to propagate `CHAT_ID` in MDC and ScopedValue. <!-- id: 615 -->
+- [x] Step 6: Verify OTel and MDC consistency via tests and logs. <!-- id: 616 -->
+
+---
+
+## Phase 65-D: Quality, Maintainability & SPI Completion ✅
+- [x] D1-Step 1: Create `CompactionService` with extracted business logic. <!-- id: 617 -->
+- [x] D1-Step 2: Create `CompactionEventBridge` for async CDI observer. <!-- id: 618 -->
+- [x] D1-Step 3: Update `CompactionHandler` to use `CompactionService`. <!-- id: 619 -->
+- [x] D1-Step 4: Create `CompactionServiceTest` and `CompactionEventBridgeTest`. <!-- id: 620 -->
+- [x] D1-Step 5: Create `CompactionServiceIntegrationTest` to replace old integration test. <!-- id: 621 -->
+- [x] D1-Step 6: Delete `ContextCompactionService`, `ContextCompactionServiceTest`, `ContextCompactionServiceIntegrationTest`. <!-- id: 622 -->
+- [x] D2-Step 1: Create `EmbeddingProviderFactory` interface and `EmbeddingModelConfig` record. <!-- id: 623 -->
+- [x] D2-Step 2: Create `OpenAiEmbeddingProviderFactory`. <!-- id: 624 -->
+- [x] D2-Step 3: Create `JinaEmbeddingProviderFactory`. <!-- id: 625 -->
+- [x] D2-Step 4: Create `OllamaEmbeddingProviderFactory`. <!-- id: 626 -->
+- [x] D2-Step 5: Refactor `EmbeddingModelProducer` to use SPI discovery. <!-- id: 627 -->
+- [x] D2-Step 6: Create `EmbeddingModelProducerTest`. <!-- id: 628 -->
+- [x] D3-Step 1: Add `validateBeforePersist()` to `AuditEventRepository`. <!-- id: 629 -->
+- [x] D3-Step 2: Remove null-fallback hacks for `prevHash` and `hmacHash`. <!-- id: 630 -->
+- [x] D3-Step 3: Add validation tests to `AuditEventRepositoryTest`. <!-- id: 631 -->

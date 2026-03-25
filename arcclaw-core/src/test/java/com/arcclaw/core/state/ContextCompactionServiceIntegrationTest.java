@@ -47,7 +47,7 @@ class ContextCompactionServiceIntegrationTest {
     }
 
     @Inject
-    ContextCompactionService service;
+    CompactionService service;
 
     @Inject
     PersistentChatMemoryStore chatMemoryStore;
@@ -106,8 +106,8 @@ class ContextCompactionServiceIntegrationTest {
             
             var summaryOpt = summaryRepository.findLatestBySessionId(TEST_SESSION_ID);
             assertTrue(summaryOpt.isPresent());
-            assertEquals("Prior session: user asked about X...", summaryOpt.get().summary);
-            assertEquals(2, summaryOpt.get().messagesCompacted);
+            assertEquals("Prior session: user asked about X...", summaryOpt.get().getSummary());
+            assertEquals(2, summaryOpt.get().getMessagesCompacted());
 
             // Find the audit event
             auditService.waitForIdle();

@@ -10,9 +10,11 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.common.annotation.Identifier;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 @QuarkusTest
 public class IntentClassifierServiceTest {
@@ -210,5 +212,24 @@ public class IntentClassifierServiceTest {
         when(classifierModel.chat(anyString())).thenReturn("brahaspati");
         String role = service.classify("plan the database schema");
         Assertions.assertEquals("architect", role);
+    }
+
+    @Test
+    @DisplayName("Verify sanitize resolves all roles by deity name from displayName (B3 Hardening)")
+    void testSanitizeResolvesAllRolesByDeityName() {
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            String displayName = role.definition().displayName();
+            // Extract deity name (e.g. "Brahaspati" from "Brahaspati (Architect)")
+            String deityName = displayName.contains("(")
+                    ? displayName.substring(0, displayName.indexOf("(")).trim()
+                    : displayName;
+            
+            // We mock the LLM returning the deity name
+            when(classifierModel.chat(anyString())).thenReturn(deityName);
+            
+            String resolved = service.classify("test message for " + deityName);
+            Assertions.assertEquals(role.toScopedName(), resolved, 
+                "Deity name '" + deityName + "' should resolve to role " + role.toScopedName());
+        }
     }
 }

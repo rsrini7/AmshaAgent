@@ -22,9 +22,6 @@ Now the prompts:
 
 # PROMPT — PHASE 65-A: Correctness & Runtime Stability (Tier A)
 
-```markdown
-# PROMPT — PHASE 65-A: Correctness & Runtime Stability (Tier A)
-
 Role: Senior Java Architect, Bug Fixer & Senior Java Developer
 Task: Phase 65-A — Fix 5 confirmed correctness defects in live production code.
 All bugs below exist today and have been observed in production logs or test runs.
@@ -35,6 +32,8 @@ No architectural changes. Surgical fixes only.
 ## Architecture Context
 Refer @TROUBLESHOOTING.md §26 (Phase 64 section) for prior audit chain fixes.
 Refer @PLAN.md Phase 64-A/B for GovernanceLayer and AuditEventRepository context.
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -75,39 +74,6 @@ In `AuditHashUtil.sha256hex(String input)`:
 
 **Test**: `AuditHashUtilTest.testSha256HexNeverReturnsNull()` — verify that `sha256hex("test")` returns
 a 64-character hex string and never null, even under concurrent invocation.
-
----
-
-### Component A2 — AsyncPersistenceEngine Drain Thread Not Daemon
-
-**File**: `arcclaw-core/src/main/java/com/arcclaw/core/persistence/AsyncPersistenceEngine.java`
-**Symptom**: After test suite completion, JVM hangs for 30 seconds before Surefire force-kills it:
-```
-WARN: [AsyncPersistenceEngine] Telemetry drain interrupted — shutting down.
-[ERROR] Surefire is going to kill self fork JVM. The exit has elapsed 30 seconds after System.exit(0).
-```
-**Root cause**: The drain virtual thread is started with `Thread.ofVirtual().name(...).start(...)` without
-`.daemon(true)`. Non-daemon threads prevent JVM exit. When `System.exit(0)` fires at test end, the JVM
-waits for all non-daemon threads to finish before terminating.
-
-**Fix**:
-In `AsyncPersistenceEngine.startDrainThreads()`, mark both drain threads as daemon:
-```java
-Thread.ofVirtual()
-    .name("arcclaw-audit-telemetry-drain")
-    .daemon(true)          // ← add this to BOTH drain threads
-    .start(() -> drainTelemetry());
-
-Thread.ofVirtual()
-    .name("arcclaw-audit-compliance-drain")
-    .daemon(true)          // ← add this
-    .start(() -> drainCompliance());
-```
-Daemon virtual threads are killed automatically when all non-daemon threads exit. No data loss risk:
-the `@PreDestroy` method already calls `drainRemaining()` synchronously for graceful shutdown.
-
-**Test**: `AsyncPersistenceEngineTest.testDrainThreadsAreDaemon()` — after `@PostConstruct`, verify
-that no non-daemon threads with name containing `"arcclaw-audit"` are alive via `Thread.getAllStackTraces()`.
 
 ---
 
@@ -230,14 +196,9 @@ After all 5 fixes:
 ./mvnw clean test -pl arcclaw-core,arcclaw-app -am -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tail -5
 ```
 Expected: 777+ tests, 0 failures, JVM exits cleanly (no 30s Surefire kill).
-```
-```
 
 ---
 
-# PROMPT — PHASE 65-B: Security & Concurrency Hardening (Tier B)
-
-```markdown
 # PROMPT — PHASE 65-B: Security & Concurrency Hardening (Tier B)
 
 Role: Senior Java Architect & Security Engineer
@@ -250,6 +211,8 @@ security leakage under production load or future code changes.
 ## Architecture Context
 Refer @TROUBLESHOOTING.md §25 (Phase 63-U) for DevSecretSeeder production path history.
 Refer @PLAN.md Phase 64-B for SessionRegistry and DevSecretSeederStartup context.
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -362,14 +325,9 @@ automatically recognizes both its canonical name and its deity alias — no code
   -Dsurefire.failIfNoSpecifiedTests=false 2>&1 | tail -5
 ```
 Expected: 777+ tests, 0 failures.
-```
-```
 
 ---
 
-# PROMPT — PHASE 65-C: Architectural Unblocks & SPI Completion (Tier C)
-
-```markdown
 # PROMPT — PHASE 65-C: Architectural Unblocks & SPI Completion (Tier C)
 
 Role: Senior Java Architect & Platform Engineer
@@ -383,6 +341,8 @@ same CDI pattern already established by ChannelJobNotifier and IntentRoutingProv
 Refer @PLAN.md Phase 64-C for ChannelJobNotifier SPI precedent.
 Refer @TROUBLESHOOTING.md §43 (Phase 47) for IntentRoutingProvider SPI precedent.
 All new SPIs must follow the same CDI @Any Instance<T> discovery pattern already in use.
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -615,14 +575,9 @@ expected `id()` value.
 Expected: 777+ tests, 0 failures.
 Note: C3 will produce compilation errors in all modules that switch on `ChannelType` enum —
 fix each one by migrating to `switch (channelType.id())` as shown above.
-```
-```
 
 ---
 
-# PROMPT — PHASE 65-D: Quality & Maintainability (Tier D)
-
-```markdown
 # PROMPT — PHASE 65-D: Quality, Maintainability & SPI Completion (Tier D)
 
 Role: Senior Java Architect & Platform Engineer
@@ -634,6 +589,8 @@ and reduce long-term maintenance burden.
 ## Architecture Context
 Refer @PLAN.md Phase 64-C for ContextCompactionService history and CompactionRequest event design.
 Refer @PLAN.md Phase 65-C for EmbeddingModelProducer context (C3 established LlmModelFactory pattern).
+Refer @Architecture_Nuances.md
+Refer @arcclaw_rg_cheatsheet.md
 
 ---
 
@@ -829,8 +786,6 @@ After all 4 tiers (A+B+C+D) are complete:
 Expected: 800+ tests (Phase 65 adds ~30 new tests), 0 failures, JVM exits cleanly.
 
 Update PLAN.md, TASKS.md, TROUBLESHOOTING.md, and WALKTHROUGH.md to mark Phase 65 complete.
-```
-```
 
 ---
 

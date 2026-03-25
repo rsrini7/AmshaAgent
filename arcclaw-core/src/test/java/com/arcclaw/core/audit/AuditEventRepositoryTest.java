@@ -154,4 +154,56 @@ public class AuditEventRepositoryTest {
         assertEquals(count, repository.findBySessionId(sidA).size());
         assertEquals(count, repository.findBySessionId(sidB).size());
     }
+
+    // ── Phase 65-D3: Defensive pre-persist validation tests ──────────────
+
+    @Test
+    public void testPersistWithNullPrevHashThrows() {
+        AuditEvent event = new AuditEvent();
+        event.sessionId = "test-session-validation";
+        event.prevHash = null;
+        event.hmacHash = "some-hash";
+        event.sequence = 1;
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, 
+            () -> repository.validateBeforePersist(event));
+        assertTrue(ex.getMessage().contains("prevHash"));
+    }
+
+    @Test
+    public void testPersistWithNullHmacHashThrows() {
+        AuditEvent event = new AuditEvent();
+        event.sessionId = "test-session-validation";
+        event.prevHash = "some-prev";
+        event.hmacHash = null;
+        event.sequence = 1;
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, 
+            () -> repository.validateBeforePersist(event));
+        assertTrue(ex.getMessage().contains("hmacHash"));
+    }
+
+    @Test
+    public void testPersistWithNullSessionIdThrows() {
+        AuditEvent event = new AuditEvent();
+        event.sessionId = null;
+        event.prevHash = "some-prev";
+        event.hmacHash = "some-hash";
+        event.sequence = 1;
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, 
+            () -> repository.validateBeforePersist(event));
+        assertTrue(ex.getMessage().contains("sessionId"));
+    }
+
+    @Test
+    public void testPersistWithValidEventPassesValidation() {
+        AuditEvent event = new AuditEvent();
+        event.sessionId = "test-session-valid";
+        event.prevHash = "abc123";
+        event.hmacHash = "def456";
+        event.sequence = 1;
+
+        assertDoesNotThrow(() -> repository.validateBeforePersist(event));
+    }
 }

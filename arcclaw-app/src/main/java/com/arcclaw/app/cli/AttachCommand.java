@@ -1,6 +1,5 @@
 package com.arcclaw.app.cli;
 
-import io.quarkus.runtime.Quarkus;
 import picocli.CommandLine;
 
 /**
@@ -15,23 +14,35 @@ public class AttachCommand implements Runnable {
     @CommandLine.Parameters(paramLabel = "<channel>", description = "Channel to service: telegram, discord")
     String channel;
 
+    @jakarta.inject.Inject
+    @jakarta.enterprise.inject.Any
+    jakarta.enterprise.inject.Instance<com.arcclaw.core.pipeline.ChannelDaemon> daemons;
+
     @Override
     public void run() {
-        switch (channel.toLowerCase()) {
-            case "telegram" -> {
-                System.out.println("🔗 ArcClaw daemon running for Telegram.");
-                System.out.println("   Telegram route managed by TelegramChannelRoute.onStart().");
-                System.out.println("   Press Ctrl+C to shutdown.");
-                Quarkus.waitForExit();
-            }
-            case "discord" -> {
-                System.out.println("🔗 ArcClaw not supported Discord Yet.");
-                System.out.println("   Press Ctrl+C to shutdown.");
-            }
-            default -> {
-                System.err.println("❌ Unsupported channel: " + channel);
-                System.err.println("   Supported: telegram");
-            }
+        String target = channel.toLowerCase();
+        java.util.Optional<com.arcclaw.core.pipeline.ChannelDaemon> daemon = daemons.stream()
+            .filter(d -> d.channelId().equalsIgnoreCase(target))
+            .findFirst();
+
+        if (daemon.isEmpty()) {
+            System.out.printf("❌ Unknown channel '%s'. Available: %s%n",
+                channel,
+                daemons.stream().map(com.arcclaw.core.pipeline.ChannelDaemon::channelId).collect(java.util.stream.Collectors.joining(", ")));
+            return;
+        }
+
+        if (!daemon.get().isConfigured()) {
+            System.out.printf("⚠️ Channel '%s' is not configured. Check required environment variables.%n", channel);
+            return;
+        }
+
+        try {
+            System.out.printf("🔗 ArcClaw daemon starting for %s...%n", channel);
+            System.out.println("   Press Ctrl+C to shutdown.");
+            daemon.get().start();
+        } catch (Exception e) {
+            System.err.printf("❌ Channel daemon '%s' failed: %s%n", channel, e.getMessage());
         }
     }
 }

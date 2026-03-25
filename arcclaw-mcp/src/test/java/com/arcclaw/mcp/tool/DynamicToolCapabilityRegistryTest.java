@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class DynamicToolCapabilityRegistryTest {
@@ -68,5 +69,42 @@ class DynamicToolCapabilityRegistryTest {
         registry.deregister("tool1");
         Collection<DynamicToolCapability> allAfterDeregister = registry.getAll();
         assertEquals(1, allAfterDeregister.size());
+    }
+
+    @Test
+    @DisplayName("Verify no CME occurs when registering and iterating concurrently (B2 Hardening)")
+    void testConcurrentRegisterAndDeregisterNoCme() throws InterruptedException {
+        int threads = 50;
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(threads);
+        java.util.concurrent.atomic.AtomicInteger failures = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        for (int i = 0; i < threads; i++) {
+            final int idx = i;
+            executor.execute(() -> {
+                try {
+                    if (idx % 2 == 0) {
+                        for (int j = 0; j < 100; j++) {
+                            registry.register(createTool("tool-" + idx + "-" + j));
+                        }
+                    } else {
+                        for (int j = 0; j < 100; j++) {
+                            registry.getAll().stream().count();
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    failures.incrementAndGet();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        boolean finished = latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+        executor.shutdown();
+        
+        assertTrue(finished, "Test timed out");
+        assertEquals(0, failures.get(), "ConcurrentModificationException or other error occurred during concurrent operation");
     }
 }

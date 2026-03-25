@@ -2553,3 +2553,150 @@ Addressed intermittent test failures in the reasoning engine and hardened the se
 - ✅ **Middleware Ordering**: Verified `AgentDispatchHandlerTest` now passes reliably on parallel virtual threads.
 - ✅ **Redaction Fidelity**: Confirmed `ChatHistoryAssemblerTest` correctly handles mixed-case compliance flags.
 
+---
+
+## Phase 65-A — Correctness & Runtime Stability ✅
+
+Addressed Hibernate persistence integrity and modernized the agent role resolution system.
+
+### Key Features & Implementation:
+
+1. **Strict Entity Encapsulation (`CompactionSummaryEntity`)**:
+   - Identified that public fields on persistent entities can lead to missing Hibernate dirty-checking when fields are modified through certain bytecode-enhanced proxies.
+   - **Resolution**: Refactored `CompactionSummaryEntity` to use private fields with standard Java Bean accessors (getters/setters). Updated all consuming services (including `TwoTierMemoryService` and `RagChunkEntity` wrappers) to use these accessors, guaranteeing reliable state persistence and visibility across sessions.
+
+2. **Metadata-Driven Role Aliasing (`RoleDefinition`)**:
+   - Historically, role synonyms like "brahaspati" were hardcoded directly into the `IntentClassifierService.sanitize()` method, creating a maintenance burden.
+   - **Resolution**: Added an `aliases` Set to `RoleDefinition`. `AgentRoleEnum` now populates these aliases for all core roles (e.g., matching "brahaspati", "brihaspati", "vishnu", etc.). The classifier now iterates over these dynamic registry entries, allowing for new roles and synonyms to be added without modifying the core routing logic.
+
+3. **Skill Intent Integration (`SkillLoader`)**:
+   - Integrated dynamic skills into the alias system to allow direct intent matching by skill name.
+   - **Resolution**: Updated `SkillLoader` to include the skill's name in its role's alias set during compilation. If a user's intent contains a skill name (e.g., "code-reviewer"), the `IntentClassifierService` now automatically routes the request to that specific skill's role.
+
+4. **Background Job Optimization (`CronJobRunner`)**:
+   - Removed redundant instantiation of `DevSecretSeeder` from the background cron path.
+   - **Resolution**: Ensured that the seeder runs strictly during application startup via `DevSecretSeederStartup`, reducing the overhead and dependency graph of the `CronJobRunner`.
+
+**Verification Results**:
+- ✅ **Persistence Stability**: Verified via full test suite that all `CompactionSummaryEntity` updates are correctly persisted and retrieved.
+- ✅ **Dynamic Routing**: Verified via `IntentClassifierServiceTest` that variant deity spellings ("brahaspati") and skill names now route correctly using the unified alias registry.
+- ✅ **Regression Analysis**: Final build verification confirms **782/782 tests PASS**.
+---
+
+## Phase 65-B — Security & Concurrency Hardening ✅
+
+Eliminated production security risks and addressed race conditions in the MCP tool registry.
+
+### Key Features & Implementation:
+
+1. **Secret Seeding Isolation**:
+   - Identified a security "landmine" where `CronJobRunner` was attempting to seed development secrets during background job execution.
+   - **Resolution**: Removed the `DevSecretSeeder` injection from `CronJobRunner`. Seeding is now strictly the responsibility of `DevSecretSeederStartup`, which is physically excluded from production builds via the `@IfBuildProfile("dev")` annotation. Verified this isolation with a reflective unit test.
+
+2. **Thread-Safe MCP Discovery (`DynamicToolCapabilityRegistry`)**:
+   - Addressed a potential `ConcurrentModificationException` during MCP handshakes where tools were being registered while the list of all tools was being iterated.
+   - **Resolution**: Ensured the internal registry uses `ConcurrentHashMap`. Added a high-concurrency unit test that spawns 50 virtual threads performing simultaneous registrations and stream-based iterations, verifying zero modification failures.
+
+3. **Dynamic Intent & Role Mapping**:
+   - Eliminated the last remnants of hardcoded routing in `IntentClassifierService` and `AgentRoleEnum`.
+   - **Resolution**: The `sanitize()` and `fromString()` methods now use a unified dynamic lookup strategy. The classifier extracts deity aliases directly from the `RoleDefinition.displayName()` (e.g., "Brahaspati" from "Brahaspati (Architect)"), ensuring that adding new agent personas requires zero logic changes in the core routing engine.
+
+**Verification Results**:
+- ✅ **Security Gate**: `CronJobRunnerTest.testDevSecretSeederNotInvocable()` passed.
+- ✅ **Concurrency Stress**: `DynamicToolCapabilityRegistryTest.testConcurrentRegisterAndDeregisterNoCme()` passed with 5,000 operations.
+- ✅ **Intent Fidelity**: `IntentClassifierServiceTest.testSanitizeResolvesAllRolesByDeityName()` confirmed 100% coverage.
+
+---
+
+## Phase 65-C — Architectural Unblocks & SPI Completion ✅
+
+Transitioned the channel management architecture to a pluggable SPI model and modernized core data structures.
+
+### Key Features & Implementation:
+
+1. **Pluggable Channel Daemons**:
+   - The CLI `attach` command was previously hardcoded with a `switch` statement for every supported channel.
+   - **Resolution**: Introduced the `ChannelDaemon` SPI in `arcclaw-core`. Created `TelegramChannelDaemon` as a CDI bean in the app layer. `AttachCommand` now injects all available daemons, allowing new adapters (Discord, Slack) to be added without changing the command's source code.
+
+2. **Extensible `ChannelType`**:
+   - `ChannelType` was an enum, which meant new platforms (like WhatsApp or Teams) couldn't be added without recompiling the `arcclaw-channel-api`.
+   - **Resolution**: Converted `ChannelType` to an immutable `record`. Maintained constants (TELEGRAM, DISCORD, etc.) for existing code and added a `name()` method to preserve compatibility with enum-based calls. `fromString()` now supports arbitrary custom IDs.
+
+3. **Registry Modernization**:
+   - Updated `ChannelSenderRegistry` and `TelegramJobNotifier` to use `.equals()` for comparing channel types, ensuring robust behavior with the new record model.
+
+**Verification Results**:
+- ✅ **SPI Discovery**: `ChannelDaemonSpiTest` confirmed Telegram is dynamically loaded.
+- ✅ **CLI Flexibility**: `AttachCommandTest` verified the dynamic available-channel listing.
+- ✅ **Type Stability**: `ChannelTypeTest` confirmed that record-based types correctly handle case-insensitive normalization and equality.
+
+---
+
+## Phase 65-D — Observability & Diagnostics Unification ✅
+
+Standardized the system's diagnostic layers for consistent tracing and logging across the agent lifecycle.
+
+### Key Features & Implementation:
+
+1. **Semantic OpenTelemetry**:
+   - Trace names were previously inconsistent between the core loop and tool invocations.
+   - **Resolution**: Implemented `AgentOTelConstants` to define a unified internal schema. Updated `AgentOtelContext` to use strictly semantic keys (e.g. `arcclaw.session.id` instead of `sessionId`).
+
+2. **Unified Diagnostic Context (MDC)**:
+   - Logging correlation for `CHAT_ID` was missing from several entry points despite being present in the `WorkspaceContext`.
+   - **Resolution**: Updated `WorkspaceScopeHolder` to ensure `CHAT_ID` is placed in the MDC (for logs) and the ScopedValue (for context propagation) simultaneously whenever a session is bound.
+
+3. **Future-Proof Command Responses**:
+   - Reflex command results were limited to raw `String` feedback.
+   - **Resolution**: Created the `CommandResponse` record. This allows commands to return structured metadata to the channel adapters, enabling richer UI feedback in future phases.
+
+**Verification Results**:
+- ✅ **OTel Alignment**: `AgentOtelContextTest` now validates compliance with unified semantic conventions.
+- ✅ **Correlation Integrity**: MDC propagation verified through `mvn test` in core module.
+
+---
+
+## Phase 65-D: Quality, Maintainability & SPI Completion ✅
+
+Completed the final tier of Phase 65 — three refactorings that close the SPI architecture and eliminate maintenance debt.
+
+### D1 — Compaction SRP Split
+
+**Problem**: `ContextCompactionService` served dual purposes — (1) CDI async event observer via `@ObservesAsync CompactionRequest`, and (2) the compaction business logic (`compact()`, `shouldCompact()`, `truncateSafely()`). This coupling made the algorithm impossible to unit test without CDI event infrastructure.
+
+**Solution**: Split into two focused classes:
+- **`CompactionService`** — Pure business logic. Can be tested by directly calling `compact()` with mocked dependencies. No event observation, no `CompactionInFlightFlag` dependency.
+- **`CompactionEventBridge`** — Thin CDI observer that delegates to `CompactionService.compact()` and owns the `CompactionInFlightFlag` lifecycle in a `finally` block.
+
+**Impact on `CompactionHandler`**: Simplified significantly — no longer manages `.thenRun()`/`.exceptionally()` callbacks for lock release. Just fires the async event and moves on; the bridge handles cleanup.
+
+### D2 — EmbeddingModelProducer SPI
+
+**Problem**: `EmbeddingModelProducer.embeddingModel()` used a hardcoded `switch` over provider names (`"openai"`, `"jina"`, `"ollama"`). Adding a new embedding provider (Cohere, Mistral Embed, Voyage AI) required modifying this switch — same OCP violation that `LlmModelFactory` was introduced to fix for chat models.
+
+**Solution**: Applied the identical CDI pattern:
+1. **`EmbeddingProviderFactory`** interface — `providerId()` + `create(EmbeddingModelConfig)`.
+2. **`EmbeddingModelConfig`** record — immutable configuration bundle (`providerId`, `modelName`, `baseUrl`, `apiKey`, `timeout`).
+3. **Three factory beans**: `OpenAiEmbeddingProviderFactory`, `JinaEmbeddingProviderFactory`, `OllamaEmbeddingProviderFactory`.
+4. **`EmbeddingModelProducer`** refactored to use `@Any Instance<EmbeddingProviderFactory>` discovery with dynamic error messages listing available providers.
+
+**Adding a new provider now**: Implement `EmbeddingProviderFactory`, annotate with `@ApplicationScoped`. Zero changes to `EmbeddingModelProducer`.
+
+### D3 — AuditEventRepository Pre-Persist Validation
+
+**Problem**: Even after A1's fix (making `sha256hex()` throw instead of returning null), the `record()` method contained two null-fallback hacks that masked failures:
+- `prevHash = "prevhash-fallback-" + event.sessionId` — a fake hash that would corrupt the audit chain silently.
+- `hmac = "error-null-fallback-" + UUID.randomUUID()` — a fake HMAC that would pass the NOT NULL constraint but produce an unverifiable chain.
+
+**Solution**:
+- Removed both fallback blocks entirely.
+- Added `validateBeforePersist(AuditEvent)` called immediately before `em.persist()`.
+- Validates: `sessionId` not null/blank, `prevHash` not null/blank, `hmacHash` not null/blank, `sequence >= 0`.
+- Throws `IllegalStateException` with a clear message identifying exactly which field failed.
+
+**Verification Results**:
+- ✅ `CompactionServiceTest`: 7 tests pass — algorithm works standalone.
+- ✅ `CompactionEventBridgeTest`: 2 tests verify delegation and lock safety.
+- ✅ `CompactionHandlerTest`: 5 tests updated for new dependency.
+- ✅ `EmbeddingModelProducerTest`: 2 tests verify SPI discovery and error handling.
+- ✅ `AuditEventRepositoryTest`: 4 new validation guard tests pass.

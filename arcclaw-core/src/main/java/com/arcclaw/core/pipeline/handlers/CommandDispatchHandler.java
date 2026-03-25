@@ -93,6 +93,8 @@ public class CommandDispatchHandler implements MessageHandler {
                     } catch (Exception e) {
                         log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
                         log.debug("Full command dispatch failure stack trace:", e);
+                        context.getSender().sendRaw(context.getUser(),
+                            "⚠️ Command failed due to an internal error. Please try again.");
                         yield HandleResult.STOP;
                     }
                     
@@ -132,6 +134,8 @@ public class CommandDispatchHandler implements MessageHandler {
         } catch (Exception e) {
             log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage());
             log.debug("Full command dispatch failure stack trace:", e);
+            context.getSender().sendRaw(context.getUser(),
+                "⚠️ Command failed due to an internal error. Please try again.");
             return;
         }
 

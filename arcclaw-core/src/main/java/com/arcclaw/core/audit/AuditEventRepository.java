@@ -1,10 +1,7 @@
 package com.arcclaw.core.audit;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
-
-import org.jboss.logging.Logger;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -14,8 +11,6 @@ import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class AuditEventRepository {
-
-    private static final Logger log = Logger.getLogger(AuditEventRepository.class);
 
     @Inject
     EntityManager em;
@@ -59,33 +54,38 @@ public class AuditEventRepository {
             long currentMax = maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst();
             event.sequence = currentMax + 1;
 
-            // Step 2: compute prevHash (genesis-safe, never null)
+            // Step 2: compute prevHash (genesis-safe)
             String prevHash = findLatestHash(event.sessionId);
             if (prevHash == null) {
                 prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
             }
-            if (prevHash == null) {
-                // Absolute last resort — must not violate NOT NULL
-                prevHash = "prevhash-fallback-" + event.sessionId;
-            }
             event.prevHash = prevHash;
 
-            // Step 3: compute HMAC (never null at DB layer)
+            // Step 3: compute HMAC
             String payload = event.computePayloadStr();
-            String hmac = hashUtil.hmacHex(prevHash + "|" + payload);
+            event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
 
-            if (hmac == null) {
-                log.errorf("CRITICAL: hmacHash is null for session %s. HMAC production failed unexpectedly.",
-                        event.sessionId);
-                hmac = "error-null-fallback-" + UUID.randomUUID();
-            }
-            event.hmacHash = hmac;
-
-            // Step 4: persist
+            // Step 4: validate and persist
+            validateBeforePersist(event);
             em.persist(event);
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Defensive pre-persist validation.
+     * Catches any null-escape from hash utilities before hitting the DB NOT NULL constraint.
+     */
+    void validateBeforePersist(AuditEvent event) {
+        if (event.sessionId == null || event.sessionId.isBlank())
+            throw new IllegalStateException("AuditEvent.sessionId must not be null/blank");
+        if (event.prevHash == null || event.prevHash.isBlank())
+            throw new IllegalStateException("AuditEvent.prevHash must not be null — genesis hash failed");
+        if (event.hmacHash == null || event.hmacHash.isBlank())
+            throw new IllegalStateException("AuditEvent.hmacHash must not be null — HMAC failed");
+        if (event.sequence < 0)
+            throw new IllegalStateException("AuditEvent.sequence must be >= 0");
     }
 
     /**

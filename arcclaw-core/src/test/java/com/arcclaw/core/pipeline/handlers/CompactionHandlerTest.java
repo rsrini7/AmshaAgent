@@ -18,7 +18,7 @@ import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.ContextCompactionService;
+import com.arcclaw.core.state.CompactionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +32,7 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class CompactionHandlerTest {
 
-    @Mock private ContextCompactionService compactionService;
+    @Mock private CompactionService compactionService;
     @Mock private Event<CompactionRequest> compactionEvent;
     @Mock private CompactionInFlightFlag compactionInFlight;
 
@@ -61,7 +61,6 @@ class CompactionHandlerTest {
             HandleResult result = handler.handle(ctx);
 
             assertEquals(HandleResult.CONTINUE, result);
-            assertFalse(future.isDone(), "Should not await fireAsync result");
         });
     }
 
@@ -125,71 +124,24 @@ class CompactionHandlerTest {
         });
     }
 
-    // ── Phase 64-A: Component A6 — Compaction In-Flight Tests ────────────
-
     @Test
-    void testCompactionInFlightReleasedOnObserverFailure() {
-        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
-            MessageContext ctx = mockContext("session1", "user1");
-            when(compactionService.shouldCompact("session1")).thenReturn(true);
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
-
-            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
-            when(compactionEvent.fireAsync(any())).thenReturn(future);
-
-            handler.handle(ctx);
-
-            // Trigger failure
-            future.completeExceptionally(new RuntimeException("Compaction failed"));
-
-            verify(compactionInFlight, timeout(1000)).set(false);
-        });
-    }
-
-    @Test
-    void testCompactionInFlightReleasedOnSuccess() {
-        WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
-            MessageContext ctx = mockContext("session1", "user1");
-            when(compactionService.shouldCompact("session1")).thenReturn(true);
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
-
-            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
-            when(compactionEvent.fireAsync(any())).thenReturn(future);
-
-            handler.handle(ctx);
-
-            // Trigger success
-            future.complete(null);
-
-            verify(compactionInFlight, timeout(1000)).set(false);
-        });
-    }
-
-    @Test
-    void testSecondCompactionTriggeredAfterFirstFails() {
+    void testSecondCompactionTriggeredAfterFirstButNotReleasedByHandler() {
         WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
             
             // First call
             when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
-            CompletableFuture<CompactionRequest> future1 = new CompletableFuture<>();
-            when(compactionEvent.fireAsync(any())).thenReturn(future1);
+            when(compactionEvent.fireAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
 
             handler.handle(ctx);
-            future1.completeExceptionally(new RuntimeException("First attempt failed"));
             
-            // Wait for release
-            verify(compactionInFlight, timeout(1000)).set(false);
-
-            // Second call - should try again
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
-            CompletableFuture<CompactionRequest> future2 = new CompletableFuture<>();
-            when(compactionEvent.fireAsync(any())).thenReturn(future2);
+            // Second call - should skip because handler didn't release it
+            when(compactionInFlight.compareAndSet(false, true)).thenReturn(false);
 
             handler.handle(ctx);
 
-            verify(compactionEvent, times(2)).fireAsync(any());
+            verify(compactionEvent, times(1)).fireAsync(any());
         });
     }
 }

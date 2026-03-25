@@ -18,7 +18,7 @@ class SkillRegistryTest {
         SkillDefinition def = new SkillDefinition("id", name, "desc", List.of(), List.of(), 5, "prompt");
         Pattern[] patterns = new Pattern[] { Pattern.compile(regex, Pattern.CASE_INSENSITIVE) };
         RoleDefinition role = new RoleDefinition(
-                "skill:" + name, name, "desc", 5, false, Set.of());
+                "skill:" + name, name, "desc", 5, false, Set.of(), Set.of());
         return new CompiledSkillEntry(def, patterns, role, "classpath");
     }
 

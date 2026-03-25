@@ -16,7 +16,8 @@ public enum AgentRoleEnum {
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
             7,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH),
+            Set.of("brihaspati", "brahaspati")
     )),
 
     COORDINATOR("coordinator", new RoleDefinition(
@@ -25,7 +26,8 @@ public enum AgentRoleEnum {
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
             7,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT)
+            Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT),
+            Set.of("vishnu")
     )),
 
     RESEARCHER("researcher", new RoleDefinition(
@@ -34,7 +36,8 @@ public enum AgentRoleEnum {
             "Perform information retrieval, web searches, and documentation lookups.",
             10,
             true,
-            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH)
+            Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH),
+            Set.of("saraswati")
     )),
 
     CODER("coder", new RoleDefinition(
@@ -43,7 +46,8 @@ public enum AgentRoleEnum {
             "Writes new architectural code, features from scratch, and logic implementations.",
             3,
             false,
-            Set.of() // SANDBOX_EXEC deferred to Phase 48
+            Set.of(), // SANDBOX_EXEC deferred to Phase 48
+            Set.of("brahma")
     )),
 
     DEBUGGER("debugger", new RoleDefinition(
@@ -52,7 +56,8 @@ public enum AgentRoleEnum {
             "Analyzes stack traces, finds bugs, and fixes broken code.",
             3,
             false,
-            Set.of(ToolCapability.GITHUB)
+            Set.of(ToolCapability.GITHUB),
+            Set.of("shiva")
     )),
 
     SYNTHESIZER("synthesizer", new RoleDefinition(
@@ -65,7 +70,8 @@ public enum AgentRoleEnum {
             true,
             Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH,
                              ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE,
-                             ToolCapability.INGEST_DOCUMENT)
+                             ToolCapability.INGEST_DOCUMENT),
+            Set.of("dattatreya", "datta")
     ));
 
     private final String canonicalName;
@@ -113,22 +119,24 @@ public enum AgentRoleEnum {
 
         String normalized = roleStr.trim().toLowerCase();
 
-        // Skill roles produced by SkillAwareIntentClassifier (e.g. "skill:code-reviewer").
-        // Use RESEARCHER as the base role — provides GITHUB + MEMORY_SEARCH which matches
-        // current skill tool-capability declarations. SystemPromptBuilder replaces the
-        // persona prompt with the skill's own system prompt before the LLM call.
+        // Skill-based dynamic routing
         if (normalized.startsWith("skill:")) {
             return RESEARCHER;
         }
 
-        return switch (normalized) {
-            case "architect", "brihaspati", "brahaspati" -> ARCHITECT;
-            case "coordinator", "vishnu" -> COORDINATOR;
-            case "researcher", "saraswati" -> RESEARCHER;
-            case "coder", "brahma" -> CODER;
-            case "debugger", "shiva" -> DEBUGGER;
-            case "synthesizer", "dattatreya", "datta" -> SYNTHESIZER;
-            default -> throw new IllegalArgumentException("Unknown AgentRole: " + roleStr);
-        };
+        for (AgentRoleEnum role : values()) {
+            // Match canonical name
+            if (role.canonicalName.equalsIgnoreCase(normalized)) {
+                return role;
+            }
+            // Match registered aliases (deities, etc.)
+            for (String alias : role.definition.aliases()) {
+                if (alias.equalsIgnoreCase(normalized)) {
+                    return role;
+                }
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown AgentRole: " + roleStr);
     }
 }

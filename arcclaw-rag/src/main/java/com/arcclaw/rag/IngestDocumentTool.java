@@ -96,6 +96,12 @@ public class IngestDocumentTool implements AgentTool {
                 : "Document stored in session memory (persistent vector store unavailable).");
     }
 
+    @Override
+    public boolean requiresManualApproval(Map<String, Object> params) {
+        // Gate ingest like github/sandbox tools
+        return true; // always require approval
+    }
+
     /**
      * Sanitizes raw text before ingestion.
      * Groq's function-call validator rejects payloads containing

@@ -76,7 +76,7 @@ public class StatusReflex implements AgentReflex {
         String memoryLine = compactionSummaryRepository
             .findLatestBySessionId(sessionId)
             .map(s -> String.format("Compacted (msgs summarized: %d) | Active window running",
-                s.messagesCompacted))
+                s.getMessagesCompacted()))
             .orElse("Not compacted — session within active window");
 
         String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;

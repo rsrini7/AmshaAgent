@@ -117,8 +117,8 @@ public class MemorySearchTool implements AgentTool {
             }
 
             String formatted = results.stream()
-                    .map(r -> String.format("Session %s (%s): %s",
-                            r.sessionId, r.createdAt, r.summary))
+                    .map((CompactionSummaryEntity r) -> String.format("Session %s (%s): %s",
+                            r.getSessionId(), r.getCreatedAt(), r.getSummary()))
                     .collect(Collectors.joining("\n---\n"));
 
             if (formatted.isBlank()) {

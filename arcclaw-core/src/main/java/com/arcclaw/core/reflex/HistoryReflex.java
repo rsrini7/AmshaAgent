@@ -38,9 +38,9 @@ public class HistoryReflex implements AgentReflex {
         // Use findLatestBySessionId for consistency
         compactionSummaryRepository.findLatestBySessionId(sessionId).ifPresent(s -> {
             sb.append("🗜️ *Compacted Summary* (")
-              .append(s.messagesCompacted)
+              .append(s.getMessagesCompacted())
               .append(" messages):\n")
-              .append(s.summary)
+              .append(s.getSummary())
               .append("\n\n");
         });
 

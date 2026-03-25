@@ -3714,3 +3714,24 @@ This is an optional cleanup step, not functionally required.
 **Root Cause**: The `chatQueues` field was replaced by a Caffeine cache (P3-12) to improve resource management, but the test was still attempting to access the old `ConcurrentHashMap` field.
 **Resolution**: Updated the test reflection to target the `processingFlags` (or equivalent) field and use the `ManagedExecutor` for synchronous execution in tests.
 
+---
+
+#### 🔴 Failure: Wide-Spread Test Compilation Break (RoleDefinition Change)
+
+**Symptom:** After adding the `aliases` field to the `RoleDefinition` record, running a build results in dozens of "constructor is undefined" errors across multiple test classes (e.g., `RoleDefinitionTest`, `RoleRegistryTest`, `SkillReflexTest`, `CompiledSkillEntryTest`).
+**Root Cause:** Adding a new field to a Java `record` changes its canonical constructor. Since many unit tests were manually instantiating `RoleDefinition` with the old argument list, the compiler could no longer resolve those calls.
+**Resolution:** Updated all `RoleDefinition` constructor calls to include the new `aliases` parameter. In test cases where aliases are not relevant, used `Set.of()` to fulfill the contract and maintain immutability.
+
+```java
+// BEFORE
+RoleDefinition def = new RoleDefinition("id", "Name", "Desc", 5, false, Set.of());
+
+// AFTER
+RoleDefinition def = new RoleDefinition("id", "Name", "Desc", 5, false, Set.of(), Set.of());
+```
+
+#### 🟡 Warning: Intent Classification Failures on Deity Variants
+
+**Symptom:** Intents mentioning roles like "Brahaspati" are incorrectly routed to the default `coordinator` role, causing failures in `IntentClassifierServiceTest`.
+**Root Cause:** The `IntentClassifierService.sanitize()` logic was previously relying on hardcoded keyword matching or specific `displayName` substrings. Spelling variants or synonyms that weren't explicitly handled were silently failing over to the default role.
+**Resolution:** Refactored the classifier to use the new `RoleDefinition.aliases()` registry. By populating the registry (e.g., "brahaspati", "brihaspati" -> ARCHITECT), the router now correctly maps synonyms and variant spellings to their intended roles dynamically.

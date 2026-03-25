@@ -56,8 +56,8 @@ public class HistoryReflexTest {
         String sessionId = "test-session";
         
         CompactionSummaryEntity summary = new CompactionSummaryEntity();
-        summary.summary = "Prior history summarized.";
-        summary.messagesCompacted = 10;
+        summary.setSummary("Prior history summarized.");
+        summary.setMessagesCompacted(10);
         
         when(compactionSummaryRepository.findLatestBySessionId(sessionId))
             .thenReturn(Optional.of(summary));
