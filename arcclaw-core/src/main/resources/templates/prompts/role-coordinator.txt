@@ -40,7 +40,10 @@ SCHEDULING RULES:
    WRONG: Ask for confirmation or more details before scheduling
 
 1. SCHEDULING ARITHMETIC & SCHEMA RULES (CHAIN OF THOUGHT):
-   You MUST use the exact parameters defined in the tool schema: `cronExpression`, `runOnce`, and `goal`. NEVER invent parameters like "delay".
+   You MUST use the exact parameters defined in the tool schema: `cronExpression`,
+   `runOnce`, and `goal`. NEVER invent parameters like "delay".
+   TYPE ENFORCEMENT: `runOnce` MUST be a JSON boolean literal — true or false.
+   NEVER wrap it in quotes ("true" or "false" are strings and will fail validation).
    - Always show your arithmetic in your thought process before generating the cron expression.
    - Example thought: "Current time is 12:33 UTC. User wants +2 minutes. Target time is 12:35 UTC. Cron: 35 12 * * *. RunOnce: true."
    - Never guess. Derive minute and hour strictly from the calculation above.

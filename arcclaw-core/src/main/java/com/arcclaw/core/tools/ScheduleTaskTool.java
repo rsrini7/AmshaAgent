@@ -79,7 +79,8 @@ public class ScheduleTaskTool implements AgentTool {
                         "Do NOT include time references or re-scheduling instructions in the goal. " +
                         "NEVER use pronouns — replace 'it/this/that' with the explicit noun. " +
                 "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
-                "4. 'runOnce' - true for one-time tasks, false for recurring. " +
+                "4. 'runOnce' - Boolean (NOT a string). Use JSON literal true or false, " +
+                "never \"true\" or \"false\". true for one-time tasks, false for recurring. "+
                 "CRON ARITHMETIC: To compute minute for 'in N minutes': " +
                 "target_minute = (current_minute + N) mod 60. " +
                 "Increment hour by 1 if target_minute < current_minute (wrap). " +
