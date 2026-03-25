@@ -116,8 +116,10 @@ public class ScheduleTaskTool implements AgentTool {
                         .description("IANA timezone for cron interpretation (default: UTC). " +
                                 "Example: 'Asia/Kolkata', 'America/New_York'.")
                         .build())
-                .addProperty("runOnce", JsonBooleanSchema.builder()
-                        .description("true for one-time tasks, false for recurring (default: false).")
+                .addProperty("runOnce", JsonStringSchema.builder()
+                        .description("Whether this is a one-time task. " +
+                                        "Use exactly the string \"true\" for one-time tasks, " +
+                                        "or \"false\" for recurring tasks. Default: \"false\".")
                         .build())
                 .required("cronExpression", "goal")
                 .build();
