@@ -115,14 +115,10 @@ public class WorkspaceManager {
     public void resetSessionState(String sessionId) {
         log.infof("Soft-resetting session state for: %s", sessionId);
 
-        // Chat memory — both in-memory and persistent
-        clearInMemoryChatMemory(sessionId);
-        try {
-            chatMemoryStore.deleteMessages(sessionId);
-            log.debugf("Chat memory deleted for session=%s", sessionId);
-        } catch (Exception e) {
-            log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
-        }
+        // Chat memory intentionally NOT cleared here.
+        // Soft reset preserves the conversation window so the user
+        // can continue the same dialogue after /reset.
+        // Only checkpoint state, workspace artifacts, and CDI scope are wiped.
 
         // Stale workspace artifacts
         wipeWorkspaceDir(sessionId);
@@ -140,6 +136,7 @@ public class WorkspaceManager {
 
         // heartbeatTracker — NOT touched ✅
         // governanceLayer   — NOT touched ✅ (budget survives per REFLEX-5)
+        // chatMemoryStore   — NOT touched ✅ (conversation window survives soft reset)
     }
 
     private void clearInMemoryChatMemory(String sessionId) {

@@ -72,12 +72,13 @@ public class ResetReflex implements AgentReflex {
         // 4. Clear stale cron jobs — session-scoped only, NOT user-scoped
         long deletedCrons = cronRepository.deleteAllBySessionId(sessionId);
 
-        log.infof("[ResetReflex] Session %s soft-reset — workspace, checkpoints, memory, " +
-                "compaction, %d cron job(s) cleared. Heartbeat and budget retained.", 
-                sessionId, deletedCrons);
+        log.infof("[ResetReflex] Session %s soft-reset — workspace, checkpoints, " +
+        "compaction, %d cron job(s) cleared. Chat memory, heartbeat, and budget retained.",
+        sessionId, deletedCrons);
 
-        String output = "🧹 Conversation history, memory, checkpoints, and " + deletedCrons
-                + " scheduled task(s) have been completely wiped. We are starting fresh.";
+        String output = "🧹 Agent state, checkpoints, and " + deletedCrons
+                + " scheduled task(s) have been cleared. " +
+                "Your conversation history has been preserved — we can pick up where we left off.";
         return ReflexResult.respond(output, context);
     }
 }
