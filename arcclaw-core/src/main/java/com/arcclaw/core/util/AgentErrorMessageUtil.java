@@ -4,26 +4,38 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class AgentErrorMessageUtil {
-    
+
     private static final Pattern TOKEN_LIMIT_PATTERN = Pattern.compile("Limit (\\d+), Used (\\d+), Requested (\\d+)");
     private static final Pattern RETRY_AFTER_PATTERN = Pattern.compile("Please try again in ([\\dhms.]+)");
-    private static final Pattern DURATION_PATTERN = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?");
+    private static final Pattern DURATION_PATTERN    = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?");
+
+    /**
+     * JVM internal exception message patterns that should never be surfaced to users.
+     * These indicate a lower-level framework crash (e.g. Retry-After header parse failure)
+     * rather than a meaningful API error.
+     */
+    private static final Pattern JVM_INTERNALS_PATTERN = Pattern.compile(
+            "^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
 
     private AgentErrorMessageUtil() {}
 
     public static String sanitizeErrorMessage(String raw) {
         if (raw == null) return "❌ Task failed. Please try again.";
 
-        // Strip prefixes added by the internal engine
+        // Guard: if the raw message looks like a JVM internal crash message,
+        // return a safe fallback immediately — never show stack-trace internals to users.
+        if (JVM_INTERNALS_PATTERN.matcher(raw.trim()).find()) {
+            return "⚠️ The AI service returned an unexpected response. Please try again.";
+        }
+
         String stripped = raw.replace("ReasoningEngine error: ", "")
                              .replace("java.lang.RuntimeException: ", "")
                              .replace("TOOL_EXECUTION_FAILED: ", "")
                              .trim();
 
-        // 1. Rock-Solid JSON Extraction
         int msgStart = stripped.indexOf("\"message\":\"");
         int typeStart = stripped.indexOf("\",\"type\"");
-        
+
         String apiMessage = stripped;
         boolean isJson = false;
 
@@ -34,30 +46,26 @@ public final class AgentErrorMessageUtil {
             isJson = true;
         }
 
-        // 2. Route the clean message
         if (apiMessage.contains("tokens per day") || apiMessage.contains("TPD")) {
             return formatTpdMessage(apiMessage);
         }
-        
+
         if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
             return "⏳ I'm temporarily throttled. Please try again in " + extractWaitTime(apiMessage) + ".";
         }
 
-        // Handle Groq "over capacity" errors
         if (apiMessage.contains("over capacity")) {
             return "⚠️ The AI service is currently over capacity and cannot process requests. Please try again in a few minutes.";
         }
-        
-        // Let tool parse errors show the actual message if it contains "invalid_request_error"
+
         if (apiMessage.contains("tool call validation failed") || apiMessage.contains("SCHEMA_ERROR")) {
             return "❌ Tool execution error: The agent generated an invalid request.";
         }
-        
+
         if (apiMessage.contains("Budget Exceeded")) {
             return "❌ Your session budget limit has been reached.";
         }
 
-        // 3. Ultimate Fallbacks
         if (isJson) {
             return "⚠️ API Error: " + apiMessage;
         }
@@ -71,32 +79,27 @@ public final class AgentErrorMessageUtil {
 
     private static String formatTpdMessage(String apiMessage) {
         String waitTime = extractWaitTime(apiMessage);
-        
-        // Extract Limits from Groq's payload: "Limit 100000, Used 99854, Requested 5526"
         Matcher tokenMatcher = TOKEN_LIMIT_PATTERN.matcher(apiMessage);
-        
+
         if (tokenMatcher.find()) {
             String limit = tokenMatcher.group(1);
-            String used = tokenMatcher.group(2);
-            String req = tokenMatcher.group(3);
-            
+            String used  = tokenMatcher.group(2);
+            String req   = tokenMatcher.group(3);
             return String.format("⚠️ **Daily Token Limit Reached**\n" +
                                  "• Limit: %s\n" +
                                  "• Used: %s\n" +
                                  "• Requested: %s\n\n" +
-                                 "⏳ Please try again in %s.", 
+                                 "⏳ Please try again in %s.",
                                  limit, used, req, waitTime);
         }
-        
+
         return "⚠️ Daily token limit reached. Please try again in " + waitTime + ".";
     }
 
     private static String extractWaitTime(String text) {
-        // Matches "1h17m28.32s.", "26m47s", "120s" (sometimes includes the trailing period)
         Matcher m = RETRY_AFTER_PATTERN.matcher(text);
         if (m.find()) {
             String timeStr = m.group(1);
-            // Strip the trailing period if the regex greedily grabbed the end of the sentence
             if (timeStr.endsWith(".")) {
                 timeStr = timeStr.substring(0, timeStr.length() - 1);
             }
@@ -106,41 +109,38 @@ public final class AgentErrorMessageUtil {
     }
 
     private static String humanReadableWait(String rawInterval) {
-        int hours = 0;
+        int hours   = 0;
         int minutes = 0;
         int seconds = 0;
         String s = rawInterval.trim().toLowerCase();
 
-        // Match "(Xh)?(Ym)?(Zs)?"
         Matcher m1 = DURATION_PATTERN.matcher(s);
-        
+
         if (m1.matches()) {
-            if (m1.group(1) != null) hours = Integer.parseInt(m1.group(1));
+            if (m1.group(1) != null) hours   = Integer.parseInt(m1.group(1));
             if (m1.group(2) != null) minutes = Integer.parseInt(m1.group(2));
             if (m1.group(3) != null) seconds = (int) Math.round(Double.parseDouble(m1.group(3)));
         } else if (s.endsWith("s")) {
-            String num = s.substring(0, s.length() - 1);
-            seconds = (int) Math.round(Double.parseDouble(num));
+            try {
+                seconds = (int) Math.round(Double.parseDouble(s.substring(0, s.length() - 1)));
+            } catch (NumberFormatException ignored) {
+                return "a few moments";
+            }
+        } else {
+            // Unrecognised format — safe fallback, never crash
+            return "a few moments";
         }
 
-        // Normalize (just in case API sends "90m" instead of "1h30m")
+        // Normalize
         minutes += seconds / 60;
-        seconds = seconds % 60;
-        hours += minutes / 60;
-        minutes = minutes % 60;
+        seconds  = seconds % 60;
+        hours   += minutes / 60;
+        minutes  = minutes % 60;
 
         StringBuilder sb = new StringBuilder();
-        if (hours > 0) {
-            sb.append(hours).append(hours == 1 ? " hour" : " hours");
-        }
-        if (minutes > 0) {
-            if (sb.length() > 0) sb.append(" ");
-            sb.append(minutes).append(minutes == 1 ? " minute" : " minutes");
-        }
-        if (seconds > 0) {
-            if (sb.length() > 0) sb.append(" and ");
-            sb.append(seconds).append(seconds == 1 ? " second" : " seconds");
-        }
+        if (hours > 0)   sb.append(hours).append(hours == 1 ? " hour" : " hours");
+        if (minutes > 0) { if (sb.length() > 0) sb.append(" "); sb.append(minutes).append(minutes == 1 ? " minute" : " minutes"); }
+        if (seconds > 0) { if (sb.length() > 0) sb.append(" and "); sb.append(seconds).append(seconds == 1 ? " second" : " seconds"); }
 
         String result = sb.toString();
         return result.isEmpty() ? "a few moments" : result;

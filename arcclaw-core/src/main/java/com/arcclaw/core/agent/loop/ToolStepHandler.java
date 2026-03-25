@@ -110,8 +110,8 @@ public class ToolStepHandler {
         log.debugf("Observation for '%s': %s", toolName,
                 observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
 
-        // Phase 4 — Resolve
-        return resolveOutcome(sessionId, toolName, response, observation,
+        // Phase 4 — Resolve (params forwarded so manage_schedule can branch on action)
+        return resolveOutcome(sessionId, toolName, params, response, observation,
                 completedStep, history, consecutiveFailures);
     }
 
@@ -162,18 +162,42 @@ public class ToolStepHandler {
         return "Tool execution failed: " + out + " (exit=" + response.exitCode() + ")";
     }
 
+    /**
+     * Resolves the post-tool-invocation outcome.
+     *
+     * Fast-path exit rules:
+     * - schedule_task:      always terminal — task is handed off, nothing more to do.
+     * - manage_schedule:    terminal ONLY for mutating actions (delete/pause/resume).
+     *                       "list" must continue so the LLM can read the results and
+     *                       call the follow-up action (e.g. delete) in the next iteration.
+     *                       Previously all manage_schedule calls were terminal, which
+     *                       forced the two-step delete flow across multiple /run requests.
+     */
     private StepDecision resolveOutcome(String sessionId, String toolName,
+            Map<String, Object> params,
             ToolResponse response, String observation,
             ReasoningStep completedStep, List<ReasoningStep> history,
             int consecutiveFailures) {
 
-        if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
+        if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)) {
             log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
             String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
             String finalAnswer = (response.success() ? "✅ " : "❌ ") + cleanOutput;
             writer.saveAnswer(sessionId, finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+        }
+
+        if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
+            String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase();
+            if (!"list".equals(action)) {
+                // delete / pause / resume — terminal, no further reasoning needed
+                log.infof("[STATE-MACHINE] Fast-path exit for tool '%s' action=%s", toolName, action);
+                String finalAnswer = (response.success() ? "✅ " : "❌ ") + observation;
+                writer.saveAnswer(sessionId, finalAnswer);
+                return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+            }
+            // list — fall through so the LLM sees the results and acts in the next iteration
+            log.debugf("[STATE-MACHINE] manage_schedule list — continuing loop for follow-up action");
         }
 
         if (!response.success()

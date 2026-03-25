@@ -43,6 +43,40 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 || message.contains("errors:");
     }
 
+    /**
+     * Checks whether a message string signals a Groq rate-limit rejection.
+     * Covers both TPM (tokens-per-minute) and TPD (tokens-per-day) variants.
+     */
+    private boolean isRateLimitError(String message) {
+        if (message == null) return false;
+        return message.contains("rate_limit_exceeded")
+                || message.contains("tokens per minute")
+                || message.contains("tokens per day")
+                || message.contains("TPM")
+                || message.contains("TPD")
+                || message.contains("Rate limit");
+    }
+
+    /**
+     * Walks the full exception cause chain looking for a rate-limit signal.
+     * Returns the first message that contains a Groq rate-limit indicator,
+     * or null if none is found.
+     *
+     * This is necessary because the Quarkus REST client sometimes wraps
+     * the original HttpException inside a NumberFormatException when it fails
+     * to parse the Retry-After header value (e.g. "570m") as a plain integer.
+     * Without cause-chain inspection, the generic catch only sees
+     * "For input string: \"570m\"" and loses the rate-limit context entirely.
+     */
+    private String findRateLimitMessage(Throwable e) {
+        Throwable t = e;
+        while (t != null) {
+            if (isRateLimitError(t.getMessage())) return t.getMessage();
+            t = t.getCause();
+        }
+        return null;
+    }
+
     @Inject
     ChatModel chatModel;
 
@@ -77,7 +111,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         // 3. Prepend SystemMessage + build full message list
         List<ChatMessage> messages = new ArrayList<>();
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         messages.add(SystemMessage.systemMessage(systemPrompt));
         messages.addAll(assembled);
 
@@ -106,18 +139,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         } catch (InvalidRequestException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
 
-            // Schema validation error (e.g. Groq rejects bad parameter values).
-            // Re-throw so AgentStateMachineRunner.processEngineStep handles it
-            // via llmSchemaErrorCount + retryEngine — which already injects the
-            // correct transient correction. Do NOT catch it here.
             if (isSchemaValidationError(msg)) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
                         "re-throwing to state machine for retry handling: %s", msg);
                 throw e;
             }
 
-            // Tool truly absent from request.tools (different condition).
-            // Return an inline correction — this is the original intended path.
             if (msg.contains("was not in request.tools") || msg.contains("tool_use_failed")) {
                 log.warnf("[LangChainReasoningEngine] LLM called unavailable tool — " +
                         "injecting inline correction: %s", msg);
@@ -134,6 +161,19 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
             throw e;
         } catch (Exception e) {
+            // Walk the full cause chain first — the Quarkus REST client can wrap the
+            // original Groq HttpException inside a NumberFormatException when it fails
+            // to parse the Retry-After header (e.g. "570m") as a plain integer.
+            // Without this check, the generic path would surface "For input string: \"570m\""
+            // to the user instead of the proper rate-limit message.
+            String rateLimitMsg = findRateLimitMessage(e);
+            if (rateLimitMsg != null) {
+                log.warnf("[LangChainReasoningEngine] Rate limit detected in cause chain — " +
+                        "surfacing clean message: %s", rateLimitMsg);
+                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
+                throw new RuntimeException(clean, e);
+            }
+
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             throw new RuntimeException(clean, e);
         }
@@ -145,22 +185,18 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
         Span span = otelContext.childSpan(sessionId, "structured_output_generation");
         try {
-            // 1. Build system prompt with empty goal to avoid ReAct contamination
             String systemPrompt = promptBuilder.build(agentRole, sessionId, "");
 
-            // 2. Build message list: SystemPrompt + UserMessage(schemaPrompt)
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(SystemMessage.systemMessage(systemPrompt));
             messages.add(UserMessage.userMessage(schemaPrompt));
 
-            // 3. Build ChatRequest and call LLM (JSON MODE is NOT set globally)
             ChatRequest request = ChatRequest.builder()
                     .messages(messages)
                     .build();
 
             ChatResponse response = chatModel.chat(request);
 
-            // 4. Record consumption
             TokenUsage usage = response.tokenUsage();
             if (usage != null) {
                 try {
@@ -179,6 +215,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         } catch (BudgetWarningException | BudgetExceededException e) {
             throw e;
         } catch (Exception e) {
+            // Same cause-chain check for structured output path
+            String rateLimitMsg = findRateLimitMessage(e);
+            if (rateLimitMsg != null) {
+                log.warnf("[LangChainReasoningEngine] Rate limit in structured output — %s", rateLimitMsg);
+                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
+                throw new RuntimeException("Structured output LLM call failed: " + clean, e);
+            }
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             throw new RuntimeException("Structured output LLM call failed: " + clean, e);
         } finally {
