@@ -113,16 +113,33 @@ public class WorkspaceManager {
      * Reset the session state while keeping the session record (WORM compliance).
      */
     public void resetSessionState(String sessionId) {
-        log.infof("Resetting session state for: %s", sessionId);
-        
+        log.infof("Soft-resetting session state for: %s", sessionId);
+
+        // Chat memory — both in-memory and persistent
         clearInMemoryChatMemory(sessionId);
-        
         try {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
         } catch (Exception e) {
             log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
         }
+
+        // Stale workspace artifacts
+        wipeWorkspaceDir(sessionId);
+
+        // CDI scope — destroy so @WorkspaceScoped beans re-init on next bind
+        try {
+            var context = (WorkspaceScopeContext) Arc.container()
+                    .getActiveContext(WorkspaceScoped.class);
+            if (context != null) {
+                context.destroySession(sessionId);
+            }
+        } catch (Exception e) {
+            log.warnf("CDI scope reset failed for session=%s: %s", sessionId, e.getMessage());
+        }
+
+        // heartbeatTracker — NOT touched ✅
+        // governanceLayer   — NOT touched ✅ (budget survives per REFLEX-5)
     }
 
     private void clearInMemoryChatMemory(String sessionId) {

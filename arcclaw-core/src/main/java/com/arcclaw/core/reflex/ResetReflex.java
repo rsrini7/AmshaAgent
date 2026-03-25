@@ -47,17 +47,15 @@ public class ResetReflex implements AgentReflex {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
-        
-        // 1. Wipe the workspace scope (clears IN_PROGRESS / AWAITING_APPROVAL state)
-        workspaceManager.terminateSession(sessionId);
 
-        // 2. Wipe persistent chat memory from SQLite so context poisoning is cleared
-        chatMemoryStore.deleteMessages(sessionId);
+        // 1. Soft workspace reset — clears memory, workspace dir, CDI scope
+        //    Does NOT remove heartbeat. Does NOT clear governance budget.
+        workspaceManager.resetSessionState(sessionId);
 
-        // 3. Wipe the compaction ghost memory
+        // 2. Wipe compaction ghost memory
         compactionSummaryRepository.deleteBySessionId(sessionId);
 
-        // 4. Clear stale agent checkpoints so handleResumeHook never fires for new messages
+        // 3. Mark stale checkpoints FAILED so handleResumeHook never fires
         for (AgentRoleEnum role : AgentRoleEnum.values()) {
             statefulAgentStore.load(sessionId, role.toScopedName()).ifPresent(cp -> {
                 cp.setStatus(CheckpointStatus.FAILED);
@@ -66,14 +64,15 @@ public class ResetReflex implements AgentReflex {
             });
         }
 
-        // 5. Wipe all scheduled background cron jobs for this WORM tenant
-        long deletedCrons = cronRepository.deleteAllByUserId(userId);
+        // 4. Clear stale cron jobs — session-scoped only, NOT user-scoped
+        long deletedCrons = cronRepository.deleteAllBySessionId(sessionId);
 
-        log.infof("[ResetReflex] Session %s fully reset — workspace, checkpoints, chat memory, compacted memory, and %d cron jobs cleared", 
+        log.infof("[ResetReflex] Session %s soft-reset — workspace, checkpoints, memory, " +
+                "compaction, %d cron job(s) cleared. Heartbeat and budget retained.", 
                 sessionId, deletedCrons);
 
-        String output = "🧹 Conversation history, memory, checkpoints, and " + deletedCrons 
-            + " scheduled task(s) have been completely wiped. We are starting fresh.";
+        String output = "🧹 Conversation history, memory, checkpoints, and " + deletedCrons
+                + " scheduled task(s) have been completely wiped. We are starting fresh.";
         return ReflexResult.respond(output, context);
     }
 }

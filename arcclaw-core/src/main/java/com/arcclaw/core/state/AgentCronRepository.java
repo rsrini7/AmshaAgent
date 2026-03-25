@@ -14,7 +14,7 @@ import jakarta.transaction.Transactional.TxType;
  * transaction patterns.
  * <p>
  * Read methods use {@code NOT_SUPPORTED} to avoid write locks.
- * Write methods use {@code REQUIRED} for atomic micro-short transactions.
+ * Write methods use {@code REQUIRED} or {@code REQUIRES_NEW} for atomic micro-short transactions.
  * This split prevents {@code SQLITE_BUSY} on the main Telegram read paths.
  */
 @ApplicationScoped
@@ -23,6 +23,7 @@ public class AgentCronRepository {
     @Inject
     EntityManager em;
 
+
     // ──────────────────────────────────────────────────────────────
     // READ-ONLY — MUST NOT open a write transaction
     // ──────────────────────────────────────────────────────────────
@@ -30,11 +31,16 @@ public class AgentCronRepository {
     /**
      * Finds all active cron jobs whose next fire time is at or before now.
      * Read-only — no write lock acquired.
+     *
+     * NOTE: em.clear() is intentionally omitted here.
+     * NOT_SUPPORTED suspends any outer transaction and runs without a persistence
+     * context — there are no managed entities in scope, so em.clear() would be
+     * a no-op. Stale L1 cache is not a concern here because each call gets a
+     * fresh EntityManager scope with no prior state.
      */
     @Transactional(TxType.NOT_SUPPORTED)
     @SuppressWarnings("unchecked")
     public List<AgentCronEntity> findDueCrons() {
-        em.clear(); // Evict stale L1 cache — background threads may have updated rows
         String now = InstantToTextConverter.format(Instant.now());
         return em.createNativeQuery(
                 "SELECT * FROM agentcron WHERE status='ACTIVE' AND nextFireTime <= :now",
@@ -44,10 +50,16 @@ public class AgentCronRepository {
 
     /**
      * Tenant-isolated query: returns all cron jobs for the given user.
+     *
+     * NOTE: em.clear() is intentionally kept here.
+     * SUPPORTS joins the caller's outer transaction if one exists (e.g. Telegram
+     * message handler). Without clear(), the L1 cache would return stale managed
+     * entities from earlier in the same transaction, hiding freshly committed DB
+     * changes — this was the root cause of the "chat mode changes not immediate" bug.
      */
     @Transactional(TxType.SUPPORTS)
     public List<AgentCronEntity> findByUserId(String userId) {
-        em.clear(); // Evict stale L1 cache — background threads may have updated rows
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId",
                 AgentCronEntity.class
@@ -56,15 +68,21 @@ public class AgentCronRepository {
 
     /**
      * Finds all cron jobs awaiting user approval for a specific user.
+     *
+     * NOTE: em.clear() is intentionally kept here — same reason as findByUserId().
+     * SUPPORTS joins outer transaction; clear() prevents stale L1 reads in
+     * Telegram/chat approval flows where the AWAITING_APPROVAL write and this
+     * read may share the same persistence context.
      */
     @Transactional(TxType.SUPPORTS)
     public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
-        em.clear(); // Evict stale L1 cache — background threads may have updated rows
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = 'AWAITING_APPROVAL'",
                 AgentCronEntity.class
         ).setParameter("userId", userId).getResultList();
     }
+
 
     // ──────────────────────────────────────────────────────────────
     // WRITE — atomic micro-short transactions
@@ -165,6 +183,7 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markSkipped(List<AgentCronEntity> skippedJobs) {
+        if (skippedJobs.isEmpty()) return; // avoid acquiring write lock for nothing
         String now = InstantToTextConverter.format(Instant.now());
         for (AgentCronEntity job : skippedJobs) {
             em.createNativeQuery(
@@ -211,10 +230,43 @@ public class AgentCronRepository {
          .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRED)
+    /**
+     * Wipes ALL cron jobs for a user across ALL sessions.
+     *
+     * <p><strong>INTENDED FOR ACCOUNT LIFECYCLE ONLY</strong> — use this for:
+     * <ul>
+     *   <li>Account deletion</li>
+     *   <li>GDPR/DPDP data erasure</li>
+     *   <li>Admin-initiated user ban</li>
+     * </ul>
+     *
+     * <p><strong>DO NOT use for session reset or terminate</strong> — that would
+     * silently wipe scheduled tasks from other active sessions belonging to the
+     * same user. Use {@link #deleteAllBySessionId(String)} instead.
+     *
+     * <p>REQUIRES_NEW ensures this commits independently — caller rollback
+     * cannot silently undo a destructive bulk delete.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
     public long deleteAllByUserId(String userId) {
-        return em.createQuery("DELETE FROM AgentCronEntity c WHERE c.userId = :userId")
-                 .setParameter("userId", userId)
+        return em.createQuery(
+                "DELETE FROM AgentCronEntity c WHERE c.userId = :userId")
+                .setParameter("userId", userId)
+                .executeUpdate();
+    }
+
+    /**
+     * Session-scoped bulk delete — used by ResetReflex to clear only the
+     * cron jobs belonging to the reset session, leaving other sessions'
+     * scheduled tasks untouched.
+     * REQUIRES_NEW ensures this commits independently — caller rollback
+     * cannot silently undo a destructive bulk delete.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    public long deleteAllBySessionId(String sessionId) {
+        return em.createQuery(
+                "DELETE FROM AgentCronEntity c WHERE c.sessionId = :sessionId")
+                 .setParameter("sessionId", sessionId)
                  .executeUpdate();
     }
 }
