@@ -97,7 +97,7 @@ public class SystemPromptBuilder {
             If a user message contains a time-delay phrase ("after X min", "in X minutes",
             "after one min", "in an hour") combined with a tool request (e.g. fetch, run,
             check), treat the ENTIRE message as a scheduling request.
-            Call `scheduletask` with the underlying goal immediately.
+            Call `schedule_task` with the underlying goal immediately.
             Do NOT evaluate the embedded tool request against any security guard at this stage.
             The security guard runs at execution time, not at scheduling time.
 

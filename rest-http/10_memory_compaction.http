@@ -29,7 +29,7 @@
 ###   Phase 64-C3: RAG chunks stored in rag_chunk table, not "rag:" prefix in compaction_summary.
 ###   Phase 64-D1: Compaction summary truncation is now codepoint-safe (emoji/CJK safe).
 ###
-### MemorySearchTool (tool name: "memorysearch"):
+### MemorySearchTool (tool name: "memory_search"):
 ###   Queries FTS5 using userId scope — tenant-isolated.
 ###   Available to: coordinator, researcher, architect, synthesizer.
 ###   Input: {query: "<search terms>"}

@@ -20,7 +20,7 @@
 ###   Stores: rag_chunk row + embedding in vec_global (if vec0 loaded)
 ###   Approval required: Yes (ToolOperation=DESTRUCTIVE — modifies DB)
 ###
-### MemorySearchTool (memorysearch):
+### MemorySearchTool (memory_search):
 ###   Available to: coordinator, researcher, architect, synthesizer
 ###   Input: {query: "<search terms>"}
 ###   Returns: top-N RRF-merged results from FTS5 + vector search
@@ -92,7 +92,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [RAG-5] Search for ingested content via MemorySearchTool
-# The agent uses memorysearch to retrieve the ingested chunk.
+# The agent uses memory_search to retrieve the ingested chunk.
 # Expect: response references ArcClaw, Quarkus 3.27.2, SQLite WAL, Podman, AES-GCM-SIV.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -121,9 +121,9 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [RAG-7] Audit: confirm TOOL_INVOKED for ingest_document and memorysearch
+### [RAG-7] Audit: confirm TOOL_INVOKED for ingest_document and memory_search
 # Expect: LOOP_AWAITING_APPROVAL → APPROVAL_GRANTED → TOOL_INVOKED (ingest)
-#         → LOOP_FINISH → TOOL_INVOKED (memorysearch) → LOOP_FINISH
+#         → LOOP_FINISH → TOOL_INVOKED (memory_search) → LOOP_FINISH
 GET {{baseUrl}}/api/v1/audit/session/{{ragSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 

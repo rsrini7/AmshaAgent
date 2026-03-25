@@ -60,7 +60,7 @@ public class DattatreyaAgent implements Agent {
               appropriate specialist rather than handling it yourself.
             - If a task is outside your expertise, delegate back to the coordinator.
 
-            AVAILABLE TOOLS: github, memory_search, scheduletask, manageschedule
+            AVAILABLE TOOLS: github, memory_search, schedule_task, manage_schedule
             """;
 
     @Override

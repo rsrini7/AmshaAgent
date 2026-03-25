@@ -19,12 +19,12 @@ public enum ToolCapability {
     /**
      * Ability to schedule a future or recurring execution of an agent goal.
      */
-    SCHEDULE_TASK("scheduletask", "Schedule future or continuous background tasks"),
+    SCHEDULE_TASK("schedule_task", "Schedule future or continuous background tasks"),
 
     /**
      * Ability to list or delete previously scheduled tasks.
      */
-    MANAGE_SCHEDULE("manageschedule", "Manage (list/delete) existing scheduled tasks"),
+    MANAGE_SCHEDULE("manage_schedule", "Manage (list/delete) existing scheduled tasks"),
 
     /**
      * Read-only vector search against the agent's long-term memory store.
@@ -37,7 +37,7 @@ public enum ToolCapability {
      * <b>Note:</b> Deferred component; presence in schema does not imply
      * execution support until Phase 48 container integration is complete.
      */
-    SANDBOX_EXEC("sandboxexec", "Execute code within an isolated Podman sandbox"),
+    SANDBOX_EXEC("sandbox_exec", "Execute code within an isolated Podman sandbox"),
 
     /**
      * Ability to ingest a document into the RAG knowledge base.

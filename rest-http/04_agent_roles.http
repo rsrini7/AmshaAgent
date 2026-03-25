@@ -6,12 +6,12 @@
 ###
 ### Role → Deity        → Tools available
 ### ────────────────────────────────────────────────────────────
-### coordinator → Vishnu     → github, scheduletask, manageschedule, memorysearch
-### researcher  → Saraswati  → github, memorysearch
+### coordinator → Vishnu     → github, schedule_task, manage_schedule, memory_search
+### researcher  → Saraswati  → github, memory_search
 ### coder       → Brahma     → NONE (intentionally empty — structural guarantee)
 ### debugger    → Shiva      → github ONLY
-### architect   → Brihaspati → github, memorysearch (NOT scheduletask)
-### synthesizer → Dattatreya → github, scheduletask, manageschedule, memorysearch
+### architect   → Brihaspati → github, memory_search (NOT schedule_task)
+### synthesizer → Dattatreya → github, schedule_task, manage_schedule, memory_search
 ###
 ### IMPORTANT — coder vs debugger tool schema:
 ###   coder:   EMPTY schema. Structurally cannot invoke ANY tool regardless of prompt.
@@ -66,7 +66,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # RESEARCHER — Saraswati (facts, knowledge retrieval, no fabrication)
-# Has: github, memorysearch. Strict no-hallucination rule.
+# Has: github, memory_search. Strict no-hallucination rule.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-3] Create session for researcher
@@ -187,7 +187,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 # DEBUGGER — Shiva (bug analysis, stack traces, security audits)
 # Contrarian persona — challenges assumptions, surfaces blind spots.
-# Has: github ONLY (not scheduletask, not memorysearch).
+# Has: github ONLY (not schedule_task, not memory_search).
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-8] Create session for debugger
@@ -243,7 +243,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # ARCHITECT — Brihaspati (system design, ADRs, trade-off analysis)
-# Has: github, memorysearch. Does NOT have scheduletask.
+# Has: github, memory_search. Does NOT have schedule_task.
 # Will NOT write production code — delegates to Brahma.
 # ─────────────────────────────────────────────────────────────────
 
@@ -270,7 +270,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-11a] Architect CANNOT schedule tasks (no scheduletask in schema)
+### [ROLE-11a] Architect CANNOT schedule tasks (no schedule_task in schema)
 # Expect 200: agent explains it cannot schedule tasks (tool not available),
 # OR the response is architectural advice without any tool call.
 # Confirm in audit: NO CRONCREATED event.

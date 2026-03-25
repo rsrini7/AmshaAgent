@@ -304,10 +304,10 @@ class AgentStateMachineRunnerTest {
     @Test
     void testSchedulingToolFastPathExits() {
         ReasoningStep scheduleStep = ReasoningStep.pending(
-                "planning", "scheduletask", Map.of("task", "clean"), 0, 0);
+                "planning", "schedule_task", Map.of("task", "clean"), 0, 0);
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenReturn(scheduleStep);
-        when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(mock(AgentTool.class)));
+        when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());

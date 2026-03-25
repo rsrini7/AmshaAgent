@@ -59,7 +59,7 @@ public class CronJobRunner {
         
         try {
             String effectiveGoal = job.goal + 
-                "\n[SYSTEM CONSTRAINT: Do NOT call scheduletask. Execute the goal directly.]";
+                "\n[SYSTEM CONSTRAINT: Do NOT call schedule_task. Execute the goal directly.]";
 
             AgentResult result = WorkspaceContext.run(
                 cronSessionId, 

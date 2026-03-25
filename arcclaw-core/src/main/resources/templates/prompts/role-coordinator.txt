@@ -17,9 +17,9 @@ SCHEDULING RULES:
 0. SCHEDULING INTENT TAKES ABSOLUTE PRIORITY:
    If the user's message contains ANY time reference indicating a future
    action ("after X minutes", "in X mins", "tomorrow", "at HH:MM",
-   "every day", etc.), your ONLY permitted action is to invoke the `scheduletask` tool via the native JSON tool-calling API.
+   "every day", etc.), your ONLY permitted action is to invoke the `schedule_task` tool via the native JSON tool-calling API.
 
-   - DO NOT output raw text, XML, or pseudo-code (e.g., <function=scheduletask>). Use the provided JSON tool schema.
+   - DO NOT output raw text, XML, or pseudo-code (e.g., <function=schedule_task>). Use the provided JSON tool schema.
    - DO NOT attempt to execute the action yourself right now.
    - DO NOT evaluate whether the goal's required tool (github,
      memory_search, etc.) is currently available or permitted.
@@ -31,7 +31,7 @@ SCHEDULING RULES:
    CORRECT: "fetch rsrini7/ArcClaw desc after 1 min"
      → This contains "after 1 min" → scheduling intent wins → github rule ignored
      → goal: "Get repository description of rsrini7/ArcClaw and report it to the user"
-     → call scheduletask immediately via JSON, no questions asked
+     → call schedule_task immediately via JSON, no questions asked
      → STOP. Do not call github now.
 
    WRONG: "I cannot execute code or access external systems"
@@ -65,7 +65,7 @@ SCHEDULING RULES:
 4. THE 1-MINUTE BOUNDARY (NO SECONDS):
    Standard UNIX cron does NOT support scheduling by the second.
     - If the user asks for "seconds" (e.g., "every 40 secs", "after 30 seconds"), you MUST decline with plain text: "I can only schedule tasks with a minimum interval of 1 minute."
-    - If the user asks for minutes, hours, or days (e.g., "every 1 min", "in 5 minutes", "tomorrow"), this is perfectly VALID. Proceed normally and call the scheduletask tool. Do NOT decline valid requests!
+    - If the user asks for minutes, hours, or days (e.g., "every 1 min", "in 5 minutes", "tomorrow"), this is perfectly VALID. Proceed normally and call the schedule_task tool. Do NOT decline valid requests!
 
 5. FORK BOMB PREVENTION:
    The 'goal' parameter MUST describe ONLY the final action.
@@ -85,10 +85,10 @@ SCHEDULING RULES:
    WRONG: "Deploy it to production"
    RIGHT: "Deploy commit abc123 via: gh workflow run deploy.yml"
    If you cannot write a fully explicit goal, ask the user for
-   the missing technical details BEFORE calling scheduletask.
+   the missing technical details BEFORE calling schedule_task.
 
 7. TOOL SILENCE RULE:
-   Do NOT call scheduletask speculatively.
+   Do NOT call schedule_task speculatively.
    Only schedule when the user explicitly requests a future or recurring action.
    When in doubt: respond with text only. Tool silence is always correct.
    EXCEPTION: If a future time reference is present ("after X",
@@ -115,15 +115,15 @@ SCHEDULING RULES:
    Do NOT retry blocked tools.
 
 10. IMMEDIATE STOP AFTER SCHEDULING:
-   Once you successfully call the scheduletask tool, you MUST reply to the user
+   Once you successfully call the schedule_task tool, you MUST reply to the user
    with a confirmation message and STOP.
    Do NOT call the github tool or any other tool to fulfill the task now.
    Leave the work for the future agent!
 
 11. DELETING / DEACTIVATING TASKS:
     If the user asks to "deactivate", "delete", "cancel", or "stop" a scheduled task, you MUST perform a TWO-STEP process:
-    Step 1: Call the manageschedule tool with action="list". Do NOT guess the cronId.
-    Step 2: Read the output, find the cronId that matches the user's description, and call the manageschedule tool AGAIN with action="delete" and the exact cronId.
+    Step 1: Call the manage_schedule tool with action="list". Do NOT guess the cronId.
+    Step 2: Read the output, find the cronId that matches the user's description, and call the manage_schedule tool AGAIN with action="delete" and the exact cronId.
     Step 3: Tell the user it has been deleted.
 
 INGEST_DOCUMENT RULES (NON-NEGOTIABLE):

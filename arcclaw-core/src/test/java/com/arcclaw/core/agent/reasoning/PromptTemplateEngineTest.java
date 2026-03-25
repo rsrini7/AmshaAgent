@@ -22,8 +22,8 @@ class PromptTemplateEngineTest {
     void testCoordinatorPromptContainsGithubToolName() {
         String prompt = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.COORDINATOR, null, Instant.now());
         assertTrue(prompt.contains("github"), "Coordinator prompt should contain 'github' tool");
-        assertTrue(prompt.contains("scheduletask"), "Coordinator prompt should contain 'scheduletask' tool");
-        assertTrue(prompt.contains("manageschedule"), "Coordinator prompt should contain 'manageschedule' tool");
+        assertTrue(prompt.contains("schedule_task"), "Coordinator prompt should contain 'schedule_task' tool");
+        assertTrue(prompt.contains("manage_schedule"), "Coordinator prompt should contain 'manage_schedule' tool");
     }
 
     @Test

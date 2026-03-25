@@ -16,7 +16,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
  * <ul>
  * <li>Perform high-level design and architectural review</li>
  * <li>Write no production code (delegated to Brahma)</li>
- * <li>Use memorysearch and github to access prior context/code</li>
+ * <li>Use memory_search and github to access prior context/code</li>
  * </ul>
  */
 @ApplicationScoped

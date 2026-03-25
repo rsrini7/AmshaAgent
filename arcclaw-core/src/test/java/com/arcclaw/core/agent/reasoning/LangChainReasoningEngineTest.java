@@ -324,7 +324,7 @@ class LangChainReasoningEngineTest {
         AgentTool memorySearch = Mockito.mock(AgentTool.class);
         when(memorySearch.name()).thenReturn("memory_search");
         
-        when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search", "scheduletask", "manageschedule"));
+        when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search", "schedule_task", "manage_schedule"));
         when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
         when(toolRegistry.findTool("memory_search")).thenReturn(Optional.of(memorySearch));
 
@@ -349,12 +349,12 @@ class LangChainReasoningEngineTest {
         assertTrue(toolNames.contains("memory_search"), "researcher must have memory_search");
         
         // Researcher MUST NOT have scheduling tools
-        assertFalse(toolNames.contains("scheduletask"),   "researcher must NOT have scheduletask");
-        assertFalse(toolNames.contains("manageschedule"), "researcher must NOT have manageschedule");
+        assertFalse(toolNames.contains("schedule_task"),   "researcher must NOT have schedule_task");
+        assertFalse(toolNames.contains("manage_schedule"), "researcher must NOT have manage_schedule");
         
         // Researcher must NOT have shell or vault access — safety boundary
-        assertFalse(toolNames.contains("executeshell"), "researcher must NOT have executeshell");
-        assertFalse(toolNames.contains("vaultaccess"),  "researcher must NOT have vaultaccess");
+        assertFalse(toolNames.contains("execute_shell"), "researcher must NOT have execute_shell");
+        assertFalse(toolNames.contains("vault_access"),  "researcher must NOT have vault_access");
     }
 
     @Test
@@ -365,20 +365,20 @@ class LangChainReasoningEngineTest {
 
         // Mock RoleRegistry to return permitted tools for coordinator
         when(roleRegistry.permittedTools(AgentRoleEnum.COORDINATOR))
-                .thenReturn(Set.of("github", "scheduletask", "manageschedule"));
+                .thenReturn(Set.of("github", "schedule_task", "manage_schedule"));
 
         // Mock ToolRegistry to return available tools
         AgentTool github = Mockito.mock(AgentTool.class);
         when(github.name()).thenReturn("github");
         AgentTool sched = Mockito.mock(AgentTool.class);
-        when(sched.name()).thenReturn("scheduletask");
+        when(sched.name()).thenReturn("schedule_task");
         AgentTool manage = Mockito.mock(AgentTool.class);
-        when(manage.name()).thenReturn("manageschedule");
+        when(manage.name()).thenReturn("manage_schedule");
         
-        when(toolRegistry.listTools()).thenReturn(List.of("github", "scheduletask", "manageschedule"));
+        when(toolRegistry.listTools()).thenReturn(List.of("github", "schedule_task", "manage_schedule"));
         when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
-        when(toolRegistry.findTool("scheduletask")).thenReturn(Optional.of(sched));
-        when(toolRegistry.findTool("manageschedule")).thenReturn(Optional.of(manage));
+        when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(sched));
+        when(toolRegistry.findTool("manage_schedule")).thenReturn(Optional.of(manage));
 
         when(promptBuilder.build(any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -390,14 +390,14 @@ class LangChainReasoningEngineTest {
         ChatRequest sent = captor.getValue();
         assertNotNull(sent.toolSpecifications());
         
-        // Assert scheduletask and manageschedule are physically missing
+        // Assert schedule_task and manage_schedule are physically missing
         boolean hasScheduleTask = sent.toolSpecifications().stream()
-                .anyMatch(t -> t.name().equals("scheduletask"));
+                .anyMatch(t -> t.name().equals("schedule_task"));
         boolean hasManageSchedule = sent.toolSpecifications().stream()
-                .anyMatch(t -> t.name().equals("manageschedule"));
+                .anyMatch(t -> t.name().equals("manage_schedule"));
         
-        assertFalse(hasScheduleTask, "scheduletask MUST be stripped from cron sessions to prevent fork bombs");
-        assertFalse(hasManageSchedule, "manageschedule MUST be stripped from cron sessions");
+        assertFalse(hasScheduleTask, "schedule_task MUST be stripped from cron sessions to prevent fork bombs");
+        assertFalse(hasManageSchedule, "manage_schedule MUST be stripped from cron sessions");
     }
 
     @Test
