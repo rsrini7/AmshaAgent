@@ -1,6 +1,6 @@
 package com.arcclaw.app.channel;
 
-import com.arcclaw.core.channel.ChannelPluginRegistry;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
@@ -8,10 +8,9 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.lifecycle.ApprovalTimedOutEvent;
 import org.jboss.logging.Logger;
-
-import java.util.Optional;
 
 /**
  * Dispatcher that routes approval timeout events to the correct ChannelJobNotifier.

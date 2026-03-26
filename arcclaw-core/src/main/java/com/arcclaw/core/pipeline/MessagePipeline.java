@@ -8,9 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.channel.api.ChannelPlugin;
-
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import org.jboss.logging.Logger;
 
 /**

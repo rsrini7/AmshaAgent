@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent.persona;
 
 import java.util.Collections;
-import org.jboss.logging.Logger;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -9,6 +8,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import org.jboss.logging.Logger;
 
 /**
  * Registry to look up the persona-specific system prompt from Agent CDI beans.

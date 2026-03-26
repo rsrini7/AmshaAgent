@@ -3,12 +3,12 @@ package com.arcclaw.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-import com.arcclaw.core.channel.ChannelPluginRegistry;
-import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.pipeline.HandleResult;

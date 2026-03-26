@@ -12,11 +12,11 @@ import java.util.concurrent.Callable;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.SessionContext;

@@ -1,15 +1,13 @@
 package com.arcclaw.app.channel;
 
-import com.arcclaw.core.channel.ChannelPluginRegistry;
-
-import org.jboss.logging.Logger;
-
-import com.arcclaw.channel.api.ChannelPlugin;
-import com.arcclaw.core.cron.AgentJobCompleted;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+
+import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
+import com.arcclaw.core.cron.AgentJobCompleted;
+import org.jboss.logging.Logger;
 
 /**
  * Dispatcher that routes cron job completion events to the correct ChannelJobNotifier.

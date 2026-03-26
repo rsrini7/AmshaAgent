@@ -2,7 +2,6 @@ package com.arcclaw.core.reflex;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-
 import java.time.Instant;
 
 import jakarta.inject.Inject;
