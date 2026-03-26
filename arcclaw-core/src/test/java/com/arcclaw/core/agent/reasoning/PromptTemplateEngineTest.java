@@ -35,9 +35,12 @@ class PromptTemplateEngineTest {
     }
 
     @Test
-    void testCoderPromptContainsNoneToolsSection() {
-        String prompt = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.CODER, null, Instant.now());
-        assertTrue(prompt.contains("PERMITTED TOOLS: None"), "Coder prompt should explicitly state no tools");
+    void testCoderPromptContainsSandboxExecSection() {
+        String rendered = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.CODER, null, null);
+        assertTrue(rendered.contains("sandbox_exec"),
+            "Coder prompt should list sandbox_exec as permitted tool");
+        assertTrue(rendered.contains("SANDBOX EXECUTION RULES"),
+            "Coder prompt should include sandbox execution rules block");
     }
 
     @Test

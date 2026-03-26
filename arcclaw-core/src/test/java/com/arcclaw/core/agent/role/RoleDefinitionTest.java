@@ -46,10 +46,11 @@ public class RoleDefinitionTest {
     }
 
     @Test
-    void testBrahmaHasNoTools() {
-        RoleDefinition coderDef = AgentRoleEnum.CODER.definition();
-        assertTrue(coderDef.capabilities().isEmpty(), "Coder must have no tools per Phase 47 constraints");
-        assertTrue(coderDef.toolNames().isEmpty());
+    void testBrahmaHasSandboxExecOnly() {
+        Set<ToolCapability> caps = AgentRoleEnum.CODER.definition().capabilities();
+        assertEquals(1, caps.size(), "Coder must have exactly one capability: SANDBOX_EXEC");
+        assertTrue(caps.contains(ToolCapability.SANDBOX_EXEC),
+            "Coder's only capability must be SANDBOX_EXEC");
     }
 
     @Test
