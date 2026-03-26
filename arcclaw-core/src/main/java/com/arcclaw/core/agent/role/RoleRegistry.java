@@ -51,7 +51,7 @@ public class RoleRegistry {
      * @param definition The compiled role definition
      */
     public void registerDynamic(String name, RoleDefinition definition) {
-        dynamicRoles.put("skill:" + name, definition);
+        dynamicRoles.put(AgentRoleEnum.SKILL_PREFIX + name, definition);
     }
 
     /**

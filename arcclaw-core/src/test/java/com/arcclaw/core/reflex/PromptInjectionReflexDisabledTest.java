@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.Map;
 
 import jakarta.inject.Inject;
-import com.arcclaw.core.security.InputSanitizer;
 
+import com.arcclaw.core.security.InputSanitizer;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;

@@ -8,6 +8,7 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
 
@@ -41,7 +42,7 @@ public class SkillAwareIntentClassifier implements IntentClassifier {
         for (CompiledSkillEntry entry : snapshot) {
             if (entry.matches(userMessage)) {
                 // Return dynamic role name syntax
-                return "skill:" + entry.definition().name();
+                return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
             }
         }
 

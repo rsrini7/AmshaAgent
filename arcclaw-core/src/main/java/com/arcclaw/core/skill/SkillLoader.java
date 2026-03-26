@@ -16,6 +16,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -106,7 +107,7 @@ public class SkillLoader {
                         + ". Skill rejected to prevent a zombie role.");
             }
 
-            String canonicalRoleName = "skill:" + def.name();
+            String canonicalRoleName = AgentRoleEnum.SKILL_PREFIX + def.name();
             RoleDefinition roleDef = new RoleDefinition(
                     canonicalRoleName,
                     "Skill: " + def.name(),

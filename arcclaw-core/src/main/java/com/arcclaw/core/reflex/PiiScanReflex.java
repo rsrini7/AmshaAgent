@@ -6,12 +6,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import jakarta.enterprise.inject.Default;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
