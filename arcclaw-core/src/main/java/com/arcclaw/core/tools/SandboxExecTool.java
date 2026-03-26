@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
+import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.ToolExecutionException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
@@ -106,6 +107,18 @@ public class SandboxExecTool implements AgentTool {
             if (!ALLOWED_LANGUAGES.contains(lang)) {
                 return ToolResponse.failure(1, "Unsupported language: " + lang +
                         ". Allowed: " + ALLOWED_LANGUAGES);
+            }
+
+            // Safety scan — blocks destructive patterns regardless of isolation strategy.
+            // In DIRECT mode (no Podman), this is the last line of defence on the host.
+            String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
+            if (violation != null) {
+                log.warnf("[SandboxExecTool] Blocked dangerous code pattern in session %s: %s",
+                        WorkspaceContext.requireSessionId(), violation);
+                return ToolResponse.failure(1,
+                        "🚫 Execution blocked: " + violation +
+                        "\nIf you believe this is a false positive, rephrase your request " +
+                        "or ask the coordinator to review.");
             }
 
             List<String> commandList = new ArrayList<>(buildCommand(lang, code));

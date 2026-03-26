@@ -364,7 +364,7 @@ arcclaw:
 
   sandbox:
     enabled: true
-    strategy: PODMAN
+    strategy: PODMAN    # options: DIRECT | PODMAN | NAMESPACE
     podman-path: podman
     container-image: "arcclaw-tool-runner:latest"
     timeout-seconds: 30
