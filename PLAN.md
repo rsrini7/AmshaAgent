@@ -4689,4 +4689,45 @@ Finalized the SPI-based architecture for LLM providers, Agent roles, and Channel
 - ✅ `ChannelPluginRegistryTest`: Verified Telegram plugin registration and capability wiring.
 - ✅ `AgentRoleRegistryTest`: Confirmed six built-in roles plus dynamic role support.
 - ✅ `Vec0NativeLibraryInstallerTest`: Verified extraction logic across OS/Arch keys.
-- ✅ `arcclaw-dev.log`: Confirmed successful `sqlite-vec` loading and auto-install during boot.
+- 
+---
+
+# Phase 67 — Telegram Channel Modularization & Test Stabilization ✅
+
+Resolved long-standing bean ambiguity and persistence-layer crashes in the `arcclaw-channel-telegram` module, enabling a green build for modularized channel testing.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Centralized Mocking (T1)**: Consolidated all `@QuarkusTest` mocks into a single, authoritative `TestCoreMocks` class with `@Alternative` and `@Priority(1)`. This eliminates `AmbiguousResolutionException` by ensuring only one mock provider exists for `ChatModel`, `IntentClassifier`, and other core services.
+
+> [!WARNING]
+> **Real Persistence for Tests (T2)**: Discarded the mock `EntityManager` pattern. Channel integration tests now utilize the real Hibernate/SQLite datasource configured in `application.yaml`, preventing NullPointerExceptions during schema enforcement and audit logging.
+
+> [!NOTE]
+> **Enhanced Entity Discovery (T3)**: Added `arcclaw-core` to the `index-dependency` block in `application.yaml` and explicitly listed missing core packages (`com.arcclaw.core.session`, `com.arcclaw.core.lifecycle`) in `hibernate-orm.packages`. This ensures Hibernate correctly discovers entities across module boundaries during isolated testing.
+
+## Completed Changes
+
+### Component T1 — Mock Consolidation
+
+#### [MODIFY] [TestCoreMocks.java](file:///arcclaw-channel-telegram/src/test/java/com/arcclaw/channel/telegram/TestCoreMocks.java)
+- Consolidated all `@Produces` methods for core mocks into this class.
+- Added `@Alternative` and `@Priority(1)` to the class level.
+- Removed the mock `EntityManager` to allow real Hibernate initialization.
+
+#### [MODIFY] [TelegramChannelRouteStartupTest.java](file:///arcclaw-channel-telegram/src/test/java/com/arcclaw/channel/telegram/TelegramChannelRouteStartupTest.java)
+- Removed all inline `@Produces` mock beans.
+- Relies strictly on `TestCoreMocks` for dependency satisfaction.
+
+### Component T3 — Test Configuration
+
+#### [MODIFY] [application.yaml](file:///arcclaw-channel-telegram/src/test/resources/application.yaml)
+- Added `arcclaw-core` and `arcclaw-channel-api` to `quarkus.index-dependency`.
+- Expanded `quarkus.hibernate-orm.packages` to include `com.arcclaw.core.session` and `com.arcclaw.core.lifecycle`.
+- Synchronized environment with `arcclaw-app` test settings (disabled OTel/Fault Tolerance).
+
+## Verification
+- ✅ `mvn clean test -pl :arcclaw-channel-telegram -Dtest=TelegramChannelRouteStartupTest`: PASSED.
+- ✅ `mvn clean verify`: All 809 tests passed (including all telegram module tests).
+- ✅ Verified Hibernate DDL executes correctly on the test SQLite database (`target/telegram-test.db`).

@@ -1295,3 +1295,13 @@
 - [x] Step 12: Override `%test` data/lib paths in `application.yaml` to use `target/`. <!-- id: 643 -->
 - [x] Step 13: Rename deprecated Quarkus log properties in `application.yaml`. <!-- id: 644 -->
 - [x] Step 14: Final verification build: `mvn clean verify` passes (832/832 tests green). <!-- id: 645 -->
+
+---
+
+## Phase 67 — Telegram Channel Modularization & Test Stabilization ✅
+- [x] Step 1: Consolidate all core mocks into `TestCoreMocks.java` with `@Alternative` and `@Priority(1)`. <!-- id: 646 -->
+- [x] Step 2: Remove inline `@Produces` from `TelegramChannelRouteStartupTest.java`. <!-- id: 647 -->
+- [x] Step 3: Remove mock `EntityManager` from `TestCoreMocks.java` to allow real Hibernate/SQLite boot. <!-- id: 648 -->
+- [x] Step 4: Update `application.yaml` in `arcclaw-channel-telegram` with `arcclaw-core` index and missing Hibernate packages. <!-- id: 649 -->
+- [x] Step 5: Verify module test execution: `mvn clean test -pl :arcclaw-channel-telegram` (Step 1-4 tests green). <!-- id: 650 -->
+- [x] Step 6: Verify full system regression: `mvn clean verify` (809/809 tests green). <!-- id: 651 -->

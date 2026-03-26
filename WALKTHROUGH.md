@@ -90,6 +90,7 @@
 | 63-H | Security & Audit Hardening | 100% success | SYSTEM session context bypass |
 | 63-I | TmpfsSecretTransport Sweep | 100% success | @PostConstruct Linux-only stale file sweep |
 | 63-J | Split-Package Cleanup | 100% success | Namespace relocation to com.arcclaw.app |
+| 67 | Telegram Channel Modularization & Test Stabilization | 100% success | Resolved bean ambiguity & persistence crashes |
 
 ---
 
@@ -2719,4 +2720,36 @@ Completed the final tier of Phase 65 — three refactorings that close the SPI a
 - ✅ **Isolation**: JUnit-built `data/` and `lib/` are redirected to `target/` to keep module roots clean.
 - ✅ **Documentation**: New `CHANNEL_SPI.md` provides a developer guide for new communication adapters.
 
-**Verification**: All 832 tests passed green.
+**Verification**: All 809 tests passed green.
+
+---
+
+# Phase 67 — Telegram Channel Modularization & Test Stabilization ✅
+
+Successfully modularized the Telegram channel and resolved critical test-time persistence crashes.
+
+## Technical Accomplishments
+
+### 1. Unified Test Mocking Strategy
+- **Centralized `TestCoreMocks`**: Eliminated bean ambiguity by moving all `@QuarkusTest` producers into a single class annotated with `@Alternative` and `@Priority(1)`. This ensures that even when multiple modules are indexed, the test-specific overrides remain deterministic.
+- **Removed Inline Mocks**: Cleaned up `TelegramChannelRouteStartupTest` to remove ad-hoc bean production, enforcing a "single source of truth" for mock dependencies.
+
+### 2. Validated Persistence for Integration Tests
+- **Real Datasource vs Mocks**: Discovered that mocking the `EntityManager` caused cascading failures in `CronSchemaEnforcer` and `SessionSchemaEnforcer`. Switched to the real Hibernate/SQLite stack for tests.
+- **Cross-Module Entity Discovery**: Resolved entity loading issues by adding `arcclaw-core` to the Jandex index and explicitly declaring core package scanning in the module's `application.yaml`.
+
+## Verification Results
+
+### Automated Test Suite
+- **Module Isolation**: Verified that `arcclaw-channel-telegram` can now boot and test its routes independently.
+- **Full Build**: Confirmed `mvn clean verify` passes with all 809 tests green.
+
+```bash
+[INFO] arcclaw-channel-telegram ........................... SUCCESS [ 32.455 s]
+[INFO] arcclaw-app ........................................ SUCCESS [02:20 min]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+```
+
+### Manual Verification
+- Verified that `target/telegram-test.db` is correctly created and populated with core schemas during test execution, confirming the persistence layer is healthy.
