@@ -10,23 +10,21 @@ Adding a new channel (Discord, Slack, WhatsApp) to ArcClaw requires zero changes
 | `ChannelSender` | `arcclaw-channel-api` | Sends `List<ReplyNode>` to the channel | Yes |
 | `ReplyRenderer` | `arcclaw-channel-api` | Converts `ReplyNode` tree to channel-native format | Yes |
 | `ChannelAllowlist` | `arcclaw-channel-api` | Determines if a `ChannelUser` is authorized | Yes |
-| `ChannelJobNotifier` | `arcclaw-app/channel` | Sends cron and approval timeout notifications | Yes |
+| `ChannelJobNotifier` | `arcclaw-channel-api` | Sends cron and approval timeout notifications | Yes |
 | `ChannelDaemon` | `arcclaw-core/pipeline` | Daemon lifecycle: `isConfigured()`, `start()` | Yes |
+
+## Inbound Message Handling (Daemon -> Pipeline)
+
+For channels that listen for messages (like Telegram), the `ChannelDaemon.start()` implementation is responsible for bridging the external event to the `MessagePipeline`.
+
+1.  **Implement a Route/Listener**: Use Camel, JDA, or a raw listener to receive messages.
+2.  **Map to ChannelMessage**: Map the native platform message (e.g., `IncomingMessage`) to a `ChannelMessage` type.
+3.  **Dispatch to Pipeline**: Use `@Inject MessagePipeline pipeline` to dispatch a `MessageContext`.
+
+---
 
 ## Step-by-Step: Adding Discord as an Example
 
-1. **Step 1: Create Maven Module**
-   Create `arcclaw-channel-discord` module with `pom.xml` depending on `arcclaw-channel-api`, `arcclaw-core`, and `arcclaw-app`. (Alternatively, if no separate module is needed, place inside `arcclaw-app`).
-2. **Step 2: Implement ChannelSender**
-   Implement `DiscordChannelSender implements ChannelSender` to send messages natively.
-3. **Step 3: Implement ReplyRenderer**
-   Implement `DiscordRenderer implements ReplyRenderer`. Render `ReplyNode.Heading` as Discord `**bold**`, `ReplyNode.CodeBlock` as ` ```lang ` fences, etc.
-4. **Step 4: Implement ChannelAllowlist**
-   Implement `DiscordAllowlist implements ChannelAllowlist` to gatekeep using `ARCCLAW_DISCORD_ALLOWED_GUILDS`.
-5. **Step 5: Implement ChannelJobNotifier**
-   Implement `DiscordJobNotifier implements ChannelJobNotifier` to support server notifications.
-6. **Step 6: Implement ChannelDaemon**
-   Implement `DiscordDaemon implements ChannelDaemon` connecting to your JDA bot lifecycle.
 7. **Step 7: Implement ChannelPlugin**
    Create the composite registry CDI block.
 

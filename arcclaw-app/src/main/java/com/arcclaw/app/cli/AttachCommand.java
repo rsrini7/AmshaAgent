@@ -7,7 +7,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.pipeline.ChannelDaemon;
+import com.arcclaw.channel.api.ChannelDaemon;
 import picocli.CommandLine;
 
 /**

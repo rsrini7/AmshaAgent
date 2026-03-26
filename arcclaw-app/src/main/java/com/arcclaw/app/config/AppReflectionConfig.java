@@ -1,6 +1,5 @@
 package com.arcclaw.app.config;
 
-import com.arcclaw.app.channel.telegram.TelegramAgentHandler;
 import com.arcclaw.app.mcp.McpConnectResource;
 import com.arcclaw.app.security.AuthErrorResponse;
 import com.arcclaw.app.security.RateLimitErrorResponse;
@@ -9,7 +8,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(
     targets = {
-        TelegramAgentHandler.class,
         McpConnectResource.ConnectRequest.class,
         McpConnectResource.ConnectResponse.class,
         McpConnectResource.DisconnectResponse.class,

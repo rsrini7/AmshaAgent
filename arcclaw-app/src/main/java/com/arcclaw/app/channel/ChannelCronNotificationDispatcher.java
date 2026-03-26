@@ -1,5 +1,7 @@
 package com.arcclaw.app.channel;
 
+import com.arcclaw.channel.api.ChannelJobNotifier;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Any;

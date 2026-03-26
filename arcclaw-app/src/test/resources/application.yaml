@@ -36,6 +36,9 @@ quarkus:
     arcclaw-channel-api:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-api
+    arcclaw-channel-telegram:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-telegram
   http:
     host: "localhost"
     port: 8081

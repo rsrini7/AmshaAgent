@@ -20,6 +20,9 @@ quarkus:
     arcclaw-channel-api:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-api
+    arcclaw-channel-telegram:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-telegram
     arcclaw-rag:
       group-id: com.arcclaw
       artifact-id: arcclaw-rag
