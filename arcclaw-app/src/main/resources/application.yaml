@@ -373,6 +373,9 @@ arcclaw:
     memory-limit: "512m"    # Fix C2
     cpu-limit: "0.5"        # Fix C2
     tmpfs-path: /run/arcclaw/secrets
+    # python-executable: "C:\\Python313\\python.exe"
+    circuit-breaker:
+      failure-threshold: 3   # was 2; gives LLM one retry for param errors
 
   autonomy:
     default-level: SUPERVISED

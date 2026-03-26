@@ -1,8 +1,10 @@
 package com.arcclaw.core.tools;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
@@ -28,6 +30,11 @@ public class SandboxExecTool implements AgentTool {
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node");
 
+    // On Windows, Python is installed as 'python.exe' not 'python3.exe'.
+    // 'python3' either doesn't exist or opens the Microsoft Store (exit 9009).
+    static final boolean IS_WINDOWS =
+            System.getProperty("os.name", "").toLowerCase().contains("win");
+
     @Inject
     ProcessIsolationExecutor isolationExecutor;
 
@@ -36,6 +43,14 @@ public class SandboxExecTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = ".data/workspaces")
     String workspaceRootDir;
+
+    /**
+     * Optional override: set to a full absolute path (e.g. C:\Python313\python.exe)
+     * to bypass auto-detection. Useful in restricted CI environments.
+     * Defaults to empty string = auto-detect by OS.
+     */
+    @ConfigProperty(name = "arcclaw.sandbox.python-executable")
+    Optional<String> configuredPythonExe;
 
     @Override
     public String name() {
@@ -54,14 +69,10 @@ public class SandboxExecTool implements AgentTool {
 
     @Override
     public boolean requiresSandbox() {
-        // We manage our own isolation via direct ProcessIsolationExecutor injection
-        // to support multi-language command building.
+        // Manages own isolation via ProcessIsolationExecutor for multi-language support.
         return false;
     }
 
-    /**
-     * Helper for tests or direct JSON string execution if needed.
-     */
     public ToolCapability capability() {
         return ToolCapability.SANDBOX_EXEC;
     }
@@ -76,7 +87,9 @@ public class SandboxExecTool implements AgentTool {
                 return ToolResponse.failure(1, "Parameter 'code' is required.");
             }
             if (lang == null) {
-                return ToolResponse.failure(1, "Parameter 'language' is required.");
+                return ToolResponse.failure(1,
+                        "Parameter 'language' is required. Allowed: " + ALLOWED_LANGUAGES +
+                        ". Example: {\"code\":\"print('hi')\",\"language\":\"python\"}");
             }
             lang = lang.toLowerCase();
 
@@ -85,13 +98,7 @@ public class SandboxExecTool implements AgentTool {
                         ". Allowed: " + ALLOWED_LANGUAGES);
             }
 
-            // Build Command List
-            List<String> commandList = new java.util.ArrayList<>(switch (lang) {
-                case "python", "python3" -> List.of("python3", "-c", code);
-                case "bash" -> List.of("bash", "-c", code);
-                case "node" -> List.of("node", "-e", code);
-                default -> throw new IllegalStateException("Allowed languages check failed");
-            });
+            List<String> commandList = new ArrayList<>(buildCommand(lang, code));
 
             // Append extra args if present
             Object argsObj = params.get("args");
@@ -101,23 +108,20 @@ public class SandboxExecTool implements AgentTool {
                 }
             }
 
-            // Resolve Workspace
             String sessionId = WorkspaceContext.requireSessionId();
             Path workspaceRoot = Path.of(workspaceRootDir, sessionId);
 
-            // Resolve Secrets
             Map<String, String> requiredSecrets = Map.of();
             Object secretsObj = params.get("secrets");
             if (secretsObj instanceof Map<?, ?> secretsMap) {
-                requiredSecrets = objectMapper.convertValue(secretsMap, 
-                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+                requiredSecrets = objectMapper.convertValue(secretsMap,
+                        objectMapper.getTypeFactory().constructMapType(
+                                Map.class, String.class, String.class));
             }
 
-            // Execute
             String output = isolationExecutor.executeSandboxed(
                     sessionId, workspaceRoot, commandList, requiredSecrets);
 
-            // Truncate
             if (output != null && output.length() > MAX_OUTPUT_CHARS) {
                 output = output.substring(0, MAX_OUTPUT_CHARS) + TRUNCATION_SUFFIX;
             }
@@ -131,10 +135,47 @@ public class SandboxExecTool implements AgentTool {
         } catch (SecurityException e) {
             return ToolResponse.failure(1, "Sandbox security violation: " + e.getMessage());
         } catch (BudgetExceededException e) {
-            throw e; // RETHROW
+            throw e;
         } catch (Exception e) {
-            log.errorf(e, "SandboxExecTool unexpected error for session %s", WorkspaceContext.requireSessionId());
+            log.errorf(e, "SandboxExecTool unexpected error for session %s",
+                    WorkspaceContext.requireSessionId());
             return ToolResponse.failure(1, "Sandbox error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Builds the OS-aware command list for the given language and code snippet.
+     * Package-private for unit testing.
+     *
+     * Python:  Linux/macOS → python3 -c <code>
+     *          Windows     → python  -c <code>  (python3.exe does not exist on Windows;
+     *                                             typing it triggers the MS Store redirect
+     *                                             and exits with code 9009)
+     * Bash:    Kept as-is on all platforms. On Windows, bash is available via Git Bash
+     *          or WSL; users without either should use 'python' or 'node' instead.
+     * Node:    node -e <code> (same on all platforms).
+     */
+    List<String> buildCommand(String lang, String code) {
+        return switch (lang) {
+            case "python", "python3" -> {
+                String exe = resolvePythonExecutable();
+                yield List.of(exe, "-c", code);
+            }
+            case "bash" -> List.of("bash", "-c", code);
+            case "node" -> List.of("node", "-e", code);
+            default -> throw new IllegalStateException(
+                    "Allowed-languages check passed for unexpected lang: " + lang);
+        };
+    }
+
+    /**
+     * Resolves the Python executable name.
+     * Priority: explicit config → OS detection.
+     * Package-private for unit testing.
+     */
+    String resolvePythonExecutable() {
+         return configuredPythonExe
+            .filter(exe -> !exe.isBlank())
+            .orElse(IS_WINDOWS ? "python" : "python3");
     }
 }
