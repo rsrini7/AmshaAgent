@@ -39,11 +39,14 @@ public enum ToolCapability {
      */
     SANDBOX_EXEC("sandbox_exec",
         "Execute code in an isolated sandbox. " +
-        "REQUIRED params: 'code' (string, the code to run), " +
-        "'language' (string, one of: python, python3, bash, node). " +
-        "OPTIONAL: 'args' (list of strings), 'secrets' (map of env-var-name to vault-key). " +
-        "ALWAYS pass flat JSON — never wrap in 'properties'. " +
-        "Example: {\"code\":\"print('Hello World')\",\"language\":\"python\"}"),
+        "REQUIRED: 'code' (string), 'language' (one of: python, python3, bash, node, java, go). " +
+        "OPTIONAL: 'args' (list), 'secrets' (map). " +
+        "Interpreted (python/node/bash): runs inline. " +
+        "Compiled (java): needs a complete class with main(). Filename = class name. " +
+        "Go: needs complete program with 'package main' and 'func main()'. " +
+        "ALWAYS pass flat JSON. Examples: " +
+        "{\"code\":\"System.out.println(\\\"Hello\\\");\",\"language\":\"java\"} — WRONG (no class). " +
+        "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} — CORRECT."),
 
     /**
      * Ability to ingest a document into the RAG knowledge base.

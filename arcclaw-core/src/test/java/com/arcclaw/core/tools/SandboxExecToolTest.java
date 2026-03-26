@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -341,4 +342,156 @@ class SandboxExecToolTest {
         assertFalse(AgentRoleEnum.COORDINATOR.definition().capabilities()
                 .contains(ToolCapability.SANDBOX_EXEC));
     }
-}
+
+    // -------------------------------------------------------------------------
+    // Java language tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void java_language_writes_file_and_runs_via_javac() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            String code = "public class Main { public static void main(String[] a) { System.out.println(\"Hi\"); } }";
+            when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
+                    .thenReturn("") // javac returns empty on success
+                    .thenReturn("Hi\n"); // java run returns output
+
+            Map<String, Object> params = Map.of("code", code, "language", "java");
+            ToolResponse r = tool.execute(params);
+
+            assertTrue(r.success());
+            assertEquals("Hi\n", r.output());
+
+            // Verify two separate executor calls: compile then run
+            verify(mockIsolationExecutor, times(2))
+                    .executeSandboxed(any(), any(), any(), any());
+            return null;
+        });
+    }
+
+    @Test
+    void java_language_returns_compilation_error_on_failure() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
+                    .thenThrow(new ToolExecutionException("';' expected", 1));
+
+            String code = "public class Main { public static void main(String[] a) { bad syntax } }";
+            Map<String, Object> params = Map.of("code", code, "language", "java");
+            ToolResponse r = tool.execute(params);
+
+            assertFalse(r.success());
+            assertTrue(r.output().contains("compilation failed"), "Expected compilation error message");
+            return null;
+        });
+    }
+
+    @Test
+    void extractJavaClassName_returns_public_class_name() {
+        String code = "public class HelloWorld { public static void main(String[] a) {} }";
+        assertEquals("HelloWorld", tool.extractJavaClassName(code));
+    }
+
+    @Test
+    void extractJavaClassName_falls_back_to_any_class() {
+        String code = "class Foo { }";
+        assertEquals("Foo", tool.extractJavaClassName(code));
+    }
+
+    @Test
+    void extractJavaClassName_defaults_to_Main_when_no_class() {
+        assertEquals("Main", tool.extractJavaClassName("// no class here"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Go language tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void go_language_writes_file_and_runs_via_go_run() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            String code = "package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"Hello\") }";
+            when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
+                    .thenReturn("Hello\n");
+
+            Map<String, Object> params = Map.of("code", code, "language", "go");
+            ToolResponse r = tool.execute(params);
+
+            assertTrue(r.success());
+            assertEquals("Hello\n", r.output());
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
+            verify(mockIsolationExecutor).executeSandboxed(any(), any(), cmdCaptor.capture(), any());
+
+            List<String> cmd = cmdCaptor.getValue();
+            assertEquals("go", cmd.get(0));
+            assertEquals("run", cmd.get(1));
+            assertTrue(cmd.get(2).endsWith("main.go"), "Expected main.go as target file");
+            return null;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Safety scanner integration tests (via SandboxExecTool.execute())
+    // -------------------------------------------------------------------------
+
+    @Test
+    void java_runtime_exec_is_blocked_by_safety_scanner() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            String code = "public class Main { public static void main(String[] a) throws Exception { Runtime.getRuntime().exec(\"rm -rf /\"); } }";
+            Map<String, Object> params = Map.of("code", code, "language", "java");
+            ToolResponse r = tool.execute(params);
+
+            assertFalse(r.success());
+            assertTrue(r.output().contains("Execution blocked"));
+            verifyNoInteractions(mockIsolationExecutor);
+            return null;
+        });
+    }
+
+    @Test
+    void go_os_remove_all_is_blocked_by_safety_scanner() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            String code = "package main\nimport \"os\"\nfunc main() { os.RemoveAll(\"/\") }";
+            Map<String, Object> params = Map.of("code", code, "language", "go");
+            ToolResponse r = tool.execute(params);
+
+            assertFalse(r.success());
+            assertTrue(r.output().contains("Execution blocked"));
+            verifyNoInteractions(mockIsolationExecutor);
+            return null;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // ALLOWED_LANGUAGES coverage check
+    // -------------------------------------------------------------------------
+
+    @Test
+    void all_six_languages_are_accepted() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
+                    .thenReturn("ok");
+
+            for (String lang : List.of("python", "python3", "node", "bash")) {
+                Map<String, Object> params = Map.of("code", "x", "language", lang);
+                ToolResponse r = tool.execute(params);
+                // May succeed or fail depending on OS — just must NOT be "Unsupported language"
+                assertFalse(r.output().startsWith("Unsupported language"),
+                        "Language should be accepted: " + lang);
+            }
+            return null;
+        });
+    }
+
+    @Test
+    void ruby_is_still_rejected_after_java_go_added() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            Map<String, Object> params = Map.of("code", "puts 'hi'", "language", "ruby");
+            ToolResponse r = tool.execute(params);
+            assertFalse(r.success());
+            assertTrue(r.output().contains("Unsupported language"));
+            verifyNoInteractions(mockIsolationExecutor);
+            return null;
+        });
+    }
+    }

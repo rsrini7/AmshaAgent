@@ -1,6 +1,7 @@
 package com.arcclaw.core.sandbox;
 
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -9,71 +10,110 @@ import java.util.regex.Pattern;
  *
  * Architecture Invariants §8.5: Sandbox tools must default to isolated execution.
  * When isolation is opted out (DIRECT mode), this scanner is the last safety line.
+ *
+ * Pattern structure:
+ *  - UNIVERSAL_PATTERNS : fire for ALL languages regardless of lang parameter.
+ *  - LANG_PATTERNS      : fire only when lang matches — prevents cross-language false positives.
  */
 public final class SandboxCodeSafetyScanner {
 
     private SandboxCodeSafetyScanner() {}
 
     // -------------------------------------------------------------------------
-    // Cross-language dangerous patterns
+    // Universal — dangerous in every language context
     // -------------------------------------------------------------------------
 
-    private static final List<Pattern> BLOCKED = List.of(
+    private static final List<Pattern> UNIVERSAL_PATTERNS = List.of(
 
-        // Filesystem destruction — Python
-        pattern("shutil\\.rmtree"),
-        pattern("os\\.remove\\s*\\("),
-        pattern("os\\.unlink\\s*\\("),
-        pattern("pathlib.*\\.unlink\\s*\\("),
-        pattern("pathlib.*\\.rmdir\\s*\\("),
-
-        // Shell escalation FROM Python (allows bypassing the language check)
-        pattern("os\\.system\\s*\\("),
-        pattern("subprocess\\.(run|call|Popen|check_output)"),
-
-        // Filesystem destruction — bash / sh
-        pattern("rm\\s+(-[^ ]*r[^ ]*|-r)"),        // rm -rf, rm -r, rm -Rf, etc.
-        pattern("rmdir\\s+/[sS]"),                  // Windows rmdir /s
-        pattern("rd\\s+/[sS]"),                     // Windows rd /s
+        // Filesystem destruction — shell
+        pattern("rm\\s+(-[^ ]*r[^ ]*|-r)"),         // rm -rf, rm -r, rm -Rf etc.
+        pattern("rmdir\\s+/[sS]"),                   // Windows rmdir /s
+        pattern("rd\\s+/[sS]"),                      // Windows rd /s
 
         // Windows PowerShell / cmd destruction
         pattern("Remove-Item.*-Recurse"),
         pattern("ri\\s+.*-Recurse"),
         pattern("Format-Volume"),
 
-        // Dangerous redirects / overwrites
-        pattern("dd\\s+if="),                       // dd if=/dev/zero of=/dev/sda
+        // Dangerous device writes
+        pattern("dd\\s+if="),                        // dd if=/dev/zero of=/dev/sda
         pattern("mkfs"),
-        pattern(">\\s*/dev/"),                      // redirect to device
+        pattern(">\\s*/dev/"),                       // redirect to device file
 
         // Supply-chain injection
         pattern("curl.*\\|\\s*(ba)?sh"),
         pattern("wget.*\\|\\s*(ba)?sh"),
         pattern("curl.*\\|\\s*python"),
 
-        // Fork bomb
+        // Fork bomb (bash)
         pattern(":\\(\\)\\s*\\{"),
 
         // Privilege escalation
         pattern("sudo\\s+rm"),
         pattern("sudo\\s+dd"),
-        pattern("chmod\\s+[0-7]*7[0-7][0-7]\\s+/"),  // chmod 777 /
+        pattern("chmod\\s+[0-7]*7[0-7][0-7]\\s+/"), // chmod 777 /
         pattern("chown\\s+-R.*\\s+/")
     );
 
+    // -------------------------------------------------------------------------
+    // Language-scoped — only fire when lang matches to avoid false positives
+    // e.g. exec.Command must not block node's child_process.exec
+    // -------------------------------------------------------------------------
+
+    private static final Map<String, List<Pattern>> LANG_PATTERNS = Map.of(
+
+        "python", List.of(
+            pattern("shutil\\.rmtree"),
+            pattern("os\\.remove\\s*\\("),
+            pattern("os\\.unlink\\s*\\("),
+            pattern("pathlib.*\\.unlink\\s*\\("),
+            pattern("pathlib.*\\.rmdir\\s*\\("),
+            pattern("os\\.system\\s*\\("),
+            pattern("subprocess\\.(run|call|Popen|check_output)")
+        ),
+
+        "python3", List.of(
+            pattern("shutil\\.rmtree"),
+            pattern("os\\.remove\\s*\\("),
+            pattern("os\\.unlink\\s*\\("),
+            pattern("pathlib.*\\.unlink\\s*\\("),
+            pattern("pathlib.*\\.rmdir\\s*\\("),
+            pattern("os\\.system\\s*\\("),
+            pattern("subprocess\\.(run|call|Popen|check_output)")
+        ),
+
+        "java", List.of(
+            pattern("Runtime\\.getRuntime\\(\\)\\.exec"),
+            pattern("new\\s+ProcessBuilder"),
+            pattern("Files\\.delete\\s*\\("),
+            pattern("FileUtils\\.delete(Directory|Recursive|Force)?")
+        ),
+
+        "go", List.of(
+            pattern("exec\\.Command"),
+            pattern("os\\.Remove(All)?\\s*\\(")
+        )
+    );
+
     /**
-     * Returns the first blocked pattern description found in the code,
-     * or null if the code is clean.
+     * Returns the first blocked pattern found in the code, or null if clean.
+     *
+     * @param lang  language identifier (python, python3, bash, node, java, go)
+     * @param code  source code to scan
+     * @return      the regex string of the matched pattern, or null
      */
-    public static String findViolation(String language, String code) {
+    public static String findViolation(String lang, String code) {
         if (code == null || code.isBlank()) return null;
 
-        for (Pattern p : BLOCKED) {
-            if (p.matcher(code).find()) {
-                return "Blocked pattern detected: [" + p.pattern() + "]. " +
-                       "This operation is not permitted in sandbox execution.";
-            }
+        for (Pattern p : UNIVERSAL_PATTERNS) {
+            if (p.matcher(code).find()) return p.pattern();
         }
+
+        String normalizedLang = lang != null ? lang.toLowerCase() : "";
+        for (Pattern p : LANG_PATTERNS.getOrDefault(normalizedLang, List.of())) {
+            if (p.matcher(code).find()) return p.pattern();
+        }
+
         return null;
     }
 
