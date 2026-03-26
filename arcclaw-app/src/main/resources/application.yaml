@@ -286,8 +286,8 @@ arcclaw:
   memory:
     compaction:
       enabled: true
-      threshold: 7
-      keep-recent: 5
+      threshold: 12
+      keep-recent: 7
       max-tokens: 1024
       max-chars: 96000 
       api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
