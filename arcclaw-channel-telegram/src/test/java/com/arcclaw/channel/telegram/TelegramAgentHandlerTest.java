@@ -6,9 +6,14 @@ import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import jakarta.inject.Inject;
 
@@ -63,7 +68,7 @@ class TelegramAgentHandlerTest {
         // 1. Stub the processingFlags to always return a fresh ready flag
         Field flagsField = TelegramAgentHandler.class.getDeclaredField("processingFlags");
         flagsField.setAccessible(true);
-        ConcurrentHashMap<String, AtomicBoolean> flags = new ConcurrentHashMap<>();
+        Cache<String, AtomicBoolean> flags = Caffeine.newBuilder().build();
         flagsField.set(target, flags);
 
         // 2. Stub the ManagedExecutor to run synchronously
@@ -176,5 +181,67 @@ class TelegramAgentHandlerTest {
 
         when(in.getBody(IncomingMessage.class)).thenReturn(msg);
         return exchange;
+    }
+
+    @Test
+    void rapidConcurrentMessagesFromSameChatAreSerialised() throws Exception {
+        String chatId = "race-chat-" + UUID.randomUUID();
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch firstComplete = new CountDownLatch(1);
+
+        // Configure mock pipeline: first call signals firstStarted, then awaits firstComplete
+        doAnswer(invocation -> {
+            firstStarted.countDown();
+            assertTrue(firstComplete.await(5, TimeUnit.SECONDS), "First message took too long to complete");
+            return null;
+        }).when(pipeline).process(argThat(ctx -> chatId.equals(ctx.getChatId())));
+
+        // Channel message with text
+        ChannelMessage.TelegramMessage channelMsg = new ChannelMessage.TelegramMessage(
+                new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "hello", chatId, Instant.now());
+        when(mapper.map(anyString(), any(), anyString())).thenReturn(channelMsg);
+
+        // 1. Start first message in a real background thread to simulate concurrency
+        new Thread(() -> {
+            Exchange ex = createExchange(chatId, "123", "alice", "hello");
+            handler.receiveMessage(ex);
+        }).start();
+
+        // Wait for first message to actually start and hold the lock
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS), "First message never started");
+        assertTrue(handler.isProcessing(chatId), "Handler should be processing the first message");
+
+        // 2. Send second message while first is still running
+        Exchange ex2 = createExchange(chatId, "123", "alice", "another hello");
+        handler.receiveMessage(ex2);
+
+        // Second message must get "still processing" reply
+        verify(sender).sendRaw(argThat(user -> chatId.equals(user.channelId())), contains("Still processing"));
+
+        // 3. Complete first message
+        firstComplete.countDown();
+        
+        // Give it a moment to finish the finally block
+        Thread.sleep(100);
+
+        assertFalse(handler.isProcessing(chatId), "Clean state after processing completes");
+
+        // 4. Send third message — it should be accepted normally
+        Exchange ex3 = createExchange(chatId, "123", "alice", "third hello");
+        handler.receiveMessage(ex3);
+        verify(pipeline, atLeast(2)).process(any()); // first and third
+    }
+
+    @Test
+    void processingFlagIsFalseAfterSuccessfulProcessing() {
+        String chatId = "chat-ok-" + UUID.randomUUID();
+        Exchange exchange = createExchange(chatId, "123", "alice", "hello ok");
+        ChannelMessage.TelegramMessage channelMsg = new ChannelMessage.TelegramMessage(
+                new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "hello ok", chatId, Instant.now());
+        when(mapper.map(anyString(), any(), anyString())).thenReturn(channelMsg);
+
+        handler.receiveMessage(exchange);
+
+        assertFalse(handler.isProcessing(chatId), "Flag must be false after completion");
     }
 }

@@ -1,7 +1,9 @@
 package com.arcclaw.channel.telegram;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.time.Duration;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingMessage;
@@ -35,7 +37,12 @@ public class TelegramAgentHandler {
     @Inject
     TelegramChannelSender sender;
 
-    private final ConcurrentHashMap<String, AtomicBoolean> processingFlags = new ConcurrentHashMap<>();
+    private static final Duration FLAG_TTL = Duration.ofMinutes(10);
+    // 10 min >> any realistic agent loop. Caffeine expiry prevents both the memory leak
+    // and the reference-identity race in the remove() call pattern.
+    private final Cache<String, AtomicBoolean> processingFlags = Caffeine.newBuilder()
+        .expireAfterAccess(FLAG_TTL)
+        .build();
 
     public void receiveMessage(Exchange exchange) {
         log.infof("TELEGRAM-RECV raw exchange received");
@@ -95,7 +102,7 @@ public class TelegramAgentHandler {
         }
 
         log.debugf("Processing message for chat %s", chatId);
-        AtomicBoolean flag = processingFlags.computeIfAbsent(chatId, id -> new AtomicBoolean(false));
+        AtomicBoolean flag = processingFlags.get(chatId, id -> new AtomicBoolean(false));
 
         if (!flag.compareAndSet(false, true)) {
             sender.sendRaw(user, "⏳ Still processing your previous message. Please wait.");
@@ -107,7 +114,10 @@ public class TelegramAgentHandler {
                 processPipeline(context);
             } finally {
                 flag.set(false);
-                processingFlags.remove(chatId, flag);
+                // DO NOT call processingFlags.invalidate(chatId) here.
+                // Caffeine.get() returns the SAME AtomicBoolean on cache hit.
+                // flag.set(false) resets the same object; next message's get() returns it as false.
+                // Caffeine TTL handles eviction. Manual invalidate would orphan a concurrent message's flag.
             }
         });
     }
@@ -132,5 +142,11 @@ public class TelegramAgentHandler {
         } finally {
             requestContext.terminate();   // ← always release, even on exception
         }
+    }
+
+    /** For tests only — checks if a chat is currently being processed. */
+    boolean isProcessing(String chatId) {
+        AtomicBoolean flag = processingFlags.getIfPresent(chatId);
+        return flag != null && flag.get();
     }
 }
