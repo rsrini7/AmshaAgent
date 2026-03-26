@@ -29,16 +29,15 @@ public class CompactionEventBridge {
      * <p>
      * Replaces the event observer that was previously embedded in {@code ContextCompactionService}.
      */
+    // in CompactionEventBridge.java — update the observer method's finally block only
     public void onCompactionRequested(@ObservesAsync CompactionRequest request) {
         try {
             log.debugf("Compaction bridge received request for session %s", request.sessionId());
             compactionService.compact(request.sessionId(), request.userId());
         } catch (Exception e) {
-            log.errorf("Compaction failed for session %s: %s", request.sessionId(), e.getMessage());
-            log.debug("Full compaction failure stack trace:", e);
+            log.errorf(e, "Compaction failed for session %s: %s", request.sessionId(), e.getMessage());
         } finally {
-            // Always clear the flag so the next request can proceed
-            compactionInFlight.set(false);
+            compactionInFlight.set(request.sessionId(), false);  // ← was: compactionInFlight.set(false)
             log.debugf("Compaction bridge released in-flight lock for session %s", request.sessionId());
         }
     }

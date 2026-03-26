@@ -29,6 +29,9 @@ public class CompactionService {
     private static final int MAX_SUMMARY_CODEPOINTS = 1985;
     private static final String TRUNCATION_SUFFIX = "...[truncated]";
 
+    @ConfigProperty(name = "arcclaw.memory.compaction.max-chars", defaultValue = "96000")
+    long maxCharsBeforeCompaction;
+
     @Inject
     PersistentChatMemoryStore chatMemoryStore;
 
@@ -82,10 +85,22 @@ public class CompactionService {
     public boolean shouldCompact(String sessionId) {
         if (!enabled) return false;
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
+        
         long count = allMessages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .count();
-        return count >= threshold;
+        if (count > threshold) return true;
+
+        // Token-volume guard: ~4 chars per token; 96000 chars ≈ 24K tokens.
+        // Catches single-turn bloat before the message-count threshold is reached.
+        long totalChars = allMessages.stream()
+                .mapToLong(m -> m.toString().length())
+                .sum();
+        if (totalChars > maxCharsBeforeCompaction) {
+            log.debugf("CompactionService char threshold exceeded for session %s: %d chars", sessionId, totalChars);
+            return true;
+        }
+        return false;
     }
 
     /**

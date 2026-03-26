@@ -15,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.audit.SessionAuditSequencer;
+import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -59,6 +60,9 @@ public class SessionReaper {
 
     @Inject
     SqliteRetryTemplate retryTemplate;
+
+    @Inject
+    CompactionInFlightFlag compactionInFlight;
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
@@ -159,6 +163,7 @@ public class SessionReaper {
                 return;
             }
             log.warnf("GC sweep: session=%s expired", sessionId);
+            compactionInFlight.remove(sessionId);
             workspaceManager.terminateSession(sessionId);
             heartbeatTracker.removeHeartbeat(sessionId);
             auditSequencer.releaseStaleSession(sessionId);
@@ -229,6 +234,7 @@ public class SessionReaper {
                 approvalTimeoutMinutes
         ));
 
+        compactionInFlight.remove(cp.getSessionId());
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
         auditSequencer.releaseStaleSession(cp.getSessionId());

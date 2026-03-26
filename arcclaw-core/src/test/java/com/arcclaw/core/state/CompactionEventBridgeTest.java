@@ -31,7 +31,7 @@ class CompactionEventBridgeTest {
         bridge.onCompactionRequested(request);
 
         verify(compactionService).compact("session1", "user1");
-        verify(compactionInFlight).set(false);
+        verify(compactionInFlight).set("session1", false);
     }
 
     @Test
@@ -41,6 +41,6 @@ class CompactionEventBridgeTest {
 
         bridge.onCompactionRequested(request);
 
-        verify(compactionInFlight).set(false);
+        verify(compactionInFlight).set("session1", false);
     }
 }

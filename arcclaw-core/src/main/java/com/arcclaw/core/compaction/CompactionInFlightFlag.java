@@ -1,26 +1,25 @@
 package com.arcclaw.core.compaction;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import jakarta.enterprise.context.ApplicationScoped;
 
-import com.arcclaw.core.scope.WorkspaceScoped;
-
-/**
- * A per-session flag that prevents concurrent compaction for the same session.
- * Managed by CDI within the WorkspaceScoped context.
- */
-@WorkspaceScoped
+@ApplicationScoped
 public class CompactionInFlightFlag {
-    private final AtomicBoolean flag = new AtomicBoolean(false);
 
-    public boolean compareAndSet(boolean expect, boolean update) {
-        return flag.compareAndSet(expect, update);
+    private final ConcurrentHashMap<String, AtomicBoolean> flags = new ConcurrentHashMap<>();
+
+    public boolean compareAndSet(String sessionId, boolean expect, boolean update) {
+        return flags.computeIfAbsent(sessionId, k -> new AtomicBoolean(false))
+                    .compareAndSet(expect, update);
     }
 
-    public void set(boolean value) {
-        flag.set(value);
+    public void set(String sessionId, boolean value) {
+        flags.computeIfAbsent(sessionId, k -> new AtomicBoolean(false)).set(value);
     }
 
-    public boolean get() {
-        return flag.get();
+    /** Called by SessionReaper to prevent map growth after session termination. */
+    public void remove(String sessionId) {
+        flags.remove(sessionId);
     }
 }
