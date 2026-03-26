@@ -34,6 +34,13 @@ public class ToolStepHandler {
             "OBSERVE", "THINK", "ACT", "PLAN", "REASON", "THOUGHT"
     );
 
+    // FIX Bug 1: Keywords that indicate the user wants to act on the list,
+    // not just view it. Only these goals continue the loop after manage_schedule list.
+    private static final Set<String> MUTATING_GOAL_KEYWORDS = Set.of(
+            "delete", "remove", "cancel", "stop", "modify", "change",
+            "update", "edit", "pause", "resume", "clear", "disable"
+    );
+
     @Inject ToolRegistry toolRegistry;
     @Inject Instance<AgentObserver> observers;
     @Inject ToolInvocationGuard guard;
@@ -120,7 +127,6 @@ public class ToolStepHandler {
             List<ReasoningStep> history, ReasoningStep step,
             List<CompiledSkillEntry> skillSnapshot) {
 
-        // READONLY: block all tool calls inline — no persistence, no approval pause
         if (context.autonomyLevel() == AutonomyLevel.READONLY) {
             log.infof("[ToolStepHandler] READONLY session %s — blocking tool '%s' inline",
                     context.sessionId(), step.action());
@@ -180,12 +186,13 @@ public class ToolStepHandler {
      * Resolves the post-tool-invocation outcome.
      *
      * Fast-path exit rules:
-     * - schedule_task:      always terminal — task is handed off, nothing more to do.
-     * - manage_schedule:    terminal ONLY for mutating actions (delete/pause/resume).
-     *                       "list" must continue so the LLM can read the results and
-     *                       call the follow-up action (e.g. delete) in the next iteration.
-     *                       Previously all manage_schedule calls were terminal, which
-     *                       forced the two-step delete flow across multiple /run requests.
+     * - schedule_task:               always terminal — handed off to cron system.
+     * - manage_schedule (non-list):  always terminal — delete/pause/resume confirmed.
+     * - manage_schedule (list):      terminal if goal is list-only (no mutating intent).
+     *                                continues loop ONLY if goal contains delete/modify/etc.
+     *                                This prevents the LLM from appending conversational
+     *                                follow-ups ("Would you like to delete or modify it?")
+     *                                when the user simply asked to see the task list.
      */
     private StepDecision resolveOutcome(AgentExecutionContext context, String toolName,
             Map<String, Object> params,
@@ -204,14 +211,23 @@ public class ToolStepHandler {
         if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
             String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase();
             if (!"list".equals(action)) {
-                // delete / pause / resume — terminal, no further reasoning needed
+                // delete / pause / resume — always terminal
                 log.infof("[STATE-MACHINE] Fast-path exit for tool '%s' action=%s", toolName, action);
                 String finalAnswer = (response.success() ? "✅ " : "❌ ") + observation;
                 writer.saveAnswer(context.sessionId(), finalAnswer);
                 return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
             }
-            // list — fall through so the LLM sees the results and acts in the next iteration
-            log.debugf("[STATE-MACHINE] manage_schedule list — continuing loop for follow-up action");
+
+            // FIX Bug 1: list — fast-path if the original goal has no mutating intent.
+            // Only continue the loop when the user's goal explicitly involves
+            // deleting, modifying, or acting on a task (e.g. "delete the oldest task").
+            if (isListOnlyGoal(context.goal())) {
+                log.debugf("[STATE-MACHINE] manage_schedule list — list-only goal, fast-path exit");
+                writer.saveAnswer(context.sessionId(), observation);
+                return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
+            }
+            // Goal contains mutating intent — continue so LLM can act on the listed tasks
+            log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal detected, continuing loop");
         }
 
         if (!response.success()
@@ -236,6 +252,17 @@ public class ToolStepHandler {
         }
 
         return StepDecision.proceedWithFailures(completedStep, consecutiveFailures);
+    }
+
+    /**
+     * Returns true if the goal contains no keywords that imply the user wants to
+     * act on the listed tasks. When true, manage_schedule list fast-paths to exit
+     * instead of continuing the loop (which causes LLM conversational follow-ups).
+     */
+    private boolean isListOnlyGoal(String goal) {
+        if (goal == null || goal.isBlank()) return true;
+        String lower = goal.toLowerCase();
+        return MUTATING_GOAL_KEYWORDS.stream().noneMatch(lower::contains);
     }
 
     /** Sealed result of the invokeTool phase. */
