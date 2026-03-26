@@ -16,6 +16,7 @@
     <module>arcclaw-mcp</module>
     <module>arcclaw-rag</module>
     <module>arcclaw-deployment</module>
+    <module>arcclaw-channel-telegram</module>
     <module>arcclaw-app</module>
   </modules>
 
@@ -72,6 +73,11 @@
       <dependency>
         <groupId>com.arcclaw</groupId>
         <artifactId>arcclaw-mcp</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.arcclaw</groupId>
+        <artifactId>arcclaw-channel-telegram</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

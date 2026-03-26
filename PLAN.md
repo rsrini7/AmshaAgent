@@ -4689,4 +4689,82 @@ Finalized the SPI-based architecture for LLM providers, Agent roles, and Channel
 - ✅ `ChannelPluginRegistryTest`: Verified Telegram plugin registration and capability wiring.
 - ✅ `AgentRoleRegistryTest`: Confirmed six built-in roles plus dynamic role support.
 - ✅ `Vec0NativeLibraryInstallerTest`: Verified extraction logic across OS/Arch keys.
-- ✅ `arcclaw-dev.log`: Confirmed successful `sqlite-vec` loading and auto-install during boot.
+- 
+---
+
+# Phase 67 — Telegram Modularization & Sandbox Security ✅
+
+Modularized the Telegram channel into a dedicated JAR, retired the legacy `ChannelSenderRegistry` SPI, implemented financial safety for prompt templates, and integrated `SandboxExecTool` for secure polyglot code execution.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Centralized Mocking (T1)**: Consolidated all `@QuarkusTest` mocks into a single, authoritative `TestCoreMocks` class with `@Alternative` and `@Priority(1)`. This eliminates `AmbiguousResolutionException` by ensuring only one mock provider exists for `ChatModel`, `IntentClassifier`, and other core services.
+
+> [!WARNING]
+> **Real Persistence for Tests (T2)**: Discarded the mock `EntityManager` pattern. Channel integration tests now utilize the real Hibernate/SQLite datasource configured in `application.yaml`, preventing NullPointerExceptions during schema enforcement and audit logging.
+
+> [!NOTE]
+> **Enhanced Entity Discovery (T3)**: Added `arcclaw-core` to the `index-dependency` block in `application.yaml` and explicitly listed missing core packages (`com.arcclaw.core.session`, `com.arcclaw.core.lifecycle`) in `hibernate-orm.packages`. This ensures Hibernate correctly discovers entities across module boundaries during isolated testing.
+
+> [!IMPORTANT]
+> **Financial Safety Fallback (T2b)**: Updated `PromptTemplateEngine` to issue a visual `[WARNING]` in logs and system prompts if a template is missing and falls back to a default. This prevents silent execution with zero context, which leads to high-entropy (expensive) hallucination loops.
+
+> [!TIP]
+> **SPI Retirement (T3b)**: Successfully retired `ChannelSenderRegistry` in favor of the `ChannelPluginRegistry` SPI. All routing now flows through the consolidated `ChannelPlugin` interface, reducing core-to-channel coupling and improving type-safety.
+
+> [!IMPORTANT]
+> **Polyglot Sandbox (T6)**: Implemented `SandboxExecTool` supporting Python, Bash, and Node.js. It features strict 8KB output truncation, financial budget propagation, and automated secret injection via `ProcessIsolationExecutor` (Podman).
+
+## Completed Changes
+
+### Component T1 — Mock Consolidation
+
+#### [MODIFY] [TestCoreMocks.java](file:///arcclaw-channel-telegram/src/test/java/com/arcclaw/channel/telegram/TestCoreMocks.java)
+- Consolidated all `@Produces` methods for core mocks into this class.
+- Added `@Alternative` and `@Priority(1)` to the class level.
+- Removed the mock `EntityManager` to allow real Hibernate initialization.
+
+#### [MODIFY] [TelegramChannelRouteStartupTest.java](file:///arcclaw-channel-telegram/src/test/java/com/arcclaw/channel/telegram/TelegramChannelRouteStartupTest.java)
+- Removed all inline `@Produces` mock beans.
+- Relies strictly on `TestCoreMocks` for dependency satisfaction.
+
+### Component T3 — Test Configuration
+
+#### [MODIFY] [application.yaml](file:///arcclaw-channel-telegram/src/test/resources/application.yaml)
+- Added `arcclaw-core` and `arcclaw-channel-api` to `quarkus.index-dependency`.
+- Expanded `quarkus.hibernate-orm.packages` to include `com.arcclaw.core.session` and `com.arcclaw.core.lifecycle`.
+- Synchronized environment with `arcclaw-app` test settings (disabled OTel/Fault Tolerance).
+
+### Component T2/T3/T4 — Infrastructure Hardening
+
+#### [MODIFY] [PromptTemplateEngine.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/PromptTemplateEngine.java)
+- Added explicit `[FALLBACK WARNING]` for missing templates (T2).
+
+#### [MODIFY] [AgentDispatchHandler.java](file:///arcclaw-app/src/main/java/com/arcclaw/app/channel/AgentDispatchHandler.java)
+- Migrated from legacy registry to SPI-based `ChannelPluginRegistry` (T3).
+- Switched `processingFlags` from a static Map to a Caffeine cache with 5s expiry to prevent memory leaks (T4).
+
+#### [MODIFY] [MessageContext.java](file:///arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/MessageContext.java)
+- Removed `ChannelSender` field (T5) to enable multi-channel routing compatibility.
+
+### Component T6 — SandboxExecTool
+
+#### [CREATE] [SandboxExecTool.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/tools/SandboxExecTool.java)
+- Multi-language support (Python3, Bash, Node).
+- 8192-char output truncation with footer.
+- Circuit breaker awareness and budget propagation.
+
+#### [MODIFY] [AgentRoleEnum.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/agent/role/AgentRoleEnum.java)
+- Added `SANDBOX_EXEC` capability to `CODER` and `DEBUGGER` roles.
+
+#### [MODIFY] [ToolExecutionException.java](file:///arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ToolExecutionException.java)
+- Added `exitCode` field for better failure reporting.
+
+## Verification
+- ✅ `mvn clean test -pl :arcclaw-channel-telegram -Dtest=TelegramChannelRouteStartupTest`: PASSED.
+- ✅ `mvn clean test -pl arcclaw-core -Dtest=SandboxExecToolTest`: PASSED. 
+- ✅ `mvn clean verify`: All 821 tests passed (Full system integrity confirmed).
+- ✅ Verified `SandboxExecTool` returns exit code 1 and "Execution failed" on bad scripts.
+- ✅ Verified `PromptTemplateEngine` fallbacks log a clear warning.
+- ✅ Verified `ChannelSenderRegistryRetirementTest` passes without the old registry bean.

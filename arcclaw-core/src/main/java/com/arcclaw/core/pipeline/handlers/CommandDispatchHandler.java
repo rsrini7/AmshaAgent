@@ -4,7 +4,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
@@ -21,6 +23,9 @@ public class CommandDispatchHandler implements MessageHandler {
 
     @Inject
     ReflexRegistry reflexRegistry;
+
+    @Inject
+    ChannelPluginRegistry channelPluginRegistry;
 
     @Override
     public int priority() {
@@ -93,18 +98,34 @@ public class CommandDispatchHandler implements MessageHandler {
                     } catch (Exception e) {
                         log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
                         log.debug("Full command dispatch failure stack trace:", e);
-                        context.getSender().sendRaw(context.getUser(),
-                            "⚠️ Command failed due to an internal error. Please try again.");
+                        
+                        channelPluginRegistry.find(context.getChannelType())
+                            .map(ChannelPlugin::sender)
+                            .ifPresentOrElse(
+                                s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
+                                () -> log.warnf("CommandDispatchHandler: no sender for type %s — error reply dropped", context.getChannelType())
+                            );
                         yield HandleResult.STOP;
                     }
                     
                     if (result != null && result.commandResponse().isPresent()) {
-                        context.getSender().sendRaw(context.getUser(), result.commandResponse().get());
+                        String response = result.commandResponse().get();
+                        channelPluginRegistry.find(context.getChannelType())
+                            .map(ChannelPlugin::sender)
+                            .ifPresentOrElse(
+                                s -> s.sendRaw(context.getUser(), response),
+                                () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
+                            );
                         yield HandleResult.STOP;
                     }
     
                     if (u.raw().startsWith("/cron")) {
-                        context.getSender().sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks.");
+                        channelPluginRegistry.find(context.getChannelType())
+                            .map(ChannelPlugin::sender)
+                            .ifPresentOrElse(
+                                s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
+                                () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
+                            );
                         yield HandleResult.STOP;
                     }
                 }
@@ -134,14 +155,24 @@ public class CommandDispatchHandler implements MessageHandler {
         } catch (Exception e) {
             log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage());
             log.debug("Full command dispatch failure stack trace:", e);
-            context.getSender().sendRaw(context.getUser(),
-                "⚠️ Command failed due to an internal error. Please try again.");
+            
+            channelPluginRegistry.find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                    s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
+                    () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
+                );
             return;
         }
 
         if(result != null){
             result.commandResponse().ifPresent(response ->
-                context.getSender().sendRaw(context.getUser(), response)
+                channelPluginRegistry.find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresentOrElse(
+                        s -> s.sendRaw(context.getUser(), response),
+                        () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
+                    )
             );
         }
     }

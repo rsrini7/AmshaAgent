@@ -8,6 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import org.jboss.logging.Logger;
 
 /**
@@ -18,9 +20,11 @@ public class MessagePipeline {
     private static final Logger log = Logger.getLogger(MessagePipeline.class);
 
     private final List<MessageHandler> handlers;
+    private final ChannelPluginRegistry channelPluginRegistry;
 
     @Inject
-    public MessagePipeline(Instance<MessageHandler> handlerInstances) {
+    public MessagePipeline(Instance<MessageHandler> handlerInstances, ChannelPluginRegistry channelPluginRegistry) {
+        this.channelPluginRegistry = channelPluginRegistry;
         this.handlers = handlerInstances.stream()
                 .sorted(Comparator.comparingInt(MessageHandler::priority))
                 .collect(Collectors.toList());
@@ -50,8 +54,12 @@ public class MessagePipeline {
                         handler.getClass().getSimpleName(), context.getChatId(), e.getMessage());
                 log.debugf(e, "Full stacktrace for pipeline failure in handler %s", handler.getClass().getSimpleName());
                 try {
-                    context.getSender().sendRaw(context.getUser(),
-                        "⚠️ An internal error occurred. Please try again.");
+                    channelPluginRegistry.find(context.getChannelType())
+                        .map(ChannelPlugin::sender)
+                        .ifPresentOrElse(
+                            s -> s.sendRaw(context.getUser(), "⚠️ An internal error occurred. Please try again."),
+                            () -> log.warnf("MessagePipeline: no sender for type %s — error notification dropped", context.getChannelType())
+                        );
                 } catch (Exception notifyEx) {
                     log.warnf("Failed to send pipeline error notification to chat %s: %s",
                             context.getChatId(), notifyEx.getMessage());

@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,9 +35,12 @@ class PromptTemplateEngineTest {
     }
 
     @Test
-    void testCoderPromptContainsNoneToolsSection() {
-        String prompt = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.CODER, null, Instant.now());
-        assertTrue(prompt.contains("PERMITTED TOOLS: None"), "Coder prompt should explicitly state no tools");
+    void testCoderPromptContainsSandboxExecSection() {
+        String rendered = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.CODER, null, null);
+        assertTrue(rendered.contains("sandbox_exec"),
+            "Coder prompt should list sandbox_exec as permitted tool");
+        assertTrue(rendered.contains("SANDBOX EXECUTION RULES"),
+            "Coder prompt should include sandbox execution rules block");
     }
 
     @Test
@@ -59,6 +63,26 @@ class PromptTemplateEngineTest {
             // Test with both current time and null
             assertNotNull(promptTemplateEngine.buildSystemPrompt(role, "summary", Instant.now()));
             assertNotNull(promptTemplateEngine.buildSystemPrompt(role, null, null));
+        }
+    }
+
+    @Test
+    void unknownDynamicRoleGetsCoordinatorToolRulesAndDoesNotThrow() {
+        // AgentRoleEnum.fromString("security-auditor") returns an open role
+        AgentRoleEnum unknown = AgentRoleEnum.fromString("security-auditor");
+        // Must NOT throw — must return non-blank content
+        String prompt = promptTemplateEngine.buildSystemPrompt(unknown, null, Instant.now());
+        assertNotNull(prompt);
+        assertFalse(prompt.isBlank());
+        // Must contain coordinator tool rules as fallback evidence
+        assertTrue(prompt.toUpperCase().contains("PERMITTED TOOLS"));
+    }
+
+    @Test
+    void allSixBuiltInRolesResolveToTheirOwnTemplate() {
+        // None of the built-in 6 should trigger the WARN path
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            assertDoesNotThrow(() -> promptTemplateEngine.buildSystemPrompt(role, null, Instant.now()));
         }
     }
 }

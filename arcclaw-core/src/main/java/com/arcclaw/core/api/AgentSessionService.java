@@ -13,10 +13,8 @@ import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -377,16 +375,7 @@ public class AgentSessionService {
     private MessageContext createRestContext(String sessionId, String goal) {
         ChannelUser user = new ChannelUser("rest:api", "rest:api", "REST API User", ChannelType.REST_API);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "rest-api-" + sessionId, Instant.now());
-        ChannelSender noOpSender = new ChannelSender() {
-            @Override public ChannelType supports() { return ChannelType.REST_API; }
-            @Override public void send(ChannelUser recipient, List<ReplyNode> nodes) {
-                log.infof("[REST-SENDER] Sent %d nodes to %s", nodes.size(), recipient.platformId());
-            }
-            @Override public void sendRaw(ChannelUser recipient, String text) {
-                log.infof("[REST-SENDER] Sent raw message to %s: %s", recipient.platformId(), text);
-            }
-        };
-        return new MessageContext("rest-chat-" + sessionId, user, msg, noOpSender);
+        return new MessageContext("rest-chat-" + sessionId, user, msg);
     }
 
     private Optional<Response> validateRole(String role) {

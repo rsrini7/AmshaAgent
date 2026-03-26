@@ -86,9 +86,13 @@ public class PromptTemplateEngine {
                 );
             }
 
+        boolean hasSandboxExec = sortedCapabilities.stream()
+                .anyMatch(c -> "sandbox_exec".equals(c.toolName()));
+
         return templateFor(role)
                 .data("roleDef", role.definition())
                 .data("sortedCapabilities", sortedCapabilities)
+                .data("hasSandboxExec", hasSandboxExec)
                 .data("compactionSummary", compactionSummary)
                 .data("systemTimeUtc", timeString)
                 .render();
@@ -102,7 +106,14 @@ public class PromptTemplateEngine {
             case "debugger"    -> debuggerTemplate;
             case "architect"   -> architectTemplate;
             case "synthesizer" -> synthesizerTemplate;
-            default            -> coordinatorTemplate;
+            default -> {
+                log.warnf("[PromptTemplateEngine] No Qute template registered for role '%s'. " +
+                            "Falling back to coordinator tool rules. " +
+                            "To fix: create templates/prompts/role-%s.txt in arcclaw-core/src/main/resources. " +
+                            "The coordinator tool ruleset includes GitHub, memory-search, schedule, and manage-schedule.",
+                            role.id(), role.id());
+                yield coordinatorTemplate;
+            }
         };
     }
 }

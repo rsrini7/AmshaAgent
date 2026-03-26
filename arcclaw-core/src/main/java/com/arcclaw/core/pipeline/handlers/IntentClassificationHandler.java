@@ -4,8 +4,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
@@ -25,6 +27,9 @@ public class IntentClassificationHandler implements MessageHandler {
 
     @Inject
     DestructiveVocabularyFilter destructiveVocabularyFilter;
+
+    @Inject
+    ChannelPluginRegistry channelPluginRegistry;
 
     @Override
     public int priority() {
@@ -48,7 +53,9 @@ public class IntentClassificationHandler implements MessageHandler {
                         "— blocking before agent dispatch. chat=%s", context.getChatId());
                 String safeReply = "⛔ I can only perform read operations (view, list). " +
                         "Destructive operations such as deleting repositories are not supported.";
-                context.getSender().sendRaw(context.getUser(), safeReply);
+                channelPluginRegistry.find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), safeReply));
                 return HandleResult.STOP;    // ← short-circuits AgentDispatchHandler entirely
             }
             // ── END DESTRUCTIVE VOCABULARY GUARD ──────────────────────────
@@ -66,8 +73,9 @@ public class IntentClassificationHandler implements MessageHandler {
                 if (e.statusCode() == 429 || (e.getMessage() != null && e.getMessage().contains("rate limit"))) {
                     log.warnf("Intent classifier rate limited for chat %s — defaulting to coordinator: %s",
                             context.getChatId(), e.getMessage());
-                    context.getSender().sendRaw(context.getUser(),
-                            "⏳ Rate limited on classification — defaulting to coordinator.");
+                    channelPluginRegistry.find(context.getChannelType())
+                        .map(ChannelPlugin::sender)
+                        .ifPresent(s -> s.sendRaw(context.getUser(), "⏳ Rate limited on classification — defaulting to coordinator."));
                     context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
                 } else {
                     throw e; // re-throw non-rate-limit HTTP errors

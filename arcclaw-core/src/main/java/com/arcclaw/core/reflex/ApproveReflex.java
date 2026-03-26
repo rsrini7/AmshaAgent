@@ -13,6 +13,7 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -30,7 +31,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
 import org.jboss.logging.Logger;
 
@@ -76,6 +77,16 @@ public class ApproveReflex implements AgentReflex {
     }
 
     @Override
+    public SecurityEventType auditEventType() {
+        return SecurityEventType.APPROVAL_GRANTED;
+    }
+
+    @Override
+    public String auditDetail(String sessionId, String input) {
+        return "action=APPROVE session=" + sessionId;
+    }
+
+    @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         ChannelCommand.Approve approve = (ChannelCommand.Approve) ChannelCommand.parse(input);
         Optional<String> cronId = approve.cronId();
@@ -116,7 +127,7 @@ public class ApproveReflex implements AgentReflex {
                             sessionId, userId, chatId, finalRole,
                             () -> agentLoop.run(sessionId, finalRole, resumeGoal, reasoningEngine, 5, context)
                     );
-                    return CronResultFormatter.format(result);
+                    return AgentResultFormatter.format(result);
                 }
 
                 // 3. No session checkpoint — Fix 1 guidance
@@ -204,7 +215,7 @@ public class ApproveReflex implements AgentReflex {
 
         jobCompletedEvent.fire(new AgentJobCompleted(
                 cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                CronResultFormatter.format(result),
+                AgentResultFormatter.format(result),
                 result instanceof AgentResult.Failed f ? f.category() : null));
 
         try {

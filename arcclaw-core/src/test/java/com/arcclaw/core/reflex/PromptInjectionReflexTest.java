@@ -1,14 +1,12 @@
 package com.arcclaw.core.reflex;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 
 import java.time.Instant;
 
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -24,7 +22,7 @@ public class PromptInjectionReflexTest {
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user", "user", "user", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "sess", Instant.now());
-        return new MessageContext("chat", user, msg, mock(ChannelSender.class));
+        return new MessageContext("chat", user, msg);
     }
 
     @Test

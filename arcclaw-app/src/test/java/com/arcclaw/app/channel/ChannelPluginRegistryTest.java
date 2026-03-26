@@ -2,14 +2,12 @@ package com.arcclaw.app.channel;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Optional;
 
 import jakarta.inject.Inject;
 
-import com.arcclaw.app.channel.telegram.TelegramChannelPlugin;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -17,13 +15,6 @@ import org.junit.jupiter.api.Test;
 class ChannelPluginRegistryTest {
 
     @Inject ChannelPluginRegistry registry;
-
-    @Test
-    void telegramPluginIsRegisteredAtStartup() {
-        Optional<ChannelPlugin> telegram = registry.find(ChannelType.TELEGRAM);
-        assertTrue(telegram.isPresent());
-        assertTrue(telegram.get() instanceof TelegramChannelPlugin);
-    }
 
     @Test
     void allFiveCapabilitiesAreNonNull() {

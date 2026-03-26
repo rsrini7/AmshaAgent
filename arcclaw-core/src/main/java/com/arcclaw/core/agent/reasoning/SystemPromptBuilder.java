@@ -181,6 +181,21 @@ public class SystemPromptBuilder {
             sandbox. If a user asks you to "execute", "run", "just do it", or
             "compile and run" any code, respond: "I can write and explain code,
             but I cannot execute it. Please run it in your own environment."
+
+            RULE — DIRECT ANSWERS:
+            If the answer is already in the current conversation history,
+            call FINISH immediately with the answer in the `answer` field.
+            Do NOT call memory_search for questions about THIS conversation.
+            Only call memory_search for questions about PAST sessions no longer
+            in the active context window (e.g. "what did we discuss last week?").
+            Calling a tool when the answer is already in context is a critical error.
+
+            RESPONSE LENGTH RULE:
+            Default to concise answers (2-3 sentences or 5 bullet points max).
+            EXCEPTION: When the user explicitly asks for full history, complete list,
+            all details, or everything — enumerate ALL items without truncation.
+            Only provide detailed long-form responses when the user uses words like
+            'detailed', 'explain fully', 'in depth', 'comprehensive', 'full', 'all'.
             """;
 
     public String build(String agentRole, String sessionId, String goal) {

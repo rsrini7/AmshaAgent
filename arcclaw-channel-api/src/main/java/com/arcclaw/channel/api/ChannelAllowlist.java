@@ -8,7 +8,7 @@ package com.arcclaw.channel.api;
  * remains type-agnostic across channels (Telegram uses numeric IDs, Discord uses
  * snowflakes, etc.).
  *
- * @see com.arcclaw.app.security.TelegramAllowlistGuard
+ * @see com.arcclaw.channel.telegram.TelegramAllowlistGuard
  */
 public interface ChannelAllowlist {
 

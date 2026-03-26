@@ -69,6 +69,10 @@ public class PiiScanReflex implements AgentReflex {
         new PiiRule(PHONE_INDIA,     "PHONE",   "[REDACTED-PHONE]"),
         new PiiRule(PHONE_INTL,      "PHONE",   "[REDACTED-PHONE]"),
         new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[REDACTED-AADHAAR]"),
+        new PiiRule(
+            Pattern.compile("(?<!\\d)(?<!-)(?<![./])\\d{10}(?!\\d)(?!-)"), "PHONE",
+                        "[REDACTED-PHONE]"
+        ),
         new PiiRule(PASSPORT_IN,     "PASSPORT","[REDACTED-PASSPORT]"),
         new PiiRule(DATE_OF_BIRTH,   "DOB",     "[REDACTED-DOB]"),
         new PiiRule(IPV4,            "IP",      "[REDACTED-IP]"),
@@ -80,6 +84,16 @@ public class PiiScanReflex implements AgentReflex {
     @Override
     public boolean matches(String input) {
         return piiMode == PiiMode.BLOCK_AND_NOTIFY && containsPii(input);
+    }
+
+    @Override
+    public boolean emitsSanitizeAudit() {
+        return true;
+    }
+
+    @Override
+    public String auditDetail(String sessionId, String input) {
+        return "mode=" + piiMode.name() + " inputLength=" + input.length();
     }
 
     @Override

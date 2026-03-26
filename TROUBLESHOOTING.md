@@ -896,7 +896,27 @@ if (camelContext.getRoute("telegram-bot") == null) {
 
 
 
-#### 13.2 Real-time Metrics Verification
+| 13.2 | Real-time Metrics Verification |
+---
+
+## 18. Telegram Modularization & Test Stabilization (Phase 67)
+
+### 🔴 Failure: `AmbiguousResolutionException` in Telegram Module Tests
+**Symptom:** Tests like `TelegramChannelRouteStartupTest` fail to start with "Ambiguous dependencies for type ChatModel".
+**Root Cause:** CDI bean conflict between inline `@Produces` mocks in the test class and the centralized `TestCoreMocks.java`.
+**Resolution:** Remove all inline `@Produces` methods and consolidate them into `TestCoreMocks` using `@Alternative` and `@Priority(1)`.
+
+### 🔴 Failure: `NullPointerException` in `CronSchemaEnforcer` during Startup
+**Symptom:** Quarkus fails to boot during tests with an NPE in `onStart()` when trying to execute `entityManager.createNativeQuery()`.
+**Root Cause:** A mock `EntityManager` was returning `null` for query creation. Core services require a functional Hibernate lifecycle for schema validation.
+**Resolution:** Remove the mock `EntityManager` from `TestCoreMocks`. Allow Quarkus to initialize the real Hibernate/SQLite datasource configured in `application.yaml`.
+
+### 🔴 Failure: `jakarta.persistence.metamodel.EntityType` Discovery Failure
+**Symptom:** Hibernate fails to find entity classes (e.g., `AgentCheckpoint`) when running tests in the isolated `arcclaw-channel-telegram` module.
+**Root Cause:** The `arcclaw-core` module (where entities reside) was not being scanned or indexed by the isolated module's test runner.
+**Resolution:**
+1. Add `arcclaw-core` to `quarkus.index-dependency` in `application.yaml`.
+2. Explicitly add missing entity packages to `quarkus.hibernate-orm.packages` (e.g., `com.arcclaw.core.session`, `com.arcclaw.core.lifecycle`).
 
 * **Symptom:** The metrics endpoint at `/q/metrics` loads, but the `arcclaw_` specific counters are missing.
 * **Root Cause:** Micrometer counters are lazily initialized and only appear after the first event is recorded, or the `MetricsAgentObserver` is not being discovered by the `AgentLoop` due to indexing issues.
@@ -3763,3 +3783,24 @@ This provides the most compatible structure for both the IDE and the Quarkus run
 **Symptom**: Stray `data/` and `lib/` folders appearing in the `arcclaw-app` module root after running JUnit tests.
 **Cause**: Default configuration uses `./data` and `./lib/vec0` which resolve relative to the launch directory.
 **Fix**: Implemented `%test` profile overrides in `application.yaml` to redirect these to `target/data` and `target/lib/vec0`. Combined with absolute path pinning in `ArcClawCli`, this ensures the workspace remains clean.
+
+---
+
+## 18. Telegram Modularization & Test Stabilization (Phase 67)
+
+### 🔴 Failure: `AmbiguousResolutionException` in Telegram Module Tests
+**Symptom:** Tests like `TelegramChannelRouteStartupTest` fail to start with "Ambiguous dependencies for type ChatModel".
+**Root Cause:** CDI bean conflict between inline `@Produces` mocks in the test class and the centralized `TestCoreMocks.java`.
+**Resolution:** Remove all inline `@Produces` methods and consolidate them into `TestCoreMocks` using `@Alternative` and `@Priority(1)`.
+
+### 🔴 Failure: `NullPointerException` in `CronSchemaEnforcer` during Startup
+**Symptom:** Quarkus fails to boot during tests with an NPE in `onStart()` when trying to execute `entityManager.createNativeQuery()`.
+**Root Cause:** A mock `EntityManager` was returning `null` for query creation. Core services require a functional Hibernate lifecycle for schema validation.
+**Resolution:** Remove the mock `EntityManager` from `TestCoreMocks`. Allow Quarkus to initialize the real Hibernate/SQLite datasource configured in `application.yaml`.
+
+### 🔴 Failure: `jakarta.persistence.metamodel.EntityType` Discovery Failure
+**Symptom:** Hibernate fails to find entity classes (e.g., `AgentCheckpoint`) when running tests in the isolated `arcclaw-channel-telegram` module.
+**Root Cause:** The `arcclaw-core` module (where entities reside) was not being scanned or indexed by the isolated module's test runner.
+**Resolution:**
+1. Add `arcclaw-core` to `quarkus.index-dependency` in `application.yaml`.
+2. Explicitly add missing entity packages to `quarkus.hibernate-orm.packages` (e.g., `com.arcclaw.core.session`, `com.arcclaw.core.lifecycle`).

@@ -7,18 +7,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
- * Brahma — Math/Code Creator and Logic Expert agent.
- * <p>
- * Specializes in code analysis, generation, and logical reasoning.
- * Refuses non-technical requests.
- * <p>
- * System prompt enforces:
- * <ul>
- * <li>Generate code from scratch based on specifications</li>
- * <li>Use NO tools (pure code generation engine)</li>
- * <li>Refuse external fetching, research, or non-technical tasks</li>
- * <li>Validate all code suggestions for correctness</li>
- * </ul>
+ * Brahma — Math/Code Creator, Logic Expert, and Sandbox Executor.
+ * Specializes in code generation, logical reasoning, and sandboxed execution.
  */
 @ApplicationScoped
 @AgentRole("coder")
@@ -32,17 +22,17 @@ public class BrahmaAgent implements Agent {
             - Implement features, algorithms, and data structures.
             - Perform logical reasoning and mathematical computations.
             - Write unit tests and implementation code.
+            - Execute code in the sandbox when the user asks you to run, test, or execute it.
 
             STRICT RULES:
-            - You are a PURE code generation engine. You do NOT use any tools.
-            - You MUST NOT perform research, fetch repositories, or access external systems.
             - You MUST validate all code suggestions for correctness before presenting them.
             - You MUST NOT fabricate APIs or methods that do not exist.
+            - You MUST NOT perform research, fetch repositories, or access external systems.
             - If a task requires external data (e.g. a GitHub repository), respond:
               "I need the source code pasted directly — I cannot fetch external repositories."
             - If a task is outside your expertise, delegate back to the coordinator.
-
-            AVAILABLE TOOLS: None. You are a pure code generation engine.
+            - When asked to execute, run, or test code — use sandbox_exec. Report its output verbatim.
+            - NEVER say "I cannot execute code" when sandbox_exec is available to you.
             """;
 
     @Override
@@ -57,7 +47,8 @@ public class BrahmaAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        return List.of(); // SANDBOX_EXEC deferred to Phase 51
-        //return List.copyOf(AgentRoleEnum.CODER.definition().toolNames()) which is an empty list.
+        // Fixed in P67-T6: SANDBOX_EXEC is now in CODER's capabilities.
+        // This drives sortedCapabilities in role-coder.txt — must not be empty.
+        return List.copyOf(AgentRoleEnum.CODER.definition().toolNames());
     }
 }

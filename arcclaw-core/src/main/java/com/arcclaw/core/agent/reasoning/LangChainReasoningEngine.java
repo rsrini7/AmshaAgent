@@ -218,46 +218,44 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         return stepParser.parse(sessionId, agentRole, response);
     }
 
-    /**
-     * Extracts the prose content from Groq's failed_generation field.
-     * Unescapes \\n → newline and \\\" → quote so the extracted text
-     * is clean markdown ready for direct delivery to the user.
-     */
-    private String extractProseFromFailedGeneration(String message) {
-        int start = message.indexOf("\"failed_generation\":\"");
-        if (start == -1) return null;
-        start += 21;
+    private static final String FAILED_GEN_KEY = "\"failed_generation\":\"";
 
-        // Find the closing "}}" that terminates the error JSON —
-        // the failed_generation value ends just before it
-        int end = message.lastIndexOf("\"}}");
-        if (end <= start) return null;
-
-        return message.substring(start, end)
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .trim();
-    }
-
-    /**
-     * Returns true when Groq's tool_use_failed rejection contains prose in
-     * failed_generation rather than a malformed tool call JSON.
-     * Prose responses start with markdown markers (**,#,*) or plain letters,
-     * never with '{' which would indicate a tool call attempt.
-     */
     private boolean isProseGenerationFailure(String message) {
         if (message == null) return false;
-        int idx = message.indexOf("\"failed_generation\":\"");
+        int idx = message.indexOf(FAILED_GEN_KEY);   // ← finds actual JSON key, not the description
         if (idx == -1) return false;
-        int start = idx + 21;
+        int start = idx + FAILED_GEN_KEY.length();   // first char of actual value
         if (start >= message.length()) return false;
-        // Skip leading whitespace/escape sequences
-        String snippet = message.substring(start).stripLeading()
-                .replace("\\n", "").replace("\\r", "").stripLeading();
-        // Tool call JSON starts with '[' or '{'; prose starts with text/markdown
-        return !snippet.startsWith("[") && !snippet.startsWith("{");
+        String snippet = message.substring(start)
+            .replace("\\n", "\n").replace("\\\"", "\"").stripLeading();
+        return !snippet.startsWith("{") && !snippet.startsWith("[");
+    }
+
+    private String extractProseFromFailedGeneration(String message) {
+        if (message == null) return null;
+        int idx = message.indexOf(FAILED_GEN_KEY);   // ← same fix
+        if (idx == -1) return null;
+        int start = idx + FAILED_GEN_KEY.length();   // first char of actual value
+        // Read character-by-character until closing unescaped "
+        StringBuilder sb = new StringBuilder();
+        boolean escape = false;
+        for (int i = start; i < message.length(); i++) {
+            char c = message.charAt(i);
+            if (escape) {
+                if (c == 'n') sb.append('\n');
+                else if (c == 't') sb.append('\t');
+                else sb.append(c);
+                escape = false;
+            } else if (c == '\\') {
+                escape = true;
+            } else if (c == '"') {
+                break;                               // end of JSON string value
+            } else {
+                sb.append(c);
+            }
+        }
+        String result = sb.toString().strip();
+        return result.isBlank() ? null : result;
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {

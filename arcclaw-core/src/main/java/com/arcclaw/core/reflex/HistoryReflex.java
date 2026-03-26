@@ -17,8 +17,14 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 @ApplicationScoped
 public class HistoryReflex implements AgentReflex {
 
-    private static final Pattern MATCHES_PATTERN = 
-        Pattern.compile("(?i)^/history$");
+     private static final Pattern MATCHES_PATTERN = Pattern.compile(
+        "(?i)^/history$" +
+        "|what (did |have )?(we |i )?(discuss|talk|cover|say)" +
+        "|our conversation( so far| history)?" +
+        "|(show|give|list|summarize).{0,20}(conversation|discussion|history)" +
+        "|search memory.{0,30}(full|all|everything)" +
+        "|what.{0,20}so far"
+    );
 
     @Inject
     ChatMemoryStore chatMemoryStore;

@@ -166,12 +166,12 @@
 
     <!-- Channels -->
     <dependency>
-      <groupId>org.apache.camel.quarkus</groupId>
-      <artifactId>camel-quarkus-telegram</artifactId>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-channel-telegram</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.camel.quarkus</groupId>
-      <artifactId>camel-quarkus-bean</artifactId>
+      <artifactId>camel-quarkus-core</artifactId>
     </dependency>
     <dependency>
         <groupId>org.apache.camel.quarkus</groupId>

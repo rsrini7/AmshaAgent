@@ -20,6 +20,9 @@ quarkus:
     arcclaw-channel-api:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-api
+    arcclaw-channel-telegram:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-telegram
     arcclaw-rag:
       group-id: com.arcclaw
       artifact-id: arcclaw-rag
@@ -360,7 +363,8 @@ arcclaw:
     approval-timeout-minutes: 60 # must be >> gc-interval converted to minutes
 
   sandbox:
-    strategy: PODMAN
+    enabled: true
+    strategy: PODMAN    # options: DIRECT | PODMAN | NAMESPACE
     podman-path: podman
     container-image: "arcclaw-tool-runner:latest"
     timeout-seconds: 30
@@ -368,6 +372,10 @@ arcclaw:
     tool-runner-user: "65534"
     memory-limit: "512m"    # Fix C2
     cpu-limit: "0.5"        # Fix C2
+    tmpfs-path: /run/arcclaw/secrets
+    # python-executable: "C:\\Python313\\python.exe"
+    circuit-breaker:
+      failure-threshold: 3   # was 2; gives LLM one retry for param errors
 
   autonomy:
     default-level: SUPERVISED

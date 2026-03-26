@@ -1,15 +1,16 @@
 package com.arcclaw.app.channel;
 
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.stream.Stream;
+import java.util.Optional;
 
-import jakarta.enterprise.inject.Instance;
-
+import com.arcclaw.channel.api.ChannelJobNotifier;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +22,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ChannelCronNotificationDispatcherTest {
 
     @Mock
-    Instance<ChannelJobNotifier> notifiers;
+    ChannelPluginRegistry pluginRegistry;
+
+    @Mock
+    ChannelPlugin telegramPlugin;
 
     @Mock
     ChannelJobNotifier telegramNotifier;
@@ -29,12 +33,10 @@ class ChannelCronNotificationDispatcherTest {
     @InjectMocks
     ChannelCronNotificationDispatcher dispatcher;
 
-
-
     @Test
     void testTelegramJobNotifierSelectedForTelegramEvent() {
-        when(telegramNotifier.supports(ChannelType.TELEGRAM)).thenReturn(true);
-        when(notifiers.stream()).thenReturn(Stream.of(telegramNotifier));
+        when(telegramPlugin.jobNotifier()).thenReturn(telegramNotifier);
+        when(pluginRegistry.find(ChannelType.TELEGRAM)).thenReturn(Optional.of(telegramPlugin));
 
         AgentJobCompleted event = new AgentJobCompleted(
             "cron-1", "user-1", ChannelType.TELEGRAM, "chat-1", 
@@ -47,8 +49,7 @@ class ChannelCronNotificationDispatcherTest {
 
     @Test
     void testUnknownChannelTypeLogsWarning() {
-        when(telegramNotifier.supports(ChannelType.CLI)).thenReturn(false);
-        when(notifiers.stream()).thenReturn(Stream.of(telegramNotifier));
+        when(pluginRegistry.find(ChannelType.CLI)).thenReturn(Optional.empty());
 
         AgentJobCompleted event = new AgentJobCompleted(
             "cron-1", "user-1", ChannelType.CLI, "chat-1", 
@@ -57,7 +58,7 @@ class ChannelCronNotificationDispatcherTest {
         dispatcher.onJobCompleted(event);
 
         // No exception thrown, and telegram notifier is not called
-        verify(telegramNotifier, never()).notifyJobCompleted(anyString(), anyString(), anyString());
+        verify(telegramNotifier, never()).notifyJobCompleted(any(), any(), any());
     }
 
     @Test
@@ -68,7 +69,7 @@ class ChannelCronNotificationDispatcherTest {
 
         dispatcher.onJobCompleted(event);
 
-        // Notifiers stream shouldn't even be called
-        verify(telegramNotifier, never()).notifyJobCompleted(anyString(), anyString(), anyString());
+        // Registry find should not even be called
+        verify(pluginRegistry, never()).find(any(ChannelType.class));
     }
 }

@@ -1,17 +1,25 @@
 package com.arcclaw.core.security;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 public class DestructiveVocabularyFilterTest {
 
     private final DestructiveVocabularyFilter filter = new DestructiveVocabularyFilter();
 
     @Test
-    void testCoderExemptByEmptyCapabilities() {
-        // Coder has empty capabilities, so filter passes through even with "delete"
-        String result = filter.filter("coder", "delete the repo");
-        Assertions.assertEquals("coder", result);
+    void testCoderExemptBySandboxOnlyCapabilities() {
+        // Coder has exactly SANDBOX_EXEC — still exempt (sandbox is controlled execution)
+        assertTrue(filter.isSandboxOnlyRole(AgentRoleEnum.CODER),
+            "Coder must be exempt from destructive vocabulary filter — sandbox-only role");
+        // Coordinator has broad tools — must NOT be exempt
+        assertFalse(filter.isSandboxOnlyRole(AgentRoleEnum.COORDINATOR),
+            "Coordinator must not be exempt — has network/schedule capabilities");
     }
 
     @Test

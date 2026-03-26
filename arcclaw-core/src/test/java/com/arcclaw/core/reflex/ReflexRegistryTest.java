@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -14,11 +13,9 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.audit.AuditHashUtil;
@@ -28,11 +25,11 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class ReflexRegistryTest {
@@ -66,7 +63,7 @@ class ReflexRegistryTest {
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user-1", "user-1", "user-1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
-        return new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
+        return new MessageContext("chat-1", user, msg);
     }
 
     // ── ReflexRegistry routing ──────────────────────────────────────────────

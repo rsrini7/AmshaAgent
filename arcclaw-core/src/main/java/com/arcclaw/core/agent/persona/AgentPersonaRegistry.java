@@ -8,12 +8,14 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import org.jboss.logging.Logger;
 
 /**
  * Registry to look up the persona-specific system prompt from Agent CDI beans.
  */
 @ApplicationScoped
 public class AgentPersonaRegistry {
+    private static final Logger log = Logger.getLogger(AgentPersonaRegistry.class);
 
     private final Iterable<Agent> agents;
 
@@ -43,6 +45,11 @@ public class AgentPersonaRegistry {
                 return agent.systemPrompt();
             }
         }
+
+        log.warnf("[AgentPersonaRegistry] No Agent bean registered for role '%s'. " +
+                "Returning coordinator persona as fallback. " +
+                "To fix: create a @ApplicationScoped class implementing Agent with role() = '%s'.",
+                role.toScopedName(), role.toScopedName());
 
         // Fallback: coordinator prompt if role not found
         for (Agent agent : agents) {

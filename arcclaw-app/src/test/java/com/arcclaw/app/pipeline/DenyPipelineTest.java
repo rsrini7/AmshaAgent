@@ -1,5 +1,6 @@
 package com.arcclaw.app.pipeline;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,11 +16,13 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.reflex.ReflexRegistry;
@@ -44,6 +47,9 @@ public class DenyPipelineTest {
     @InjectMock
     ChannelAllowlist allowlist;
 
+    @InjectMock
+    ChannelPluginRegistry channelPluginRegistry;
+
     private MessageContext context;
     private ChannelSender sender;
     private ChannelUser user;
@@ -55,8 +61,13 @@ public class DenyPipelineTest {
 
         user = new ChannelUser("user-123", "user-123", "alice", ChannelType.CLI);
         sender = mock(ChannelSender.class);
+        
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
+
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "session-456", Instant.now());
-        context = new MessageContext("chat-789", user, msg, sender);
+        context = new MessageContext("chat-789", user, msg);
     }
 
     @Test

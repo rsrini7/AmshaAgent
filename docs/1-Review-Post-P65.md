@@ -573,8 +573,8 @@ However, there are areas where architectural principles (SOLID, YAGNI, GoF) coul
 
 ### 5.2 MessagePipeline
 - **Positive:** Handler chain with priority.
-- **Issue:** The `AgentDispatchHandler` uses `CronResultFormatter.format` to format the result and sends raw text via `ChannelSender`. That's fine. However, the `ChannelSender` interface expects to send `ReplyNode` list or raw string. The `AgentDispatchHandler` only sends raw string, so structured replies are not used. This limits the ability to render rich messages in other channels.
-- **Suggestion:** Enhance `AgentResult` to include a list of `ReplyNode` directly (e.g., `Finished` could have a `List<ReplyNode>`). Then the `AgentDispatchHandler` could call `sender.send(recipient, nodes)` instead of `sendRaw`. This would allow channel-specific rendering (e.g., Telegram Markdown, Discord embed). Currently, `CronResultFormatter` returns a plain string, and `TelegramChannelSender` uses `TelegramMarkdownV2Renderer` only for `send` (not `sendRaw`). So structured replies are not used in the pipeline except for cron notifications (which use `sendRaw`). Consider using structured replies for all outputs.
+- **Issue:** The `AgentDispatchHandler` uses `AgentResultFormatter.format` to format the result and sends raw text via `ChannelSender`. That's fine. However, the `ChannelSender` interface expects to send `ReplyNode` list or raw string. The `AgentDispatchHandler` only sends raw string, so structured replies are not used. This limits the ability to render rich messages in other channels.
+- **Suggestion:** Enhance `AgentResult` to include a list of `ReplyNode` directly (e.g., `Finished` could have a `List<ReplyNode>`). Then the `AgentDispatchHandler` could call `sender.send(recipient, nodes)` instead of `sendRaw`. This would allow channel-specific rendering (e.g., Telegram Markdown, Discord embed). Currently, `AgentResultFormatter` returns a plain string, and `TelegramChannelSender` uses `TelegramMarkdownV2Renderer` only for `send` (not `sendRaw`). So structured replies are not used in the pipeline except for cron notifications (which use `sendRaw`). Consider using structured replies for all outputs.
 
 ### 5.3 Cron Notifications
 - **Positive:** `AgentJobCompleted` event carries rendered answer.
@@ -624,7 +624,7 @@ However, there are areas where architectural principles (SOLID, YAGNI, GoF) coul
 - In `EngineStepHandler.handleEngineException`, the `isSchemaError` check catches `InvalidRequestException` and `HttpException` (status 400). This is good, but there is also a `isToolUseFailed` branch that extracts `failed_generation`. This logic is brittle. Consider using a more robust way to extract the failed generation, maybe by parsing the error JSON. The current regex extraction may fail if the error format changes.
 - Suggestion: Use Jackson to parse the error response, which is often a JSON string. Many LLM providers return a structured error. Could parse it and extract the `failed_generation` field if present.
 
-### 6.6 Refactor CronResultFormatter
+### 6.6 Refactor AgentResultFormatter
 - Make it return a `List<ReplyNode>` instead of a plain string. Then the `AgentDispatchHandler` and cron notifiers can use `ChannelSender.send`. This would improve extensibility.
 
 ### 6.7 Improve SqliteRetryTemplate

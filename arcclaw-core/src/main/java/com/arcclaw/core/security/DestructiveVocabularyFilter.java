@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -62,7 +64,7 @@ public class DestructiveVocabularyFilter {
 
         // Rule: if the role has ANY tool capabilities, it must pass the destructive check.
         if (!EXEMPT_ROLES.contains(resolvedRole)
-            && !resolvedRole.definition().capabilities().isEmpty()
+            && !isSandboxOnlyRole(resolvedRole)
                 && isDestructive(userMessage)) {
             Log.warnf("Destructive vocabulary detected in message routed to '%s' (%s). " +
                     "Overriding to 'coordinator' with no-tool mode.",
@@ -70,5 +72,11 @@ public class DestructiveVocabularyFilter {
             return "coordinator";
         }
         return role;
+    }
+
+    boolean isSandboxOnlyRole(AgentRoleEnum role) {
+        Set<ToolCapability> caps = role.definition().capabilities();
+        return caps.isEmpty() ||
+            (caps.size() == 1 && caps.contains(ToolCapability.SANDBOX_EXEC));
     }
 }

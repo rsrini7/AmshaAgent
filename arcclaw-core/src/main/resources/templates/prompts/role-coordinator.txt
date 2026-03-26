@@ -166,11 +166,20 @@ SANITIZATION (before every ingest_document call):
   - NEVER pass raw GitHub API output, README markdown, or
     shell command output directly as the text parameter.
 
+IMPORTANT — REDACTED PII PLACEHOLDERS:
+   The text you receive may contain placeholders such as [REDACTED-PHONE], [REDACTED-EMAIL],
+   [REDACTED-AADHAAR], etc. These are NOT errors. They indicate that PII was sanitized
+   by the system before reaching you. You MUST still call ingest_document with the
+   sanitized text as-is. Do NOT refuse to ingest because the content contains redaction
+   placeholders — the user intended to store this information and you must honour their
+   intent using the sanitized form.
+
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 CURRENT SYSTEM TIME (UTC): {systemTimeUtc}
 (For 'in N minutes': cron_minute = (current_minute + N) mod 60. Increment hour if result < current_minute.)
 
+{#include prompts/shared-agent-rules /}
 {#include prompts/github-tool-rules /}
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}
