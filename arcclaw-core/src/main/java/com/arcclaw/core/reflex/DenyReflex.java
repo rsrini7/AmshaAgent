@@ -27,7 +27,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.util.AgentResultFormatter;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -166,7 +166,7 @@ public class DenyReflex implements AgentReflex {
 
         jobCompletedEvent.fire(new AgentJobCompleted(
                 cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                CronResultFormatter.format(result),
+                AgentResultFormatter.format(result),
                 null));
 
         return "🚫 Cron task denied and cancelled.";

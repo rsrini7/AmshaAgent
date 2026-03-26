@@ -30,7 +30,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
 import org.jboss.logging.Logger;
 
@@ -116,7 +116,7 @@ public class ApproveReflex implements AgentReflex {
                             sessionId, userId, chatId, finalRole,
                             () -> agentLoop.run(sessionId, finalRole, resumeGoal, reasoningEngine, 5, context)
                     );
-                    return CronResultFormatter.format(result);
+                    return AgentResultFormatter.format(result);
                 }
 
                 // 3. No session checkpoint — Fix 1 guidance
@@ -204,7 +204,7 @@ public class ApproveReflex implements AgentReflex {
 
         jobCompletedEvent.fire(new AgentJobCompleted(
                 cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                CronResultFormatter.format(result),
+                AgentResultFormatter.format(result),
                 result instanceof AgentResult.Failed f ? f.category() : null));
 
         try {

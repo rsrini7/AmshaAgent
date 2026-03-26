@@ -691,7 +691,7 @@ Two bugs observed in production:
 1. Intent classifier rate limit (llama-3.1-8b-instant) causes silent
    ~4-8s delay — user gets no signal while RetryUtils retries internally
 2. AgentStateMachineRunner 429 handler formats message with ⏳ but
-   CronResultFormatter wraps it with ❌ — contradictory output
+   AgentResultFormatter wraps it with ❌ — contradictory output
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 GROUND TRUTH — READ BEFORE IMPLEMENTING
@@ -706,7 +706,7 @@ GROUND TRUTH — READ BEFORE IMPLEMENTING
    AgentResult.failed(humanMessage, SYSTEM_ERROR, ...)
    AgentErrorMessageUtil.sanitizeErrorMessage() already formats this
    as "⏳ I'm temporarily throttled. Please try again in X."
-   But CronResultFormatter.format() prefixes ALL Failed results with
+   But AgentResultFormatter.format() prefixes ALL Failed results with
    "❌ " — so the user sees "❌ ⏳ I'm temporarily throttled" which
    is contradictory. Fix the formatter, not the sanitizer.
 
@@ -800,9 +800,9 @@ Change SYSTEM_ERROR to RATE_LIMIT:
   AgentResult.FailureCategory.RATE_LIMIT
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FIX 4 — Fix CronResultFormatter contradictory prefix
+FIX 4 — Fix AgentResultFormatter contradictory prefix
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-File: arcclaw-core/.../util/CronResultFormatter.java
+File: arcclaw-core/.../util/AgentResultFormatter.java
 
 Current switch for Failed:
   case AgentResult.Failed f -> "❌ " + AgentErrorMessageUtil.sanitizeErrorMessage(f.reason())
@@ -839,7 +839,7 @@ This aligns REST response code with the actual error type.
 EXECUTION ORDER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Fix 3 (AgentStateMachineRunner RATE_LIMIT category)
-2. Fix 4 (CronResultFormatter prefix fix)
+2. Fix 4 (AgentResultFormatter prefix fix)
 3. Fix 5 (AgentResponseMapper 429 status)
 4. Fix 2 (IntentClassificationHandler split catch)
 5. Fix 1 (TelegramAgentHandler ⏳ acknowledgment)
@@ -851,7 +851,7 @@ Run after each fix:
 DEFINITION OF DONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - AgentStateMachineRunner uses RATE_LIMIT (not SYSTEM_ERROR) for 429
-- CronResultFormatter never prefixes ⏳ messages with ❌
+- AgentResultFormatter never prefixes ⏳ messages with ❌
 - AgentResponseMapper returns HTTP 429 for RATE_LIMIT failures
 - IntentClassificationHandler notifies user when rate limit exhausts
   retries, then falls back to coordinator
@@ -863,7 +863,7 @@ DEFINITION OF DONE
 - AgentStateMachineRunnerTest: new test case verifying that an
   HttpException with statusCode 429 produces AgentResult.Failed
   with category == RATE_LIMIT
-- CronResultFormatterTest (if exists): verify Failed result with
+- AgentResultHandlerTest (if exists): verify Failed result with
   ⏳-prefixed message is NOT further prefixed with ❌
 - Full test suite passes:
   .\mvnw.cmd clean test -pl arcclaw-core,arcclaw-app -am

@@ -16,7 +16,7 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
 import org.jboss.logging.Logger;
 
@@ -62,7 +62,7 @@ public class CronResultHandler {
 
     // Handles Finished, Failed, LoopExceeded — always terminates session
     private void handleNormalCompletion(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
-        String answer = CronResultFormatter.format(result);
+        String answer = AgentResultFormatter.format(result);
         String finalAnswer = answer.trim().isEmpty()
                 ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.goal
                 : answer;
@@ -86,7 +86,7 @@ public class CronResultHandler {
             SecurityEventType.LOOP_AWAITING_APPROVAL,
             "cronId=" + job.id + " pendingTool=" + result.toolName());
 
-        String answer = CronResultFormatter.formatCronHitl(job.id, job.goal, result.toolName());
+        String answer = AgentResultFormatter.formatCronHitl(job.id, job.goal, result.toolName());
         // Fire delivery event — session intentionally kept alive for approval
         fireCompletionEvent(job, executionId, answer, null);
 
@@ -134,7 +134,7 @@ public class CronResultHandler {
             }
         } else {
             // LoopExceeded or Failed variants
-            cronRepository.markFailed(job.id, CronResultFormatter.format(result));
+            cronRepository.markFailed(job.id, AgentResultFormatter.format(result));
             auditService.record(cronSessionId, job.userId,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     SecurityEventType.CRONFAILED,

@@ -18,7 +18,7 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.util.CronResultFormatter;
+import com.arcclaw.core.util.AgentResultFormatter;
 import org.jboss.logging.Logger;
 
 /**
@@ -122,7 +122,7 @@ public class AgentDispatchHandler implements MessageHandler {
             return HandleResult.STOP;  // stop pipeline gracefully — do not throw
         }
 
-        String output = CronResultFormatter.format(result);
+        String output = AgentResultFormatter.format(result);
         channelPluginRegistry.find(context.getChannelType())
             .map(ChannelPlugin::sender)
             .ifPresentOrElse(
