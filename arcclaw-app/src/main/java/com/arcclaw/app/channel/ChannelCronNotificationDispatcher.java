@@ -1,14 +1,13 @@
 package com.arcclaw.app.channel;
 
+import org.jboss.logging.Logger;
+
+import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.core.cron.AgentJobCompleted;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Any;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-
-import com.arcclaw.channel.api.ChannelJobNotifier;
-import com.arcclaw.core.cron.AgentJobCompleted;
-import org.jboss.logging.Logger;
 
 /**
  * Dispatcher that routes cron job completion events to the correct ChannelJobNotifier.
@@ -21,8 +20,7 @@ public class ChannelCronNotificationDispatcher {
     private static final Logger log = Logger.getLogger(ChannelCronNotificationDispatcher.class);
 
     @Inject
-    @Any
-    Instance<ChannelJobNotifier> notifiers;
+    ChannelPluginRegistry pluginRegistry;
 
     void onJobCompleted(@Observes AgentJobCompleted event) {
         if (event.channelType() == null) {
@@ -34,12 +32,11 @@ public class ChannelCronNotificationDispatcher {
             log.warnf("CRON-FAIL cronId=%s category=%s", event.cronId(), event.failureCategory());
         }
 
-        notifiers.stream()
-            .filter(n -> n.supports(event.channelType()))
-            .findFirst()
+        pluginRegistry.find(event.channelType())
+            .map(ChannelPlugin::jobNotifier)
             .ifPresentOrElse(
                 n -> n.notifyJobCompleted(event.channelPlatformId(), event.renderedAnswer(), event.correlationId()),
-                () -> log.warnf("No ChannelJobNotifier found for type [%s]", event.channelType())
+                () -> log.warnf("No ChannelPlugin for channelType [%s] — dropping notification", event.channelType())
             );
     }
 }

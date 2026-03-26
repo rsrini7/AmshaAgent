@@ -2,14 +2,14 @@ package com.arcclaw.app.channel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
-import jakarta.enterprise.inject.Any;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.channel.api.ChannelJobNotifier;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.lifecycle.ApprovalTimedOutEvent;
 import org.jboss.logging.Logger;
+
+import java.util.Optional;
 
 /**
  * Dispatcher that routes approval timeout events to the correct ChannelJobNotifier.
@@ -22,8 +22,7 @@ public class ChannelApprovalTimeoutDispatcher {
     private static final Logger log = Logger.getLogger(ChannelApprovalTimeoutDispatcher.class);
 
     @Inject
-    @Any
-    Instance<ChannelJobNotifier> notifiers;
+    ChannelPluginRegistry pluginRegistry;
 
     void onApprovalTimedOut(@ObservesAsync ApprovalTimedOutEvent event) {
         if (event.channelPlatformId() == null || event.channelPlatformId().isBlank()) {
@@ -32,14 +31,20 @@ public class ChannelApprovalTimeoutDispatcher {
             return;
         }
 
-        ChannelType type = ChannelType.fromString(event.channelType()).orElse(ChannelType.TELEGRAM);
+        Optional<ChannelType> typeOpt = ChannelType.fromString(event.channelType());
+        if (typeOpt.isEmpty()) {
+            log.warnf("ChannelApprovalTimeoutDispatcher: unknown channelType '%s' for session %s — " +
+                    "dropping timeout notification. Fix: ensure channelType is set on AgentCronEntity.",
+                    event.channelType(), event.sessionId());
+            return;
+        }
+        ChannelType type = typeOpt.get();
 
-        notifiers.stream()
-            .filter(n -> n.supports(type))
-            .findFirst()
+        pluginRegistry.find(type)
+            .map(ChannelPlugin::jobNotifier)
             .ifPresentOrElse(
                 n -> n.notifyApprovalTimeout(event.channelPlatformId(), event.sessionId(), event.pendingToolName(), event.timeoutMinutes()),
-                () -> log.warnf("No ChannelJobNotifier found for type [%s]", type)
+                () -> log.warnf("No ChannelPlugin for channelType [%s] — dropping notification", type)
             );
     }
 }
