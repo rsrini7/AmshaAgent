@@ -10,9 +10,11 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.enterprise.inject.Default;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@Default
 @InputSanitizer.Injection
 public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
