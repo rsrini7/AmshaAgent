@@ -4,20 +4,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.util.Fts5QueryUtil;
+
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Agent tool for searching user's long-term memory (past session summaries)
@@ -33,9 +32,6 @@ public class MemorySearchTool implements AgentTool {
 
     @Inject
     CompactionSummaryRepository repository;
-
-    @Inject
-    AuditService auditService;
 
     @Override
     public String name() {
@@ -105,12 +101,7 @@ public class MemorySearchTool implements AgentTool {
                 return ToolResponse.failure(500, "Memory search failed: " + msg);
             }
 
-            // 5. Audit
-            auditService.record(sessionId, userId, "tool",
-                    SecurityEventType.TOOL_INVOKED,
-                    "tool=memory_search query_length=" + query.length());
-
-            // 6. Format results
+            // 5. Format results
             if (results == null || results.isEmpty()) {
                 return ToolResponse.success("No relevant memory found for query: " + query + 
                                             ". Proceed with current context only.");

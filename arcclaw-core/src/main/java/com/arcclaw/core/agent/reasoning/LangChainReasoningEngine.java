@@ -220,25 +220,29 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     /**
      * Extracts the prose content from Groq's failed_generation field.
-     * Unescapes \\n → newline and \\\" → quote so the extracted text
+     * Unescapes quote so the extracted text
      * is clean markdown ready for direct delivery to the user.
      */
     private String extractProseFromFailedGeneration(String message) {
-        int start = message.indexOf("\"failed_generation\":\"");
+        int start = message.indexOf("failed_generation");
         if (start == -1) return null;
-        start += 21;
-
-        // Find the closing "}}" that terminates the error JSON —
-        // the failed_generation value ends just before it
-        int end = message.lastIndexOf("\"}}");
+        start += 21; // skip past "failed_generation":"
+        int end = message.lastIndexOf("\"");
         if (end <= start) return null;
 
-        return message.substring(start, end)
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .trim();
+        String raw = message.substring(start, end)
+            .replace("\\\"", "\"")
+            .replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .trim();
+
+        // For JSON arrays/objects, unescape the entire block and return as-is
+        if (raw.startsWith("[") || raw.startsWith("{")) {
+            return raw.isBlank() ? null : raw;
+        }
+
+        // For natural language: existing character-by-character extraction is fine
+        return raw.isBlank() ? null : raw;
     }
 
     /**
@@ -249,15 +253,32 @@ public class LangChainReasoningEngine implements ReasoningEngine {
      */
     private boolean isProseGenerationFailure(String message) {
         if (message == null) return false;
-        int idx = message.indexOf("\"failed_generation\":\"");
+        int idx = message.indexOf("failed_generation");
         if (idx == -1) return false;
-        int start = idx + 21;
+        int start = idx + 21; // length of "\"failed_generation\":\""
         if (start >= message.length()) return false;
-        // Skip leading whitespace/escape sequences
-        String snippet = message.substring(start).stripLeading()
-                .replace("\\n", "").replace("\\r", "").stripLeading();
-        // Tool call JSON starts with '[' or '{'; prose starts with text/markdown
-        return !snippet.startsWith("[") && !snippet.startsWith("{");
+
+        String snippet = message.substring(start)
+            .stripLeading()
+            .replace("\\n", "\n")
+            .replace("\\\"", "\"")
+            .stripLeading();
+
+        // JSON arrays are always valid data answers — task lists, search results, etc.
+        // The LLM produced a structured response but forgot to wrap it in FINISH.
+        if (snippet.startsWith("[")) return true;
+
+        // JSON objects: only retry if it looks like a tool call schema.
+        // A real tool call attempt contains "action" or "tool" keys.
+        // A plain JSON object answer (e.g. {"result": "..."}) is a valid FINISH.
+        if (snippet.startsWith("{")) {
+            return !snippet.contains("\"action\"")
+                && !snippet.contains("\"tool\"")
+                && !snippet.contains("\"function\"");
+        }
+
+        // Natural language / markdown: starts with letter, #, *, - → always extractable
+        return true;
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
