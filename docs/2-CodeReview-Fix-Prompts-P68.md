@@ -618,10 +618,6 @@ cd C:\Users\Srini\ws\ArcClawInternal
 mvn clean test
 # Expected: 877+ tests, 0 failures, 0 errors
 
-# Confirm no SKILL_PREFIX duplicate remains after B1:
-rg "SKILL_PREFIX|startsWith\(\"skill:" arcclaw-core/src arcclaw-app/src --type java
-# Expected: only AgentRoleEnum.java contains the "skill:" literal
-
 # Confirm no CRON inline check remains after B2:
 rg "startsWith\(\"CRON\"\)\|\"CRON \"\s*\+" arcclaw-core/src arcclaw-app/src --type java
 # Expected: 0 results

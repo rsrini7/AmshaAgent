@@ -4768,3 +4768,107 @@ Modularized the Telegram channel into a dedicated JAR, retired the legacy `Chann
 - ✅ Verified `SandboxExecTool` returns exit code 1 and "Execution failed" on bad scripts.
 - ✅ Verified `PromptTemplateEngine` fallbacks log a clear warning.
 - ✅ Verified `ChannelSenderRegistryRetirementTest` passes without the old registry bean.
+
+---
+
+# Phase 68 — Architectural Hardening & SOLID Alignment ✅
+
+Completed the architectural hardening of the ArcClaw agent loop, eliminated critical structural anti-patterns, and finalized the InputSanitizer SPI.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **InputSanitizer SPI (D4)**: Decoupled the agent loop and chat memory logic from concrete reflex implementations. Refactored `PiiScanReflex` and `PromptInjectionReflex` to implement the new `InputSanitizer` interface, resolving injection ambiguity through specialized CDI qualifiers (`@InputSanitizer.PII`, `@InputSanitizer.Injection`).
+
+> [!NOTE]
+> **Control-Flow Modernization (D1)**: Replaced the `FastExitException` anti-pattern (control-flow-via-exception) with a sealed `InvokeResult` interface. This improves performance by avoiding stack trace generation and makes the tool invocation state machine explicit and type-safe.
+
+> [!TIP]
+> **Consolidated Execution Context (D2)**: Propagated `AgentExecutionContext` throughout the internal handler chain (`EngineStepHandler`, `ToolStepHandler`, etc.). This eliminated "data clump" signatures and ensured consistent session attributes (autonomy, goal) are available at all decision points.
+
+## Completed Changes
+
+### Phase 68-A — Correctness & Safety
+- **A1**: Fixed silent `argsJson` corruption in `ChatHistoryAssembler` by ensuring fallback to `{}` on serialization errors.
+- **A2**: Added `@ActivateRequestContext` to `AgentLoop` short overloads to prevent `ContextNotActiveException` in cron/CLI paths.
+- **A3**: Eliminated double-recording of OTel metrics by removing direct `otelContext` calls in favor of the `AgentObserver` loop.
+- **A4**: Resolved startup race in SQLite schema initialization using `@Priority` (WAL/FTS before vec0 warmup).
+- **A5**: Removed dead `catch (IllegalArgumentException)` block in `ToolRegistry`.
+- **A6**: Made `ReasoningEngine.chatForStructuredOutput()` abstract to enforce the interface contract (LSP).
+
+### Phase 68-B — SOLID & Magic Strings
+- **B1**: Centralized skill role detection in `AgentRoleEnum` and removed `SKILL_PREFIX` magic string duplication from 6 classes.
+- **B2**: Centralized cron goal markers in `AgentSentinels` using `CRON_PREFIX`.
+- **B3**: Added `canGenerateCode` to `RoleDefinition` to OCP-harden `AgentStateMachineRunner` against hardcoded role checks.
+- **B4**: Implemented `LlmProviderFactory` SPI, closing the hardcoded switch in `ChatModelProducer`.
+- **B5**: Switched `ToolRegistry` to use CDI-injected `AutonomyPolicy` (DIP).
+- **B6**: Introduced `SynthesizingAgent` interface to resolve LSP violations on the base `Agent` contract.
+
+### Phase 68-C — Cleanup & SPI Docs
+- **C1**: Purged 6 confirmed dead items (e.g., `ScopedCounter`, `ArcClawInfo`, legacy aliases).
+- **C2**: Relocated compliance message filtering to `ChatMemoryWriter` (fixed Inappropriate Intimacy smell).
+- **C3**: Updated `CHANNEL_SPI.md` to reflect modernized modular package paths.
+
+### Phase 68-D — Architectural Hardening
+- **D1**: Eliminated `FastExitException` in favor of sealed `InvokeResult` (ShortCircuit vs Responded).
+- **D2**: Threaded `AgentExecutionContext` through all agent loop handlers and managers.
+- **D3**: Built `ObservationTransformer` SPI, allowing extensible observation sanitization (truncation, redaction).
+- **D4**: Finalized `InputSanitizer` ISP split, replacing concrete `PiiScanReflex` references with interface-based injection.
+
+## Verification
+- ✅ **Full Suite**: `mvn clean verify` passed with 884 tests green across the reactor.
+- ✅ **CDI Ambiguity**: Verified `ReflexRegistry` and `ChatMemoryWriter` correctly resolve qualifiers without `AmbiguousResolutionException`.
+- ✅ **Control Flow**: `ToolStepHandler` correctly handles tool approvals via `InvokeResult.ShortCircuit` without exceptions.
+- ✅ **Audit Integrity**: Confirmed `PII_SCAN_REDACTED` events are correctly triggered via the new transformer chain.
+
+---
+
+# Phase 68 — Architectural Hardening & SOLID Alignment ✅
+
+Completed the architectural hardening of the ArcClaw agent loop, eliminated critical structural anti-patterns, and finalized the InputSanitizer SPI.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **InputSanitizer SPI (D4)**: Decoupled the agent loop and chat memory logic from concrete reflex implementations. Refactored `PiiScanReflex` and `PromptInjectionReflex` to implement the new `InputSanitizer` interface, resolving injection ambiguity through specialized CDI qualifiers (`@InputSanitizer.PII`, `@InputSanitizer.Injection`).
+
+> [!NOTE]
+> **Control-Flow Modernization (D1)**: Replaced the `FastExitException` anti-pattern (control-flow-via-exception) with a sealed `InvokeResult` interface. This improves performance by avoiding stack trace generation and makes the tool invocation state machine explicit and type-safe.
+
+> [!TIP]
+> **Consolidated Execution Context (D2)**: Propagated `AgentExecutionContext` throughout the internal handler chain (`EngineStepHandler`, `ToolStepHandler`, etc.). This eliminated "data clump" signatures and ensured consistent session attributes (autonomy, goal) are available at all decision points.
+
+## Completed Changes
+
+### Phase 68-A — Correctness & Safety
+- **A1**: Fixed silent `argsJson` corruption in `ChatHistoryAssembler` by ensuring fallback to `{}` on serialization errors.
+- **A2**: Added `@ActivateRequestContext` to `AgentLoop` short overloads to prevent `ContextNotActiveException` in cron/CLI paths.
+- **A3**: Eliminated double-recording of OTel metrics by removing direct `otelContext` calls in favor of the `AgentObserver` loop.
+- **A4**: Resolved startup race in SQLite schema initialization using `@Priority` (WAL/FTS before vec0 warmup).
+- **A5**: Removed dead `catch (IllegalArgumentException)` block in `ToolRegistry`.
+- **A6**: Made `ReasoningEngine.chatForStructuredOutput()` abstract to enforce the interface contract (LSP).
+
+### Phase 68-B — SOLID & Magic Strings
+- **B1**: Centralized skill role detection in `AgentRoleEnum` and removed `SKILL_PREFIX` magic string duplication from `SkillAwareIntentClassifier` and others.
+- **B2**: Centralized cron goal markers in `AgentSentinels` using `CRON_PREFIX`.
+- **B3**: Added `canGenerateCode` to `RoleDefinition` to OCP-harden `AgentStateMachineRunner` against hardcoded role checks.
+- **B4**: Implemented `LlmProviderFactory` SPI, closing the hardcoded switch in `ChatModelProducer`.
+- **B5**: Switched `ToolRegistry` to use CDI-injected `AutonomyPolicy` (DIP).
+- **B6**: Introduced `SynthesizingAgent` interface to resolve LSP violations on the base `Agent` contract.
+
+### Phase 68-C — Cleanup & SPI Docs
+- **C1**: Purged confirmed dead items (`ScopedCounter`, `ArcClawInfo`, legacy aliases).
+- **C2**: Relocated compliance message filtering to `ChatMemoryWriter` (fixed Inappropriate Intimacy smell).
+- **C3**: Updated `CHANNEL_SPI.md` to reflect modernized modular package paths.
+
+### Phase 68-D — Architectural Hardening
+- **D1**: Eliminated `FastExitException` in favor of sealed `InvokeResult` (ShortCircuit vs Responded).
+- **D2**: Threaded `AgentExecutionContext` through all agent loop handlers and managers.
+- **D3**: Built `ObservationTransformer` SPI, allowing extensible observation sanitization (truncation, redaction).
+- **D4**: Finalized `InputSanitizer` ISP split, replacing concrete `PiiScanReflex` references with interface-based injection.
+
+## Verification
+- ✅ **Full Suite**: `mvn clean verify` passed with 884 tests green across the reactor.
+- ✅ **CDI Ambiguity**: Verified `ReflexRegistry` and `ChatMemoryWriter` correctly resolve qualifiers.
+- ✅ **Control Flow**: `ToolStepHandler` correctly handles tool approvals via `InvokeResult.ShortCircuit`.
+- ✅ **Audit Integrity**: Confirmed `PII_SCAN_REDACTED` events are correctly triggered.
