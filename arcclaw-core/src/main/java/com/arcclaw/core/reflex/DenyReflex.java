@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -58,6 +59,16 @@ public class DenyReflex implements AgentReflex {
     public boolean matches(String input) {
         ChannelCommand cmd = ChannelCommand.parse(input);
         return cmd instanceof ChannelCommand.Deny;
+    }
+
+    @Override
+    public SecurityEventType auditEventType() {
+        return SecurityEventType.APPROVAL_DENIED;
+    }
+
+    @Override
+    public String auditDetail(String sessionId, String input) {
+        return "action=DENY session=" + sessionId;
     }
 
     @Override

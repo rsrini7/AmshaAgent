@@ -19,9 +19,12 @@ public class IngestRoutingProvider implements IntentRoutingProvider {
                             Pattern.CASE_INSENSITIVE
                         );
 
+    private static final Pattern STORE_CMD =
+                        Pattern.compile("(?i)^store\\s+.+", Pattern.CASE_INSENSITIVE);
+
     @Override
     public List<Pattern> fastPathTriggers() {
-        return List.of(COORDINATOR_FORCE_PATTERN);
+        return List.of(COORDINATOR_FORCE_PATTERN, STORE_CMD);
     }
 
     @Override

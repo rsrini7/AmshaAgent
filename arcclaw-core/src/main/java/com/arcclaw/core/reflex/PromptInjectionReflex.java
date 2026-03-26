@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -109,6 +110,18 @@ public class PromptInjectionReflex implements AgentReflex {
             }
         }
         return false;
+    }
+
+    @Override
+    public SecurityEventType auditEventType() {
+        return SecurityEventType.PROMPT_INJECTION_BLOCKED;
+    }
+
+    @Override
+    public String auditDetail(String sessionId, String input) {
+        // First 200 chars only — do not log full injection attempt
+        String truncated = input.length() > 200 ? input.substring(0, 200) + "…" : input;
+        return "inputPreview=" + truncated;
     }
 
     @Override

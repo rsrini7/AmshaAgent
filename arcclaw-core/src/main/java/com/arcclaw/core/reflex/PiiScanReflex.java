@@ -87,6 +87,16 @@ public class PiiScanReflex implements AgentReflex {
     }
 
     @Override
+    public boolean emitsSanitizeAudit() {
+        return true;
+    }
+
+    @Override
+    public String auditDetail(String sessionId, String input) {
+        return "mode=" + piiMode.name() + " inputLength=" + input.length();
+    }
+
+    @Override
     public ReflexResult execute(String sessionId, String userId, String chatId,
             String input, MessageContext context) {
         return ReflexResult.respond("⚠️ PII detected. Message has been sanitized and blocked.", context);
