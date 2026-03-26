@@ -159,95 +159,247 @@ Qwen
 
 ---
 
-## 🔴 CRITICAL GAPS (Must Fix Before GitHub)
+# ArcClaw Phase 68 - Corrected Architecture Review
 
-### 1. **Missing `SandboxCodeSafetyScanner` Implementation** ⚠️
-**File:** Referenced in `SandboxExecTool.java` but **NOT in codebase**
+### ✅ SandboxCodeSafetyScanner (PRESENT & WELL-DESIGNED)
 
 ```java
-// Line 73 in SandboxExecTool.java
-String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
+public final class SandboxCodeSafetyScanner {
+    // UNIVERSAL_PATTERNS - fires for ALL languages
+    // LANG_PATTERNS - language-specific patterns
+    public static String findViolation(String lang, String code)
+}
 ```
 
-**Impact:** This class is **missing from the uploaded codebase**. The tool will fail at runtime.
+**Strengths:**
+- Two-tier pattern system (universal + language-specific)
+- Prevents cross-language false positives (e.g., `exec.Command` won't block Node.js)
+- Returns the matched pattern for audit logging
+- Case-insensitive matching with `Pattern.DOTALL`
 
-**Priority:** 🔴 **CRITICAL** - Build will fail
+**Coverage:**
+| Category | Patterns Covered |
+|----------|-----------------|
+| Filesystem destruction | `rm -rf`, `rmdir /s`, `Remove-Item -Recurse` |
+| Device writes | `dd if=`, `mkfs`, `> /dev/` |
+| Supply-chain injection | `curl | sh`, `wget | bash` |
+| Fork bomb | `:(){ :|:& }:;` |
+| Privilege escalation | `sudo rm`, `chmod 777 /` |
+| Python-specific | `shutil.rmtree`, `os.system`, `subprocess.run` |
+| Java-specific | `Runtime.getRuntime().exec`, `ProcessBuilder` |
+| Go-specific | `exec.Command`, `os.RemoveAll` |
 
-**Fix Required:**
+---
+
+### ✅ ProcessIsolationExecutor (PRESENT & ROBUST)
+
+**Fallback Chain:**
+```
+PODMAN (primary) → NAMESPACE (fallback) → DIRECT (disabled)
+```
+
+**Key Features:**
+- `sandboxEnabled` flag overrides strategy entirely
+- Circuit breaker integration (`shouldAttemptPodman()`)
+- Captures `stateAtCall` before failure for accurate circuit state tracking
+- Tool execution failures don't trigger circuit breaker (only infrastructure failures)
+
+---
+
+### ✅ SandboxCircuitBreaker (PRESENT & PRODUCTION-READY)
+
+**State Machine:**
+```
+CLOSED → (3 failures) → OPEN → (30s timeout) → HALF_OPEN → (success) → CLOSED
+```
+
+**Atomic Operations:**
+- `AtomicReference<CircuitBreakerState>` for state
+- `AtomicInteger` for failure counting
+- `AtomicLong` for timestamp tracking
+
+---
+
+## Updated Critical Findings
+
+### 🔴 P0: RagContextEnricher - Score Filter Logic Bug
+
+**Location:** `arcclaw-rag/src/main/java/com/arcclaw/rag/RagContextEnricher.java`
+
+**Current Code:**
 ```java
-@ApplicationScoped
-public class SandboxCodeSafetyScanner {
-    private static final Set<Pattern> DANGEROUS_PATTERNS = Set.of(
-        Pattern.compile("\\b(rm\\s+-rf|chmod\\s+777|dd\\s+if=)\\b"),
-        Pattern.compile("\\b(fork\\s*bomb|:(){:|:&}:;)\\b"),
-        // ... more patterns
-    );
-    
-    public static String findViolation(String lang, String code) {
-        for (Pattern p : DANGEROUS_PATTERNS) {
-            if (p.matcher(code).find()) {
-                return "Dangerous pattern detected: " + p.pattern();
-            }
-        }
-        return null;
+List<ScoredChunk> relevant = chunks.stream()
+        .filter(c -> c.score() >= minScore)
+        .toList();
+
+if (relevant.isEmpty()) {
+    log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
+        (Object) relevant.size(), chunks.size(), minScore, sessionId);
+    return basePrompt;  // ← BUG: log says "injecting" but returns basePrompt
+}
+```
+
+**Issue:** Log message says "injecting" but code returns `basePrompt` (no injection).
+
+**Fix:**
+```java
+if (relevant.isEmpty()) {
+    log.debugf("RagContextEnricher: NO chunks meet min-score=%.2f for session %s",
+        minScore, sessionId);
+    return basePrompt;
+}
+```
+
+---
+
+### 🟡 P1: TwoTierMemoryService - minScore Not Propagated
+
+**Location:** `arcclaw-rag/src/main/java/com/arcclaw/rag/TwoTierMemoryService.java`
+
+**Current Code:**
+```java
+public List<ScoredChunk> search(String query, String userId, int topK) {
+    List<ScoredChunk> ftsResults = ftsSearch(query, userId, topK * 2);
+    if (!ftsInterceptor.isVectorSearchEnabled()) {
+        return ftsResults.stream().limit(topK).toList();
     }
+    List<ScoredChunk> vectorResults = vectorSearch(query, userId, topK * 2);
+    return mergeRrf(ftsResults, vectorResults, topK);
+}
+```
+
+**Issue:** `SessionKnowledgeBase.search()` doesn't accept `minScore` parameter, so session-memory chunks bypass the score filter.
+
+**Fix:**
+```java
+// Add overload to SessionKnowledgeBase
+public List<ScoredChunk> search(String query, int topN, double minScore) {
+    EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
+        .queryEmbedding(queryEmbedding)
+        .maxResults(topN)
+        .minScore(minScore)  // ← Filter at store level
+        .build();
+    // ...
 }
 ```
 
 ---
 
-### 2. **Missing `SandboxCircuitBreaker` Implementation** ⚠️
-**File:** Referenced in `PodmanMcpTransport.java` but **NOT in codebase**
+### 🟡 P1: SandboxCodeSafetyScanner - Pattern Gaps
 
+**Missing Patterns:**
+
+| Language | Missing Pattern | Risk |
+|----------|----------------|------|
+| **bash** | `:(){ :|:& }:;` (fork bomb) | Already covered in UNIVERSAL |
+| **node** | `child_process.exec('rm -rf')` | Not covered |
+| **node** | `fs.rmSync('/', {recursive:true})` | Not covered |
+| **python** | `os.popen()` | Not covered |
+| **java** | `ProcessBuilder().command()` | Partially covered |
+
+**Recommended Additions:**
 ```java
-// Line 37 in PodmanMcpTransport.java
-@Inject SandboxCircuitBreaker sandboxCircuitBreaker;
+"node", List.of(
+    pattern("child_process\\.exec"),
+    pattern("child_process\\.execSync"),
+    pattern("fs\\.rmSync.*recursive"),
+    pattern("fs\\.removeSync"),
+    pattern("require\\('child_process'\\)")
+),
+
+"python", List.of(
+    pattern("os\\.popen\\s*\\("),
+    pattern("commands\\.getoutput"),
+    pattern("subprocess\\.getoutput")
+)
 ```
 
-**Priority:** 🔴 **CRITICAL** - Build will fail
+---
 
-**Fix Required:**
+### 🟡 P1: ProcessIsolationExecutor - Namespace Fallback Security
+
+**Issue:** When Podman circuit opens, fallback to `NamespaceExecutor` which uses Linux namespaces but **no resource caps**.
+
+**Current Fallback:**
 ```java
-@ApplicationScoped
-public class SandboxCircuitBreaker {
-    public enum CircuitBreakerState { CLOSED, OPEN, HALF_OPEN }
-    // ... implementation matching P65 design
+return namespaceExecutor.executeInNamespace(workspaceRoot, command);
+```
+
+**Risk:** Namespace isolation without `--memory`, `--cpus`, `--pids-limit` caps.
+
+**Fix:** Add resource caps to `NamespaceExecutor`:
+```java
+// Add to NamespaceExecutor.executeInNamespace()
+List<String> commandWithCaps = new ArrayList<>(command);
+// Add ulimit via shell wrapper if needed
+```
+
+---
+
+### 🟢 P2: RagContextEnricher - Write Intent Detection
+
+**Current Implementation:**
+```java
+private static final Set<String> WRITE_INTENT_TOKENS = Set.of(
+    "store", "save", "remember", "ingest", "add to knowledge",
+    "call me", "note that", "add to memory", "memorize"
+);
+
+private boolean isWriteIntent(String goal) {
+    String lower = goal.toLowerCase();
+    return WRITE_INTENT_TOKENS.stream().anyMatch(lower::contains);
+}
+```
+
+**Issue:** Simple substring match causes false positives:
+- "Can you **store** this in a variable?" → blocked (shouldn't be)
+- "Please **save** your work" → blocked (shouldn't be)
+
+**Fix:** Use word boundary matching:
+```java
+private static final List<Pattern> WRITE_INTENT_PATTERNS = List.of(
+    Pattern.compile("\\b(store|save|remember|ingest)\\s+(this|my|your|the)\\s+(name|data|info|document)\\b"),
+    Pattern.compile("\\b(add|memorize)\\s+(to\\s+)?(knowledge|memory)\\b"),
+    Pattern.compile("\\bcall\\s+me\\s+(as|by)\\b")
+);
+
+private boolean isWriteIntent(String goal) {
+    String lower = goal.toLowerCase();
+    return WRITE_INTENT_PATTERNS.stream()
+        .anyMatch(p -> p.matcher(lower).find());
 }
 ```
 
 ---
 
-### 3. **Missing `ProcessIsolationExecutor` Implementation** ⚠️
-**File:** Referenced in `ToolRegistry.java` and `SandboxExecTool.java` but **NOT in codebase**
+## Updated Completion Status
 
-```java
-// Line 38 in ToolRegistry.java
-@Inject ProcessIsolationExecutor isolationExecutor;
-```
-
-**Priority:** 🔴 **CRITICAL** - Build will fail
-
-**Fix Required:** Restore the P65 implementation with:
-- `executeSandboxed()` method
-- Podman container execution
-- Secret injection via tmpfs
-- Output truncation
+| Component | P65 Status | P68 Status | Notes |
+|-----------|------------|------------|-------|
+| Channel SPI | ⚠️ Partial | ✅ Complete | `ChannelPlugin` SPI fully implemented |
+| Sandbox Safety Scanner | ❌ Missing | ✅ Complete | Present with universal + language patterns |
+| ProcessIsolationExecutor | ❌ Missing | ✅ Complete | Full fallback chain with circuit breaker |
+| SandboxCircuitBreaker | ❌ Missing | ✅ Complete | Atomic state management |
+| RagContextEnricher | ⚠️ Partial | ⚠️ Partial | Score filter bug + write intent false positives |
+| TwoTierMemoryService | ⚠️ Partial | ⚠️ Partial | minScore not propagated to session search |
 
 ---
 
-### 4. **Missing `RagContextEnricher` Implementation** ⚠️
-**File:** Listed in `RagReflectionConfig.java` but marked as **[Binary file]** in upload
+## Priority Action Plan (Corrected)
 
-```java
-// Referenced in SystemPromptBuilder.java line 175
-for (ContextEnricher enricher : contextEnrichers) {
-    finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
-}
-```
+| Priority | Issue | Effort | Impact |
+|----------|-------|--------|--------|
+| 🔴 P0 | RagContextEnricher log bug | 10 min | Correctness |
+| 🔴 P0 | Write intent false positives | 30 min | Usability |
+| 🟡 P1 | Node.js pattern gaps | 30 min | Security |
+| 🟡 P1 | Namespace resource caps | 1 hour | Security |
+| 🟡 P1 | minScore propagation | 30 min | RAG quality |
+| 🟢 P2 | Python `os.popen()` pattern | 10 min | Security |
 
-**Priority:** 🟠 **HIGH** - RAG context enrichment will fail
+**Total P0+P1 Effort:** ~2.5 hours
 
 ---
+
 
 ## 🟡 MEDIUM PRIORITY Improvements
 
@@ -356,6 +508,20 @@ Add `docs/architecture.png` showing:
 
 ---
 
+## Final Corrected Verdict
+
+**ArcClaw Phase 68 is significantly more complete than my initial review indicated.** The sandbox safety infrastructure is production-ready with:
+
+1. ✅ Multi-layer pattern scanning (universal + language-specific)
+2. ✅ Circuit breaker with proper state machine
+3. ✅ Fallback chain (PODMAN → NAMESPACE → DIRECT)
+4. ✅ Atomic state management
+
+**The only remaining gaps are:**
+1. RagContextEnricher log message accuracy (trivial)
+2. Write intent detection false positives (moderate)
+3. Node.js/Python pattern coverage (moderate)
+
 ## Test Coverage Analysis (887 Tests)
 
 | Module | Test Count | Coverage Estimate |
@@ -376,10 +542,6 @@ Add `docs/architecture.png` showing:
 
 | Priority | Action | Effort | Impact |
 |----------|--------|--------|--------|
-| 🔴 P0 | Restore missing `SandboxCodeSafetyScanner` | 2 hours | **Build Fix** |
-| 🔴 P0 | Restore missing `SandboxCircuitBreaker` | 2 hours | **Build Fix** |
-| 🔴 P0 | Restore missing `ProcessIsolationExecutor` | 4 hours | **Build Fix** |
-| 🔴 P0 | Restore missing `RagContextEnricher` | 2 hours | **Feature Fix** |
 | 🟠 P1 | Create main README.md | 4 hours | **GitHub Ready** |
 | 🟠 P1 | Add ADRs (5 documents) | 8 hours | **Architecture Docs** |
 | 🟠 P1 | Enhance CHANNEL_SPI.md with Discord example | 4 hours | **Extensibility** |
@@ -399,8 +561,6 @@ Add `docs/architecture.png` showing:
 
 **Current State:** 90% complete technically, but **missing critical files** prevent build.
 
-**After P0 Fixes:** Ready for private beta testing.
-
 **After P0+P1:** Ready for **GitHub public release** with enterprise credibility.
 
 **After P0+P1+P2:** Ready for **production enterprise adoption**.
@@ -409,12 +569,8 @@ Add `docs/architecture.png` showing:
 
 ## Specific File Restoration Priority
 
-1. **`arcclaw-core/src/main/java/com/arcclaw/core/sandbox/SandboxCodeSafetyScanner.java`** - CRITICAL
-2. **`arcclaw-core/src/main/java/com/arcclaw/core/sandbox/SandboxCircuitBreaker.java`** - CRITICAL
-3. **`arcclaw-core/src/main/java/com/arcclaw/core/sandbox/ProcessIsolationExecutor.java`** - CRITICAL
-4. **`arcclaw-rag/src/main/java/com/arcclaw/rag/RagContextEnricher.java`** - HIGH
-5. **`README.md`** (root) - HIGH
-6. **`docs/adr/`** directory with 5 ADRs - HIGH
+1. **`README.md`** (root) - HIGH
+2. **`docs/adr/`** directory with 5 ADRs - HIGH
 
 ---
 
@@ -422,7 +578,6 @@ Add `docs/architecture.png` showing:
 
 Before publishing to GitHub:
 
-- [ ] Restore 4 missing critical classes
 - [ ] Verify 887 tests pass locally
 - [ ] Add README.md with badges
 - [ ] Add LICENSE file
