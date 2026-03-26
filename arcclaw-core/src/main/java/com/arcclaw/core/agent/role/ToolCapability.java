@@ -37,7 +37,13 @@ public enum ToolCapability {
      * <b>Note:</b> Deferred component; presence in schema does not imply
      * execution support until Phase 48 container integration is complete.
      */
-    SANDBOX_EXEC("sandbox_exec", "Execute code within an isolated Podman sandbox"),
+    SANDBOX_EXEC("sandbox_exec",
+        "Execute code in an isolated sandbox. " +
+        "REQUIRED params: 'code' (string, the code to run), " +
+        "'language' (string, one of: python, python3, bash, node). " +
+        "OPTIONAL: 'args' (list of strings), 'secrets' (map of env-var-name to vault-key). " +
+        "ALWAYS pass flat JSON — never wrap in 'properties'. " +
+        "Example: {\"code\":\"print('Hello World')\",\"language\":\"python\"}"),
 
     /**
      * Ability to ingest a document into the RAG knowledge base.

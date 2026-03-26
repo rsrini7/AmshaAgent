@@ -80,6 +80,16 @@ public class SandboxExecTool implements AgentTool {
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         try {
+
+            // Defensive: LLMs occasionally echo JSON Schema structure back as args.
+            // Unwrap {"properties": {"code":..., "language":...}} → {"code":..., "language":...}
+            if (params.size() == 1 && params.containsKey("properties")
+                    && params.get("properties") instanceof Map<?, ?> inner) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> unwrapped = (Map<String, Object>) inner;
+                params = unwrapped;
+            }
+
             String code = (String) params.get("code");
             String lang = (String) params.get("language");
 
