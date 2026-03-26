@@ -14,7 +14,7 @@ All bugs below exist today. No architectural changes. Surgical fixes only.
 ---
 
 ## Architecture Context and Other References
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
@@ -324,7 +324,7 @@ Task: Phase 64-B — Close 3 confirmed security gaps. All exist in production to
 ---
 
 ## Architecture Context and Other References
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
@@ -559,7 +559,7 @@ Task: Phase 64-C — 3 targeted architectural changes required before any new ch
 ---
 
 ## Architecture Context and Other References
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
@@ -811,7 +811,7 @@ Task: Phase 64-D — 7 code quality improvements and dead code cleanup. No corre
 ---
 
 ## Architecture Context and Other References
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---

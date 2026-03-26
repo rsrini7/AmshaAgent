@@ -7,7 +7,7 @@ All bugs below exist today. No architectural changes. Surgical fixes only.
 ---
 
 ## Architecture Context and Other References
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---

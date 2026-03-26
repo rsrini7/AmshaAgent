@@ -9,7 +9,7 @@ Surgical fixes only unless stated. No D8 (SPI). No D9 (MCP SDK).
 ---
 
 ## Architecture Context and Other References
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---

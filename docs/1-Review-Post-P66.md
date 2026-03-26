@@ -295,11 +295,11 @@ If you execute Phase 67 as recommended, ArcClaw transitions from a **High-End Pr
 
 GLM5:
 
-Based on the end-to-end analysis of the file structure, `Architecture_Nuances.md`, and the evolution from previous phases, here is the comprehensive Phase 67 Plan.
+Based on the end-to-end analysis of the file structure, `@Architecture_Invariants.md`, and the evolution from previous phases, here is the comprehensive Phase 67 Plan.
 
 ### 1. Executive Review: The "Honest" Truth
 
-**Current Status:** The project has evolved from a "fast prototype" into a "robust platform," evidenced by the introduction of the `ChannelPlugin` SPI and the rigorous documentation in `Architecture_Nuances.md`. The codebase shows signs of battle-testing (Nuance #23, #24 show solutions to deep runtime issues).
+**Current Status:** The project has evolved from a "fast prototype" into a "robust platform," evidenced by the introduction of the `ChannelPlugin` SPI and the rigorous documentation in `@Architecture_Invariants.md`. The codebase shows signs of battle-testing (Nuance #23, #24 show solutions to deep runtime issues).
 
 **The "Hidden" Problem:**
 While the `ChannelPlugin` interface exists, the implementation is still "semi-coupled." `TelegramChannelDaemon` and `TelegramChannelRoute` are inside `arcclaw-app`. This creates a **deployment monolith**. To add Slack, you currently have to open `arcclaw-app`, add classes, and risk breaking Telegram. This violates the **Open/Closed Principle**.
@@ -350,7 +350,7 @@ Here are the complete prompts to execute Phase 67. You can feed these to another
 >
 > **Context:** We are refactoring `arcclaw-app` to support multiple channels (Telegram, Slack, etc.) via a true Plugin architecture. Currently, `TelegramChannelDaemon` and `TelegramChannelRoute` reside inside `arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram`.
 >
-> **Constraint:** Adhere strictly to `Architecture_Nuances.md` (specifically Nuance #24 for Camel lifecycle).
+> **Constraint:** Adhere strictly to `@Architecture_Invariants.md` (specifically Nuance #24 for Camel lifecycle).
 >
 > **Task:**
 > 1.  Define the Maven module structure for `arcclaw-channel-telegram`.
@@ -365,7 +365,7 @@ Here are the complete prompts to execute Phase 67. You can feed these to another
 
 > **Role:** Quarkus Native Specialist.
 >
-> **Context:** `Architecture_Nuances.md` Nuance #21 states that classes passed to Qute templates must have `@TemplateData`. We need to prevent runtime errors in Native mode.
+> **Context:** `@Architecture_Invariants.md` Nuance #21 states that classes passed to Qute templates must have `@TemplateData`. We need to prevent runtime errors in Native mode.
 >
 > **Task:**
 > 1.  Create a Quarkus `BuildStep` (in `arcclaw-deployment`) that validates Qute usage.
@@ -389,7 +389,7 @@ Grok:
 
 **ArcClaw P66 – Final End-to-End Re-Evaluation (March 2026)**
 
-I have read **every single file** in the full P66 drop you provided (including all test files, `rest-http/` regression suites, `CHANNEL_SPI.md`, `Architecture_Nuances.md`, `docker-compose.yaml`, `Dockerfile.native`, sandbox, deployment, and the 810 passing tests). I cross-referenced it line-by-line against:
+I have read **every single file** in the full P66 drop you provided (including all test files, `rest-http/` regression suites, `CHANNEL_SPI.md`, `@Architecture_Invariants.md`, `docker-compose.yaml`, `Dockerfile.native`, sandbox, deployment, and the 810 passing tests). I cross-referenced it line-by-line against:
 
 - My original review (pre-P64)
 - P64 review
@@ -423,7 +423,7 @@ You are now **~88–90 %** of the way to the fully mature, multi-channel, produc
 2. **LlmProviderFactory SPI** (`GroqLlmProviderFactory`, `OllamaLlmProviderFactory`, `OpenAiLlmProviderFactory`, `LlmModelConfig`) — completes the LLM side extensibility.
 3. **Vec0NativeLibraryInstaller** — clean startup handling of the sqlite-vec binary.
 4. **Sandbox** has been significantly expanded (`ProcessIsolationExecutor`, `NamespaceExecutor`, `SandboxCircuitBreaker`, etc.).
-5. **Architecture_Nuances.md** and **CHANNEL_SPI.md** are now first-class living documentation.
+5. **@Architecture_Invariants.md** and **CHANNEL_SPI.md** are now first-class living documentation.
 6. **810 tests passing** — excellent coverage, especially the regression suite in `rest-http/15_phase64_regression.http`.
 
 **What Is Still Missing / Pending (Prioritised Backlog for P67)**
@@ -437,7 +437,7 @@ I ranked the remaining items by **impact on extensibility, maintainability, and 
 
 **Priority 2 (High value – 2 days)**
 - **Sandbox final polish** — Make `ProcessIsolationExecutor` the default and clean up the remaining `DirectExecutor` path.
-- **Documentation & cleanup** — Update `Architecture_Nuances.md` with P66/P67 entries and remove any remaining Telegram-specific comments in core.
+- **Documentation & cleanup** — Update `@Architecture_Invariants.md` with P66/P67 entries and remove any remaining Telegram-specific comments in core.
 
 **Priority 3 (Nice-to-have)**
 - Minor test cleanups, Vec0 installer improvements, etc.
@@ -460,7 +460,7 @@ Below is the **complete P67 scope** with exact file-by-file prompts you can copy
 6. **arcclaw-core/src/main/java/com/arcclaw/core/governance/GovernanceStrategy.java** (new)
 7. **arcclaw-core/src/main/java/com/arcclaw/core/tool/ToolInvocationStrategy.java** (new)
 8. **arcclaw-core/src/main/java/com/arcclaw/core/tool/ToolRegistry.java** (use the new strategy)
-9. **Update Architecture_Nuances.md** with P67 entries
+9. **Update @Architecture_Invariants.md** with P67 entries
 10. **Update CHANNEL_SPI.md** with the new handler contract
 
 **Exact Prompts for P67 (copy-paste ready)**
@@ -505,7 +505,7 @@ Ensure all sandbox tests still pass.
 
 **Prompt 4 – Final documentation**
 ```
-Update Architecture_Nuances.md and CHANNEL_SPI.md with all P66/P67 changes.
+Update @Architecture_Invariants.md and CHANNEL_SPI.md with all P66/P67 changes.
 Add a new section "P67 — ChannelPlugin Maturity Complete" with the final contract.
 ```
 
@@ -535,7 +535,7 @@ The strongest evidence of progress is that you did not just patch bugs: you adde
 
 ## Improvement delta
 
-Compared with the earlier snapshot, the architecture is now noticeably more intentional around extension points: the full repo adds `ChannelPlugin`, `ChannelPluginRegistry`, `TelegramChannelPlugin`, `LlmProviderFactory` implementations for Groq/Ollama/OpenAI, `GovernanceStrategy`, sandbox executors, and explicit docs like `CHANNEL_SPI.md` and `Architecture_Nuances.md`. 
+Compared with the earlier snapshot, the architecture is now noticeably more intentional around extension points: the full repo adds `ChannelPlugin`, `ChannelPluginRegistry`, `TelegramChannelPlugin`, `LlmProviderFactory` implementations for Groq/Ollama/OpenAI, `GovernanceStrategy`, sandbox executors, and explicit docs like `CHANNEL_SPI.md` and `@Architecture_Invariants.md`. 
 That means the codebase has moved from “good abstractions with Telegram gravity” toward “platform abstractions with partial enforcement,” which is real progress, not cosmetic refactoring. 
 
 The test story is also much stronger now. The full snapshot shows wide coverage for channel SPI, startup, routing, structured output, governance, sandboxing, SQLite/vec behavior, MCP transport, scheduler concurrency, workspace scope, and security validators, which is exactly what I wanted to see in a system that already works fast in real use. 
@@ -543,7 +543,7 @@ So relative to my previous review, I would say the project improved meaningfully
 
 ## What is still pending
 
-Your biggest remaining issue is that the architecture still depends too much on special-case knowledge encoded outside the type system. `Architecture_Nuances.md` contains many mandatory rules about ScopedValue usage, Quarkus/Camel startup order, native-image requirements, ORM transaction behavior, delimiter handling, vec path resolution, and test rules, which is valuable documentation but also a sign that too many invariants are enforced by memory and convention instead of design constraints. 
+Your biggest remaining issue is that the architecture still depends too much on special-case knowledge encoded outside the type system. `@Architecture_Invariants.md` contains many mandatory rules about ScopedValue usage, Quarkus/Camel startup order, native-image requirements, ORM transaction behavior, delimiter handling, vec path resolution, and test rules, which is valuable documentation but also a sign that too many invariants are enforced by memory and convention instead of design constraints. 
 A strong system should not need 30-plus “always apply” rules for ordinary contributors to stay safe. 
 
 The second issue is that channel neutrality is still incomplete. The repo now has a channel SPI and plugin registry, but the Telegram implementation still lives inside `arcclaw-app`, `CHANNEL_SPI.md` still allows new channels to be placed inside `arcclaw-app`, and some legacy behavior still treats missing channel metadata as Telegram-oriented fallback behavior. 
@@ -559,7 +559,7 @@ I would prioritize P67 like this:
 | Priority | Area | Why now | What “done” looks like |
 |---|---|---|---|
 | P0 | Channel extraction | Channel SPI exists, but adapter code is still too app-centric and Telegram-biased.   | Telegram becomes a true adapter module boundary, with no Telegram defaulting in core/app-neutral flows.   |
-| P0 | Invariant hardening | Too many critical rules live in `Architecture_Nuances.md` instead of code-enforced contracts.   | Replace convention-heavy rules with validators, typed wrappers, startup checks, and narrower APIs.   |
+| P0 | Invariant hardening | Too many critical rules live in `@Architecture_Invariants.md` instead of code-enforced contracts.   | Replace convention-heavy rules with validators, typed wrappers, startup checks, and narrower APIs.   |
 | P1 | Execution/session model cleanup | Session scope, workspace context, approval, cron, and async persistence are powerful but complex.   | A smaller set of application services own start/resume/finalize/notify flows explicitly.   |
 | P1 | Registry validation | The project uses many CDI-discovered registries and SPIs.   | Duplicate/missing plugin/provider/role/renderer/notifier/tool registrations fail fast at startup.   |
 | P2 | Ops simplification | Docker/native/vec/Camel/Podman support is impressive but operationally delicate.   | Startup paths become simpler, more deterministic, and easier to debug without nuance docs.   |
@@ -587,7 +587,7 @@ Acceptance criteria for P67 should be strict:
 - No core or generic app component should default absent channel metadata to Telegram behavior. 
 - Startup should fail fast on duplicate or incomplete SPI registrations. 
 - At least one “fake second channel” test module or in-memory stub should prove the SPI is truly adapter-neutral. 
-- A chunk of `Architecture_Nuances.md` should be retired because the rules are now enforced by code or tests. 
+- A chunk of `@Architecture_Invariants.md` should be retired because the rules are now enforced by code or tests. 
 
 ## P67 prompt pack
 
@@ -857,7 +857,7 @@ Every module now has test classes:[^1]
 - `AgentRoleRegistry` in persona package — dynamic role metadata lookup[^1]
 - `Vec0NativeLibraryInstaller` — cross-platform vec0 detection and installation (codifies Nuance \#23)[^1]
 - `github-tool-rules.txt` + `safety-rules.txt` templates — externalized system prompt rules from code[^1]
-- `Architecture_Nuances.md` expanded to **38 nuances** — JMX dev mode fix (\#24), Jackson config (\#27), StructuredRetryLoop budget (\#28), Hibernate ORM 7 (\#29-30), tool sanitizer (\#31), nanoTime (\#33), vault pepper (\#35), WorkspaceContext vs WorkspaceScopeHolder (\#38)[^1]
+- `@Architecture_Invariants.md` expanded to **38 nuances** — JMX dev mode fix (\#24), Jackson config (\#27), StructuredRetryLoop budget (\#28), Hibernate ORM 7 (\#29-30), tool sanitizer (\#31), nanoTime (\#33), vault pepper (\#35), WorkspaceContext vs WorkspaceScopeHolder (\#38)[^1]
 - `docker-compose.yaml` — full observability stack: Jaeger, Prometheus, OTel Collector, sandbox image build[^1]
 - `rest-http/` — 15 `.http` files covering all API surface areas[^1]
 
@@ -991,7 +991,7 @@ COORDINATOR, RESEARCHER, ARCHITECT, SYNTHESIZER must NOT receive SANDBOX_EXEC.
 TASK 4: Update ReflectionConfig.java
 Add SandboxExecTool.class to the @RegisterForReflection targets array.
 
-TASK 5: Update Architecture_Nuances.md
+TASK 5: Update @Architecture_Invariants.md
 Append Nuance #39 exactly as stated in the MANDATORY ARCHITECTURE NUANCES section above.
 
 TASK 6: Update application.yaml

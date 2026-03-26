@@ -11,7 +11,7 @@
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 **Pattern precedent already in the codebase:**
@@ -231,7 +231,7 @@ class AgentRoleRegistryTest {
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 **Pattern to mirror exactly:**
@@ -472,7 +472,7 @@ class LlmProviderFactoryTest {
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 ---
@@ -628,7 +628,7 @@ class GovernanceStrategyTest {
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 **What "composite SPI" means here:** Instead of separately discovering `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, and `ChannelDaemon` through five independent `Instance<>` lookups, a single `ChannelPlugin` bean per channel bundles all five. This mirrors how a Java `ServiceLoader` plugin works — one class registers all capabilities for a channel.
@@ -852,7 +852,7 @@ class ChannelPluginRegistryTest {
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 ---
@@ -1004,7 +1004,7 @@ Verify that `TelegramMarkdownV2RendererTest` has at least one test that would ha
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 **Current state (from `.env.example`):**
@@ -1226,7 +1226,7 @@ class Vec0NativeLibraryInstallerTest {
 ---
 
 ## Architecture Context and Other References
-Refer `@Architecture_Nuances.md`
+Refer `@Architecture_Invariants.md`
 Refer `@arcclaw_rg_cheatsheet.md`
 
 ---

@@ -103,6 +103,20 @@ These are NOT interchangeable.
 - Hard budget exceedance must propagate upward and stop execution.
 - Do not swallow hard budget failures.
 
+## 3.6 Chat memory storage boundary
+
+System-role messages (injected tool rules, persona definitions, sanitized tool output headers)
+MUST NOT be stored in the SQLite `ChatMemoryStore`. Only user and assistant turns are persisted.
+Storing system messages inflates context, corrupts compaction logic, and leaks tool contracts.
+
+---
+
+## 3.7 Budget threshold check ordering
+
+In `StructuredRetryLoop`, `assertWithinBudget()` threshold check MUST precede `compareAndSet()`.
+If CAS fires first at 79% budget, `warningSent` is permanently `true` — the real 80% boundary
+warning is forever suppressed. The ordering is: check → log → CAS, never CAS → check.
+
 ---
 
 ## 4. Registry and SPI invariants
@@ -128,6 +142,33 @@ These are NOT interchangeable.
 ### 4.5 Channel plugin contract
 - New channel implementations must satisfy the channel SPI contract cleanly.
 - Do not add one-off channel branches into core flow when an SPI extension point exists.
+
+## 4.6 ReflexRegistry chain ordering
+
+The `ReflexRegistry` discovery uses a two-pass chain that MUST NOT be broken or reordered:
+- Pass 1: Built-in command prefixes (approve, deny, status, cron-list, etc.)
+- Pass 2: CDI-discovered `AgentReflex` beans (additive, no core changes needed)
+
+Do NOT inject reflexes into Pass 1, or reorder the passes. New reflexes go to Pass 2 only.
+
+## 4.7 Skill frontmatter boundary
+
+`maxBudgetUsd` is MUST NOT appear in skill frontmatter YAML.
+Budget governance is a runtime session concern owned by `GovernanceLayer`, not a per-skill config.
+Adding it to skill YAML silently bypasses the governance SPI.
+
+## 4.8 Dynamic skill rendering contract
+
+Dynamic skills MUST render their system prompt via the pre-compiled Qute wrapper
+`SkillSystemPrompt.html` only. Ad hoc string-built prompts bypass injection-safety
+sanitization and native-image Qute compilation checks.
+
+## 4.9 AgentFunctionProcessor schema source
+
+`AgentFunctionProcessor` MUST generate JSON schema from the SAM **return type** using
+`SchemaFactoryWrapper.acceptJsonFormatVisitor(returnTypeClass, visitor)`.
+MUST NOT use `ToolSpecifications.toolSpecificationFrom()` — that generates the INPUT
+parameter schema, not the output schema, and produces silent wrong behavior in native tools.
 
 ---
 
@@ -159,6 +200,12 @@ These are NOT interchangeable.
 - The custom SQLite dialect is mandatory for ORM-generated identity-column DDL correctness.
 - Do not remove or bypass it for entity tables using generated identifiers.
 
+## 5.7 EncryptedSecret version field ownership
+
+`EncryptedSecret.ormVersion` is Hibernate-managed. Application code MUST NOT read or set it.
+`EncryptedSecret.encryptionKeyVersion` is application-managed. Application code sets ONLY this field.
+Mixing these two fields corrupts encryption version tracking and is undetectable at runtime.
+
 ---
 
 ## 6. Native image and reflection rules
@@ -176,6 +223,14 @@ These are NOT interchangeable.
 
 ### 6.4 Resource loading
 - For generated/augmented resources in multi-module tests, prefer context-classloader resource loading when required by current Quarkus augmentation behavior.
+
+## 6.5 @RunOnVirtualThread enforcement
+
+The constraint that JAX-RS resources injecting `EntityManager` MUST have `@RunOnVirtualThread`
+is enforced at **build time** by `RestResourceBuildStep`. Violations fail the build with a
+`ValidationError` — they do NOT surface as runtime `BlockingOperationNotAllowedException`.
+Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
+
 
 ---
 
@@ -221,6 +276,16 @@ These are NOT interchangeable.
 - Sandbox/protected tools must default to isolated execution unless explicitly documented otherwise.
 - Opting out of isolation is exceptional and requires strong justification.
 
+## 8.6 Sandbox tool exception contract
+
+`SandboxExecTool.execute()` MUST follow this exception contract:
+- `BudgetExceededException` — MUST propagate (not catch); `AgentStateMachineRunner` handles it.
+- `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` — MUST catch
+  and return `ToolResponse.failure(message)`. Never propagate to `ToolInvoker`.
+- Output exceeding 8192 characters MUST be truncated at exactly 8192 with suffix
+  `[output truncated at 8192 chars]`. Never include raw Java stack traces in tool output.
+
+
 ---
 
 ## 9. Performance and reliability rules
@@ -256,6 +321,15 @@ These are NOT interchangeable.
 ### 10.3 Path resolution
 - OS-native binaries and dynamic extensions must be resolved using normalized absolute paths when runtime behavior depends on working directory.
 - Do not rely on launch-directory-relative behavior for native libs.
+
+## 10.4 Test profile skill reload
+
+The test profile MUST explicitly set:
+  arcclaw.skills.hot-reload: false
+
+Omitting this causes `SkillRegistry` to watch the filesystem during tests, producing
+flaky failures when skill YAML files are rewritten by concurrent Maven forks.
+
 
 ---
 
@@ -319,3 +393,15 @@ Every time an invariant here can be enforced by:
 - dedicated helper API,
 - typed wrapper/value object,
 - failing integration test,
+
+---
+
+## 15. Module CDI discovery contract
+
+Every non-app, non-deployment Maven module that contains CDI beans MUST:
+1. Include `jandex-maven-plugin` in its `pom.xml` build section.
+2. Include `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`.
+
+Without Jandex, `@ApplicationScoped` beans in library modules are **silently invisible**
+to the Quarkus CDI container — no error, no warning, just missing beans.
+This applies to every `arcclaw-channel-*` module added in P67 and beyond.

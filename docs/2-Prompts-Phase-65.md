@@ -32,7 +32,7 @@ No architectural changes. Surgical fixes only.
 ## Architecture Context
 Refer @TROUBLESHOOTING.md §26 (Phase 64 section) for prior audit chain fixes.
 Refer @PLAN.md Phase 64-A/B for GovernanceLayer and AuditEventRepository context.
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
@@ -211,7 +211,7 @@ security leakage under production load or future code changes.
 ## Architecture Context
 Refer @TROUBLESHOOTING.md §25 (Phase 63-U) for DevSecretSeeder production path history.
 Refer @PLAN.md Phase 64-B for SessionRegistry and DevSecretSeederStartup context.
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
@@ -341,7 +341,7 @@ same CDI pattern already established by ChannelJobNotifier and IntentRoutingProv
 Refer @PLAN.md Phase 64-C for ChannelJobNotifier SPI precedent.
 Refer @TROUBLESHOOTING.md §43 (Phase 47) for IntentRoutingProvider SPI precedent.
 All new SPIs must follow the same CDI @Any Instance<T> discovery pattern already in use.
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
@@ -589,7 +589,7 @@ and reduce long-term maintenance burden.
 ## Architecture Context
 Refer @PLAN.md Phase 64-C for ContextCompactionService history and CompactionRequest event design.
 Refer @PLAN.md Phase 65-C for EmbeddingModelProducer context (C3 established LlmModelFactory pattern).
-Refer @Architecture_Nuances.md
+Refer @Architecture_Invariants.md
 Refer @arcclaw_rg_cheatsheet.md
 
 ---
