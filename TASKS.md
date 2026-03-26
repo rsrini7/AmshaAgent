@@ -1298,10 +1298,17 @@
 
 ---
 
-## Phase 67 — Telegram Channel Modularization & Test Stabilization ✅
+## Phase 67 — Telegram Modularization & Sandbox Security ✅
 - [x] Step 1: Consolidate all core mocks into `TestCoreMocks.java` with `@Alternative` and `@Priority(1)`. <!-- id: 646 -->
 - [x] Step 2: Remove inline `@Produces` from `TelegramChannelRouteStartupTest.java`. <!-- id: 647 -->
 - [x] Step 3: Remove mock `EntityManager` from `TestCoreMocks.java` to allow real Hibernate/SQLite boot. <!-- id: 648 -->
 - [x] Step 4: Update `application.yaml` in `arcclaw-channel-telegram` with `arcclaw-core` index and missing Hibernate packages. <!-- id: 649 -->
 - [x] Step 5: Verify module test execution: `mvn clean test -pl :arcclaw-channel-telegram` (Step 1-4 tests green). <!-- id: 650 -->
-- [x] Step 6: Verify full system regression: `mvn clean verify` (809/809 tests green). <!-- id: 651 -->
+- [x] Step 6: Implement explicit `[FALLBACK WARNING]` in `PromptTemplateEngine` for missing templates. <!-- id: 651 -->
+- [x] Step 7: Retire `ChannelSenderRegistry` and migrate `AgentDispatchHandler` to `ChannelPluginRegistry` SPI. <!-- id: 652 -->
+- [x] Step 8: Replace static `processingFlags` with Caffeine cache (5s expiry) in `AgentDispatchHandler`. <!-- id: 653 -->
+- [x] Step 9: Remove `ChannelSender` field from `MessageContext` to ensure multi-channel neutrality. <!-- id: 654 -->
+- [x] Step 10: Implement `SandboxExecTool` with Python, Bash, and Node support and 8KB output truncation. <!-- id: 655 -->
+- [x] Step 11: Register `SandboxExecTool` for reflection and update `CODER`/`DEBUGGER` role capabilities. <!-- id: 656 -->
+- [x] Step 12: Update `ToolExecutionException` with `exitCode` for granular sandbox failure reporting. <!-- id: 657 -->
+- [x] Step 13: Verify full system regression: `mvn clean verify` (821/821 tests green). <!-- id: 658 -->
