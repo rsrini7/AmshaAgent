@@ -136,6 +136,11 @@ public class AgentStateMachineRunner {
 
         if (answer != null) {
             answer = StringEscapeUtils.unescapeHtml4(answer);
+            // unescapeHtml4 doesn't cover JSON unicode escapes
+            answer = answer.replace("\\u003c", "<")
+                        .replace("\\u003e", ">")
+                        .replace("\\u0026", "&")
+                        .replace("\\u0027", "'");
         }
 
         if (answer != null && isGeneratedCodeBlock(answer)) {

@@ -22,6 +22,8 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -187,10 +189,28 @@ public class EngineStepHandler {
         }
 
         log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
-        log.debugf(e, "Full stacktrace for ReasoningEngine failure in session %s", sessionId);
+        log.debugf("ReasoningEngine failure cause chain for session %s: %s", sessionId, rootCauseChain(e));
         return StepDecision.terminal(AgentResult.failed(
                 "ReasoningEngine error: " + e.getMessage(),
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+    }
+
+    /**
+     * Returns a compact single-line cause chain instead of a full stack trace.
+     * e.g. "RuntimeException: I'm busy → HttpException: rate_limit_exceeded"
+     * Replaces verbose log.debugf(..., e) calls that bloat logs during throttling.
+     */
+    private static String rootCauseChain(Throwable t) {
+        return ExceptionUtils.getThrowableList(t)
+                .stream()
+                .map(cause -> cause.getClass().getSimpleName() + ": " +
+                            truncate(cause.getMessage(), 120))
+                .collect(java.util.stream.Collectors.joining(" → "));
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "null";
+        return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 
     private String extractUnavailableToolName(String rawError) {
