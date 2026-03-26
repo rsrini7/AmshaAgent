@@ -1,13 +1,12 @@
 package com.arcclaw.app.channel;
 
-import com.arcclaw.channel.api.ChannelJobNotifier;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.lifecycle.ApprovalTimedOutEvent;
 import org.jboss.logging.Logger;

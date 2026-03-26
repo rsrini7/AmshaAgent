@@ -1,5 +1,8 @@
 package com.arcclaw.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelDaemon;
 import com.arcclaw.channel.api.ChannelJobNotifier;
@@ -7,9 +10,6 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ReplyRenderer;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 /**
  * Composite ChannelPlugin for Telegram.

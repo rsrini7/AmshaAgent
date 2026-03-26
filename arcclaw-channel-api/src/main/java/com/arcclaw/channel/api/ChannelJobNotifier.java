@@ -1,7 +1,5 @@
 package com.arcclaw.channel.api;
 
-
-
 /**
  * Interface for channel-specific job notification dispatchers.
  * <p>

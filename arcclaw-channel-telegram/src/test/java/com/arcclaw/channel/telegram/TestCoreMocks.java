@@ -1,15 +1,16 @@
 package com.arcclaw.channel.telegram;
 
-import com.arcclaw.channel.api.IntentClassifier;
-import dev.langchain4j.model.chat.ChatModel;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.quarkus.qute.Template;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Named;
+
+import com.arcclaw.channel.api.IntentClassifier;
+import dev.langchain4j.model.chat.ChatModel;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.quarkus.qute.Template;
 import io.smallrye.common.annotation.Identifier;
 import org.mockito.Mockito;
 

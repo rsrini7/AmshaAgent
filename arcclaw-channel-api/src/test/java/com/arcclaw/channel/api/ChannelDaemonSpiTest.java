@@ -31,3 +31,4 @@
 //         Assertions.assertTrue(hasTelegram, "TelegramChannelDaemon should be discovered via CDI");
 //     }
 // }
+

@@ -1,13 +1,12 @@
 package com.arcclaw.app.channel;
 
-import com.arcclaw.channel.api.ChannelJobNotifier;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import org.jboss.logging.Logger;
 
