@@ -33,7 +33,6 @@ import org.jboss.logging.Logger;
 public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
 
-    private static final String SKILL_PREFIX = "skill:";
     private static final int DEFAULT_MAX_ITERATIONS = 5;
 
     @Inject
@@ -68,8 +67,8 @@ public class AgentDispatchHandler implements MessageHandler {
 
         // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
-        if (role.startsWith(SKILL_PREFIX)) {
-            String skillName = role.substring(SKILL_PREFIX.length());
+        if (AgentRoleEnum.isSkillRole(role)) {
+            String skillName = AgentRoleEnum.skillName(role);
             maxIterations = skillRegistry.findByName(skillName)
                     .map(entry -> entry.definition().maxIterations())
                     .orElse(DEFAULT_MAX_ITERATIONS);

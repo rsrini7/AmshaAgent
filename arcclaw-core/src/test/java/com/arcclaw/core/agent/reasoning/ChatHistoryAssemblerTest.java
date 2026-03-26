@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+import org.jboss.logging.Logger;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -31,12 +33,16 @@ class ChatHistoryAssemblerTest {
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock
+    Logger log;
+
     ChatHistoryAssembler assembler;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         assembler = new ChatHistoryAssembler(chatMemoryStore, objectMapper);
+        assembler.log = log;
     }
 
     @Test
@@ -128,5 +134,29 @@ class ChatHistoryAssemblerTest {
 
         Assertions.assertTimeout(Duration.ofMillis(100),
             () -> ChatHistoryAssembler.COMPLIANCE_OVERRIDE_PATTERN.matcher(evil).find());
+    }
+
+    @Test
+    void testAssemble_serializationErrorFallsBackToEmptyParams() {
+        // Arrange
+        Object thrower = new Object() {
+            @SuppressWarnings("unused")
+            public String getFail() {
+                throw new RuntimeException("Force serialization failure");
+            }
+        };
+        ReasoningStep step = ReasoningStep.pending("thought", "myTool", Map.of("badParam", thrower), 0, 0);
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(null, null, List.of(step));
+
+        // Assert
+        assertEquals(1, result.size());
+        assertTrue(result.get(0) instanceof AiMessage);
+        AiMessage ai = (AiMessage) result.get(0);
+        assertTrue(ai.hasToolExecutionRequests());
+        dev.langchain4j.agent.tool.ToolExecutionRequest req = ai.toolExecutionRequests().get(0);
+        assertEquals("myTool", req.name());
+        assertEquals("{}", req.arguments());
     }
 }

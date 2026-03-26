@@ -85,8 +85,8 @@ public class AuditHashUtil {
      */
     public String sha256hex(String input) {
         if (input == null) {
-            // Never propagate null into prevHash — use explicit sentinel
-            return "genesis-fallback-null-input";
+            // Genesis parent link: 64 zeros
+            return "0000000000000000000000000000000000000000000000000000000000000000";
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

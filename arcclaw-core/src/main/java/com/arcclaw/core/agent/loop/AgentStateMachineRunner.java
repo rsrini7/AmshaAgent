@@ -138,8 +138,7 @@ public class AgentStateMachineRunner {
         }
 
         if (answer != null && isGeneratedCodeBlock(answer)) {
-            if (AgentRoleEnum.RESEARCHER.toScopedName().equals(agentRole)
-                    || AgentRoleEnum.ARCHITECT.toScopedName().equals(agentRole)) {
+            if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
                 String refusal = "I'm " + agentRole + " — I don't generate code. " +
                         "Please ask Brahma (coder) for code generation tasks.";
                 writer.saveAnswer(sessionId, refusal);

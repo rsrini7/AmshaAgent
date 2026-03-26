@@ -27,10 +27,6 @@ public interface ReasoningEngine {
 
     /**
      * Optional method for structured (non-ReAct) LLM calls.
-     * Default implementation throws UnsupportedOperationException to preserve
-     * the interface as a Functional Interface for tests.
      */
-    default String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-        throw new UnsupportedOperationException("Structured output not supported by this engine");
-    }
+    String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt);
 }

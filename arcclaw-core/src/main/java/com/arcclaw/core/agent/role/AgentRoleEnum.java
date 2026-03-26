@@ -89,7 +89,7 @@ public record AgentRoleEnum(String id) {
         String normalized = roleStr.trim().toLowerCase();
 
         // Skill-based dynamic routing
-        if (normalized.startsWith("skill:")) {
+        if (isSkillRole(normalized)) {
             return RESEARCHER;
         }
 
@@ -107,7 +107,7 @@ public record AgentRoleEnum(String id) {
     public static boolean isKnownRole(String roleStr) {
         if (roleStr == null || roleStr.isBlank()) return false;
         String normalized = roleStr.trim().toLowerCase();
-        if (normalized.startsWith("skill:")) return true;
+        if (isSkillRole(normalized)) return true;
         for (AgentRoleEnum builtIn : BUILT_IN) {
             RoleDefinition def = DEFINITIONS.get(builtIn.id());
             if (def.canonicalName().equals(normalized) || def.aliases().contains(normalized)) {
@@ -115,6 +115,19 @@ public record AgentRoleEnum(String id) {
             }
         }
         return false;
+    }
+
+    /** Returns true if the role string starts with the skill prefix. */
+    public static boolean isSkillRole(String roleStr) {
+        return roleStr != null && roleStr.startsWith("skill:");
+    }
+
+    /** Extracts the skill name from a skill role string. */
+    public static String skillName(String roleStr) {
+        if (!isSkillRole(roleStr)) {
+            throw new IllegalArgumentException("Not a skill role: " + roleStr);
+        }
+        return roleStr.substring("skill:".length());
     }
 
     /** Drop-in replacement for the enum-generated values() calls. */

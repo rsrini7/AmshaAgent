@@ -26,7 +26,6 @@ import org.jboss.logging.Logger;
 public class SystemPromptBuilder {
 
     private static final Logger log = Logger.getLogger(SystemPromptBuilder.class);
-    private static final String SKILL_PREFIX = "skill:";
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -206,8 +205,8 @@ public class SystemPromptBuilder {
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
 
-        if (agentRole != null && agentRole.startsWith(SKILL_PREFIX)) {
-            String skillName = agentRole.substring(SKILL_PREFIX.length());
+        if (AgentRoleEnum.isSkillRole(agentRole)) {
+            String skillName = AgentRoleEnum.skillName(agentRole);
             roleEnum = AgentRoleEnum.fromString(agentRole); // returns RESEARCHER — correct tool set
 
             personaPrompt = skillRegistry.findByName(skillName)
@@ -231,7 +230,7 @@ public class SystemPromptBuilder {
                 "\n\n";
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && (agentRole == null || !agentRole.startsWith(SKILL_PREFIX))) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole)) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main

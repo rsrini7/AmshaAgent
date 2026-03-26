@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -121,7 +121,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // This ensures schedule_task is never available when the goal originated from the scheduler,
         // regardless of how the session was created.
         boolean isCronFired = (sessionId != null && sessionId.toLowerCase().startsWith("cron-"))
-                || (goal != null && goal.toUpperCase().startsWith("CRON:"));
+                || AgentSentinels.isCronGoal(goal);
         
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
         .filter(allowedTools::contains)

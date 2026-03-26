@@ -5,6 +5,8 @@ import java.sql.Connection;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.annotation.Priority;
+import jakarta.interceptor.Interceptor;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
@@ -31,7 +33,8 @@ public class RagSchemaInitializer {
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
 
-    void onStart(@Observes StartupEvent ev) {
+    @Priority(Interceptor.Priority.APPLICATION + 100)
+    void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 100) StartupEvent ev) {
         // Acquire a connection to trigger FtsConnectionInterceptor.onConnectionAcquire()
         // which calls enable_load_extension + load_extension(vec-extension-path).
         // Without this, isVectorSearchEnabled() is always false at startup because

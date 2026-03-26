@@ -17,6 +17,10 @@ public final class AgentSentinels {
     /** Internal goal strings used when resuming a task. */
     public static final String GOAL_RESUME_APPROVED = "Resuming task after approval";
     public static final String GOAL_RESUME_DENIED   = "Resuming task after denial";
+    public static final String CRON_PREFIX = "CRON ";
 
+    public static boolean isCronGoal(String goal) {
+        return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);
+    }
 }
 

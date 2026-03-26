@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import org.jboss.logging.Logger;
+
 import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -24,6 +26,9 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
  */
 @ApplicationScoped
 public class ChatHistoryAssembler {
+
+    @Inject
+    Logger log;
 
     private final ChatMemoryStore chatMemoryStore;
     private final ObjectMapper objectMapper;
@@ -108,7 +113,9 @@ public class ChatHistoryAssembler {
                         }
                     }
                 } catch (Exception e) {
-                    // Ignore serialization errors
+                    argsJson = "{}";
+                    log.warnf("[ChatHistoryAssembler] Failed to serialize tool args at step %d" +
+                              " — using empty params. Cause: %s", i, e.getMessage());
                 }
 
                 String callId = "call_" + i;
