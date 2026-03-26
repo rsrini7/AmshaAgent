@@ -13,6 +13,8 @@ This is the **final merged, definitive Phase 67 plan** — adjudicated from the 
 
 ***
 # PHASE 67 — FINAL COMPLETE PROMPTS
+
+Note : @Architecture_Invariants.md if missed specific section can refer @Architecture_Nuances.md (Invariants created from Nuances.)
 ---
 ## PROMPT T67-1: Extract `arcclaw-channel-telegram` Maven Module
 ```
