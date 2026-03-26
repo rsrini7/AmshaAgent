@@ -68,4 +68,12 @@ class AgentPersonaRegistryTest {
             assertNotEquals(fallback, prompt, "Should not hit ultimate fallback for " + role);
         }
     }
+
+    @Test
+    void testUnknownRoleFallsBackToCoordinator() {
+        AgentRoleEnum unknown = AgentRoleEnum.fromString("unknown-role");
+        String prompt = registry.getPersonaPrompt(unknown);
+        String coordinatorPrompt = registry.getPersonaPrompt(AgentRoleEnum.COORDINATOR);
+        assertEquals(coordinatorPrompt, prompt, "Unknown role should fall back to coordinator persona");
+    }
 }

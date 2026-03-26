@@ -1,16 +1,18 @@
 package com.arcclaw.core.agent.reasoning;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 @QuarkusTest
 class PromptTemplateEngineTest {
@@ -59,6 +61,26 @@ class PromptTemplateEngineTest {
             // Test with both current time and null
             assertNotNull(promptTemplateEngine.buildSystemPrompt(role, "summary", Instant.now()));
             assertNotNull(promptTemplateEngine.buildSystemPrompt(role, null, null));
+        }
+    }
+
+    @Test
+    void unknownDynamicRoleGetsCoordinatorToolRulesAndDoesNotThrow() {
+        // AgentRoleEnum.fromString("security-auditor") returns an open role
+        AgentRoleEnum unknown = AgentRoleEnum.fromString("security-auditor");
+        // Must NOT throw — must return non-blank content
+        String prompt = promptTemplateEngine.buildSystemPrompt(unknown, null, Instant.now());
+        assertNotNull(prompt);
+        assertFalse(prompt.isBlank());
+        // Must contain coordinator tool rules as fallback evidence
+        assertTrue(prompt.toUpperCase().contains("PERMITTED TOOLS"));
+    }
+
+    @Test
+    void allSixBuiltInRolesResolveToTheirOwnTemplate() {
+        // None of the built-in 6 should trigger the WARN path
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            assertDoesNotThrow(() -> promptTemplateEngine.buildSystemPrompt(role, null, Instant.now()));
         }
     }
 }

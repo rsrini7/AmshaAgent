@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.persona;
 
 import java.util.Collections;
+import org.jboss.logging.Logger;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -14,6 +15,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
  */
 @ApplicationScoped
 public class AgentPersonaRegistry {
+    private static final Logger log = Logger.getLogger(AgentPersonaRegistry.class);
 
     private final Iterable<Agent> agents;
 
@@ -43,6 +45,11 @@ public class AgentPersonaRegistry {
                 return agent.systemPrompt();
             }
         }
+
+        log.warnf("[AgentPersonaRegistry] No Agent bean registered for role '%s'. " +
+                "Returning coordinator persona as fallback. " +
+                "To fix: create a @ApplicationScoped class implementing Agent with role() = '%s'.",
+                role.toScopedName(), role.toScopedName());
 
         // Fallback: coordinator prompt if role not found
         for (Agent agent : agents) {

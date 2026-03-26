@@ -3,19 +3,20 @@ package com.arcclaw.channel.telegram;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.apache.camel.Exchange;
+import org.apache.camel.component.telegram.model.IncomingMessage;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
+
 import io.quarkus.arc.Arc;
-import org.apache.camel.Exchange;
-import org.apache.camel.component.telegram.model.IncomingMessage;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class TelegramAgentHandler {
