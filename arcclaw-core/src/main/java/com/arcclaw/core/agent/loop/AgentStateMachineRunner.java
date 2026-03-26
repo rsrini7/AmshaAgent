@@ -35,11 +35,24 @@ import org.jboss.logging.Logger;
 public class AgentStateMachineRunner {
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
 
+    // ── Matches completion non-answers: "Done.", "✅ Done.", "OK.", "ok" etc.
+    // NOTE: token-count gate removed — step.outputTokens() is 0 for ReasoningStep.pending()
+    // paths, making it unreliable. The pattern itself is the real gate.
     private static final Pattern SUSPICIOUSLY_SHORT =
             Pattern.compile(
-                "^[✅\\s]*(done\\.?|ok\\.?|yes\\.?|noted\\.?)\\s*$",
+                "^[✅⏳\\s]*(done\\.?|ok\\.?)\\s*$",
                 Pattern.CASE_INSENSITIVE
             );
+
+    // ── LangChain4J / internal error strings that must never reach the user.
+    private static final List<String> INTERNAL_ERROR_FRAGMENTS = List.of(
+            "text cannot be null or blank",
+            "NullPointerException",
+            "IllegalArgumentException",
+            "IllegalStateException",
+            "StackOverflowError",
+            "OutOfMemoryError"
+    );
 
     @Inject AgentStepProcessor stepProcessor;
     @Inject ChatMemoryWriter writer;
@@ -76,7 +89,7 @@ public class AgentStateMachineRunner {
                     engineDecision = stepProcessor.processEngineStep(
                             context, engine, history, transientError, llmSchemaErrorCount, iteration);
                 } catch (StructuredOutputException soe) {
-                   log.warnf(
+                    log.warnf(
                         "StateMachine schema self-correction exhausted at iteration %d/%d for session %s — " +
                         "treating as loop exceeded to preserve LOOP_MAX_ITERATIONS audit semantics.",
                         iteration, context.maxIterations(), context.sessionId()
@@ -136,12 +149,16 @@ public class AgentStateMachineRunner {
 
         if (answer != null) {
             answer = StringEscapeUtils.unescapeHtml4(answer);
-            // unescapeHtml4 doesn't cover JSON unicode escapes
+            // unescapeHtml4 doesn't cover JSON unicode escapes — fix explicitly.
             answer = answer.replace("\\u003c", "<")
-                        .replace("\\u003e", ">")
-                        .replace("\\u0026", "&")
-                        .replace("\\u0027", "'");
+                          .replace("\\u003e", ">")
+                          .replace("\\u0026", "&")
+                          .replace("\\u0027", "'");
         }
+
+        // ── Sanitize raw internal exception messages before they reach the user.
+        // e.g. "text cannot be null or blank" from LangChain4J must never be shown.
+        answer = sanitizeErrorForUser(answer, sessionId);
 
         if (answer != null && isGeneratedCodeBlock(answer)) {
             if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
@@ -153,12 +170,11 @@ public class AgentStateMachineRunner {
             }
         }
 
-        // ── Answer guard: suppress suspiciously short answers (e.g. "Done.", "✅ Done.")
-        // that are produced when the LLM sees a thin compacted context due to the
-        // compaction race. out=1 token with "Done." is the telltale signal.
-        // guardFinalAnswer replaces the response with a retry prompt so the user
-        // knows to re-send rather than silently receiving a wrong answer.
-        answer = guardFinalAnswer(answer, step.outputTokens());
+        // ── Answer guard: suppress suspiciously short non-answers ("Done.", "OK.")
+        // produced when the LLM sees thin compacted context after a compaction race.
+        // Token-count gate removed — step.outputTokens() is unreliable (always 0 for
+        // ReasoningStep.pending() paths). Pattern-only check is the real gate.
+        answer = guardFinalAnswer(answer, step.outputTokens(), sessionId);
 
         if (sessionId != null && answer != null && !answer.isBlank()) {
             writer.saveAnswer(sessionId, answer);
@@ -186,11 +202,40 @@ public class AgentStateMachineRunner {
         return AgentResult.finished(answer, List.copyOf(history));
     }
 
-    private String guardFinalAnswer(String answer, int outputTokens) {
-        if (outputTokens <= 2 && answer != null && SUSPICIOUSLY_SHORT.matcher(answer.trim()).matches()) {
-            log.warnf("ANSWER-GUARD suppressed suspicious %d-token response: '%s' — " +
-                    "likely caused by compaction race. Returning retry prompt.", outputTokens, answer);
-            return "I lost context mid-response — please try again.";
+    /**
+     * Suppresses suspiciously short non-answers ("Done.", "OK.") caused by
+     * the LLM receiving thin compacted context after a compaction race.
+     * Token-count gate intentionally removed — step.outputTokens() is 0 for
+     * all ReasoningStep.pending() construction paths, making it unreliable.
+     */
+    private String guardFinalAnswer(String answer, int outputTokens, String sessionId) {
+        if (answer == null || answer.isBlank()) {
+            log.warnf("ANSWER-GUARD: null/blank answer for session %s — returning retry prompt",
+                    sessionId);
+            return "⚠️ I wasn't able to generate a response. Please try again.";
+        }
+        if (SUSPICIOUSLY_SHORT.matcher(answer.strip()).matches()) {
+            log.warnf("ANSWER-GUARD suppressed suspicious %d-token response: '%s' " +
+                    "for session %s — likely caused by compaction race or stale context.",
+                    outputTokens, answer.strip(), sessionId);
+            return "⚠️ Context was lost mid-response — please resend your request.";
+        }
+        return answer;
+    }
+
+    /**
+     * Ensures raw LangChain4J / JVM internal exception messages never reach the user.
+     * These appear when a null/blank tool result leaks into chat history and the next
+     * LLM call fails with "text cannot be null or blank" from LangChain4J validation.
+     */
+    private String sanitizeErrorForUser(String answer, String sessionId) {
+        if (answer == null) return null;
+        for (String fragment : INTERNAL_ERROR_FRAGMENTS) {
+            if (answer.contains(fragment)) {
+                log.warnf("ANSWER-GUARD: sanitized internal error message '%s' for session %s",
+                        answer, sessionId);
+                return "⚠️ An internal error occurred. Please try again.";
+            }
         }
         return answer;
     }
