@@ -57,7 +57,7 @@ In your `DiscordDaemon`, implement `isConfigured()` returning `false` if the tok
 
 ## Reference: Telegram Implementation
 
-Check the reference Telegram implementation inside `arcclaw-app/src/main/java/com/arcclaw/app/channel/telegram/`:
+Check the reference Telegram implementation inside `arcclaw-channel-telegram/src/main/java/com/arcclaw/channel/telegram/`:
 - `TelegramChannelPlugin.java`
 - `TelegramChannelSender.java`
 - `TelegramMarkdownV2Renderer.java`
