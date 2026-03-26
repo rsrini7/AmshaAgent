@@ -9,6 +9,9 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.compaction.CompactionAbortedException;
+import com.arcclaw.core.governance.RateLimitTracker;
+
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -25,7 +28,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class CompactionService {
-    
+
     private static final int MAX_SUMMARY_CODEPOINTS = 1985;
     private static final String TRUNCATION_SUFFIX = "...[truncated]";
 
@@ -44,6 +47,9 @@ public class CompactionService {
     @Inject
     @Identifier("compaction")
     ChatModel compactionModel;
+
+    @Inject
+    RateLimitTracker rateLimitTracker;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
@@ -85,7 +91,7 @@ public class CompactionService {
     public boolean shouldCompact(String sessionId) {
         if (!enabled) return false;
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
-        
+
         long count = allMessages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .count();
@@ -97,7 +103,8 @@ public class CompactionService {
                 .mapToLong(m -> m.toString().length())
                 .sum();
         if (totalChars > maxCharsBeforeCompaction) {
-            log.debugf("CompactionService char threshold exceeded for session %s: %d chars", sessionId, totalChars);
+            log.debugf("CompactionService char threshold exceeded for session %s: %d chars",
+                    sessionId, totalChars);
             return true;
         }
         return false;
@@ -105,6 +112,11 @@ public class CompactionService {
 
     /**
      * Executes the compaction algorithm.
+     * <p>
+     * Throws {@link CompactionAbortedException} (unchecked) if the LLM call is
+     * rate-limited. The caller ({@code CompactionEventBridge}) catches this in its
+     * {@code finally} block, which releases the per-session latch immediately so
+     * the agent thread does not have to wait for the full {@code AWAIT_TIMEOUT_SECONDS}.
      *
      * @return true if compaction was successfully completed, false otherwise.
      */
@@ -112,7 +124,7 @@ public class CompactionService {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
-        
+
         List<ChatMessage> nonSystemMessages = allMessages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .toList();
@@ -123,10 +135,12 @@ public class CompactionService {
 
         int size = nonSystemMessages.size();
         List<ChatMessage> toCompact = nonSystemMessages.subList(0, size - keepRecent);
-        List<ChatMessage> toKeep = nonSystemMessages.subList(size - keepRecent, size);
+        List<ChatMessage> toKeep   = nonSystemMessages.subList(size - keepRecent, size);
 
-        Optional<CompactionSummaryEntity> existingSummaryOpt = summaryRepository.findLatestBySessionId(sessionId);
-        String existingSummaryText = existingSummaryOpt.map(CompactionSummaryEntity::getSummary).orElse("");
+        Optional<CompactionSummaryEntity> existingSummaryOpt =
+                summaryRepository.findLatestBySessionId(sessionId);
+        String existingSummaryText =
+                existingSummaryOpt.map(CompactionSummaryEntity::getSummary).orElse("");
 
         String messagesToCompactStr = toCompact.stream()
                 .map(ChatMessage::toString)
@@ -136,11 +150,27 @@ public class CompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        String newSummary = compactionModel.chat(UserMessage.userMessage(prompt))
-                .aiMessage().text().trim();
+        // ── Rate-limit fast-fail: if Groq throttles the summary call, record the
+        // hit (so CompactionHandler skips compaction for the next BACKOFF_SECONDS)
+        // and throw CompactionAbortedException so CompactionEventBridge.finally
+        // releases the latch immediately — no waiting for AWAIT_TIMEOUT_SECONDS.
+        String newSummary;
+        try {
+            newSummary = compactionModel.chat(UserMessage.userMessage(prompt))
+                    .aiMessage().text().trim();
+        } catch (Exception e) {
+            if (isRateLimit(e)) {
+                rateLimitTracker.recordHit();
+                log.warnf("CompactionService: rate-limited during summary for session %s — " +
+                          "aborting compaction, latch will release via finally block", sessionId);
+                throw new CompactionAbortedException("Rate-limited during compaction", e);
+            }
+            throw e;  // non-rate-limit errors propagate normally
+        }
 
         if (newSummary.isBlank()) {
-            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.", sessionId);
+            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.",
+                    sessionId);
             return false;
         }
 
@@ -151,16 +181,26 @@ public class CompactionService {
         List<ChatMessage> filteredKeep = toKeep.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .toList();
-        
+
         chatMemoryStore.updateMessages(sessionId, filteredKeep);
 
-        String detail = String.format("{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
+        String detail = String.format(
+                "{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
                 toCompact.size(), filteredKeep.size(), newSummary.length());
-        
-        auditService.record(sessionId, "system", "system", SecurityEventType.CONTEXT_COMPACTED, detail);
 
-        log.infof("Context compacted for session %s. Compacted %d messages, kept %d.", sessionId, toCompact.size(), filteredKeep.size());
+        auditService.record(sessionId, "system", "system",
+                SecurityEventType.CONTEXT_COMPACTED, detail);
+
+        log.infof("Context compacted for session %s. Compacted %d messages, kept %d.",
+                sessionId, toCompact.size(), filteredKeep.size());
         return true;
+    }
+
+    private static boolean isRateLimit(Throwable e) {
+        if (e == null) return false;
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("rate_limit_exceeded") || msg.contains("429"))) return true;
+        return isRateLimit(e.getCause());  // walk the cause chain
     }
 
     private String truncateSafely(String text) {

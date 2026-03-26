@@ -25,7 +25,7 @@ public class CompactionEventBridge {
 
     private static final Logger log = Logger.getLogger(CompactionEventBridge.class);
 
-    private static final int AWAIT_TIMEOUT_SECONDS = 5;
+    private static final int AWAIT_TIMEOUT_SECONDS = 15;
 
     /**
      * Per-session latches. Registered synchronously by CompactionHandler BEFORE
