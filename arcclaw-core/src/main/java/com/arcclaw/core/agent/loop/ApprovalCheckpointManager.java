@@ -28,9 +28,11 @@ public class ApprovalCheckpointManager {
      * Captures the original user goal so RAG context enrichment on resume uses the
      * correct embedding query instead of the synthetic resume sentinel string.
      */
-    AgentResult persist(String sessionId, String agentRole,
+    AgentResult persist(AgentExecutionContext context,
             String toolName, String paramsJson,
-            List<ReasoningStep> history, String goal) {
+            List<ReasoningStep> history) {
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
         AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
                 .orElseGet(() -> {
                     AgentCheckpoint c = new AgentCheckpoint();
@@ -41,7 +43,7 @@ public class ApprovalCheckpointManager {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
-        cp.setOriginalGoal(goal);
+        cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s", sessionId, toolName);

@@ -15,6 +15,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,8 @@ public class EngineStepHandlerOtelTest {
         when(engine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(step);
 
         // Act
-        handler.processEngineStep("test-session", "goal", engine, Collections.emptyList(), "coordinator", null, 0, 1);
+        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, 5);
+        handler.processEngineStep(context, engine, Collections.emptyList(), null, 0, 1);
 
         // Assert
         // recordLlmCall should be called EXACTLY once (from the observer loop).

@@ -44,8 +44,8 @@ public class ToolStepHandler {
 
     // ── Validation
 
-    StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history,
-            ReasoningStep step, String goal, int consecutiveFailures) {
+    StepDecision validateTool(AgentExecutionContext context, List<ReasoningStep> history,
+            ReasoningStep step, int consecutiveFailures) {
         String toolName = step.action();
         if (toolRegistry.findTool(toolName).isPresent())
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
@@ -71,7 +71,7 @@ public class ToolStepHandler {
         log.warnf("[ToolStepHandler] Hallucinated tool '%s' intercepted", toolName);
         final ReasoningStep completedStep = step.withObservation(errorObs);
         history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
+        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
 
         consecutiveFailures++;
         if (consecutiveFailures >= 2)
@@ -85,87 +85,87 @@ public class ToolStepHandler {
     // ── Invocation
 
     /** Orchestrates the 4 phases: guard → invoke → observe → resolve outcome. */
-    StepDecision invokeToolAndObserve(String sessionId, String agentRole,
+    StepDecision invokeToolAndObserve(AgentExecutionContext context,
             List<ReasoningStep> history, ReasoningStep step,
-            int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot, AutonomyLevel autonomy) {
+            int consecutiveFailures, List<CompiledSkillEntry> skillSnapshot) {
 
         // Phase 1 — Guard
-        StepDecision guardDecision = evaluateGuard(sessionId, agentRole, history, step, goal, skillSnapshot, autonomy);
+        StepDecision guardDecision = evaluateGuard(context, history, step, skillSnapshot);
         if (guardDecision != null) return guardDecision;
 
         // Phase 2 — Invoke
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
         ToolResponse response;
-        try {
-            response = invokeTool(sessionId, agentRole, history, step, toolName, params, goal);
-        } catch (FastExitException e) {
-            return e.decision;
+        InvokeResult invokeResult = invokeTool(context, history, step, toolName, params);
+        if (invokeResult instanceof InvokeResult.ShortCircuit sc) {
+            return sc.decision();
         }
+        response = ((InvokeResult.Responded) invokeResult).response();
 
         // Phase 3 — Observe
         String observation = buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation);
         history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
+        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
         log.debugf("Observation for '%s': %s", toolName,
                 observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
 
         // Phase 4 — Resolve (params forwarded so manage_schedule can branch on action)
-        return resolveOutcome(sessionId, toolName, params, response, observation,
+        return resolveOutcome(context, toolName, params, response, observation,
                 completedStep, history, consecutiveFailures);
     }
 
-    private StepDecision evaluateGuard(String sessionId, String agentRole,
+    private StepDecision evaluateGuard(AgentExecutionContext context,
             List<ReasoningStep> history, ReasoningStep step,
-            String goal, List<CompiledSkillEntry> skillSnapshot, AutonomyLevel autonomy) {
+            List<CompiledSkillEntry> skillSnapshot) {
 
         // READONLY: block all tool calls inline — no persistence, no approval pause
-        if (autonomy == AutonomyLevel.READONLY) {
+        if (context.autonomyLevel() == AutonomyLevel.READONLY) {
             log.infof("[ToolStepHandler] READONLY session %s — blocking tool '%s' inline",
-                    sessionId, step.action());
+                    context.sessionId(), step.action());
             final ReasoningStep blockedStep = step.withObservation(
                     "Tool execution is not permitted in READONLY mode. " +
                     "Answer using only your existing knowledge. " +
                     "Do not attempt to call any tools.");
             history.add(blockedStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
+            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), blockedStep));
             return StepDecision.retryValidation(0);
         }
 
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                sessionId, agentRole, step.action(),
+                context.sessionId(), context.agentRole(), step.action(),
                 step.actionInput() != null ? step.actionInput() : Map.of(),
-                history, goal, skillSnapshot);
+                history, context.goal(), skillSnapshot);
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
             history.add(dedupStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, dedupStep));
+            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), dedupStep));
             return StepDecision.proceedWithFailures(dedupStep, 0);
         }
         if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
             final ReasoningStep blockedStep = step.withObservation(b.observation());
             history.add(blockedStep);
-            observers.forEach(o -> o.onStepComplete(sessionId, agentRole, blockedStep));
+            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), blockedStep));
             return StepDecision.retryValidation(0);
         }
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
             return StepDecision.terminal(
-                    checkpointManager.persist(sessionId, agentRole, p.toolName(), p.paramsJson(), history, goal));
+                    checkpointManager.persist(context, p.toolName(), p.paramsJson(), history));
         }
         return null; // PROCEED
     }
 
-    private ToolResponse invokeTool(String sessionId, String agentRole,
+    private InvokeResult invokeTool(AgentExecutionContext context,
             List<ReasoningStep> history, ReasoningStep step,
-            String toolName, Map<String, Object> params, String goal) {
+            String toolName, Map<String, Object> params) {
         try {
-            return invoker.invoke(toolName, params, sessionId);
+            return new InvokeResult.Responded(invoker.invoke(toolName, params, context.sessionId()));
         } catch (RequiresApprovalException e) {
-            throw new FastExitException(StepDecision.terminal(
-                    checkpointManager.persist(sessionId, agentRole,
-                            e.getToolName(), e.getToolParametersJson(), history, goal)));
+            return new InvokeResult.ShortCircuit(StepDecision.terminal(
+                    checkpointManager.persist(context,
+                            e.getToolName(), e.getToolParametersJson(), history)));
         }
     }
 
@@ -187,7 +187,7 @@ public class ToolStepHandler {
      *                       Previously all manage_schedule calls were terminal, which
      *                       forced the two-step delete flow across multiple /run requests.
      */
-    private StepDecision resolveOutcome(String sessionId, String toolName,
+    private StepDecision resolveOutcome(AgentExecutionContext context, String toolName,
             Map<String, Object> params,
             ToolResponse response, String observation,
             ReasoningStep completedStep, List<ReasoningStep> history,
@@ -197,7 +197,7 @@ public class ToolStepHandler {
             log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
             String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
             String finalAnswer = (response.success() ? "✅ " : "❌ ") + cleanOutput;
-            writer.saveAnswer(sessionId, finalAnswer);
+            writer.saveAnswer(context.sessionId(), finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
         }
 
@@ -207,7 +207,7 @@ public class ToolStepHandler {
                 // delete / pause / resume — terminal, no further reasoning needed
                 log.infof("[STATE-MACHINE] Fast-path exit for tool '%s' action=%s", toolName, action);
                 String finalAnswer = (response.success() ? "✅ " : "❌ ") + observation;
-                writer.saveAnswer(sessionId, finalAnswer);
+                writer.saveAnswer(context.sessionId(), finalAnswer);
                 return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
             }
             // list — fall through so the LLM sees the results and acts in the next iteration
@@ -217,7 +217,7 @@ public class ToolStepHandler {
         if (!response.success()
                 && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                 && observation.contains("GitHub integration is not available")) {
-            if (sessionId != null && !observation.isBlank()) writer.saveAnswer(sessionId, observation);
+            if (context.sessionId() != null && !observation.isBlank()) writer.saveAnswer(context.sessionId(), observation);
             return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
         }
 
@@ -225,7 +225,7 @@ public class ToolStepHandler {
             consecutiveFailures++;
             if (consecutiveFailures >= 2) {
                 log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s tool=%s failures=%d",
-                        sessionId, toolName, consecutiveFailures);
+                        context.sessionId(), toolName, consecutiveFailures);
                 return StepDecision.terminal(AgentResult.finished(
                         "❌ I encountered repeated errors trying to execute that task. " +
                         "Please rephrase your request or check the parameters.",
@@ -238,12 +238,9 @@ public class ToolStepHandler {
         return StepDecision.proceedWithFailures(completedStep, consecutiveFailures);
     }
 
-    /** Unchecked signal to short-circuit invokeTool() when approval is required mid-call. */
-    static class FastExitException extends RuntimeException {
-        final StepDecision decision;
-        FastExitException(StepDecision decision) {
-            super(null, null, true, false); // suppress stacktrace — control flow only
-            this.decision = decision;
-        }
+    /** Sealed result of the invokeTool phase. */
+    protected sealed interface InvokeResult {
+        record Responded(ToolResponse response) implements InvokeResult {}
+        record ShortCircuit(StepDecision decision) implements InvokeResult {}
     }
 }

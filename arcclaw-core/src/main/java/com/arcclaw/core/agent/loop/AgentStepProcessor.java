@@ -9,7 +9,6 @@ import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 
 /**
@@ -23,28 +22,28 @@ public class AgentStepProcessor {
     @Inject ToolStepHandler toolStepHandler;
     @Inject ApprovalCheckpointManager checkpointManager;
 
-    StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
-            List<ReasoningStep> history, String agentRole, String transientError,
+    StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
+            List<ReasoningStep> history, String transientError,
             int llmSchemaErrorCount, int iteration) {
         return engineStepHandler.processEngineStep(
-                sessionId, goal, engine, history, agentRole, transientError, llmSchemaErrorCount, iteration);
+                context, engine, history, transientError, llmSchemaErrorCount, iteration);
     }
 
-    StepDecision validateTool(String sessionId, String agentRole, List<ReasoningStep> history,
-            ReasoningStep step, String goal, int consecutiveFailures) {
-        return toolStepHandler.validateTool(sessionId, agentRole, history, step, goal, consecutiveFailures);
+    StepDecision validateTool(AgentExecutionContext context, List<ReasoningStep> history,
+            ReasoningStep step, int consecutiveFailures) {
+        return toolStepHandler.validateTool(context, history, step, consecutiveFailures);
     }
 
-    StepDecision invokeToolAndObserve(String sessionId, String agentRole,
+    StepDecision invokeToolAndObserve(AgentExecutionContext context,
             List<ReasoningStep> history, ReasoningStep step,
-            int consecutiveFailures, String goal, List<CompiledSkillEntry> skillSnapshot, AutonomyLevel autonomy) {
+            int consecutiveFailures, List<CompiledSkillEntry> skillSnapshot) {
         return toolStepHandler.invokeToolAndObserve(
-                sessionId, agentRole, history, step, consecutiveFailures, goal, skillSnapshot, autonomy);
+                context, history, step, consecutiveFailures, skillSnapshot);
     }
 
-    AgentResult persistApprovalCheckpoint(String sessionId, String agentRole,
+    AgentResult persistApprovalCheckpoint(AgentExecutionContext context,
             String toolName, String paramsJson,
-            List<ReasoningStep> history, String goal) {
-        return checkpointManager.persist(sessionId, agentRole, toolName, paramsJson, history, goal);
+            List<ReasoningStep> history) {
+        return checkpointManager.persist(context, toolName, paramsJson, history);
     }
 }

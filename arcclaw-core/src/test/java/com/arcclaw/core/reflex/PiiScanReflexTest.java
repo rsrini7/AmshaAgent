@@ -1,6 +1,7 @@
 package com.arcclaw.core.reflex;
 
 import jakarta.inject.Inject;
+import com.arcclaw.core.security.InputSanitizer;
 
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 class PiiScanReflexTest {
 
     @Inject
+    @InputSanitizer.PII
     PiiScanReflex piiScanReflex;
 
     @Test

@@ -63,9 +63,12 @@ public class CheckpointResumeHandler {
                 .orElse(AgentSentinels.GOAL_RESUME_APPROVED);
     }
 
-    public AgentResult handle(String sessionId, String agentRole, String goal, List<ReasoningStep> history, MessageContext context) {
+    public AgentResult handle(AgentExecutionContext context, List<ReasoningStep> history, MessageContext messageContext) {
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
+        String goal = context.goal();
         // 1. Only proceed if the context explicitly signals a resumption attempt
-        if (context == null || !context.isResumeSignal()) {
+        if (messageContext == null || !messageContext.isResumeSignal()) {
             return null;
         }
 

@@ -34,21 +34,22 @@ public class EngineStepHandler {
     @Inject GovernanceStrategy governanceLayer;
     @Inject Instance<AgentObserver> observers;
 
-    StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
-            List<ReasoningStep> history, String agentRole, String transientError,
+    StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
+            List<ReasoningStep> history, String transientError,
             int llmSchemaErrorCount, int iteration) {
         ReasoningStep step;
         try {
+            String goal = context.goal();
             String currentGoal = transientError != null ? goal + "\n\n" + transientError : goal;
-            step = engine.nextStep(sessionId, agentRole, currentGoal,
+            step = engine.nextStep(context.sessionId(), context.agentRole(), currentGoal,
                     Collections.unmodifiableList(history));
 
             if (step != null) {
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
-                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", sessionId);
+                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
                     if (llmSchemaErrorCount >= 2) {
-                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", context.sessionId());
                         return StepDecision.terminal(AgentResult.failed(
                                 "The agent could not complete this request due to repeated formatting errors.",
                                 AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
@@ -57,11 +58,11 @@ public class EngineStepHandler {
                 }
 
                 try {
-                    governanceLayer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
+                    governanceLayer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());
                     for (var observer : observers)
-                        observer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
+                        observer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());
                 } catch (BudgetWarningException bw) {
-                    log.warnf("Budget warning for session %s: %s", sessionId, bw.getMessage());
+                    log.warnf("Budget warning for session %s: %s", context.sessionId(), bw.getMessage());
                     step = step.withObservation("⚠️ BUDGET WARNING: " + bw.getMessage() +
                             " Keep all subsequent responses to 1-2 sentences maximum.");
                     history.add(step);
@@ -77,7 +78,7 @@ public class EngineStepHandler {
                 }
             }
         } catch (Exception e) {
-            return handleEngineException(e, sessionId, llmSchemaErrorCount, iteration, history);
+            return handleEngineException(e, context.sessionId(), llmSchemaErrorCount, iteration, history);
         }
 
         if (step == null) {

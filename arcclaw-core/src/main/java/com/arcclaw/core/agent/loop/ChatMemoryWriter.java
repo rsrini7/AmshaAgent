@@ -8,7 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.reflex.PiiScanReflex;
+import com.arcclaw.core.security.InputSanitizer;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -23,7 +23,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 public class ChatMemoryWriter {
 
     @Inject ChatMemoryStore chatMemoryStore;
-    @Inject PiiScanReflex piiScanReflex;
+    @Inject @InputSanitizer.PII InputSanitizer piiScanReflex;
 
     static final Set<String> SKIP_GOALS = Set.of(
         AgentSentinels.GOAL_TOOL_APPROVED,
@@ -39,7 +39,7 @@ public class ChatMemoryWriter {
         if (sessionId == null || goal == null || goal.isEmpty()) return;
         if (SKIP_GOALS.contains(goal)) return;
 
-        String sanitizedGoal = piiScanReflex.redactPii(goal);
+        String sanitizedGoal = piiScanReflex.sanitize(goal);
 
         List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
         if (currentHistory == null) currentHistory = new ArrayList<>();
@@ -66,7 +66,7 @@ public class ChatMemoryWriter {
     public void saveAnswer(String sessionId, String answer) {
         if (sessionId == null || answer == null || answer.isBlank()) return;
 
-        String sanitizedAnswer = piiScanReflex.redactPii(answer);
+        String sanitizedAnswer = piiScanReflex.sanitize(answer);
 
         List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
         if (currentHistory == null) {

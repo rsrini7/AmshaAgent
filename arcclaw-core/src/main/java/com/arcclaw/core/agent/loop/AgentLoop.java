@@ -182,20 +182,21 @@ public class AgentLoop {
                 }
             }
 
+            AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
+                    sessionId,
+                    WorkspaceContext.userId(),
+                    WorkspaceContext.chatId(),
+                    canonicalRole,
+                    goal,
+                    WorkspaceContext.autonomy(),
+                    maxIterations
+            );
+
             AgentResult resumeResult = checkpointResumeHandler.handle(
-                    sessionId, canonicalRole, goal, resumedHistory, context);
+                    agentExecutionContext, resumedHistory, context);
             if (resumeResult != null) {
                 result = resumeResult;
             } else {
-                AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
-                        sessionId,
-                        WorkspaceContext.userId(),
-                        WorkspaceContext.chatId(),
-                        canonicalRole,
-                        goal,
-                        WorkspaceContext.autonomy(),
-                        maxIterations
-                );
                 result = stateMachineRunner.run(agentExecutionContext, engine, resumedHistory);
             }
 

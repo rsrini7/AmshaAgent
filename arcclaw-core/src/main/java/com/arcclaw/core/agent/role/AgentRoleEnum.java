@@ -23,6 +23,8 @@ public record AgentRoleEnum(String id) {
     private static final List<AgentRoleEnum> BUILT_IN = List.of(
         CODER, DEBUGGER, RESEARCHER, COORDINATOR, ARCHITECT, SYNTHESIZER);
 
+    public static final String SKILL_PREFIX = "skill:";
+
     private static final Map<String, RoleDefinition> DEFINITIONS = Map.of(
         "architect", new RoleDefinition(
             "architect",
@@ -119,7 +121,7 @@ public record AgentRoleEnum(String id) {
 
     /** Returns true if the role string starts with the skill prefix. */
     public static boolean isSkillRole(String roleStr) {
-        return roleStr != null && roleStr.startsWith("skill:");
+        return roleStr != null && roleStr.startsWith(SKILL_PREFIX);
     }
 
     /** Extracts the skill name from a skill role string. */
@@ -127,7 +129,7 @@ public record AgentRoleEnum(String id) {
         if (!isSkillRole(roleStr)) {
             throw new IllegalArgumentException("Not a skill role: " + roleStr);
         }
-        return roleStr.substring("skill:".length());
+        return roleStr.substring(SKILL_PREFIX.length());
     }
 
     /** Drop-in replacement for the enum-generated values() calls. */

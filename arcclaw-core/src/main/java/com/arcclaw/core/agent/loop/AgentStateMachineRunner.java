@@ -16,7 +16,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.reflex.PiiScanReflex;
+import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
@@ -39,7 +39,7 @@ public class AgentStateMachineRunner {
     @Inject Instance<AgentObserver> observers;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
     @Inject SkillRegistry skillRegistry;
-    @Inject PiiScanReflex piiScanReflex;
+    @Inject @InputSanitizer.PII InputSanitizer piiScanReflex;
     @Inject AgentOtelContext agentOtelContext;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
@@ -51,7 +51,7 @@ public class AgentStateMachineRunner {
         String transientError = null;
 
         log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
-                context.sessionId(), piiScanReflex.redactPii(context.goal()), context.maxIterations());
+                context.sessionId(), piiScanReflex.sanitize(context.goal()), context.maxIterations());
 
         writer.saveGoal(context.sessionId(), context.goal());
 
@@ -67,8 +67,7 @@ public class AgentStateMachineRunner {
                 StepDecision engineDecision;
                 try {
                     engineDecision =  stepProcessor.processEngineStep(
-                                        context.sessionId(), context.goal(), engine, history,
-                                        context.agentRole(), transientError, llmSchemaErrorCount, iteration);
+                                        context, engine, history, transientError, llmSchemaErrorCount, iteration);
                 } catch (StructuredOutputException soe) {
                     // Schema self-correction budget exhausted inside EngineStepHandler.
                     // If we are also at/beyond maxIterations, surface LoopExceeded (not SCHEMA)
@@ -96,8 +95,7 @@ public class AgentStateMachineRunner {
                             history, step, iteration);
 
                 StepDecision validationDecision = stepProcessor.validateTool(
-                        context.sessionId(), context.agentRole(), history,
-                        step, context.goal(), consecutiveFailures);
+                        context, history, step, consecutiveFailures);
                 if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
                 if (validationDecision.type() == DecisionType.CONTINUE) {
                     consecutiveFailures = validationDecision.consecutiveFailures();
@@ -106,8 +104,7 @@ public class AgentStateMachineRunner {
                 step = validationDecision.step();
 
                 StepDecision invocationDecision = stepProcessor.invokeToolAndObserve(
-                        context.sessionId(), context.agentRole(), history, step,
-                        consecutiveFailures, context.goal(), skillSnapshot, context.autonomyLevel());
+                        context, history, step, consecutiveFailures, skillSnapshot);
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
                 consecutiveFailures = invocationDecision.consecutiveFailures();
 

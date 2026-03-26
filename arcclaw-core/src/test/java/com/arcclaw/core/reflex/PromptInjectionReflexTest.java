@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.time.Instant;
 
 import jakarta.inject.Inject;
+import com.arcclaw.core.security.InputSanitizer;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 public class PromptInjectionReflexTest {
 
     @Inject
+    @InputSanitizer.Injection
     PromptInjectionReflex reflex;
 
     private MessageContext createContext(String input) {
