@@ -4,6 +4,8 @@ import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -99,13 +101,29 @@ public class EngineStepHandler {
 
         if (isSchemaError) {
             log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, e.getMessage());
+
+            String rawError = e.getMessage() != null ? e.getMessage() : "";
+
+            // Groq-specific: LLM tried a tool not registered in this role's schema.
+            // Retrying will never help — terminal immediately with a clear message.
+            if (rawError.contains("not in request.tools")) {
+                String unavailableTool = extractUnavailableToolName(rawError);
+                String msg = unavailableTool != null
+                    ? String.format(
+                        "I tried to use `%s`, but that tool is not available in this role. "
+                        + "Try rephrasing, or start fresh with a more specific request.", unavailableTool)
+                    : "I tried to use a tool that is not available in my current role.";
+                log.warnf("[STATE-MACHINE] session %s: tool '%s' not in request.tools — terminating immediately",
+                        sessionId, unavailableTool);
+                return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
+            }
+
             boolean isToolUseFailed = e.getMessage() != null
                     && e.getMessage().contains("tool_use_failed");
 
             if (isToolUseFailed) {
                 // Extract failed_generation — if it's prose, the LLM already has the answer
                 // and tried to embed it in a tool call instead of calling FINISH.
-                String rawError = e.getMessage() != null ? e.getMessage() : "";
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
                     log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose answer — extracting as FINISH", sessionId);
@@ -173,6 +191,14 @@ public class EngineStepHandler {
         return StepDecision.terminal(AgentResult.failed(
                 "ReasoningEngine error: " + e.getMessage(),
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+    }
+
+    private String extractUnavailableToolName(String rawError) {
+        // Parses: "attempted to call tool 'manage_schedule' which was not in request.tools"
+        Matcher m = Pattern
+            .compile("attempted to call tool '([^']+)'")
+            .matcher(rawError);
+        return m.find() ? m.group(1) : null;
     }
 
     private String extractFailedGeneration(String rawError) {

@@ -1,6 +1,8 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -264,7 +266,14 @@ public class SystemPromptBuilder {
                 + promptTemplateEngine.buildSystemPrompt(roleEnum, compactionSummary, Instant.now())
                 + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
-                + "When in doubt, output text only.";
+                + "When in doubt, output text only.\n\n"
+
+                // FIX: Cross-turn tool contamination guard.
+                // Groq error "attempted to call tool X which was not in request.tools" is caused
+                // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
+                // a prior coordinator turn and trying to call it in a role that does not have it.
+                // This block is a hard LLM-level instruction to prevent that contamination.
+                + buildToolContaminationGuard(roleEnum);
 
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
         String finalPrompt = baseSystemPrompt + strictBinding;
@@ -274,5 +283,45 @@ public class SystemPromptBuilder {
             }
         }
         return finalPrompt;
+    }
+
+    /**
+     * Builds the HARD TOOL OVERRIDE block that explicitly lists the tools available
+     * in THIS turn and forbids calling any tool referenced in chat history that belongs
+     * to a different role (e.g. manage_schedule seen from a prior coordinator turn).
+     * <p>
+     * This prevents the Groq "attempted to call tool X which was not in request.tools"
+     * error that occurs when the LLM reads the conversation history and tries to reuse
+     * a tool that was available to a different persona in a prior message.
+     */
+    private String buildToolContaminationGuard(AgentRoleEnum roleEnum) {
+        String toolList = roleEnum.definition().toolNames()
+                .stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.joining(", "));
+
+        if (toolList.isBlank()) {
+            // Coder has no external tools — make this explicit
+            return """
+                    HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:
+                    You have NO external tools available in this turn.
+                    The conversation history may reference tools used in other roles \
+                    (e.g. manage_schedule, schedule_task, github, memory_search).
+                    Those tools are NOT available to you now.
+                    If you need a capability outside your scope, use FINISH to tell the \
+                    user to rephrase or ask the coordinator.
+                    NEVER attempt to call a tool not listed in the PERMITTED TOOLS section above.
+                    """;
+        }
+
+        return "HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:\n"
+                + "Your ONLY available tools in this turn are: " + toolList + ".\n"
+                + "The conversation history may reference tools from other roles "
+                + "(e.g. manage_schedule, schedule_task, sandbox_exec, ingest_document).\n"
+                + "Those tools are NOT registered in your current schema. "
+                + "Attempting to call them will cause an immediate hard failure.\n"
+                + "If you need a capability outside this list, use FINISH to tell the "
+                + "user that the task requires a different role or that they should "
+                + "rephrase the request.\n";
     }
 }

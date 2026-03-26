@@ -66,6 +66,31 @@ public class CommandDispatchHandler implements MessageHandler {
             case ChannelCommand.Reset _ -> {
                 dispatch(context, "/reset");
                 yield HandleResult.STOP;
+            }     
+            case ChannelCommand.Start s -> {
+                // Telegram sends /start on first open and after the user presses the Start button.
+                // Deep-link payload (e.g. /start approve_xyz) is forwarded to the reflex chain
+                // so future inline-button flows work without any further changes.
+                if (s.payload().isPresent()) {
+                    String payloadInput = s.payload().get();
+                    log.debugf("[CommandDispatch] /start with deep-link payload '%s' — routing to reflexes",
+                            payloadInput);
+                    dispatch(context, payloadInput);  // reuse existing dispatch → reflex chain
+                } else {
+                    channelPluginRegistry.find(context.getChannelType())
+                        .map(ChannelPlugin::sender)
+                        .ifPresent(sender -> sender.sendRaw(context.getUser(),
+                            "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
+                            + "Just type your question or task in plain text.\n\n"
+                            + "*Commands:*\n"
+                            + "/cron — list scheduled tasks\n"
+                            + "/status — session state\n"
+                            + "/history — conversation history\n"
+                            + "/reset — clear this session\n"
+                            + "/halt — stop current task\n"
+                            + "/approve · /deny — HITL approvals"));
+                }
+                yield HandleResult.STOP;
             }
             case ChannelCommand.CronTasks _ -> {
                 dispatch(context, "/cron");
@@ -126,6 +151,22 @@ public class CommandDispatchHandler implements MessageHandler {
                                 s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
                                 () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
                             );
+                        yield HandleResult.STOP;
+                    }
+
+                    if ("/start".equalsIgnoreCase(u.raw().trim())) {
+                        channelPluginRegistry.find(context.getChannelType())
+                            .map(ChannelPlugin::sender)
+                            .ifPresent(s -> s.sendRaw(context.getUser(),
+                                "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
+                                + "Just type your question or task in plain text.\n\n"
+                                + "*Commands:*\n"
+                                + "/cron — list scheduled tasks\n"
+                                + "/status — session state\n"
+                                + "/history — conversation history\n"
+                                + "/reset — clear this session\n"
+                                + "/halt — stop current task\n"
+                                + "/approve · /deny — HITL approvals"));
                         yield HandleResult.STOP;
                     }
                 }
