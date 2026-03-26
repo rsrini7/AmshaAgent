@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
@@ -213,7 +214,7 @@ public class ScheduleTaskTool implements AgentTool {
         entity.cronExpression = cronExpression;
         entity.timezone       = timezone;
         entity.runOnce        = runOnce;
-        entity.goal           = "CRON: " + goal;
+        entity.goal           = AgentSentinels.CRON_PREFIX + goal;
         entity.nextFireTime   = nextFireTime;
         entity.status         = CronStatus.ACTIVE;
         entity.createdAt      = Instant.now();

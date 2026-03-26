@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -54,8 +55,8 @@ class ReflexRegistryTest {
     
     @BeforeEach
     void setupMocks() {
-        when(hashUtil.sha256hex(anyString())).thenReturn("mock-sha256");
-        when(hashUtil.hmacHex(anyString())).thenReturn("mock-hmac");
+        doReturn("mock-sha256").when(hashUtil).sha256hex(anyString());
+        doReturn("mock-hmac").when(hashUtil).hmacHex(anyString());
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

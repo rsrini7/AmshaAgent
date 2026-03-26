@@ -18,12 +18,16 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.jboss.logging.Logger;
 
 /**
  * Assembles the ChatMessage list from history and the current goal.
  */
 @ApplicationScoped
 public class ChatHistoryAssembler {
+
+    @Inject
+    Logger log;
 
     private final ChatMemoryStore chatMemoryStore;
     private final ObjectMapper objectMapper;
@@ -108,7 +112,9 @@ public class ChatHistoryAssembler {
                         }
                     }
                 } catch (Exception e) {
-                    // Ignore serialization errors
+                    argsJson = "{}";
+                    log.warnf("[ChatHistoryAssembler] Failed to serialize tool args at step %d" +
+                              " — using empty params. Cause: %s", i, e.getMessage());
                 }
 
                 String callId = "call_" + i;

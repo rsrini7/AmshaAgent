@@ -5,9 +5,11 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.interceptor.Interceptor;
 
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.runtime.StartupEvent;
@@ -37,7 +39,8 @@ public class SqliteWalConfigurer {
     @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
     String dataDir;
 
-    void onStartup(@Observes StartupEvent event) {
+    @Priority(Interceptor.Priority.APPLICATION + 50)
+    void onStartup(@Observes @Priority(Interceptor.Priority.APPLICATION + 50) StartupEvent event) {
         try (Connection conn = dataSource.getConnection();
                 Statement stmt = conn.createStatement()) {
 

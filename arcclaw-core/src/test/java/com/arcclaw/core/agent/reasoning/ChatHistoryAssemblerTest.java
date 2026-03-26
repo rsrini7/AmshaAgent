@@ -10,12 +10,14 @@ import java.util.Map;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,12 +33,16 @@ class ChatHistoryAssemblerTest {
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock
+    Logger log;
+
     ChatHistoryAssembler assembler;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         assembler = new ChatHistoryAssembler(chatMemoryStore, objectMapper);
+        assembler.log = log;
     }
 
     @Test
@@ -128,5 +134,29 @@ class ChatHistoryAssemblerTest {
 
         Assertions.assertTimeout(Duration.ofMillis(100),
             () -> ChatHistoryAssembler.COMPLIANCE_OVERRIDE_PATTERN.matcher(evil).find());
+    }
+
+    @Test
+    void testAssemble_serializationErrorFallsBackToEmptyParams() {
+        // Arrange
+        Object thrower = new Object() {
+            @SuppressWarnings("unused")
+            public String getFail() {
+                throw new RuntimeException("Force serialization failure");
+            }
+        };
+        ReasoningStep step = ReasoningStep.pending("thought", "myTool", Map.of("badParam", thrower), 0, 0);
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(null, null, List.of(step));
+
+        // Assert
+        assertEquals(1, result.size());
+        assertTrue(result.get(0) instanceof AiMessage);
+        AiMessage ai = (AiMessage) result.get(0);
+        assertTrue(ai.hasToolExecutionRequests());
+        ToolExecutionRequest req = ai.toolExecutionRequests().get(0);
+        assertEquals("myTool", req.name());
+        assertEquals("{}", req.arguments());
     }
 }

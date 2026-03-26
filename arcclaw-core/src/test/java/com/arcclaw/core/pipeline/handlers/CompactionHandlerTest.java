@@ -53,7 +53,7 @@ class CompactionHandlerTest {
         WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
 
             CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
             when(compactionEvent.fireAsync(any(CompactionRequest.class))).thenReturn(future);
@@ -69,7 +69,7 @@ class CompactionHandlerTest {
         WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
             when(compactionEvent.fireAsync(any(CompactionRequest.class)))
                     .thenReturn(CompletableFuture.completedFuture(null));
 
@@ -88,7 +88,7 @@ class CompactionHandlerTest {
         WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(false);
+            when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(false);
 
             handler.handle(ctx);
 
@@ -105,7 +105,7 @@ class CompactionHandlerTest {
             handler.handle(ctx);
 
             verify(compactionEvent, never()).fireAsync(any());
-            verify(compactionInFlight, never()).compareAndSet(anyBoolean(), anyBoolean());
+            verify(compactionInFlight, never()).compareAndSet(anyString(), anyBoolean(), anyBoolean());
         });
     }
 
@@ -114,7 +114,7 @@ class CompactionHandlerTest {
         WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
             when(compactionEvent.fireAsync(any())).thenAnswer(invocation -> {
                 Thread.sleep(10);
                 return CompletableFuture.completedFuture(null);
@@ -131,13 +131,13 @@ class CompactionHandlerTest {
             when(compactionService.shouldCompact("session1")).thenReturn(true);
             
             // First call
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(true);
+            when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
             when(compactionEvent.fireAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
 
             handler.handle(ctx);
             
             // Second call - should skip because handler didn't release it
-            when(compactionInFlight.compareAndSet(false, true)).thenReturn(false);
+            when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(false);
 
             handler.handle(ctx);
 

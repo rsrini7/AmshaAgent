@@ -2,7 +2,6 @@ package com.arcclaw.core.tools;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -10,8 +9,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CompactionSummaryEntity;
@@ -21,7 +18,6 @@ import org.junit.jupiter.api.Test;
 class MemorySearchToolTest {
 
     private final CompactionSummaryRepository repository = mock(CompactionSummaryRepository.class);
-    private final AuditService auditService = mock(AuditService.class);
 
     private MemorySearchTool createTool() {
         MemorySearchTool tool = new MemorySearchTool();
@@ -29,10 +25,6 @@ class MemorySearchToolTest {
             var repoField = MemorySearchTool.class.getDeclaredField("repository");
             repoField.setAccessible(true);
             repoField.set(tool, repository);
-
-            var auditField = MemorySearchTool.class.getDeclaredField("auditService");
-            auditField.setAccessible(true);
-            auditField.set(tool, auditService);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }
@@ -94,24 +86,7 @@ class MemorySearchToolTest {
         assertEquals("No query provided", result.output());
     }
 
-    @Test
-    void testSearchAuditedWithToolInvoked() throws Exception {
-        MemorySearchTool tool = createTool();
 
-        when(repository.searchMemory(eq("user-42"), anyString(), eq(5)))
-                .thenReturn(List.of());
-
-        WorkspaceContext.run("test-session", "user-42", "test-chat",
-                AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "architecture")));
-
-        verify(auditService).record(
-                eq("test-session"),
-                eq("user-42"),
-                eq("tool"),
-                eq(SecurityEventType.TOOL_INVOKED),
-                contains("memory_search"));
-    }
 
     @Test
     void testEmptyFtsResultReturnsGracefulMessage() throws Exception {

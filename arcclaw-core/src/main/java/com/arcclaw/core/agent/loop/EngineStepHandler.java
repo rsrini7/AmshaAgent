@@ -4,6 +4,8 @@ import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -20,6 +22,8 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -34,21 +38,22 @@ public class EngineStepHandler {
     @Inject GovernanceStrategy governanceLayer;
     @Inject Instance<AgentObserver> observers;
 
-    StepDecision processEngineStep(String sessionId, String goal, ReasoningEngine engine,
-            List<ReasoningStep> history, String agentRole, String transientError,
+    StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
+            List<ReasoningStep> history, String transientError,
             int llmSchemaErrorCount, int iteration) {
         ReasoningStep step;
         try {
+            String goal = context.goal();
             String currentGoal = transientError != null ? goal + "\n\n" + transientError : goal;
-            step = engine.nextStep(sessionId, agentRole, currentGoal,
+            step = engine.nextStep(context.sessionId(), context.agentRole(), currentGoal,
                     Collections.unmodifiableList(history));
 
             if (step != null) {
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
-                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", sessionId);
+                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
                     if (llmSchemaErrorCount >= 2) {
-                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", context.sessionId());
                         return StepDecision.terminal(AgentResult.failed(
                                 "The agent could not complete this request due to repeated formatting errors.",
                                 AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
@@ -57,11 +62,11 @@ public class EngineStepHandler {
                 }
 
                 try {
-                    governanceLayer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
+                    governanceLayer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());
                     for (var observer : observers)
-                        observer.recordLlmCall(sessionId, step.inputTokens(), step.outputTokens());
+                        observer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());
                 } catch (BudgetWarningException bw) {
-                    log.warnf("Budget warning for session %s: %s", sessionId, bw.getMessage());
+                    log.warnf("Budget warning for session %s: %s", context.sessionId(), bw.getMessage());
                     step = step.withObservation("⚠️ BUDGET WARNING: " + bw.getMessage() +
                             " Keep all subsequent responses to 1-2 sentences maximum.");
                     history.add(step);
@@ -77,7 +82,7 @@ public class EngineStepHandler {
                 }
             }
         } catch (Exception e) {
-            return handleEngineException(e, sessionId, llmSchemaErrorCount, iteration, history);
+            return handleEngineException(e, context.sessionId(), llmSchemaErrorCount, iteration, history);
         }
 
         if (step == null) {
@@ -98,13 +103,29 @@ public class EngineStepHandler {
 
         if (isSchemaError) {
             log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, e.getMessage());
+
+            String rawError = e.getMessage() != null ? e.getMessage() : "";
+
+            // Groq-specific: LLM tried a tool not registered in this role's schema.
+            // Retrying will never help — terminal immediately with a clear message.
+            if (rawError.contains("not in request.tools")) {
+                String unavailableTool = extractUnavailableToolName(rawError);
+                String msg = unavailableTool != null
+                    ? String.format(
+                        "I tried to use `%s`, but that tool is not available in this role. "
+                        + "Try rephrasing, or start fresh with a more specific request.", unavailableTool)
+                    : "I tried to use a tool that is not available in my current role.";
+                log.warnf("[STATE-MACHINE] session %s: tool '%s' not in request.tools — terminating immediately",
+                        sessionId, unavailableTool);
+                return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
+            }
+
             boolean isToolUseFailed = e.getMessage() != null
                     && e.getMessage().contains("tool_use_failed");
 
             if (isToolUseFailed) {
                 // Extract failed_generation — if it's prose, the LLM already has the answer
                 // and tried to embed it in a tool call instead of calling FINISH.
-                String rawError = e.getMessage() != null ? e.getMessage() : "";
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
                     log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose answer — extracting as FINISH", sessionId);
@@ -168,10 +189,36 @@ public class EngineStepHandler {
         }
 
         log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
-        log.debugf(e, "Full stacktrace for ReasoningEngine failure in session %s", sessionId);
+        log.debugf("ReasoningEngine failure cause chain for session %s: %s", sessionId, rootCauseChain(e));
         return StepDecision.terminal(AgentResult.failed(
                 "ReasoningEngine error: " + e.getMessage(),
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+    }
+
+    /**
+     * Returns a compact single-line cause chain instead of a full stack trace.
+     * e.g. "RuntimeException: I'm busy → HttpException: rate_limit_exceeded"
+     * Replaces verbose log.debugf(..., e) calls that bloat logs during throttling.
+     */
+    private static String rootCauseChain(Throwable t) {
+        return ExceptionUtils.getThrowableList(t)
+                .stream()
+                .map(cause -> cause.getClass().getSimpleName() + ": " +
+                            truncate(cause.getMessage(), 120))
+                .collect(java.util.stream.Collectors.joining(" → "));
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "null";
+        return s.length() <= max ? s : s.substring(0, max) + "…";
+    }
+
+    private String extractUnavailableToolName(String rawError) {
+        // Parses: "attempted to call tool 'manage_schedule' which was not in request.tools"
+        Matcher m = Pattern
+            .compile("attempted to call tool '([^']+)'")
+            .matcher(rawError);
+        return m.find() ? m.group(1) : null;
     }
 
     private String extractFailedGeneration(String rawError) {

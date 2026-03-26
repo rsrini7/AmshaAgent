@@ -1312,3 +1312,51 @@
 - [x] Step 11: Register `SandboxExecTool` for reflection and update `CODER`/`DEBUGGER` role capabilities. <!-- id: 656 -->
 - [x] Step 12: Update `ToolExecutionException` with `exitCode` for granular sandbox failure reporting. <!-- id: 657 -->
 - [x] Step 13: Verify full system regression: `mvn clean verify` (821/821 tests green). <!-- id: 658 -->
+
+---
+
+## Phase 68 — Architectural Hardening & SOLID Alignment ✅
+- [x] Component A1: Fix silent argsJson corruption in ChatHistoryAssembler. <!-- id: 659 -->
+- [x] Component A2: Add @ActivateRequestContext to AgentLoop short overloads. <!-- id: 660 -->
+- [x] Component A3: Eliminate OTel double-recording in EngineStepHandler. <!-- id: 661 -->
+- [x] Component A4: Fix startup race between SqliteWalConfigurer and RagSchemaInitializer via @Priority. <!-- id: 662 -->
+- [x] Component A5: Remove dead catch(IllegalArgumentException) in ToolRegistry. <!-- id: 663 -->
+- [x] Component A6: Make ReasoningEngine.chatForStructuredOutput() abstract (LSP). <!-- id: 664 -->
+- [x] Component B1: Centralize skill role detection in AgentRoleEnum and remove SKILL_PREFIX duplication. <!-- id: 665 -->
+- [x] Component B2: Centralize CRON_PREFIX in AgentSentinels and remove magic strings. <!-- id: 666 -->
+- [x] Component B3: Implement RoleDefinition.canGenerateCode() and update Researcher/Architect roles. <!-- id: 667 -->
+- [x] Component B4: Implement LlmProviderFactory SPI and refactor ChatModelProducer. <!-- id: 668 -->
+- [x] Component B5: Inject AutonomyPolicy in ToolRegistry (DIP fix). <!-- id: 669 -->
+- [x] Component B6: Split SynthesizingAgent interface from Agent (LSP fix). <!-- id: 670 -->
+- [x] Component C1: Purge dead code (ScopedCounter, ApprovalTimeoutNotifier, ArcClawInfo, aliases). <!-- id: 671 -->
+- [x] Component C2: Move compliance message filter to ChatMemoryWriter (Smell fix). <!-- id: 672 -->
+- [x] Component C3: Update CHANNEL_SPI.md stale reference paths. <!-- id: 673 -->
+- [x] Component D1: Eliminate FastExitException in favor of sealed InvokeResult interface. <!-- id: 674 -->
+- [x] Component D2: Propagate AgentExecutionContext through all agent loop handlers and managers. <!-- id: 675 -->
+- [x] Component D3: Implement ObservationTransformer SPI for extensible observation sanitization. <!-- id: 676 -->
+- [x] Component D4: Create InputSanitizer ISP interface and decouple reflex implementations. <!-- id: 677 -->
+- [x] Step 14: Final verification build: mvn clean verify passes (884/884 tests green). <!-- id: 678 -->
+
+---
+
+## Phase 68 — Architectural Hardening & SOLID Alignment ✅
+- [x] Component A1: Fix silent argsJson corruption in ChatHistoryAssembler.
+- [x] Component A2: Add @ActivateRequestContext to AgentLoop short overloads.
+- [x] Component A3: Eliminate OTel double-recording in EngineStepHandler.
+- [x] Component A4: Fix startup race between SqliteWalConfigurer and RagSchemaInitializer via @Priority.
+- [x] Component A5: Remove dead catch(IllegalArgumentException) in ToolRegistry.
+- [x] Component A6: Make ReasoningEngine.chatForStructuredOutput() abstract (LSP).
+- [x] Component B1: Centralize skill role detection in AgentRoleEnum and remove SKILL_PREFIX duplication.
+- [x] Component B2: Centralize CRON_PREFIX in AgentSentinels and remove magic strings.
+- [x] Component B3: Implement RoleDefinition.canGenerateCode() and update Researcher/Architect roles.
+- [x] Component B4: Implement LlmProviderFactory SPI and refactor ChatModelProducer.
+- [x] Component B5: Inject AutonomyPolicy in ToolRegistry (DIP fix).
+- [x] Component B6: Split SynthesizingAgent interface from Agent (LSP fix).
+- [x] Component C1: Purge dead code (ScopedCounter, ApprovalTimeoutNotifier, ArcClawInfo, aliases).
+- [x] Component C2: Move compliance message filter to ChatMemoryWriter (Smell fix).
+- [x] Component C3: Update CHANNEL_SPI.md stale reference paths.
+- [x] Component D1: Eliminate FastExitException in favor of sealed InvokeResult interface.
+- [x] Component D2: Propagate AgentExecutionContext through all agent loop handlers and managers.
+- [x] Component D3: Implement ObservationTransformer SPI for extensible observation sanitization.
+- [x] Component D4: Create InputSanitizer ISP interface and decouple reflex implementations.
+- [x] Final verification build: mvn clean verify passes (884 tests green).

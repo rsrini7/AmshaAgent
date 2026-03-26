@@ -6,6 +6,7 @@ import java.util.Map;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.security.InputSanitizer;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 public class PromptInjectionReflexDisabledTest {
 
     @Inject
+    @InputSanitizer.Injection
     PromptInjectionReflex reflex;
 
     public static class DisabledProfile implements QuarkusTestProfile {

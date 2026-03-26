@@ -10,6 +10,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.security.InputSanitizer;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 public class PromptInjectionReflexTest {
 
     @Inject
+    @InputSanitizer.Injection
     PromptInjectionReflex reflex;
 
     private MessageContext createContext(String input) {

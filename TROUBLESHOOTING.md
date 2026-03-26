@@ -3804,3 +3804,22 @@ This provides the most compatible structure for both the IDE and the Quarkus run
 **Resolution:**
 1. Add `arcclaw-core` to `quarkus.index-dependency` in `application.yaml`.
 2. Explicitly add missing entity packages to `quarkus.hibernate-orm.packages` (e.g., `com.arcclaw.core.session`, `com.arcclaw.core.lifecycle`).
+
+---
+
+## Phase 68 Troubleshooting & Post-Mortem ✅
+
+### 1. CDI Ambiguous/Unsatisfied Resolution for InputSanitizer
+**Symptom**: `jakarta.enterprise.inject.spi.DeploymentException: Ambiguous dependencies for type com.arcclaw.core.security.InputSanitizer`.
+**Cause**: Multiple classes implemented `InputSanitizer` (e.g., `PromptInjectionReflex`, `PiiScanReflex`), confusing Quarkus CDI.
+**Fix**: Added specialized qualifiers (`@InputSanitizer.PII` and `@InputSanitizer.Injection`) to disambiguate injections, and fixed reflex registry tests to mock appropriately via interfaces rather than concrete classes.
+
+### 2. Mockito CannotStubVoidMethodWithReturnValue
+**Symptom**: `CannotStubVoidMethodWithReturnValue: 'calculateChainFields' is a void method...` in `ReflexRegistryTest`.
+**Cause**: Void method `calculateChainFields` was incorrectly stubbed using `when().thenReturn()` logic.
+**Fix**: Migrated Mockito stubs to use `doNothing().when(...)` or `doThrow(...)` depending on test context.
+
+### 3. Magic String Extrication
+**Symptom**: Checkpoint updates failed because of missing "skill:" prefixes or incorrect manual additions.
+**Cause**: "skill:" was hardcoded in `IntentClassifier` and several other files.
+**Fix**: Pulled `SKILL_PREFIX` and role resolutions into `AgentRoleEnum` for unified matching.

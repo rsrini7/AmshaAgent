@@ -33,23 +33,22 @@ public class SandboxExecTool implements AgentTool {
     private static final int MAX_OUTPUT_CHARS = 8192;
     private static final String TRUNCATION_SUFFIX = "[output truncated at 8192 chars]";
 
-    // Interpreted: inline via -c / -e flags — no temp file needed.
-    // Compiled:    write to file, compile, then run.
+    // ── Sentinel returned when executeSandboxed() gives null/empty output.
+    // LangChain4J will throw "text cannot be null or blank" if ToolExecutionResultMessage
+    // receives an empty string — this sentinel prevents that.
+    private static final String NO_OUTPUT_SENTINEL = "[execution produced no output]";
+
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node", "java", "go");
 
-    // Matches "public class Foo" or "class Foo" to derive the .java filename
     private static final Pattern JAVA_CLASS_PATTERN =
             Pattern.compile("(?:public\\s+)?class\\s+(\\w+)", Pattern.MULTILINE);
 
     static final boolean IS_WINDOWS =
             System.getProperty("os.name", "").toLowerCase().contains("win");
 
-    @Inject
-    ProcessIsolationExecutor isolationExecutor;
-
-    @Inject
-    ObjectMapper objectMapper;
+    @Inject ProcessIsolationExecutor isolationExecutor;
+    @Inject ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = ".data/workspaces")
     String workspaceRootDir;
@@ -57,18 +56,10 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
     Optional<String> configuredPythonExe;
 
-    @Override
-    public String name() { return ToolCapability.SANDBOX_EXEC.toolName(); }
-
-    @Override
-    public String description() { return ToolCapability.SANDBOX_EXEC.description(); }
-
-    @Override
-    public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
-
-    @Override
-    public boolean requiresSandbox() { return false; }
-
+    @Override public String name() { return ToolCapability.SANDBOX_EXEC.toolName(); }
+    @Override public String description() { return ToolCapability.SANDBOX_EXEC.description(); }
+    @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
+    @Override public boolean requiresSandbox() { return false; }
     public ToolCapability capability() { return ToolCapability.SANDBOX_EXEC; }
 
     @Override
@@ -100,7 +91,6 @@ public class SandboxExecTool implements AgentTool {
                         "Unsupported language: " + lang + ". Allowed: " + ALLOWED_LANGUAGES);
             }
 
-            // Safety scan — last line of defence in DIRECT mode
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
             if (violation != null) {
                 log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s",
@@ -119,7 +109,6 @@ public class SandboxExecTool implements AgentTool {
                                 Map.class, String.class, String.class));
             }
 
-            // Dispatch: compiled languages use file-based execution
             return switch (lang) {
                 case "java" -> executeJava(sessionId, workspaceRoot, code, requiredSecrets);
                 case "go"   -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
@@ -128,23 +117,24 @@ public class SandboxExecTool implements AgentTool {
             };
 
         } catch (ToolExecutionException e) {
-            return ToolResponse.failure(e.exitCode(), "Execution failed: " + e.getMessage());
+            return ToolResponse.failure(e.exitCode(),
+                    nonBlank("Execution failed: " + e.getMessage()));
         } catch (TimeoutException | InterruptedException e) {
             return ToolResponse.failure(1, "Sandbox execution timed out.");
         } catch (SecurityException e) {
-            return ToolResponse.failure(1, "Sandbox security violation: " + e.getMessage());
+            return ToolResponse.failure(1,
+                    nonBlank("Sandbox security violation: " + e.getMessage()));
         } catch (BudgetExceededException e) {
             throw e;
         } catch (Exception e) {
             log.errorf(e, "SandboxExecTool unexpected error for session %s",
                     WorkspaceContext.requireSessionId());
-            return ToolResponse.failure(1, "Sandbox error: " + e.getMessage());
+            return ToolResponse.failure(1,
+                    nonBlank("Sandbox error: " + e.getMessage()));
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Interpreted languages: Python, Node, Bash — inline, no temp file
-    // -------------------------------------------------------------------------
+    // ── Interpreted: Python, Node, Bash ──────────────────────────────────────
 
     private ToolResponse executeInterpreted(String sessionId, Path workspaceRoot,
             String lang, String code, Map<String, Object> params,
@@ -159,12 +149,12 @@ public class SandboxExecTool implements AgentTool {
 
         String output = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, commandList, secrets);
+        // ── Null/empty guard: LangChain4J throws "text cannot be null or blank"
+        // if ToolExecutionResultMessage receives empty text.
         return ToolResponse.success(truncate(output));
     }
 
-    // -------------------------------------------------------------------------
-    // Java: write ClassName.java → javac → java -cp workspaceRoot ClassName
-    // -------------------------------------------------------------------------
+    // ── Java: write ClassName.java → javac → java -cp ────────────────────────
 
     private ToolResponse executeJava(String sessionId, Path workspaceRoot,
             String code, Map<String, String> secrets) throws Exception {
@@ -174,17 +164,14 @@ public class SandboxExecTool implements AgentTool {
         Path javaFile = workspaceRoot.resolve(className + ".java");
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
-        // Step 1: compile
         List<String> compileCmd = List.of("javac", javaFile.toString());
         try {
             isolationExecutor.executeSandboxed(sessionId, workspaceRoot, compileCmd, secrets);
         } catch (ToolExecutionException e) {
-            // Compilation error output IS useful — return it as structured failure
             return ToolResponse.failure(e.exitCode(),
-                    "Java compilation failed:\n" + e.getMessage());
+                    nonBlank("Java compilation failed:\n" + e.getMessage()));
         }
 
-        // Step 2: run — use current JVM location on Windows to avoid PATH issues
         String javaExe = resolveJavaExecutable();
         List<String> runCmd = List.of(javaExe, "-cp", workspaceRoot.toString(), className);
         String output = isolationExecutor.executeSandboxed(
@@ -192,9 +179,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(output));
     }
 
-    // -------------------------------------------------------------------------
-    // Go: write main.go → go run
-    // -------------------------------------------------------------------------
+    // ── Go: write main.go → go run ────────────────────────────────────────────
 
     private ToolResponse executeGo(String sessionId, Path workspaceRoot,
             String code, Map<String, String> secrets) throws Exception {
@@ -209,11 +194,8 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(output));
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Package-private for unit tests. */
     List<String> buildCommand(String lang, String code) {
         return switch (lang) {
             case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
@@ -224,7 +206,6 @@ public class SandboxExecTool implements AgentTool {
         };
     }
 
-    /** Package-private for unit tests. */
     String resolvePythonExecutable() {
         return configuredPythonExe
                 .filter(exe -> !exe.isBlank())
@@ -239,13 +220,10 @@ public class SandboxExecTool implements AgentTool {
      */
     String resolveJavaExecutable() {
         if (IS_WINDOWS) {
-            // ProcessHandle gives us the exact java.exe running this JVM
             String javaHome = System.getProperty("java.home");
             if (javaHome != null) {
                 Path javaExe = Path.of(javaHome, "bin", "java.exe");
-                if (Files.exists(javaExe)) {
-                    return javaExe.toString();
-                }
+                if (Files.exists(javaExe)) return javaExe.toString();
             }
         }
         return "java";
@@ -257,19 +235,32 @@ public class SandboxExecTool implements AgentTool {
      * Package-private for unit tests.
      */
     String extractJavaClassName(String code) {
-        // First pass: prefer public class
         Matcher m = Pattern.compile("public\\s+class\\s+(\\w+)", Pattern.MULTILINE).matcher(code);
         if (m.find()) return m.group(1);
-        // Second pass: any class
         m = JAVA_CLASS_PATTERN.matcher(code);
         if (m.find()) return m.group(1);
         return "Main";
     }
 
+    /**
+     * Truncates output and replaces null/empty with a sentinel string.
+     * Prevents blank ToolExecutionResultMessage which causes LangChain4J to throw
+     * "text cannot be null or blank" on the next LLM call.
+     */
     private String truncate(String output) {
-        if (output == null) return "";
+        if (output == null || output.isBlank()) return NO_OUTPUT_SENTINEL;
         return output.length() > MAX_OUTPUT_CHARS
                 ? output.substring(0, MAX_OUTPUT_CHARS) + TRUNCATION_SUFFIX
                 : output;
+    }
+
+    /**
+     * Ensures error messages passed to ToolResponse.failure() are never null/blank.
+     * A blank failure message would also cause "text cannot be null or blank" when
+     * LangChain4J wraps the tool result into a ToolExecutionResultMessage.
+     */
+    private String nonBlank(String message) {
+        if (message == null || message.isBlank()) return "Sandbox execution failed with no details.";
+        return message;
     }
 }

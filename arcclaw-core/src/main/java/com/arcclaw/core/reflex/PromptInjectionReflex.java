@@ -4,15 +4,19 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.security.InputSanitizer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
-public class PromptInjectionReflex implements AgentReflex {
+@Default
+@InputSanitizer.Injection
+public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     @ConfigProperty(name = "arcclaw.security.prompt-injection.enabled", defaultValue = "true")
     boolean enabled;
@@ -158,5 +162,10 @@ public class PromptInjectionReflex implements AgentReflex {
                 return true;
         }
         return false;
+    }
+
+    @Override
+    public String sanitize(String input) {
+        return input;
     }
 }

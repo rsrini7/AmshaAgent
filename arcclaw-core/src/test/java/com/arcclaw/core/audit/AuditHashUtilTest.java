@@ -103,7 +103,7 @@ public class AuditHashUtilTest {
         // SHA-256 of "hello" (UTF-8)
         String expected = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
         assertEquals(expected, util.sha256hex(input));
-        assertEquals("genesis-fallback-null-input", util.sha256hex(null));
+        assertEquals("0000000000000000000000000000000000000000000000000000000000000000", util.sha256hex(null));
     }
 
     @Test

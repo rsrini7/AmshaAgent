@@ -49,7 +49,6 @@ public class AgentLoop {
 
     private static final Logger log = Logger.getLogger(AgentLoop.class);
     private static final int DEFAULT_MAX_ITERATIONS = 5;
-    private static final String SKILL_PREFIX = "skill:";
 
     @Inject
     ToolRegistry toolRegistry;
@@ -78,6 +77,7 @@ public class AgentLoop {
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
      */
+    @ActivateRequestContext
     public AgentResult run(String goal, ReasoningEngine engine) {
         return run(goal, engine, DEFAULT_MAX_ITERATIONS);
     }
@@ -134,7 +134,7 @@ public class AgentLoop {
             AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
             // Preserve skill: prefix so SystemPromptBuilder sees it intact.
             // For standard roles, normalize via toScopedName() as before.
-            canonicalRole = (agentRole != null && agentRole.startsWith(SKILL_PREFIX))
+            canonicalRole = AgentRoleEnum.isSkillRole(agentRole)
                     ? agentRole
                     : resolvedRole.toScopedName();
         } catch (IllegalArgumentException e) {
@@ -182,20 +182,21 @@ public class AgentLoop {
                 }
             }
 
+            AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
+                    sessionId,
+                    WorkspaceContext.userId(),
+                    WorkspaceContext.chatId(),
+                    canonicalRole,
+                    goal,
+                    WorkspaceContext.autonomy(),
+                    maxIterations
+            );
+
             AgentResult resumeResult = checkpointResumeHandler.handle(
-                    sessionId, canonicalRole, goal, resumedHistory, context);
+                    agentExecutionContext, resumedHistory, context);
             if (resumeResult != null) {
                 result = resumeResult;
             } else {
-                AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
-                        sessionId,
-                        WorkspaceContext.userId(),
-                        WorkspaceContext.chatId(),
-                        canonicalRole,
-                        goal,
-                        WorkspaceContext.autonomy(),
-                        maxIterations
-                );
                 result = stateMachineRunner.run(agentExecutionContext, engine, resumedHistory);
             }
 
@@ -288,6 +289,7 @@ public class AgentLoop {
     }
 
     // Keep the two-arg overload for callers that don't need session lifecycle.
+    @ActivateRequestContext
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         return run(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);

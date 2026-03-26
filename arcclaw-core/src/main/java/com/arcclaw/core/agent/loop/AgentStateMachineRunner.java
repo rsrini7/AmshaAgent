@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -16,7 +17,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.reflex.PiiScanReflex;
+import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
@@ -34,12 +35,31 @@ import org.jboss.logging.Logger;
 public class AgentStateMachineRunner {
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
 
+    // ── Matches completion non-answers: "Done.", "✅ Done.", "OK.", "ok" etc.
+    // NOTE: token-count gate removed — step.outputTokens() is 0 for ReasoningStep.pending()
+    // paths, making it unreliable. The pattern itself is the real gate.
+    private static final Pattern SUSPICIOUSLY_SHORT =
+            Pattern.compile(
+                "^[✅⏳\\s]*(done\\.?|ok\\.?)\\s*$",
+                Pattern.CASE_INSENSITIVE
+            );
+
+    // ── LangChain4J / internal error strings that must never reach the user.
+    private static final List<String> INTERNAL_ERROR_FRAGMENTS = List.of(
+            "text cannot be null or blank",
+            "NullPointerException",
+            "IllegalArgumentException",
+            "IllegalStateException",
+            "StackOverflowError",
+            "OutOfMemoryError"
+    );
+
     @Inject AgentStepProcessor stepProcessor;
     @Inject ChatMemoryWriter writer;
     @Inject Instance<AgentObserver> observers;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
     @Inject SkillRegistry skillRegistry;
-    @Inject PiiScanReflex piiScanReflex;
+    @Inject @InputSanitizer.PII InputSanitizer piiScanReflex;
     @Inject AgentOtelContext agentOtelContext;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
@@ -51,7 +71,7 @@ public class AgentStateMachineRunner {
         String transientError = null;
 
         log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
-                context.sessionId(), piiScanReflex.redactPii(context.goal()), context.maxIterations());
+                context.sessionId(), piiScanReflex.sanitize(context.goal()), context.maxIterations());
 
         writer.saveGoal(context.sessionId(), context.goal());
 
@@ -66,13 +86,9 @@ public class AgentStateMachineRunner {
 
                 StepDecision engineDecision;
                 try {
-                    engineDecision =  stepProcessor.processEngineStep(
-                                        context.sessionId(), context.goal(), engine, history,
-                                        context.agentRole(), transientError, llmSchemaErrorCount, iteration);
+                    engineDecision = stepProcessor.processEngineStep(
+                            context, engine, history, transientError, llmSchemaErrorCount, iteration);
                 } catch (StructuredOutputException soe) {
-                    // Schema self-correction budget exhausted inside EngineStepHandler.
-                    // If we are also at/beyond maxIterations, surface LoopExceeded (not SCHEMA)
-                    // so LOOP_MAX_ITERATIONS audit event fires correctly.
                     log.warnf(
                         "StateMachine schema self-correction exhausted at iteration %d/%d for session %s — " +
                         "treating as loop exceeded to preserve LOOP_MAX_ITERATIONS audit semantics.",
@@ -96,8 +112,7 @@ public class AgentStateMachineRunner {
                             history, step, iteration);
 
                 StepDecision validationDecision = stepProcessor.validateTool(
-                        context.sessionId(), context.agentRole(), history,
-                        step, context.goal(), consecutiveFailures);
+                        context, history, step, consecutiveFailures);
                 if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
                 if (validationDecision.type() == DecisionType.CONTINUE) {
                     consecutiveFailures = validationDecision.consecutiveFailures();
@@ -106,8 +121,7 @@ public class AgentStateMachineRunner {
                 step = validationDecision.step();
 
                 StepDecision invocationDecision = stepProcessor.invokeToolAndObserve(
-                        context.sessionId(), context.agentRole(), history, step,
-                        consecutiveFailures, context.goal(), skillSnapshot, context.autonomyLevel());
+                        context, history, step, consecutiveFailures, skillSnapshot);
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
                 consecutiveFailures = invocationDecision.consecutiveFailures();
 
@@ -135,11 +149,19 @@ public class AgentStateMachineRunner {
 
         if (answer != null) {
             answer = StringEscapeUtils.unescapeHtml4(answer);
+            // unescapeHtml4 doesn't cover JSON unicode escapes — fix explicitly.
+            answer = answer.replace("\\u003c", "<")
+                          .replace("\\u003e", ">")
+                          .replace("\\u0026", "&")
+                          .replace("\\u0027", "'");
         }
 
+        // ── Sanitize raw internal exception messages before they reach the user.
+        // e.g. "text cannot be null or blank" from LangChain4J must never be shown.
+        answer = sanitizeErrorForUser(answer, sessionId);
+
         if (answer != null && isGeneratedCodeBlock(answer)) {
-            if (AgentRoleEnum.RESEARCHER.toScopedName().equals(agentRole)
-                    || AgentRoleEnum.ARCHITECT.toScopedName().equals(agentRole)) {
+            if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
                 String refusal = "I'm " + agentRole + " — I don't generate code. " +
                         "Please ask Brahma (coder) for code generation tasks.";
                 writer.saveAnswer(sessionId, refusal);
@@ -147,6 +169,12 @@ public class AgentStateMachineRunner {
                 return AgentResult.finished(refusal, List.copyOf(history));
             }
         }
+
+        // ── Answer guard: suppress suspiciously short non-answers ("Done.", "OK.")
+        // produced when the LLM sees thin compacted context after a compaction race.
+        // Token-count gate removed — step.outputTokens() is unreliable (always 0 for
+        // ReasoningStep.pending() paths). Pattern-only check is the real gate.
+        answer = guardFinalAnswer(answer, step.outputTokens(), sessionId);
 
         if (sessionId != null && answer != null && !answer.isBlank()) {
             writer.saveAnswer(sessionId, answer);
@@ -158,14 +186,13 @@ public class AgentStateMachineRunner {
 
         if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(agentRole)) {
             String combinedContext = history.stream()
-                    .filter(s -> s.observation() != null 
+                    .filter(s -> s.observation() != null
                             && !s.observation().isBlank()
-                            && !"Task completed.".equals(s.observation()))  // skip trivial
+                            && !"Task completed.".equals(s.observation()))
                     .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
                     .collect(Collectors.joining("\n\n"));
 
             if (combinedContext.isBlank()) {
-                // No real multi-agent findings — return direct answer as-is
                 return AgentResult.finished(answer, List.copyOf(history));
             }
 
@@ -173,6 +200,44 @@ public class AgentStateMachineRunner {
         }
 
         return AgentResult.finished(answer, List.copyOf(history));
+    }
+
+    /**
+     * Suppresses suspiciously short non-answers ("Done.", "OK.") caused by
+     * the LLM receiving thin compacted context after a compaction race.
+     * Token-count gate intentionally removed — step.outputTokens() is 0 for
+     * all ReasoningStep.pending() construction paths, making it unreliable.
+     */
+    private String guardFinalAnswer(String answer, int outputTokens, String sessionId) {
+        if (answer == null || answer.isBlank()) {
+            log.warnf("ANSWER-GUARD: null/blank answer for session %s — returning retry prompt",
+                    sessionId);
+            return "⚠️ I wasn't able to generate a response. Please try again.";
+        }
+        if (SUSPICIOUSLY_SHORT.matcher(answer.strip()).matches()) {
+            log.warnf("ANSWER-GUARD suppressed suspicious %d-token response: '%s' " +
+                    "for session %s — likely caused by compaction race or stale context.",
+                    outputTokens, answer.strip(), sessionId);
+            return "⚠️ Context was lost mid-response — please resend your request.";
+        }
+        return answer;
+    }
+
+    /**
+     * Ensures raw LangChain4J / JVM internal exception messages never reach the user.
+     * These appear when a null/blank tool result leaks into chat history and the next
+     * LLM call fails with "text cannot be null or blank" from LangChain4J validation.
+     */
+    private String sanitizeErrorForUser(String answer, String sessionId) {
+        if (answer == null) return null;
+        for (String fragment : INTERNAL_ERROR_FRAGMENTS) {
+            if (answer.contains(fragment)) {
+                log.warnf("ANSWER-GUARD: sanitized internal error message '%s' for session %s",
+                        answer, sessionId);
+                return "⚠️ An internal error occurred. Please try again.";
+            }
+        }
+        return answer;
     }
 
     private boolean isGeneratedCodeBlock(String text) {
@@ -186,10 +251,7 @@ public class AgentStateMachineRunner {
         return false;
     }
 
-    // ── Shared types ─────────────────────────────────────────────────────────
-    // Package-private so AgentStepProcessor can reference them without a
-    // circular dependency — both live in com.arcclaw.core.agent.loop.
-
+    // ── Shared types ──────────────────────────────────────────────────────────
     enum DecisionType { CONTINUE, TERMINAL, PROCEED }
 
     record StepDecision(

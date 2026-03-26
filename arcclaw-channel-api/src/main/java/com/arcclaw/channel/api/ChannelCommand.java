@@ -22,12 +22,13 @@ public sealed interface ChannelCommand
                 ChannelCommand.History,
                 ChannelCommand.CronTasks,
                 ChannelCommand.DeleteCron,
+                ChannelCommand.Start,
                 ChannelCommand.Unknown {
 
     // Single compiled Pattern — avoids repeated compilation per message.
     // The inner group (\\S+) matches the first non-whitespace token after the command.
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
+            "^/(start|approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -77,7 +78,8 @@ public sealed interface ChannelCommand
             case "halt"    -> new Halt();
             case "reset"   -> new Reset();
             case "history" -> new History();
-            case "crons"    -> new CronTasks();
+            case "crons"   -> new CronTasks();
+            case "start"   -> new Start(optArg);
             case "cron" -> {
                 String[] parts = text.trim().split("\\s+");
                 if ("delete".equalsIgnoreCase(arg)) {
@@ -113,6 +115,13 @@ public sealed interface ChannelCommand
      *               if empty, targets the active interactive session
      */
     record Deny(Optional<String> cronId) implements ChannelCommand {}
+
+     /**
+     * Telegram lifecycle command — sent automatically when a user opens a fresh
+     * chat or clicks the "Start" button. {@code payload} carries any deep-link
+     * parameter Telegram appends after /start (may be empty).
+     */
+    record Start(Optional<String> payload) implements ChannelCommand {}
 
     /** Queries the current status of the agent's active session. */
     record Status() implements ChannelCommand {}

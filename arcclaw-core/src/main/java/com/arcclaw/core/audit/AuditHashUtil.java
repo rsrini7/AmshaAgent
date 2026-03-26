@@ -85,8 +85,8 @@ public class AuditHashUtil {
      */
     public String sha256hex(String input) {
         if (input == null) {
-            // Never propagate null into prevHash — use explicit sentinel
-            return "genesis-fallback-null-input";
+            // Genesis parent link: 64 zeros
+            return "0000000000000000000000000000000000000000000000000000000000000000";
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -119,5 +119,27 @@ public class AuditHashUtil {
             }
             throw new RuntimeException("Failed to compute HMAC", e);
         }
+    }
+
+    /**
+     * Computes the HMAC chain fields (prevHash, hmacHash) for an AuditEvent.
+     * This centralizes the chain integrity logic, ensuring that any changes to the
+     * payload reconstruction or hashing algorithm are captured in a single place.
+     *
+     * @param event    The audit event to sign.
+     * @param lastHash The HMAC hash of the previous event in the session chain (nullable for genesis).
+     */
+    public void calculateChainFields(AuditEvent event, String lastHash) {
+        // Step 1: Genesis-safe prevHash resolution
+        String prevHash = lastHash;
+        if (prevHash == null) {
+            // First event in session: use a deterministic genesis seed derived from sessionId
+            prevHash = sha256hex("GENESIS:" + event.sessionId);
+        }
+        event.prevHash = prevHash;
+
+        // Step 2: Compute HMAC over (prevHash + payload)
+        String payload = event.computePayloadStr();
+        event.hmacHash = hmacHex(prevHash + "|" + payload);
     }
 }

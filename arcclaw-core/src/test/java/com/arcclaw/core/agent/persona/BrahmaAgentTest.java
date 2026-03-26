@@ -6,10 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
 
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import org.junit.jupiter.api.Test;
 
 class BrahmaAgentTest {
 

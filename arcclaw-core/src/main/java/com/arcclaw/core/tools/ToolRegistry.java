@@ -130,25 +130,23 @@ public class ToolRegistry {
         // This is the hard enforcement layer — role must explicitly own the capability.
         String agentRole = WorkspaceContext.agentRole();
         if (agentRole != null) {
-            try {
-                AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
-                boolean roleAllowed = role.definition().capabilities().stream()
-                        .anyMatch(cap -> cap.toolName().equals(toolName));
-                if (!roleAllowed) {
-                    log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
-                            agentRole, toolName);
-                    auditService.record(
-                            WorkspaceContext.requireSessionId(), resolveUserId(), agentRole,
-                            SecurityEventType.TOOL_BLOCKED,
-                            "tool=" + toolName + " reason=ROLE_CAPABILITY_MISMATCH role=" + agentRole);
-                    return ToolResponse.failure(403,
-                            "Tool '" + toolName + "' is not available for role '" + agentRole + "'. "
-                            + "This action requires a different agent role.");
-                }
-            } catch (IllegalArgumentException e) {
-                // Unknown role — fail closed
+            if (!AgentRoleEnum.isKnownRole(agentRole)) {
                 log.warnf("SECURITY: Unknown agentRole=%s — blocking tool=%s", agentRole, toolName);
                 return ToolResponse.failure(403, "Unknown agent role: " + agentRole);
+            }
+            AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
+            boolean roleAllowed = role.definition().capabilities().stream()
+                    .anyMatch(cap -> cap.toolName().equals(toolName));
+            if (!roleAllowed) {
+                log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
+                        agentRole, toolName);
+                auditService.record(
+                        WorkspaceContext.requireSessionId(), resolveUserId(), agentRole,
+                        SecurityEventType.TOOL_BLOCKED,
+                        "tool=" + toolName + " reason=ROLE_CAPABILITY_MISMATCH role=" + agentRole);
+                return ToolResponse.failure(403,
+                        "Tool '" + toolName + "' is not available for role '" + agentRole + "'. "
+                        + "This action requires a different agent role.");
             }
         }
 

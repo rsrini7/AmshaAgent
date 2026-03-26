@@ -2780,3 +2780,29 @@ Implemented a unified `SandboxExecTool` that provides agents with access to Pyth
 - ✅ `SandboxExecToolTest` (Truncation, Language Validation, Exit Codes) passes.
 - ✅ `ChannelSenderRegistryRetirementTest` confirms no active beans of the old registry type.
 - ✅ `mvn clean verify`: 821/821 tests pass (Full system integrity).
+
+---
+
+## Phase 68 — Architectural Hardening & SOLID Alignment ✅
+
+Successfully completed the architectural hardening of the ArcClaw agent loop, eliminated critical structural anti-patterns, and finalized the InputSanitizer SPI.
+
+### 1. Control-Flow Modernization (InvokeResult)
+Eliminated the `FastExitException` control-flow anti-pattern. Replaced it with a sealed `InvokeResult` interface (`Responded`, `ShortCircuit`).
+
+### 2. Consolidated Execution Context
+Threaded `AgentExecutionContext` through all agent loop handlers (`EngineStepHandler`, `ToolStepHandler`, `CheckpointResumeHandler`) ensuring rules are available at every step of the reasoning chain without "data clump" signatures.
+
+### 3. SPI-based Extensible Sanitization
+Replaced hardcoded tool observation sanitization with the `ObservationTransformer` SPI to allow security pipeline capabilities (PII redaction, truncation, injection filtering) without modifying the core logic.
+
+### 4. InputSanitizer SPI & ISP Split
+Decoupled the agent loop from concrete reflex implementations like `PiiScanReflex`. Introduced the `InputSanitizer` SPI with specialized qualifiers (`@InputSanitizer.PII`, `@InputSanitizer.Injection`).
+
+### 5. SOLID & Clean Code Improvements
+- **B1**: Centralized skill role detection in `AgentRoleEnum` to eliminate magic string duplication (`SKILL_PREFIX`).
+- **B4**: Implemented `LlmProviderFactory` SPI for the `ChatModelProducer`, making the model creation logic OCP-compliant.
+- **B6**: Introduced the `SynthesizingAgent` interface to resolve LSP violations.
+
+**Verification**:
+- ✅ `mvn clean verify`: 884/884 tests pass (Full system integrity confirmed).

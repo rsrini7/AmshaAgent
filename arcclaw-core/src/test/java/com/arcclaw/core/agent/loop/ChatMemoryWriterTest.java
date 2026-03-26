@@ -8,7 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.reflex.PiiScanReflex;
+import com.arcclaw.core.security.InputSanitizer;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,16 +26,16 @@ class ChatMemoryWriterTest {
     ChatMemoryStore chatMemoryStore;
 
     @Mock
-    PiiScanReflex piiScanReflex;
+    InputSanitizer piiScanReflex;
 
     @InjectMocks
     ChatMemoryWriter chatMemoryWriter;
 
     @BeforeEach
     void setUp() {
-        // piiScanReflex.redactPii() should return input unchanged for unit tests.
+        // piiScanReflex.sanitize() should return input unchanged for unit tests.
         // Marked lenient to avoid UnnecessaryStubbingException in tests that don't reach the redaction call.
-        lenient().when(piiScanReflex.redactPii(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(piiScanReflex.sanitize(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test

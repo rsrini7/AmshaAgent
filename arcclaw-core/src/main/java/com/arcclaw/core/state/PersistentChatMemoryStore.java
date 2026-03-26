@@ -35,12 +35,26 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     @Inject
     EntityManager em;
 
+    @Inject
+    CompactionEventBridge compactionEventBridge;
+
     @ConfigProperty(name = "quarkus.langchain4j.chat-memory.max-messages", defaultValue = "20")
     int rollingWindowSize;
 
     @Override
     @Transactional
     public List<ChatMessage> getMessages(Object memoryId) {
+
+        String sessionId = memoryId.toString();
+
+        // ── Race guard: block until any in-flight compaction for this session
+        // has committed its rewritten message store. Without this, LangChain4j's
+        // second getMessages() call (which builds the LLM prompt) can land after
+        // compaction completes, producing in~4192 tokens instead of ~7000+.
+        // The LLM then has no context and outputs "Done." in 1 token.
+        // Fast-path if no compaction is running (latch map lookup only).
+        compactionEventBridge.awaitIfInFlight(sessionId);
+        
         log.debugf("ChatMemory getMessages called with memoryId: %s (type: %s)",
                 memoryId, memoryId.getClass().getSimpleName());
 

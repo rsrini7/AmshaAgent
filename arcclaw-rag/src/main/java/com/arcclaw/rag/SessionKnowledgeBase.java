@@ -28,7 +28,6 @@ public class SessionKnowledgeBase {
     public void ingest(String chunkId, String text) {
         try {
             Embedding embedding = embeddingModel.embed(text).content();
-            // Store chunkId in metadata so search() can retrieve it
             Metadata metadata = Metadata.from("id", chunkId);
             store.add(chunkId, embedding, TextSegment.from(text, metadata));
         } catch (Exception e) {
@@ -36,22 +35,30 @@ public class SessionKnowledgeBase {
         }
     }
 
+    // Original — unchanged, kept for callers that don't need score filtering.
     public List<ScoredChunk> search(String query, int topN) {
+        return search(query, topN, 0.0);
+    }
+
+    // ── New overload: minScore filters at the store level, avoiding the cost of
+    // returning and then discarding low-relevance matches at the enricher layer.
+    public List<ScoredChunk> search(String query, int topN, double minScore) {
         try {
             Embedding queryEmbedding = embeddingModel.embed(query).content();
             EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
-                .queryEmbedding(queryEmbedding)
-                .maxResults(topN)
-                .build();
-            
+                    .queryEmbedding(queryEmbedding)
+                    .maxResults(topN)
+                    .minScore(minScore)
+                    .build();
+
             EmbeddingSearchResult<TextSegment> result = store.search(request);
-            
+
             return result.matches().stream()
-                .map(match -> new ScoredChunk(
-                    match.embedded().metadata().getString("id"),
-                    match.embedded().text(),
-                    match.score()))
-                .collect(Collectors.toList());
+                    .map(match -> new ScoredChunk(
+                            match.embedded().metadata().getString("id"),
+                            match.embedded().text(),
+                            match.score()))
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             log.warnf("SessionKnowledgeBase search failed: %s", e.getMessage());
             return List.of();

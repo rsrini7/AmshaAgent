@@ -1,6 +1,8 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -26,7 +28,6 @@ import org.jboss.logging.Logger;
 public class SystemPromptBuilder {
 
     private static final Logger log = Logger.getLogger(SystemPromptBuilder.class);
-    private static final String SKILL_PREFIX = "skill:";
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -196,6 +197,21 @@ public class SystemPromptBuilder {
             all details, or everything — enumerate ALL items without truncation.
             Only provide detailed long-form responses when the user uses words like
             'detailed', 'explain fully', 'in depth', 'comprehensive', 'full', 'all'.
+
+            RULE — MEMORY STORAGE IS NEVER A DIRECT ANSWER:
+            When the user asks you to "store", "remember", "save", "ingest", "note down",
+            or "call me [name]" — this is ALWAYS a tool call request, NEVER a direct answer.
+            You MUST call `ingest_document` with the information to persist.
+            DO NOT output "Done" or any confirmation text without first calling `ingest_document`.
+            Outputting "Done" without calling the tool is a critical failure — the information
+            will be lost and the user will think it was saved when it was not.
+            Only FINISH after the tool observation confirms the document was ingested.
+
+            RULE — NO PLACEHOLDER TEXT IN RESPONSES:
+            NEVER use placeholder text like "[insert X]", "[X here]", "[task ID]", or any
+            bracketed template variable in your responses. If you do not know a value,
+            say so explicitly in plain text (e.g. "I don't have the task ID available").
+            Placeholder text is not a valid response and will cause system errors.
             """;
 
     public String build(String agentRole, String sessionId, String goal) {
@@ -206,8 +222,8 @@ public class SystemPromptBuilder {
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
 
-        if (agentRole != null && agentRole.startsWith(SKILL_PREFIX)) {
-            String skillName = agentRole.substring(SKILL_PREFIX.length());
+        if (AgentRoleEnum.isSkillRole(agentRole)) {
+            String skillName = AgentRoleEnum.skillName(agentRole);
             roleEnum = AgentRoleEnum.fromString(agentRole); // returns RESEARCHER — correct tool set
 
             personaPrompt = skillRegistry.findByName(skillName)
@@ -231,7 +247,7 @@ public class SystemPromptBuilder {
                 "\n\n";
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && (agentRole == null || !agentRole.startsWith(SKILL_PREFIX))) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole)) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main
@@ -265,7 +281,14 @@ public class SystemPromptBuilder {
                 + promptTemplateEngine.buildSystemPrompt(roleEnum, compactionSummary, Instant.now())
                 + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
-                + "When in doubt, output text only.";
+                + "When in doubt, output text only.\n\n"
+
+                // FIX: Cross-turn tool contamination guard.
+                // Groq error "attempted to call tool X which was not in request.tools" is caused
+                // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
+                // a prior coordinator turn and trying to call it in a role that does not have it.
+                // This block is a hard LLM-level instruction to prevent that contamination.
+                + buildToolContaminationGuard(roleEnum);
 
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
         String finalPrompt = baseSystemPrompt + strictBinding;
@@ -275,5 +298,45 @@ public class SystemPromptBuilder {
             }
         }
         return finalPrompt;
+    }
+
+    /**
+     * Builds the HARD TOOL OVERRIDE block that explicitly lists the tools available
+     * in THIS turn and forbids calling any tool referenced in chat history that belongs
+     * to a different role (e.g. manage_schedule seen from a prior coordinator turn).
+     * <p>
+     * This prevents the Groq "attempted to call tool X which was not in request.tools"
+     * error that occurs when the LLM reads the conversation history and tries to reuse
+     * a tool that was available to a different persona in a prior message.
+     */
+    private String buildToolContaminationGuard(AgentRoleEnum roleEnum) {
+        String toolList = roleEnum.definition().toolNames()
+                .stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.joining(", "));
+
+        if (toolList.isBlank()) {
+            // Coder has no external tools — make this explicit
+            return """
+                    HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:
+                    You have NO external tools available in this turn.
+                    The conversation history may reference tools used in other roles \
+                    (e.g. manage_schedule, schedule_task, github, memory_search).
+                    Those tools are NOT available to you now.
+                    If you need a capability outside your scope, use FINISH to tell the \
+                    user to rephrase or ask the coordinator.
+                    NEVER attempt to call a tool not listed in the PERMITTED TOOLS section above.
+                    """;
+        }
+
+        return "HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:\n"
+                + "Your ONLY available tools in this turn are: " + toolList + ".\n"
+                + "The conversation history may reference tools from other roles "
+                + "(e.g. manage_schedule, schedule_task, sandbox_exec, ingest_document).\n"
+                + "Those tools are NOT registered in your current schema. "
+                + "Attempting to call them will cause an immediate hard failure.\n"
+                + "If you need a capability outside this list, use FINISH to tell the "
+                + "user that the task requires a different role or that they should "
+                + "rephrase the request.\n";
     }
 }

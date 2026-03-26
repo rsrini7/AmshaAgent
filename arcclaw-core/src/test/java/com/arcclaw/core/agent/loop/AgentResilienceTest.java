@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -39,20 +40,28 @@ class AgentResilienceTest {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             var callCount = new AtomicInteger(0);
 
-            ReasoningEngine engine = (sessionId, role, goal, history) -> {
-                int call = callCount.incrementAndGet();
-                if (call == 1) {
-                    // First call: LLM hallucinates a tool that doesn't exist
+            ReasoningEngine engine = new ReasoningEngine() {
+                @Override
+                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                    int call = callCount.incrementAndGet();
+                    if (call == 1) {
+                        // First call: LLM hallucinates a tool that doesn't exist
+                        return ReasoningStep.pending(
+                                "I need to search the web for this.",
+                                "web_search", // <-- does NOT exist
+                                Map.of("query", "test query"), 0, 0);
+                    }
+                    // Second call: after receiving the error observation, LLM self-corrects
                     return ReasoningStep.pending(
-                            "I need to search the web for this.",
-                            "web_search", // <-- does NOT exist
-                            Map.of("query", "test query"), 0, 0);
+                            "The web_search tool doesn't exist. I'll finish with what I know.",
+                            ReasoningStep.FINISH,
+                            Map.of("answer", "Self-corrected after tool not found."), 0, 0);
                 }
-                // Second call: after receiving the error observation, LLM self-corrects
-                return ReasoningStep.pending(
-                        "The web_search tool doesn't exist. I'll finish with what I know.",
-                        ReasoningStep.FINISH,
-                        Map.of("answer", "Self-corrected after tool not found."), 0, 0);
+
+                @Override
+                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                    throw new UnsupportedOperationException();
+                }
             };
 
             AgentResult result = agentLoop.run("test hallucination", engine);
@@ -81,10 +90,20 @@ class AgentResilienceTest {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             // Engine that always requests the same tool (never finishes)
-            ReasoningEngine engine = (sessionId, role, goal, history) -> ReasoningStep.pending(
-                    "I'll keep trying the github tool.",
-                    "github",
-                    Map.of("repo", "test/repo"), 0, 0);
+            ReasoningEngine engine = new ReasoningEngine() {
+                @Override
+                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                    return ReasoningStep.pending(
+                        "I'll keep trying the github tool.",
+                        "github",
+                        Map.of("repo", "test/repo"), 0, 0);
+                }
+
+                @Override
+                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                    throw new UnsupportedOperationException();
+                }
+            };
 
             int maxIterations = 3;
             AgentResult result = agentLoop.run("infinite loop test", engine, maxIterations);
@@ -103,10 +122,20 @@ class AgentResilienceTest {
     void testFinishActionReturnsCorrectResult() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            ReasoningEngine engine = (sessionId, role, goal, history) -> ReasoningStep.pending(
-                    "I'm done.",
-                    ReasoningStep.FINISH,
-                    Map.of("answer", "Task complete."), 0, 0);
+            ReasoningEngine engine = new ReasoningEngine() {
+                @Override
+                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                    return ReasoningStep.pending(
+                        "I'm done.",
+                        ReasoningStep.FINISH,
+                        Map.of("answer", "Task complete."), 0, 0);
+                }
+
+                @Override
+                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                    throw new UnsupportedOperationException();
+                }
+            };
 
             AgentResult result = agentLoop.run("finish test", engine);
 
@@ -123,7 +152,17 @@ class AgentResilienceTest {
     void testNullStepTerminatesGracefully() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            ReasoningEngine engine = (sessionId, role, goal, history) -> null;
+            ReasoningEngine engine = new ReasoningEngine() {
+                @Override
+                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                    return null;
+                }
+
+                @Override
+                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                    throw new UnsupportedOperationException();
+                }
+            };
 
             AgentResult result = agentLoop.run("null step test", engine);
 
@@ -140,8 +179,16 @@ class AgentResilienceTest {
     void testEngineExceptionHandled() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            ReasoningEngine engine = (sessionId, role, goal, history) -> {
-                throw new RuntimeException("LLM API Timeout");
+            ReasoningEngine engine = new ReasoningEngine() {
+                @Override
+                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                    throw new RuntimeException("LLM API Timeout");
+                }
+
+                @Override
+                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                    throw new UnsupportedOperationException();
+                }
             };
 
             AgentResult result = agentLoop.run("exception test", engine);

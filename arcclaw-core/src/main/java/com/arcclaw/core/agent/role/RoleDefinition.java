@@ -57,4 +57,9 @@ public record RoleDefinition(
                 .map(ToolCapability::toolName)
                 .collect(Collectors.toUnmodifiableSet());
     }
+
+    /** Returns true if this role is permitted to generate or fix source code blocks. */
+    public boolean canGenerateCode() {
+        return "coder".equals(canonicalName) || "debugger".equals(canonicalName);
+    }
 }

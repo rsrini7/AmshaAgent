@@ -239,6 +239,8 @@ smallrye:
         level: INFO
       "org.apache.camel.component.telegram.TelegramConsumer":
         level: ERROR
+      "org.jboss.resteasy.reactive.common.core":
+        level: WARN
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
@@ -261,6 +263,7 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
   rag:
+    min-score: 0.40f
     context-chunks: 5
     embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
     embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
@@ -283,9 +286,10 @@ arcclaw:
   memory:
     compaction:
       enabled: true
-      threshold: 5
-      keep-recent: 5
+      threshold: 12
+      keep-recent: 7
       max-tokens: 1024
+      max-chars: 96000 
       api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:${quarkus.langchain4j.openai.base-url}}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
@@ -488,6 +492,8 @@ mp:
         "org.infinispan":
           level: WARN
         "java.lang.ProcessBuilder":
+          level: WARN
+        "org.jboss.resteasy.reactive.common.core":
           level: WARN
     console:
       enabled: false

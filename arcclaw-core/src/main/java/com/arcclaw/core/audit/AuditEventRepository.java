@@ -54,16 +54,9 @@ public class AuditEventRepository {
             long currentMax = maxSeqResult.isEmpty() ? 0L : maxSeqResult.getFirst();
             event.sequence = currentMax + 1;
 
-            // Step 2: compute prevHash (genesis-safe)
+            // Step 2 & 3: Compute chain fields via centralized utility
             String prevHash = findLatestHash(event.sessionId);
-            if (prevHash == null) {
-                prevHash = hashUtil.sha256hex("GENESIS:" + event.sessionId);
-            }
-            event.prevHash = prevHash;
-
-            // Step 3: compute HMAC
-            String payload = event.computePayloadStr();
-            event.hmacHash = hashUtil.hmacHex(prevHash + "|" + payload);
+            hashUtil.calculateChainFields(event, prevHash);
 
             // Step 4: validate and persist
             validateBeforePersist(event);

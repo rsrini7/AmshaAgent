@@ -6,14 +6,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.security.InputSanitizer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
-public class PiiScanReflex implements AgentReflex {
+@Default
+@InputSanitizer.PII
+public class PiiScanReflex implements AgentReflex, InputSanitizer {
 
     public enum PiiMode {
         REDACT_AND_FORWARD,
@@ -178,5 +182,10 @@ public class PiiScanReflex implements AgentReflex {
             result = rule.pattern().matcher(result).replaceAll(rule.replacement());
         }
         return result;
+    }
+
+    @Override
+    public String sanitize(String input) {
+        return redactPii(input);
     }
 }
