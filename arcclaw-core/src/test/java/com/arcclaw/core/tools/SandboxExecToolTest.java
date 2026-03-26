@@ -398,7 +398,7 @@ class SandboxExecToolTest {
 
     @Test
     void extractJavaClassName_defaults_to_Main_when_no_class() {
-        assertEquals("Main", tool.extractJavaClassName("// no class here"));
+        assertEquals("Main", tool.extractJavaClassName("// just a comment, nothing to see"));
     }
 
     // -------------------------------------------------------------------------

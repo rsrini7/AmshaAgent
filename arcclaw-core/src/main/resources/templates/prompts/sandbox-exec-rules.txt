@@ -1,4 +1,4 @@
-{#if sortedCapabilities.stream().anyMatch(c -> c.toolName() == "sandbox_exec")}
+{#if hasSandboxExec}
 SANDBOX EXECUTION RULES:
 - When asked to run, execute, or test code — ALWAYS call sandbox_exec. Do NOT simulate or guess output.
 - ALWAYS pass flat JSON with both "code" and "language". Never wrap in "properties".

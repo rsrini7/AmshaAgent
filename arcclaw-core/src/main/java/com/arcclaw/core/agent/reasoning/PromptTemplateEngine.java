@@ -86,9 +86,13 @@ public class PromptTemplateEngine {
                 );
             }
 
+        boolean hasSandboxExec = sortedCapabilities.stream()
+                .anyMatch(c -> "sandbox_exec".equals(c.toolName()));
+
         return templateFor(role)
                 .data("roleDef", role.definition())
                 .data("sortedCapabilities", sortedCapabilities)
+                .data("hasSandboxExec", hasSandboxExec)
                 .data("compactionSummary", compactionSummary)
                 .data("systemTimeUtc", timeString)
                 .render();
