@@ -3,7 +3,7 @@ package com.arcclaw.core.pipeline;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.result.AgentState;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -16,7 +16,6 @@ public final class MessageContext {
     private final String chatId;
     private final ChannelUser user;
     private final ChannelMessage message;
-    private final ChannelSender sender;
     
     // Enriched fields
     private String sessionId;
@@ -26,17 +25,19 @@ public final class MessageContext {
     private boolean resumeSignal = false;
     private AutonomyLevel autonomyLevel;
 
-    public MessageContext(String chatId, ChannelUser user, ChannelMessage message, ChannelSender sender) {
+    public MessageContext(String chatId, ChannelUser user, ChannelMessage message) {
         this.chatId = chatId;
         this.user = user;
         this.message = message;
-        this.sender = sender;
     }
 
     public String getChatId() { return chatId; }
     public ChannelUser getUser() { return user; }
     public ChannelMessage getMessage() { return message; }
-    public ChannelSender getSender() { return sender; }
+
+    public ChannelType getChannelType() {
+        return user != null ? user.channel() : ChannelType.TELEGRAM;
+    }
 
     public Optional<String> getSessionId() { return Optional.ofNullable(sessionId); }
     public void setSessionId(String sessionId) { this.sessionId = sessionId; }

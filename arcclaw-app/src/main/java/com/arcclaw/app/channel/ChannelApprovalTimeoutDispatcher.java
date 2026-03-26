@@ -1,5 +1,7 @@
 package com.arcclaw.app.channel;
 
+import com.arcclaw.core.channel.ChannelPluginRegistry;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;

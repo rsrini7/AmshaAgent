@@ -15,7 +15,6 @@ import java.util.Optional;
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
@@ -114,14 +113,9 @@ class AgentLoopTest {
                 setField(loop, "hashUtil", hashUtil);
                 setField(loop, "observers", observers);
 
-                ChannelUser user = new ChannelUser("foo", "bar", "disp",
-                                ChannelType.TELEGRAM);
-                ChannelMessage msg = new ChannelMessage.TelegramMessage(
-                                user,
-                                "h", "foo", Instant.now());
-                MessageContext ctx = new MessageContext("foo", user,
-                                msg,
-                                mock(ChannelSender.class));
+                ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
+                ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "h", "foo", Instant.now());
+                MessageContext ctx = new MessageContext("foo", user, msg);
 
                 AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
                 when(checkpoint.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);

@@ -3,14 +3,12 @@ package com.arcclaw.core.pipeline.handlers;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -52,8 +50,7 @@ class SessionResolutionHandlerTest {
     void testSessionResolutionWithStoredAutonomy() {
         ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.SLACK);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
-        ChannelSender sender = mock(ChannelSender.class);
-        MessageContext context = new MessageContext("chat1", user, msg, sender);
+        MessageContext context = new MessageContext("chat1", user, msg);
 
         when(sessionIdResolver.resolveOrCreate("SLACK", "chat1", "u1"))
             .thenReturn(FIXED_SESSION_ID);
@@ -70,8 +67,7 @@ class SessionResolutionHandlerTest {
     void testSessionResolutionWithCheckpointFallback() {
         ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
-        ChannelSender sender = mock(ChannelSender.class);
-        MessageContext context = new MessageContext("chat1", user, msg, sender);
+        MessageContext context = new MessageContext("chat1", user, msg);
 
         when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(null);
         when(agentStore.loadLatestAutonomyForSession(FIXED_SESSION_ID)).thenReturn(Optional.of(AutonomyLevel.READONLY));
@@ -85,8 +81,7 @@ class SessionResolutionHandlerTest {
     void testSessionResolutionDefaultsToSupervised() {
         ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
-        ChannelSender sender = mock(ChannelSender.class);
-        MessageContext context = new MessageContext("chat1", user, msg, sender);
+        MessageContext context = new MessageContext("chat1", user, msg);
 
         when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(null);
         when(agentStore.loadLatestAutonomyForSession(FIXED_SESSION_ID)).thenReturn(Optional.empty());
@@ -100,8 +95,7 @@ class SessionResolutionHandlerTest {
     void testSessionIdComesFromResolver() {
         ChannelUser user = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "test", "chat1", Instant.now());
-        ChannelSender sender = mock(ChannelSender.class);
-        MessageContext context = new MessageContext("chat1", user, msg, sender);
+        MessageContext context = new MessageContext("chat1", user, msg);
 
         when(heartbeatTracker.getAutonomyLevel(FIXED_SESSION_ID)).thenReturn(AutonomyLevel.SUPERVISED);
 

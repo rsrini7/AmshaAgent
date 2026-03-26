@@ -1,5 +1,7 @@
 package com.arcclaw.app.channel;
 
+import com.arcclaw.core.channel.ChannelPluginRegistry;
+
 import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelPlugin;

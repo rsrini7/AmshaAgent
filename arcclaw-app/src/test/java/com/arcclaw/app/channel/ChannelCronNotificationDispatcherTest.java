@@ -10,6 +10,7 @@ import java.util.Optional;
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -5,14 +5,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,13 +23,21 @@ class MessagePipelineTest {
 
     private MessagePipeline pipeline;
     private MessageContext context;
+    private ChannelPluginRegistry registry;
+    private ChannelSender sender;
 
     @BeforeEach
     void setup() {
         ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
-        ChannelSender sender = mock(ChannelSender.class);
-        context = new MessageContext("chat1", user, msg, sender);
+        sender = mock(ChannelSender.class);
+        registry = mock(ChannelPluginRegistry.class);
+        
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(registry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
+        
+        context = new MessageContext("chat1", user, msg);
     }
 
     @Test
@@ -67,7 +78,7 @@ class MessagePipelineTest {
         
         assertDoesNotThrow(() -> pipeline.process(context));
         verify(h2, never()).handle(context);
-        verify(context.getSender()).sendRaw(eq(context.getUser()), contains("error"));
+        verify(sender).sendRaw(eq(context.getUser()), contains("error"));
     }
     
     @Test
@@ -129,6 +140,6 @@ class MessagePipelineTest {
     private void setupPipeline(MessageHandler... handlers) {
         Instance<MessageHandler> instance = mock(Instance.class);
         when(instance.stream()).thenReturn(Stream.of(handlers));
-        pipeline = new MessagePipeline(instance);
+        pipeline = new MessagePipeline(instance, registry);
     }
 }

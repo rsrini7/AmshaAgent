@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -68,7 +67,7 @@ class CheckpointResumeHandlerTest {
     private MessageContext createContext(String input, boolean resume) {
         ChannelUser user = new ChannelUser("user-1", "user-1", "user-1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "chat-1", Instant.now());
-        MessageContext ctx = new MessageContext("chat-1", user, msg, mock(ChannelSender.class));
+        MessageContext ctx = new MessageContext("chat-1", user, msg);
         ctx.setResumeSignal(resume);
         return ctx;
     }

@@ -2,11 +2,12 @@ package com.arcclaw.app;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import jakarta.inject.Inject;
-
-import com.arcclaw.app.channel.ChannelPluginRegistry;
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
+
+import com.arcclaw.core.channel.ChannelPluginRegistry;
+
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 
 @QuarkusTest
 public class ModuleBoundaryTest {

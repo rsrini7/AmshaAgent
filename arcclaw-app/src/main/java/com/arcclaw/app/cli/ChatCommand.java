@@ -1,7 +1,6 @@
 package com.arcclaw.app.cli;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
@@ -10,10 +9,8 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -162,16 +159,7 @@ public class ChatCommand implements Runnable {
     private MessageContext createCliContext(String sessionId, String input) {
         ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, Instant.now());
-        ChannelSender noOpSender = new ChannelSender() {
-            @Override public ChannelType supports() { return ChannelType.CLI; }
-            @Override public void send(ChannelUser recipient, List<ReplyNode> nodes) {
-                System.out.println("\n[CLI] " + nodes);
-            }
-            @Override public void sendRaw(ChannelUser recipient, String text) {
-                System.out.println("\n[CLI] " + text);
-            }
-        };
-        return new MessageContext("cli-chat", user, msg, noOpSender);
+        return new MessageContext("cli-chat", user, msg);
     }
 }
 

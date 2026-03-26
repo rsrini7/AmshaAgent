@@ -94,7 +94,7 @@ public class TelegramAgentHandler {
 
         log.debugf("Mapped message for chat %s: %s", chatId, channelMessage);
 
-        MessageContext context = new MessageContext(chatId, user, channelMessage, sender);
+        MessageContext context = new MessageContext(chatId, user, channelMessage);
         
         // Immediate acknowledgment for non-command messages
         if (text != null && !text.trim().startsWith("/")) {
@@ -134,7 +134,7 @@ public class TelegramAgentHandler {
             } else {
                 log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId());
                 try {
-                    context.getSender().sendRaw(context.getUser(), "Sorry, an internal error occurred while processing your message.");
+                    sender.sendRaw(context.getUser(), "Sorry, an internal error occurred while processing your message.");
                 } catch (Exception sendEx) {
                     log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
                 }

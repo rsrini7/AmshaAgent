@@ -1,4 +1,4 @@
-package com.arcclaw.app.channel;
+package com.arcclaw.core.channel;
 
 import java.util.Map;
 import java.util.Optional;
@@ -45,10 +45,12 @@ public class ChannelPluginRegistry {
     }
 
     public Optional<ChannelPlugin> find(ChannelType type) {
+        if (type == null) return Optional.empty();
         return Optional.ofNullable(registry.get(type.id()));
     }
 
     public Optional<ChannelPlugin> find(String channelTypeId) {
+        if (channelTypeId == null) return Optional.empty();
         return Optional.ofNullable(registry.get(channelTypeId));
     }
 }

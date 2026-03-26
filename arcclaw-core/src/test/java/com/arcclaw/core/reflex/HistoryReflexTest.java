@@ -1,7 +1,6 @@
 package com.arcclaw.core.reflex;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -11,7 +10,6 @@ import java.util.Optional;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -41,7 +39,7 @@ public class HistoryReflexTest {
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user1", "user1", "user1", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, "test-session", Instant.now());
-        return new MessageContext("chat1", user, msg, mock(ChannelSender.class));
+        return new MessageContext("chat1", user, msg);
     }
 
     @Test

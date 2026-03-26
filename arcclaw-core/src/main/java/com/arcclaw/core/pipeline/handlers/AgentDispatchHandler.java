@@ -5,6 +5,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -42,6 +44,9 @@ public class AgentDispatchHandler implements MessageHandler {
 
     @Inject
     SkillRegistry skillRegistry;
+
+    @Inject
+    ChannelPluginRegistry channelPluginRegistry;
 
     @Override
     public int priority() {
@@ -107,13 +112,23 @@ public class AgentDispatchHandler implements MessageHandler {
         } catch (Exception e) {
             log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());
             log.debug("Full agent dispatch failure stack trace:", e);
-            context.getSender().sendRaw(context.getUser(),
-                "❌ An internal error occurred. Please try again.");
+            
+            channelPluginRegistry.find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                    s -> s.sendRaw(context.getUser(), "❌ An internal error occurred. Please try again."),
+                    () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s — error reply dropped", context.getChannelType())
+                );
             return HandleResult.STOP;  // stop pipeline gracefully — do not throw
         }
 
         String output = CronResultFormatter.format(result);
-        context.getSender().sendRaw(context.getUser(), output);
+        channelPluginRegistry.find(context.getChannelType())
+            .map(ChannelPlugin::sender)
+            .ifPresentOrElse(
+                s -> s.sendRaw(context.getUser(), output),
+                () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s — result reply dropped", context.getChannelType())
+            );
 
         return HandleResult.STOP;
     }

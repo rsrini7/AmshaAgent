@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
 import java.time.Instant;
@@ -12,8 +11,8 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -44,6 +43,9 @@ class AgentDispatchHandlerTest {
 
     @Mock
     SkillRegistry skillRegistry;
+
+    @Mock
+    ChannelPluginRegistry channelPluginRegistry;
 
     @InjectMocks
     AgentDispatchHandler handler;
@@ -120,9 +122,8 @@ class AgentDispatchHandlerTest {
     private MessageContext createTestContext(AutonomyLevel level) {
         ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.REST_API);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, "test", "m1", Instant.now());
-        ChannelSender sender = mock(ChannelSender.class);
         
-        MessageContext context = new MessageContext("chat123", user, msg, sender);
+        MessageContext context = new MessageContext("chat123", user, msg);
         context.setSessionId("sess123");
         context.setAutonomyLevel(level);
         context.setAgentRole("coordinator");
