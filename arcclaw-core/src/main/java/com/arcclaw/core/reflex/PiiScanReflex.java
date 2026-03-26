@@ -69,6 +69,10 @@ public class PiiScanReflex implements AgentReflex {
         new PiiRule(PHONE_INDIA,     "PHONE",   "[REDACTED-PHONE]"),
         new PiiRule(PHONE_INTL,      "PHONE",   "[REDACTED-PHONE]"),
         new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[REDACTED-AADHAAR]"),
+        new PiiRule(
+            Pattern.compile("(?<!\\d)(?<!-)(?<![./])\\d{10}(?!\\d)(?!-)"), "PHONE",
+                        "[REDACTED-PHONE]"
+        ),
         new PiiRule(PASSPORT_IN,     "PASSPORT","[REDACTED-PASSPORT]"),
         new PiiRule(DATE_OF_BIRTH,   "DOB",     "[REDACTED-DOB]"),
         new PiiRule(IPV4,            "IP",      "[REDACTED-IP]"),
