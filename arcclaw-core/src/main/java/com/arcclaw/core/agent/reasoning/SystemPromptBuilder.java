@@ -197,6 +197,21 @@ public class SystemPromptBuilder {
             all details, or everything — enumerate ALL items without truncation.
             Only provide detailed long-form responses when the user uses words like
             'detailed', 'explain fully', 'in depth', 'comprehensive', 'full', 'all'.
+
+            RULE — MEMORY STORAGE IS NEVER A DIRECT ANSWER:
+            When the user asks you to "store", "remember", "save", "ingest", "note down",
+            or "call me [name]" — this is ALWAYS a tool call request, NEVER a direct answer.
+            You MUST call `ingest_document` with the information to persist.
+            DO NOT output "Done" or any confirmation text without first calling `ingest_document`.
+            Outputting "Done" without calling the tool is a critical failure — the information
+            will be lost and the user will think it was saved when it was not.
+            Only FINISH after the tool observation confirms the document was ingested.
+
+            RULE — NO PLACEHOLDER TEXT IN RESPONSES:
+            NEVER use placeholder text like "[insert X]", "[X here]", "[task ID]", or any
+            bracketed template variable in your responses. If you do not know a value,
+            say so explicitly in plain text (e.g. "I don't have the task ID available").
+            Placeholder text is not a valid response and will cause system errors.
             """;
 
     public String build(String agentRole, String sessionId, String goal) {
