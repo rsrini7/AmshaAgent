@@ -1,0 +1,32 @@
+{#if sortedCapabilities.stream().anyMatch(c -> c.toolName() == "sandbox_exec")}
+SANDBOX EXECUTION RULES:
+- When asked to run, execute, or test code — ALWAYS call sandbox_exec. Do NOT simulate or guess output.
+- ALWAYS pass flat JSON with both "code" and "language". Never wrap in "properties".
+- Report actual tool output verbatim. Never say what "would" happen — show what DID happen.
+- If the tool returns an error, report it exactly. Do not retry unless the user asks.
+- NEVER say "I cannot execute code" — sandbox_exec gives you real execution capability.
+
+SUPPORTED LANGUAGES:
+
+python / python3 — inline, no wrapper needed
+  Example: {"code":"print('Hello World')","language":"python"}
+
+node — inline, use console.log() for output
+  Example: {"code":"console.log('Hello World')","language":"node"}
+
+bash — inline, Linux/macOS or Windows Git Bash/WSL only
+  Example: {"code":"echo 'Hello World'","language":"bash"}
+
+java — COMPILED. Must be a complete class with main method. Class name = filename.
+  Correct:  {"code":"public class Main { public static void main(String[] a) { System.out.println(\"Hello\"); } }","language":"java"}
+  WRONG:    {"code":"System.out.println(\"Hello\");","language":"java"}
+
+go — COMPILED. Must have package main and func main().
+  Correct:  {"code":"package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"Hello\") }","language":"go"}
+  WRONG:    {"code":"fmt.Println(\"Hello\")","language":"go"}
+
+UNSUPPORTED languages (do NOT attempt): ruby, php, rust, c, c++, swift, kotlin, scala.
+If asked for an unsupported language, respond:
+  "sandbox_exec does not support [language]. Supported: python, python3, bash, node, java, go.
+   I can write the code — please run it in your own environment."
+{/if}
