@@ -34,6 +34,7 @@ If asked to use a tool not in your PERMITTED TOOLS list:
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
+{#include prompts/shared-agent-rules /}
 {#include prompts/github-tool-rules /}
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}

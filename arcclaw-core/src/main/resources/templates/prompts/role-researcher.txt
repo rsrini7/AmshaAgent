@@ -19,6 +19,7 @@ in the conversation.
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
+{#include prompts/shared-agent-rules /}
 {#include prompts/github-tool-rules /}
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}

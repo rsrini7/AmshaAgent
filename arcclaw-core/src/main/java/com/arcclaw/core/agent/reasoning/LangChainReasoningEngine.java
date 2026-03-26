@@ -218,67 +218,44 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         return stepParser.parse(sessionId, agentRole, response);
     }
 
-    /**
-     * Extracts the prose content from Groq's failed_generation field.
-     * Unescapes quote so the extracted text
-     * is clean markdown ready for direct delivery to the user.
-     */
-    private String extractProseFromFailedGeneration(String message) {
-        int start = message.indexOf("failed_generation");
-        if (start == -1) return null;
-        start += 21; // skip past "failed_generation":"
-        int end = message.lastIndexOf("\"");
-        if (end <= start) return null;
+    private static final String FAILED_GEN_KEY = "\"failed_generation\":\"";
 
-        String raw = message.substring(start, end)
-            .replace("\\\"", "\"")
-            .replace("\\n", "\n")
-            .replace("\\t", "\t")
-            .trim();
-
-        // For JSON arrays/objects, unescape the entire block and return as-is
-        if (raw.startsWith("[") || raw.startsWith("{")) {
-            return raw.isBlank() ? null : raw;
-        }
-
-        // For natural language: existing character-by-character extraction is fine
-        return raw.isBlank() ? null : raw;
-    }
-
-    /**
-     * Returns true when Groq's tool_use_failed rejection contains prose in
-     * failed_generation rather than a malformed tool call JSON.
-     * Prose responses start with markdown markers (**,#,*) or plain letters,
-     * never with '{' which would indicate a tool call attempt.
-     */
     private boolean isProseGenerationFailure(String message) {
         if (message == null) return false;
-        int idx = message.indexOf("failed_generation");
+        int idx = message.indexOf(FAILED_GEN_KEY);   // ← finds actual JSON key, not the description
         if (idx == -1) return false;
-        int start = idx + 21; // length of "\"failed_generation\":\""
+        int start = idx + FAILED_GEN_KEY.length();   // first char of actual value
         if (start >= message.length()) return false;
-
         String snippet = message.substring(start)
-            .stripLeading()
-            .replace("\\n", "\n")
-            .replace("\\\"", "\"")
-            .stripLeading();
+            .replace("\\n", "\n").replace("\\\"", "\"").stripLeading();
+        return !snippet.startsWith("{") && !snippet.startsWith("[");
+    }
 
-        // JSON arrays are always valid data answers — task lists, search results, etc.
-        // The LLM produced a structured response but forgot to wrap it in FINISH.
-        if (snippet.startsWith("[")) return true;
-
-        // JSON objects: only retry if it looks like a tool call schema.
-        // A real tool call attempt contains "action" or "tool" keys.
-        // A plain JSON object answer (e.g. {"result": "..."}) is a valid FINISH.
-        if (snippet.startsWith("{")) {
-            return !snippet.contains("\"action\"")
-                && !snippet.contains("\"tool\"")
-                && !snippet.contains("\"function\"");
+    private String extractProseFromFailedGeneration(String message) {
+        if (message == null) return null;
+        int idx = message.indexOf(FAILED_GEN_KEY);   // ← same fix
+        if (idx == -1) return null;
+        int start = idx + FAILED_GEN_KEY.length();   // first char of actual value
+        // Read character-by-character until closing unescaped "
+        StringBuilder sb = new StringBuilder();
+        boolean escape = false;
+        for (int i = start; i < message.length(); i++) {
+            char c = message.charAt(i);
+            if (escape) {
+                if (c == 'n') sb.append('\n');
+                else if (c == 't') sb.append('\t');
+                else sb.append(c);
+                escape = false;
+            } else if (c == '\\') {
+                escape = true;
+            } else if (c == '"') {
+                break;                               // end of JSON string value
+            } else {
+                sb.append(c);
+            }
         }
-
-        // Natural language / markdown: starts with letter, #, *, - → always extractable
-        return true;
+        String result = sb.toString().strip();
+        return result.isBlank() ? null : result;
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {

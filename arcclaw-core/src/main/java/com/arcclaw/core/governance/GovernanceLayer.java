@@ -44,9 +44,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         long effectiveOutput = zeroReport ? minTokensFloor : outputTokens;
 
         if (zeroReport) {
-            log.warnf("GOVERNANCE zero token report for session %s — applying " +
-                "floor %d. Verify log-requests config or provider token reporting.",
-                sessionId, minTokensFloor);
+             log.debugf("GOVERNANCE prose-extraction step for session %s — applying token floor %d", sessionId, minTokensFloor);
         }
 
         double cost = (effectiveInput / 1000.0) * pricePer1kInput + (effectiveOutput / 1000.0) * pricePer1kOutput;

@@ -179,6 +179,7 @@ MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 CURRENT SYSTEM TIME (UTC): {systemTimeUtc}
 (For 'in N minutes': cron_minute = (current_minute + N) mod 60. Increment hour if result < current_minute.)
 
+{#include prompts/shared-agent-rules /}
 {#include prompts/github-tool-rules /}
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}

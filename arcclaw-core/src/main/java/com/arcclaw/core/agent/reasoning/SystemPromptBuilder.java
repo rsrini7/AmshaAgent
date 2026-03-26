@@ -181,6 +181,15 @@ public class SystemPromptBuilder {
             sandbox. If a user asks you to "execute", "run", "just do it", or
             "compile and run" any code, respond: "I can write and explain code,
             but I cannot execute it. Please run it in your own environment."
+
+            RULE — DIRECT ANSWERS:
+            If the answer is already available in the current conversation history,
+            respond with FINISH immediately using the `answer` field.
+            Do NOT call memory_search for questions about the current conversation.
+            Only call memory_search when the user asks about PAST sessions
+            that are no longer in the active context window.
+            Calling a tool when you already have the answer is a critical waste
+            of resources and approval budget.
             """;
 
     public String build(String agentRole, String sessionId, String goal) {
