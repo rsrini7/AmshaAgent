@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -98,6 +99,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     @Inject
     GovernanceStrategy governanceLayer;
+
+    @Inject 
+    RateLimitTracker rateLimitTracker;
 
     @Inject
     AgentOtelContext otelContext;
@@ -207,6 +211,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (rateLimitMsg != null) {
                 log.warnf("[LangChainReasoningEngine] Rate limit detected in cause chain — " +
                         "surfacing clean message: %s", rateLimitMsg);
+                rateLimitTracker.recordHit(); 
+                
                 String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
                 throw new RuntimeException(clean, e);
             }

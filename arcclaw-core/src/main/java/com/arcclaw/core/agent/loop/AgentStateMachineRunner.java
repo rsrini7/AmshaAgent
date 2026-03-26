@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,6 +34,12 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class AgentStateMachineRunner {
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
+
+    private static final Pattern SUSPICIOUSLY_SHORT =
+            Pattern.compile(
+                "^[✅\\s]*(done\\.?|ok\\.?|yes\\.?|noted\\.?)\\s*$",
+                Pattern.CASE_INSENSITIVE
+            );
 
     @Inject AgentStepProcessor stepProcessor;
     @Inject ChatMemoryWriter writer;
@@ -66,13 +73,10 @@ public class AgentStateMachineRunner {
 
                 StepDecision engineDecision;
                 try {
-                    engineDecision =  stepProcessor.processEngineStep(
-                                        context, engine, history, transientError, llmSchemaErrorCount, iteration);
+                    engineDecision = stepProcessor.processEngineStep(
+                            context, engine, history, transientError, llmSchemaErrorCount, iteration);
                 } catch (StructuredOutputException soe) {
-                    // Schema self-correction budget exhausted inside EngineStepHandler.
-                    // If we are also at/beyond maxIterations, surface LoopExceeded (not SCHEMA)
-                    // so LOOP_MAX_ITERATIONS audit event fires correctly.
-                    log.warnf(
+                   log.warnf(
                         "StateMachine schema self-correction exhausted at iteration %d/%d for session %s — " +
                         "treating as loop exceeded to preserve LOOP_MAX_ITERATIONS audit semantics.",
                         iteration, context.maxIterations(), context.sessionId()
@@ -144,6 +148,13 @@ public class AgentStateMachineRunner {
             }
         }
 
+        // ── Answer guard: suppress suspiciously short answers (e.g. "Done.", "✅ Done.")
+        // that are produced when the LLM sees a thin compacted context due to the
+        // compaction race. out=1 token with "Done." is the telltale signal.
+        // guardFinalAnswer replaces the response with a retry prompt so the user
+        // knows to re-send rather than silently receiving a wrong answer.
+        answer = guardFinalAnswer(answer, step.outputTokens());
+
         if (sessionId != null && answer != null && !answer.isBlank()) {
             writer.saveAnswer(sessionId, answer);
         }
@@ -154,14 +165,13 @@ public class AgentStateMachineRunner {
 
         if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(agentRole)) {
             String combinedContext = history.stream()
-                    .filter(s -> s.observation() != null 
+                    .filter(s -> s.observation() != null
                             && !s.observation().isBlank()
-                            && !"Task completed.".equals(s.observation()))  // skip trivial
+                            && !"Task completed.".equals(s.observation()))
                     .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
                     .collect(Collectors.joining("\n\n"));
 
             if (combinedContext.isBlank()) {
-                // No real multi-agent findings — return direct answer as-is
                 return AgentResult.finished(answer, List.copyOf(history));
             }
 
@@ -169,6 +179,15 @@ public class AgentStateMachineRunner {
         }
 
         return AgentResult.finished(answer, List.copyOf(history));
+    }
+
+    private String guardFinalAnswer(String answer, int outputTokens) {
+        if (outputTokens <= 2 && answer != null && SUSPICIOUSLY_SHORT.matcher(answer.trim()).matches()) {
+            log.warnf("ANSWER-GUARD suppressed suspicious %d-token response: '%s' — " +
+                    "likely caused by compaction race. Returning retry prompt.", outputTokens, answer);
+            return "I lost context mid-response — please try again.";
+        }
+        return answer;
     }
 
     private boolean isGeneratedCodeBlock(String text) {
@@ -182,10 +201,7 @@ public class AgentStateMachineRunner {
         return false;
     }
 
-    // ── Shared types ─────────────────────────────────────────────────────────
-    // Package-private so AgentStepProcessor can reference them without a
-    // circular dependency — both live in com.arcclaw.core.agent.loop.
-
+    // ── Shared types ──────────────────────────────────────────────────────────
     enum DecisionType { CONTINUE, TERMINAL, PROCEED }
 
     record StepDecision(

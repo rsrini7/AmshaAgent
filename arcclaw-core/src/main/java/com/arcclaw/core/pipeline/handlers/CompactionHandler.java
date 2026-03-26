@@ -1,4 +1,3 @@
-// arcclaw-core/src/main/java/com/arcclaw/core/pipeline/handlers/CompactionHandler.java
 package com.arcclaw.core.pipeline.handlers;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -6,9 +5,11 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.state.CompactionEventBridge;
 import com.arcclaw.core.state.CompactionService;
 import org.jboss.logging.Logger;
 
@@ -19,7 +20,9 @@ public class CompactionHandler implements MessageHandler {
 
     @Inject CompactionService compactionService;
     @Inject Event<CompactionRequest> compactionEvent;
-    @Inject CompactionInFlightFlag compactionInFlight;  // ← no @WorkspaceScoped qualifier
+    @Inject CompactionInFlightFlag compactionInFlight;
+    @Inject CompactionEventBridge compactionEventBridge;
+    @Inject RateLimitTracker rateLimitTracker;
 
     @Override
     public int priority() { return 60; }
@@ -34,7 +37,18 @@ public class CompactionHandler implements MessageHandler {
         String userId = context.getUser() != null ? context.getUser().platformId() : "unknown";
 
         if (compactionService.shouldCompact(sessionId)) {
+
+            // ── Skip compaction if provider is currently throttled.
+            // Compaction calls the LLM for its summary — firing it while
+            // rate-limited causes a double-Groq-hit that produces Done. in 1 token.
+            if (rateLimitTracker.isBackingOff()) {
+                log.debugf("CompactionHandler: skipping compaction for session %s — " +
+                        "LLM provider is backing off after rate-limit", sessionId);
+                return HandleResult.CONTINUE;
+            }
+
             if (compactionInFlight.compareAndSet(sessionId, false, true)) {
+                compactionEventBridge.registerLatch(sessionId);
                 compactionEvent.fireAsync(new CompactionRequest(sessionId, userId));
                 log.debugf("Async compaction triggered for session %s", sessionId);
             } else {
