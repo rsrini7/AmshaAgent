@@ -1,6 +1,7 @@
 package com.arcclaw.rag;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -22,51 +23,75 @@ public class RagContextEnricher implements ContextEnricher {
     @ConfigProperty(name = "arcclaw.rag.context-chunks", defaultValue = "5")
     int contextChunks;
 
+    // ── Fix Bug D: without a score floor, a single document ("My name is srini")
+    // is returned for every query regardless of relevance (weather, code, etc.).
+    // Tune this value relative to what TwoTierMemoryService returns:
+    //   vec0 cosine similarity → [0.0, 1.0]  → 0.40 is a good floor
+    //   FTS5 BM25 rank         → negative    → set arcclaw.rag.min-score=-1.0 to disable
+    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.40")
+    double minScore;
+
+    // ── Fix Bug A: write-intent goals must never be enriched with past RAG data.
+    // Injecting a previously-stored "My name is srini" chunk into "store my name
+    // as srini" causes the LLM to conclude the store already happened and emit
+    // "Done" in 1 token — bypassing the ingest_document tool entirely.
+    private static final Set<String> WRITE_INTENT_TOKENS = Set.of(
+            "store", "save", "remember", "ingest", "add to knowledge",
+            "call me", "note that", "add to memory", "memorize"
+    );
+
     @Override
     public String enrich(String sessionId, String goal, String basePrompt) {
         if (goal == null || goal.isBlank()) return basePrompt;
 
-        // WorkspaceContext.userId() returns "" when unbound — never null.
-        // ArcClaw is single-tenant via Telegram; userId is the chatId string.
-        // Fall back to sessionId so FTS5 and vec searches still execute even
-        // when userId is not explicitly propagated into the scope.
+        if (isWriteIntent(goal)) {
+            log.debugf("RagContextEnricher: skipping — write-intent goal (session=%s)", sessionId);
+            return basePrompt;
+        }
+
         String userId = WorkspaceContext.userId();
         if (userId == null || userId.isBlank()) {
             userId = sessionId;
         }
 
         try {
-            // Wrap in FTS5 phrase quotes to handle apostrophes and special characters
-            // (e.g. "today's news" → "\"today's news\"").
-            // Without quoting, FTS5 parses the value as a query expression and
-            // an apostrophe opens an unterminated phrase literal → SQLITE_ERROR.
-            // Phrase search is also semantically better for RAG — we want the
-            // whole phrase matched, not individual unordered tokens.
             String ftsQuery = Fts5QueryUtil.toFts5Phrase(goal);
 
             List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks);
             if (chunks.isEmpty()) return basePrompt;
 
-            String context = chunks.stream()
-                .map(ScoredChunk::text)
-                .filter(t -> t != null && !t.isBlank())
-                .collect(Collectors.joining("\n---\n"));
+            List<ScoredChunk> relevant = chunks.stream()
+                    .filter(c -> c.score() >= minScore)
+                    .toList();
+
+            if (relevant.isEmpty()) {
+                log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
+                    (Object) relevant.size(), chunks.size(), minScore, sessionId);
+                return basePrompt;
+            }
+
+            String context = relevant.stream()
+                    .map(ScoredChunk::text)
+                    .filter(t -> t != null && !t.isBlank())
+                    .collect(Collectors.joining("\n---\n"));
 
             if (context.isBlank()) return basePrompt;
 
-            log.debugf("RagContextEnricher: injecting %d chunks for session %s",
-                chunks.size(), sessionId);
+            log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
+                    (Object) relevant.size(), chunks.size(), minScore, sessionId);
 
             return "## Retrieved Context\n" + context + "\n\n---\n\n" + basePrompt;
 
         } catch (Exception e) {
-            // Always fail open — a RAG failure must never crash the agent loop.
-            // No permanent disable flag — transient Jina/network failures are
-            // retried on the next message automatically.
             log.warnf("RagContextEnricher enrichment failed for session %s: %s",
-                sessionId, e.getMessage());
+                    sessionId, e.getMessage());
             return basePrompt;
         }
     }
 
+    private boolean isWriteIntent(String goal) {
+        if (goal == null) return false;
+        String lower = goal.toLowerCase();
+        return WRITE_INTENT_TOKENS.stream().anyMatch(lower::contains);
+    }
 }
