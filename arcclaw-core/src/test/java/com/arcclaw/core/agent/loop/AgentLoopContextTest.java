@@ -6,22 +6,23 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
+
 import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.InjectMock;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.Test;
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import java.util.Collections;
 
 @QuarkusTest
 class AgentLoopContextTest {

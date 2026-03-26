@@ -4,20 +4,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-import org.jboss.logging.Logger;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -155,7 +155,7 @@ class ChatHistoryAssemblerTest {
         assertTrue(result.get(0) instanceof AiMessage);
         AiMessage ai = (AiMessage) result.get(0);
         assertTrue(ai.hasToolExecutionRequests());
-        dev.langchain4j.agent.tool.ToolExecutionRequest req = ai.toolExecutionRequests().get(0);
+        ToolExecutionRequest req = ai.toolExecutionRequests().get(0);
         assertEquals("myTool", req.name());
         assertEquals("{}", req.arguments());
     }

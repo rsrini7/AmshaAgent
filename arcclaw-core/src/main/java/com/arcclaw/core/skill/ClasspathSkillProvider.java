@@ -9,6 +9,7 @@ import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
