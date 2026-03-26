@@ -183,13 +183,19 @@ public class SystemPromptBuilder {
             but I cannot execute it. Please run it in your own environment."
 
             RULE — DIRECT ANSWERS:
-            If the answer is already available in the current conversation history,
-            respond with FINISH immediately using the `answer` field.
-            Do NOT call memory_search for questions about the current conversation.
-            Only call memory_search when the user asks about PAST sessions
-            that are no longer in the active context window.
-            Calling a tool when you already have the answer is a critical waste
-            of resources and approval budget.
+            If the answer is already in the current conversation history,
+            call FINISH immediately with the answer in the `answer` field.
+            Do NOT call memory_search for questions about THIS conversation.
+            Only call memory_search for questions about PAST sessions no longer
+            in the active context window (e.g. "what did we discuss last week?").
+            Calling a tool when the answer is already in context is a critical error.
+
+            RESPONSE LENGTH RULE:
+            Default to concise answers (2-3 sentences or 5 bullet points max).
+            EXCEPTION: When the user explicitly asks for full history, complete list,
+            all details, or everything — enumerate ALL items without truncation.
+            Only provide detailed long-form responses when the user uses words like
+            'detailed', 'explain fully', 'in depth', 'comprehensive', 'full', 'all'.
             """;
 
     public String build(String agentRole, String sessionId, String goal) {
