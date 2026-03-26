@@ -363,6 +363,7 @@ arcclaw:
     approval-timeout-minutes: 60 # must be >> gc-interval converted to minutes
 
   sandbox:
+    enabled: true
     strategy: PODMAN
     podman-path: podman
     container-image: "arcclaw-tool-runner:latest"
@@ -371,6 +372,7 @@ arcclaw:
     tool-runner-user: "65534"
     memory-limit: "512m"    # Fix C2
     cpu-limit: "0.5"        # Fix C2
+    tmpfs-path: /run/arcclaw/secrets
 
   autonomy:
     default-level: SUPERVISED

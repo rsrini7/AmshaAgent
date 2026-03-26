@@ -162,7 +162,7 @@ public class PodmanContainerExecutor {
                         log.warn("**====================================================================**");
                         log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.", containerImage);
                         log.warn("To use the secure Podman sandbox, please build the runner image:");
-                        log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner . ", containerImage);
+                        log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner . ");
                         log.warn("Falling back to host execution...");
                         log.warn("**====================================================================**");
                         
@@ -174,8 +174,9 @@ public class PodmanContainerExecutor {
                     if (exitCode == 125) {
                         throw new IOException("Podman engine failure (exit 125): " + output);
                     }
-
-                    throw new ToolExecutionException("Tool failed (exit " + exitCode + "): " + output);
+                    
+                    // Specific exit code for tool logic failure (standard for LLM tools)
+                    throw new ToolExecutionException(output, exitCode);
                 }
 
                 span.setStatus(StatusCode.OK);

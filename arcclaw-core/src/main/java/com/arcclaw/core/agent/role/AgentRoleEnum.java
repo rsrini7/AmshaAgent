@@ -46,13 +46,13 @@ public record AgentRoleEnum(String id) {
             "coder",
             "Brahma (Creator)",
             "Writes new architectural code, features from scratch, and logic implementations.",
-            3, false, Set.of(), Set.of("brahma")
+            3, false, Set.of(ToolCapability.SANDBOX_EXEC), Set.of("brahma")
         ),
         "debugger", new RoleDefinition(
             "debugger",
             "Shiva (Destroyer/Debugger)",
             "Analyzes stack traces, finds bugs, and fixes broken code.",
-            3, false, Set.of(ToolCapability.GITHUB), Set.of("shiva")
+            3, false, Set.of(ToolCapability.GITHUB, ToolCapability.SANDBOX_EXEC), Set.of("shiva")
         ),
         "synthesizer", new RoleDefinition(
             "synthesizer",
