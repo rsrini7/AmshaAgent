@@ -18,12 +18,6 @@ public class TelegramChannelRoute extends RouteBuilder {
     private static final Logger log = Logger.getLogger(TelegramChannelRoute.class);
 
     @Inject
-    TelegramAgentHandler telegramAgentHandler;
-
-    @Inject
-    TelegramCallbackHandler telegramCallbackHandler;
-
-    @Inject
     CamelContext camelContext;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.enabled", defaultValue = "true")
@@ -63,9 +57,9 @@ public class TelegramChannelRoute extends RouteBuilder {
                 .routeId("telegram-bot")
                 .choice()
                     .when(body().isInstanceOf(IncomingCallbackQuery.class))
-                        .bean(telegramCallbackHandler, "handleCallback")
+                        .bean(TelegramCallbackHandler.class, "handleCallback")
                     .otherwise()
-                        .bean(telegramAgentHandler, "receiveMessage")
+                        .bean(TelegramAgentHandler.class, "receiveMessage")
                 .end(); // Added .end() here
     }
 

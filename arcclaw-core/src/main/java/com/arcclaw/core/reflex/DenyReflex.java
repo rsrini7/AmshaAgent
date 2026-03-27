@@ -23,7 +23,6 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -55,9 +54,6 @@ public class DenyReflex implements AgentReflex {
 
     @Inject
     Event<AgentJobCompleted> jobCompletedEvent;
-
-    @Inject
-    DevSecretSeeder devSeeder;
 
     @Inject
     AuditService auditService;
@@ -94,9 +90,6 @@ public class DenyReflex implements AgentReflex {
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
-                // Seed secrets strictly INSIDE the isolated cron session
-                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
-
                 // 1. SessionId explicit — delegation §7.33
                 // Prioritize session ID over cron ID because session IDs (numeric-hyphen-numeric)
                 // would otherwise match the cronId pattern §7.33

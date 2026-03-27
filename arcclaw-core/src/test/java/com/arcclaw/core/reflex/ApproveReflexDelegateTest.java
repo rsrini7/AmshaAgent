@@ -19,7 +19,6 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +33,6 @@ class ApproveReflexDelegateTest {
     @Mock StatefulAgentStore agentStore;
     @Mock AgentLoop agentLoop;
     @Mock DelegateApprovalGuard delegateGuard;
-    @Mock DevSecretSeeder devSeeder;
     @Mock CheckpointResumeHandler resumeHandler;
     
     ApproveReflex reflex;
@@ -45,7 +43,6 @@ class ApproveReflexDelegateTest {
         reflex.statefulAgentStore = agentStore;
         reflex.agentLoop = agentLoop;
         reflex.delegateGuard = delegateGuard;
-        reflex.devSeeder = devSeeder;
         reflex.checkpointResumeHandler = resumeHandler;
         reflex.log = mock(Logger.class);
     }

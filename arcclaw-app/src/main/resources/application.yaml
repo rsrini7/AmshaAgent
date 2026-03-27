@@ -650,7 +650,7 @@ mp:
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
     workspace:
-      root-dir: /var/arcclaw/workspaces
+      root-dir: "${ARCCLAW_DATA_DIR:./data}/workspaces"
     sandbox:
       strategy: PODMAN
     autonomy:

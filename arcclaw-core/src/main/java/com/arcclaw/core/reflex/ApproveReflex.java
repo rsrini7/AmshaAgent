@@ -25,7 +25,6 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -61,9 +60,6 @@ public class ApproveReflex implements AgentReflex {
 
     @Inject
     AuditService auditService;
-
-    @Inject
-    DevSecretSeeder devSeeder;
 
     @Inject
     ObjectMapper objectMapper;
@@ -105,9 +101,6 @@ public class ApproveReflex implements AgentReflex {
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
-                // Seed development secrets for the approval thread
-                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
-
                 // 1. SessionId explicit — delegation §7.33
                 // Prioritize session ID over cron ID because session IDs (numeric-hyphen-numeric)
                 // would otherwise match the cronId pattern §7.33

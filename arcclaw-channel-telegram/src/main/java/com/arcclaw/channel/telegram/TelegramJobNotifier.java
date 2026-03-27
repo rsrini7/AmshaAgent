@@ -20,6 +20,9 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
     @Inject
     TelegramChannelSender sender;
 
+    @Inject
+    TelegramMarkdownV2Renderer markdownRenderer;
+
     @Override
     public boolean supports(ChannelType channelType) {
         return ChannelType.TELEGRAM.equals(channelType);
@@ -62,13 +65,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
     }
 
     private String escapeMdV2(String text) {
-        if (text == null) return "";
-        return text
-                .replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
-                .replace("]", "\\]").replace("(", "\\(").replace(")", "\\)")
-                .replace("~", "\\~").replace("`", "\\`").replace(">", "\\>")
-                .replace("#", "\\#").replace("+", "\\+").replace("-", "\\-")
-                .replace("=", "\\=").replace("|", "\\|").replace("{", "\\{")
-                .replace("}", "\\}").replace(".", "\\.").replace("!", "\\!");
+        if (text == null || text.trim().isEmpty()) return "";
+        return markdownRenderer.esc(text);
     }
 }

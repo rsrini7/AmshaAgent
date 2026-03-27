@@ -248,10 +248,16 @@ public class SandboxExecTool implements AgentTool {
      * "text cannot be null or blank" on the next LLM call.
      */
     private String truncate(String output) {
-        if (output == null || output.isBlank()) return NO_OUTPUT_SENTINEL;
-        return output.length() > MAX_OUTPUT_CHARS
-                ? output.substring(0, MAX_OUTPUT_CHARS) + TRUNCATION_SUFFIX
-                : output;
+        if (output == null || output.isBlank()) {
+            return NO_OUTPUT_SENTINEL; // Use the sentinel for blank output
+        } 
+        if (output.length() <= MAX_OUTPUT_CHARS) {
+            return output;
+        }
+        // Codepoint-safe truncation to prevent splitting UTF-16 surrogate pairs
+        int endIndex = output.offsetByCodePoints(0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
+        
+        return output.substring(0, endIndex) + TRUNCATION_SUFFIX; 
     }
 
     /**
