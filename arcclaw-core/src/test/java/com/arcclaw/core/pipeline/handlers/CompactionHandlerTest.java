@@ -14,10 +14,12 @@ import jakarta.enterprise.event.Event;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.state.CompactionEventBridge;
 import com.arcclaw.core.state.CompactionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,8 +37,8 @@ class CompactionHandlerTest {
     @Mock private CompactionService compactionService;
     @Mock private Event<CompactionRequest> compactionEvent;
     @Mock private CompactionInFlightFlag compactionInFlight;
-    @Mock private com.arcclaw.core.governance.RateLimitTracker rateLimitTracker;
-    @Mock private com.arcclaw.core.state.CompactionEventBridge compactionEventBridge;
+    @Mock private RateLimitTracker rateLimitTracker;
+    @Mock private CompactionEventBridge compactionEventBridge;
 
     @InjectMocks
     private CompactionHandler handler;

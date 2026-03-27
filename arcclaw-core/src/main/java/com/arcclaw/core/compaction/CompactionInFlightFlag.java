@@ -2,6 +2,7 @@ package com.arcclaw.core.compaction;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped

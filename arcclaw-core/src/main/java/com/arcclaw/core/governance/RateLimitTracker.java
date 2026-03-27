@@ -2,7 +2,9 @@ package com.arcclaw.core.governance;
 
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
+
 import jakarta.enterprise.context.ApplicationScoped;
+
 import org.jboss.logging.Logger;
 
 /**

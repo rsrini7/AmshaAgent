@@ -4,13 +4,14 @@ import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import java.util.Locale;
 
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -21,9 +22,10 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
-
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -38,7 +40,7 @@ public class EngineStepHandler {
 
     @Inject GovernanceStrategy governanceLayer;
     @Inject Instance<AgentObserver> observers;
-    @Inject com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Inject ObjectMapper objectMapper;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^[A-Za-z].*\\s.*[.!?]\\s*$", Pattern.DOTALL);
@@ -210,7 +212,7 @@ public class EngineStepHandler {
                 .stream()
                 .map(cause -> cause.getClass().getSimpleName() + ": " +
                             truncate(cause.getMessage(), 120))
-                .collect(java.util.stream.Collectors.joining(" → "));
+                .collect(Collectors.joining(" → "));
     }
 
     private static String truncate(String s, int max) {
@@ -231,9 +233,9 @@ public class EngineStepHandler {
         try {
             int start = rawError.indexOf('{');
             if (start < 0) return null;
-            com.fasterxml.jackson.databind.JsonNode root =
+            JsonNode root =
                 objectMapper.readTree(rawError.substring(start));
-            com.fasterxml.jackson.databind.JsonNode node =
+            JsonNode node =
                 root.path("failed_generation");
             if (node.isMissingNode() || !node.isTextual()) return null;
             String result = node.asText().strip();

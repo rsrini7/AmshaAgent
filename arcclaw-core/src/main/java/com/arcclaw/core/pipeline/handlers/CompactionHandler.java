@@ -3,6 +3,7 @@ package com.arcclaw.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.governance.RateLimitTracker;

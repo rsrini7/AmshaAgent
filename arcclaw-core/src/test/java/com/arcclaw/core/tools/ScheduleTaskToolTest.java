@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import com.arcclaw.channel.api.ChannelType;
-
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
