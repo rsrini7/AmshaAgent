@@ -3,18 +3,20 @@ package com.arcclaw.channel.telegram;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.apache.camel.ProducerTemplate;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.apache.camel.component.telegram.model.OutgoingTextMessage;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
-import org.apache.camel.ProducerTemplate;
-import org.jboss.logging.Logger;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Telegram implementation of ChannelSender.
@@ -66,8 +68,8 @@ public class TelegramChannelSender implements ChannelSender {
         if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith("parallel:")) {
             String toolNamesStr = promptOpt.get().toolName().substring("parallel:".length());
             List<String> list = Arrays.asList(toolNamesStr.split(","));
-            String keyboardJson = BatchHitlKeyboardBuilder.buildKeyboardJson(promptOpt.get().sessionId(), list);
-            sendWithKeyboard(recipient, rendered, keyboardJson);
+            InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(promptOpt.get().sessionId(), list);
+            sendWithKeyboard(recipient, rendered, markup);
         } else {
             sendRawToChatId(chatId, rendered);
         }
@@ -88,8 +90,8 @@ public class TelegramChannelSender implements ChannelSender {
      * Sends a message with an optional inline keyboard.
      * §7.24
      */
-    public void sendWithKeyboard(ChannelUser recipient, String text, String keyboardJson) {
-        if (keyboardJson == null || keyboardJson.isBlank()) {
+    public void sendWithKeyboard(ChannelUser recipient, String text, InlineKeyboardMarkup markup) {
+        if (markup == null) {
             sendRawToChatId(recipient.channelId(), text);
             return;
         }
@@ -98,22 +100,21 @@ public class TelegramChannelSender implements ChannelSender {
             return;
         }
         String chatId = recipient.channelId();
-        
-        producerTemplate.sendBodyAndHeaders("telegram:bots", text, Map.of(
-            TelegramConstants.TELEGRAM_CHAT_ID, chatId,
-            "CamelTelegramReplyMarkup", keyboardJson
-        ));
+
+        OutgoingTextMessage msg = new OutgoingTextMessage();
+        msg.setText(text);
+        msg.setParseMode("MarkdownV2");
+        msg.setReplyMarkup(markup);
+
+        producerTemplate.sendBodyAndHeader("telegram:bots", msg,
+            TelegramConstants.TELEGRAM_CHAT_ID, chatId);
     }
 
-    public void editMessage(String chatId, int messageId, String newText, String keyboardJson) {
-        // Without telegrambots dependency, we must send raw JSON to the camel component or API.
-        // For camel-telegram, there's an editMessage api, but as a fallback we will try to use the header approach.
-        // Actually, camel-telegram natively does not support editMessage without EditMessageText object.
-        // We'll just send a new message instead if it throws, or implement a dummy if not needed immediately.
-        producerTemplate.sendBodyAndHeaders("telegram:bots", newText != null ? newText : "", Map.of(
-            TelegramConstants.TELEGRAM_CHAT_ID, chatId,
-            "CamelTelegramReplyMarkup", keyboardJson == null ? "" : keyboardJson
-        ));
+    public void editMessage(String chatId, int messageId, String newText, InlineKeyboardMarkup markup) {
+        // P74-3: editMessageReplyMarkup not yet supported via camel-telegram.
+        // Proper implementation requires OutgoingEditMessage or direct Bot API call.
+        // Stubbing to avoid sending redundant new messages.
+        log.debugf("editMessage: deferred to P74 (chatId=%s, msgId=%d)", chatId, messageId);
     }
 
     private static final int TELEGRAM_MAX_LENGTH = 4096;
@@ -121,7 +122,7 @@ public class TelegramChannelSender implements ChannelSender {
     /**
      * Internal helper to send a message to a specific chat ID, handling chunking if needed.
      */
-    public void sendRawToChatId(String chatId, String text) {
+    private void sendRawToChatId(String chatId, String text) {
         if (text == null || text.isBlank()) {
             log.warn("Attempted to send empty message to " + chatId + " — skipping");
             return;

@@ -65,7 +65,8 @@ public class TelegramChannelRoute extends RouteBuilder {
                     .when(body().isInstanceOf(IncomingCallbackQuery.class))
                         .bean(telegramCallbackHandler, "handleCallback")
                     .otherwise()
-                        .bean(telegramAgentHandler, "receiveMessage");
+                        .bean(telegramAgentHandler, "receiveMessage")
+                .end(); // Added .end() here
     }
 
     void onStart(@Observes StartupEvent ev) {

@@ -1,30 +1,28 @@
 package com.arcclaw.channel.telegram;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.camel.component.telegram.model.InlineKeyboardButton;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.jboss.logging.Logger;
 
 /**
- * Builds the Telegram inline_keyboard JSON for a parallel batch HITL pause.
+ * Builds the Telegram {@link InlineKeyboardMarkup} for a parallel batch HITL pause.
  * §7.24 §7.25
  */
 class BatchHitlKeyboardBuilder {
 
     private static final Logger log = Logger.getLogger(BatchHitlKeyboardBuilder.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * @param sessionId the active session ID (embedded in callback data)
      * @param toolNames ordered list of tool names in the batch
-     * @return inline_keyboard JSON string for Telegram
+     * @return InlineKeyboardMarkup for Telegram
      */
-    static String buildKeyboardJson(String sessionId, List<String> toolNames) {
-        ObjectNode root = MAPPER.createObjectNode();
-        ArrayNode keyboard = root.putArray("inline_keyboard");
+    static InlineKeyboardMarkup buildKeyboard(String sessionId, List<String> toolNames) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
         // Format sessionId
         String safeSessionId = sessionId.replace(":", "_");
@@ -34,42 +32,39 @@ class BatchHitlKeyboardBuilder {
             String approveCb = truncateCb("BATCH_APPROVE:" + safeSessionId + ":" + safeToolName);
             String denyCb = truncateCb("BATCH_DENY:" + safeSessionId + ":" + safeToolName);
             
-            ArrayNode row = MAPPER.createArrayNode();
+            List<InlineKeyboardButton> row = new ArrayList<>();
             
-            ObjectNode appBtn = MAPPER.createObjectNode();
-            appBtn.put("text", "✅ " + toolName);
-            appBtn.put("callback_data", approveCb);
+            InlineKeyboardButton appBtn = new InlineKeyboardButton();
+            appBtn.setText("✅ " + toolName);
+            appBtn.setCallbackData(approveCb);
             row.add(appBtn);
             
-            ObjectNode denBtn = MAPPER.createObjectNode();
-            denBtn.put("text", "🚫 " + toolName);
-            denBtn.put("callback_data", denyCb);
+            InlineKeyboardButton denBtn = new InlineKeyboardButton();
+            denBtn.setText("🚫 " + toolName);
+            denBtn.setCallbackData(denyCb);
             row.add(denBtn);
             
-            keyboard.add(row);
+            rows.add(row);
         }
 
         // Final row
-        ArrayNode finalRow = MAPPER.createArrayNode();
+        List<InlineKeyboardButton> finalRow = new ArrayList<>();
         
-        ObjectNode approveAllBtn = MAPPER.createObjectNode();
-        approveAllBtn.put("text", "✅ Approve All");
-        approveAllBtn.put("callback_data", truncateCb("BATCH_APPROVE_ALL:" + safeSessionId));
+        InlineKeyboardButton approveAllBtn = new InlineKeyboardButton();
+        approveAllBtn.setText("✅ Approve All");
+        approveAllBtn.setCallbackData(truncateCb("BATCH_APPROVE_ALL:" + safeSessionId));
         finalRow.add(approveAllBtn);
 
-        ObjectNode denyAllBtn = MAPPER.createObjectNode();
-        denyAllBtn.put("text", "🚫 Deny All");
-        denyAllBtn.put("callback_data", truncateCb("BATCH_DENY_ALL:" + safeSessionId));
+        InlineKeyboardButton denyAllBtn = new InlineKeyboardButton();
+        denyAllBtn.setText("🚫 Deny All");
+        denyAllBtn.setCallbackData(truncateCb("BATCH_DENY_ALL:" + safeSessionId));
         finalRow.add(denyAllBtn);
 
-        keyboard.add(finalRow);
+        rows.add(finalRow);
 
-        try {
-            return MAPPER.writeValueAsString(root);
-        } catch (Exception e) {
-            log.warn("Failed to generate keyboard JSON", e);
-            return null;
-        }
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        markup.setInlineKeyboard(rows);
+        return markup;
     }
 
     private static String truncateCb(String cbInfo) {

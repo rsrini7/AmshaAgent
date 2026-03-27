@@ -4,7 +4,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.lifecycle.StaleApprovalExpired;
 
 @ApplicationScoped
@@ -12,6 +14,9 @@ public class TelegramStaleApprovalObserver {
 
     @Inject
     TelegramChannelSender sender;
+
+    @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
+    long hitlTimeoutHours;
 
     void onStaleApproval(@Observes StaleApprovalExpired event) {
 
@@ -29,8 +34,8 @@ public class TelegramStaleApprovalObserver {
             "The pending tool execution was automatically cancelled.\n" +
             "Start a new request to try again.",
             toolDisplay,
-            24);
+            hitlTimeoutHours);
 
-        sender.sendRawToChatId(event.channelPlatformId(), msg);
+        sender.sendRaw(new ChannelUser(event.channelPlatformId(), event.channelPlatformId(), "unknown", ChannelType.TELEGRAM), msg);
     }
 }

@@ -476,8 +476,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.status = com.arcclaw.core.state.CheckpointStatus.AWAITING_APPROVAL " +
+                "WHERE c.status = :status " +
                 "AND c.updatedAt < :cutoff", AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC))
                 .getResultList();
     }

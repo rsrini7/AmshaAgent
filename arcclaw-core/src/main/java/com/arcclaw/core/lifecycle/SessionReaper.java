@@ -224,10 +224,13 @@ public class SessionReaper {
                     AgentSentinels.TOOL_DECISION_DENIED));
         }
 
-        cp.setStatus(CheckpointStatus.FAILED);
-        cp.setFailedAt(Instant.now());
-        cp.setFailReason("Approval timed out after " + hitlTimeoutHours + " hours.");
-        em.merge(cp);
+        // Reload to pick up the decisions written by REQUIRES_NEW transactions above
+        AgentCheckpoint fresh = agentStore.load(cp.getSessionId(), cp.getAgentRole())
+            .orElse(cp);
+        fresh.setStatus(CheckpointStatus.FAILED);
+        fresh.setFailedAt(Instant.now());
+        fresh.setFailReason("Approval timed out after " + hitlTimeoutHours + " hours.");
+        em.merge(fresh);
 
         // Notify user via channel event
         staleApprovalEvent.fireAsync(new StaleApprovalExpired(
