@@ -43,9 +43,8 @@ public class SandboxExecTool implements AgentTool {
     // Never copy-paste this string — always reference this constant.
     // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
     private static final String SANDBOX_OFFLINE_MSG =
-        "SANDBOX_OFFLINE: The sandbox execution environment is currently unavailable. " +
-        "The code was NOT executed. You MUST NOT answer from memory or training data. " +
-        "Tell the user the sandbox is offline and they should try again later.";
+        "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed."+
+        "The code was NOT run. Inform the user gracefully that the execution environment is currently offline.";
 
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node", "java", "go");
