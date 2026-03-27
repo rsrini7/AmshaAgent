@@ -26,15 +26,13 @@ public class TelegramChannelSender implements ChannelSender {
 
     private final ProducerTemplate producerTemplate;
     private final TelegramMarkdownV2Renderer renderer;
-    private final Logger log;
+    private static final Logger log = Logger.getLogger(TelegramChannelSender.class);
 
     @Inject
     public TelegramChannelSender(ProducerTemplate producerTemplate,
-                                 TelegramMarkdownV2Renderer renderer,
-                                 Logger log) {
+                                 TelegramMarkdownV2Renderer renderer) {
         this.producerTemplate = producerTemplate;
         this.renderer = renderer;
-        this.log = log;
     }
 
     @Override

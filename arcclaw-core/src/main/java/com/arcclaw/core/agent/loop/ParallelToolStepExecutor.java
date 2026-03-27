@@ -21,10 +21,13 @@ import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceExecutors;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.core.util.PreExecutionFilter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.opentelemetry.context.Context;
@@ -50,6 +53,10 @@ public class ParallelToolStepExecutor {
     @Inject Instance<AgentObserver> observers;
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
+
+    @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools",
+                    defaultValue = "")
+    Optional<List<String>> preExecutableTools;
 
 
     @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60")
@@ -91,13 +98,13 @@ public class ParallelToolStepExecutor {
                 context.sessionId(), context.agentRole(),
                 call.toolName(), call.params(), history,
                 context.goal(), List.of());
-
-            if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval pause) {
-                // §7.4: ANY tool needs HITL → pause ALL atomically
+            if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval) {
+                // §7.4: ANY tool needs HITL → pause ENTIRE batch atomically.
+                // §7.30: PRE-EXECUTE tools whose autonomy level is >= FULL.
                 log.infof("[PARALLEL-HITL] session=%s tool=%s requires approval " +
-                          "— pausing entire batch of %d tools.",
+                          "— evaluating pre-execution for remaining %d tools.",
                           context.sessionId(), call.toolName(), calls.size());
-                return pauseEntireBatch(context, history, batchStep, calls, pause);
+                return handleHitlBatch(context, history, batchStep, calls);
             }
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
@@ -307,16 +314,15 @@ public class ParallelToolStepExecutor {
         return StepDecision.proceed(completedBatchStep);
     }
 
-    private StepDecision pauseEntireBatch(
+    private StepDecision handleHitlBatch(
             AgentExecutionContext context,
             List<ReasoningStep> history,
             ReasoningStep batchStep,
-            List<ParallelToolCall> calls,
-            ToolInvocationGuard.GuardDecision.PauseForApproval pause) {
+            List<ParallelToolCall> calls) {
 
-        String batchJson;
+        String originalBatchJson;
         try {
-            batchJson = objectMapper.writeValueAsString(calls);
+            originalBatchJson = objectMapper.writeValueAsString(calls);
         } catch (Exception e) {
             return StepDecision.terminal(AgentResult.failed(
                 "Failed to serialize batch for HITL approval.",
@@ -324,14 +330,71 @@ public class ParallelToolStepExecutor {
                 List.copyOf(history)));
         }
 
-        String compositeName = "__parallel__:" +
+        Set<String> safeTools = preExecutableTools
+            .map(HashSet::new)
+            .orElse(new HashSet<>());
+
+        AutonomyLevel autonomy = context.autonomyLevel();
+
+        PreExecutionFilter.SplitResult split =
+            PreExecutionFilter.split(calls, autonomy, safeTools);
+
+        String compositeName = "ReasoningStep.PARALLEL_SENTINEL:" +
             calls.stream().map(ParallelToolCall::toolName)
                  .collect(Collectors.joining(","));
 
-        // §7.20: Use persistBatch() to seed per-tool decision state.
+        // If nothing is pre-executable, persist normally §7.31
+        if (split.preExecutable().isEmpty()) {
+            return StepDecision.terminal(
+                checkpointManager.persistBatch(
+                    context, compositeName, originalBatchJson, calls, history));
+        }
+
+        // Pre-execute the safe tools now (§7.30)
+        Map<String, String> preResults = new LinkedHashMap<>();
+        for (ParallelToolCall call : split.preExecutable()) {
+            try {
+                // Pre-execution MUST be under FULL autonomy regardless of session setting §7.30
+                ToolResponse resp = WorkspaceContext.runWithFullAutonomy(
+                    context.sessionId(), context.userId(), context.chatId(),
+                    context.agentRole(),
+                    () -> invokeTool(call, context.sessionId()));
+                
+                preResults.put(call.toolName(), objectMapper.writeValueAsString(resp));
+                log.debugf("[PRE-EXEC] session=%s tool=%s succeeded.", context.sessionId(), call.toolName());
+            } catch (Exception e) {
+                log.warnf("[PRE-EXEC] session=%s tool %s failed pre-execution: %s",
+                    context.sessionId(), call.toolName(), e.getMessage());
+                ToolResponse errorResp = ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage());
+                try {
+                    preResults.put(call.toolName(), objectMapper.writeValueAsString(errorResp));
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // Rebuild compositeName with ONLY the HITL-pending tools §7.32 (UI constraint)
+        // Note: originalBatchJson still contains ALL calls for context.
+        String hitlCompositeName = "ReasoningStep.PARALLEL_SENTINEL:" + split.hitlPending().stream()
+            .map(ParallelToolCall::toolName)
+            .collect(Collectors.joining(","));
+
+        String preResultsJson;
+        try {
+            preResultsJson = objectMapper.writeValueAsString(preResults);
+        } catch (Exception e) {
+            log.errorf("Failed to serialize pre-executed results: %s", e.getMessage());
+            return StepDecision.terminal(checkpointManager.persistBatch(
+                    context, compositeName, originalBatchJson, calls, history));
+        }
+
         return StepDecision.terminal(
-            checkpointManager.persistBatch(
-                context, compositeName, batchJson, calls, history));
+            checkpointManager.persistBatchWithPreExecuted(
+                context, hitlCompositeName, originalBatchJson,
+                split.hitlPending(), preResultsJson, history));
+    }
+
+    private ToolResponse invokeTool(ParallelToolCall call, String sessionId) {
+        return toolInvoker.invoke(call.toolName(), call.params(), sessionId);
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {

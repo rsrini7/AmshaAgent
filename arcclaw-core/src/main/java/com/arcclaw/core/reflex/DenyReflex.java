@@ -64,6 +64,9 @@ public class DenyReflex implements AgentReflex {
     @Inject
     CheckpointResumeHandler checkpointResumeHandler;
 
+    @Inject
+    DelegateApprovalGuard delegateGuard;
+
     @Override
     public boolean matches(String input) {
         ChannelCommand cmd = ChannelCommand.parse(input);
@@ -90,7 +93,19 @@ public class DenyReflex implements AgentReflex {
                 // Seed secrets strictly INSIDE the isolated cron session
                 devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
 
-                // 1. CronId explicit — always wins (Fix 3)
+                // 1. SessionId explicit — delegation §7.33
+                // Prioritize session ID over cron ID because session IDs (numeric-hyphen-numeric)
+                // would otherwise match the cronId pattern §7.33
+                if (deny.targetSessionId().isPresent()) {
+                    String targetSid = deny.targetSessionId().get();
+                    if (!delegateGuard.isDelegate(userId)) {
+                        log.warnf("[DELEGATE-DENIED] admin=%s attempted to deny session=%s", userId, targetSid);
+                        return "❌ You are not authorized to use approval delegation.";
+                    }
+                    return handleDelegateDenial(targetSid, userId, chatId, context);
+                }
+
+                // 2. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {
                     return handleCronDenial(cronId.get(), userId, chatId, context);
                 }
@@ -269,32 +284,56 @@ public class DenyReflex implements AgentReflex {
             context.setResumeSignal(true);
             context.setGoal(AgentSentinels.GOAL_DENY_APPROVED);
 
-        // "denial" keyword no longer needed as trigger, we use resumeSignal
-        AgentResult result = WorkspaceContext.run(
-                cronSessionId, cron.userId, cron.chatId,
-                AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> agentLoop.run(
-                        cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        AgentSentinels.GOAL_DENY_APPROVED,
-                        reasoningEngine, 1, context) // maxIterations=1 — denial returns immediately
+            // "denial" keyword no longer needed as trigger, we use resumeSignal
+            AgentResult result = WorkspaceContext.run(
+                    cronSessionId, cron.userId, cron.chatId,
+                    AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
+                    () -> agentLoop.run(
+                            cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
+                            AgentSentinels.GOAL_DENY_APPROVED,
+                            reasoningEngine, 1, context) // maxIterations=1 — denial returns immediately
+            );
 
-        );
+            cronRepository.markFailed(cron.id, "User denied tool execution.");
 
-        cronRepository.markFailed(cron.id, "User denied tool execution.");
+            // Fallback to TELEGRAM for legacy rows missing channelType
+            ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
 
-        // Fallback to TELEGRAM for legacy rows missing channelType
-        ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
+            String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
 
-        String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
+            jobCompletedEvent.fire(new AgentJobCompleted(
+                    cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
+                    AgentResultFormatter.format(result),
+                    null));
 
-        jobCompletedEvent.fire(new AgentJobCompleted(
-                cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                AgentResultFormatter.format(result),
-                null));
-
-        return "🚫 Cron task denied and cancelled.";
+            return "🚫 Cron task denied and cancelled.";
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
         }
+    }
+
+    private String handleDelegateDenial(
+            String targetSid, String adminId, String adminChatId, MessageContext context) throws Exception {
+
+        log.infof("[DELEGATE-DENY] admin=%s denying session=%s", adminId, targetSid);
+
+        String agentRole = AgentRoleEnum.COORDINATOR.toScopedName();
+
+        // Verify session is actually awaiting approval
+        AgentCheckpoint cp = statefulAgentStore.load(targetSid, agentRole)
+            .filter(c -> c.getStatus() == CheckpointStatus.AWAITING_APPROVAL)
+            .orElse(null);
+
+        if (cp == null) {
+            return "❌ Target session not found or not awaiting approval.";
+        }
+
+        // Auto-deny all tools in batch if parallel (§7.21, §7.33)
+        if (cp.hasBatchToolDecisions()) {
+            autoDenyAllPending(targetSid, agentRole);
+        }
+
+        // Trigger resume into the admin's chat context §7.33
+        return triggerBatchResume(targetSid, adminId, adminChatId, agentRole, context);
     }
 }

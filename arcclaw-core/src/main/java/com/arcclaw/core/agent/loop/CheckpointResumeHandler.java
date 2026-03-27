@@ -211,8 +211,34 @@ public class CheckpointResumeHandler {
             }
         }
 
+        // §7.30: Load pre-executed results and merge or resume
+        Map<String, String> preExecuted = Map.of();
+        if (checkpoint.hasPreExecutedResults()) {
+            try {
+                preExecuted = objectMapper.readValue(
+                    checkpoint.getPreExecutedResults(),
+                    new TypeReference<Map<String, String>>() {});
+            } catch (Exception e) {
+                log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load pre-executed results.", sessionId);
+            }
+        }
+
         List<ParallelToolCall> completed = new ArrayList<>();
         for (ParallelToolCall call : calls) {
+            // §7.30: Use pre-stored result if available — never re-execute
+            if (preExecuted.containsKey(call.toolName())) {
+                try {
+                    ToolResponse stored = objectMapper.readValue(
+                        preExecuted.get(call.toolName()), ToolResponse.class);
+                    completed.add(call.withResult(stored.output(), stored.success()));
+                    continue;
+                } catch (Exception e) {
+                    log.warnf("[PRE-EXEC-RESTORE] session=%s could not restore result for %s, re-invoking",
+                        sessionId, call.toolName());
+                    // fall through to normal execution if restore failed
+                }
+            }
+
             String decision = decisions.getOrDefault(
                 call.toolName(), AgentSentinels.TOOL_DECISION_PENDING);
 

@@ -303,6 +303,10 @@ arcclaw:
     rate-limit:
       requests-per-minute: 20
 
+  hitl:
+    pre-executable-tools: ""   # (§75-A1) comma-separated tool names
+    delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs
+
   mcp:
     exposed-tools:
       - github

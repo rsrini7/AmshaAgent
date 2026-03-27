@@ -150,8 +150,8 @@ class ChannelCommandParseTest {
 
     @Test
     void controlCommandsShouldBeIdentified() {
-        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty()).isControlCommand());
-        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
         assertTrue(new ChannelCommand.Halt().isControlCommand());
         assertTrue(new ChannelCommand.Reset().isControlCommand());
 
@@ -173,5 +173,26 @@ class ChannelCommandParseTest {
         var cmd = ChannelCommand.parse("/cron delete");
         assertInstanceOf(ChannelCommand.DeleteCron.class, cmd);
         assertTrue(((ChannelCommand.DeleteCron) cmd).cronId().isEmpty());
+    }
+
+    @Test
+    void parseApproveWithSessionId() {
+        ChannelCommand cmd = ChannelCommand.parse("/approve 12345-1711234567890");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertEquals(Optional.of("12345-1711234567890"), a.targetSessionId());
+        assertTrue(a.cronId().isEmpty());
+    }
+
+    @Test
+    void parseApproveWithSessionIdAndTool() {
+        ChannelCommand cmd = ChannelCommand.parse("/approve 12345-1711234567890 github");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertEquals(Optional.of("12345-1711234567890"), a.targetSessionId());
+        // Since it contains digits and a hyphen, it does NOT match parseCronId anymore §75-B2
+        assertTrue(a.cronId().isEmpty()); 
+        // Parser only captures the first argument as targetSessionId, github is in 'rest' of arg
+        assertTrue(a.toolName().isEmpty()); 
     }
 }
