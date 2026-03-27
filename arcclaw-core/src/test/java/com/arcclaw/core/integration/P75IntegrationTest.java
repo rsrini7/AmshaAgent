@@ -9,16 +9,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.reflex.DelegateApprovalGuard;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.PreExecutionFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Integration-style tests for Phase 75: Pre-execution and Delegation.

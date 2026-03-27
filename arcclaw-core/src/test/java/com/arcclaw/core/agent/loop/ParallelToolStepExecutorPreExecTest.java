@@ -14,11 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -28,8 +24,11 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.enterprise.inject.Instance;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ParallelToolStepExecutorPreExecTest {

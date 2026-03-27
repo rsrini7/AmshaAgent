@@ -6,10 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.security.AutonomyLevel;
+import org.junit.jupiter.api.Test;
 
 class PreExecutionFilterTest {
 
