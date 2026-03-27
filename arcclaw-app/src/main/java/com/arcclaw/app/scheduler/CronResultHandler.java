@@ -1,6 +1,7 @@
 package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -143,7 +144,7 @@ public class CronResultHandler {
     }
 
     private void fireCompletionEvent(AgentCronEntity job, String executionId, String answer, AgentResult.FailureCategory category) {
-        java.util.Optional<ChannelType> resolvedType = ChannelType.fromString(job.channelType);
+        Optional<ChannelType> resolvedType = ChannelType.fromString(job.channelType);
         if (resolvedType.isEmpty()) {
             log.warnf("CRON-NOTIFY cronId=%d has null/unknown channelType='%s'. " +
                        "Cannot notify — see Architecture_Invariants.md §1.4. " +
