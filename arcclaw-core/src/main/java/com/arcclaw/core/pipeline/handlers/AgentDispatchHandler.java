@@ -101,6 +101,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 resolvedChatId,
                 finalLevel,
                 role,
+                context.getChannelType(),
                 () -> agentLoop.run(
                     sessionId,
                     role,
