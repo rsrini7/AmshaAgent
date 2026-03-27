@@ -1,3 +1,100 @@
+All critical fixes from the previous review landed correctly. Three issues remain before P73 is clean.
+
+***
+
+## Critical — `ParseMode = "MarkdownV2"` Breaks the Keyboard Message
+
+`sendWithKeyboard()` sets `msg.setParseMode("MarkdownV2")` on the `OutgoingTextMessage`, but the text it carries comes from `AgentResultFormatter.formatHitlMessage()` — which is **not** escaped for MarkdownV2. Telegram's MarkdownV2 requires that `(`, `)`, `.`, `!`, `-` be backslash-escaped. The HITL text contains all of these:
+
+```
+"**All at once:** `approve` (approve all) or `deny` (deny all)"
+                              ↑               ↑
+                         must be \(       must be \)
+```
+
+Telegram returns HTTP 400 for any unescaped special character in MarkdownV2. The result: `producerTemplate.sendBodyAndHeader(...)` throws, the entire HITL keyboard message is dropped, and the user sees nothing.
+
+**Fix — one line removal:**
+```java
+// TelegramChannelSender.sendWithKeyboard()
+OutgoingTextMessage msg = new OutgoingTextMessage();
+msg.setText(text);
+// REMOVE: msg.setParseMode("MarkdownV2");  ← causes 400 on unescaped ( ) . chars
+msg.setReplyMarkup(markup);
+producerTemplate.sendBodyAndHeader("telegram:bots", msg,
+    TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+```
+
+Without a parse mode the text renders as plain text (keyboard buttons are unaffected by parse mode). If MarkdownV2 rendering is wanted later, the text must first go through `TelegramMarkdownV2Renderer.escape()` before being set — track that as a P74 item.
+
+***
+
+## Medium — `answerCallback()` is Dead Code
+
+The method is a no-op — the only meaningful line is commented out. Yet `botToken` and `producerTemplate` are injected solely for that one commented line, which the compiler will warn about. The spinner stays permanently on every button press.
+
+Either implement it now using the JDK's built-in HTTP client (no new Maven dependency):
+
+```java
+private void answerCallback(String callbackQueryId) {
+    try {
+        String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
+        java.net.http.HttpClient.newHttpClient().sendAsync(
+            java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(
+                    "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                .header("Content-Type", "application/json")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            java.net.http.HttpResponse.BodyHandlers.discarding());
+    } catch (Exception e) {
+        log.warnf("Failed to answer callback %s: %s", callbackQueryId, e.getMessage());
+    }
+}
+```
+
+Or, if deferring to P74, remove the injected fields (`producerTemplate` is already injected in `TelegramChannelSender` where it belongs; injecting it here just for a commented call adds noise) and add a `// P74: answerCallbackQuery — spinner remains until P74` comment.
+
+***
+
+## Low — `\\n` Still Displays as Literal `\n` Text
+
+The observer message change went from `\\\\n` → `\\n`, which displays as `\n` (backslash-n) in Telegram instead of `\\n` (double backslash-n). It is an improvement but not a proper line break. The correct Java escape for a newline character is `\n` (single backslash in source):
+
+```java
+// CURRENT — Java source \\n → string value \n → Telegram shows: \n (text)
+"The pending tool execution was automatically cancelled.\\n" +
+
+// CORRECT — Java source \n → string value = newline char → Telegram shows: line break
+"The pending tool execution was automatically cancelled.\n" +
+```
+
+Same issue remains in `ApproveReflex` and `DenyReflex` "Still waiting for" messages from P72 (out of scope here but should be batched in the same commit).
+
+***
+
+## What's Correct in This Diff
+
+| Component | Status |
+|---|---|
+| `BatchHitlKeyboardBuilder` — Camel model objects, no JSON round-trip | ✅ |
+| `TelegramChannelSender.sendWithKeyboard()` — `OutgoingTextMessage` + `setReplyMarkup()` | ✅ (modulo ParseMode above) |
+| `TelegramChannelSender.editMessage()` — properly stubbed, no spurious messages | ✅ |
+| `TelegramChannelSender.sendRawToChatId()` — back to `private` | ✅ |
+| `TelegramCallbackHandler.getSessionId()` — exhaustive sealed switch | ✅ |
+| `TelegramCallbackHandler` `MessageContext` — non-null `ChannelMessage` | ✅ |
+| `TelegramCallbackHandler.answerCallback()` — called in both happy path and catch | ✅ (structure correct, implementation empty) |
+| `TelegramChannelRoute` — `.end()` added | ✅ |
+| `TelegramStaleApprovalObserver` — `hitlTimeoutHours` from config, proper `ChannelUser` | ✅ |
+| `CheckpointResumeHandler` — `hasBatchToolDecisions()` null-guard | ✅ |
+| `SessionReaper` — entity reload before `em.merge()` | ✅ |
+| `StatefulAgentStoreImpl.findStaleAwaitingApproval()` — JPQL param binding | ✅ |
+
+
+----
+
+****already done****
+
 Good news first: `ReplyNode.ApprovalPrompt` was already in the sealed hierarchy from P68, so P73 compiles cleanly.  The `AgentResultFormatter` prefix fix (`"parallel:"` vs `"__parallel__:"`) was correctly applied in the P73 diff as well.  Here is the full end-to-end review: 
 
 ***

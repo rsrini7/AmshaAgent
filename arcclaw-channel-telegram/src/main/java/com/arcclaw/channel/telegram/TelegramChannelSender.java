@@ -103,7 +103,8 @@ public class TelegramChannelSender implements ChannelSender {
 
         OutgoingTextMessage msg = new OutgoingTextMessage();
         msg.setText(text);
-        msg.setParseMode("MarkdownV2");
+        // P74: add MarkdownV2 only after text goes through TelegramMarkdownV2Renderer.escape()
+        // Without parse mode the text renders as plain text; keyboard buttons are unaffected.
         msg.setReplyMarkup(markup);
 
         producerTemplate.sendBodyAndHeader("telegram:bots", msg,

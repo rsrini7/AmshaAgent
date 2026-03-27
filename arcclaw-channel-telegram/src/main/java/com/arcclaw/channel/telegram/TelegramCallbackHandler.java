@@ -22,7 +22,6 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.apache.camel.Exchange;
-import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.jboss.logging.Logger;
@@ -43,12 +42,9 @@ public class TelegramCallbackHandler {
 
     @Inject
     ObjectMapper objectMapper;
- 
-     @Inject
-     ProducerTemplate producerTemplate;
- 
-     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
-     String botToken;
+
+    @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
+    String botToken;
 
     public void handleCallback(Exchange exchange) {
         IncomingCallbackQuery query = exchange.getIn().getBody(IncomingCallbackQuery.class);
@@ -56,7 +52,7 @@ public class TelegramCallbackHandler {
 
         String data = query.getData();
         if (data == null) return;
-        
+
         String chatId = String.valueOf(query.getMessage().getChat().getId());
         String userId = String.valueOf(query.getFrom().getId());
         int messageId = Math.toIntExact(query.getMessage().getMessageId());
@@ -75,44 +71,46 @@ public class TelegramCallbackHandler {
         ChannelMessage.TelegramMessage message = new ChannelMessage.TelegramMessage(user, commandText, chatId, Instant.now());
         MessageContext ctx = new MessageContext(chatId, user, message);
         String sessionId = getSessionId(event);
- 
-         for (AgentReflex reflex : reflexes) {
-             if (reflex.matches(commandText)) {
-                 try {
-                     ReflexResult result = reflex.execute(sessionId, userId, chatId, commandText, ctx);
- 
-                     if (result.commandResponse().isPresent() && !result.commandResponse().get().isBlank()) {
-                         sender.sendRaw(ctx.getUser(), result.commandResponse().get());
-                     }
- 
-                     updateOrRemoveKeyboard(sessionId, chatId, messageId);
-                     answerCallback(query.getId());
-                     return;
-                 } catch (Exception e) {
-                     log.error("Reflex execution failed from callback", e);
-                     sender.sendRaw(ctx.getUser(), "❌ Failed to process callback");
-                     answerCallback(query.getId());
-                     return;
-                 }
-             }
-         }
-         answerCallback(query.getId());
+
+        for (AgentReflex reflex : reflexes) {
+            if (reflex.matches(commandText)) {
+                try {
+                    ReflexResult result = reflex.execute(sessionId, userId, chatId, commandText, ctx);
+
+                    if (result.commandResponse().isPresent() && !result.commandResponse().get().isBlank()) {
+                        sender.sendRaw(ctx.getUser(), result.commandResponse().get());
+                    }
+
+                    updateOrRemoveKeyboard(sessionId, chatId, messageId);
+                    answerCallback(query.getId());
+                    return;
+                } catch (Exception e) {
+                    log.error("Reflex execution failed from callback", e);
+                    sender.sendRaw(ctx.getUser(), "❌ Failed to process callback");
+                    answerCallback(query.getId());
+                    return;
+                }
+            }
+        }
+        answerCallback(query.getId());
     }
- 
-     private void answerCallback(String callbackQueryId) {
-         try {
-             // camel-telegram does not wrap answerCallbackQuery natively.
-             // Accessing the bot API directly via a generic producer call if netty-http is available
-             // Or we just ignore the spinner if we can't easily send it without adding dependencies.
-             // Given the instructions, we'll try to keep it simple.
-             log.debugf("Answering callback %s", callbackQueryId);
-             // In a real environment, we'd use a RestClient or similar. 
-             // producerTemplate.sendBody("netty-http:https://api.telegram.org/bot" + botToken + "/answerCallbackQuery?callback_query_id=" + callbackQueryId, "");
-         } catch (Exception e) {
-             log.warnf("Failed to answer callback %s: %s", callbackQueryId, e.getMessage());
-         }
-     }
-    
+
+    private void answerCallback(String callbackQueryId) {
+        try {
+            log.debugf("Answering callback %s", callbackQueryId);
+            String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
+            java.net.http.HttpClient.newHttpClient().sendAsync(
+                java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(
+                        "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+                    .build(),
+                java.net.http.HttpResponse.BodyHandlers.discarding());
+        } catch (Exception e) {
+            log.warnf("Failed to answer callback %s: %s", callbackQueryId, e.getMessage());
+        }
+    }
 
     private void updateOrRemoveKeyboard(String sessionId, String chatId, int messageId) {
         String activeRole = null;
