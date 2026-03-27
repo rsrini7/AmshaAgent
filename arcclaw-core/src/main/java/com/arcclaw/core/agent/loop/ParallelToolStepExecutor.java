@@ -49,7 +49,7 @@ public class ParallelToolStepExecutor {
     @Inject Instance<AgentObserver> observers;
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
-    @Inject ChatMemoryWriter chatMemoryWriter;
+
 
     @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60")
     long toolTimeoutSeconds;
@@ -291,19 +291,10 @@ public class ParallelToolStepExecutor {
 
         history.add(completedBatchStep);
 
-        // §7.14: Persist updated history to ChatMemoryStore (SQLite).
-        // ChatHistoryAssembler uses in-memory history but SQLite must
-        // stay consistent for session recovery after restarts.
-        try {
-            chatMemoryWriter.write(
-                context.sessionId(), history, context.goal());
-        } catch (Exception e) {
-            // Non-fatal: in-memory history is correct. Log and continue.
-            log.warnf("[PARALLEL] session=%s: ChatMemoryWriter.write() failed " +
-                      "after batch — history is correct in memory but not " +
-                      "persisted to SQLite. Cause: %s",
-                      context.sessionId(), e.getMessage());
-        }
+        // §7.14 (corrected): ReasoningStep history is in-memory during execution.
+        // AgentLoop.runWithRole() persists to SQLite via agentStore.save() at
+        // session end or HITL pause. ChatMemoryWriter handles user/AI messages
+        // only — it does NOT manage tool-step history. No write needed here.
 
         for (ParallelToolCall c : completed) {
             ReasoningStep toolStep = new ReasoningStep(

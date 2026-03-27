@@ -842,3 +842,180 @@ KNOWN PHASE 71 LIMITATIONS (Tracked for Phase 72+)
 | D3 Invariants final | `Architecture_Invariants.md` | Documentation | 🟢 |
 
 Zero new Maven dependencies. Zero DB migrations. The `io.opentelemetry.context.Context` import is already on the classpath via `quarkus-opentelemetry`. 
+
+---
+
+Now I have the complete picture. The P68 source reveals the exact truth about `ChatMemoryWriter`. Here's the precise next step for P71:
+
+***
+
+## P71 — One Remaining Issue: The `ChatMemoryWriter.write()` Stub
+
+Everything else in the P71 diff is correct. The **only issue is the stub** — and it's not just incomplete, it's architecturally wrong. Here's why:
+
+### Root Cause: `ChatMemoryWriter` is NOT a history persistence mechanism
+
+From the P68 source, `ChatMemoryWriter` has exactly three methods — **none of which handle `ReasoningStep` history**: 
+
+| Method | What it does |
+|---|---|
+| `saveGoal(sessionId, goal)` | Appends `UserMessage` to `ChatMemoryStore` |
+| `saveAnswer(sessionId, answer)` | Appends `AiMessage` to `ChatMemoryStore` |
+| `clearMemory(sessionId)` | Deletes all messages for a session |
+
+`ChatMemoryStore` only stores **user goal + AI answer pairs** (Telegram conversation layer). Intermediate `ReasoningStep` history (tools, observations) is in-memory during a run and persisted to SQLite by `AgentLoop.runWithRole()` via `agentStore.save()` **at session end/checkpoint** — never after individual steps. `ToolStepHandler` never calls `ChatMemoryWriter` either. The developer's own comment confirmed it: *"ToolStepHandler doesn't actually call this either."* 
+
+***
+
+## P71 Completion Prompt
+
+```
+═══════════════════════════════════════════════════════════════════════════
+PHASE 71 COMPLETION — Remove ChatMemoryWriter Stub
+═══════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+  Phase 71-A4 added a stub ChatMemoryWriter.write() method and wired it
+  into ParallelToolStepExecutor.buildCompletedBatchDecision().
+  The stub is a no-op and architecturally incorrect.
+
+  ChatMemoryWriter only manages user goal / AI answer messages in the
+  ChatMemoryStore (the Telegram conversation layer). It does NOT handle
+  ReasoningStep history. Intermediate tool steps are NEVER written to
+  ChatMemoryStore — not by ToolStepHandler, not by the runner, nowhere.
+
+  ReasoningStep history persistence works as follows:
+    - In-memory history (List<ReasoningStep>) is the source of truth
+      for the duration of one AgentLoop.runWithRole() execution.
+    - AgentLoop.runWithRole() persists history to SQLite via
+      agentStore.save(sessionId, agentRole, result.steps) at:
+        • session end (Finished / LoopExceeded / Failed)
+        • HITL pause (AwaitingApproval checkpoint)
+    - ChatHistoryAssembler.assemble() reads the in-memory history on
+      each LLM call — it does NOT need SQLite to be up-to-date mid-run.
+
+  The parallel batch completedBatchStep is already added to the in-memory
+  history by buildCompletedBatchDecision() (history.add(completedBatchStep)).
+  The next LLM call in the runner loop will see it. AgentLoop will persist
+  it at session end. No intra-step write is needed or correct.
+
+═══════════════════════════════════════════════════════════════════════════
+STEP 1 — Remove stub from ChatMemoryWriter
+═══════════════════════════════════════════════════════════════════════════
+
+File: arcclaw-core/.../loop/ChatMemoryWriter.java
+
+REMOVE the entire write() method that was added in Phase 71:
+
+  // DELETE this entire block:
+  /**
+   * Persists updated history to ChatMemoryStore.
+   * Required by Phase 71 parallel batch completion.
+   */
+  public void write(String sessionId,
+                    List<com.arcclaw.core.agent.reasoning.ReasoningStep> history,
+                    String goal) {
+      // Stub implementation for compilation...
+  }
+
+ChatMemoryWriter after this change has exactly these three methods:
+  - saveGoal(String sessionId, String goal)
+  - saveAnswer(String sessionId, String answer)
+  - clearMemory(String sessionId)
+
+═══════════════════════════════════════════════════════════════════════════
+STEP 2 — Remove ChatMemoryWriter from ParallelToolStepExecutor
+═══════════════════════════════════════════════════════════════════════════
+
+File: arcclaw-core/.../loop/ParallelToolStepExecutor.java
+
+2a. REMOVE the @Inject field:
+  // DELETE:
+  @Inject ChatMemoryWriter chatMemoryWriter;
+
+2b. REMOVE the chatMemoryWriter.write() call from
+    buildCompletedBatchDecision():
+
+  // DELETE this entire try-catch block:
+  try {
+      chatMemoryWriter.write(
+          context.sessionId(), history, context.goal());
+  } catch (Exception e) {
+      log.warnf("[PARALLEL] session=%s: ChatMemoryWriter.write() failed ...",
+                context.sessionId(), e.getMessage());
+  }
+
+  // REPLACE with this comment explaining why no write is needed:
+  // §7.14 (corrected): ReasoningStep history is in-memory during execution.
+  // AgentLoop.runWithRole() persists to SQLite via agentStore.save() at
+  // session end or HITL pause. ChatMemoryWriter handles user/AI messages
+  // only — it does NOT manage tool-step history. No write needed here.
+
+═══════════════════════════════════════════════════════════════════════════
+STEP 3 — Correct §7.14 in Architecture_Invariants.md
+═══════════════════════════════════════════════════════════════════════════
+
+File: Architecture_Invariants.md
+
+REPLACE the current §7.14:
+
+  OLD:
+    7.14 MUST: ChatMemoryWriter.write() MUST be called after every parallel
+         batch execution completes (post-fold, pre-return). This keeps
+         ChatMemoryStore (SQLite persistence) consistent with the in-memory
+         ReasoningStep history list used by ChatHistoryAssembler.
+
+  NEW:
+    7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
+         during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
+         from in-memory history on each LLM call — SQLite does not need to
+         be current mid-run. AgentLoop persists history to SQLite via
+         agentStore.save() at session end (Finished/Failed/LoopExceeded) or
+         HITL pause (AwaitingApproval checkpoint). ChatMemoryWriter manages
+         user goal/AI answer messages in ChatMemoryStore only — it MUST NOT
+         be used for ReasoningStep history persistence.
+
+═══════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════
+
+After the three steps above:
+
+  mvn clean verify -pl arcclaw-core
+
+Expected: All tests pass. No ChatMemoryWriter.write() references remain
+in ParallelToolStepExecutor. No stub method in ChatMemoryWriter.
+
+Confirm the final ParallelToolStepExecutor @Inject fields are:
+  @Inject ObjectMapper objectMapper;
+  @Inject ToolInvocationGuard guard;
+  @Inject ToolInvoker toolInvoker;
+  @Inject ApprovalCheckpointManager checkpointManager;
+  @Inject ToolObservationSanitizer observationSanitizer;
+  @Inject Instance<AgentObserver> observers;
+  @Inject GovernanceStrategy governanceLayer;
+  @Inject RateLimitTracker rateLimitTracker;
+  // chatMemoryWriter is gone
+
+Phase 71 is complete after this change.
+```
+
+***
+
+## P71 Final Status
+
+| Component | Status |
+|---|---|
+| A1 ExecutorService close | ✅ Correct |
+| A2 OTel context propagation | ✅ Correct (`Scope _` pattern, JDK 25) |
+| A3 Remove `synchronized(history)` | ✅ Both sites cleaned |
+| A4 ChatMemoryWriter after batch | ❌ **Stub is a no-op — remove entirely** |
+| B1 Partial dedup | ✅ Pass 1/2 + `buildCompletedBatchDecision()` |
+| B2 Per-tool timeout | ✅ `TimeoutException` + `@ConfigProperty` |
+| C1 Metrics `PARALLEL_SENTINEL` guard | ✅ Correct |
+| C2 MDC keys in `finally` | ✅ Correct |
+| D1 Static `PARAMS_MAPPER` | ✅ Correct |
+| D2 `channelType()` audit + §1.5 | ✅ Correct |
+| D3 §7.12–§7.18 invariants | ⚠️ §7.14 needs correction per above |
+
+Three files changed, 3 additions, ~15 deletions. Clean finish. 

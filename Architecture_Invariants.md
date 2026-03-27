@@ -473,10 +473,14 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
      propagates WorkspaceScoped session context (ScopedValue) only — it
      does NOT propagate OTel ThreadLocal spans.
 
-7.14 MUST: ChatMemoryWriter.write() MUST be called after every parallel
-     batch execution completes (post-fold, pre-return). This keeps
-     ChatMemoryStore (SQLite persistence) consistent with the in-memory
-     ReasoningStep history list used by ChatHistoryAssembler.
+7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
+     during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
+     from in-memory history on each LLM call — SQLite does not need to
+     be current mid-run. AgentLoop persists history to SQLite via
+     agentStore.save() at session end (Finished/Failed/LoopExceeded) or
+     HITL pause (AwaitingApproval checkpoint). ChatMemoryWriter manages
+     user goal/AI answer messages in ChatMemoryStore only — it MUST NOT
+     be used for ReasoningStep history persistence.
 
 7.15 MUST NOT: A deduplicated tool in a parallel batch MUST NOT cause
      its peers to be skipped. The dedup tool receives its cached
@@ -498,4 +502,4 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 7.18 INVARIANT: ReasoningStep history list is mutated EXACTLY ONCE
      per parallel batch execution — inside buildCompletedBatchDecision().
      Do NOT add intermediate steps for dedup results or partial
-     executions. The single batch step encodes ALL N results.
+     executions. The single batch step encodes ALL N results.
