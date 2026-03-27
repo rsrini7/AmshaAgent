@@ -5019,3 +5019,31 @@ Enable the agent loop to execute multiple tool calls issued by the LLM in a sing
 - ✅ **CheckpointResumeHandlerTest**: Updated constructor to include `ObjectMapper` — passes.
 - ✅ **AgentCheckpoint**: `isParallelBatch()` and `parallelToolNames()` compile correctly.
 - ✅ **ReasoningStepParser**: All code paths return a `ReasoningStep` (control-flow fix).
+
+---
+
+# Phase 71 — Parallel Execution Hardening ✅
+
+Harden the new parallel execution engine (Phase 70) for production compliance, resolving resource leaks, context propagation gaps, and deduplication logic.
+
+## Completed Changes
+
+### 1. Resource & Context Management 
+- **Thread Pool Leaks**: Applied `try-with-resources` array closure to the `ExecutorService` returned by `WorkspaceExecutors.newVirtualThreadPerTaskExecutor()`.
+- **OTel Propagation**: Wrapped execution tasks in `otelContext.makeCurrent()` with a suppressed `var _` warning to propagate the trace context reliably across virtual thread boundaries.
+
+### 2. Validation & Flow Control
+- **Partial Deduplication**: Implemented a two-pass mechanism in `ParallelToolStepExecutor` where duplicated tools are safely skipped via cache (`observation = "__DUPLICATE_SUPPRESSED__"`), preserving parallel execution of unique tools.
+- **Micro-Timeouts**: Enforced `future.get(timeout, unit)` based on `arcclaw.parallel.tool-timeout-seconds` (defaults to 60s) to preclude infinite blocks on rogue tool APIs. Timed out steps yield a degraded failure observation, allowing the rest of the batch to finalize.
+
+### 3. Persistence & State Consistency
+- **Synchronous Write**: Guaranteed `ChatMemoryWriter.write()` executes aggressively after parallel batch conclusion to prevent memory rollback in catastrophic failure scenarios.
+- **Resiliency**: Lifted the superfluous `synchronized(history)` from `CheckpointResumeHandler`, since checkpoint restoration is guaranteed single-threaded.
+
+### 4. Metrics & Diagnostics
+- **MDC Embellishment**: Embedded `PARALLEL_BATCH_SIZE` and `PARALLEL_TOOLS` into the underlying SLF4J MDC before routing traces to OTel in `ParallelToolStepExecutor`.
+- **Observer Filtering**: Masked `PARALLEL_SENTINEL` iterations in `MetricsAgentObserver.onStepCompleted()` to preclude false-positive tracking statistics.
+- **Memory Hotspots**: Extracted `ObjectMapper` inside `ParallelToolCall` to a thread-safe `static final ObjectMapper` to eradicate loop-bound object creation overheads.
+
+## Verification
+- ✅ Tests maintained at `884/884` passing. No regression in memory models or tracing.
