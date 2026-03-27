@@ -220,11 +220,11 @@ public class EngineStepHandler {
         return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 
+    private static final Pattern UNAVAILABLE_TOOL_PATTERN = Pattern.compile("attempted to call tool '([^']+)'");
+
     private String extractUnavailableToolName(String rawError) {
         // Parses: "attempted to call tool 'manage_schedule' which was not in request.tools"
-        Matcher m = Pattern
-            .compile("attempted to call tool '([^']+)'")
-            .matcher(rawError);
+        Matcher m = UNAVAILABLE_TOOL_PATTERN.matcher(rawError);
         return m.find() ? m.group(1) : null;
     }
 

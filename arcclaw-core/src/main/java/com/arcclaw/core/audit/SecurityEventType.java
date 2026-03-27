@@ -7,6 +7,7 @@ public enum SecurityEventType {
     LOOP_BUDGET_EXCEEDED,
     LOOP_MAX_ITERATIONS,
     LOOP_AWAITING_APPROVAL,
+    INVALID_ROLE_FALLBACK,
 
     // Tool layer
     TOOL_INVOKED,          // every ToolRegistry.invokeTool() call
