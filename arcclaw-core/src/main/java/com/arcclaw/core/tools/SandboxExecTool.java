@@ -19,6 +19,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
+import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.sandbox.ToolExecutionException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
@@ -38,6 +39,14 @@ public class SandboxExecTool implements AgentTool {
     // receives an empty string — this sentinel prevents that.
     private static final String NO_OUTPUT_SENTINEL = "[execution produced no output]";
 
+    // ── Single source of truth for the infra-failure user message.
+    // Never copy-paste this string — always reference this constant.
+    // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
+    private static final String SANDBOX_OFFLINE_MSG =
+        "SANDBOX_OFFLINE: The sandbox execution environment is currently unavailable. " +
+        "The code was NOT executed. You MUST NOT answer from memory or training data. " +
+        "Tell the user the sandbox is offline and they should try again later.";
+
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node", "java", "go");
 
@@ -56,11 +65,11 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
     Optional<String> configuredPythonExe;
 
-    @Override public String name() { return ToolCapability.SANDBOX_EXEC.toolName(); }
-    @Override public String description() { return ToolCapability.SANDBOX_EXEC.description(); }
+    @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
+    @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
     @Override public boolean requiresSandbox() { return false; }
-    public ToolCapability capability() { return ToolCapability.SANDBOX_EXEC; }
+    public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
@@ -147,11 +156,14 @@ public class SandboxExecTool implements AgentTool {
             for (Object arg : extraArgs) commandList.add(arg.toString());
         }
 
-        String output = isolationExecutor.executeSandboxed(
+        SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, commandList, secrets);
-        // ── Null/empty guard: LangChain4J throws "text cannot be null or blank"
-        // if ToolExecutionResultMessage receives empty text.
-        return ToolResponse.success(truncate(output));
+        if (result.isInfraFailure()) {
+            log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s",
+                    lang, sessionId, result.reason());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        return ToolResponse.success(truncate(result.output()));
     }
 
     // ── Java: write ClassName.java → javac → java -cp ────────────────────────
@@ -164,19 +176,32 @@ public class SandboxExecTool implements AgentTool {
         Path javaFile = workspaceRoot.resolve(className + ".java");
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
+        // Phase 1 — compile
         List<String> compileCmd = List.of("javac", javaFile.toString());
         try {
-            isolationExecutor.executeSandboxed(sessionId, workspaceRoot, compileCmd, secrets);
+            SandboxResult compileResult = isolationExecutor.executeSandboxed(
+                    sessionId, workspaceRoot, compileCmd, secrets);
+            if (compileResult.isInfraFailure()) {
+                log.errorf("[SandboxExecTool] Infra failure (java/compile) session=%s: %s",
+                        sessionId, compileResult.reason());
+                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            }
         } catch (ToolExecutionException e) {
             return ToolResponse.failure(e.exitCode(),
                     nonBlank("Java compilation failed:\n" + e.getMessage()));
         }
 
+        // Phase 2 — run
         String javaExe = resolveJavaExecutable();
         List<String> runCmd = List.of(javaExe, "-cp", workspaceRoot.toString(), className);
-        String output = isolationExecutor.executeSandboxed(
+        SandboxResult runResult = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        return ToolResponse.success(truncate(output));
+        if (runResult.isInfraFailure()) {
+            log.errorf("[SandboxExecTool] Infra failure (java/run) session=%s: %s",
+                    sessionId, runResult.reason());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        return ToolResponse.success(truncate(runResult.output()));
     }
 
     // ── Go: write main.go → go run ────────────────────────────────────────────
@@ -189,9 +214,14 @@ public class SandboxExecTool implements AgentTool {
         Files.writeString(goFile, code, StandardCharsets.UTF_8);
 
         List<String> runCmd = List.of("go", "run", goFile.toString());
-        String output = isolationExecutor.executeSandboxed(
+        SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        return ToolResponse.success(truncate(output));
+        if (result.isInfraFailure()) {
+            log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s",
+                    sessionId, result.reason());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        return ToolResponse.success(truncate(result.output()));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -249,15 +279,15 @@ public class SandboxExecTool implements AgentTool {
      */
     private String truncate(String output) {
         if (output == null || output.isBlank()) {
-            return NO_OUTPUT_SENTINEL; // Use the sentinel for blank output
-        } 
+            return NO_OUTPUT_SENTINEL;
+        }
         if (output.length() <= MAX_OUTPUT_CHARS) {
             return output;
         }
         // Codepoint-safe truncation to prevent splitting UTF-16 surrogate pairs
-        int endIndex = output.offsetByCodePoints(0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
-        
-        return output.substring(0, endIndex) + TRUNCATION_SUFFIX; 
+        int endIndex = output.offsetByCodePoints(
+                0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
+        return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
     }
 
     /**

@@ -161,7 +161,7 @@ class AgentStateMachineRunnerTest {
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
-                .thenReturn(new ToolResponse(0, "output", true));
+                .thenReturn(new ToolResponse(0, "output", true, false));
 
 
         AgentExecutionContext ctx = new AgentExecutionContext(
@@ -261,7 +261,7 @@ class AgentStateMachineRunnerTest {
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
-                .thenReturn(new ToolResponse(1, "error", false));
+                .thenReturn(new ToolResponse(1, "error", false, false));
 
 
         AgentResult result = runner.run(createCtx(), engine, List.of());
@@ -305,7 +305,7 @@ class AgentStateMachineRunnerTest {
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
-                .thenReturn(new ToolResponse(0, "Scheduled cleaning", true));
+                .thenReturn(new ToolResponse(0, "Scheduled cleaning", true, false));
 
 
         AgentResult result = runner.run(createCtx(), engine, List.of());

@@ -89,21 +89,18 @@ public class ProcessIsolationExecutor {
      * @param workspaceRoot   The workspace root directory.
      * @param command         The command to execute.
      * @param requiredSecrets Map of envVar → vaultKey for secrets to inject.
-     * @return The command output (stdout + stderr).
+     * @return SandboxResult indicating success, failure, or infra failure.
      */
-    public String executeSandboxed(
+    public SandboxResult executeSandboxed(
             String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
 
-        // arcclaw.sandbox.enabled=false overrides strategy entirely.
-        // Tools run directly on host PATH regardless of configured strategy.
-        // Set ARCCLAW_SANDBOX_ENABLED=true in .env to restore isolation.
         if (!sandboxEnabled) {
             log.debugf("Sandbox disabled — executing directly (session=%s)", sessionId);
-            return directExecutor.executeDirectly(workspaceRoot, command);
+            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, command));
         }
 
         if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
-            return directExecutor.executeDirectly(workspaceRoot, command);
+            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, command));
         }
 
         if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
@@ -113,16 +110,17 @@ public class ProcessIsolationExecutor {
                     String result = podmanExecutor.executeInContainer(
                             sessionId, workspaceRoot, command, requiredSecrets);
                     circuitBreaker.recordSuccess();
-                    return result;
+                    return SandboxResult.success(result);
                 } catch (ToolExecutionException e) {
-                    // Tool ran but failed — do NOT fall back to namespace
                     throw e;
                 } catch (Exception e) {
                     log.errorf("Podman execution failed (session=%s): %s", sessionId, e.getMessage());
                     circuitBreaker.recordFailure(stateAtCall);
+                    return SandboxResult.infraFailure(
+                            "SANDBOX_OFFLINE: Podman is unavailable — " + e.getMessage());
                 }
             }
         }
-        return namespaceExecutor.executeInNamespace(workspaceRoot, command);
+        return SandboxResult.success(namespaceExecutor.executeInNamespace(workspaceRoot, command));
     }
 }
