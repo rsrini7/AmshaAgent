@@ -425,6 +425,14 @@ if (Test-Path '.env') {
 }
 try {
     mise use --path mise.toml java@graalvm-community-25.0.2
+
+    # --- JENV BYPASS ---
+    # Resolve the exact path of the mise-managed GraalVM and force Quarkus to use it directly
+    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $env:GRAALVM_HOME = $graalPath
+    $env:JAVA_HOME = $graalPath
+    # -------------------
+
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false'
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
@@ -464,6 +472,14 @@ if (Test-Path '.env') {
 }
 try {
     mise use --path mise.toml java@graalvm-community-25.0.2
+    
+    # --- JENV BYPASS ---
+    # Resolve the exact path of the mise-managed GraalVM and force Quarkus to use it directly
+    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $env:GRAALVM_HOME = $graalPath
+    $env:JAVA_HOME = $graalPath
+    # -------------------
+
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
         '-Dquarkus.native.container-build=false' `
