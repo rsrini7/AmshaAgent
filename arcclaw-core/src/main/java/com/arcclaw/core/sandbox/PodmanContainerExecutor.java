@@ -159,15 +159,14 @@ public class PodmanContainerExecutor {
                 if (exitCode != 0) {
                     // Intercept the "Image Not Found" case
                     if (output.contains("not known") || output.contains("not found")) {
-                        log.warn("**====================================================================**");
-                        log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.", containerImage);
-                        log.warn("To use the secure Podman sandbox, please build the runner image:");
-                        log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner . ");
-                        log.warn("Falling back to host execution...");
-                        log.warn("**====================================================================**");
-                        
-                        // Throw IOException to trigger the Graceful Degradation circuit breaker
-                        throw new IOException("Missing sandbox image: " + containerImage);
+                        log.warnf("**====================================================================**");
+                        log.warnf("[SANDBOX-WARNING] Sandbox image 'arcclaw-tool-runner:latest' is missing from local storage.");
+                        log.warnf("To use the secure Podman sandbox, please build the runner image:");
+                        log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
+                        // ── REMOVE the "Falling back to host execution" line entirely ──
+                        // There is NO fallback — throwing below. The old message was a security lie.
+                        log.warnf("**====================================================================**");
+                        throw new SandboxImageMissingException("Missing sandbox image: arcclaw-tool-runner:latest");
                     }
                     
                     // Handle other infrastructure failures (exit 125)

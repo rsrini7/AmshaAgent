@@ -1,2 +1,44 @@
-FROM alpine:latest
+# sandbox/Dockerfile.toolrunner
+# ArcClaw secure tool-runner sandbox image.
+# Build: podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
+FROM alpine:3.21
+
+# ── System base ───────────────────────────────────────────────────────────────
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    bash \
+    git
+
+# ── Go ────────────────────────────────────────────────────────────────────────
+RUN apk add --no-cache go
+
+# ── Python 3 ─────────────────────────────────────────────────────────────────
+RUN apk add --no-cache python3 py3-pip
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+RUN apk add --no-cache nodejs npm
+
+# ── Java (OpenJDK 21) ─────────────────────────────────────────────────────────
+RUN apk add --no-cache openjdk21-jdk
+
+# ── GitHub CLI ────────────────────────────────────────────────────────────────
 RUN apk add --no-cache github-cli
+
+# ── Security hardening ────────────────────────────────────────────────────────
+# Run as a non-root user — LLM-generated code must never run as root
+RUN addgroup -S sandbox && adduser -S sandbox -G sandbox
+USER sandbox
+
+# ── Workspace ─────────────────────────────────────────────────────────────────
+WORKDIR /workspace
+
+# ── Smoke-test all runtimes at build time ─────────────────────────────────────
+# Build fails fast if any runtime is broken/missing — catch it at image build,
+# not at first user execution.
+RUN go version && \
+    python3 --version && \
+    node --version && \
+    java -version && \
+    bash --version && \
+    gh --version
