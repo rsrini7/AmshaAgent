@@ -119,6 +119,7 @@ public class PodmanContainerExecutor {
                         "--pull", "never",
                         "--network=bridge",
                         "--read-only",
+                        "--tmpfs", "/tmp:rw,nosuid,size=128m",
                         "--security-opt=no-new-privileges",
                         "--cap-drop=ALL",
                         "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",

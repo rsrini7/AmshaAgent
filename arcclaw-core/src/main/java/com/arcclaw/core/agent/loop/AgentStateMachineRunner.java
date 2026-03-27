@@ -81,8 +81,6 @@ public class AgentStateMachineRunner {
             try (Scope scope = iterSpan.makeCurrent()) {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
-                List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
-
                 StepDecision engineDecision;
                 try {
                     engineDecision = engineStepHandler.processEngineStep(
@@ -167,6 +165,8 @@ public class AgentStateMachineRunner {
                 }
                 step = validationDecision.step();
 
+                List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
+
                 StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
                         context, history, step, consecutiveFailures, skillSnapshot);
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
@@ -174,7 +174,8 @@ public class AgentStateMachineRunner {
 
             } catch (Exception e) {
                 iterSpan.recordException(e);
-                iterSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                iterSpan.setStatus(StatusCode.ERROR,
+                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 throw e;
             } finally {
                 iterSpan.end();
