@@ -17,7 +17,7 @@ class LlmProviderFactoryTest {
 
     @Inject LlmModelFactory factory;
 
-    @Inject @Any Instance<LlmProviderFactory> factories;
+    @Inject @Any Instance<RoutingChatModelProvider> factories;
 
     @Test
     void groqProviderIsDiscoveredViaSpi() {
@@ -42,7 +42,7 @@ class LlmProviderFactoryTest {
 
     @Test
     void allThreeBuiltInProviderIdsAreRegistered() {
-        var ids = factories.stream().map(LlmProviderFactory::providerId).collect(Collectors.toSet());
+        var ids = factories.stream().map(RoutingChatModelProvider::providerId).collect(Collectors.toSet());
         assertTrue(ids.contains("groq"));
         assertTrue(ids.contains("openai"));
         assertTrue(ids.contains("ollama"));

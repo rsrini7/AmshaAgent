@@ -7,7 +7,7 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
-public class OpenAiProviderFactory implements LlmProviderFactory {
+public class OpenAiProviderFactory implements AgentChatModelProvider {
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
     String apiKey;

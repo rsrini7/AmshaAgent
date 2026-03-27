@@ -6,7 +6,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 
 @ApplicationScoped
-public class OllamaLlmProviderFactory implements LlmProviderFactory {
+public class OllamaLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override public String providerId() { return "ollama"; }
     @Override public boolean requiresApiKey() { return false; }
