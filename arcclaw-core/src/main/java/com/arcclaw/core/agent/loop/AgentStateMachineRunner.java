@@ -108,9 +108,21 @@ public class AgentStateMachineRunner {
                 ReasoningStep step = engineDecision.step();
                 transientError = null;
 
-                if (ReasoningStep.FINISH.equals(step.action()))
+                // Phase 70 note: parallel batch steps return StepDecision.proceed()
+                // from ParallelToolStepExecutor. The step in the decision is the
+                // completed batch step (with all observations). History was already
+                // mutated by ParallelToolStepExecutor. The runner continues to the
+                // next LLM call normally. No structural runner change needed.
+
+                if (ReasoningStep.FINISH.equals(step.action())) {
+                    if (step.isParallelBatch()) {
+                        log.errorf("[PARALLEL] INVARIANT VIOLATION: session=%s parallel batch " +
+                                   "step reached FINISH handler — this is a bug in Phase 70.",
+                                   context.sessionId());
+                    }
                     return handleFinishAction(context.sessionId(), context.agentRole(),
                             history, step, iteration);
+                }
 
                 StepDecision validationDecision = toolStepHandler.validateTool(
                         context, history, step, consecutiveFailures);

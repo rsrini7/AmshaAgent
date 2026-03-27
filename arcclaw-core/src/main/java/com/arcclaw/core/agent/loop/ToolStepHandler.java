@@ -49,11 +49,21 @@ public class ToolStepHandler {
     @Inject ChatMemoryWriter writer;
     @Inject Instance<DynamicToolLookup> dynamicToolLookup;
     @Inject ApprovalCheckpointManager checkpointManager;
+    @Inject ParallelToolStepExecutor parallelExecutor;
 
     // ── Validation
 
     StepDecision validateTool(AgentExecutionContext context, List<ReasoningStep> history,
             ReasoningStep step, int consecutiveFailures) {
+
+        // Parallel batch — bypass single-tool validation, route to executor
+        if (step.isParallelBatch()) {
+            log.debugf("ToolStepHandler routing parallel batch to " +
+                       "ParallelToolStepExecutor for session %s", context.sessionId());
+            return StepDecision.proceed(step);
+            // Execution happens in invokeToolAndObserve()
+        }
+
         String toolName = step.action();
         if (toolRegistry.findTool(toolName).isPresent())
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
@@ -96,6 +106,11 @@ public class ToolStepHandler {
     StepDecision invokeToolAndObserve(AgentExecutionContext context,
             List<ReasoningStep> history, ReasoningStep step,
             int consecutiveFailures, List<CompiledSkillEntry> skillSnapshot) {
+
+        // Parallel batch — delegate to ParallelToolStepExecutor
+        if (step.isParallelBatch()) {
+            return parallelExecutor.execute(context, history, step, consecutiveFailures);
+        }
 
         // Phase 1 — Guard
         StepDecision guardDecision = evaluateGuard(context, history, step, skillSnapshot);

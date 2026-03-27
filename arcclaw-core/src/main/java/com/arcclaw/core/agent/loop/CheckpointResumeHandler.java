@@ -1,20 +1,26 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -24,16 +30,19 @@ public class CheckpointResumeHandler {
 
     private final StatefulAgentStore agentStore;
     private final ToolRegistry toolRegistry;
+    private final ObjectMapper objectMapper;
 
     protected CheckpointResumeHandler() {
         this.agentStore = null;
         this.toolRegistry = null;
+        this.objectMapper = null;
     }
 
     @Inject
-    public CheckpointResumeHandler(StatefulAgentStore agentStore, ToolRegistry toolRegistry) {
+    public CheckpointResumeHandler(StatefulAgentStore agentStore, ToolRegistry toolRegistry, ObjectMapper objectMapper) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -111,6 +120,11 @@ public class CheckpointResumeHandler {
                     List.copyOf(history));
         }
 
+        // NEW: Parallel batch resume (§7.4)
+        if (checkpoint.isParallelBatch()) {
+            return resumeParallelBatch(context, history, checkpoint);
+        }
+
         // 4. Normal Approval Path
         log.infof("[AgentLoop] Resuming session %s executing pending tool %s", sessionId, pendingTool);
 
@@ -157,5 +171,87 @@ public class CheckpointResumeHandler {
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(history));
         }
+    }
+
+    private AgentResult resumeParallelBatch(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            AgentCheckpoint checkpoint) {
+
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
+
+        log.infof("[PARALLEL-HITL-RESUME] session=%s resuming batch: %s",
+                  sessionId, checkpoint.parallelToolNames());
+
+        List<ParallelToolCall> calls;
+        try {
+            calls = objectMapper.readValue(
+                checkpoint.getPendingToolParametersJson(),
+                new TypeReference<List<ParallelToolCall>>() {});
+        } catch (Exception e) {
+            log.errorf("[PARALLEL-HITL-RESUME] session=%s: failed to parse batch: %s",
+                       sessionId, e.getMessage());
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            agentStore.save(checkpoint);
+            return AgentResult.failed(
+                "Failed to resume parallel tool batch — corrupt checkpoint.",
+                AgentResult.FailureCategory.SYSTEM_ERROR,
+                List.copyOf(history));
+        }
+
+        List<ParallelToolCall> completed = new ArrayList<>();
+        for (ParallelToolCall call : calls) {
+            try {
+                ToolResponse response = WorkspaceContext.runWithFullAutonomy(
+                    sessionId,
+                    WorkspaceContext.userId(),
+                    WorkspaceContext.chatId(),
+                    agentRole,
+                    () -> toolRegistry.invokeTool(
+                        call.toolName(), call.paramsAsString(), sessionId));
+                completed.add(call.withResult(response.output(), response.success()));
+            } catch (Exception e) {
+                log.warnf("[PARALLEL-HITL-RESUME] session=%s tool=%s failed: %s",
+                          sessionId, call.toolName(), e.getMessage());
+                completed.add(call.withResult(
+                    "Tool execution failed on resume: " + e.getMessage(), false));
+            }
+        }
+
+        String completedJson;
+        try {
+            completedJson = objectMapper.writeValueAsString(completed);
+        } catch (Exception e) {
+            checkpoint.setStatus(CheckpointStatus.FAILED);
+            agentStore.save(checkpoint);
+            return AgentResult.failed(
+                "Failed to serialize resumed batch results.",
+                AgentResult.FailureCategory.SYSTEM_ERROR,
+                List.copyOf(history));
+        }
+
+        String summary = completed.stream()
+            .map(c -> c.toolName() + "→" + (c.success() ? "OK" : "FAIL"))
+            .collect(Collectors.joining(", "));
+
+        ReasoningStep completedStep = new ReasoningStep(
+            "Human Approved (batch)",
+            ReasoningStep.PARALLEL_SENTINEL,
+            Map.of("batch", completedJson),
+            summary,
+            0, 0
+        );
+
+        synchronized (history) {
+            history.add(completedStep);
+        }
+
+        checkpoint.setPendingToolName(null);
+        checkpoint.setPendingToolParametersJson(null);
+        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+        agentStore.save(checkpoint);
+
+        return null; // Signal main loop to continue to next LLM call
     }
 }

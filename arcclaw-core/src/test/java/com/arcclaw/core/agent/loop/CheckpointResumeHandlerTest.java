@@ -36,6 +36,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -62,7 +63,7 @@ class CheckpointResumeHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, new ObjectMapper());
     }
 
     private MessageContext createContext(String input, boolean resume) {

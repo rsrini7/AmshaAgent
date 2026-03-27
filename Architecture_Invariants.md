@@ -405,3 +405,55 @@ Every non-app, non-deployment Maven module that contains CDI beans MUST:
 Without Jandex, `@ApplicationScoped` beans in library modules are **silently invisible**
 to the Quarkus CDI container — no error, no warning, just missing beans.
 This applies to every `arcclaw-channel-*` module added in P67 and beyond.
+
+---
+
+## §7. Parallel Tool Execution
+
+7.1 MUST: A parallel LLM turn (N tool calls in one ChatResponse) MUST
+    be represented as a single ReasoningStep in agent history using
+    action = ReasoningStep.PARALLEL_SENTINEL ("__parallel__").
+    The full batch payload is stored in actionInput under key "batch".
+
+7.2 MUST NOT: Expand parallel tool calls into N separate ReasoningStep
+    entries in history before execution. History entries MUST map
+    1:1 with LLM turns to preserve chat protocol correctness.
+
+7.3 MUST: ChatHistoryAssembler MUST reconstruct a parallel turn as:
+    ONE AiMessage(thought, [req1, req2, ..., reqN]) followed by
+    N ToolExecutionResultMessages in callId order.
+
+7.4 MUST: If ANY tool in a parallel batch requires HITL, ALL tools in
+    the batch pause atomically. Partial per-tool approval is forbidden
+    until Phase 71 defines the partial approval protocol.
+
+7.5 MUST NOT: Execute parallel tools on the calling thread.
+    Use ManagedExecutor (already injected via WorkspaceExecutors)
+    for all parallel tool invocations.
+
+7.6 MUST: All parallel tool spans MUST be siblings under the same
+    parent iteration span. Use startToolSpan() per tool call.
+
+7.7 MUST: Deduplication guard (ToolInvocationGuard) MUST check ALL
+    tools in a batch before ANY tool executes. If any call is a
+    duplicate, the entire batch is evaluated before execution begins.
+
+7.8 MUST: ParallelToolCall.callId MUST follow the pattern "call_N"
+    where N is the 0-based index in the LLM's tool call list.
+    Do NOT use UUID for callIds — LangChain4j requires stable,
+    predictable callId matching between AiMessage and
+    ToolExecutionResultMessage.
+
+7.9 MUST NOT: Modify ReasoningStep record shape in Phase 70.
+    The parallel batch is encoded in actionInput["batch"] as JSON.
+    Schema migration for a native parallel column is Phase 71+.
+
+7.10 SHOULD: Test parallel tool execution with Claude 3.5 Sonnet and
+     GPT-4o before enabling in production, as parallel tool call
+     behavior differs between providers. Groq (llama-3.x) rarely
+     issues parallel tool calls — most parallel call traffic will
+     come from Anthropic and OpenAI providers.
+
+7.11 LEGACY: Single getFirst() path in ReasoningStepParser is removed
+     in Phase 70. Do NOT add it back as a fallback without updating
+     this invariant first.

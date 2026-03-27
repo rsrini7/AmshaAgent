@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -100,6 +101,49 @@ public class ChatHistoryAssembler {
         for (int i = 0; i < history.size(); i++) {
             ReasoningStep step = history.get(i);
 
+            // NEW: Handle parallel batch step (§7.3)
+            if (step.isParallelBatch()) {
+                List<ParallelToolCall> calls = deserializeBatch(step);
+                if (calls != null && !calls.isEmpty()) {
+                    // Build N ToolExecutionRequests for ONE AiMessage
+                    List<ToolExecutionRequest> allRequests = calls.stream()
+                        .map(call -> {
+                            String argsJson;
+                            try {
+                                argsJson = objectMapper.writeValueAsString(call.params());
+                            } catch (Exception e) {
+                                argsJson = "{}";
+                            }
+                            return ToolExecutionRequest.builder()
+                                .id(call.callId())
+                                .name(call.toolName())
+                                .arguments(argsJson)
+                                .build();
+                        })
+                        .toList();
+
+                    // ONE AiMessage with ALL N tool requests (LangChain4j parallel protocol)
+                    messages.add(AiMessage.aiMessage(
+                        step.thought() != null ? step.thought() : "",
+                        allRequests));
+
+                    // N ToolExecutionResultMessages — one per callId in order
+                    for (ParallelToolCall call : calls) {
+                        String safeObs = call.observation() != null ? call.observation() : "";
+                        if (safeObs.length() > 4000) safeObs = safeObs.substring(0, 4000) + "...";
+                        messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(
+                            call.callId(), call.toolName(), safeObs));
+                    }
+                } else {
+                    // Deserialization failed — add error as plain AI message to preserve context continuity
+                    log.warnf("ChatHistoryAssembler: failed to deserialize parallel batch " +
+                              "at history index %d — adding error placeholder.", i);
+                    messages.add(AiMessage.aiMessage(
+                        "[PARALLEL-BATCH-ERROR: could not reconstruct tool calls]"));
+                }
+                continue;  // skip the single-tool path below
+            }
+
             if (step.action() != null && !step.action().equals(ReasoningStep.FINISH)) {
                 String argsJson = "{}";
                 try {
@@ -157,5 +201,22 @@ public class ChatHistoryAssembler {
         }
 
         return messages;
+    }
+
+    private List<ParallelToolCall> deserializeBatch(ReasoningStep step) {
+        try {
+            Object raw = step.actionInput() != null
+                ? step.actionInput().get("batch") : null;
+            if (raw == null) return null;
+            String json = raw instanceof String s ? s
+                : objectMapper.writeValueAsString(raw);
+            return objectMapper.readValue(json,
+                new TypeReference<
+                    List<ParallelToolCall>>() {});
+        } catch (Exception e) {
+            log.warnf("ChatHistoryAssembler.deserializeBatch failed: %s",
+                      e.getMessage());
+            return null;
+        }
     }
 }
