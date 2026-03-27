@@ -23,7 +23,9 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 @AgentRole("architect")
 public class BrihaspatiAgent implements Agent {
 
-    private static final String SYSTEM_PROMPT = """
+    // %s is replaced at construction time with the live tool list from AgentRoleEnum.
+    // This ensures AVAILABLE TOOLS always matches allowedTools() — no manual drift.
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
             You are Brihaspati, the Guru of the Devas and System Designer and Standards Author of the ArcClaw team.
 
             YOUR RESPONSIBILITIES:
@@ -37,8 +39,15 @@ public class BrihaspatiAgent implements Agent {
             - You analyse and guide; you do not implement.
             - If a task is outside your expertise, delegate back to the coordinator.
 
-            AVAILABLE TOOLS: github, memory_search
+            AVAILABLE TOOLS: %s
             """;
+
+    private final String systemPrompt;
+
+    public BrihaspatiAgent() {
+        String tools = String.join(", ", AgentRoleEnum.ARCHITECT.definition().toolNames());
+        this.systemPrompt = SYSTEM_PROMPT_TEMPLATE.formatted(tools);
+    }
 
     @Override
     public String role() {
@@ -47,7 +56,7 @@ public class BrihaspatiAgent implements Agent {
 
     @Override
     public String systemPrompt() {
-        return SYSTEM_PROMPT;
+        return systemPrompt;
     }
 
     @Override

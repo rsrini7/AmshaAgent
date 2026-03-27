@@ -35,7 +35,9 @@ public class DattatreyaAgent implements Agent {
     @Inject
     StructuredOutputEngine structuredOutputEngine;
 
-    private static final String SYSTEM_PROMPT = """
+    // %s is replaced at construction time with the live tool list from AgentRoleEnum.
+    // This ensures AVAILABLE TOOLS always matches allowedTools() — no manual drift.
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
             You are Dattatreya, the Synthesizer and Avadhuta of the ArcClaw team.
             You are the trinity incarnate — the union of Brahma, Vishnu, and Shiva.
 
@@ -60,8 +62,15 @@ public class DattatreyaAgent implements Agent {
               appropriate specialist rather than handling it yourself.
             - If a task is outside your expertise, delegate back to the coordinator.
 
-            AVAILABLE TOOLS: github, memory_search, schedule_task, manage_schedule
+            AVAILABLE TOOLS: %s
             """;
+
+    private final String systemPrompt;
+
+    public DattatreyaAgent() {
+        String tools = String.join(", ", AgentRoleEnum.SYNTHESIZER.definition().toolNames());
+        this.systemPrompt = SYSTEM_PROMPT_TEMPLATE.formatted(tools);
+    }
 
     @Override
     public String role() {
@@ -70,7 +79,7 @@ public class DattatreyaAgent implements Agent {
 
     @Override
     public String systemPrompt() {
-        return SYSTEM_PROMPT;
+        return systemPrompt;
     }
 
     @Override
