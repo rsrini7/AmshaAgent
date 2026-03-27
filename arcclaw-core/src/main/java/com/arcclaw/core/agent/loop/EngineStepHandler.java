@@ -182,7 +182,8 @@ public class EngineStepHandler {
 
         if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
             String msg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
-            log.warnf("[STATE-MACHINE] Rate limit hit session=%s: %s", sessionId, msg);
+            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s",
+                        sessionId, rootCauseChain(e));
             return StepDecision.terminal(AgentResult.failed(
                     msg, AgentResult.FailureCategory.RATE_LIMIT, List.copyOf(history)));
         }
