@@ -1,32 +1,38 @@
 # sandbox/Dockerfile.toolrunner
 # ArcClaw secure tool-runner sandbox image.
-# Build: podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
+# Build: podman build --no-cache -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
 FROM alpine:3.21
 
-# ── System base ───────────────────────────────────────────────────────────────
+# ── System base — tiny, never changes ────────────────────────────────────────
 RUN apk add --no-cache \
     ca-certificates \
+    tzdata \
     curl \
-    bash \
-    git
+    git \
+    bash
 
-# ── Go ────────────────────────────────────────────────────────────────────────
-RUN apk add --no-cache go
-
-# ── Python 3 ─────────────────────────────────────────────────────────────────
-RUN apk add --no-cache python3 py3-pip
-
-# ── Node.js ───────────────────────────────────────────────────────────────────
-RUN apk add --no-cache nodejs npm
-
-# ── Java (OpenJDK 21) ─────────────────────────────────────────────────────────
+# ── Java (OpenJDK 21) — heaviest (~200MB), changes only on JDK major bumps ───
 RUN apk add --no-cache openjdk21-jdk
 
-# ── GitHub CLI ────────────────────────────────────────────────────────────────
+# ── Go — second heaviest (~350MB), version bumps quarterly ───────────────────
+RUN apk add --no-cache go
+
+# ── Node.js (~80MB) ───────────────────────────────────────────────────────────
+RUN apk add --no-cache nodejs npm
+
+# ── Python 3 (~60MB) ──────────────────────────────────────────────────────────
+RUN apk add --no-cache python3 py3-pip
+
+# ── GitHub CLI — changes most frequently of all tooling ──────────────────────
 RUN apk add --no-cache github-cli
 
+# ── Python runtime hygiene ────────────────────────────────────────────────────
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 # ── Security hardening ────────────────────────────────────────────────────────
-# Run as a non-root user — LLM-generated code must never run as root
+# Run as a non-root user — LLM-generated code must never run as root.
+# Must come AFTER all apk installs (root required to install packages).
 RUN addgroup -S sandbox && adduser -S sandbox -G sandbox
 USER sandbox
 

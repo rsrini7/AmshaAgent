@@ -1566,7 +1566,7 @@ if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host '▶   Building arcclaw-tool-runner image via Podman...'
-podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
+podman build --no-cache -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
 if ($LASTEXITCODE -ne 0) { 
     Write-Host "❌  Podman build failed (exit $LASTEXITCODE)"
     exit $LASTEXITCODE 
@@ -1581,7 +1581,7 @@ podman images | Select-String 'arcclaw-tool-runner'
 # SANDBOX TASKS
 # =============================================================================
 
-[tasks."sandbox:check"]
+[tasks."podman:sandbox-check"]
 description = "Verify the arcclaw-tool-runner sandbox image exists"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
