@@ -20,17 +20,27 @@ import org.jboss.logging.Logger;
  * Strategy B (lightweight): Linux unshare namespaces via ProcessBuilder.
  * Strategy NONE: dev mode — direct execution, no isolation.
  * <p>
- * Resource caps (Fix C2): --memory, --cpus, --pids-limit, --ulimit.
- * Circuit breaker (Fix C3): auto-fallback to NAMESPACE after 3 Podman failures.
- * <li><strong>Security</strong>:
- * Secret injection (V1.0.0): ephemeral env-file, deleted in finally, never in process args.
- * OTel tracing: child spans attached to session root span.
- * Fix G2: @PreDestroy graceful container shutdown.
+ * Resource caps: --memory, --cpus, --pids-limit, --ulimit.
+ * Circuit breaker: auto-fallback to NAMESPACE after N Podman transient failures.
+ * <p>
+ * <strong>Important:</strong> {@link SandboxImageMissingException} is NOT recorded
+ * as a circuit-breaker failure — a missing image is a permanent configuration error,
+ * not a transient Podman failure. Recording it would open the circuit and silently
+ * degrade to namespace execution, which is less secure and equally broken until the
+ * image is rebuilt. Callers receive {@link SandboxResult#infraFailure} instead.
+ * <p>
+ * <strong>Known limitation:</strong> {@code requiredSecrets} is NOT passed to
+ * {@link NamespaceExecutor} on circuit-breaker fallback — namespace isolation does
+ * not support the tmpfs secret transport used by Podman. Tool calls requiring secrets
+ * will receive empty environment variables in namespace mode. This is a known
+ * security degradation accepted as part of the fallback trade-off.
  */
 @ApplicationScoped
 public class ProcessIsolationExecutor {
 
     private static final Logger log = Logger.getLogger(ProcessIsolationExecutor.class);
+
+    public static final String SANDBOX_STRATEGY_PODMAN = "PODMAN";
 
     @Inject
     SandboxCircuitBreaker circuitBreaker;
@@ -44,7 +54,7 @@ public class ProcessIsolationExecutor {
     @Inject
     DirectExecutor directExecutor;
 
-    @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
+    @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = SANDBOX_STRATEGY_PODMAN)
     String sandboxStrategy;
 
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
@@ -64,8 +74,7 @@ public class ProcessIsolationExecutor {
     /** Startup availability check — degrades gracefully if Podman not installed. */
     @PostConstruct
     void checkPodmanAvailability() {
-
-        if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
+        if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
             try {
                 var pb = new ProcessBuilder(podmanPath, "--version");
                 pb.redirectErrorStream(true);
@@ -92,7 +101,10 @@ public class ProcessIsolationExecutor {
      * @return SandboxResult indicating success, failure, or infra failure.
      */
     public SandboxResult executeSandboxed(
-            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
+            String sessionId,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets) throws Exception {
 
         if (!sandboxEnabled) {
             log.debugf("Sandbox disabled — executing directly (session=%s)", sessionId);
@@ -103,7 +115,7 @@ public class ProcessIsolationExecutor {
             return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, command));
         }
 
-        if ("PODMAN".equalsIgnoreCase(sandboxStrategy)) {
+        if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
             if (circuitBreaker.shouldAttemptPodman()) {
                 CircuitBreakerState stateAtCall = circuitBreaker.getState();
                 try {
@@ -111,16 +123,41 @@ public class ProcessIsolationExecutor {
                             sessionId, workspaceRoot, command, requiredSecrets);
                     circuitBreaker.recordSuccess();
                     return SandboxResult.success(result);
+
+                } catch (SandboxImageMissingException e) {
+                    // FIX: do NOT record a circuit-breaker failure for a missing image.
+                    //
+                    // A missing image is a permanent configuration error — the image will
+                    // not reappear until someone runs `podman build`. Recording it as a
+                    // Podman failure opens the circuit and silently downgrades execution
+                    // to namespace mode, which is less secure and equally broken for tools
+                    // that need the runner image. The correct response is infraFailure so
+                    // the agent surfaces the error to the user immediately.
+                    log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, e.getMessage());
+                    return SandboxResult.infraFailure(
+                            "SANDBOX_OFFLINE: The sandbox image is missing. " +
+                            "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
+                            "-f ./sandbox/Dockerfile.toolrunner .");
+
                 } catch (ToolExecutionException e) {
+                    // Tool logic failure (non-zero exit from user code) — not an infra error.
+                    // Re-throw so SandboxExecTool can return it as a normal tool failure.
                     throw e;
+
                 } catch (Exception e) {
-                    log.errorf("Podman execution failed (session=%s): %s", sessionId, e.getMessage());
+                    // Transient Podman infrastructure failure — record against the circuit.
+                    // FIX: null-guard e.getMessage() — some exception types return null here.
+                    String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    log.errorf("Podman execution failed (session=%s): %s", sessionId, errMsg);
                     circuitBreaker.recordFailure(stateAtCall);
                     return SandboxResult.infraFailure(
-                            "SANDBOX_OFFLINE: Podman is unavailable — " + e.getMessage());
+                            "SANDBOX_OFFLINE: Podman is unavailable — " + errMsg);
                 }
             }
         }
+
+        // Podman circuit is open (or strategy is NAMESPACE) — fall back to namespace isolation.
+        // NOTE: requiredSecrets are NOT injected in namespace mode (see class-level Javadoc).
         return SandboxResult.success(namespaceExecutor.executeInNamespace(workspaceRoot, command));
     }
 }

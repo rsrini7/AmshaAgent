@@ -167,16 +167,21 @@ public class SandboxExecTool implements AgentTool {
 
     // ── Java: write ClassName.java → javac → java -cp ────────────────────────
 
+    // Container-side mount point — must match what ProcessIsolationExecutor mounts workspaceRoot as.
+    // The Dockerfile sets WORKDIR /workspace; ProcessIsolationExecutor mounts workspaceRoot there.
+    private static final String CONTAINER_WORKSPACE = "/workspace";
+
     private ToolResponse executeJava(String sessionId, Path workspaceRoot,
-            String code, Map<String, String> secrets) throws Exception {
+        String code, Map<String, String> secrets) throws Exception {
 
         Files.createDirectories(workspaceRoot);
         String className = extractJavaClassName(code);
         Path javaFile = workspaceRoot.resolve(className + ".java");
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
-        // Phase 1 — compile
-        List<String> compileCmd = List.of("javac", javaFile.toString());
+        // Use CONTAINER_WORKSPACE path for javac argument
+        List<String> compileCmd = List.of("javac",
+                CONTAINER_WORKSPACE + "/" + className + ".java");
         try {
             SandboxResult compileResult = isolationExecutor.executeSandboxed(
                     sessionId, workspaceRoot, compileCmd, secrets);
@@ -190,9 +195,9 @@ public class SandboxExecTool implements AgentTool {
                     nonBlank("Java compilation failed:\n" + e.getMessage()));
         }
 
-        // Phase 2 — run
+        // Use CONTAINER_WORKSPACE for -cp classpath argument
         String javaExe = resolveJavaExecutable();
-        List<String> runCmd = List.of(javaExe, "-cp", workspaceRoot.toString(), className);
+        List<String> runCmd = List.of(javaExe, "-cp", CONTAINER_WORKSPACE, className);
         SandboxResult runResult = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
         if (runResult.isInfraFailure()) {
@@ -206,13 +211,15 @@ public class SandboxExecTool implements AgentTool {
     // ── Go: write main.go → go run ────────────────────────────────────────────
 
     private ToolResponse executeGo(String sessionId, Path workspaceRoot,
-            String code, Map<String, String> secrets) throws Exception {
+        String code, Map<String, String> secrets) throws Exception {
 
         Files.createDirectories(workspaceRoot);
         Path goFile = workspaceRoot.resolve("main.go");
         Files.writeString(goFile, code, StandardCharsets.UTF_8);
 
-        List<String> runCmd = List.of("go", "run", goFile.toString());
+        // Use CONTAINER_WORKSPACE path — workspaceRoot is the HOST path,
+        // which does not exist inside the Podman container.
+        List<String> runCmd = List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
         SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
         if (result.isInfraFailure()) {

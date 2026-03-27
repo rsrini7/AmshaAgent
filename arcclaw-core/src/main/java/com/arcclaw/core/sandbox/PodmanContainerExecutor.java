@@ -58,7 +58,7 @@ public class PodmanContainerExecutor {
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
 
     /**
-     * Fix G2: Graceful container shutdown on JVM SIGTERM / @ApplicationScoped destroy.
+     * Graceful container shutdown on JVM SIGTERM / @ApplicationScoped destroy.
      * <p>
      * Stops all tracked containers with a 10-second grace period
      * (matching Kubernetes terminationGracePeriodSeconds default).
@@ -94,13 +94,13 @@ public class PodmanContainerExecutor {
             Map<String, String> requiredSecrets) throws Exception {
 
         var resolvedSecrets = secretResolver.resolveSecrets(requiredSecrets);
-        
+
         // Use the unified Tier 1 tmpfs secure transport.
         // The transport strictly zeroes the memory arrays when closed.
         try (var transport = new TmpfsSecretTransport(sessionId, tmpfsPath)) {
             List<String> transportArgs = transport.prepare(resolvedSecrets);
 
-            // Fix G2: deterministic container name for tracking + graceful stop on shutdown.
+            // Deterministic container name for tracking + graceful stop on shutdown.
             // Format: zc-<sessionId truncated to 8 chars>-<nonce> to stay within 64-char limit.
             String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                     + "-" + Long.toHexString(System.nanoTime());
@@ -108,13 +108,14 @@ public class PodmanContainerExecutor {
             Span span = otelContext.childSpan(sessionId, "tool.container_exec");
             span.setAttribute("container.image", containerImage);
             span.setAttribute("container.name", containerName);
-            span.setAttribute("sandbox.strategy", "PODMAN");
+            span.setAttribute("sandbox.strategy", ProcessIsolationExecutor.SANDBOX_STRATEGY_PODMAN);
 
-            activeContainerNames.add(containerName); // track before start — avoids race on early failure
+            // Track before start — avoids race on early failure.
+            activeContainerNames.add(containerName);
             try (Scope _ = span.makeCurrent()) {
                 var podmanCmd = new ArrayList<>(List.of(
                         podmanPath, "run", "--rm",
-                        "--name", containerName, // Fix G2: named for tracking + graceful stop
+                        "--name", containerName,
                         "--pull", "never",
                         "--network=bridge",
                         "--read-only",
@@ -122,31 +123,51 @@ public class PodmanContainerExecutor {
                         "--cap-drop=ALL",
                         "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                         "--user=65534:65534",
-                        "--memory=" + containerMemoryLimit, // Fix C2: OOM kill before host impact
-                        "--cpus=" + containerCpuLimit,      // Fix C2: prevent CPU saturation
-                        "--pids-limit=" + CONTAINER_PIDS_LIMIT, // Fix C2: block fork bombs
-                        "--ulimit=nofile=256:256"            // Fix C2: limit open file descriptors
+                        "--memory=" + containerMemoryLimit,   // OOM kill before host impact
+                        "--cpus=" + containerCpuLimit,        // prevent CPU saturation
+                        "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
+                        "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));
-                
+
                 // Inject the transport args (e.g. --env-file /run/arcclaw/secrets/<nonce>.env)
                 podmanCmd.addAll(transportArgs);
-                
+
                 podmanCmd.add(containerImage);
                 podmanCmd.addAll(command);
 
                 var pb = new ProcessBuilder(podmanCmd);
 
+                // FIX: check mkdirs() return value — silent failure leaves ProcessBuilder
+                // pointing at a non-existent directory, producing a confusing OS error.
                 File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
                 if (!workspaceDir.exists()) {
-                    workspaceDir.mkdirs();
-                    log.warn("PIE Workspace dir missing — recreated: " + workspaceDir.getAbsolutePath());
+                    boolean created = workspaceDir.mkdirs();
+                    if (!created) {
+                        throw new IOException(
+                            "Failed to create workspace directory: " + workspaceDir.getAbsolutePath());
+                    }
+                    log.warnf("PIE Workspace dir missing — recreated: %s",
+                              workspaceDir.getAbsolutePath());
                 }
+
                 pb.directory(workspaceDir);
-                pb.redirectErrorStream(true);
+                pb.redirectErrorStream(true); // merge stderr into stdout — prevents output buffer deadlock
 
                 var process = pb.start();
                 transport.deliver(process);
-                var output = new String(process.getInputStream().readAllBytes());
+
+                // FIX: waitFor() BEFORE readAllBytes().
+                //
+                // The original order was: readAllBytes() → waitFor().
+                // readAllBytes() blocks until the process stream is closed (i.e., the process
+                // has already exited), so waitFor() would always return true immediately and
+                // the timeout check `if (!finished)` was unreachable for hanging processes.
+                //
+                // Correct order:
+                //   1. waitFor(timeout) — enforces the deadline.
+                //   2. If timed out → destroyForcibly() → throw.
+                //   3. readAllBytes() — safe after process exits; output is buffered in the pipe
+                //      and available regardless of whether we read before or after exit.
                 boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
 
                 if (!finished) {
@@ -154,26 +175,29 @@ public class PodmanContainerExecutor {
                     throw new ToolExecutionException("Tool timed out after " + timeoutSeconds + "s");
                 }
 
+                // Process has exited — drain the buffered output now.
+                var output = new String(process.getInputStream().readAllBytes());
                 int exitCode = process.exitValue();
-                
+
                 if (exitCode != 0) {
-                    // Intercept the "Image Not Found" case
+                    // Intercept the "Image Not Found" case.
+                    // FIX: use containerImage field instead of hardcoded literal
+                    // so the warning stays accurate if the image name is overridden in config.
                     if (output.contains("not known") || output.contains("not found")) {
                         log.warnf("**====================================================================**");
-                        log.warnf("[SANDBOX-WARNING] Sandbox image 'arcclaw-tool-runner:latest' is missing from local storage.");
+                        log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.",
+                                  containerImage);
                         log.warnf("To use the secure Podman sandbox, please build the runner image:");
                         log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
-                        // ── REMOVE the "Falling back to host execution" line entirely ──
-                        // There is NO fallback — throwing below. The old message was a security lie.
                         log.warnf("**====================================================================**");
-                        throw new SandboxImageMissingException("Missing sandbox image: arcclaw-tool-runner:latest");
+                        throw new SandboxImageMissingException("Missing sandbox image: " + containerImage);
                     }
-                    
+
                     // Handle other infrastructure failures (exit 125)
                     if (exitCode == 125) {
                         throw new IOException("Podman engine failure (exit 125): " + output);
                     }
-                    
+
                     // Specific exit code for tool logic failure (standard for LLM tools)
                     throw new ToolExecutionException(output, exitCode);
                 }
@@ -183,11 +207,14 @@ public class PodmanContainerExecutor {
 
             } catch (Exception e) {
                 span.recordException(e);
-                span.setStatus(StatusCode.ERROR, e.getMessage());
+                // FIX: null-guard e.getMessage() — some exception types (e.g. NullPointerException)
+                // return null from getMessage(), which causes OpenTelemetry to throw internally.
+                span.setStatus(StatusCode.ERROR,
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 throw e;
             } finally {
                 span.end();
-                activeContainerNames.remove(containerName); // Fix G2: deregister on normal exit
+                activeContainerNames.remove(containerName); // deregister on normal exit or exception
             }
         }
     }
