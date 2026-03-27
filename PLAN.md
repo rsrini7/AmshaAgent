@@ -4938,3 +4938,84 @@ Comprehensive production hardening spanning correctness fixes, observability imp
 - ✅ **Interface Compliance**: `StatusReflex` references only `GovernanceStrategy`.
 - ✅ **Skill Ordering**: `SkillLoader` logs priority values during load.
 - ✅ **§1.4 Enforcement**: `CronResultHandler` no longer defaults to Telegram.
+
+---
+
+# Phase 70 — Parallel Tool Execution ✅
+
+Enable the agent loop to execute multiple tool calls issued by the LLM in a single response, maintaining the LangChain4j parallel protocol (`1 AiMessage → N ToolExecutionResultMessages`).
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Atomic HITL**: If *any* tool in a parallel batch requires human approval, the *entire* batch is atomically paused via `ApprovalCheckpointManager`. No partial execution occurs.
+
+> [!NOTE]
+> **Virtual Thread Parallelism**: Tool calls within a batch are executed concurrently using `WorkspaceExecutors.newVirtualThreadPerTaskExecutor()` with `CompletableFuture`, leveraging JDK 21+ Virtual Threads for max throughput without carrier thread starvation.
+
+> [!TIP]
+> **Protocol Compliance**: `ChatHistoryAssembler` reconstructs parallel turns as a single `AiMessage` (with N `ToolExecutionRequest`s) followed by N `ToolExecutionResultMessage`s, per the LangChain4j specification.
+
+> [!WARNING]
+> **No New Maven Dependencies**: The entire parallel execution engine is implemented using existing project dependencies (`java.util.concurrent`, Jackson, LangChain4j, OpenTelemetry).
+
+## Completed Changes
+
+### 70-A: Data Structures & Parser
+
+#### [MODIFY] [ReasoningStep.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStep.java)
+- Added `PARALLEL_SENTINEL = "__parallel__"` constant.
+- Added `parallelBatch()` factory method for creating batch steps.
+- Added `isParallelBatch()` predicate.
+
+#### [NEW] [ParallelToolCall.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ParallelToolCall.java)
+- Immutable record: `callId`, `toolName`, `params`, `observation`, `success`.
+- Factory: `pending(callId, toolName, params)` for pre-execution state.
+- `withResult(observation, success)` for post-execution immutable copy.
+
+#### [MODIFY] [ReasoningStepParser.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java)
+- Detects `aiMessage.toolExecutionRequests().size() > 1` and aggregates into a single `ReasoningStep.parallelBatch()`.
+- Serializes the full `List<ParallelToolCall>` as the `"batch"` key in `actionInput`.
+
+### 70-B: Execution Engine & Routing
+
+#### [NEW] [ParallelToolStepExecutor.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ParallelToolStepExecutor.java)
+- `@ApplicationScoped` bean handling batch validation, execution, and result folding.
+- **Guard Phase**: Iterates all calls through `ToolInvocationGuard` (Dedup, HITL, Blocked).
+- **HITL Pause**: Serializes the full batch JSON and persists via `ApprovalCheckpointManager` with composite name `__parallel__:tool1,tool2,...`.
+- **Execution Phase**: Runs all calls in parallel via `CompletableFuture.supplyAsync()` on Virtual Thread executor.
+- **Result Folding**: Collects all futures, serializes completed batch, and creates a single `ReasoningStep` with observation summary.
+- **Governance**: Pre-flight `GovernanceStrategy.assertWithinBudget()` and `RateLimitTracker.isAnyBackingOff()` checks.
+
+#### [MODIFY] [ToolStepHandler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolStepHandler.java)
+- Injected `ParallelToolStepExecutor`.
+- Added early routing: if `step.isParallelBatch()`, delegates directly to `ParallelToolStepExecutor.execute()`.
+
+#### [MODIFY] [AgentStateMachineRunner.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/AgentStateMachineRunner.java)
+- Added safety guard to prevent parallel batch steps from reaching the FINISH handler.
+
+### 70-C: Protocol & Resume
+
+#### [MODIFY] [ChatHistoryAssembler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java)
+- Implemented `reconstructParallelTurn()`: Deserializes the batch, builds a single `AiMessage` with N `ToolExecutionRequest`s, then appends N individual `ToolExecutionResultMessage`s.
+- Ensures strict LangChain4j protocol compliance for parallel calls.
+
+#### [MODIFY] [AgentCheckpoint.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java)
+- Added `isParallelBatch()`: Detects composite tool names starting with `__parallel__:`.
+- Added `parallelToolNames()`: Splits composite name into individual tool names.
+
+#### [MODIFY] [CheckpointResumeHandler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java)
+- Added `ObjectMapper` injection for batch deserialization.
+- Implemented `resumeParallelBatch()`: On approved parallel batch, deserializes `List<ParallelToolCall>` from checkpoint, re-executes all tools via `ToolInvoker`, and folds results into a completed `ReasoningStep`.
+
+### 70-D: Governance & Architecture
+
+#### [MODIFY] [Architecture_Invariants.md](file:///c:/Users/Srini/ws/ArcClawInternal/Architecture_Invariants.md)
+- Added **§7: Parallel Tool Execution Invariants** (§7.1–§7.9) covering sentinel format, batch encoding, guard evaluation, atomic HITL, result collection, chat protocol, governance, and resume semantics.
+
+## Verification
+- ✅ **Full Suite**: `mvn clean verify` passed with 884 tests green, 0 failures, 0 errors.
+- ✅ **Existing Tests**: All prior Phase 53–69 tests remain unaffected.
+- ✅ **CheckpointResumeHandlerTest**: Updated constructor to include `ObjectMapper` — passes.
+- ✅ **AgentCheckpoint**: `isParallelBatch()` and `parallelToolNames()` compile correctly.
+- ✅ **ReasoningStepParser**: All code paths return a `ReasoningStep` (control-flow fix).

@@ -2874,3 +2874,54 @@ Addressed 7 confirmed correctness and runtime stability bugs:
 - ✅ `StatusReflex` depends only on `GovernanceStrategy` interface.
 - ✅ `SkillLoader` logs provider priority during load.
 - ✅ `CronResultHandler` compliant with Architecture_Invariants.md §1.4.
+
+---
+
+## Phase 70: Parallel Tool Execution ✅
+
+Enabled the agent loop to handle multiple tool calls issued by the LLM in a single response, executing them concurrently and reconstructing the LangChain4j parallel protocol on replay.
+
+| Phase | File | Purpose |
+|-------|------|---------|
+| 70-A | [ReasoningStep.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStep.java) | `PARALLEL_SENTINEL`, `parallelBatch()`, `isParallelBatch()` |
+| 70-A | [ParallelToolCall.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ParallelToolCall.java) | Immutable record for individual tool calls within a batch |
+| 70-A | [ReasoningStepParser.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ReasoningStepParser.java) | Detection and aggregation of N>1 tool calls |
+| 70-B | [ParallelToolStepExecutor.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ParallelToolStepExecutor.java) | Guard → HITL → Execute → Fold pipeline |
+| 70-B | [ToolStepHandler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolStepHandler.java) | Routes parallel batch steps to new executor |
+| 70-C | [ChatHistoryAssembler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/ChatHistoryAssembler.java) | `1 AiMessage → N ToolExecutionResultMessage` protocol reconstruction |
+| 70-C | [AgentCheckpoint.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCheckpoint.java) | `isParallelBatch()` and `parallelToolNames()` helpers |
+| 70-C | [CheckpointResumeHandler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java) | Parallel batch resume after HITL approval |
+| 70-D | [Architecture_Invariants.md](file:///c:/Users/Srini/ws/ArcClawInternal/Architecture_Invariants.md) | §7: Parallel Tool Execution Invariants (§7.1–§7.9) |
+
+### Data Flow
+
+```mermaid
+graph TD
+    A["LLM Response (N tool calls)"] --> B["ReasoningStepParser"]
+    B --> C{"N > 1?"}
+    C -->|Yes| D["ReasoningStep.parallelBatch()"]
+    C -->|No| E["Single tool step (existing path)"]
+    D --> F["ToolStepHandler"]
+    F --> G["ParallelToolStepExecutor"]
+    G --> H{"Guard Phase"}
+    H -->|Any HITL| I["ApprovalCheckpointManager\n(Atomic batch pause)"]
+    H -->|All OK| J["CompletableFuture.supplyAsync()\n(Virtual Threads)"]
+    J --> K["Collect all futures"]
+    K --> L["Fold into completed ReasoningStep"]
+    L --> M["ChatHistoryAssembler\n(1 AiMessage → N results)"]
+```
+
+### Key Architectural Decisions
+
+1. **Atomic HITL (§7.4)**: If any tool in a batch requires human approval, the entire batch is paused. No partial execution occurs. The composite tool name `__parallel__:tool1,tool2` is persisted for resume.
+
+2. **Result Collection (§7.5)**: All futures are collected via `future.get()` — interrupted threads are handled gracefully. Failed tools get a `success=false` observation without crashing the batch.
+
+3. **Protocol Compliance (§7.6)**: `ChatHistoryAssembler.reconstructParallelTurn()` produces exactly one `AiMessage` (with N `ToolExecutionRequest` objects) followed by N `ToolExecutionResultMessage`s. This matches the LangChain4j strict protocol.
+
+4. **Resume Semantics (§7.9)**: `CheckpointResumeHandler.resumeParallelBatch()` deserializes the full `List<ParallelToolCall>` from the checkpoint's parameters JSON, re-executes all tools (now with elevated autonomy), and produces a completed batch step.
+
+**Verification**:
+- ✅ `mvn clean verify`: 884/884 tests green, 0 failures, 0 errors.
+- ✅ All prior Phase 53–69 tests remain unaffected.
+- ✅ Import cleanup: FQN references replaced with proper imports in all modified files.
