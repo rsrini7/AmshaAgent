@@ -7,7 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.governance.GovernanceLayer;
+import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -19,7 +19,7 @@ public class StatusReflex implements AgentReflex {
 
     @Inject StatefulAgentStore statefulAgentStore;
     @Inject CompactionSummaryRepository compactionSummaryRepository;
-    @Inject GovernanceLayer governanceLayer;
+    @Inject GovernanceStrategy governanceStrategy;
 
     @Override
     public boolean matches(String input) {
@@ -41,11 +41,11 @@ public class StatusReflex implements AgentReflex {
 
         String status = resolveStatus(checkpoints);
 
-        double budgetUsd    = governanceLayer.getBudgetUsd();
-        double cost         = governanceLayer.getSessionCost(sessionId);
+        double budgetUsd    = governanceStrategy.getBudgetUsd();
+        double cost         = governanceStrategy.getSessionCost(sessionId);
         double pct          = budgetUsd > 0 ? (cost / budgetUsd) * 100 : 0;
-        int    inputTokens  = governanceLayer.getSessionInputTokens(sessionId);
-        int    outputTokens = governanceLayer.getSessionOutputTokens(sessionId);
+        int    inputTokens  = governanceStrategy.getSessionInputTokens(sessionId);
+        int    outputTokens = governanceStrategy.getSessionOutputTokens(sessionId);
         int    totalTokens  = inputTokens + outputTokens;
 
         String memoryLine = compactionSummaryRepository

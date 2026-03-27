@@ -27,6 +27,11 @@ public class ClasspathSkillProvider implements SkillProvider {
     }
 
     @Override
+    public int priority() {
+        return 100;
+    }
+
+    @Override
     public List<SkillDefinition> load() {
         List<SkillDefinition> skills = new ArrayList<>();
         try (InputStream indexStream = getClass().getResourceAsStream(INDEX_PATH)) {
