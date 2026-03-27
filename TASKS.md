@@ -1436,3 +1436,14 @@
 - [x] Avoid duplicate counting by skipping `ReasoningStep.PARALLEL_SENTINEL` in metric calculations.
 - [x] Code Quality: Optimize `ParallelToolCall` ObjectMapper, eliminate spurious `synchronized(history)` in `CheckpointResumeHandler`.
 - [x] Final verification build: mvn clean verify passes (884 tests green).
+
+---
+
+## Phase 72 — Per-Tool HITL Parallelism ✅
+- [x] Add `batchToolDecisions` JSON column to `AgentCheckpoint` entity.
+- [x] Extracted `getToolDecisions` and `updateToolDecision` in `StatefulAgentStore`.
+- [x] `ApproveReflex` and `DenyReflex` parsed to support granular tool name approvals.
+- [x] Updated `ChannelCommand.Approve/Deny` with optional `toolName` parameter.
+- [x] Updated `AgentResultFormatter` for per-tool HITL formatting.
+- [x] `CheckpointResumeHandler` updated to skip `DENIED` tools during batch replay.
+- [x] Update documentation (PLAN.md, TASKS.md, WALKTHROUGH.md) with architectural changes.

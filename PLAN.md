@@ -5047,3 +5047,20 @@ Harden the new parallel execution engine (Phase 70) for production compliance, r
 
 ## Verification
 - ✅ Tests maintained at `884/884` passing. No regression in memory models or tracing.
+
+---
+
+# Phase 72 — Per-Tool HITL Parallelism ✅
+
+Implemented granular, per-tool approval and denial functionality for parallel tool batches in the ArcClaw agent loop.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Per-Tool Execution Control**: The `AgentCheckpoint` data model was extended to include a `batchToolDecisions` JSON map, allowing tracking of individual `PENDING`, `APPROVED`, or `DENIED` states for parallel tool calls within a single batch.
+
+> [!NOTE]
+> **Hit-the-Loop Resumption Logic**: `ApproveReflex` and `DenyReflex` were refactored to handle single-tool commands (e.g., `/approve github`). The system now only triggers a batch resumption when all tools in the batch have reached a terminal decision state, maintaining backward compatibility for "approve all" commands.
+
+> [!TIP]
+> **Failure Isolation**: Denied parallel tools automatically return a synthetic failure observation without execution, gracefully falling back within the parallel batch executor (`CheckpointResumeHandler`), bypassing tool registry invocation.
