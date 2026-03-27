@@ -35,6 +35,14 @@ import org.jboss.logging.Logger;
 public class AgentStateMachineRunner {
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
 
+    // ── Raw tool-call leak guard ──────────────────────────────────────────────
+    // The LLM occasionally writes a tool call as JSON prose in its FINISH answer
+    // instead of invoking it properly. Detect and retry as a schema correction.
+    // Checked in run() BEFORE handleFinishAction — because handleFinishAction
+    // returns AgentResult and cannot continue the loop.
+    private static final Pattern RAW_TOOL_CALL_PATTERN = Pattern.compile(
+        "^\\s*\\{\\s*\"type\"\\s*:\\s*\"function\"", Pattern.DOTALL);
+
     // ── Matches completion non-answers: "Done.", "✅ Done.", "OK.", "ok" etc.
     // NOTE: token-count gate removed — step.outputTokens() is 0 for ReasoningStep.pending()
     // paths, making it unreliable. The pattern itself is the real gate.
@@ -43,16 +51,6 @@ public class AgentStateMachineRunner {
                 "^[✅⏳\\s]*(done\\.?|ok\\.?)\\s*$",
                 Pattern.CASE_INSENSITIVE
             );
-
-    // ── LangChain4J / internal error strings that must never reach the user.
-    private static final List<String> INTERNAL_ERROR_FRAGMENTS = List.of(
-            "text cannot be null or blank",
-            "NullPointerException",
-            "IllegalArgumentException",
-            "IllegalStateException",
-            "StackOverflowError",
-            "OutOfMemoryError"
-    );
 
     @Inject EngineStepHandler engineStepHandler;
     @Inject ToolStepHandler toolStepHandler;
@@ -120,6 +118,42 @@ public class AgentStateMachineRunner {
                                    "step reached FINISH handler — this is a bug in Phase 70.",
                                    context.sessionId());
                     }
+
+                    // Raw tool-call leak guard
+                    // Must run HERE (before handleFinishAction) because
+                    // handleFinishAction returns AgentResult — it cannot
+                    // continue the loop for a retry.
+                    // Extract candidate answer the same way handleFinishAction does.
+                    String candidateAnswer = step.thought();
+                    if (step.actionInput() != null && step.actionInput().containsKey("answer")) {
+                        candidateAnswer = String.valueOf(step.actionInput().get("answer"));
+                    }
+
+                    if (isRawToolCallLeak(candidateAnswer)) {
+                        log.warnf("[STATE-MACHINE] session %s: FINISH answer contains raw " +
+                                  "tool call JSON — retrying with correction (schema attempt %d)",
+                                  context.sessionId(), llmSchemaErrorCount + 1);
+                        history.add(step);
+                        transientError =
+                                "System: Your last response was a raw JSON tool call object " +
+                                "written as plain text, not a valid FINISH answer. " +
+                                "You MUST invoke tools through the tool mechanism — " +
+                                "NEVER write {\"type\": \"function\", ...} as your answer text. " +
+                                "If you need to search memory, call memory_search properly as a tool. " +
+                                "Retry now: call the tool correctly, or FINISH with a plain text answer.";
+                        llmSchemaErrorCount++;
+                        if (llmSchemaErrorCount >= 2) {
+                            log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
+                                       "limit after raw tool call leak", context.sessionId());
+                            return AgentResult.failed(
+                                    "I encountered a formatting error and could not complete your request. " +
+                                    "Please try again.",
+                                    AgentResult.FailureCategory.SCHEMA_ERROR,
+                                    List.copyOf(history));
+                        }
+                        continue; // re-enter loop with correction injected into transientError
+                    }
+
                     return handleFinishAction(context.sessionId(), context.agentRole(),
                             history, step, iteration);
                 }
@@ -150,6 +184,21 @@ public class AgentStateMachineRunner {
         log.warnf("StateMachine exceeded %d iterations for session=%s",
                 context.maxIterations(), context.sessionId());
         return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+    }
+
+    // ── LangChain4J / internal error strings that must never reach the user.
+    private static final List<String> INTERNAL_ERROR_FRAGMENTS = List.of(
+            "text cannot be null or blank",
+            "NullPointerException",
+            "IllegalArgumentException",
+            "IllegalStateException",
+            "StackOverflowError",
+            "OutOfMemoryError"
+    );
+
+    private boolean isRawToolCallLeak(String answer) {
+        if (answer == null || answer.isBlank()) return false;
+        return RAW_TOOL_CALL_PATTERN.matcher(answer).find();
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,

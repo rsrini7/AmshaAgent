@@ -263,7 +263,7 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
   rag:
-    min-score: 0.40f
+    min-score: 0.25f
     context-chunks: 5
     embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
     embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
