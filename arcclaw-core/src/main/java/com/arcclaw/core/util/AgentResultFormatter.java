@@ -40,9 +40,9 @@ public class AgentResultFormatter {
         StringBuilder sb = new StringBuilder();
 
         // 1. Detect parallel batch
-        boolean isBatch = compositeName != null && compositeName.startsWith("__parallel__:");
+        boolean isBatch = compositeName != null && compositeName.startsWith("parallel:");
         if (isBatch) {
-            String[] tools = compositeName.substring("__parallel__:".length()).split(",");
+            String[] tools = compositeName.substring("parallel:".length()).split(",");
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");
             for (String ts : tools) {
