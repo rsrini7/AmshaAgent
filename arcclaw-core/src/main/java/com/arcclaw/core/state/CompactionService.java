@@ -159,7 +159,7 @@ public class CompactionService {
                     .aiMessage().text().trim();
         } catch (Exception e) {
             if (isRateLimit(e)) {
-                rateLimitTracker.recordHit();
+                rateLimitTracker.recordHit("compaction");
                 log.warnf("CompactionService: rate-limited during summary for session %s — " +
                           "aborting compaction, latch will release via finally block", sessionId);
                 throw new CompactionAbortedException("Rate-limited during compaction", e);

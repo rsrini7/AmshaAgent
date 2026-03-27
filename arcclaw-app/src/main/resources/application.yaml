@@ -365,6 +365,7 @@ arcclaw:
     price-per-1k-input: 0.003
     price-per-1k-output: 0.015
     approval-timeout-minutes: 60 # must be >> gc-interval converted to minutes
+    rate-limit-backoff-seconds: 30
 
   sandbox:
     enabled: true

@@ -1,10 +1,12 @@
 package com.arcclaw.core.governance;
 
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -18,17 +20,30 @@ public class RateLimitTracker {
 
     private static final Logger log = Logger.getLogger(RateLimitTracker.class);
 
-    // How long to suppress compaction after a rate-limit hit
-    private static final long BACKOFF_SECONDS = 30;
+    @ConfigProperty(name = "arcclaw.governance.rate-limit-backoff-seconds",
+                    defaultValue = "30")
+    long backoffSeconds;
 
-    private final AtomicReference<Instant> lastHit = new AtomicReference<>(Instant.EPOCH);
+    private final ConcurrentHashMap<String, AtomicReference<Instant>> hitsByProvider =
+        new ConcurrentHashMap<>();
 
-    public void recordHit() {
-        lastHit.set(Instant.now());
-        log.debugf("RateLimitTracker: rate-limit hit recorded at %s", Instant.now());
+    public void recordHit(String provider) {
+        hitsByProvider
+            .computeIfAbsent(provider, p -> new AtomicReference<>(Instant.EPOCH))
+            .set(Instant.now());
+        log.debugf("RateLimitTracker: rate-limit hit recorded for provider %s at %s", provider, Instant.now());
     }
 
-    public boolean isBackingOff() {
-        return Instant.now().isBefore(lastHit.get().plusSeconds(BACKOFF_SECONDS));
+    public boolean isBackingOff(String provider) {
+        AtomicReference<Instant> ref = hitsByProvider.get(provider);
+        if (ref == null) return false;
+        return Instant.now().isBefore(ref.get().plusSeconds(backoffSeconds));
+    }
+
+    /** true if ANY provider is backing off (for global compaction guard). */
+    public boolean isAnyBackingOff() {
+        return hitsByProvider.values().stream()
+            .anyMatch(ref ->
+                Instant.now().isBefore(ref.get().plusSeconds(backoffSeconds)));
     }
 }

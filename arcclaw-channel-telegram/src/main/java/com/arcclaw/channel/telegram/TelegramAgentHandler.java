@@ -11,6 +11,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.Arc;
@@ -144,6 +145,7 @@ public class TelegramAgentHandler {
                 }
             }
         } finally {
+            WorkspaceScopeHolder.clear();
             requestContext.terminate();   // ← always release, even on exception
         }
     }

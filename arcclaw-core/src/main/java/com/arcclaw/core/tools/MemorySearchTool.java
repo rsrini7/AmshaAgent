@@ -79,7 +79,7 @@ public class MemorySearchTool implements AgentTool {
             // 3. Validate query
             String query = params != null ? (String) params.get("query") : null;
             if (query == null || query.isBlank()) {
-                return ToolResponse.success("No query provided");
+                return ToolResponse.failure(400, "query parameter is required for memory_search");
             }
 
             String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
