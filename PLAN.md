@@ -4872,3 +4872,69 @@ Completed the architectural hardening of the ArcClaw agent loop, eliminated crit
 - ✅ **CDI Ambiguity**: Verified `ReflexRegistry` and `ChatMemoryWriter` correctly resolve qualifiers.
 - ✅ **Control Flow**: `ToolStepHandler` correctly handles tool approvals via `InvokeResult.ShortCircuit`.
 - ✅ **Audit Integrity**: Confirmed `PII_SCAN_REDACTED` events are correctly triggered.
+
+---
+
+# Phase 69 — Production Defect Fixes & Architectural Hardening ✅
+
+Comprehensive production hardening spanning correctness fixes, observability improvements, SPI decoupling, and naming hygiene across the agent loop architecture.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **SPI Decoupling (B4/C6/D1)**: Decoupled the core reasoning provider SPI (`AgentChatModelProvider`) from the routing provider SPI (`RoutingChatModelProvider`). Previously both used the name `LlmProviderFactory`, creating a classpath hazard. Each now has a distinct contract and identity.
+
+> [!NOTE]
+> **GovernanceStrategy Completeness (D2)**: Promoted `getSessionInputTokens()` and `getSessionOutputTokens()` from the concrete `GovernanceLayer` to the `GovernanceStrategy` interface. This allows `StatusReflex` to depend on the interface rather than the concrete implementation, enabling alternative governance policies.
+
+> [!TIP]
+> **Deterministic Skill Loading (D4)**: Added `priority()` to the `SkillProvider` SPI with default value 100. Database providers override with priority 10, ensuring user-created skills always win on name collision regardless of CDI `Instance` iteration order. This eliminates a JVM/native build ordering hazard.
+
+> [!WARNING]
+> **§1.4 Compliance (D5)**: Eliminated the last surviving Telegram default fallback in `CronResultHandler.fireCompletionEvent()`. Legacy cron rows with null `channelType` now emit a `LEGACY_CHANNEL_FALLBACK` audit event and skip notification rather than silently routing to Telegram.
+
+## Completed Changes
+
+### Phase 69-A — Production Defect Fixes
+
+- **A1 (EngineStepHandler)**: Hardened `looksLikeNaturalLanguage` with static regex gate; replaced manual JSON parsing with Jackson for `extractFailedGeneration` (Unicode escape handling).
+- **A2 (AgentDispatchHandler)**: Replaced reference equality (`==`) with `.equals()` for `ChannelType` comparison.
+- **A3 (CheckpointResumeHandler)**: Fixed false-positive denial triggers using `AgentSentinels.GOAL_DENY_APPROVED`.
+- **A4 (AuditHashUtil)**: Defensive `.clone()` on HMAC key bytes; `AuditEvent` `SECURITY_EVENT` outcome support.
+- **A5 (StructuredRetryLoop)**: Enforced `executeWithBudgetGate` in all `BudgetWarningException` catch blocks.
+- **A6 (TelegramAgentHandler)**: Fixed double-acknowledgment race; null-safety for `msg.getFrom()`.
+- **A7 (WorkspaceContext)**: Enforced strict `requireChannelType()` binding.
+
+### Phase 69-B — Hardening & Observability
+
+- **B1 (ReasoningStepParser)**: Warning logs for parallel tool call suppression.
+- **B2 (Telegram Chunking)**: Message chunking at 4096 char limit with word-boundary splitting.
+- **B3 (WorkspaceScopeHolder)**: Added `.clear()` to `TelegramAgentHandler` finally blocks.
+- **B4 (MemorySearchTool)**: Returns `ToolResponse.failure(400)` for empty/null queries.
+- **B5 (DotenvConfigSourceProvider)**: Handles `export KEY=VALUE` prefix syntax.
+- **B6 (RateLimitTracker)**: Refactored to provider-aware tracking; compaction and reasoning engines use provider-specific state.
+- **B7 (SessionReaper)**: Explicit cleanup of `AuditObserver` and `GovernanceLayer` state.
+
+### Phase 69-C — Architectural Hygiene
+
+- **C1 (ToolStepHandler)**: `Locale.ROOT` for `REACT_KEYWORDS` check.
+- **C2 (EngineStepHandler)**: Extracted `UNAVAILABLE_TOOL_PATTERN` to static final field.
+- **C3 (AgentStateMachineRunner)**: Deleted `AgentStepProcessor` delegation shell; direct handler injection.
+- **C4 (AgentLoop)**: Injected `MeterRegistry` and `AuditService`; Micrometer counter + audit event on unknown role fallback (`INVALID_ROLE_FALLBACK`).
+- **C5 (AgentExecutionContext)**: Null validation and iteration limit checks in compact constructor.
+- **C6 (AgentObserver)**: Removed redundant `public` modifier from interface default method.
+
+### Phase 69-D — SPI Naming & Interface Hardening
+
+- **D1 (Rename)**: Renamed `arcclaw-core/.../reasoning/LlmProviderFactory` → `AgentChatModelProvider`. Renamed `arcclaw-app/.../routing/LlmProviderFactory` → `RoutingChatModelProvider`. Updated all implementors and consumers.
+- **D2 (StatusReflex)**: Promoted token accessor methods to `GovernanceStrategy` interface. `StatusReflex` now injects `GovernanceStrategy` instead of concrete `GovernanceLayer`.
+- **D3 (SessionKnowledgeBase)**: **Deferred** — SQLite persistence for session-scoped RAG chunks requires schema migration + JPA entity. Planned for dedicated follow-up phase.
+- **D4 (SkillProvider Priority)**: Added `priority()` to `SkillProvider` SPI (default 100). `DatabaseSkillProvider` = 10 (wins), `ClasspathSkillProvider` = 100 (baseline). `SkillLoader` sorts by priority before merge.
+- **D5 (CronResultHandler)**: Eliminated `.orElse(ChannelType.TELEGRAM)` fallback. Now emits `LEGACY_CHANNEL_FALLBACK` audit event and skips notification for null/unknown `channelType`. Added `SecurityEventType.LEGACY_CHANNEL_FALLBACK`.
+
+## Verification
+- ✅ **Full Suite**: `mvn clean verify` passed with 808 tests green.
+- ✅ **SPI Isolation**: `grep -r "LlmProviderFactory" --include="*.java" arcclaw-core` returns zero results.
+- ✅ **Interface Compliance**: `StatusReflex` references only `GovernanceStrategy`.
+- ✅ **Skill Ordering**: `SkillLoader` logs priority values during load.
+- ✅ **§1.4 Enforcement**: `CronResultHandler` no longer defaults to Telegram.

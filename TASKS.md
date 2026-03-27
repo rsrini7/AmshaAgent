@@ -1360,3 +1360,41 @@
 - [x] Component D3: Implement ObservationTransformer SPI for extensible observation sanitization.
 - [x] Component D4: Create InputSanitizer ISP interface and decouple reflex implementations.
 - [x] Final verification build: mvn clean verify passes (884 tests green).
+
+---
+
+## Phase 69 — Production Defect Fixes & Architectural Hardening ✅
+
+### Phase 69-A — Production Defect Fixes
+- [x] A1: Harden EngineStepHandler (static regex gate, Jackson for extractFailedGeneration). <!-- id: 700 -->
+- [x] A2: Fix AgentDispatchHandler ChannelType reference equality. <!-- id: 701 -->
+- [x] A3: Fix CheckpointResumeHandler false-positive denial via GOAL_DENY_APPROVED. <!-- id: 702 -->
+- [x] A4: Harden AuditHashUtil (.clone(), SECURITY_EVENT outcome). <!-- id: 703 -->
+- [x] A5: Enforce executeWithBudgetGate in StructuredRetryLoop catch blocks. <!-- id: 704 -->
+- [x] A6: Fix TelegramAgentHandler double-ack race + null-safety. <!-- id: 705 -->
+- [x] A7: Enforce requireChannelType() in WorkspaceContext. <!-- id: 706 -->
+
+### Phase 69-B — Hardening & Observability
+- [x] B1: ReasoningStepParser parallel tool call warning logs. <!-- id: 707 -->
+- [x] B2: Telegram message chunking (4096 char limit, word-boundary). <!-- id: 708 -->
+- [x] B3: WorkspaceScopeHolder.clear() in TelegramAgentHandler finally. <!-- id: 709 -->
+- [x] B4: MemorySearchTool failure(400) for empty/null queries. <!-- id: 710 -->
+- [x] B5: DotenvConfigSourceProvider handles `export KEY=VALUE`. <!-- id: 711 -->
+- [x] B6: RateLimitTracker provider-aware refactor. <!-- id: 712 -->
+- [x] B7: SessionReaper AuditObserver/GovernanceLayer cleanup. <!-- id: 713 -->
+
+### Phase 69-C — Architectural Hygiene
+- [x] C1: ToolStepHandler Locale.ROOT for REACT_KEYWORDS. <!-- id: 714 -->
+- [x] C2: EngineStepHandler static UNAVAILABLE_TOOL_PATTERN. <!-- id: 715 -->
+- [x] C3: Delete AgentStepProcessor delegation shell. <!-- id: 716 -->
+- [x] C4: AgentLoop INVALID_ROLE_FALLBACK audit + Micrometer counter. <!-- id: 717 -->
+- [x] C5: AgentExecutionContext null validation and iteration limit checks. <!-- id: 718 -->
+- [x] C6: AgentObserver remove redundant `public` on default method. <!-- id: 719 -->
+
+### Phase 69-D — SPI Naming & Interface Hardening
+- [x] D1: Rename core LlmProviderFactory → AgentChatModelProvider; app LlmProviderFactory → RoutingChatModelProvider. <!-- id: 720 -->
+- [x] D2: Promote getSessionInputTokens/getSessionOutputTokens to GovernanceStrategy; StatusReflex injects interface. <!-- id: 721 -->
+- [ ] D3: Persist SessionKnowledgeBase to SQLite (vec_session table) — **Deferred**. <!-- id: 722 -->
+- [x] D4: Add priority() to SkillProvider SPI; DatabaseSkillProvider=10, ClasspathSkillProvider=100; SkillLoader sorted merge. <!-- id: 723 -->
+- [x] D5: Fix CronResultHandler TELEGRAM fallback → audit + skip (LEGACY_CHANNEL_FALLBACK). <!-- id: 724 -->
+- [x] Final verification: mvn clean verify 808/808 tests green. <!-- id: 725 -->
