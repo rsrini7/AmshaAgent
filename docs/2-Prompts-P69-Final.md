@@ -1,6 +1,6 @@
-═══════════════════════════════════════════════════════════════════════════
+=====
 PROMPT — PHASE 69-A: Critical Correctness, Security & Regression Fixes
-═══════════════════════════════════════════════════════════════════════════
+=====
 
 Role: Senior Java Architect, Bug Fixer & Senior Java Developer
 Task: Phase 69-A — Fix 10 confirmed production defects in P68 live code.
@@ -366,9 +366,9 @@ TEST: TelegramAgentHandlerNullFromTest
   - WARN log emitted with chatId.
 
 
-═══════════════════════════════════════════════════════════════════════════
+=====
 PROMPT — PHASE 69-B: Reliability, Threading, Observability & Memory Safety
-═══════════════════════════════════════════════════════════════════════════
+=====
 
 Role: Senior Java Architect & Senior Java Developer
 Task: Phase 69-B — Fix reliability gaps, threading issues, observability
@@ -611,9 +611,9 @@ TEST: SessionReaperCleanupTest
   - Assert governanceLayer has no budget state for sessionId.
 
 
-═══════════════════════════════════════════════════════════════════════════
+=====
 PROMPT — PHASE 69-C: Architecture Compliance & Low-Priority Hygiene
-═══════════════════════════════════════════════════════════════════════════
+=====
 
 Role: Senior Java Architect & Senior Java Developer
 Task: Phase 69-C — Targeted hygiene, locale safety, delegation shell
@@ -744,10 +744,10 @@ The public modifier on interface default methods is redundant. Will
 flag in all static analysis tools (Checkstyle, PMD, SonarQube).
 
 
-═══════════════════════════════════════════════════════════════════════════
+=====
 PROMPT — PHASE 69-D: Architecture Improvements & Durability
   (From Claude.ai Fresh Review — all SOURCE-VERIFIED from directory structure)
-═══════════════════════════════════════════════════════════════════════════
+=====
 
 Role: Senior Java Architect & Senior Java Developer
 Task: Phase 69-D — Four architecture-level improvements. No bug fixes here
