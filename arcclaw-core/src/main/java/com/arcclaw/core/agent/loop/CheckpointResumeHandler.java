@@ -137,14 +137,13 @@ public class CheckpointResumeHandler {
                     agentRole,
                     () -> toolRegistry.invokeTool(pendingTool, pendingParams, sessionId));
 
-            synchronized (history) {
-                history.add(new ReasoningStep(
-                        "Human Approved",
-                        pendingTool,
-                        Map.of("parameters", pendingParams != null ? pendingParams : "{}"),
-                        resumeResponse.output(),
-                        0, 0));
-            }
+            // history is single-threaded at resume time — no synchronization needed.
+            history.add(new ReasoningStep(
+                    "Human Approved",
+                    pendingTool,
+                    Map.of("parameters", pendingParams != null ? pendingParams : "{}"),
+                    resumeResponse.output(),
+                    0, 0));
 
             // Transition back to IN_PROGRESS so the main loop iteration can proceed
             checkpoint.setPendingToolName(null);
@@ -243,9 +242,10 @@ public class CheckpointResumeHandler {
             0, 0
         );
 
-        synchronized (history) {
-            history.add(completedStep);
-        }
+        // history is single-threaded at resume time — no synchronization needed.
+        // Parallel execution within a batch uses its own CompletableFuture
+        // collecting pattern inside ParallelToolStepExecutor (separate list).
+        history.add(completedStep);
 
         checkpoint.setPendingToolName(null);
         checkpoint.setPendingToolParametersJson(null);

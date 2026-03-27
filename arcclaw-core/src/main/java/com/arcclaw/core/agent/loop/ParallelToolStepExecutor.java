@@ -4,6 +4,8 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,9 +23,14 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.scope.WorkspaceExecutors;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.MdcKeys;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 /**
  * Executes a parallel tool batch produced by ReasoningStepParser
@@ -42,6 +49,10 @@ public class ParallelToolStepExecutor {
     @Inject Instance<AgentObserver> observers;
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
+    @Inject ChatMemoryWriter chatMemoryWriter;
+
+    @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60")
+    long toolTimeoutSeconds;
 
     private static final TypeReference<List<ParallelToolCall>> BATCH_TYPE = new TypeReference<>() {};
 
@@ -69,12 +80,16 @@ public class ParallelToolStepExecutor {
                   calls.stream().map(ParallelToolCall::toolName)
                        .collect(Collectors.joining(", ")));
 
-        // 2. Validate all tools (deduplication + HITL check) — §7.7 BEFORE execution
+        // Pass 1: Validate all tools BEFORE any execution (§7.7).
+        // Categorize each call: ALLOW, DEDUP, BLOCKED, HITL.
+        List<ParallelToolCall> allowedCalls  = new ArrayList<>();
+        List<ParallelToolCall> dedupCalls    = new ArrayList<>();
+
         for (ParallelToolCall call : calls) {
             ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 context.sessionId(), context.agentRole(),
                 call.toolName(), call.params(), history,
-                context.goal(), List.of()); // skillSnapshot: pass empty array or inject SkillRegistry if needed
+                context.goal(), List.of());
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval pause) {
                 // §7.4: ANY tool needs HITL → pause ALL atomically
@@ -85,7 +100,6 @@ public class ParallelToolStepExecutor {
             }
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
-                // Blocked tool in batch → fail the entire batch for safety
                 log.warnf("[PARALLEL-BLOCKED] session=%s tool=%s blocked: %s",
                            context.sessionId(), call.toolName(), blocked.observation());
                 String blockedObs = String.format(
@@ -97,15 +111,28 @@ public class ParallelToolStepExecutor {
             }
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate dedup) {
-                // Duplicate in batch — surface cached observation, skip entire batch
-                log.warnf("[PARALLEL-DEDUP] session=%s tool=%s is duplicate — " +
-                          "using cached observation, skipping full batch.",
-                           context.sessionId(), call.toolName());
-                ReasoningStep dedupStep = batchStep.withObservation(
-                    "[PARALLEL-DEDUP] " + dedup.cachedObservation());
-                history.add(dedupStep);
-                return StepDecision.proceed(dedupStep);
+                // §7.15: Dedup tool → use cached result; DO NOT skip peers.
+                log.infof("[PARALLEL-DEDUP] session=%s tool=%s is duplicate — " +
+                          "using cached observation, continuing with remaining %d tools.",
+                          context.sessionId(), call.toolName(),
+                          calls.size() - 1);
+                dedupCalls.add(call.withResult(
+                    "[DEDUP] " + dedup.cachedObservation(), true));
+                continue; // other tools proceed
             }
+
+            // GuardDecision.Allow
+            allowedCalls.add(call);
+        }
+
+        // If ALL tools were dedup, return the merged dedup batch
+        if (allowedCalls.isEmpty()) {
+            log.infof("[PARALLEL-DEDUP] session=%s all %d tools were duplicates " +
+                      "— returning merged dedup batch.",
+                      context.sessionId(), calls.size());
+            List<ParallelToolCall> allDedup = new ArrayList<>(dedupCalls);
+            return buildCompletedBatchDecision(
+                context, history, batchStep, allDedup, consecutiveFailures);
         }
 
         try {
@@ -128,46 +155,111 @@ public class ParallelToolStepExecutor {
 
         // 3. Execute all tools in parallel
         log.debugf("[PARALLEL-OTEL] session=%s executing %d tools in parallel: %s",
-                   context.sessionId(), calls.size(),
-                   calls.stream().map(ParallelToolCall::toolName)
+                   context.sessionId(), allowedCalls.size(),
+                   allowedCalls.stream().map(ParallelToolCall::toolName)
                         .collect(Collectors.joining(", ")));
 
-        ExecutorService executor = WorkspaceExecutors.newVirtualThreadPerTaskExecutor();
-        List<CompletableFuture<ParallelToolCall>> futures = calls.stream()
-            .map(call -> CompletableFuture.supplyAsync(() -> {
-                try {
-                    ToolResponse response = toolInvoker.invoke(
-                        call.toolName(), call.params(), context.sessionId());
-                    return call.withResult(response.output(), response.success());
-                } catch (Exception e) {
-                    log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",
-                              context.sessionId(), call.toolName(), e.getMessage());
-                    return call.withResult(
-                        "Tool execution failed: " + e.getMessage(), false);
-                }
-            }, executor))
-            .toList();
+        // §7.13: Capture OTel context on the calling thread BEFORE submitting.
+        // ContextAwareExecutorService propagates WorkspaceScoped only.
+        // OTel ThreadLocal span context requires explicit propagation.
+        final Context otelContext = Context.current();
 
-        // 4. Collect all results (wait for all — §7.5)
-        List<ParallelToolCall> completed = new ArrayList<>();
-        for (CompletableFuture<ParallelToolCall> future : futures) {
-            try {
-                completed.add(future.get());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return StepDecision.terminal(AgentResult.failed(
-                    "Parallel tool execution interrupted.",
-                    AgentResult.FailureCategory.SYSTEM_ERROR,
-                    List.copyOf(history)));
-            } catch (ExecutionException e) {
-                log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
-                           e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
-                completed.add(calls.get(futures.indexOf(future))
-                    .withResult("Unexpected execution failure.", false));
+        MDC.put(MdcKeys.PARALLEL_BATCH_SIZE, String.valueOf(allowedCalls.size()));
+        MDC.put(MdcKeys.PARALLEL_TOOLS,
+            allowedCalls.stream().map(ParallelToolCall::toolName)
+                 .collect(Collectors.joining(",")));
+
+        List<ParallelToolCall> allowedCompleted = new ArrayList<>();
+        
+        // §7.12: ExecutorService MUST be closed after batch completes.
+        // WorkspaceExecutors.newVirtualThreadPerTaskExecutor() returns
+        // ContextAwareExecutorService which implements AutoCloseable via
+        // ExecutorService (Java 19+ close() calls shutdown() + awaitTermination).
+        try (ExecutorService executor =
+                WorkspaceExecutors.newVirtualThreadPerTaskExecutor()) {
+
+            List<CompletableFuture<ParallelToolCall>> futures = allowedCalls.stream()
+                .map(call -> CompletableFuture.supplyAsync(() -> {
+                    // Restore OTel context in this virtual thread
+                    try (Scope _ = otelContext.makeCurrent()) {
+                        try {
+                            ToolResponse response = toolInvoker.invoke(
+                                call.toolName(), call.params(), context.sessionId());
+                            return call.withResult(response.output(), response.success());
+                        } catch (Exception e) {
+                            log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",
+                                      context.sessionId(), call.toolName(), e.getMessage());
+                            return call.withResult(
+                                "Tool execution failed: " + e.getMessage(), false);
+                        }
+                    }
+                    // otelScope.close() restores the previous context automatically
+                }, executor))
+                .toList();
+
+            for (int i = 0; i < futures.size(); i++) {
+                CompletableFuture<ParallelToolCall> future = futures.get(i);
+                try {
+                    allowedCompleted.add(future.get(toolTimeoutSeconds, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return StepDecision.terminal(AgentResult.failed(
+                        "Parallel tool execution interrupted.",
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
+                } catch (TimeoutException e) {
+                    // §7.16: timeout — tool slot gets a FAIL result, batch continues
+                    future.cancel(true); // attempt interrupt; virtual thread may not honour it
+                    ParallelToolCall timedOut = allowedCalls.get(i);
+                    log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
+                              context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
+                    allowedCompleted.add(timedOut.withResult(
+                        String.format("Tool timed out after %ds.", toolTimeoutSeconds),
+                        false));
+                } catch (ExecutionException e) {
+                    log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
+                               e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                    allowedCompleted.add(allowedCalls.get(i)
+                        .withResult("Unexpected execution failure.", false));
+                }
+            }
+        } finally {
+            MDC.remove(MdcKeys.PARALLEL_BATCH_SIZE);
+            MDC.remove(MdcKeys.PARALLEL_TOOLS);
+        }
+
+        // Pass 2: Execute only ALLOWED calls in parallel (virtual threads)
+        // Merge: dedup results come first in original order for LLM clarity
+        List<ParallelToolCall> allCompleted = new ArrayList<>();
+        for (ParallelToolCall original : calls) {
+            Optional<ParallelToolCall> dedup = dedupCalls.stream()
+                .filter(d -> d.callId().equals(original.callId()))
+                .findFirst();
+            if (dedup.isPresent()) {
+                allCompleted.add(dedup.get());
+            } else {
+                allowedCompleted.stream()
+                    .filter(c -> c.callId().equals(original.callId()))
+                    .findFirst()
+                    .ifPresent(allCompleted::add);
             }
         }
 
-        // 5. Fold all results back into the batch step (§7.1, §7.2)
+        return buildCompletedBatchDecision(
+            context, history, batchStep, allCompleted, consecutiveFailures);
+    }
+
+    /**
+     * Folds completed results into a batch step, persists to history and SQLite.
+     * Called from both the all-dedup path and the normal execution path.
+     */
+    private StepDecision buildCompletedBatchDecision(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep batchStep,
+            List<ParallelToolCall> completed,
+            int consecutiveFailures) {
+
         String batchJson;
         try {
             batchJson = objectMapper.writeValueAsString(completed);
@@ -198,6 +290,20 @@ public class ParallelToolStepExecutor {
         );
 
         history.add(completedBatchStep);
+
+        // §7.14: Persist updated history to ChatMemoryStore (SQLite).
+        // ChatHistoryAssembler uses in-memory history but SQLite must
+        // stay consistent for session recovery after restarts.
+        try {
+            chatMemoryWriter.write(
+                context.sessionId(), history, context.goal());
+        } catch (Exception e) {
+            // Non-fatal: in-memory history is correct. Log and continue.
+            log.warnf("[PARALLEL] session=%s: ChatMemoryWriter.write() failed " +
+                      "after batch — history is correct in memory but not " +
+                      "persisted to SQLite. Cause: %s",
+                      context.sessionId(), e.getMessage());
+        }
 
         for (ParallelToolCall c : completed) {
             ReasoningStep toolStep = new ReasoningStep(

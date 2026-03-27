@@ -43,6 +43,9 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 - New channels must fit the channel SPI without changing core engine behavior.
 - Any fallback to Telegram is LEGACY and should be removed, not copied.
 
+### 1.5 Channel type policy
+- POLICY: WorkspaceContext.channelType() returns Optional<String>. Use requireChannelType() only at call sites where a missing channelType is a fatal invariant violation. Use channelType().orElse("UNKNOWN") at call sites where a fallback is acceptable (e.g., audit logging only).
+
 ---
 
 ## 2. Context and session binding
@@ -456,4 +459,43 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 7.11 LEGACY: Single getFirst() path in ReasoningStepParser is removed
      in Phase 70. Do NOT add it back as a fallback without updating
-     this invariant first.
+     this invariant first.
+
+7.12 MUST: The ExecutorService created for a parallel batch MUST be
+     closed after all futures complete. Use try-with-resources or
+     an explicit close() in a finally block. Leaking virtual thread
+     executors causes GC pressure and metric drift over long sessions.
+
+7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
+     to virtual threads. Capture io.opentelemetry.context.Context.current()
+     on the calling thread BEFORE submitting to the executor. Restore it
+     inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
+     propagates WorkspaceScoped session context (ScopedValue) only — it
+     does NOT propagate OTel ThreadLocal spans.
+
+7.14 MUST: ChatMemoryWriter.write() MUST be called after every parallel
+     batch execution completes (post-fold, pre-return). This keeps
+     ChatMemoryStore (SQLite persistence) consistent with the in-memory
+     ReasoningStep history list used by ChatHistoryAssembler.
+
+7.15 MUST NOT: A deduplicated tool in a parallel batch MUST NOT cause
+     its peers to be skipped. The dedup tool receives its cached
+     observation as its result. All other tools in the batch proceed
+     to execution normally.
+
+7.16 SHOULD: Each parallel tool execution MUST time out after
+     arcclaw.parallel.tool-timeout-seconds (default: 60). A timed-out
+     tool returns withResult("Tool timed out after Xs", false) and
+     does not block the rest of the batch.
+
+7.17 MUST: Metrics counters arcclaw.agent.tool.calls MUST reflect
+     individual tool names in a parallel batch — not the __parallel__
+     sentinel. The MetricsAgentObserver already receives individual
+     onStepComplete() calls from ParallelToolStepExecutor (one per
+     tool) — verify the sentinel step itself does NOT trigger an
+     additional __parallel__ counter increment.
+
+7.18 INVARIANT: ReasoningStep history list is mutated EXACTLY ONCE
+     per parallel batch execution — inside buildCompletedBatchDecision().
+     Do NOT add intermediate steps for dedup results or partial
+     executions. The single batch step encodes ALL N results.

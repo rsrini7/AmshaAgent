@@ -30,9 +30,17 @@ public class MetricsAgentObserver implements AgentObserver {
                 "role", role != null ? role : "unknown").increment();
 
         // Track which tools are being called and how often
-        if (step.action() != null && !ReasoningStep.FINISH.equals(step.action())) {
+        if (step.action() != null 
+                && !ReasoningStep.FINISH.equals(step.action())
+                && !ReasoningStep.PARALLEL_SENTINEL.equals(step.action())) {
             registry.counter("arcclaw.agent.tool.calls",
                     "tool", step.action(),
+                    "role", role != null ? role : "unknown").increment();
+        }
+
+        if (ReasoningStep.PARALLEL_SENTINEL.equals(step.action())) {
+            // Count batch-level metrics (invocation is a parallel batch)
+            registry.counter("arcclaw.agent.parallel.batches",
                     "role", role != null ? role : "unknown").increment();
         }
 

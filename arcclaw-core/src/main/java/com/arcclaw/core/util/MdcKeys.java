@@ -11,4 +11,10 @@ public final class MdcKeys {
     public static final String CHAT_ID      = "chatId";
     public static final String AGENT_ROLE   = "agentRole";
     public static final String ROLE         = "role";
+
+    /** Number of tools in the current parallel batch. */
+    public static final String PARALLEL_BATCH_SIZE = "parallelBatchSize";
+
+    /** Comma-separated tool names in current parallel batch. */
+    public static final String PARALLEL_TOOLS = "parallelTools";
 }
