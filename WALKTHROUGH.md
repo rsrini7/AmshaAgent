@@ -1973,7 +1973,40 @@ Conducted a mechanical sweep to modernize the codebase using JDK 21+ features an
 **Verification**:
 - ✅ `arcclaw-core`: 350 tests pass.
 - ✅ `arcclaw-app`: 121 tests pass.
-- ✅ Total 471 tests passed in 02:27 mins.
+- ✅ Total 471 tests passed.
+
+---
+
+## Phase 73: Telegram Inline Keyboard & Stale Checkpoint GC ✅
+
+Finalized the Telegram parallel HITL experience with interactive inline keyboards and implemented a garbage collector for stale `AWAITING_APPROVAL` checkpoints.
+
+### Interactive Telegram UI
+
+| Component | Responsibility |
+|-----------|----------------|
+| [BatchHitlKeyboardBuilder.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-channel-telegram/src/main/java/com/arcclaw/channel/telegram/BatchHitlKeyboardBuilder.java) | Generates `inline_keyboard` JSON and parses 64-byte callback payloads. |
+| [TelegramCallbackHandler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-channel-telegram/src/main/java/com/arcclaw/channel/telegram/TelegramCallbackHandler.java) | Processes button clicks, executes reflexes via `ReflexRegistry`, and updates message state. |
+| [TelegramChannelSender.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-channel-telegram/src/main/java/com/arcclaw/channel/telegram/TelegramChannelSender.java) | Enhanced ProducerTemplate wrapper to support interactive keyboards and message editing. |
+
+### Lifecycle & GC Hardening
+
+- **Batch Decision Utility**: Extracted shared logic to `BatchDecisionUtil` for parsing `parallel:tool1,tool2` tokens and merging tool-specific outcomes.
+- **Stale Approval Sweep**: Integrated `sweepTimedOutApprovals()` into the `SessionReaper` (Phase 53.1). Checkpoints awaiting approval for >24h are now auto-denied to prevent state bloat.
+- **User Feedback**: Added `StaleApprovalExpired` event and notification logic to inform users when a session has timed out due to HITL inactivity.
+
+### Verification Results
+
+| Suite | Focus | Result |
+|-------|-------|--------|
+| `BatchDecisionUtilTest` | Tool name extraction & batch results | ✅ Pass |
+| `WorkspaceManagerGcSweepTest` | Stale checkpoint termination & audit | ✅ Pass |
+| `TelegramChannelSenderTest` | Keyboard header propagation | ✅ Pass |
+| `mvn clean verify` | Reactor-wide regression check | ✅ Pass |
+
+> [!TIP]
+> **Callback Data Compression**: Since Telegram limits callback data to 64 bytes, we use a compact format `BATCH_ACTION:safeSessionId[:safeToolName]`. This ensures multi-tool batches remain clickable even with long session IDs.
+ in 02:27 mins.
 
 ---
 

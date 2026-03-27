@@ -1447,3 +1447,20 @@
 - [x] Updated `AgentResultFormatter` for per-tool HITL formatting.
 - [x] `CheckpointResumeHandler` updated to skip `DENIED` tools during batch replay.
 - [x] Update documentation (PLAN.md, TASKS.md, WALKTHROUGH.md) with architectural changes.
+
+---
+
+## Phase 73 — Telegram Inline Keyboard & Stale Checkpoint GC ✅
+- [x] Update `Architecture_Invariants.md` with §7.24 (Telegram inline keyboard), §7.25 (callback data format), and §7.26 (stale checkpoint GC).
+- [x] Centralize parallel batch tool parsing in `BatchDecisionUtil.java`.
+- [x] Refactor `ApproveReflex` and `DenyReflex` to utilize `BatchDecisionUtil` for consistency.
+- [x] Implement `findStaleAwaitingApproval(Instant)` in `StatefulAgentStore` and `StatefulAgentStoreImpl`.
+- [x] Update `SessionReaper` to auto-deny stale `AWAITING_APPROVAL` checkpoints (default 24h) and fire `StaleApprovalExpired` events.
+- [x] Create `TelegramStaleApprovalObserver` to notify users via Telegram upon HITL timeout.
+- [x] Implement `BatchHitlKeyboardBuilder` to generate Telegram `inline_keyboard` JSON for parallel batches.
+- [x] Update `TelegramChannelSender` with `sendWithKeyboard` and `editMessage` to support interactive buttons.
+- [x] Update `AgentDispatchHandler` to pass `ApprovalPrompt` nodes down the pipeline for parallel batches.
+- [x] Implement `TelegramCallbackHandler` to process `BATCH_` callback queries and update inline keyboards.
+- [x] Wire `TelegramCallbackHandler` into `TelegramChannelRoute` choice block.
+- [x] Final verification: mvn clean verify passes.
+
