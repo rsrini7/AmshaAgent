@@ -5,18 +5,18 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.camel.ProducerTemplate;
-import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
-import org.apache.camel.component.telegram.model.OutgoingTextMessage;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.apache.camel.ProducerTemplate;
+import org.apache.camel.component.telegram.model.EditMessageTextMessage;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.apache.camel.component.telegram.model.OutgoingTextMessage;
+import org.jboss.logging.Logger;
 
 /**
  * Telegram implementation of ChannelSender.
@@ -69,6 +69,9 @@ public class TelegramChannelSender implements ChannelSender {
             String toolNamesStr = promptOpt.get().toolName().substring("parallel:".length());
             List<String> list = Arrays.asList(toolNamesStr.split(","));
             InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(promptOpt.get().sessionId(), list);
+            // §7.28: escape at call site — rendered text from renderer.render() is already
+            // MarkdownV2-safe for structured nodes, but the HITL text portion from
+            // AgentResultFormatter is plain text and needs escaping.
             sendWithKeyboard(recipient, rendered, markup);
         } else {
             sendRawToChatId(chatId, rendered);
@@ -102,20 +105,43 @@ public class TelegramChannelSender implements ChannelSender {
         String chatId = recipient.channelId();
 
         OutgoingTextMessage msg = new OutgoingTextMessage();
+        // §7.28: Text is assumed pre-escaped by caller. sendWithKeyboard() is
+        // deliberately dumb — it sets ParseMode and sends, nothing else.
         msg.setText(text);
-        // P74: add MarkdownV2 only after text goes through TelegramMarkdownV2Renderer.escape()
-        // Without parse mode the text renders as plain text; keyboard buttons are unaffected.
+        msg.setParseMode("MarkdownV2");
         msg.setReplyMarkup(markup);
 
         producerTemplate.sendBodyAndHeader("telegram:bots", msg,
             TelegramConstants.TELEGRAM_CHAT_ID, chatId);
     }
 
+    /**
+     * Edits an existing message's text and/or inline keyboard. §7.27
+     * <p>
+     * Uses Camel's {@link EditMessageTextMessage} which maps to the
+     * Telegram Bot API {@code editMessageText} endpoint.
+     *
+     * @param chatId    the chat containing the message
+     * @param messageId the message to edit
+     * @param newText   replacement text (plain, not MarkdownV2-escaped)
+     * @param markup    new inline keyboard, or {@code null} to remove all buttons
+     */
     public void editMessage(String chatId, int messageId, String newText, InlineKeyboardMarkup markup) {
-        // P74-3: editMessageReplyMarkup not yet supported via camel-telegram.
-        // Proper implementation requires OutgoingEditMessage or direct Bot API call.
-        // Stubbing to avoid sending redundant new messages.
-        log.debugf("editMessage: deferred to P74 (chatId=%s, msgId=%d)", chatId, messageId);
+        try {
+            EditMessageTextMessage edit = EditMessageTextMessage.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .text(newText != null ? newText : "")
+                .replyMarkup(markup != null ? markup : new InlineKeyboardMarkup())
+                .build();
+            producerTemplate.sendBodyAndHeader(
+                "telegram:bots", edit,
+                TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            log.debugf("editMessage sent for chatId=%s msgId=%d", chatId, messageId);
+        } catch (Exception e) {
+            log.warnf("editMessage failed for chatId=%s msgId=%d: %s",
+                      chatId, messageId, e.getMessage());
+        }
     }
 
     private static final int TELEGRAM_MAX_LENGTH = 4096;

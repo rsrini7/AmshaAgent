@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -46,6 +47,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private static final Logger log = Logger.getLogger(StatefulAgentStoreImpl.class);
     private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {
     };
+
+    /**
+     * In-memory set of sessionIds currently in the process of resuming
+     * a parallel batch. Prevents double-resume from concurrent callbacks.
+     * §7.29 — NOT persisted; cleared on session termination.
+     */
+    private final ConcurrentHashMap<String, Boolean>
+        resumingBatches = new ConcurrentHashMap<>();
 
     @Inject
     ObjectMapper objectMapper;
@@ -481,5 +490,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC))
                 .getResultList();
+    }
+
+    @Override
+    public boolean markBatchResuming(String sessionId) {
+        // putIfAbsent returns null if the key was NOT present → this
+        // caller is first → safe to proceed.
+        return resumingBatches.putIfAbsent(sessionId, Boolean.TRUE) == null;
+    }
+
+    @Override
+    public void clearBatchResuming(String sessionId) {
+        resumingBatches.remove(sessionId);
     }
 }

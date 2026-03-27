@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -62,6 +64,10 @@ class DenyReflexTest {
             instance = (DenyReflex) ((ClientProxy) denyReflex).arc_contextualInstance();
         }
         instance.jobCompletedEvent = jobCompletedEventMock;
+        
+        // §7.29 guard: allow tests to proceed by default
+        when(statefulAgentStore.markBatchResuming(anyString()))
+                .thenReturn(true);
     }
 
     private MessageContext createContext(String input) {
@@ -143,5 +149,30 @@ class DenyReflexTest {
             checkpoint.getStatus() == CheckpointStatus.FAILED &&
             AgentSentinels.DENY_SENTINEL.equals(checkpoint.getFailReason())
         ));
+    }
+
+    @Test
+    void testResumeGuardBlocksDuplicateCall() {
+        String userId = "user-1";
+        AgentCronEntity cron = new AgentCronEntity();
+        cron.id = "cron-123";
+        cron.userId = userId;
+        cron.status = CronStatus.AWAITING_APPROVAL;
+        when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
+
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId("session-1");
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+
+        when(statefulAgentStore.findLatestAwaitingApprovalForCron(anyString())).thenReturn(Optional.of(cp));
+        
+        // MOCK THE GUARD TO FAIL
+        when(statefulAgentStore.markBatchResuming(anyString())).thenReturn(false);
+
+        MessageContext ctx = createContext("/deny cron-123");
+        ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny cron-123", ctx);
+
+        assertEquals("⏳ Already processing your approval. Please wait.", result.commandResponse().get());
+        assertFalse(ctx.isResumeSignal());
     }
 }

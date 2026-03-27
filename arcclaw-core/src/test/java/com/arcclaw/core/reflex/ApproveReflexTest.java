@@ -1,6 +1,7 @@
 package com.arcclaw.core.reflex;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -63,6 +64,10 @@ class ApproveReflexTest {
             instance = (ApproveReflex) ((ClientProxy) approveReflex).arc_contextualInstance();
         }
         instance.jobCompletedEvent = jobCompletedEventMock;
+        
+        // §7.29 guard: allow tests to proceed by default
+        when(statefulAgentStore.markBatchResuming(anyString()))
+                .thenReturn(true);
     }
 
     private MessageContext createContext(String input) {
@@ -143,8 +148,28 @@ class ApproveReflexTest {
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
 
         assertEquals("Session Result", result.commandResponse().get());
-        assertTrue(ctx.isResumeSignal());
+        assertTrue(ctx.isResumeSignal(), "Resume signal should be set on successful flow");
         verify(agentLoop).run(eq("session-1"), eq(AgentRoleEnum.COORDINATOR.toScopedName()), anyString(), any(), anyInt(), eq(ctx));
+    }
+
+    @Test
+    void testResumeGuardBlocksDuplicateCall() {
+        String userId = "user-1";
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+
+        when(statefulAgentStore.load(anyString(), eq(AgentRoleEnum.COORDINATOR.toScopedName())))
+                .thenReturn(Optional.of(cp));
+        
+        // MOCK THE GUARD TO FAIL (Someone else is already resuming)
+        when(statefulAgentStore.markBatchResuming(anyString())).thenReturn(false);
+
+        MessageContext ctx = createContext("/approve");
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
+
+        assertEquals("⏳ Already processing your approval. Please wait.", result.commandResponse().get());
+        // Verify signal is NOT set because the loop was never entered
+        assertFalse(ctx.isResumeSignal(), "Resume signal should NOT be set when guard blocks call");
     }
 
     @Test
