@@ -32,6 +32,9 @@ public enum SecurityEventType {
     CHECKPOINT_COMPLETED,  // stateful store markCompleted()
     CHECKPOINT_FAILED,     // stateful store markFailed()
 
+    // Misc Security
+    SECURITY,
+
     // Context memory
     CONTEXT_COMPACTED,     // session history summary created
 

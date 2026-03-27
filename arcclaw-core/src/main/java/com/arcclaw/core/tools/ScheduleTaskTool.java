@@ -210,7 +210,7 @@ public class ScheduleTaskTool implements AgentTool {
         entity.sessionId      = sessionId;
         entity.userId         = userId;
         entity.chatId         = chatId;
-        entity.channelType    = WorkspaceContext.channelType();
+        entity.channelType    = WorkspaceContext.requireChannelType();
         entity.cronExpression = cronExpression;
         entity.timezone       = timezone;
         entity.runOnce        = runOnce;

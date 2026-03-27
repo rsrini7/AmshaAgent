@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import java.util.Locale;
 
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -37,6 +38,10 @@ public class EngineStepHandler {
 
     @Inject GovernanceStrategy governanceLayer;
     @Inject Instance<AgentObserver> observers;
+    @Inject com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    private static final Pattern NATURAL_LANGUAGE_GATE =
+        Pattern.compile("^[A-Za-z].*\\s.*[.!?]\\s*$", Pattern.DOTALL);
 
     StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
             List<ReasoningStep> history, String transientError,
@@ -224,28 +229,14 @@ public class EngineStepHandler {
     private String extractFailedGeneration(String rawError) {
         if (rawError == null) return null;
         try {
-            int idx = rawError.indexOf("\"failed_generation\"");
-            if (idx < 0) return null;
-            int start = rawError.indexOf('"', idx + "\"failed_generation\"".length() + 1);
+            int start = rawError.indexOf('{');
             if (start < 0) return null;
-            StringBuilder sb = new StringBuilder();
-            boolean escape = false;
-            for (int i = start + 1; i < rawError.length(); i++) {
-                char c = rawError.charAt(i);
-                if (escape) {
-                    if (c == 'n') sb.append('\n');
-                    else if (c == 't') sb.append('\t');
-                    else sb.append(c);
-                    escape = false;
-                } else if (c == '\\') {
-                    escape = true;
-                } else if (c == '"') {
-                    break;
-                } else {
-                    sb.append(c);
-                }
-            }
-            String result = sb.toString().strip();
+            com.fasterxml.jackson.databind.JsonNode root =
+                objectMapper.readTree(rawError.substring(start));
+            com.fasterxml.jackson.databind.JsonNode node =
+                root.path("failed_generation");
+            if (node.isMissingNode() || !node.isTextual()) return null;
+            String result = node.asText().strip();
             return result.isBlank() ? null : result;
         } catch (Exception e) {
             log.debugf("extractFailedGeneration parse failed: %s", e.getMessage());
@@ -254,10 +245,17 @@ public class EngineStepHandler {
     }
 
     private boolean looksLikeNaturalLanguage(String text) {
-        if (text == null || text.isBlank()) return false;
-        char first = text.stripLeading().charAt(0);
-        if (first == '{' || first == '[') return false;
-        return text.contains(" ");
+        if (text == null || text.length() < 20) return false;
+        String trimmed = text.strip();
+        char first = trimmed.charAt(0);
+        if (first == '{' || first == '[' || first == '<') return false;
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.contains("error") || lower.contains("exception") ||
+            lower.contains("invalid") || lower.contains("failed") ||
+            lower.contains("limit") || lower.contains("permission") ||
+            lower.contains("unauthorized") || lower.contains("code\":")) return false;
+        String[] tokens = trimmed.split("\\s+");
+        return tokens.length >= 5 && NATURAL_LANGUAGE_GATE.matcher(trimmed).matches();
     }
 
     private boolean isNetworkError(Exception e) {

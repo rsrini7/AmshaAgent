@@ -94,7 +94,7 @@ public class CheckpointResumeHandler {
         // 3. Logic-Based Denial Check
         // We no longer scan chat history. We check if the "goal" passed from
         // CommandDispatchHandler contains the explicit signal "denial".
-        boolean isDenial = goal != null && goal.toLowerCase().contains("denial");
+        boolean isDenial = AgentSentinels.GOAL_DENY_APPROVED.equals(goal);
 
         if (isDenial) {
             log.infof("[AgentLoop] User denied tool execution for session %s, tool %s", sessionId, pendingTool);

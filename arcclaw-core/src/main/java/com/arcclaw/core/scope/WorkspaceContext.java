@@ -1,5 +1,6 @@
 package com.arcclaw.core.scope;
 
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 import com.arcclaw.channel.api.ChannelType;
@@ -125,10 +126,18 @@ public final class WorkspaceContext {
     }
 
 
-    // Accessor with safe default — TELEGRAM is correct for all existing callers
-    public static String channelType() {
-        return CHANNEL_TYPE.isBound() && CHANNEL_TYPE.get() != null
-            ? CHANNEL_TYPE.get()
-            : "TELEGRAM";
+    public static Optional<String> channelType() {
+        if (CHANNEL_TYPE.isBound() && CHANNEL_TYPE.get() != null) {
+            return Optional.of(CHANNEL_TYPE.get());
+        }
+        return Optional.empty();
+    }
+
+    public static String requireChannelType() {
+        return channelType().orElseThrow(() ->
+            new IllegalStateException(
+                "CHANNEL_TYPE not bound — violates Architecture_Invariants.md §1.4. " +
+                "Ensure all channel entry points bind ChannelType via " +
+                "WorkspaceContext.run(..., channelType, ...)."));
     }
 }

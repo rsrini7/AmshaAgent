@@ -14,6 +14,8 @@ import static org.mockito.Mockito.verify;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import com.arcclaw.channel.api.ChannelType;
+
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -56,6 +58,7 @@ class ScheduleTaskToolTest {
                 "test-chat",
                 AutonomyLevel.SUPERVISED,
                 "coordinator",
+                ChannelType.TELEGRAM,
                 task);
     }
 
@@ -116,13 +119,13 @@ class ScheduleTaskToolTest {
     void testMissingUserIdReturnsFailure403() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        // Bind with blank/null user to simulate missing
         ToolResponse result = WorkspaceContext.run(
                 "test-session-id",
                 "",          // ← blank userId triggers the 403
                 "test-chat",
                 AutonomyLevel.SUPERVISED,
                 "coordinator",
+                ChannelType.TELEGRAM,
                 () -> tool.execute(Map.of(
                         "cronExpression", "0 9 * * 1",
                         "goal", "Send report"

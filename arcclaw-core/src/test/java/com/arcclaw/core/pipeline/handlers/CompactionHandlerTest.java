@@ -35,6 +35,8 @@ class CompactionHandlerTest {
     @Mock private CompactionService compactionService;
     @Mock private Event<CompactionRequest> compactionEvent;
     @Mock private CompactionInFlightFlag compactionInFlight;
+    @Mock private com.arcclaw.core.governance.RateLimitTracker rateLimitTracker;
+    @Mock private com.arcclaw.core.state.CompactionEventBridge compactionEventBridge;
 
     @InjectMocks
     private CompactionHandler handler;

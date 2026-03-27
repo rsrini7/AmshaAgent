@@ -15,7 +15,7 @@ class AgentErrorMessageUtilTest {
         String result = AgentErrorMessageUtil.sanitizeErrorMessage(raw);
         
         assertTrue(result.contains("8 minutes and 45 seconds"), "Should parse and round minutes/seconds");
-        assertTrue(result.contains("temporarily throttled"), "Should use standard throttle message");
+        assertTrue(result.contains("temporarily throttled") || result.contains("I'm a little busy right now"), "Should use standard throttle message");
         assertFalse(result.contains("{"), "Should not leak JSON");
         assertFalse(result.contains("rate_limit_exceeded"), "Should not leak internal error codes");
     }

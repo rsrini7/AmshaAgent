@@ -48,8 +48,7 @@ public class StructuredRetryLoop {
             return executeWithBudgetGate(sessionId, call);
         } catch (BudgetWarningException e1) {
             log.warnf("Budget warning for session %s during %s: %s", sessionId, operationName, e1.getMessage());
-            // Absorb warning and proceed
-            return call.get();
+            return executeWithBudgetGate(sessionId, call);
         } catch (JsonExtractionException e1) {
             log.warnf("First extraction attempt failed for %s. Retrying...", operationName);
             
@@ -66,7 +65,7 @@ public class StructuredRetryLoop {
                 return result;
             } catch (BudgetWarningException ew) {
                 log.warnf("Budget warning during retry for %s: %s", operationName, ew.getMessage());
-                return call.get();
+                return executeWithBudgetGate(sessionId, call);
             } catch (JsonExtractionException e2) {
                 log.errorf("Extraction failed after retry for %s. Raw: %s", operationName, e2.getRawResponse());
                 throw new StructuredOutputException("Failed to extract structured output after retry: " + e2.getMessage(), e2);

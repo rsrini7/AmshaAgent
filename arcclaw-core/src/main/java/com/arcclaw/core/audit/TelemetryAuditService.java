@@ -109,6 +109,7 @@ public class TelemetryAuditService {
             case BUDGET_EXCEEDED -> SecurityEventType.LOOP_BUDGET_EXCEEDED;
             case MAX_ITERATIONS -> SecurityEventType.LOOP_MAX_ITERATIONS;
             case AWAITING_APPROVAL -> SecurityEventType.LOOP_AWAITING_APPROVAL;
+            case SECURITY_EVENT -> SecurityEventType.SECURITY;
             case APPROVAL_TIMEOUT -> SecurityEventType.LOOP_ERROR;
         };
     }
