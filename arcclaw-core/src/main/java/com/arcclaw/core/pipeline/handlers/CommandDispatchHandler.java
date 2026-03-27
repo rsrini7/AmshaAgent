@@ -38,16 +38,22 @@ public class CommandDispatchHandler implements MessageHandler {
 
         return switch (cmd) {
             case ChannelCommand.Approve a -> {
-                String input = a.cronId()
-                        .map(id -> "/approve " + id)
-                        .orElse("/approve");
+                String input = "/approve";
+                if (a.cronId().isPresent()) {
+                    input += " " + a.cronId().get();
+                } else if (a.toolName().isPresent()) {
+                    input += " " + a.toolName().get();
+                }
                 dispatch(context, input);
                 yield HandleResult.STOP;
             }
             case ChannelCommand.Deny d -> {
-                String input = d.cronId()
-                        .map(id -> "/deny " + id)
-                        .orElse("/deny");
+                String input = "/deny";
+                if (d.cronId().isPresent()) {
+                    input += " " + d.cronId().get();
+                } else if (d.toolName().isPresent()) {
+                    input += " " + d.toolName().get();
+                }
                 dispatch(context, input);
                 yield HandleResult.STOP;
             }

@@ -199,8 +199,26 @@ public class CheckpointResumeHandler {
                 List.copyOf(history));
         }
 
+        Map<String, String> decisions = Map.of();
+        try {
+            decisions = objectMapper.readValue(
+                checkpoint.getBatchToolDecisions(),
+                new TypeReference<Map<String, String>>() {}
+            );
+        } catch (Exception e) {
+            log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions.", sessionId);
+        }
+
         List<ParallelToolCall> completed = new ArrayList<>();
         for (ParallelToolCall call : calls) {
+            String decision = decisions.getOrDefault(
+                call.toolName(), AgentSentinels.TOOL_DECISION_PENDING);
+
+            if (AgentSentinels.TOOL_DECISION_DENIED.equals(decision)) {
+                completed.add(call.withResult("User denied this tool execution.", false));
+                continue;
+            }
+
             try {
                 ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                     sessionId,

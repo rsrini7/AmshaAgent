@@ -13,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -410,5 +411,61 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         .setParameter("sid", sessionId)
         .setParameter("role", role)
         .executeUpdate();
+    }
+
+    @Override
+    public boolean updateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
+        return withRetry(() -> self.doUpdateBatchToolDecision(sessionId, agentRole, toolName, decision), "updateBatchToolDecision");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
+        em.clear();
+        Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
+        if (cpOpt.isEmpty()) return false;
+        
+        AgentCheckpoint cp = cpOpt.get();
+        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || !cp.hasBatchToolDecisions()) {
+            return false;
+        }
+
+        try {
+            Map<String, String> map = objectMapper.readValue(
+                cp.getBatchToolDecisions(),
+                new TypeReference<Map<String, String>>() {}
+            );
+            if (!map.containsKey(toolName)) {
+                return false;
+            }
+            map.put(toolName, decision);
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
+            em.merge(cp);
+            return true;
+        } catch (Exception e) {
+            log.errorf("Failed to update batch tool decision: %s", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    @Transactional
+    public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
+        Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
+        if (cpOpt.isEmpty()) return false;
+        
+        AgentCheckpoint cp = cpOpt.get();
+        if (!cp.hasBatchToolDecisions()) return false;
+
+        try {
+            Map<String, String> map = objectMapper.readValue(
+                cp.getBatchToolDecisions(),
+                new TypeReference<Map<String, String>>() {}
+            );
+            return map.values().stream()
+                .noneMatch(val -> AgentSentinels.TOOL_DECISION_PENDING.equals(val));
+        } catch (Exception e) {
+            log.errorf("Failed to check if batch decided: %s", e.getMessage());
+            return false;
+        }
     }
 }

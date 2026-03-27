@@ -503,3 +503,29 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
      per parallel batch execution — inside buildCompletedBatchDecision().
      Do NOT add intermediate steps for dedup results or partial
      executions. The single batch step encodes ALL N results.
+
+7.19 INVARIANT: ParallelToolCall.callId() MUST be non-null at the point
+     the merge loop executes. ReasoningStepParser MUST generate a
+     UUID fallback when ToolExecutionRequest.id() is null (Ollama). 
+     Never use .equals() on a potentially-null callId — use Objects.equals().
+
+7.20 INVARIANT: A parallel batch HITL pause stores per-tool decision
+     state in AgentCheckpoint.batchToolDecisions (TEXT, JSON) as:
+       { "toolName": "PENDING" | "APPROVED" | "DENIED" }
+     toolName is the key (not callId) because tool names appear in
+     user-facing commands: `approve github`, `deny manage_schedule`.
+
+7.21 MUST: `approve` / `deny` with no argument MUST behave identically
+     to P70/P71: approve or deny ALL pending tools atomically.
+     Per-tool commands only activate when a tool name argument is given
+     AND the current checkpoint has a batchToolDecisions field.
+
+7.22 INVARIANT: A partially-decided parallel batch (some tools APPROVED,
+     some PENDING) MUST NOT resume. Resume fires only when ALL tools in
+     the batch have a non-PENDING decision. Pending tools not explicitly
+     decided when `approve` is typed are auto-approved.
+
+7.23 MUST: All N tools MUST appear in the completedBatchStep passed to
+     the LLM. Denied tools carry observation:
+     "User denied this tool execution." with success=false.
+     The LLM sees the full picture and decides next steps.

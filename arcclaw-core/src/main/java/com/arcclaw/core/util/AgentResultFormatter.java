@@ -11,17 +11,8 @@ public class AgentResultFormatter {
     public static String format(AgentResult result) {
         String reply = switch (result) {
             case AgentResult.Finished f       -> f.answer();
-            case AgentResult.AwaitingApproval a -> {
-                StringBuilder sb = new StringBuilder("⏸ Approval needed for tool: ").append(a.toolName());
-                if (a.paramsJson() != null && !a.paramsJson().isBlank()) {
-                    String display = a.paramsJson().length() > 500
-                            ? a.paramsJson().substring(0, 500) + "\n… [truncated]"
-                            : a.paramsJson();
-                    sb.append("\n\n📋 Params:\n```\n").append(display).append("\n```");
-                }
-                sb.append("\n\nReply /approve or /deny");
-                yield sb.toString();
-            }
+            case AgentResult.AwaitingApproval a -> formatHitlMessage(
+                    a.toolName(), a.paramsJson(), null, false);
             case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
             case AgentResult.Failed f         -> {
                 String msg = AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
@@ -40,10 +31,46 @@ public class AgentResultFormatter {
      * Specialized format for first-time Cron HITL prompts.
      */
     public static String formatCronHitl(String cronId, String goal, String toolName) {
-        return "⚠️ Approval Required for scheduled task.\n\n" +
-               "Cron ID: " + cronId + "\n" +
-               "Tool: " + toolName + "\n" +
+        return "⚠️ Approval Required for background task.\n\n" +
                "Goal: " + goal + "\n\n" +
-               "Reply `/approve " + cronId + "` to run it once now, or `/deny " + cronId + "` to cancel.";
+               formatHitlMessage(toolName, null, cronId, true);
+    }
+
+    private static String formatHitlMessage(String compositeName, String paramsJson, String cronId, boolean isCron) {
+        StringBuilder sb = new StringBuilder();
+
+        // 1. Detect parallel batch
+        boolean isBatch = compositeName != null && compositeName.startsWith("__parallel__:");
+        if (isBatch) {
+            String[] tools = compositeName.substring("__parallel__:".length()).split(",");
+            sb.append("⏸ Parallel batch execution requires approval.\n\n");
+            sb.append("Tools pending:\n");
+            for (String ts : tools) {
+                sb.append("• `").append(ts).append("`\n");
+            }
+        } else {
+            sb.append("⏸ Approval needed for tool: ").append(compositeName);
+            if (paramsJson != null && !paramsJson.isBlank()) {
+                String display = paramsJson.length() > 500
+                        ? paramsJson.substring(0, 500) + "\n… [truncated]"
+                        : paramsJson;
+                sb.append("\n\n📋 Params:\n```\n").append(display).append("\n```");
+            }
+        }
+
+        sb.append("\n\n");
+
+        String cronPrefix = isCron && cronId != null ? " " + cronId : "";
+        if (isBatch) {
+            sb.append("To approve/deny specific tools:\n")
+              .append(" `/approve").append(cronPrefix).append(" <toolName>`\n")
+              .append(" `/deny").append(cronPrefix).append(" <toolName>`\n\n")
+              .append("Or decide all remaining at once:\n")
+              .append(" `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("`");
+        } else {
+            sb.append("Reply `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("`");
+        }
+
+        return sb.toString();
     }
 }

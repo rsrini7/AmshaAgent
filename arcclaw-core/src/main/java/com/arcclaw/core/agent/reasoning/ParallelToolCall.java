@@ -2,6 +2,8 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 /**
  * Represents one tool call within a parallel LLM response batch.
  * Immutable. Pre-execution: observation is null.
@@ -32,8 +34,8 @@ public record ParallelToolCall(
     // Static because ParallelToolCall is a record (no CDI injection).
     // Used only for resumeParallelBatch() → invokeTool() serialization.
     // See Architecture_Invariants.md §7.9 (JSON encoding of batch payload).
-    private static final com.fasterxml.jackson.databind.ObjectMapper
-        PARAMS_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final ObjectMapper
+        PARAMS_MAPPER = new ObjectMapper();
 
     /** Utility to safely get params as json string if needed */
     public String paramsAsString() {

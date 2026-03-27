@@ -1,16 +1,21 @@
 package com.arcclaw.core.agent.loop;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
@@ -22,6 +27,7 @@ public class ApprovalCheckpointManager {
     private static final Logger log = Logger.getLogger(ApprovalCheckpointManager.class);
 
     @Inject StatefulAgentStore agentStore;
+    @Inject ObjectMapper objectMapper;
 
     /**
      * Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult.
@@ -48,5 +54,59 @@ public class ApprovalCheckpointManager {
         agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s", sessionId, toolName);
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
+    }
+
+    /**
+     * Persists an AWAITING_APPROVAL checkpoint for a parallel tool batch.
+     * Initialises per-tool decision state (§7.20) so ApproveReflex and
+     * DenyReflex can record individual tool decisions before resuming.
+     *
+     * @param calls The full parallel batch (used to seed batchToolDecisions).
+     */
+    public AgentResult persistBatch(
+            AgentExecutionContext context,
+            String compositeName,
+            String batchJson,
+            List<ParallelToolCall> calls,
+            List<ReasoningStep> history) {
+
+        String sessionId  = context.sessionId();
+        String agentRole  = context.agentRole();
+
+        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
+            .orElseGet(() -> {
+                AgentCheckpoint c = new AgentCheckpoint();
+                c.setSessionId(sessionId);
+                c.setAgentRole(agentRole);
+                return c;
+            });
+
+        // Seed per-tool decisions: all PENDING (§7.20)
+        Map<String, String> decisions = new LinkedHashMap<>();
+        calls.forEach(call -> decisions.put(
+            call.toolName(), AgentSentinels.TOOL_DECISION_PENDING));
+
+        String decisionsJson;
+        try {
+            decisionsJson = objectMapper.writeValueAsString(decisions);
+        } catch (Exception e) {
+            log.errorf("[PARALLEL-HITL] Failed to serialize decisions for " +
+                       "session %s: %s", sessionId, e.getMessage());
+            // Fall back to whole-batch persist — no per-tool granularity
+            return persist(context, compositeName, batchJson, history);
+        }
+
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setPendingToolName(compositeName);
+        cp.setPendingToolParametersJson(batchJson);
+        cp.setBatchToolDecisions(decisionsJson);
+        cp.setOriginalGoal(context.goal());
+        cp.setUpdatedAt(LocalDateTime.now());
+        agentStore.save(cp);
+
+        log.infof("[STATE-MACHINE] Pausing session %s for parallel HITL: %s",
+                  sessionId, compositeName);
+        return AgentResult.awaitingApproval(
+            compositeName, batchJson, sessionId, List.copyOf(history));
     }
 }

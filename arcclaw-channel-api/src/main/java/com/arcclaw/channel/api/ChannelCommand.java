@@ -72,8 +72,8 @@ public sealed interface ChannelCommand
         Optional<String> optArg = Optional.ofNullable(arg);
 
         return switch (cmd) {
-            case "approve" -> new Approve(optArg);
-            case "deny"    -> new Deny(optArg);
+            case "approve" -> new Approve(parseCronId(optArg), parseToolName(optArg));
+            case "deny"    -> new Deny(parseCronId(optArg), parseToolName(optArg));
             case "status"  -> new Status();
             case "halt"    -> new Halt();
             case "reset"   -> new Reset();
@@ -96,6 +96,14 @@ public sealed interface ChannelCommand
         };
     }
 
+    private static Optional<String> parseCronId(Optional<String> argOpt) {
+        return argOpt.filter(arg -> arg.contains("-"));
+    }
+
+    private static Optional<String> parseToolName(Optional<String> argOpt) {
+        return argOpt.filter(arg -> !arg.contains("-") && !arg.isBlank());
+    }
+
     // ------------------------------------------------------------------
     // Permit records
     // ------------------------------------------------------------------
@@ -103,18 +111,24 @@ public sealed interface ChannelCommand
     /**
      * Approves a pending tool execution.
      *
-     * @param cronId if present, targets a specific cron-session approval;
-     *               if empty, targets the active interactive session
+     * @param cronId   if present, targets a specific cron-session approval;
+     * @param toolName if present, targets a specific tool in a parallel batch
      */
-    record Approve(Optional<String> cronId) implements ChannelCommand {}
+    record Approve(
+        Optional<String> cronId,
+        Optional<String> toolName
+    ) implements ChannelCommand {}
 
     /**
      * Denies a pending tool execution.
      *
-     * @param cronId if present, targets a specific cron-session;
-     *               if empty, targets the active interactive session
+     * @param cronId   if present, targets a specific cron-session approval;
+     * @param toolName if present, targets a specific tool in a parallel batch
      */
-    record Deny(Optional<String> cronId) implements ChannelCommand {}
+    record Deny(
+        Optional<String> cronId,
+        Optional<String> toolName
+    ) implements ChannelCommand {}
 
      /**
      * Telegram lifecycle command — sent automatically when a user opens a fresh
