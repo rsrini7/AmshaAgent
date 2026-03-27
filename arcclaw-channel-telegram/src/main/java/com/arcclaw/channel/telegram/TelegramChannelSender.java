@@ -12,6 +12,8 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -63,8 +65,8 @@ public class TelegramChannelSender implements ChannelSender {
             .map(n -> (ReplyNode.ApprovalPrompt) n)
             .findFirst();
 
-        if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith("parallel:")) {
-            String toolNamesStr = promptOpt.get().toolName().substring("parallel:".length());
+        if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX)) {
+            String toolNamesStr = promptOpt.get().toolName().substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length());
             List<String> list = Arrays.asList(toolNamesStr.split(","));
             InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(promptOpt.get().sessionId(), list);
             // §7.28: escape at call site — rendered text from renderer.render() is already

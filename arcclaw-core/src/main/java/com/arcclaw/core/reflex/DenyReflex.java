@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -57,6 +58,9 @@ public class DenyReflex implements AgentReflex {
 
     @Inject
     DevSecretSeeder devSeeder;
+
+    @Inject
+    AuditService auditService;
 
     @Inject
     ObjectMapper objectMapper;
@@ -317,23 +321,36 @@ public class DenyReflex implements AgentReflex {
 
         log.infof("[DELEGATE-DENY] admin=%s denying session=%s", adminId, targetSid);
 
-        String agentRole = AgentRoleEnum.COORDINATOR.toScopedName();
+        String activeRole = null;
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            Optional<AgentCheckpoint> cpOpt =
+                statefulAgentStore.load(targetSid, role.toScopedName());
+            if (cpOpt.isPresent()
+                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                activeRole = role.toScopedName();
+                break;
+            }
+        }
 
-        // Verify session is actually awaiting approval
-        AgentCheckpoint cp = statefulAgentStore.load(targetSid, agentRole)
-            .filter(c -> c.getStatus() == CheckpointStatus.AWAITING_APPROVAL)
-            .orElse(null);
-
-        if (cp == null) {
+        if (activeRole == null) {
             return "❌ Target session not found or not awaiting approval.";
         }
 
+        AgentCheckpoint cp = statefulAgentStore.load(targetSid, activeRole).orElseThrow(() -> new IllegalStateException(
+                        "Checkpoint disappeared between lookup and load for session " + targetSid));
+
         // Auto-deny all tools in batch if parallel (§7.21, §7.33)
         if (cp.hasBatchToolDecisions()) {
-            autoDenyAllPending(targetSid, agentRole);
+            autoDenyAllPending(targetSid, activeRole);
         }
 
+        // Log the delegated action §7.33
+        auditService.logSecurityEvent(
+            SecurityEventType.DELEGATE_APPROVAL,
+            adminId,
+            "Admin %s denied session %s".formatted(adminId, targetSid));
+
         // Trigger resume into the admin's chat context §7.33
-        return triggerBatchResume(targetSid, adminId, adminChatId, agentRole, context);
+        return triggerBatchResume(targetSid, adminId, adminChatId, activeRole, context);
     }
 }

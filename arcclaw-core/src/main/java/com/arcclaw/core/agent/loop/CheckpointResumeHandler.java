@@ -282,7 +282,7 @@ public class CheckpointResumeHandler {
 
         ReasoningStep completedStep = new ReasoningStep(
             "Human Approved (batch)",
-            ReasoningStep.PARALLEL_SENTINEL,
+            ReasoningStep.PARALLEL_SENTINEL_DUNDER,
             Map.of("batch", completedJson),
             summary,
             0, 0

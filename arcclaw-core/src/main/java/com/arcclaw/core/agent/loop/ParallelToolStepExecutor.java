@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.*;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -290,7 +289,7 @@ public class ParallelToolStepExecutor {
 
         ReasoningStep completedBatchStep = new ReasoningStep(
             batchStep.thought(),
-            ReasoningStep.PARALLEL_SENTINEL,
+            ReasoningStep.PARALLEL_SENTINEL_DUNDER,
             completedPayload,
             summary,
             batchStep.inputTokens(),
@@ -339,7 +338,7 @@ public class ParallelToolStepExecutor {
         PreExecutionFilter.SplitResult split =
             PreExecutionFilter.split(calls, autonomy, safeTools);
 
-        String compositeName = "ReasoningStep.PARALLEL_SENTINEL:" +
+        String compositeName = ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX +
             calls.stream().map(ParallelToolCall::toolName)
                  .collect(Collectors.joining(","));
 
@@ -374,7 +373,8 @@ public class ParallelToolStepExecutor {
 
         // Rebuild compositeName with ONLY the HITL-pending tools §7.32 (UI constraint)
         // Note: originalBatchJson still contains ALL calls for context.
-        String hitlCompositeName = "ReasoningStep.PARALLEL_SENTINEL:" + split.hitlPending().stream()
+        String hitlCompositeName = ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX +
+            split.hitlPending().stream()
             .map(ParallelToolCall::toolName)
             .collect(Collectors.joining(","));
 

@@ -9,6 +9,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
@@ -129,7 +130,7 @@ public class AgentDispatchHandler implements MessageHandler {
             .map(ChannelPlugin::sender)
             .ifPresentOrElse(
                 s -> {
-                    if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith("parallel:")) {
+                    if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX)) {
                         // Pass down as a structured reply so plugins (e.g. Telegram) can build keyboards
                         s.send(context.getUser(), List.of(
                             new ReplyNode.Text(output),

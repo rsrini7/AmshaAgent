@@ -45,7 +45,7 @@ class P75IntegrationTest {
     @Test
     void testDelegateApprovalGuard_Configured() {
         var guard = new DelegateApprovalGuard();
-        guard.delegateApproverIds = Optional.of(List.of("admin123"));
+        guard.setDelegateApproverIds(List.of("admin123"));
         
         assertTrue(guard.isDelegate("admin123"));
         assertFalse(guard.isDelegate("user456"));

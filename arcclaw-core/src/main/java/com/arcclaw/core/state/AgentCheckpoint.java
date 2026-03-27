@@ -19,6 +19,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -318,7 +319,7 @@ public class AgentCheckpoint {
      */
     public boolean isParallelBatch() {
         return pendingToolName != null
-            && pendingToolName.startsWith("ReasoningStep.PARALLEL_SENTINEL:");
+            && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX);
     }
 
     /**
@@ -327,7 +328,7 @@ public class AgentCheckpoint {
      */
     public List<String> parallelToolNames() {
         if (!isParallelBatch()) return Collections.emptyList();
-        String composite = pendingToolName.substring("ReasoningStep.PARALLEL_SENTINEL:".length());
+        String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length());
         return Arrays.asList(composite.split(","));
     }
 }

@@ -70,7 +70,7 @@ class ParallelToolStepExecutorPreExecTest {
             new ParallelToolCall("c2", "unsafe_write", Map.of(), null, true)
         );
         
-        ReasoningStep batchStep = new ReasoningStep("thought", ReasoningStep.PARALLEL_SENTINEL,
+        ReasoningStep batchStep = new ReasoningStep("thought", ReasoningStep.PARALLEL_SENTINEL_DUNDER,
              Map.of("batch", calls), "", 0, 0);
 
         // First tool triggers HITL

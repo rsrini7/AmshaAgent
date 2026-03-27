@@ -15,12 +15,17 @@ public class DelegateApprovalGuard {
 
     @ConfigProperty(name = "arcclaw.hitl.delegate-approver-ids",
                     defaultValue = "")
-    public Optional<List<String>> delegateApproverIds;
+    private Optional<List<String>> delegateApproverIds;
 
     public boolean isDelegate(String userId) {
         if (userId == null) return false;
         return delegateApproverIds
             .map(ids -> ids.contains(userId))
             .orElse(false);
+    }
+
+    /** For test purposes (§P75-H) */
+    public void setDelegateApproverIds(List<String> ids) {
+        this.delegateApproverIds = Optional.ofNullable(ids);
     }
 }

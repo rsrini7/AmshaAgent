@@ -57,7 +57,7 @@ class CheckpointResumeHandlerPreExecTest {
         cp.setSessionId(sessionId);
         cp.setAgentRole(agentRole);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName("ReasoningStep.PARALLEL_SENTINEL:safe,unsafe");
+        cp.setPendingToolName("parallel:safe,unsafe");
         
         var calls = List.of(
             new ParallelToolCall("c1", "safe", Map.of(), null, true),

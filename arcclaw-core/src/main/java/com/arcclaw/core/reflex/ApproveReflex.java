@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -57,6 +58,9 @@ public class ApproveReflex implements AgentReflex {
 
     @Inject
     Event<AgentJobCompleted> jobCompletedEvent;
+
+    @Inject
+    AuditService auditService;
 
     @Inject
     DevSecretSeeder devSeeder;
@@ -354,33 +358,35 @@ public class ApproveReflex implements AgentReflex {
 
         log.infof("[DELEGATE-APPROVE] admin=%s approving session=%s", adminId, targetSid);
 
-        // Session delegation always uses COORDINATOR role (standard for all multi-role sessions)
-        String agentRole = AgentRoleEnum.COORDINATOR.toScopedName();
+        String activeRole = null;
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            Optional<AgentCheckpoint> cpOpt =
+                statefulAgentStore.load(targetSid, role.toScopedName());
+            if (cpOpt.isPresent()
+                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                activeRole = role.toScopedName();
+                break;
+            }
+        }
 
-        // Verify session is actually awaiting approval
-        AgentCheckpoint cp = statefulAgentStore.load(targetSid, agentRole)
-            .filter(c -> c.getStatus() == CheckpointStatus.AWAITING_APPROVAL)
-            .orElse(null);
-
-        if (cp == null) {
+        if (activeRole == null) {
             return "❌ Target session not found or not awaiting approval.";
         }
 
+        AgentCheckpoint cp = statefulAgentStore.load(targetSid, activeRole).orElseThrow(() -> new IllegalStateException(
+                        "Checkpoint disappeared between lookup and load for session " + targetSid));
+
         // Auto-approve all tools in batch if parallel (§7.21, §7.33)
         if (cp.hasBatchToolDecisions()) {
-            autoApproveAllPending(targetSid, agentRole);
+            autoApproveAllPending(targetSid, activeRole);
         }
 
-        // §7.33: Use DELEGATE_APPROVAL audit event
-        // (Note: execute() currently returns the auditEventType() for the whole reflex,
-        // but we can manually record or just let the default handle it. 
-        // The prompt says "Use SecurityEventType.DELEGATE_APPROVAL").
-        // I'll manually record a mandatory audit event if possible, or just note it.
-        // Actually, the reflex's auditEventType() is fixed. 
-        // I may need to update AgentReflex interface or just handle it here.
-        // I'll check if I can override it or if it's fine.
+        // §7.33: Log mandatory DELEGATE_APPROVAL audit event before triggering action
+        auditService.logSecurityEvent(
+            SecurityEventType.DELEGATE_APPROVAL,
+            adminId,
+            "Admin %s approved session %s".formatted(adminId, targetSid));
 
-        // Trigger resume into the admin's chat context §7.33
-        return triggerBatchResume(targetSid, adminId, adminChatId, agentRole, context);
+        return triggerBatchResume(targetSid, adminId, adminChatId, activeRole, context);
     }
 }
