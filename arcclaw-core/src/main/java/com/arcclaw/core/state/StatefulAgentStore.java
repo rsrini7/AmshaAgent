@@ -1,5 +1,6 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -129,4 +130,10 @@ public interface StatefulAgentStore {
     boolean isAllBatchToolsDecided(String sessionId, String agentRole);
 
     void deleteCheckpoint(String sessionId, String role);
+
+    /**
+     * Returns all AWAITING_APPROVAL checkpoints whose updatedAt is
+     * older than the given cutoff. Used by stale-checkpoint GC. §7.26
+     */
+    List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff);
 }

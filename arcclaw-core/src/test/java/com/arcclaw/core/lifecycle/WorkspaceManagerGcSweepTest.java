@@ -116,7 +116,7 @@ class WorkspaceManagerGcSweepTest {
         cp.setSessionId(sessionId);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
-        stubEntityManager(null, false, List.of(cp));
+        when(agentStoreMock.findStaleAwaitingApproval(any())).thenReturn(List.of(cp));
 
         // Act
         sessionReaper.sweepTimedOutApprovals();

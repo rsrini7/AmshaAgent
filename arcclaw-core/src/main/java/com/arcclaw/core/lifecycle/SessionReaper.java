@@ -2,7 +2,6 @@ package com.arcclaw.core.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -14,11 +13,15 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.BatchDecisionUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
@@ -53,7 +56,13 @@ public class SessionReaper {
     SessionHeartbeatTracker heartbeatTracker;
 
     @Inject
-    Event<ApprovalTimedOutEvent> approvalTimedOutEvent;
+    Event<StaleApprovalExpired> staleApprovalEvent;
+
+    @Inject
+    StatefulAgentStore agentStore;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
     SessionAuditSequencer auditSequencer;
@@ -67,8 +76,8 @@ public class SessionReaper {
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
 
-    @ConfigProperty(name = "arcclaw.governance.approval-timeout-minutes", defaultValue = "60")
-    long approvalTimeoutMinutes;
+    @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
+    long hitlTimeoutHours;
 
     void onShutdown(@Observes ShutdownEvent event) {
         shuttingDown = true;
@@ -194,44 +203,40 @@ public class SessionReaper {
     public void sweepTimedOutApprovals() {
         if (shuttingDown) return;
 
-        List<AgentCheckpoint> timedOut = findTimedOutApprovals();
-        if (timedOut.isEmpty()) return;
+        Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
+        List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
+        if (stale.isEmpty()) return;
 
-        for (var cp : timedOut) {
-            log.warnf("Approval timeout: session=%s role=%s — marking FAILED",
-                    cp.getSessionId(), cp.getAgentRole());
+        for (AgentCheckpoint cp : stale) {
+            log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh — auto-denying.",
+                    cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
             markApprovalTimedOut(cp);
         }
     }
 
-    @Transactional(Transactional.TxType.NOT_SUPPORTED)
-    List<AgentCheckpoint> findTimedOutApprovals() {
-        em.clear();
-        LocalDateTime cutoff = LocalDateTime.now()
-                .minus(Duration.ofMinutes(approvalTimeoutMinutes));
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("cutoff", cutoff)
-                .getResultList();
-    }
-
     @Transactional(Transactional.TxType.REQUIRED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
+        // Auto-deny all pending tools if it's a batch
+        if (cp.hasBatchToolDecisions()) {
+            BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
+                agentStore.updateBatchToolDecision(
+                    cp.getSessionId(), cp.getAgentRole(), toolName,
+                    AgentSentinels.TOOL_DECISION_DENIED));
+        }
+
         cp.setStatus(CheckpointStatus.FAILED);
         cp.setFailedAt(Instant.now());
-        cp.setFailReason("Approval timed out after " + approvalTimeoutMinutes + " minutes.");
+        cp.setFailReason("Approval timed out after " + hitlTimeoutHours + " hours.");
         em.merge(cp);
 
-        // fireAsync — non-blocking, does not enlist in SQLite XA transaction
-        approvalTimedOutEvent.fireAsync(new ApprovalTimedOutEvent(
+        // Notify user via channel event
+        staleApprovalEvent.fireAsync(new StaleApprovalExpired(
                 cp.getSessionId(),
-                cp.getChannelPlatformId(),
+                cp.getAgentRole(),
+                cp.getSessionId(), // derive userId from session if available
                 cp.getChannelType(),
-                cp.getPendingToolName(),
-                approvalTimeoutMinutes
+                cp.getChannelPlatformId(),
+                cp.getPendingToolName()
         ));
 
         compactionInFlight.remove(cp.getSessionId());

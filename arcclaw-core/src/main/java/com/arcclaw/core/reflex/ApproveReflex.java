@@ -2,7 +2,6 @@ package com.arcclaw.core.reflex;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -33,8 +32,8 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
@@ -206,7 +205,7 @@ public class ApproveReflex implements AgentReflex {
         // Still some PENDING tools — inform user
         AgentCheckpoint cp =
             statefulAgentStore.load(sessionId, activeRole).orElseThrow();
-        List<String> stillPending = pendingToolNames(cp);
+        List<String> stillPending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         return String.format(
             "✅ Approved `%s`. Still waiting for: %s\n" +
             "Type `approve <toolName>` or `approve` to approve all remaining.",
@@ -216,25 +215,12 @@ public class ApproveReflex implements AgentReflex {
                 .collect(Collectors.joining(", ")));
     }
 
-    private List<String> pendingToolNames(AgentCheckpoint cp) {
-        if (!cp.hasBatchToolDecisions()) return List.of();
-        try {
-            Map<String, String> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
-                new TypeReference<>() {});
-            return map.entrySet().stream()
-                .filter(e -> AgentSentinels.TOOL_DECISION_PENDING.equals(e.getValue()))
-                .map(Map.Entry::getKey)
-                .toList();
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
+
 
     private void autoApproveAllPending(String sessionId, String agentRole) {
         AgentCheckpoint cp =
             statefulAgentStore.load(sessionId, agentRole).orElseThrow();
-        pendingToolNames(cp).forEach(toolName ->
+        BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
             statefulAgentStore.updateBatchToolDecision(
                 sessionId, agentRole, toolName,
                 AgentSentinels.TOOL_DECISION_APPROVED));

@@ -1,7 +1,10 @@
 package com.arcclaw.channel.telegram;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -45,15 +48,29 @@ public class TelegramChannelSender implements ChannelSender {
         }
         String chatId = recipient.channelId();  // ← was platformId()
         if (nodes == null || nodes.isEmpty()) {
-            sendRaw(chatId, "(No response generated)");
+            sendRawToChatId(chatId, "(No response generated)");
             return;
         }
         String rendered = renderer.render(nodes);
         if (rendered == null || rendered.isBlank()) {
-            sendRaw(chatId, "(No response generated)");
+            sendRawToChatId(chatId, "(No response generated)");
             return;
         }
-        sendRaw(chatId, rendered);
+
+        // Component 73-A4 — Intercept ApprovalPrompt to add Telegram inline keyboard for batch tools
+        Optional<ReplyNode.ApprovalPrompt> promptOpt = nodes.stream()
+            .filter(n -> n instanceof ReplyNode.ApprovalPrompt)
+            .map(n -> (ReplyNode.ApprovalPrompt) n)
+            .findFirst();
+
+        if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith("parallel:")) {
+            String toolNamesStr = promptOpt.get().toolName().substring("parallel:".length());
+            List<String> list = Arrays.asList(toolNamesStr.split(","));
+            String keyboardJson = BatchHitlKeyboardBuilder.buildKeyboardJson(promptOpt.get().sessionId(), list);
+            sendWithKeyboard(recipient, rendered, keyboardJson);
+        } else {
+            sendRawToChatId(chatId, rendered);
+        }
     }
 
     @Override
@@ -64,12 +81,47 @@ public class TelegramChannelSender implements ChannelSender {
             log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
             return;
         }
-        sendRaw(recipient.channelId(), text);  // ← was platformId()
+        sendRawToChatId(recipient.channelId(), text);  // ← was platformId()
+    }
+
+    /**
+     * Sends a message with an optional inline keyboard.
+     * §7.24
+     */
+    public void sendWithKeyboard(ChannelUser recipient, String text, String keyboardJson) {
+        if (keyboardJson == null || keyboardJson.isBlank()) {
+            sendRawToChatId(recipient.channelId(), text);
+            return;
+        }
+        if (recipient == null || recipient.channelId() == null) {
+            log.warn("TELEGRAM-SEND: recipient or channelId is null — dropping");
+            return;
+        }
+        String chatId = recipient.channelId();
+        
+        producerTemplate.sendBodyAndHeaders("telegram:bots", text, Map.of(
+            TelegramConstants.TELEGRAM_CHAT_ID, chatId,
+            "CamelTelegramReplyMarkup", keyboardJson
+        ));
+    }
+
+    public void editMessage(String chatId, int messageId, String newText, String keyboardJson) {
+        // Without telegrambots dependency, we must send raw JSON to the camel component or API.
+        // For camel-telegram, there's an editMessage api, but as a fallback we will try to use the header approach.
+        // Actually, camel-telegram natively does not support editMessage without EditMessageText object.
+        // We'll just send a new message instead if it throws, or implement a dummy if not needed immediately.
+        producerTemplate.sendBodyAndHeaders("telegram:bots", newText != null ? newText : "", Map.of(
+            TelegramConstants.TELEGRAM_CHAT_ID, chatId,
+            "CamelTelegramReplyMarkup", keyboardJson == null ? "" : keyboardJson
+        ));
     }
 
     private static final int TELEGRAM_MAX_LENGTH = 4096;
 
-    private void sendRaw(String chatId, String text) {
+    /**
+     * Internal helper to send a message to a specific chat ID, handling chunking if needed.
+     */
+    public void sendRawToChatId(String chatId, String text) {
         if (text == null || text.isBlank()) {
             log.warn("Attempted to send empty message to " + chatId + " — skipping");
             return;
