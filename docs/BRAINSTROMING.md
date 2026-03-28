@@ -372,7 +372,7 @@ capabilities:
 ### 4-B. Voice Transcription via Groq Whisper *(PicoClaw feature — Good to Add)*
 PicoClaw integrates Groq/Whisper for voice note transcription from Telegram.  Enterprise users prefer voice input.
 
-**Design:** In `TelegramAgentHandler`, check `msg.getVoice() != null` before text extraction. If voice, call Groq's `whisper-large-v3` transcription endpoint (already have `GROQ_API_KEY`).  Return transcript string to the existing `AgentLoop` flow — zero changes to core agent logic.
+**Design:** In `TelegramAgentHandler`, check `msg.getVoice() != null` before text extraction. If voice, call Groq's `whisper-large-v3` transcription endpoint (already have `ARCCLAW_LLM_API_KEY`).  Return transcript string to the existing `AgentLoop` flow — zero changes to core agent logic.
 
 ### 4-C. MCP Protocol Support *(IronClaw + LangChain4J roadmap)*
 IronClaw supports MCP (Model Control Protocol) for connecting external tool servers.  Quarkus LangChain4J explicitly lists MCP and Agent-to-Agent (A2A) protocol support. [docs.quarkiverse](https://docs.quarkiverse.io/quarkus-langchain4j/dev/index.html)

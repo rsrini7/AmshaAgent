@@ -548,7 +548,7 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 | Variable | Source | Notes |
 |---|---|---|
 | All `.env` vars | `_.file = ".env"` | Auto-loaded by mise |
-| `GROQ_API_KEY` | `.env` | Required, starts with `gsk_` |
+| `ARCCLAW_LLM_API_KEY` | `.env` | Required, starts with `gsk_` |
 | `ARCCLAW_VAULT_PEPPER` | `.env` | ≥32 bytes, never change after first boot |
 | `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
 | `ARCCLAW_API_KEY_INTERNAL` | `.env` | Bearer token for REST API |

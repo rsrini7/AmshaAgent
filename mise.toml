@@ -166,7 +166,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path '.env')) {
     Copy-Item '.env.example' '.env'
-    Write-Host '✅  .env created — fill in GROQ_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
+    Write-Host '✅  .env created — fill in ARCCLAW_LLM_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
 } else {
     Write-Host 'ℹ️   .env already exists — skipping copy.'
 }
@@ -200,7 +200,7 @@ $vars = @{}
 Get-Content '.env' | Where-Object { $_ -match '^\\s*[^#]' } | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { $vars[$Matches[1].Trim()] = $Matches[2].Trim() }
 }
-if ([string]::IsNullOrEmpty($vars['GROQ_API_KEY']))                { $issues += 'GROQ_API_KEY is empty' }
+if ([string]::IsNullOrEmpty($vars['ARCCLAW_LLM_API_KEY']))                { $issues += 'ARCCLAW_LLM_API_KEY is empty' }
 if ($vars['ARCCLAW_VAULT_PEPPER']     -like '*changeme*')          { $issues += 'ARCCLAW_VAULT_PEPPER is still a placeholder' }
 if ($vars['ARCCLAW_AUDIT_HMAC_KEY']   -like '*changeme*')          { $issues += 'ARCCLAW_AUDIT_HMAC_KEY is still a placeholder' }
 if ($vars['ARCCLAW_API_KEY_INTERNAL'] -like '*changeme*')          { $issues += 'ARCCLAW_API_KEY_INTERNAL is still a placeholder' }
@@ -1028,11 +1028,11 @@ if (-not (Test-Path $envPath)) {
     Write-Host ""
 
     do {
-        $groqKey = Read-Host "  GROQ_API_KEY  (https://console.groq.com -- starts with gsk_)"
+        $groqKey = Read-Host "  ARCCLAW_LLM_API_KEY  (https://console.groq.com -- starts with gsk_)"
         if (-not $groqKey.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_ -- try again." }
     } while (-not $groqKey.StartsWith('gsk_'))
-    Set-EnvLine $envPath 'GROQ_API_KEY' $groqKey
-    Write-Host "  OK  GROQ_API_KEY set."
+    Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $groqKey
+    Write-Host "  OK  ARCCLAW_LLM_API_KEY set."
     Write-Host ""
 
     Write-Host "  Embedding provider: jina -- API key required."
@@ -1185,13 +1185,13 @@ KEYS
     echo ""
 
     while true; do
-        printf "  GROQ_API_KEY  (https://console.groq.com -- starts with gsk_): "
+        printf "  ARCCLAW_LLM_API_KEY  (https://console.groq.com -- starts with gsk_): "
         read -r _GROQ_KEY
         [[ "$_GROQ_KEY" == gsk_* ]] && break
         echo "  X  Must start with gsk_ -- try again."
     done
-    _setsed GROQ_API_KEY "$_GROQ_KEY"
-    echo "  OK  GROQ_API_KEY set."
+    _setsed ARCCLAW_LLM_API_KEY "$_GROQ_KEY"
+    echo "  OK  ARCCLAW_LLM_API_KEY set."
     echo ""
 
     echo "  Embedding provider: jina -- API key required."

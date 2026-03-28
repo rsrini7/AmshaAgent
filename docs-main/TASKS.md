@@ -233,9 +233,9 @@
 
 ## Phase 17 — Groq Cloud Migration
 - [x] Repoint LangChain4J OpenAI extension to Groq API
-- [x] Update `.env.example` with `GROQ_API_KEY`
+- [x] Update `.env.example` with `ARCCLAW_LLM_API_KEY`
 - [x] Configure `application.yaml` with `llama-3.3-70b-versatile` as default
-- [x] Pass `GROQ_API_KEY` through `docker-compose.yaml`
+- [x] Pass `ARCCLAW_LLM_API_KEY` through `docker-compose.yaml`
 - [x] Verify production profile boots with Groq configuration
 
 ---
@@ -596,7 +596,7 @@
 - [x] Implement `IntentClassificationHandler` and `CommandDispatchHandler` <!-- id: 148 -->
 - [x] Implement `ReflexHandler` and `AgentDispatchHandler` <!-- id: 149 -->
 - [x] Implement definitive CDI fix: move implementations to `arcclaw-core` <!-- id: 150 -->
-- [x] Fix `arcclaw-core` test boot failures (dummy `GROQ_API_KEY`) <!-- id: 151 -->
+- [x] Fix `arcclaw-core` test boot failures (dummy `ARCCLAW_LLM_API_KEY`) <!-- id: 151 -->
 - [x] Verify: Telegram integration via `TelegramAgentHandlerTest` <!-- id: 152 -->
 - [x] Verify: Full project clean build `mvnw clean package` (all tests green) <!-- id: 153 -->
 # Phase 47: Refined Routing & Templates (Tier 2B) ✅

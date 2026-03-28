@@ -269,7 +269,7 @@ Edit `.env`:
 
 ```env
 # LLM — required
-GROQ_API_KEY=gsk_your_key_here          # get from console.groq.com
+ARCCLAW_LLM_API_KEY=gsk_your_key_here          # get from console.groq.com
 
 # Embedding — required (Jina free tier: 1M tokens/month)
 ARCCLAW_EMBED_API_KEY=jina_your_key     # get from jina.ai
@@ -917,7 +917,7 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `GROQ_API_KEY` | ✅ | — | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
+| `ARCCLAW_LLM_API_KEY` | ✅ | — | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
 | `ARCCLAW_VAULT_PEPPER` | ✅ | — | Min 32 bytes. **Immutable after first boot.** |
 | `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | — | Min 32 bytes. **Immutable after first boot.** |
 | `ARCCLAW_API_KEY_INTERNAL` | ✅ | — | Bearer token for REST API (`Authorization: Bearer`). |
