@@ -190,7 +190,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (rateLimitMsg != null) {
                 log.warnf("[LangChainReasoningEngine] Rate limit detected in cause chain — " +
                         "surfacing clean message: %s", rateLimitMsg);
-                rateLimitTracker.recordHit();
+                rateLimitTracker.recordHit("primary");
                 String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
                 throw new RuntimeException(clean, e);
             }

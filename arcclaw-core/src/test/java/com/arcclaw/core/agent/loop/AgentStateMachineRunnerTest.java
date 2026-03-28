@@ -39,7 +39,6 @@ class AgentStateMachineRunnerTest {
 
 
     private AgentStateMachineRunner runner;
-    private AgentStepProcessor stepProcessor;
     private LangChainReasoningEngine engine;
     private ToolRegistry toolRegistry;
     private StatefulAgentStore agentStore;
@@ -99,15 +98,9 @@ class AgentStateMachineRunnerTest {
         toolStepHandler.checkpointManager = checkpointManager;
 
 
-        // Wire facade
-        stepProcessor = new AgentStepProcessor();
-        stepProcessor.engineStepHandler = engineStepHandler;
-        stepProcessor.toolStepHandler   = toolStepHandler;
-        stepProcessor.checkpointManager = checkpointManager;
-
-
         runner = new AgentStateMachineRunner();
-        runner.stepProcessor    = stepProcessor;
+        runner.engineStepHandler = engineStepHandler;
+        runner.toolStepHandler   = toolStepHandler;
         runner.writer           = writer;
         runner.observers        = observers;
         runner.skillRegistry    = skillRegistry;

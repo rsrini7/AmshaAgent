@@ -6,7 +6,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 @ApplicationScoped
-public class OpenAiLlmProviderFactory implements LlmProviderFactory {
+public class OpenAiLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override public String providerId() { return "openai"; }
 

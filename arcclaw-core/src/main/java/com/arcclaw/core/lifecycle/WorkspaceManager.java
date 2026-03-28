@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.audit.AuditObserver;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
@@ -65,6 +66,9 @@ public class WorkspaceManager {
     int maxMessages;
 
     
+    @Inject
+    AuditObserver auditObserver;
+
     // Session Termination
     
     /**
@@ -78,6 +82,11 @@ public class WorkspaceManager {
 
         // 1a. Clear budget memory
         governanceLayer.clearSession(sessionId);
+
+        // 1b. Cleanup audit observer
+        if (sessionId != null) {
+            auditObserver.cleanupSession(sessionId);
+        }
 
         // 2. Mark checkpoints FAILED (in a transaction)
         markCheckpointsFailed(sessionId);

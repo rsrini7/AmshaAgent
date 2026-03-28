@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.Objects;
+
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.security.AutonomyLevel;
 
@@ -16,6 +18,15 @@ public record AgentExecutionContext(
         AutonomyLevel autonomyLevel,
         int maxIterations
 ) {
+    public AgentExecutionContext {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(agentRole, "agentRole must not be null");
+        Objects.requireNonNull(goal, "goal must not be null");
+        if (maxIterations <= 0)
+            throw new IllegalArgumentException(
+                "maxIterations must be > 0, got: " + maxIterations);
+    }
+
     public static AgentExecutionContext from(
             RunAgentRequest req,
             String sessionId,

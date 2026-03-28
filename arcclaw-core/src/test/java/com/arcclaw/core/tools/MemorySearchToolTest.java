@@ -82,8 +82,9 @@ class MemorySearchToolTest {
                 AutonomyLevel.SUPERVISED, "tool",
                 () -> tool.execute(Map.of("query", "   ")));
 
-        assertTrue(result.success());
-        assertEquals("No query provided", result.output());
+        assertFalse(result.success());
+        assertEquals(400, result.exitCode());
+        assertEquals("query parameter is required for memory_search", result.output());
     }
 
 

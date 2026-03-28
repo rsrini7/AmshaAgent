@@ -92,8 +92,8 @@ class CheckpointResumeHandlerTest {
 
         when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
 
-        MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_DENIED, true);
-        AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_RESUME_DENIED, AutonomyLevel.FULL, 5);
+        MessageContext ctx = createContext(AgentSentinels.GOAL_DENY_APPROVED, true);
+        AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_DENY_APPROVED, AutonomyLevel.FULL, 5);
         AgentResult result = handler.handle(context, new ArrayList<>(), ctx);
 
         assertNotNull(result);

@@ -18,7 +18,7 @@ import dev.langchain4j.model.chat.ChatModel;
 @ApplicationScoped
 public class LlmModelFactory {
 
-    @Inject @Any Instance<LlmProviderFactory> factories;
+    @Inject @Any Instance<RoutingChatModelProvider> factories;
 
     public ChatModel createModel(String provider, String baseUrl, String apiKey,
                                  String modelName, Integer maxTokens, Duration timeout,
@@ -27,13 +27,13 @@ public class LlmModelFactory {
         String effectiveBaseUrl = "ollama".equalsIgnoreCase(provider) ? ollamaBaseUrl : baseUrl;
         String effectiveModel   = "ollama".equalsIgnoreCase(provider) ? ollamaModelId : modelName;
 
-        LlmProviderFactory factory = factories.stream()
+        RoutingChatModelProvider factory = factories.stream()
             .filter(f -> f.providerId().equalsIgnoreCase(provider))
             .findFirst()
             .orElseThrow(() -> new IllegalStateException(
-                "No LlmProviderFactory registered for provider: [" + provider +
+                "No RoutingChatModelProvider registered for provider: [" + provider +
                 "]. Registered: " + factories.stream()
-                    .map(LlmProviderFactory::providerId)
+                    .map(RoutingChatModelProvider::providerId)
                     .collect(Collectors.joining(", "))));
 
         LlmModelConfig config = new LlmModelConfig(

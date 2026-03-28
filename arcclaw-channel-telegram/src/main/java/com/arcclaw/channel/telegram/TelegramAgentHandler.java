@@ -11,6 +11,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.Arc;
@@ -80,6 +81,11 @@ public class TelegramAgentHandler {
 
         log.debugf("Received message from chat %s: %s", chatId, msg.getText());
 
+        if (msg.getFrom() == null) {
+            log.warnf("Dropped message with null 'from' in chat %s " +
+                      "(forwarded/channel post — no user identity)", chatId);
+            return;
+        }
         String userId = String.valueOf(msg.getFrom().getId());
         String username = msg.getFrom().getUsername();
         String text = msg.getText();
@@ -95,17 +101,17 @@ public class TelegramAgentHandler {
 
         MessageContext context = new MessageContext(chatId, user, channelMessage);
         
-        // Immediate acknowledgment for non-command messages
-        if (text != null && !text.trim().startsWith("/")) {
-            sender.sendRaw(user, "⏳");
-        }
-
         log.debugf("Processing message for chat %s", chatId);
         AtomicBoolean flag = processingFlags.get(chatId, id -> new AtomicBoolean(false));
 
         if (!flag.compareAndSet(false, true)) {
             sender.sendRaw(user, "⏳ Still processing your previous message. Please wait.");
             return;
+        }
+
+        // Immediate acknowledgment for non-command messages
+        if (text != null && !text.trim().startsWith("/")) {
+            sender.sendRaw(user, "⏳");
         }
 
         executor.execute(() -> {
@@ -139,6 +145,7 @@ public class TelegramAgentHandler {
                 }
             }
         } finally {
+            WorkspaceScopeHolder.clear();
             requestContext.terminate();   // ← always release, even on exception
         }
     }

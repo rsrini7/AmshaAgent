@@ -2806,3 +2806,71 @@ Decoupled the agent loop from concrete reflex implementations like `PiiScanRefle
 
 **Verification**:
 - ✅ `mvn clean verify`: 884/884 tests pass (Full system integrity confirmed).
+
+---
+
+## Phase 69 — Production Defect Fixes & Architectural Hardening ✅
+
+Comprehensive production hardening spanning correctness fixes, SPI decoupling, observability improvements, and naming hygiene across the agent loop architecture.
+
+### Phase 69-A: Production Defect Fixes
+
+Addressed 7 confirmed correctness and runtime stability bugs:
+
+| Fix | Component | Resolution |
+|-----|-----------|------------|
+| A1 | `EngineStepHandler` | Static regex gate for `looksLikeNaturalLanguage`; Jackson `ObjectMapper` for `extractFailedGeneration` to handle Unicode escapes |
+| A2 | `AgentDispatchHandler` | `.equals()` instead of `==` for `ChannelType` record comparison |
+| A3 | `CheckpointResumeHandler` | `AgentSentinels.GOAL_DENY_APPROVED` prevents false-positive denial triggers |
+| A4 | `AuditHashUtil` | Defensive `.clone()` on HMAC key bytes; `SECURITY_EVENT` outcome support |
+| A5 | `StructuredRetryLoop` | `executeWithBudgetGate` enforced in all `BudgetWarningException` catch blocks |
+| A6 | `TelegramAgentHandler` | Fixed double-ack race condition; null-safety for `msg.getFrom()` |
+| A7 | `WorkspaceContext` | Strict `requireChannelType()` binding, removing legacy Telegram defaults |
+
+### Phase 69-B: Hardening & Observability
+
+7 hardening improvements for production durability:
+
+1. **Parallel Tool Call Logging**: `ReasoningStepParser` emits warning logs when parallel tool calls are suppressed.
+2. **Telegram Chunking**: Messages split at 4096-char limit with word-boundary splitting to prevent Telegram API failures.
+3. **Scope Safety**: `WorkspaceScopeHolder.clear()` in `TelegramAgentHandler` finally blocks prevents scope leak.
+4. **Memory Safety**: `MemorySearchTool` returns `ToolResponse.failure(400)` for empty/null queries instead of NPE.
+5. **Config Flexibility**: `DotenvConfigSourceProvider` handles `export KEY=VALUE` prefix syntax.
+6. **Provider-Aware Rate Limiting**: `RateLimitTracker` refactored for per-provider tracking (Groq vs OpenAI vs Ollama).
+7. **Session Cleanup**: `SessionReaper` explicitly cleans `AuditObserver` and `GovernanceLayer` state.
+
+### Phase 69-C: Architectural Hygiene
+
+6 structural improvements for code quality:
+
+1. **Locale Safety**: `Locale.ROOT` for `REACT_KEYWORDS` check in `ToolStepHandler` — prevents Turkish İ/i locale bug.
+2. **Static Patterns**: Extracted `UNAVAILABLE_TOOL_PATTERN` to `static final` in `EngineStepHandler`.
+3. **Delegation Shell Removal**: Deleted `AgentStepProcessor` — `AgentStateMachineRunner` now uses direct handler injection.
+4. **Unknown Role Observability**: `AgentLoop` emits `INVALID_ROLE_FALLBACK` audit event + Micrometer counter on unknown role fallback.
+5. **Context Validation**: `AgentExecutionContext` compact constructor validates null arguments and iteration limits.
+6. **Interface Hygiene**: Removed redundant `public` modifier from `AgentObserver` interface default method.
+
+### Phase 69-D: SPI Naming & Interface Hardening
+
+5 items addressing naming collisions, SPI completeness, and Architecture_Invariants compliance:
+
+1. **SPI Rename (D1)**: Renamed `arcclaw-core/.../reasoning/LlmProviderFactory` to `AgentChatModelProvider`. Renamed `arcclaw-app/.../routing/LlmProviderFactory` to `RoutingChatModelProvider`. All implementors (`GroqProviderFactory`, `OpenAiProviderFactory`, `OllamaProviderFactory`) and consumers (`ChatModelProducer`, `LlmModelFactory`) updated. Eliminates classpath collision hazard.
+
+2. **GovernanceStrategy Completeness (D2)**: Promoted `getSessionInputTokens(String)` and `getSessionOutputTokens(String)` from `GovernanceLayer` (concrete) to `GovernanceStrategy` (interface). `StatusReflex` now injects `GovernanceStrategy` instead of `GovernanceLayer`, enabling alternative governance implementations.
+
+3. **SessionKnowledgeBase Persistence (D3)**: **Deferred** to follow-up phase — requires DDL migration (`vec_session` table), JPA entity (`RagChunkSessionEntity`), and full `SessionKnowledgeBase` refactor.
+
+4. **Deterministic Skill Loading (D4)**: Added `priority()` to `SkillProvider` SPI (default 100). `DatabaseSkillProvider` = priority 10, `ClasspathSkillProvider` = priority 100. `SkillLoader.reloadAll()` now sorts providers by priority before merge. First-writer-wins semantics ensure highest-priority provider wins on name collision. Eliminates JVM/native build ordering hazard.
+
+5. **CronResultHandler §1.4 Fix (D5)**: Removed `.orElse(ChannelType.TELEGRAM)` fallback. For legacy cron rows with null/unknown `channelType`:
+   - Emits `WARN` log referencing Architecture_Invariants.md §1.4
+   - Records `LEGACY_CHANNEL_FALLBACK` audit event
+   - Skips notification (does NOT default to Telegram)
+   - Provides migration SQL in log message
+
+**Verification**:
+- ✅ `mvn clean verify`: 808/808 tests green.
+- ✅ Zero `LlmProviderFactory` references in `arcclaw-core`.
+- ✅ `StatusReflex` depends only on `GovernanceStrategy` interface.
+- ✅ `SkillLoader` logs provider priority during load.
+- ✅ `CronResultHandler` compliant with Architecture_Invariants.md §1.4.

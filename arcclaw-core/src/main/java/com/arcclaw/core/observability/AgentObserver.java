@@ -32,7 +32,7 @@ public interface AgentObserver {
         // AgentOtelContext) are unaffected.
     }
 
-    default public void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result){
+    default void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result){
         
     }
 

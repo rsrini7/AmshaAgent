@@ -2,6 +2,7 @@ package com.arcclaw.core.skill;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +59,14 @@ public class SkillLoader {
         Map<String, CompiledSkillEntry> mergedSkills = new LinkedHashMap<>();
         List<String> allWarnings = new ArrayList<>();
 
-        for (SkillProvider provider : providers) {
-            LOG.infof("Loading skills from provider: %s", provider.sourceName());
+        // Sort by priority (lower = higher priority, processed first)
+        // putIfAbsent semantics: first writer wins → highest-priority provider wins on collision
+        List<SkillProvider> ordered = providers.stream()
+            .sorted(Comparator.comparingInt(SkillProvider::priority))
+            .toList();
+
+        for (SkillProvider provider : ordered) {
+            LOG.infof("Loading skills from provider: %s (priority=%d)", provider.sourceName(), provider.priority());
             List<SkillDefinition> definitions = provider.load();
             for (SkillDefinition def : definitions) {
                 try {

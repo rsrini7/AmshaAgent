@@ -107,7 +107,7 @@ public class AuditEvent {
         e.userId         = userId;
         e.agentRole      = agentRole != null ? agentRole : "system";
         e.goalHash       = "n/a";
-        e.outcome        = AuditOutcome.FINISH; // Default for non-loop events
+        e.outcome        = AuditOutcome.SECURITY_EVENT;
         e.eventType      = type;
         e.eventDetail    = detail;
         e.inputTokens    = 0;

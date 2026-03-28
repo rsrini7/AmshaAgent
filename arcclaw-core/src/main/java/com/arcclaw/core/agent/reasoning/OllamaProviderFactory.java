@@ -7,7 +7,7 @@ import dev.langchain4j.model.ollama.OllamaChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
-public class OllamaProviderFactory implements LlmProviderFactory {
+public class OllamaProviderFactory implements AgentChatModelProvider {
 
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://localhost:11434")
     String baseUrl;

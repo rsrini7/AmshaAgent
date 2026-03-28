@@ -87,7 +87,7 @@ class DenyReflexTest {
         when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
 
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
-        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_RESUME_DENIED), any(), eq(1), any()))
+        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), eq(1), any()))
                 .thenReturn(AgentResult.finished("Denial Ack", List.of()));
 
         MessageContext ctx = createContext("/deny " + cronId);

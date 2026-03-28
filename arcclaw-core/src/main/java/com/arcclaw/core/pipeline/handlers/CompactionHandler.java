@@ -3,6 +3,7 @@ package com.arcclaw.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.governance.RateLimitTracker;
@@ -41,7 +42,7 @@ public class CompactionHandler implements MessageHandler {
             // ── Skip compaction if provider is currently throttled.
             // Compaction calls the LLM for its summary — firing it while
             // rate-limited causes a double-Groq-hit that produces Done. in 1 token.
-            if (rateLimitTracker.isBackingOff()) {
+            if (rateLimitTracker.isAnyBackingOff()) {
                 log.debugf("CompactionHandler: skipping compaction for session %s — " +
                         "LLM provider is backing off after rate-limit", sessionId);
                 return HandleResult.CONTINUE;

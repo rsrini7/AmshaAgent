@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.util.List;
 import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -37,7 +38,15 @@ public class ReasoningStepParser {
         int outputTokens = response.tokenUsage() != null ? response.tokenUsage().outputTokenCount() : 0;
 
         if (aiMessage.hasToolExecutionRequests()) {
-            ToolExecutionRequest req = aiMessage.toolExecutionRequests().getFirst();
+            List<ToolExecutionRequest> requests = aiMessage.toolExecutionRequests();
+            if (requests.size() > 1) {
+                log.warnf("[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel " +
+                          "tool calls. Only first ('%s') will execute. Calls 2..%d dropped. " +
+                          "Parallel tool execution not yet supported — tracked for Phase 70.",
+                          sessionId, agentRole, requests.size(),
+                          requests.getFirst().name(), requests.size());
+            }
+            ToolExecutionRequest req = requests.getFirst();
 
             log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
 

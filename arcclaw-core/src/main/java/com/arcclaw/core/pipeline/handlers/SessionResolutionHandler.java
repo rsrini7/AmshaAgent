@@ -84,7 +84,7 @@ public class SessionResolutionHandler implements MessageHandler {
         // We cap FULL→SUPERVISED for Telegram to prevent accidental
         // self-promotion via the "I am an AI" fallback.
         if (level == AutonomyLevel.FULL
-            && context.getUser().channel() == ChannelType.TELEGRAM) {
+            && ChannelType.TELEGRAM.equals(context.getUser().channel())) {
                 log.debugf("Capping FULL→SUPERVISED for Telegram session %s", sessionId);
                 level = AutonomyLevel.SUPERVISED;
         }

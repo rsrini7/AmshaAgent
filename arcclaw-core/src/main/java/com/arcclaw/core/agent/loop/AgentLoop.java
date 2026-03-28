@@ -14,7 +14,9 @@ import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
@@ -29,6 +31,8 @@ import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.MdcKeys;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -73,6 +77,12 @@ public class AgentLoop {
 
     @Inject
     AuditHashUtil hashUtil;
+
+    @Inject
+    MeterRegistry meterRegistry;
+
+    @Inject
+    AuditService auditService;
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
@@ -139,6 +149,16 @@ public class AgentLoop {
                     : resolvedRole.toScopedName();
         } catch (IllegalArgumentException e) {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
+
+            auditService.record(sessionId, WorkspaceContext.userId(), agentRole,
+                SecurityEventType.INVALID_ROLE_FALLBACK,
+                "Unknown agentRole '" + agentRole + "' — defaulted to COORDINATOR");
+
+            Counter.builder("arcclaw.agent.role.unknown")
+                .tag("role", agentRole)
+                .register(meterRegistry)
+                .increment();
+
             // Fall through with coordinator as safe default
             return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
                                goal, engine, maxIterations, context);

@@ -3823,3 +3823,36 @@ This provides the most compatible structure for both the IDE and the Quarkus run
 **Symptom**: Checkpoint updates failed because of missing "skill:" prefixes or incorrect manual additions.
 **Cause**: "skill:" was hardcoded in `IntentClassifier` and several other files.
 **Fix**: Pulled `SKILL_PREFIX` and role resolutions into `AgentRoleEnum` for unified matching.
+
+---
+
+## Phase 69 â€” Production Defect Fixes & Architectural Hardening
+
+### í´´ Failure: StatusReflex injection fails after D2 refactor
+**Symptom**: `UnsatisfiedResolutionException: No bean of type GovernanceStrategy`.
+**Root Cause**: `GovernanceLayer` implements `GovernanceStrategy` but CDI may not resolve the interface if the concrete class is missing from the Jandex index.
+**Resolution**: Ensure `GovernanceLayer` is `@ApplicationScoped` and its package is included in `quarkus.index-dependency` or `quarkus.hibernate-orm.packages`.
+
+### í´´ Failure: SkillLoader merge order inconsistency across JVMs
+**Symptom**: Classpath skill overrides a database skill with the same name on some JVMs but not others.
+**Root Cause**: CDI `Instance<SkillProvider>` iteration order is JVM/container-dependent. Without explicit ordering, merge results are non-deterministic.
+**Resolution**: Added `priority()` to `SkillProvider` interface. `SkillLoader` now sorts providers by priority (lower = higher precedence) before merging. Database (10) always wins over Classpath (100). Custom providers should use values between 10 and 100.
+
+### í´´ Failure: CronResultHandler skips notification for valid cron jobs
+**Symptom**: Cron jobs that should send notifications are silently skipped.
+**Root Cause**: After the D5 fix, cron rows with `null` or empty `channelType` no longer fall back to Telegram. Instead, they are audited and skipped.
+**Resolution**: Run the migration SQL to backfill missing channel types:
+```sql
+UPDATE agentcron SET channel_type = 'TELEGRAM' WHERE channel_type IS NULL OR channel_type = '';
+```
+This makes the data explicit rather than relying on code fallback. The `WARN` log from `CronResultHandler` includes this SQL for operator convenience.
+
+### í¿¡ Warning: LlmProviderFactory still referenced in arcclaw-app
+**Symptom**: After the D1 rename, `grep -r "LlmProviderFactory" --include="*.java"` still shows results.
+**Root Cause**: The `arcclaw-app/.../routing/LlmProviderFactory.java` was **intentionally renamed** to `RoutingChatModelProvider.java`. If old references remain, they indicate an incomplete migration.
+**Resolution**: Verify that `arcclaw-app` uses `RoutingChatModelProvider` everywhere. The old `LlmProviderFactory.java` in `arcclaw-app` should be deleted.
+
+### í¿¡ Warning: GovernanceStrategy missing token methods
+**Symptom**: Compilation error in `StatusReflex` â€” `getSessionInputTokens()` not found on `GovernanceStrategy`.
+**Root Cause**: The D2 fix promoted these methods to the interface, but if you're working on an older branch, the interface may not have them.
+**Resolution**: Ensure `GovernanceStrategy.java` includes both `int getSessionInputTokens(String sessionId)` and `int getSessionOutputTokens(String sessionId)`.

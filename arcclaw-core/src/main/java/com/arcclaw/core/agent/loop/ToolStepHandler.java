@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -63,7 +64,7 @@ public class ToolStepHandler {
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
         }
 
-        if (REACT_KEYWORDS.contains(toolName.toUpperCase())) {
+        if (REACT_KEYWORDS.contains(toolName.toUpperCase(Locale.ROOT))) {
             log.warnf("[ToolStepHandler] ReAct keyword '%s' used as tool name — ephemeral correction", toolName);
             return StepDecision.retryEngine(String.format(
                     "System: '%s' is a ReAct reasoning keyword, not a tool name. " +

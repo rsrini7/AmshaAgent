@@ -7,6 +7,8 @@ public enum SecurityEventType {
     LOOP_BUDGET_EXCEEDED,
     LOOP_MAX_ITERATIONS,
     LOOP_AWAITING_APPROVAL,
+    INVALID_ROLE_FALLBACK,
+    LEGACY_CHANNEL_FALLBACK,
 
     // Tool layer
     TOOL_INVOKED,          // every ToolRegistry.invokeTool() call
@@ -31,6 +33,9 @@ public enum SecurityEventType {
     CHECKPOINT_CREATED,    // new entity persisted
     CHECKPOINT_COMPLETED,  // stateful store markCompleted()
     CHECKPOINT_FAILED,     // stateful store markFailed()
+
+    // Misc Security
+    SECURITY,
 
     // Context memory
     CONTEXT_COMPACTED,     // session history summary created

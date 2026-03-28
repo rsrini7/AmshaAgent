@@ -3,13 +3,10 @@ package com.arcclaw.app.routing;
 import dev.langchain4j.model.chat.ChatModel;
 
 /**
- * SPI for LLM chat model providers.
- * Add a new provider by implementing this interface as a CDI bean —
- * no changes to LlmModelFactory or any core class required.
- *
- * <p>Mirrors {@code EmbeddingProviderFactory} from arcclaw-rag exactly.
+ * SPI for LLM chat model providers for internal routing (intent classification, etc).
+ * Formerly LlmProviderFactory.
  */
-public interface LlmProviderFactory {
+public interface RoutingChatModelProvider {
 
     /** Lower-case canonical provider identifier (e.g. "groq", "ollama", "openai"). */
     String providerId();

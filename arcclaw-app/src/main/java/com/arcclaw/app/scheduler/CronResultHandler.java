@@ -1,6 +1,7 @@
 package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -143,8 +144,22 @@ public class CronResultHandler {
     }
 
     private void fireCompletionEvent(AgentCronEntity job, String executionId, String answer, AgentResult.FailureCategory category) {
-        // Fallback to TELEGRAM for legacy rows missing channelType
-        ChannelType chType = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
+        Optional<ChannelType> resolvedType = ChannelType.fromString(job.channelType);
+        if (resolvedType.isEmpty()) {
+            log.warnf("CRON-NOTIFY cronId=%d has null/unknown channelType='%s'. " +
+                       "Cannot notify — see Architecture_Invariants.md §1.4. " +
+                       "Run migration: UPDATE agentcron SET channel_type='TELEGRAM' " +
+                       "WHERE channel_type IS NULL;",
+                       job.id, job.channelType);
+            // Use a deterministic sessionId for audit — cronId is always available
+            String cronSessionId = "cron-" + job.id;
+            auditService.record(cronSessionId, job.userId,
+                AgentRoleEnum.COORDINATOR.toScopedName(),
+                SecurityEventType.LEGACY_CHANNEL_FALLBACK,
+                "cronId=" + job.id + " channelType=" + job.channelType);
+            return; // skip notification, do NOT default to Telegram
+        }
+        ChannelType chType = resolvedType.get();
         String platformId = job.channelPlatformId != null ? job.channelPlatformId : job.chatId;
 
         try {

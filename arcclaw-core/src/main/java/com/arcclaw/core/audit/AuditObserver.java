@@ -52,6 +52,12 @@ public class AuditObserver implements AgentObserver {
         auditService.recordLoopCompletion(sessionId, userId, agentRole, goalHash, result, inTokens, outTokens, cost);
     }
     
+    public void cleanupSession(String sessionId) {
+        if (sessionId != null) {
+            trackers.remove(sessionId);
+        }
+    }
+
     private static final class TokenTracker {
         final AtomicInteger input = new AtomicInteger();
         final AtomicInteger output = new AtomicInteger();

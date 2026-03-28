@@ -70,7 +70,7 @@ public class AuditHashUtil {
                 }
             }
         }
-        return result;
+        return result.clone();
     }
 
     /**

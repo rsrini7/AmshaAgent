@@ -32,4 +32,10 @@ public interface GovernanceStrategy {
 
     /** Total configured budget in USD. */
     double getBudgetUsd();
+
+    /** Returns total input tokens consumed for the session. */
+    int getSessionInputTokens(String sessionId);
+
+    /** Returns total output tokens consumed for the session. */
+    int getSessionOutputTokens(String sessionId);
 }

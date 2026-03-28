@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -36,6 +37,10 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
                     if (!clean.isEmpty() && !clean.startsWith("#") && clean.contains("=")) {
                         String[] parts = clean.split("=", 2);
                         String key = parts[0].trim();
+                        if (key.toLowerCase(Locale.ROOT).startsWith("export ")) {
+                            key = key.substring(7).trim();
+                        }
+                        if (key.isEmpty()) return;
                         String val = parts[1].trim();
                         // Remove surrounding quotes if any
                         if (val.startsWith("\"") && val.endsWith("\"") && val.length() >= 2) {

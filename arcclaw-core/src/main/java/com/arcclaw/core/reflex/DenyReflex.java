@@ -155,7 +155,7 @@ public class DenyReflex implements AgentReflex {
         String cronSessionId = pendingCheckpoint.getSessionId();
 
         context.setResumeSignal(true);
-        context.setGoal(AgentSentinels.GOAL_RESUME_DENIED);
+        context.setGoal(AgentSentinels.GOAL_DENY_APPROVED);
 
         // "denial" keyword no longer needed as trigger, we use resumeSignal
         AgentResult result = WorkspaceContext.run(
@@ -163,7 +163,7 @@ public class DenyReflex implements AgentReflex {
                 AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> agentLoop.run(
                         cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        AgentSentinels.GOAL_RESUME_DENIED,
+                        AgentSentinels.GOAL_DENY_APPROVED,
                         reasoningEngine, 1, context) // maxIterations=1 — denial returns immediately
 
         );

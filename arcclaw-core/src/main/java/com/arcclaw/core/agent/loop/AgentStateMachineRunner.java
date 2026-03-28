@@ -54,7 +54,8 @@ public class AgentStateMachineRunner {
             "OutOfMemoryError"
     );
 
-    @Inject AgentStepProcessor stepProcessor;
+    @Inject EngineStepHandler engineStepHandler;
+    @Inject ToolStepHandler toolStepHandler;
     @Inject ChatMemoryWriter writer;
     @Inject Instance<AgentObserver> observers;
     @Inject @AgentRole("synthesizer") Agent synthesizerAgent;
@@ -86,7 +87,7 @@ public class AgentStateMachineRunner {
 
                 StepDecision engineDecision;
                 try {
-                    engineDecision = stepProcessor.processEngineStep(
+                    engineDecision = engineStepHandler.processEngineStep(
                             context, engine, history, transientError, llmSchemaErrorCount, iteration);
                 } catch (StructuredOutputException soe) {
                     log.warnf(
@@ -111,7 +112,7 @@ public class AgentStateMachineRunner {
                     return handleFinishAction(context.sessionId(), context.agentRole(),
                             history, step, iteration);
 
-                StepDecision validationDecision = stepProcessor.validateTool(
+                StepDecision validationDecision = toolStepHandler.validateTool(
                         context, history, step, consecutiveFailures);
                 if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
                 if (validationDecision.type() == DecisionType.CONTINUE) {
@@ -120,7 +121,7 @@ public class AgentStateMachineRunner {
                 }
                 step = validationDecision.step();
 
-                StepDecision invocationDecision = stepProcessor.invokeToolAndObserve(
+                StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
                         context, history, step, consecutiveFailures, skillSnapshot);
                 if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
                 consecutiveFailures = invocationDecision.consecutiveFailures();

@@ -11,7 +11,6 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
-
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -160,7 +159,7 @@ public class CompactionService {
                     .aiMessage().text().trim();
         } catch (Exception e) {
             if (isRateLimit(e)) {
-                rateLimitTracker.recordHit();
+                rateLimitTracker.recordHit("compaction");
                 log.warnf("CompactionService: rate-limited during summary for session %s — " +
                           "aborting compaction, latch will release via finally block", sessionId);
                 throw new CompactionAbortedException("Rate-limited during compaction", e);

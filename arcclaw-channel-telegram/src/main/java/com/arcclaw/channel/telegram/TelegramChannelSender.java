@@ -1,5 +1,6 @@
 package com.arcclaw.channel.telegram;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -66,12 +67,36 @@ public class TelegramChannelSender implements ChannelSender {
         sendRaw(recipient.channelId(), text);  // ← was platformId()
     }
 
+    private static final int TELEGRAM_MAX_LENGTH = 4096;
+
     private void sendRaw(String chatId, String text) {
         if (text == null || text.isBlank()) {
             log.warn("Attempted to send empty message to " + chatId + " — skipping");
             return;
         }
-        String endpoint = "telegram:bots";
-        producerTemplate.sendBodyAndHeader(endpoint, text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+        if (text.length() <= TELEGRAM_MAX_LENGTH) {
+            producerTemplate.sendBodyAndHeader(
+                "telegram:bots", text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+        } else {
+            List<String> chunks = splitAtWordBoundary(text, TELEGRAM_MAX_LENGTH);
+            log.infof("TELEGRAM-SEND splitting %d-char response into %d chunks for %s",
+                text.length(), chunks.size(), chatId);
+            for (String chunk : chunks) {
+                producerTemplate.sendBodyAndHeader(
+                    "telegram:bots", chunk, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            }
+        }
+    }
+
+    private List<String> splitAtWordBoundary(String text, int maxLen) {
+        List<String> parts = new ArrayList<>();
+        while (text.length() > maxLen) {
+            int split = text.lastIndexOf(' ', maxLen);
+            if (split <= 0) split = maxLen;
+            parts.add(text.substring(0, split));
+            text = text.substring(split).stripLeading();
+        }
+        if (!text.isBlank()) parts.add(text);
+        return parts;
     }
 }

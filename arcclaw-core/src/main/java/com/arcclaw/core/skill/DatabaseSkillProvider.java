@@ -25,6 +25,11 @@ public class DatabaseSkillProvider implements SkillProvider {
     }
 
     @Override
+    public int priority() {
+        return 10;
+    }
+
+    @Override
     public List<SkillDefinition> load() {
         List<SkillDefinition> skills = new ArrayList<>();
         try {

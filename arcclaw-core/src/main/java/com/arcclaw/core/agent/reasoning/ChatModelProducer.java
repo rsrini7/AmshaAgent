@@ -21,7 +21,7 @@ public class ChatModelProducer {
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);
 
     @Inject
-    Instance<LlmProviderFactory> factories;
+    Instance<AgentChatModelProvider> factories;
 
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
@@ -34,7 +34,7 @@ public class ChatModelProducer {
         return factories.stream()
                 .filter(factory -> factory.providerName().equalsIgnoreCase(provider))
                 .findFirst()
-                .map(LlmProviderFactory::create)
+                .map(AgentChatModelProvider::create)
                 .orElseThrow(() -> new IllegalStateException(
                         "Unknown or unsupported LLM provider: " + provider +
                         ". Ensure an LlmProviderFactory implementation is present on the classpath."));
