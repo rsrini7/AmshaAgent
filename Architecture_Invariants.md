@@ -549,3 +549,28 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
      arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
      by the WorkspaceManager GC scheduler. The user MUST receive a
      Telegram notification that their approval window expired.
+
+7.27 MUST: After each per-tool decision (not all decided yet),
+     the original HITL keyboard message MUST be edited in-place
+     to show only the remaining PENDING tools. Decided tools
+     (APPROVED/DENIED) MUST be removed from the keyboard rows.
+     The "Approve All / Deny All" row is always retained until
+     all tools are decided.
+
+7.28 MUST: All text sent via sendWithKeyboard() MUST be escaped
+     for MarkdownV2 before ParseMode="MarkdownV2" is applied.
+     The escaping MUST use TelegramMarkdownV2Renderer.esc()
+     which already handles all 18 Telegram special characters.
+     AgentResultFormatter.formatHitlMessage() MUST produce
+     plain text output (no MarkdownV2 markup). Escaping is
+     applied at the call site in send(), not inside sendWithKeyboard(),
+     to prevent double-escaping of already-rendered MarkdownV2 text.
+
+7.29 INVARIANT: A parallel batch checkpoint MUST transition to
+     a RESUMING pseudo-status (stored as a transient flag, NOT
+     a new DB column) atomically before resumeParallelBatch()
+     is called. If the flag is already set, the second caller
+     MUST return a no-op response. This prevents double-resume
+     when two callback_query updates arrive concurrently.
+     The flag lives in a ConcurrentHashMap in StatefulAgentStore
+     and is cleared when the session terminates.

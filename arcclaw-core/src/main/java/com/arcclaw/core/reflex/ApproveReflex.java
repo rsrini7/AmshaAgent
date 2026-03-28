@@ -229,15 +229,28 @@ public class ApproveReflex implements AgentReflex {
     private String triggerBatchResume(
             String sessionId, String userId, String chatId,
             String agentRole, MessageContext context) throws Exception {
-        final String resumeGoal =
-            checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
-        context.setResumeSignal(true);
-        context.setGoal(resumeGoal);
-        AgentResult result = WorkspaceContext.runWithFullAutonomy(
-            sessionId, userId, chatId, agentRole,
-            () -> agentLoop.run(
-                sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
-        return AgentResultFormatter.format(result);
+
+        // §7.29: Prevent double-resume from concurrent callback taps.
+        if (!statefulAgentStore.markBatchResuming(sessionId)) {
+            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — " +
+                      "ignoring duplicate trigger.", sessionId);
+            return "⏳ Already processing your approval. Please wait.";
+        }
+
+        try {
+            final String resumeGoal =
+                checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
+            context.setResumeSignal(true);
+            context.setGoal(resumeGoal);
+            AgentResult result = WorkspaceContext.runWithFullAutonomy(
+                sessionId, userId, chatId, agentRole,
+                () -> agentLoop.run(
+                    sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
+            return AgentResultFormatter.format(result);
+        } finally {
+            // Always clear — success or exception.
+            statefulAgentStore.clearBatchResuming(sessionId);
+        }
     }
 
     private String handleCronApproval(String cronId, String userId, String chatId, MessageContext context) throws Exception {
@@ -267,9 +280,16 @@ public class ApproveReflex implements AgentReflex {
         String cronSessionId = pendingCheckpoint.getSessionId(); // ← actual sessionId
         String cronRole = AgentRoleEnum.COORDINATOR.toScopedName();
 
-        // Resolve the original user goal from the cron checkpoint so
-        // RagContextEnricher embeds the real cron goal on resume.
-        final String resumeGoal = checkpointResumeHandler.resolveResumeGoal(cronSessionId, cronRole);
+        // §7.29: Prevent double-resume from concurrent callback taps.
+        if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
+            log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — ignoring duplicate trigger.", cronSessionId);
+            return "⏳ Already processing your approval. Please wait.";
+        }
+
+        try {
+            // Resolve the original user goal from the cron checkpoint so
+            // RagContextEnricher embeds the real cron goal on resume.
+            final String resumeGoal = checkpointResumeHandler.resolveResumeGoal(cronSessionId, cronRole);
 
         context.setResumeSignal(true);
         context.setGoal(resumeGoal);
@@ -309,5 +329,8 @@ public class ApproveReflex implements AgentReflex {
         }
 
         return "";
+        } finally {
+            statefulAgentStore.clearBatchResuming(cronSessionId);
+        }
     }
 }

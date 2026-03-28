@@ -212,15 +212,28 @@ public class DenyReflex implements AgentReflex {
     private String triggerBatchResume(
             String sessionId, String userId, String chatId,
             String agentRole, MessageContext context) throws Exception {
-        final String resumeGoal =
-            checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
-        context.setResumeSignal(true);
-        context.setGoal(resumeGoal);
-        AgentResult result = WorkspaceContext.runWithFullAutonomy(
-            sessionId, userId, chatId, agentRole,
-            () -> agentLoop.run(
-                sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
-        return AgentResultFormatter.format(result);
+
+        // §7.29: Prevent double-resume from concurrent callback taps.
+        if (!statefulAgentStore.markBatchResuming(sessionId)) {
+            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — " +
+                      "ignoring duplicate trigger.", sessionId);
+            return "⏳ Already processing your approval. Please wait.";
+        }
+
+        try {
+            final String resumeGoal =
+                checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
+            context.setResumeSignal(true);
+            context.setGoal(resumeGoal);
+            AgentResult result = WorkspaceContext.runWithFullAutonomy(
+                sessionId, userId, chatId, agentRole,
+                () -> agentLoop.run(
+                    sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
+            return AgentResultFormatter.format(result);
+        } finally {
+            // Always clear — success or exception.
+            statefulAgentStore.clearBatchResuming(sessionId);
+        }
     }
 
     private String handleCronDenial(String cronId, String userId, String chatId, MessageContext context) throws Exception {
@@ -246,8 +259,15 @@ public class DenyReflex implements AgentReflex {
         }
         String cronSessionId = pendingCheckpoint.getSessionId();
 
-        context.setResumeSignal(true);
-        context.setGoal(AgentSentinels.GOAL_DENY_APPROVED);
+        // §7.29: Prevent double-resume from concurrent callback taps.
+        if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
+            log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — ignoring duplicate trigger.", cronSessionId);
+            return "⏳ Already processing your approval. Please wait.";
+        }
+
+        try {
+            context.setResumeSignal(true);
+            context.setGoal(AgentSentinels.GOAL_DENY_APPROVED);
 
         // "denial" keyword no longer needed as trigger, we use resumeSignal
         AgentResult result = WorkspaceContext.run(
@@ -273,5 +293,8 @@ public class DenyReflex implements AgentReflex {
                 null));
 
         return "🚫 Cron task denied and cancelled.";
+        } finally {
+            statefulAgentStore.clearBatchResuming(cronSessionId);
+        }
     }
 }

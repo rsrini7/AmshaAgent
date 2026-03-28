@@ -21,6 +21,7 @@ import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
@@ -55,6 +56,9 @@ public class WorkspaceManager {
 
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    StatefulAgentStore statefulAgentStore;
 
     @Inject
     SqliteRetryTemplate retryTemplate;
@@ -116,6 +120,9 @@ public class WorkspaceManager {
         } catch (Exception e) {
             log.warnf("Failed to destroy CDI scope for session=%s: %s", sessionId, e.getMessage());
         }
+
+        // §7.29: Clear any in-flight batch resume flag for this session.
+        statefulAgentStore.clearBatchResuming(sessionId);
     }
 
     /**

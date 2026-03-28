@@ -136,4 +136,18 @@ public interface StatefulAgentStore {
      * older than the given cutoff. Used by stale-checkpoint GC. §7.26
      */
     List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff);
+
+    /**
+     * Atomically marks the session as RESUMING.
+     * @return true if this caller is the first to mark it (safe to resume)
+     *         false if another thread already marked it (skip — already resuming)
+     * §7.29
+     */
+    boolean markBatchResuming(String sessionId);
+
+    /**
+     * Clears the RESUMING flag for the session. §7.29
+     * Called by WorkspaceManager.terminateSession() and on resume failure.
+     */
+    void clearBatchResuming(String sessionId);
 }

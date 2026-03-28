@@ -46,7 +46,7 @@ public class AgentResultFormatter {
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");
             for (String ts : tools) {
-                sb.append("• `").append(ts).append("`\n");
+                sb.append("• ").append(ts).append("\n");
             }
         } else {
             sb.append("⏸ Approval needed for tool: ").append(compositeName);
@@ -54,7 +54,7 @@ public class AgentResultFormatter {
                 String display = paramsJson.length() > 500
                         ? paramsJson.substring(0, 500) + "\n… [truncated]"
                         : paramsJson;
-                sb.append("\n\n📋 Params:\n```\n").append(display).append("\n```");
+                sb.append("\n\n📋 Params:\n").append(display);
             }
         }
 
@@ -62,13 +62,13 @@ public class AgentResultFormatter {
 
         String cronPrefix = isCron && cronId != null ? " " + cronId : "";
         if (isBatch) {
-            sb.append("**To approve/deny specific tools:**\n")
-              .append(" `/approve").append(cronPrefix).append(" <toolName>`\n")
-              .append(" `/deny").append(cronPrefix).append(" <toolName>`\n\n")
-              .append("**Or decide all at once:**\n")
-              .append(" `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("` (approve/deny all)");
+            sb.append("To approve/deny specific tools:\n")
+              .append("  /approve").append(cronPrefix).append(" <toolName>\n")
+              .append("  /deny").append(cronPrefix).append(" <toolName>\n\n")
+              .append("Or decide all at once:\n")
+              .append("  /approve").append(cronPrefix).append(" or /deny").append(cronPrefix).append(" (approve/deny all)");
         } else {
-            sb.append("Reply `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("` (confirm/cancel)");
+            sb.append("Reply /approve").append(cronPrefix).append(" or /deny").append(cronPrefix).append(" (confirm/cancel)");
         }
 
         return sb.toString();

@@ -4,10 +4,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.lifecycle.StaleApprovalExpired;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class TelegramStaleApprovalObserver {

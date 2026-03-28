@@ -1,5 +1,9 @@
 package com.arcclaw.channel.telegram;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -20,10 +24,10 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.apache.camel.Exchange;
-import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -99,14 +103,14 @@ public class TelegramCallbackHandler {
         try {
             log.debugf("Answering callback %s", callbackQueryId);
             String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
-            java.net.http.HttpClient.newHttpClient().sendAsync(
-                java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(
+            HttpClient.newHttpClient().sendAsync(
+                HttpRequest.newBuilder()
+                    .uri(URI.create(
                         "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
                     .header("Content-Type", "application/json")
-                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build(),
-                java.net.http.HttpResponse.BodyHandlers.discarding());
+                HttpResponse.BodyHandlers.discarding());
         } catch (Exception e) {
             log.warnf("Failed to answer callback %s: %s", callbackQueryId, e.getMessage());
         }
