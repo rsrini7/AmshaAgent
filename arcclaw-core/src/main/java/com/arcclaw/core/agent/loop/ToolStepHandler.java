@@ -306,12 +306,21 @@ public class ToolStepHandler {
             int consecutiveFailures) {
 
         if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)) {
-            log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
-            String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
-            String finalAnswer = (response.success() ? "✅ " : "❌ ") + cleanOutput;
-            writer.saveAnswer(context.sessionId(), finalAnswer);
-            return StepDecision.terminal(
-                AgentResult.finished(finalAnswer, List.copyOf(history)));
+            if (response.success()) {
+                // SUCCESS: hand off to cron system, fast-path exit
+                log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
+                String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
+                String finalAnswer = "✅ " + cleanOutput;
+                writer.saveAnswer(context.sessionId(), finalAnswer);
+                return StepDecision.terminal(
+                    AgentResult.finished(finalAnswer, List.copyOf(history)));
+            }
+            // FAILURE: fall through to normal consecutive-failure / circuit-breaker path.
+            // The LLM must see the error and correct params (e.g. bad cron expression,
+            // empty timezone). Do NOT fast-path — the task was never scheduled.
+            log.warnf("[STATE-MACHINE] schedule_task failed session=%s — continuing loop " +
+                    "for LLM self-correction: %s", context.sessionId(), observation);
+            // fall through → consecutiveFailures handling below
         }
 
         if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
