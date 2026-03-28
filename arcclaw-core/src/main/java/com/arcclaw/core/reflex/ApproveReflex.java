@@ -273,8 +273,8 @@ public class ApproveReflex implements AgentReflex {
     }
 
     private String handleCronApproval(
-            String cronId, String userId, String chatId,
-            MessageContext context) throws Exception {
+        String cronId, String userId, String chatId,
+        MessageContext context) throws Exception {
 
         AgentCronEntity cron = cronRepository.findByUserId(userId).stream()
                 .filter(c -> c.id.equals(cronId))
@@ -289,24 +289,24 @@ public class ApproveReflex implements AgentReflex {
             return "❌ This task is not awaiting approval (status=" + cron.status + ").";
         }
 
-        // Look up the actual checkpoint to get the real cronSessionId
-        // instead of reconstructing it from cron.lastDeliveryId which may be stale
         var pendingCheckpoint = statefulAgentStore
                 .findLatestAwaitingApprovalForCron(cronId)
                 .orElse(null);
 
         if (pendingCheckpoint == null) {
             return "❌ No pending checkpoint found for this task. " +
-                   "It may have already been processed.";
+                "It may have already been processed.";
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId();
-        String cronRole = AgentRoleEnum.COORDINATOR.toScopedName();
+        // Fix 3: use the actual agent role stored in the checkpoint.
+        // Hardcoding COORDINATOR caused resolveResumeGoal() to look up the wrong
+        // checkpoint row, returning a null/sentinel goal and producing an empty resume.
+        String cronRole = pendingCheckpoint.getAgentRole();
 
-        // §7.29: Prevent double-resume from concurrent callback taps.
         if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
-                      "ignoring duplicate trigger.", cronSessionId);
+                    "ignoring duplicate trigger.", cronSessionId);
             return "⏳ Already processing your approval. Please wait.";
         }
 
@@ -323,7 +323,6 @@ public class ApproveReflex implements AgentReflex {
                     () -> agentLoop.run(
                         cronSessionId, cronRole, resumeGoal, reasoningEngine, 5, context));
 
-            // Exhaustive status transition
             switch (result) {
                 case AgentResult.Finished _ -> {
                     if (cron.runOnce)
@@ -337,7 +336,6 @@ public class ApproveReflex implements AgentReflex {
                 case AgentResult.LoopExceeded _     -> cronRepository.markFailed(cron.id, "Loop exceeded");
             }
 
-            // Fallback to TELEGRAM for legacy rows missing channelType
             ChannelType chType =
                 ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
             String platformId =
@@ -351,10 +349,9 @@ public class ApproveReflex implements AgentReflex {
             try {
                 workspaceManager.terminateSession(cronSessionId);
             } catch (Exception e) {
-                String errMsg = e.getMessage() != null
-                    ? e.getMessage() : e.getClass().getSimpleName();
                 log.warnf("Failed to terminate cron session %s after approval: %s",
-                        cronSessionId, errMsg);
+                        cronSessionId,
+                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
 
             return "";

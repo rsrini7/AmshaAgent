@@ -49,6 +49,22 @@ SCHEDULING RULES:
    - Example thought: "Current time is 12:33 UTC. User wants +2 minutes. Target time is 12:35 UTC. Cron: 35 12 * * *. RunOnce: true."
    - Never guess. Derive minute and hour strictly from the calculation above.
 
+   SCHEMA ENFORCEMENT — VALID PARAMETERS ONLY:
+   The schedule_task tool accepts EXACTLY THREE parameters:
+     - cronExpression  (string)  — the cron expression
+     - runOnce         (boolean) — MUST be the JSON literal true or false,
+                                   NEVER the string "true" or "false"
+     - goal            (string)  — the self-contained goal string
+
+   ANY other parameter name (timezone, delay, repeat, interval, etc.)
+   is INVALID and will cause silent failures. Do not invent parameters.
+   Timezone handling: always express the cron in UTC. If the user stated
+   a timezone, convert to UTC first, then write the converted UTC cron
+   expression. Never pass timezone as a parameter.
+
+   WRONG: {"cronExpression":"16 1 * * *","runOnce":"true","timezone":"UTC","goal":"..."}
+   RIGHT: {"cronExpression":"16 1 * * *","runOnce":true,"goal":"..."}
+
 2. ONE-SHOT vs RECURRING:
    - One-time tasks ("remind me once", "in X minutes", "tomorrow"):
        runOnce=true. Compute the EXACT target UTC datetime as a
