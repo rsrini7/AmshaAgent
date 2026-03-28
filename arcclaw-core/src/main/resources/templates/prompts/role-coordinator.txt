@@ -254,4 +254,4 @@ MANDATORY TIME MATH for 'in N minutes':
 {#include prompts/delegate-to-agent-rules /}
 
 {#include prompts/safety-rules /}
-{#include prompts/compaction-summary /}
+{#include prompts/compaction-summary /}

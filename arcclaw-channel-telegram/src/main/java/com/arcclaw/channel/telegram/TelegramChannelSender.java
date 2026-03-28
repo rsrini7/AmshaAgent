@@ -13,7 +13,6 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -86,7 +85,7 @@ public class TelegramChannelSender implements ChannelSender {
             log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
             return;
         }
-        sendRawToChatId(recipient.channelId(), (String) text);  // ← was platformId()
+        sendRawToChatId(recipient.channelId(), text);  // ← was platformId()
     }
 
     /**

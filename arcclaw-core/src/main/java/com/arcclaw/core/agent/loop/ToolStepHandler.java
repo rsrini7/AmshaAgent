@@ -45,7 +45,7 @@ public class ToolStepHandler {
     );
 
     private static final Pattern GITHUB_RESOURCE_PATTERN = Pattern.compile(
-            "(?i)(github\\.com|[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+|gh\\s+repo|gist)");
+            "(?i)(github\\.com|[a-zA-Z0-9_.-]{2,}/[a-zA-Z0-9_.-]{2,}(?!\\/)|gh\\s+repo|gist\\.github\\.com)");
 
     @Inject ToolRegistry toolRegistry;
     @Inject Instance<AgentObserver> observers;
@@ -71,7 +71,7 @@ public class ToolStepHandler {
 
         String toolName = step.action();
         
-        // Component 5: Coordinator GitHub Misuse Guard
+        // Guard: block coordinator direct GitHub calls — must contain a real GitHub resource in goal or args; otherwise redirect via delegate_to_agent
         if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole())
                 && ToolCapability.GITHUB.toolName().equals(toolName)) {
             boolean goalHasResource = context.goal() != null && GITHUB_RESOURCE_PATTERN.matcher(context.goal()).find();

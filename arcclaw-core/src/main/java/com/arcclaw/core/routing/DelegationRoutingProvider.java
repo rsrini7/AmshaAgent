@@ -4,9 +4,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
  * Ensures that natural language delegation requests (e.g., "ask shiva to fix this")
@@ -16,6 +16,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class DelegationRoutingProvider implements IntentRoutingProvider {
 
+    // vishnu and coordinator are intentionally excluded:
+    // (1) Routing "ask vishnu" to coordinator would create a self-loop
+    //     (coordinator delegates to itself).
+    // (2) DelegateToAgentTool already guards against self-delegation with a
+    //     400 failure. Excluding here is the first line of defense.
+    // Do NOT add vishnu or coordinator here.
     private static final String AGENT_NAMES =
         "shiva|brahma|saraswati|brihaspati|brahaspati|dattatreya|datta|" +
         "researcher|coder|debugger|architect|synthesizer";

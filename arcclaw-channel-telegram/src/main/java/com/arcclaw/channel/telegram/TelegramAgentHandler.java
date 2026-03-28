@@ -16,7 +16,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.eclipse.microprofile.context.ManagedExecutor;

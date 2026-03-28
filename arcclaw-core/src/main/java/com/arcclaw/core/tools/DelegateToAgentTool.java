@@ -1,6 +1,7 @@
 package com.arcclaw.core.tools;
 
 import java.util.Map;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -86,9 +87,11 @@ public class DelegateToAgentTool implements AgentTool {
         int maxIterations = Math.max(1, targetRole.definition().maxIterations());
         String outerSessionId = WorkspaceContext.requireSessionId();
 
-        // Derive child session ID to isolate checkpoint rows (prevents row collisions)
+        // NOTE: Inner sessions bypass SessionRegistry intentionally.
+        // StatefulAgentStore.save() must not require a session_registry entry.
+        // Verified: save() is keyed only on (sessionId, agentRole) — no FK constraint.
         String innerSessionId = outerSessionId + ":d:" + targetRole.toScopedName()
-                                               + ":" + System.nanoTime();
+                                               + ":" + UUID.randomUUID().toString().substring(0, 8);
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
                   targetRole.toScopedName(), goal, outerSessionId);

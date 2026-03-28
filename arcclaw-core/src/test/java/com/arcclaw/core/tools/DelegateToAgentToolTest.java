@@ -1,5 +1,15 @@
 package com.arcclaw.core.tools;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
 import java.util.Map;
 
 import jakarta.enterprise.inject.Instance;
@@ -13,18 +23,11 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DelegateToAgentToolTest {
@@ -41,7 +44,7 @@ class DelegateToAgentToolTest {
 
     @BeforeEach
     void setup() {
-        org.mockito.Mockito.lenient().when(agentLoopInstance.get()).thenReturn(agentLoop);
+        Mockito.lenient().when(agentLoopInstance.get()).thenReturn(agentLoop);
     }
 
     @Test
@@ -52,12 +55,12 @@ class DelegateToAgentToolTest {
         );
 
         when(agentLoop.run(
-            eq(SESSION_ID + ":d:debugger"),
+            ArgumentMatchers.startsWith(SESSION_ID + ":d:debugger"),
             eq(AgentRoleEnum.DEBUGGER.toScopedName()),
             eq("debug this"),
             eq(reasoningEngine),
             anyInt() // 3
-        )).thenReturn(AgentResult.finished("Fixed NPE", java.util.List.of()));
+        )).thenReturn(AgentResult.finished("Fixed NPE", List.of()));
 
         ToolResponse response = WorkspaceContext.runWithFullAutonomy(SESSION_ID, USER_ID, CHAT_ID, "coordinator", () -> tool.execute(params));
 
@@ -100,7 +103,7 @@ class DelegateToAgentToolTest {
 
         when(agentLoop.run(
             any(), any(), any(), any(), anyInt()
-        )).thenReturn(AgentResult.loopExceeded(10, java.util.List.of()));
+        )).thenReturn(AgentResult.loopExceeded(10, List.of()));
 
         ToolResponse response = WorkspaceContext.runWithFullAutonomy(SESSION_ID, USER_ID, CHAT_ID, "coordinator", () -> tool.execute(params));
 
@@ -118,7 +121,7 @@ class DelegateToAgentToolTest {
 
         when(agentLoop.run(
             any(), any(), any(), any(), anyInt()
-        )).thenReturn(AgentResult.awaitingApproval("sandbox_exec", "{}", SESSION_ID + ":d:coder", java.util.List.of()));
+        )).thenReturn(AgentResult.awaitingApproval("sandbox_exec", "{}", SESSION_ID + ":d:coder", List.of()));
 
         ToolResponse response = WorkspaceContext.runWithFullAutonomy(SESSION_ID, USER_ID, CHAT_ID, "coordinator", () -> tool.execute(params));
 
