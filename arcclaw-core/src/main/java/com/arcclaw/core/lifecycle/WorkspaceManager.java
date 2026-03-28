@@ -42,26 +42,14 @@ public class WorkspaceManager {
 
     private static final Logger log = Logger.getLogger(WorkspaceManager.class);
 
-    @Inject
-    EntityManager em;
-
-    @Inject
-    WorkspaceManager self;
-
-    @Inject
-    GovernanceStrategy governanceLayer;
-
-    @Inject
-    ChatMemoryStore chatMemoryStore;
-
-    @Inject
-    SessionHeartbeatTracker heartbeatTracker;
-
-    @Inject
-    StatefulAgentStore statefulAgentStore;
-
-    @Inject
-    SqliteRetryTemplate retryTemplate;
+    @Inject EntityManager em;
+    @Inject WorkspaceManager self;
+    @Inject GovernanceStrategy governanceLayer;
+    @Inject ChatMemoryStore chatMemoryStore;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
+    @Inject StatefulAgentStore statefulAgentStore;
+    @Inject SqliteRetryTemplate retryTemplate;
+    @Inject AuditObserver auditObserver;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -69,12 +57,8 @@ public class WorkspaceManager {
     @ConfigProperty(name = "arcclaw.chat-memory.max-messages", defaultValue = "100")
     int maxMessages;
 
-    
-    @Inject
-    AuditObserver auditObserver;
-
     // Session Termination
-    
+
     /**
      * Terminate a workspace session completely.
      */
@@ -92,7 +76,11 @@ public class WorkspaceManager {
             auditObserver.cleanupSession(sessionId);
         }
 
-        // 2. Mark checkpoints FAILED (in a transaction)
+        // 2. Mark only truly live checkpoints FAILED — not terminal ones.
+        //    FIX: doMarkCheckpointsFailedRequiresNew now excludes COMPLETED, ARCHIVED,
+        //    and COMPROMISED in addition to FAILED. Previously, a cron job that
+        //    finalized as COMPLETED would be immediately clobbered to FAILED here
+        //    if the JPA transaction hadn't fully flushed before terminateSession ran.
         markCheckpointsFailed(sessionId);
 
         // 3. Wipe workspace directory
@@ -106,7 +94,8 @@ public class WorkspaceManager {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
         } catch (Exception e) {
-            log.warnf("Failed to delete chat memory for session=%s: %s", sessionId, e.getMessage());
+            log.warnf("Failed to delete chat memory for session=%s: %s",
+                      sessionId, e.getMessage());
         }
 
         // 6. Destroy CDI scope
@@ -118,7 +107,8 @@ public class WorkspaceManager {
                 log.infof("CDI scope destroyed for session=%s", sessionId);
             }
         } catch (Exception e) {
-            log.warnf("Failed to destroy CDI scope for session=%s: %s", sessionId, e.getMessage());
+            log.warnf("Failed to destroy CDI scope for session=%s: %s",
+                      sessionId, e.getMessage());
         }
 
         // §7.29: Clear any in-flight batch resume flag for this session.
@@ -131,15 +121,8 @@ public class WorkspaceManager {
     public void resetSessionState(String sessionId) {
         log.infof("Soft-resetting session state for: %s", sessionId);
 
-        // Chat memory intentionally NOT cleared here.
-        // Soft reset preserves the conversation window so the user
-        // can continue the same dialogue after /reset.
-        // Only checkpoint state, workspace artifacts, and CDI scope are wiped.
-
-        // Stale workspace artifacts
         wipeWorkspaceDir(sessionId);
 
-        // CDI scope — destroy so @WorkspaceScoped beans re-init on next bind
         try {
             var context = (WorkspaceScopeContext) Arc.container()
                     .getActiveContext(WorkspaceScoped.class);
@@ -147,12 +130,9 @@ public class WorkspaceManager {
                 context.destroySession(sessionId);
             }
         } catch (Exception e) {
-            log.warnf("CDI scope reset failed for session=%s: %s", sessionId, e.getMessage());
+            log.warnf("CDI scope reset failed for session=%s: %s",
+                      sessionId, e.getMessage());
         }
-
-        // heartbeatTracker — NOT touched ✅
-        // governanceLayer   — NOT touched ✅ (budget survives per REFLEX-5)
-        // chatMemoryStore   — NOT touched ✅ (conversation window survives soft reset)
     }
 
     private void clearInMemoryChatMemory(String sessionId) {
@@ -165,19 +145,39 @@ public class WorkspaceManager {
                     .clear();
             log.debugf("In-memory chat memory cleared for session=%s", sessionId);
         } catch (Exception e) {
-            log.warnf("Failed to clear in-memory chat memory for session=%s (non-fatal): %s", 
-                sessionId, e.getMessage());
+            log.warnf("Failed to clear in-memory chat memory for session=%s (non-fatal): %s",
+                      sessionId, e.getMessage());
         }
     }
 
+    /**
+     * Marks only genuinely live checkpoints as FAILED during session teardown.
+     *
+     * FIX: Excludes COMPLETED, ARCHIVED, and COMPROMISED in addition to FAILED.
+     *
+     * Root cause of the bug: AgentCronScheduler calls WorkspaceManager.terminateSession()
+     * immediately after CronResultHandler marks the job COMPLETED. If the finalize
+     * transaction (REQUIRES_NEW) hasn't fully flushed to SQLite before this query runs,
+     * the checkpoint is still visible as IN_PROGRESS in the EntityManager cache and gets
+     * incorrectly overwritten to FAILED — corrupting the audit trail and triggering
+     * spurious failure notifications.
+     *
+     * By excluding all terminal statuses, we ensure only truly in-flight checkpoints
+     * (IN_PROGRESS, AWAITING_APPROVAL, AWAITING_RETRY_APPROVAL) are clobbered.
+     */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkCheckpointsFailedRequiresNew(String sessionId) {
         em.clear();
         List<AgentCheckpoint> checkpoints = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status != :failed",
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.status NOT IN (:failed, :completed, :archived, :compromised)",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("failed", CheckpointStatus.FAILED)
+                .setParameter("failed",      CheckpointStatus.FAILED)
+                .setParameter("completed",   CheckpointStatus.COMPLETED)
+                .setParameter("archived",    CheckpointStatus.ARCHIVED)
+                .setParameter("compromised", CheckpointStatus.COMPROMISED)
                 .getResultList();
 
         Instant now = Instant.now();
@@ -187,7 +187,8 @@ public class WorkspaceManager {
             checkpoint.setFailReason("Session terminated by WorkspaceManager");
         }
         if (!checkpoints.isEmpty()) {
-            log.infof("Marked %d checkpoint(s) FAILED for session=%s", checkpoints.size(), sessionId);
+            log.infof("Marked %d checkpoint(s) FAILED for session=%s",
+                      checkpoints.size(), sessionId);
         }
     }
 
@@ -197,34 +198,40 @@ public class WorkspaceManager {
                 self.doMarkCheckpointsFailedRequiresNew(sessionId);
             });
         } catch (Exception e) {
-            log.errorf("Failed to mark checkpoints FAILED after retries for session=%s: %s", sessionId, e.getMessage());
-            log.debugf(e, "Full stacktrace for retry exhaustion in markCheckpointsFailed for session=%s", sessionId);
-            throw (e instanceof RuntimeException re) ? re : new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, e);
+            log.errorf("Failed to mark checkpoints FAILED after retries for session=%s: %s",
+                       sessionId, e.getMessage());
+            log.debugf(e, "Full stacktrace for retry exhaustion in markCheckpointsFailed " +
+                       "for session=%s", sessionId);
+            throw (e instanceof RuntimeException re)
+                ? re
+                : new RuntimeException(
+                    "Failed to mark checkpoints FAILED for session " + sessionId, e);
         }
     }
 
     private void wipeWorkspaceDir(String sessionId) {
         Path workspaceDir = Path.of(workspaceRootDir, sessionId);
-        if (!Files.exists(workspaceDir)) {
-            return;
-        }
+        if (!Files.exists(workspaceDir)) return;
         try {
             Files.walkFileTree(workspaceDir, new SimpleFileVisitor<>() {
                 @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                        throws IOException {
                     Files.delete(file);
                     return FileVisitResult.CONTINUE;
                 }
 
                 @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                        throws IOException {
                     Files.delete(dir);
                     return FileVisitResult.CONTINUE;
                 }
             });
             log.infof("Workspace directory wiped: %s", workspaceDir);
         } catch (IOException e) {
-            log.warnf("Failed to wipe workspace dir %s: %s", workspaceDir, e.getMessage());
+            log.warnf("Failed to wipe workspace dir %s: %s",
+                      workspaceDir, e.getMessage());
         }
     }
 }

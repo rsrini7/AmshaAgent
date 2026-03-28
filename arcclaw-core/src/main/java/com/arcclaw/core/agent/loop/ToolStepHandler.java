@@ -27,6 +27,22 @@ import org.jboss.logging.Logger;
 /**
  * Handles tool name validation, 4-phase tool invocation,
  * and the consecutive-failure circuit breaker.
+ *
+ * FIX: TOOL-GUARD now silently rewrites coordinator github calls to
+ * delegate_to_agent instead of returning a hint to the LLM.
+ *
+ * Previously, the guard returned StepDecision.retryEngine(hint), which
+ * relied on the LLM following the hint on the next iteration. Groq followed
+ * the hint in 1 shot (2 iterations total). OpenRouter free-tier models ignored
+ * the hint and called github again, exhausting the 3-iteration cron budget and
+ * producing a garbage FINISH with raw tool JSON embedded in the answer.
+ *
+ * The rewrite approach:
+ * - Intercepts in validateTool() before the LLM sees anything
+ * - Builds a delegate_to_agent ReasoningStep from the original github params
+ * - Returns StepDecision.proceed(rewrittenStep) so invokeToolAndObserve()
+ *   executes delegate_to_agent directly — no extra LLM call, no iteration wasted
+ * - delegate_to_agent fast-path in resolveOutcome() then exits in 1 iteration total
  */
 @ApplicationScoped
 public class ToolStepHandler {
@@ -37,15 +53,14 @@ public class ToolStepHandler {
             "OBSERVE", "THINK", "ACT", "PLAN", "REASON", "THOUGHT"
     );
 
-    // FIX Bug 1: Keywords that indicate the user wants to act on the list,
-    // not just view it. Only these goals continue the loop after manage_schedule list.
     private static final Set<String> MUTATING_GOAL_KEYWORDS = Set.of(
             "delete", "remove", "cancel", "stop", "modify", "change",
             "update", "edit", "pause", "resume", "clear", "disable"
     );
 
     private static final Pattern GITHUB_RESOURCE_PATTERN = Pattern.compile(
-            "(?i)(github\\.com|[a-zA-Z0-9_.-]{2,}/[a-zA-Z0-9_.-]{2,}(?!\\/)|gh\\s+repo|gist\\.github\\.com)");
+            "(?i)(github\\.com|[a-zA-Z0-9_.-]{2,}/[a-zA-Z0-9_.-]{2,}(?!\\/)" +
+            "|gh\\s+repo|gist\\.github\\.com)");
 
     @Inject ToolRegistry toolRegistry;
     @Inject Instance<AgentObserver> observers;
@@ -66,33 +81,51 @@ public class ToolStepHandler {
             log.debugf("ToolStepHandler routing parallel batch to " +
                        "ParallelToolStepExecutor for session %s", context.sessionId());
             return StepDecision.proceed(step);
-            // Execution happens in invokeToolAndObserve()
         }
 
         String toolName = step.action();
-        
-        // Guard: block coordinator direct GitHub calls — must contain a real GitHub resource in goal or args; otherwise redirect via delegate_to_agent
+
+        // TOOL-GUARD: coordinator calling github directly
+        // FIX: Instead of returning retryEngine(hint) — which relies on LLM
+        // instruction-following and burns an iteration on every failure —
+        // silently REWRITE the step to delegate_to_agent and proceed directly.
+        //
+        // Result: 1 iteration regardless of LLM provider compliance.
+        // Before fix with OpenRouter free: 2 wasted iterations + garbage FINISH.
         if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole())
                 && ToolCapability.GITHUB.toolName().equals(toolName)) {
-            boolean goalHasResource = context.goal() != null && GITHUB_RESOURCE_PATTERN.matcher(context.goal()).find();
+
+            boolean goalHasResource = context.goal() != null
+                && GITHUB_RESOURCE_PATTERN.matcher(context.goal()).find();
             boolean argsHaveResource = step.actionInput() != null
-                    && step.actionInput().values().stream()
-                        .filter(String.class::isInstance)
-                        .map(String.class::cast)
-                        .anyMatch(v -> GITHUB_RESOURCE_PATTERN.matcher(v).find());
-                        
+                && step.actionInput().values().stream()
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .anyMatch(v -> GITHUB_RESOURCE_PATTERN.matcher(v).find());
+
             if (!goalHasResource && !argsHaveResource) {
-                log.warnf("[TOOL-GUARD] Coordinator github with no GitHub resource " +
-                          "in session %s — redirecting to delegate_to_agent",
+                log.warnf("[TOOL-GUARD] Coordinator github with no resource in session %s " +
+                          "— auto-rewriting to delegate_to_agent (was: retryEngine hint)",
                           context.sessionId());
-                return StepDecision.retryEngine(
-                    "System: You called the github tool, but the user's goal contains no GitHub " +
-                    "repository or resource reference. " +
-                    "If the user asked you to involve a specialist (e.g. 'ask Shiva', 'delegate'), " +
-                    "use delegate_to_agent instead. " +
-                    "If the answer is already in context, use FINISH directly.", 0);
+
+                // Build delegate_to_agent step from the original github params.
+                // researcher role has the github tool and will execute it directly.
+                String delegateGoal = buildDelegateGoal(
+                    toolName, step.actionInput() != null ? step.actionInput() : Map.of());
+
+                ReasoningStep delegateStep = new ReasoningStep(
+                    step.thought(),
+                    ToolCapability.DELEGATE_TO_AGENT.toolName(),
+                    Map.of("role", "researcher", "goal", delegateGoal),
+                    null,
+                    0, 0
+                );
+                // proceed — invokeToolAndObserve() will execute delegate_to_agent,
+                // which fast-paths to FINISH via resolveOutcome() in the same iteration.
+                return StepDecision.proceedWithFailures(delegateStep, consecutiveFailures);
             }
         }
+
         if (toolRegistry.findTool(toolName).isPresent())
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
 
@@ -103,7 +136,8 @@ public class ToolStepHandler {
         }
 
         if (REACT_KEYWORDS.contains(toolName.toUpperCase(Locale.ROOT))) {
-            log.warnf("[ToolStepHandler] ReAct keyword '%s' used as tool name — ephemeral correction", toolName);
+            log.warnf("[ToolStepHandler] ReAct keyword '%s' used as tool name " +
+                      "— ephemeral correction", toolName);
             return StepDecision.retryEngine(String.format(
                     "System: '%s' is a ReAct reasoning keyword, not a tool name. " +
                     "Available tools: %s. Use FINISH to provide your final answer.",
@@ -117,7 +151,8 @@ public class ToolStepHandler {
         log.warnf("[ToolStepHandler] Hallucinated tool '%s' intercepted", toolName);
         final ReasoningStep completedStep = step.withObservation(errorObs);
         history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
+        observers.forEach(o -> o.onStepComplete(
+            context.sessionId(), context.agentRole(), completedStep));
 
         consecutiveFailures++;
         if (consecutiveFailures >= 2)
@@ -155,13 +190,12 @@ public class ToolStepHandler {
         response = ((InvokeResult.Responded) invokeResult).response();
 
         if (response.isInfraFailure()) {
-            log.errorf("[TOOL-STEP] Infrastructure failure for tool '%s' session=%s — " +
-                    "short-circuiting LLM to prevent hallucination: %s",
+            log.errorf("[TOOL-STEP] Infrastructure failure for tool '%s' session=%s: %s",
                     toolName, context.sessionId(), response.output());
             history.add(step.withObservation("INFRA_FAILURE: " + response.output()));
             return StepDecision.terminal(AgentResult.failed(
                     "⚠️ The sandbox execution environment is currently offline. " +
-                    "Your code was not executed. Please try again later or contact the administrator.",
+                    "Your code was not executed. Please try again later.",
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(history)));
         }
@@ -170,11 +204,13 @@ public class ToolStepHandler {
         String observation = buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation);
         history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
+        observers.forEach(o -> o.onStepComplete(
+            context.sessionId(), context.agentRole(), completedStep));
         log.debugf("Observation for '%s': %s", toolName,
-                observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
+                observation.length() > 200
+                    ? observation.substring(0, 200) + "..." : observation);
 
-        // Phase 4 — Resolve (params forwarded so manage_schedule can branch on action)
+        // Phase 4 — Resolve
         return resolveOutcome(context, toolName, params, response, observation,
                 completedStep, history, consecutiveFailures);
     }
@@ -191,7 +227,8 @@ public class ToolStepHandler {
                     "Answer using only your existing knowledge. " +
                     "Do not attempt to call any tools.");
             history.add(blockedStep);
-            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), blockedStep));
+            observers.forEach(o -> o.onStepComplete(
+                context.sessionId(), context.agentRole(), blockedStep));
             return StepDecision.retryValidation(0);
         }
 
@@ -203,22 +240,22 @@ public class ToolStepHandler {
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
             history.add(dedupStep);
-            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), dedupStep));
+            observers.forEach(o -> o.onStepComplete(
+                context.sessionId(), context.agentRole(), dedupStep));
             return StepDecision.proceedWithFailures(dedupStep, 0);
         }
+
         if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
             final ReasoningStep blockedStep = step.withObservation(b.observation());
             history.add(blockedStep);
-            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), blockedStep));
+            observers.forEach(o -> o.onStepComplete(
+                context.sessionId(), context.agentRole(), blockedStep));
 
-            // Inner sessions (sub-agents like shiva/debugger) blocked on github:
-            // the LLM would just echo FINISH next turn — skip that call entirely.
-            // Outer coordinator sessions must continue so the LLM can decide the next action.
             if (context.sessionId() != null
                     && context.sessionId().contains(":d:")
                     && ToolCapability.GITHUB.toolName().equals(step.action())) {
-                log.infof("[TOOL-GUARD] Inner session %s: github blocked — fast-pathing to FINISH " +
-                        "to skip redundant wrap-up LLM call", context.sessionId());
+                log.infof("[TOOL-GUARD] Inner session %s: github blocked " +
+                          "— fast-pathing to FINISH", context.sessionId());
                 return StepDecision.terminal(
                     AgentResult.finished(b.observation(), List.copyOf(history)));
             }
@@ -236,11 +273,12 @@ public class ToolStepHandler {
             List<ReasoningStep> history, ReasoningStep step,
             String toolName, Map<String, Object> params) {
         try {
-            return new InvokeResult.Responded(invoker.invoke(toolName, params, context.sessionId()));
+            return new InvokeResult.Responded(
+                invoker.invoke(toolName, params, context.sessionId()));
         } catch (RequiresApprovalException e) {
             return new InvokeResult.ShortCircuit(StepDecision.terminal(
                     checkpointManager.persist(context,
-                            e.getToolName(), e.getToolParametersJson(), history)));
+                        e.getToolName(), e.getToolParametersJson(), history)));
         }
     }
 
@@ -258,14 +296,10 @@ public class ToolStepHandler {
      * - schedule_task:               always terminal — handed off to cron system.
      * - manage_schedule (non-list):  always terminal — delete/pause/resume confirmed.
      * - manage_schedule (list):      terminal if goal is list-only (no mutating intent).
-     *                                continues loop ONLY if goal contains delete/modify/etc.
-     *                                This prevents the LLM from appending conversational
-     *                                follow-ups ("Would you like to delete or modify it?")
-     *                                when the user simply asked to see the task list.
+     * - delegate_to_agent (success): always terminal — specialist's answer IS the answer.
      */
     private StepDecision resolveOutcome(AgentExecutionContext context, String toolName,
-            Map<String, Object> params,
-            ToolResponse response, String observation,
+            Map<String, Object> params, ToolResponse response, String observation,
             ReasoningStep completedStep, List<ReasoningStep> history,
             int consecutiveFailures) {
 
@@ -274,51 +308,58 @@ public class ToolStepHandler {
             String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
             String finalAnswer = (response.success() ? "✅ " : "❌ ") + cleanOutput;
             writer.saveAnswer(context.sessionId(), finalAnswer);
-            return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+            return StepDecision.terminal(
+                AgentResult.finished(finalAnswer, List.copyOf(history)));
         }
 
         if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
             String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase();
             if (!"list".equals(action)) {
-                // delete / pause / resume — always terminal
-                log.infof("[STATE-MACHINE] Fast-path exit for tool '%s' action=%s", toolName, action);
+                log.infof("[STATE-MACHINE] Fast-path exit for tool '%s' action=%s",
+                          toolName, action);
                 String finalAnswer = (response.success() ? "✅ " : "❌ ") + observation;
                 writer.saveAnswer(context.sessionId(), finalAnswer);
-                return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+                return StepDecision.terminal(
+                    AgentResult.finished(finalAnswer, List.copyOf(history)));
             }
 
-            // FIX Bug 1: list — fast-path if the original goal has no mutating intent.
-            // Only continue the loop when the user's goal explicitly involves
-            // deleting, modifying, or acting on a task (e.g. "delete the oldest task").
             if (isListOnlyGoal(context.goal())) {
                 log.debugf("[STATE-MACHINE] manage_schedule list — list-only goal, fast-path exit");
                 writer.saveAnswer(context.sessionId(), observation);
-                return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
+                return StepDecision.terminal(
+                    AgentResult.finished(observation, List.copyOf(history)));
             }
-            // Goal contains mutating intent — continue so LLM can act on the listed tasks
-            log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal detected, continuing loop");
+            log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal detected, " +
+                       "continuing loop");
         }
 
-        // Fast-path: successful delegate_to_agent — specialist's answer IS the coordinator's
-        // final answer. Short-circuits the wrap-up LLM call (~9,500 tokens) and prevents
-        // the re-delegation loop seen in logs (coordinator re-delegates identical goal on iter 2).
-        // Guard: ⏳ prefix means sub-agent hit rate limit — let coordinator retry in that case.
+        // Fast-path: successful delegate_to_agent.
+        // The specialist's answer IS the coordinator's final answer.
+        // Prevents the re-delegation loop and the ~9,500-token wrap-up LLM call.
+        // Guard conditions:
+        //   ⏳ = sub-agent rate-limited — let coordinator retry
+        //   ⚠️ = sub-agent system error — let coordinator decide
+        //   "Tool execution failed" = DelegateToAgentTool exception
         if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)
                 && response.success()
                 && !observation.startsWith("⚠️")
                 && !observation.startsWith("⏳")
                 && !observation.startsWith("Tool execution failed")) {
-            log.infof("[STATE-MACHINE] Fast-path exit for delegate_to_agent session=%s", 
+            log.infof("[STATE-MACHINE] Fast-path exit for delegate_to_agent session=%s",
                     context.sessionId());
             writer.saveAnswer(context.sessionId(), observation);
-            return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
+            return StepDecision.terminal(
+                AgentResult.finished(observation, List.copyOf(history)));
         }
 
         if (!response.success()
                 && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                 && observation.contains("GitHub integration is not available")) {
-            if (context.sessionId() != null && !observation.isBlank()) writer.saveAnswer(context.sessionId(), observation);
-            return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
+            if (context.sessionId() != null && !observation.isBlank()) {
+                writer.saveAnswer(context.sessionId(), observation);
+            }
+            return StepDecision.terminal(
+                AgentResult.finished(observation, List.copyOf(history)));
         }
 
         if (!response.success()) {
@@ -339,10 +380,30 @@ public class ToolStepHandler {
     }
 
     /**
-     * Returns true if the goal contains no keywords that imply the user wants to
-     * act on the listed tasks. When true, manage_schedule list fast-paths to exit
-     * instead of continuing the loop (which causes LLM conversational follow-ups).
+     * Converts a tool name + args map into a natural-language goal for delegate_to_agent.
+     * The researcher agent parses natural language well, so descriptive text is fine.
+     *
+     * Examples:
+     *   github + {action=gist, command=list, target=rsrini7}
+     *     → "Use the github tool with action=gist command=list target=rsrini7
+     *        and return the complete results."
      */
+    private String buildDelegateGoal(String toolName, Map<String, Object> args) {
+        if (args == null || args.isEmpty()) {
+            return "Use the " + toolName + " tool and return the complete results.";
+        }
+        String action  = String.valueOf(args.getOrDefault("action",  "")).strip();
+        String command = String.valueOf(args.getOrDefault("command", "")).strip();
+        String target  = String.valueOf(args.getOrDefault("target",  "")).strip();
+
+        StringBuilder sb = new StringBuilder("Use the ").append(toolName).append(" tool");
+        if (!action.isBlank()  && !"null".equals(action))  sb.append(" with action=").append(action);
+        if (!command.isBlank() && !"null".equals(command)) sb.append(" command=").append(command);
+        if (!target.isBlank()  && !"null".equals(target))  sb.append(" target=").append(target);
+        sb.append(" and return the complete results.");
+        return sb.toString();
+    }
+
     private boolean isListOnlyGoal(String goal) {
         if (goal == null || goal.isBlank()) return true;
         String lower = goal.toLowerCase();
