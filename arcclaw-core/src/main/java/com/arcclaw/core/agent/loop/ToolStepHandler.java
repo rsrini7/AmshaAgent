@@ -301,13 +301,18 @@ public class ToolStepHandler {
      * - delegate_to_agent (success): always terminal — specialist's answer IS the answer.
      */
     private StepDecision resolveOutcome(AgentExecutionContext context, String toolName,
-            Map<String, Object> params, ToolResponse response, String observation,
-            ReasoningStep completedStep, List<ReasoningStep> history,
-            int consecutiveFailures) {
+        Map<String, Object> params, ToolResponse response, String observation,
+        ReasoningStep completedStep, List<ReasoningStep> history,
+        int consecutiveFailures) {
 
+        // schedule_task
+        // FIX: Only fast-path on SUCCESS. On failure (e.g. invalid cron expression,
+        // blank timezone) fall through so the LLM can self-correct on the next iteration.
+        // Previously fast-pathed unconditionally, sending raw error messages like
+        // "❌ Tool execution failed: Invalid ID for ZoneOffset" to the user as a
+        // final answer with no retry.
         if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)) {
             if (response.success()) {
-                // SUCCESS: hand off to cron system, fast-path exit
                 log.infof("[STATE-MACHINE] Fast-path exit for tool '%s'", toolName);
                 String cleanOutput = observation.split("\n\nCRITICAL DIRECTIVE:")[0];
                 String finalAnswer = "✅ " + cleanOutput;
@@ -315,19 +320,18 @@ public class ToolStepHandler {
                 return StepDecision.terminal(
                     AgentResult.finished(finalAnswer, List.copyOf(history)));
             }
-            // FAILURE: fall through to normal consecutive-failure / circuit-breaker path.
-            // The LLM must see the error and correct params (e.g. bad cron expression,
-            // empty timezone). Do NOT fast-path — the task was never scheduled.
-            log.warnf("[STATE-MACHINE] schedule_task failed session=%s — continuing loop " +
-                    "for LLM self-correction: %s", context.sessionId(), observation);
-            // fall through → consecutiveFailures handling below
+            log.warnf("[STATE-MACHINE] schedule_task failed — continuing loop for " +
+                    "LLM self-correction session=%s: %s",
+                    context.sessionId(), observation);
+            // fall through to consecutiveFailures handling
         }
 
+        // manage_schedule
         if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
             String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase();
             if (!"list".equals(action)) {
                 log.infof("[STATE-MACHINE] Fast-path exit for tool '%s' action=%s",
-                          toolName, action);
+                        toolName, action);
                 String finalAnswer = (response.success() ? "✅ " : "❌ ") + observation;
                 writer.saveAnswer(context.sessionId(), finalAnswer);
                 return StepDecision.terminal(
@@ -343,11 +347,10 @@ public class ToolStepHandler {
             log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal, continuing loop");
         }
 
-        // Fast-path: successful delegate_to_agent.
-        // response.success() guard is REQUIRED — without it, a failed delegate
-        // (e.g. "Parameter 'agent' is required.") gets sent to Telegram as a
-        // finished answer because the error text doesn't start with ⏳/⚠️/
-        // "Tool execution failed".
+        // delegate_to_agent
+        // response.success() guard is required — without it a failed delegate
+        // (e.g. "Parameter 'agent' is required.") gets sent as a finished answer
+        // because the error text doesn't start with ⏳/⚠️/"Tool execution failed".
         if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)
                 && response.success()
                 && !observation.startsWith("⚠️")
@@ -360,6 +363,7 @@ public class ToolStepHandler {
                 AgentResult.finished(observation, List.copyOf(history)));
         }
 
+        // github unavailable
         if (!response.success()
                 && toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName())
                 && observation.contains("GitHub integration is not available")) {
@@ -370,6 +374,7 @@ public class ToolStepHandler {
                 AgentResult.finished(observation, List.copyOf(history)));
         }
 
+        // Consecutive failure / circuit breaker
         if (!response.success()) {
             consecutiveFailures++;
             if (consecutiveFailures >= 2) {
