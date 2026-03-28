@@ -45,8 +45,7 @@ import org.jboss.logging.MDC;
 public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private static final Logger log = Logger.getLogger(StatefulAgentStoreImpl.class);
-    private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {
-    };
+    private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {};
 
     /**
      * In-memory set of sessionIds currently in the process of resuming
@@ -56,19 +55,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private final ConcurrentHashMap<String, Boolean>
         resumingBatches = new ConcurrentHashMap<>();
 
-    @Inject
-    ObjectMapper objectMapper;
-
-    @Inject
-    EntityManager em;
-    @Inject
-    AuditService auditService;
-
-    @Inject
-    SqliteRetryTemplate retryTemplate;
-
-    @Inject
-    StatefulAgentStoreImpl self;
+    @Inject ObjectMapper objectMapper;
+    @Inject EntityManager em;
+    @Inject AuditService auditService;
+    @Inject SqliteRetryTemplate retryTemplate;
+    @Inject StatefulAgentStoreImpl self;
 
     @Override
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
@@ -76,7 +67,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public AgentCheckpoint doSaveSteps(String sessionId, String agentRole, List<ReasoningStep> steps) {
+    public AgentCheckpoint doSaveSteps(String sessionId, String agentRole,
+                                       List<ReasoningStep> steps) {
         em.clear();
         String json = serializeSteps(steps);
 
@@ -84,13 +76,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
         AgentCheckpoint checkpoint;
         AutonomyLevel autonomy = WorkspaceContext.autonomy();
-        
+
         if (existing.isPresent()) {
             checkpoint = existing.get();
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
-            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
+            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s",
+                       sessionId, agentRole, autonomy);
         } else {
             checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId(sessionId);
@@ -99,11 +92,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
             em.persist(checkpoint);
-            
+
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
-            
-            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
+            auditService.record(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
+
+            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s",
+                      sessionId, agentRole, autonomy);
         }
         return checkpoint;
     }
@@ -142,9 +137,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setBatchToolDecisions(checkpoint.getBatchToolDecisions());
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
             // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
-            // ApprovalCheckpointManager explicitly sets updatedAt = now() before calling
-            // save() — if we don't copy it here, the DB row keeps the old timestamp and
-            // stale checkpoint cleanup never fires for re-saved checkpoints.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
         }
@@ -156,6 +148,36 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         return findBySessionAndRole(sessionId, agentRole);
     }
 
+    // ── NEW: findLatestAwaitingApproval ───────────────────────────────────────
+
+    /**
+     * Returns the most-recent checkpoint for this session that is in
+     * {@link CheckpointStatus#AWAITING_APPROVAL}, regardless of agentRole.
+     * <p>
+     * This replaces the AgentRoleEnum enum loop in {@code ApproveReflex} to fix
+     * stale-row ambiguity: when multiple rows exist for the same
+     * (sessionId, agentRole), the old loop called load() which could return the
+     * oldest (COMPLETED) row, shadowing a newer AWAITING_APPROVAL checkpoint and
+     * causing "/approve → No pending tool executions require approval" silently.
+     */
+    @Override
+    @Transactional
+    public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.status = :status " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
     @Override
     @Deprecated
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
@@ -165,8 +187,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
         } catch (JsonProcessingException e) {
-            log.errorf("Failed to deserialize stateJson for checkpoint id=%d: %s", checkpoint.getId(), e.getMessage());
-            log.debugf(e, "Full stacktrace for deserialization failure of checkpoint id=%d", checkpoint.getId());
+            log.errorf("Failed to deserialize stateJson for checkpoint id=%d: %s",
+                       checkpoint.getId(), e.getMessage());
+            log.debugf(e, "Full stacktrace for deserialization failure of checkpoint id=%d",
+                       checkpoint.getId());
             return List.of();
         }
     }
@@ -214,11 +238,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 "WHERE c.sessionId LIKE :sessionPrefix " +
                 "  AND c.status = :status " +
                 "ORDER BY c.updatedAt DESC",
-                AgentCheckpoint.class
-        );
+                AgentCheckpoint.class);
         q.setParameter("sessionPrefix", sessionPrefix + "%");
         q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
-
         q.setMaxResults(1);
         return q.getResultList().stream().filter(Objects::nonNull).findFirst();
     }
@@ -227,11 +249,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         checkpoint.setStatus(CheckpointStatus.FAILED);
         checkpoint.setFailedAt(Instant.now());
         checkpoint.setFailReason(reason);
-        
+
         String userId = (String) MDC.get(MdcKeys.USER_ID);
-        auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
-        
-        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s", checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
+        auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+            SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
+
+        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s",
+                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
     }
 
     @Override
@@ -249,21 +273,26 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         if (checkpoint != null) {
             checkpoint.setStatus(CheckpointStatus.COMPLETED);
             checkpoint.setCompletedAt(Instant.now());
-            
+
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(), SecurityEventType.CHECKPOINT_COMPLETED, null);
-            
+            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+                SecurityEventType.CHECKPOINT_COMPLETED, null);
+
             log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
         }
     }
 
     @Override
-    public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, List<ReasoningStep> steps, CheckpointStatus finalStatus) {
-        return withRetry(() -> self.doSaveAndFinalize(sessionId, agentRole, steps, finalStatus), "saveAndFinalize");
+    public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
+            List<ReasoningStep> steps, CheckpointStatus finalStatus) {
+        return withRetry(
+            () -> self.doSaveAndFinalize(sessionId, agentRole, steps, finalStatus),
+            "saveAndFinalize");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public AgentCheckpoint doSaveAndFinalize(String sessionId, String agentRole, List<ReasoningStep> steps, CheckpointStatus finalStatus) {
+    public AgentCheckpoint doSaveAndFinalize(String sessionId, String agentRole,
+            List<ReasoningStep> steps, CheckpointStatus finalStatus) {
         em.clear();
         String json = serializeSteps(steps);
         Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
@@ -278,23 +307,26 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             } else if (finalStatus == CheckpointStatus.FAILED) {
                 checkpoint.setFailedAt(Instant.now());
             }
-            log.debugf("Updating checkpoint for finalization: session=%s, role=%s", sessionId, agentRole);
+            log.debugf("Updating checkpoint for finalization: session=%s, role=%s",
+                       sessionId, agentRole);
         } else {
             checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId(sessionId);
             checkpoint.setAgentRole(agentRole);
             checkpoint.setStateJson(json);
-            checkpoint.setStatus(finalStatus); // Fix: Set status before persist
+            checkpoint.setStatus(finalStatus);
             if (finalStatus == CheckpointStatus.COMPLETED) {
                 checkpoint.setCompletedAt(Instant.now());
             } else if (finalStatus == CheckpointStatus.FAILED) {
                 checkpoint.setFailedAt(Instant.now());
             }
             em.persist(checkpoint);
-            
+
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole, SecurityEventType.CHECKPOINT_CREATED, null);
-            log.infof("Created new checkpoint for finalization: session=%s, role=%s", sessionId, agentRole);
+            auditService.record(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, null);
+            log.infof("Created new checkpoint for finalization: session=%s, role=%s",
+                      sessionId, agentRole);
         }
 
         final Long cpId = checkpoint.getId();
@@ -317,12 +349,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         }
 
         String userId = (String) MDC.get(MdcKeys.USER_ID);
-        SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED 
-                ? SecurityEventType.CHECKPOINT_COMPLETED 
+        SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
+                ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;
         auditService.record(sessionId, userId, agentRole, eventType, null);
 
-        log.infof("Checkpoint session=%s role=%s finalized with status=%s", sessionId, agentRole, finalStatus);
+        log.infof("Checkpoint session=%s role=%s finalized with status=%s",
+                  sessionId, agentRole, finalStatus);
         return checkpoint;
     }
 
@@ -330,13 +363,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Transactional
     public List<ReasoningStep> loadSteps(Long checkpointId) {
         TypedQuery<ReasoningStepEntity> q = em.createQuery(
-                "SELECT r FROM ReasoningStepEntity r WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC",
-                ReasoningStepEntity.class
-        );
+                "SELECT r FROM ReasoningStepEntity r " +
+                "WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC",
+                ReasoningStepEntity.class);
         q.setParameter("id", checkpointId);
-        List<ReasoningStepEntity> entities = q.getResultList();
-
-        return entities.stream()
+        return q.getResultList().stream()
                 .map(this::mapToReasoningStep)
                 .toList();
     }
@@ -345,7 +376,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         return new ReasoningStep(
                 deserialize(entity.getThoughtJson(), String.class),
                 entity.getAction(),
-                deserialize(entity.getActionInputJson(), new TypeReference<Map<String, Object>>() {}),
+                deserialize(entity.getActionInputJson(),
+                    new TypeReference<Map<String, Object>>() {}),
                 entity.getObservation(),
                 entity.getInputTokens(),
                 entity.getOutputTokens()
@@ -357,7 +389,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(json, clazz);
         } catch (JsonProcessingException e) {
-            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s", e.getMessage(), json);
+            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s",
+                       e.getMessage(), json);
             log.debug("Full deserialization failure stack trace:", e);
             return null;
         }
@@ -368,7 +401,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return objectMapper.readValue(json, typeRef);
         } catch (JsonProcessingException e) {
-            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s", e.getMessage(), json);
+            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s",
+                       e.getMessage(), json);
             log.debug("Full deserialization failure stack trace:", e);
             return null;
         }
@@ -387,17 +421,34 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         try {
             return retryTemplate.execute(operation, 5, 50, task);
         } catch (Exception e) {
-            throw (e instanceof RuntimeException re) ? re : new RuntimeException("Action failed after retries for " + operation, e);
+            throw (e instanceof RuntimeException re)
+                ? re
+                : new RuntimeException("Action failed after retries for " + operation, e);
         }
     }
 
+    /**
+     * Finds the most-recent non-ARCHIVED checkpoint for a (sessionId, agentRole) pair.
+     * <p>
+     * FIX: Added {@code ORDER BY c.id DESC} so the newest row is always returned.
+     * Previously, LIMIT 1 with no ordering caused SQLite to return the oldest row
+     * (lowest checkpoint_id = first inserted = often COMPLETED), which shadowed
+     * any newer AWAITING_APPROVAL row and broke the "/approve" flow.
+     * <p>
+     * Also excludes {@link CheckpointStatus#ARCHIVED} rows so that fresh turns
+     * archived by AgentLoop never interfere with the live checkpoint.
+     */
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.agentRole = :role",
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "  AND c.status <> :archived " +  // ← exclude archived rows
+                "ORDER BY c.id DESC",             // ← newest first — was missing
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
@@ -407,7 +458,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private String serializeSteps(List<ReasoningStep> steps) {
         try {
-            return (steps == null || steps.isEmpty()) ? "[]" : objectMapper.writeValueAsString(steps);
+            return (steps == null || steps.isEmpty())
+                ? "[]"
+                : objectMapper.writeValueAsString(steps);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize reasoning steps", e);
         }
@@ -417,9 +470,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Transactional
     public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
         TypedQuery<AutonomyLevel> q = em.createQuery(
-                "SELECT c.autonomyLevel FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
-                AutonomyLevel.class
-        );
+                "SELECT c.autonomyLevel FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
+                AutonomyLevel.class);
         q.setParameter("sid", sessionId);
         q.setMaxResults(1);
         return q.getResultList().stream().filter(Objects::nonNull).findFirst();
@@ -428,36 +481,39 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void deleteCheckpoint(String sessionId, String role) {
         em.createQuery(
-            "DELETE FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role")
+            "DELETE FROM AgentCheckpoint c " +
+            "WHERE c.sessionId = :sid AND c.agentRole = :role")
         .setParameter("sid", sessionId)
         .setParameter("role", role)
         .executeUpdate();
     }
 
     @Override
-    public boolean updateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
-        return withRetry(() -> self.doUpdateBatchToolDecision(sessionId, agentRole, toolName, decision), "updateBatchToolDecision");
+    public boolean updateBatchToolDecision(String sessionId, String agentRole,
+                                           String toolName, String decision) {
+        return withRetry(
+            () -> self.doUpdateBatchToolDecision(sessionId, agentRole, toolName, decision),
+            "updateBatchToolDecision");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public boolean doUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
+    public boolean doUpdateBatchToolDecision(String sessionId, String agentRole,
+                                             String toolName, String decision) {
         em.clear();
         Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return false;
-        
+
         AgentCheckpoint cp = cpOpt.get();
-        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || !cp.hasBatchToolDecisions()) {
+        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL
+                || !cp.hasBatchToolDecisions()) {
             return false;
         }
 
         try {
             Map<String, String> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {}
-            );
-            if (!map.containsKey(toolName)) {
-                return false;
-            }
+                new TypeReference<Map<String, String>>() {});
+            if (!map.containsKey(toolName)) return false;
             map.put(toolName, decision);
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
             em.merge(cp);
@@ -474,15 +530,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
         Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return false;
-        
+
         AgentCheckpoint cp = cpOpt.get();
         if (!cp.hasBatchToolDecisions()) return false;
 
         try {
             Map<String, String> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {}
-            );
+                new TypeReference<Map<String, String>>() {});
             return map.values().stream()
                 .noneMatch(val -> AgentSentinels.TOOL_DECISION_PENDING.equals(val));
         } catch (Exception e) {
@@ -498,7 +553,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.status = :status " +
-                "AND c.updatedAt < :cutoff", AgentCheckpoint.class)
+                "  AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC))
                 .getResultList();

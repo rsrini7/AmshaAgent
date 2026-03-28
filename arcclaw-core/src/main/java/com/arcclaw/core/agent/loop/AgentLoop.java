@@ -211,8 +211,15 @@ public class AgentLoop {
                     log.infof("Resumed %d steps from active checkpoint (status=%s)",
                               resumedHistory.size(), status);
                 } else {
-                    log.debugf("Ignoring terminal checkpoint (status=%s). Starting fresh turn.",
-                               status);
+                    // FIX: Archive the terminal checkpoint so findBySessionAndRole() (ORDER BY id DESC)
+                    // and findLatestAwaitingApproval() never return this stale row in future calls.
+                    // Without this, a COMPLETED row for (sessionId, researcher) at checkpoint_id=5
+                    // stays in the DB and shadows a newer AWAITING_APPROVAL row at checkpoint_id=6,
+                    // causing "/approve → No pending tool executions require approval".
+                    log.debugf("Ignoring terminal checkpoint (status=%s). Archiving and starting fresh turn.",
+                            status);
+                    checkpoint.setStatus(CheckpointStatus.ARCHIVED);
+                    agentStore.save(checkpoint);
                 }
             }
 

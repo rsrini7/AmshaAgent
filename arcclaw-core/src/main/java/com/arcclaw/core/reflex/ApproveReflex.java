@@ -5,9 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
@@ -16,7 +14,6 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
@@ -28,14 +25,22 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.logging.Logger;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
+
+// NOTE: AgentRoleEnum import intentionally removed — all three enum loops replaced
+// by statefulAgentStore.findLatestAwaitingApproval() to fix stale-row ambiguity.
+// When load() returned the oldest row for a (sessionId, agentRole) pair, a
+// COMPLETED checkpoint shadowed a newer AWAITING_APPROVAL one, causing
+// "/approve → No pending tool executions require approval" silently.
 
 @ApplicationScoped
 public class ApproveReflex implements AgentReflex {
@@ -102,9 +107,8 @@ public class ApproveReflex implements AgentReflex {
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
+
                 // 1. SessionId explicit — delegation §7.33
-                // Prioritize session ID over cron ID because session IDs (numeric-hyphen-numeric)
-                // would otherwise match the cronId pattern §7.33
                 if (approve.targetSessionId().isPresent()) {
                     String targetSid = approve.targetSessionId().get();
                     if (!delegateGuard.isDelegate(userId)) {
@@ -115,7 +119,7 @@ public class ApproveReflex implements AgentReflex {
                     return handleDelegateApproval(targetSid, userId, chatId, context);
                 }
 
-                // 2. CronId explicit — always wins (Fix 3)
+                // 2. CronId explicit — always wins
                 if (cronId.isPresent()) {
                     return handleCronApproval(cronId.get(), userId, chatId, context);
                 }
@@ -126,27 +130,21 @@ public class ApproveReflex implements AgentReflex {
                         approve.toolName().get(), sessionId, userId, chatId, context);
                 }
 
-                // 3. Session checkpoint — interactive approval
-                // NOTE: approve.toolName() is always empty here — we returned above if it was present.
-                String activeRole = null;
-                AgentCheckpoint activeCheckpoint = null;
-                for (AgentRoleEnum role : AgentRoleEnum.values()) {
-                    Optional<AgentCheckpoint> cpOpt =
-                        statefulAgentStore.load(sessionId, role.toScopedName());
-                    if (cpOpt.isPresent()
-                            && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                        activeRole = role.toScopedName();
-                        activeCheckpoint = cpOpt.get();
-                        break;
-                    }
-                }
+                // 3. Session checkpoint — interactive approval.
+                // FIX: replaced enum loop with findLatestAwaitingApproval() to avoid
+                // stale-row ambiguity. When multiple rows exist for the same
+                // (sessionId, agentRole), the old loop called load() which returned
+                // the first (oldest = COMPLETED) row, never finding the newer
+                // AWAITING_APPROVAL checkpoint.
+                Optional<AgentCheckpoint> latestPending =
+                    statefulAgentStore.findLatestAwaitingApproval(sessionId);
+                String activeRole = latestPending
+                    .map(AgentCheckpoint::getAgentRole)
+                    .orElse(null);
+                AgentCheckpoint activeCheckpoint = latestPending.orElse(null);
 
                 if (activeRole != null) {
-                    // FIX: Removed dead `approve.toolName().isEmpty() &&` guard — at this point
-                    // approve.toolName() is always empty (we returned early above if it was present).
-                    // The condition was masking the real intent: just check for a batch checkpoint.
                     if (activeCheckpoint.hasBatchToolDecisions()) {
-                        // Approve all remaining PENDING tools at once (§7.21)
                         autoApproveAllPending(sessionId, activeRole);
                         return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
                     }
@@ -157,7 +155,8 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 4. No session checkpoint — guide user to pending cron tasks
-                List<AgentCronEntity> pending = cronRepository.findAwaitingApprovalByUserId(userId);
+                List<AgentCronEntity> pending =
+                    cronRepository.findAwaitingApprovalByUserId(userId);
                 if (pending.size() == 1) {
                     AgentCronEntity cron = pending.getFirst();
                     return "⚠️ No active approval in this chat session.\n\n" +
@@ -190,18 +189,15 @@ public class ApproveReflex implements AgentReflex {
             String toolName, String sessionId, String userId,
             String chatId, MessageContext context) throws Exception {
 
-        // Find active parallel-batch checkpoint
-        String activeRole = null;
-        for (AgentRoleEnum role : AgentRoleEnum.values()) {
-            Optional<AgentCheckpoint> cpOpt =
-                statefulAgentStore.load(sessionId, role.toScopedName());
-            if (cpOpt.isPresent()
-                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL
-                    && cpOpt.get().hasBatchToolDecisions()) {
-                activeRole = role.toScopedName();
-                break;
-            }
-        }
+        // FIX: replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
+        // Additionally filter for hasBatchToolDecisions() since per-tool approval
+        // only applies to parallel batch checkpoints.
+        Optional<AgentCheckpoint> latestPending =
+            statefulAgentStore.findLatestAwaitingApproval(sessionId);
+        String activeRole = latestPending
+            .filter(AgentCheckpoint::hasBatchToolDecisions)
+            .map(AgentCheckpoint::getAgentRole)
+            .orElse(null);
 
         if (activeRole == null) {
             return "No parallel batch awaiting per-tool approval for this session.";
@@ -299,9 +295,6 @@ public class ApproveReflex implements AgentReflex {
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId();
-        // Fix 3: use the actual agent role stored in the checkpoint.
-        // Hardcoding COORDINATOR caused resolveResumeGoal() to look up the wrong
-        // checkpoint row, returning a null/sentinel goal and producing an empty resume.
         String cronRole = pendingCheckpoint.getAgentRole();
 
         if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
@@ -366,24 +359,20 @@ public class ApproveReflex implements AgentReflex {
 
         log.infof("[DELEGATE-APPROVE] admin=%s approving session=%s", adminId, targetSid);
 
-        String activeRole = null;
-        for (AgentRoleEnum role : AgentRoleEnum.values()) {
-            Optional<AgentCheckpoint> cpOpt =
-                statefulAgentStore.load(targetSid, role.toScopedName());
-            if (cpOpt.isPresent()
-                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                activeRole = role.toScopedName();
-                break;
-            }
-        }
+        // FIX: replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
+        Optional<AgentCheckpoint> latestPending =
+            statefulAgentStore.findLatestAwaitingApproval(targetSid);
+        String activeRole = latestPending
+            .map(AgentCheckpoint::getAgentRole)
+            .orElse(null);
 
         if (activeRole == null) {
             return "❌ Target session not found or not awaiting approval.";
         }
 
-        AgentCheckpoint cp = statefulAgentStore.load(targetSid, activeRole)
-                .orElseThrow(() -> new IllegalStateException(
-                    "Checkpoint disappeared between lookup and load for session " + targetSid));
+        AgentCheckpoint cp = latestPending.orElseThrow(() ->
+            new IllegalStateException(
+                "Checkpoint disappeared between lookup and load for session " + targetSid));
 
         // Auto-approve all tools in batch if parallel (§7.21, §7.33)
         if (cp.hasBatchToolDecisions()) {
