@@ -35,6 +35,38 @@ public record ReasoningStep(
     public static final String OBSERVE = "OBSERVE";
 
     /**
+     * Sentinel action for a parallel LLM turn (N tool calls in one response).
+     * actionInput.get("batch") contains the JSON-serialized List<ParallelToolCall>
+     * with fields: callId, toolName, params (pre-execution), observation (post-execution).
+     * See Architecture_Invariants.md §7.1.
+     */
+    public static final String PARALLEL_SENTINEL = "__parallel__";
+
+    /** Convenience: true if this step represents a parallel tool batch. */
+    public boolean isParallelBatch() {
+        return PARALLEL_SENTINEL.equals(this.action);
+    }
+
+    /**
+     * Creates a pre-execution parallel batch step.
+     * observation is empty until ParallelToolStepExecutor completes.
+     */
+    public static ReasoningStep parallelBatch(
+            String thought,
+            Map<String, Object> batchPayload,
+            int inputTokens,
+            int outputTokens) {
+        return new ReasoningStep(
+            thought,
+            PARALLEL_SENTINEL,
+            batchPayload,
+            null,          // observation filled in after execution
+            inputTokens,
+            outputTokens
+        );
+    }
+
+    /**
      * Create a step with no observation yet (pre-execution). Tokens are typically 0
      * until known.
      */

@@ -2,6 +2,9 @@ package com.arcclaw.core.state;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -274,5 +277,24 @@ public class AgentCheckpoint {
 
     public void setAutonomyLevel(AutonomyLevel autonomyLevel) {
         this.autonomyLevel = autonomyLevel;
+    }
+
+    /**
+     * Returns true if this checkpoint represents a paused parallel batch.
+     * See Architecture_Invariants.md §7.4.
+     */
+    public boolean isParallelBatch() {
+        return pendingToolName != null
+            && pendingToolName.startsWith("__parallel__:");
+    }
+
+    /**
+     * Returns the individual tool names for a parallel batch checkpoint.
+     * Returns empty list for single-tool checkpoints.
+     */
+    public List<String> parallelToolNames() {
+        if (!isParallelBatch()) return Collections.emptyList();
+        String composite = pendingToolName.substring("__parallel__:".length());
+        return Arrays.asList(composite.split(","));
     }
 }

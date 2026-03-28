@@ -1398,3 +1398,28 @@
 - [x] D4: Add priority() to SkillProvider SPI; DatabaseSkillProvider=10, ClasspathSkillProvider=100; SkillLoader sorted merge. <!-- id: 723 -->
 - [x] D5: Fix CronResultHandler TELEGRAM fallback → audit + skip (LEGACY_CHANNEL_FALLBACK). <!-- id: 724 -->
 - [x] Final verification: mvn clean verify 808/808 tests green. <!-- id: 725 -->
+
+---
+
+## Phase 70 — Parallel Tool Execution ✅
+
+### Phase 70-A — Data Structures & Parser
+- [x] Add `PARALLEL_SENTINEL`, `parallelBatch()`, `isParallelBatch()` to `ReasoningStep`. <!-- id: 730 -->
+- [x] Create `ParallelToolCall` record (callId, toolName, params, observation, success). <!-- id: 731 -->
+- [x] Update `ReasoningStepParser` to detect N>1 tool calls and create parallel batch step. <!-- id: 732 -->
+
+### Phase 70-B — Execution Engine & Routing
+- [x] Create `ParallelToolStepExecutor` (Guard, HITL Pause, Parallel Exec, Result Folding). <!-- id: 733 -->
+- [x] Update `ToolStepHandler` to route `isParallelBatch()` steps to parallel executor. <!-- id: 734 -->
+- [x] Add safety guard in `AgentStateMachineRunner` for parallel batch steps. <!-- id: 735 -->
+
+### Phase 70-C — Protocol & Resume
+- [x] Implement `reconstructParallelTurn()` in `ChatHistoryAssembler` (1 AiMessage → N results). <!-- id: 736 -->
+- [x] Add `isParallelBatch()` and `parallelToolNames()` to `AgentCheckpoint`. <!-- id: 737 -->
+- [x] Implement `resumeParallelBatch()` in `CheckpointResumeHandler` with ObjectMapper. <!-- id: 738 -->
+
+### Phase 70-D — Governance & Architecture
+- [x] Add §7: Parallel Tool Execution Invariants to `Architecture_Invariants.md`. <!-- id: 739 -->
+- [x] Embed `GovernanceStrategy.assertWithinBudget()` pre-flight in `ParallelToolStepExecutor`. <!-- id: 740 -->
+- [x] Embed `RateLimitTracker.isAnyBackingOff()` warning in `ParallelToolStepExecutor`. <!-- id: 741 -->
+- [x] Final verification: mvn clean verify 884/884 tests green. <!-- id: 742 -->
