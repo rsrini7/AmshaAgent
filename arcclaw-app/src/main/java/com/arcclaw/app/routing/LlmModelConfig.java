@@ -9,16 +9,16 @@ import java.util.Optional;
  * Mirrors {@code EmbeddingModelConfig} from arcclaw-rag.
  */
 public record LlmModelConfig(
-    String provider,
-    String modelName,
-    String baseUrl,
-    Optional<String> apiKey,
-    Optional<Integer> maxTokens,
-    Optional<Duration> timeout
+        String provider,
+        String modelName,
+        String baseUrl,
+        Optional<String> apiKey,
+        Optional<Integer> maxTokens,
+        Optional<Duration> timeout
 ) {
     public LlmModelConfig {
-        Objects.requireNonNull(provider, "provider");
-        Objects.requireNonNull(modelName, "modelName");
-        Objects.requireNonNull(baseUrl,   "baseUrl");
+        Objects.requireNonNull(provider,   "provider");
+        Objects.requireNonNull(modelName,  "modelName");
+        Objects.requireNonNull(baseUrl,    "baseUrl");
     }
 }

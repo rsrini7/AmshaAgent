@@ -1,5 +1,7 @@
 package com.arcclaw.app.routing;
 
+import java.time.Duration;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
@@ -9,6 +11,11 @@ import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+/**
+ * Produces the {@code intent-classifier} {@link ChatModel} bean.
+ * Reads provider config and delegates to {@link LlmModelFactory} which
+ * discovers the active {@link RoutingChatModelProvider} via CDI.
+ */
 @ApplicationScoped
 public class ModelProducer {
 
@@ -18,23 +25,24 @@ public class ModelProducer {
     String provider;
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
-                    defaultValue = "https://api.groq.com/openai/v1")
+                    defaultValue = "${ARCCLAW_LLM_BASE_URL}")
     String openaiBaseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
+    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key",
+                    defaultValue = "${ARCCLAW_LLM_API_KEY}")
     String openaiApiKey;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.model",
-                    defaultValue = "llama-3.1-8b-instant")
+                    defaultValue = "${ARCCLAW_INTENT_CLASSIFIER_MODEL}")
     String intentModelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
-                    defaultValue = "http://localhost:11434")
-    String ollamaBaseUrl;
-
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.ollama-model",
-                    defaultValue = "llama3.2")
+                    defaultValue = "${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL}")
     String ollamaModelId;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
+                    defaultValue = "${OLLAMA_BASE_URL}")
+    String ollamaBaseUrl;
 
     @Inject
     LlmModelFactory modelFactory;
@@ -43,10 +51,11 @@ public class ModelProducer {
     @ApplicationScoped
     @Identifier("intent-classifier")
     public ChatModel intentClassifierModel() {
-        log.infof("ModelProducer: intent-classifier provider=%s model=%s",
+        log.infof("ModelProducer intent-classifier provider=%s model=%s",
                   provider, intentModelName);
         return modelFactory.createModel(
-                provider, openaiBaseUrl, openaiApiKey, intentModelName, 10, null,
-                ollamaBaseUrl, ollamaModelId);
+            provider, openaiBaseUrl, openaiApiKey,
+            intentModelName, 10, Duration.ofSeconds(15),
+            ollamaBaseUrl, ollamaModelId);
     }
 }
