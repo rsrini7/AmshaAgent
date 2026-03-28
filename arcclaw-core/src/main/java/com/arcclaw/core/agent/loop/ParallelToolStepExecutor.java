@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.*;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -233,13 +234,13 @@ public class ParallelToolStepExecutor {
         List<ParallelToolCall> allCompleted = new ArrayList<>();
         for (ParallelToolCall original : calls) {
             Optional<ParallelToolCall> dedup = dedupCalls.stream()
-                .filter(d -> d.callId().equals(original.callId()))
+                .filter(d -> Objects.equals(d.callId(), original.callId()))
                 .findFirst();
             if (dedup.isPresent()) {
                 allCompleted.add(dedup.get());
             } else {
                 allowedCompleted.stream()
-                    .filter(c -> c.callId().equals(original.callId()))
+                    .filter(c -> Objects.equals(c.callId(), original.callId()))
                     .findFirst()
                     .ifPresent(allCompleted::add);
             }
@@ -327,9 +328,10 @@ public class ParallelToolStepExecutor {
             calls.stream().map(ParallelToolCall::toolName)
                  .collect(Collectors.joining(","));
 
-        // Changed implementation to match the new ApprovalCheckpointManager signature which returns AgentResult 
-        // Need to wrap it into StepDecision.terminal
-        return StepDecision.terminal(checkpointManager.persist(context, compositeName, batchJson, history));
+        // §7.20: Use persistBatch() to seed per-tool decision state.
+        return StepDecision.terminal(
+            checkpointManager.persistBatch(
+                context, compositeName, batchJson, calls, history));
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {

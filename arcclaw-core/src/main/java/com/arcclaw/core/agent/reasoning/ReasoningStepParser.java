@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.reasoning;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -68,7 +69,11 @@ public class ReasoningStepParser {
                 List<ParallelToolCall> calls = new ArrayList<>();
                 for (int i = 0; i < requests.size(); i++) {
                     ToolExecutionRequest req = requests.get(i);
-                    String callId = "call_" + i;
+                    // §7.19: callId must be non-null for merge loop correctness.
+                    // Ollama does not provide tool call IDs — generate stable fallback.
+                    String callId = req.id() != null
+                        ? req.id()
+                        : req.name() + "-" + UUID.randomUUID();
                     Map<String, Object> params = deserializeParams(sessionId, req.arguments());
                     calls.add(ParallelToolCall.pending(callId, req.name(), params));
                 }

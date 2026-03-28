@@ -2945,3 +2945,24 @@ In `CheckpointResumeHandler`, an obsolete `synchronized(history)` intrinsic lock
 
 #### Observability & GC Optimization
 `MetricsAgentObserver` was patched to silently discard aggregate metric events originating from the `PARALLEL_SENTINEL`. At the same time, MDC tags (`PARALLEL_BATCH_SIZE` and `PARALLEL_TOOLS`) explicitly log parallel spans across the trace collector. For memory heap compression, `ParallelToolCall` was sanitized to utilize a single static `ObjectMapper`, circumventing substantial object churn per record allocation.
+
+---
+
+## Phase 72: Per-Tool HITL Parallelism ✅
+
+Implemented granular, per-tool approval and denial functionality for parallel tool batches in the ArcClaw agent loop, allowing independent decisions to be made for tools batched in the same turn.
+
+### Key Features & Implementation:
+
+1. **State Persistence**: 
+   - Extended `AgentCheckpoint` with `batchToolDecisions` JSON map to track individual states (`PENDING`, `APPROVED`, `DENIED`) per tool within a parallel batch.
+2. **Reflex & Parser Enhancements**:
+   - Upgraded `ApproveReflex`, `DenyReflex`, and `ChannelCommand` to support targeted tool names (e.g. `/approve github`).
+   - The system now awaits all tools in the batch to reach a terminal decision before resumption.
+3. **Execution & Formatter Upgrades**:
+   - `AgentResultFormatter` displays intuitive per-tool status representations during pausing.
+   - `CheckpointResumeHandler` filters and synthesizes synthetic failure observations for `DENIED` tools, securely bypassing the registry invocation for rejected tool executions and preventing fail-open edge cases.
+
+**Final Verification**: 
+- ✅ Full `arcclaw-core` component tests updated and resolved.
+- ✅ Granular per-tool evaluation verified properly without impacting prior protocol invariants.

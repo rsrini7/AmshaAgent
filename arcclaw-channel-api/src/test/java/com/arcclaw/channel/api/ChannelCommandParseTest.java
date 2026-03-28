@@ -30,6 +30,15 @@ class ChannelCommandParseTest {
         ChannelCommand cmd = ChannelCommand.parse("/approve abc-123");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
         assertEquals(Optional.of("abc-123"), ((ChannelCommand.Approve) cmd).cronId());
+        assertTrue(((ChannelCommand.Approve) cmd).toolName().isEmpty());
+    }
+
+    @Test
+    void parseApproveWithToolName() {
+        ChannelCommand cmd = ChannelCommand.parse("/approve github");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+        assertTrue(((ChannelCommand.Approve) cmd).cronId().isEmpty());
+        assertEquals(Optional.of("github"), ((ChannelCommand.Approve) cmd).toolName());
     }
 
     @Test
@@ -37,6 +46,7 @@ class ChannelCommandParseTest {
         ChannelCommand cmd = ChannelCommand.parse("/deny");
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
         assertTrue(((ChannelCommand.Deny) cmd).cronId().isEmpty());
+        assertTrue(((ChannelCommand.Deny) cmd).toolName().isEmpty());
     }
 
     @Test
@@ -44,6 +54,15 @@ class ChannelCommandParseTest {
         ChannelCommand cmd = ChannelCommand.parse("/deny cron-42");
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
         assertEquals(Optional.of("cron-42"), ((ChannelCommand.Deny) cmd).cronId());
+        assertTrue(((ChannelCommand.Deny) cmd).toolName().isEmpty());
+    }
+
+    @Test
+    void parseDenyWithToolName() {
+        ChannelCommand cmd = ChannelCommand.parse("/deny manage_schedule");
+        assertInstanceOf(ChannelCommand.Deny.class, cmd);
+        assertTrue(((ChannelCommand.Deny) cmd).cronId().isEmpty());
+        assertEquals(Optional.of("manage_schedule"), ((ChannelCommand.Deny) cmd).toolName());
     }
 
     @Test
@@ -131,8 +150,8 @@ class ChannelCommandParseTest {
 
     @Test
     void controlCommandsShouldBeIdentified() {
-        assertTrue(new ChannelCommand.Approve(Optional.empty()).isControlCommand());
-        assertTrue(new ChannelCommand.Deny(Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty()).isControlCommand());
         assertTrue(new ChannelCommand.Halt().isControlCommand());
         assertTrue(new ChannelCommand.Reset().isControlCommand());
 

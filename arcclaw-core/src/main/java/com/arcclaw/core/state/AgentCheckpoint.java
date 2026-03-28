@@ -115,6 +115,9 @@ public class AgentCheckpoint {
     @Column(name = "pending_tool_name")
     private String pendingToolName;
 
+    @Column(name = "batch_tool_decisions", columnDefinition = "TEXT")
+    private String batchToolDecisions; // JSON: {"github":"PENDING","manage_schedule":"PENDING"}
+
     @Column(name = "pending_tool_parameters", columnDefinition = "TEXT")
     @JsonIgnore // Privacy Fix Phase 41: ensure sensitive tool parameters never leak to telemetry/JSON APIs
     private String pendingToolParametersJson;
@@ -245,6 +248,22 @@ public class AgentCheckpoint {
 
     public void setPendingToolName(String pendingToolName) {
         this.pendingToolName = pendingToolName;
+    }
+
+    public String getBatchToolDecisions() {
+        return batchToolDecisions;
+    }
+
+    public void setBatchToolDecisions(String batchToolDecisions) {
+        this.batchToolDecisions = batchToolDecisions;
+    }
+
+    /**
+     * Returns true if this is a parallel-batch HITL checkpoint with
+     * per-tool decision state. §7.20
+     */
+    public boolean hasBatchToolDecisions() {
+        return batchToolDecisions != null && !batchToolDecisions.isBlank();
     }
 
     public String getPendingToolParametersJson() {

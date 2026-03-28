@@ -108,5 +108,25 @@ public interface StatefulAgentStore {
      */
     Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId);
 
+    /**
+     * Atomically sets one tool's decision in the checkpoint's
+     * batchToolDecisions JSON map. §7.20
+     *
+     * @param sessionId   the active session
+     * @param agentRole   the agent role
+     * @param toolName    the tool whose decision to update
+     * @param decision    APPROVED or DENIED (§7.20)
+     * @return true if the checkpoint was found and updated; false otherwise
+     */
+    boolean updateBatchToolDecision(
+        String sessionId, String agentRole,
+        String toolName, String decision);
+
+    /**
+     * Returns true if all tools in the batchToolDecisions map have
+     * a non-PENDING decision. §7.22
+     */
+    boolean isAllBatchToolsDecided(String sessionId, String agentRole);
+
     void deleteCheckpoint(String sessionId, String role);
 }

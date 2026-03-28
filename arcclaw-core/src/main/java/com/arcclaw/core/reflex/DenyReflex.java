@@ -1,6 +1,7 @@
 package com.arcclaw.core.reflex;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -12,6 +13,7 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -29,6 +31,8 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -54,6 +58,12 @@ public class DenyReflex implements AgentReflex {
 
     @Inject
     DevSecretSeeder devSeeder;
+
+    @Inject
+    ObjectMapper objectMapper;
+    
+    @Inject
+    CheckpointResumeHandler checkpointResumeHandler;
 
     @Override
     public boolean matches(String input) {
@@ -86,17 +96,29 @@ public class DenyReflex implements AgentReflex {
                     return handleCronDenial(cronId.get(), userId, chatId, context);
                 }
 
+                if (deny.toolName().isPresent()) {
+                    return handlePerToolDenial(
+                        deny.toolName().get(), sessionId, userId, chatId, context);
+                }
+
                 // 2. Session checkpoint — interactive approval
                 String activeRole = null;
+                AgentCheckpoint activeCheckpoint = null;
                 for (AgentRoleEnum role : AgentRoleEnum.values()) {
                     Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role.toScopedName());
                     if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                         activeRole = role.toScopedName();
+                        activeCheckpoint = cpOpt.get();
                         break;
                     }
                 }
 
                 if (activeRole != null) {
+                    if (deny.toolName().isEmpty() && activeCheckpoint.hasBatchToolDecisions()) {
+                        autoDenyAllPending(sessionId, activeRole);
+                        return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+                    }
+
                     log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
                     AgentCheckpoint cp = statefulAgentStore.load(sessionId, activeRole).orElseThrow();
                     cp.setStatus(CheckpointStatus.FAILED);
@@ -129,6 +151,90 @@ public class DenyReflex implements AgentReflex {
             log.debug("Full denial processing failure stack trace:", e);
             return ReflexResult.respond("❌ **Denial Error**: An internal fault occurred while terminating the task.", context);
         }
+    }
+
+    private String handlePerToolDenial(
+            String toolName, String sessionId, String userId,
+            String chatId, MessageContext context) throws Exception {
+
+        String activeRole = null;
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            Optional<AgentCheckpoint> cpOpt =
+                statefulAgentStore.load(sessionId, role.toScopedName());
+            if (cpOpt.isPresent()
+                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL
+                    && cpOpt.get().hasBatchToolDecisions()) {
+                activeRole = role.toScopedName();
+                break;
+            }
+        }
+
+        if (activeRole == null) {
+            return "No parallel batch awaiting per-tool approval for this session.";
+        }
+
+        boolean updated = statefulAgentStore.updateBatchToolDecision(
+            sessionId, activeRole, toolName, AgentSentinels.TOOL_DECISION_DENIED);
+
+        if (!updated) {
+            return String.format(
+                "Tool '%s' is not part of the pending batch, " +
+                "or was already decided. Use `deny` to deny all.",
+                toolName);
+        }
+
+        if (statefulAgentStore.isAllBatchToolsDecided(sessionId, activeRole)) {
+            return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+        }
+
+        AgentCheckpoint cp =
+            statefulAgentStore.load(sessionId, activeRole).orElseThrow();
+        List<String> stillPending = pendingToolNames(cp);
+        return String.format(
+            "🚫 Denied `%s`. Still waiting for: %s\n" +
+            "Type `approve <toolName>` or `deny <toolName>` to decide remaining.",
+            toolName,
+            stillPending.stream()
+                .map(t -> "`" + t + "`")
+                .collect(Collectors.joining(", ")));
+    }
+
+    private List<String> pendingToolNames(AgentCheckpoint cp) {
+        if (!cp.hasBatchToolDecisions()) return List.of();
+        try {
+            Map<String, String> map = objectMapper.readValue(
+                cp.getBatchToolDecisions(),
+                new TypeReference<>() {});
+            return map.entrySet().stream()
+                .filter(e -> AgentSentinels.TOOL_DECISION_PENDING.equals(e.getValue()))
+                .map(Map.Entry::getKey)
+                .toList();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private void autoDenyAllPending(String sessionId, String agentRole) {
+        AgentCheckpoint cp =
+            statefulAgentStore.load(sessionId, agentRole).orElseThrow();
+        pendingToolNames(cp).forEach(toolName ->
+            statefulAgentStore.updateBatchToolDecision(
+                sessionId, agentRole, toolName,
+                AgentSentinels.TOOL_DECISION_DENIED));
+    }
+
+    private String triggerBatchResume(
+            String sessionId, String userId, String chatId,
+            String agentRole, MessageContext context) throws Exception {
+        final String resumeGoal =
+            checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
+        context.setResumeSignal(true);
+        context.setGoal(resumeGoal);
+        AgentResult result = WorkspaceContext.runWithFullAutonomy(
+            sessionId, userId, chatId, agentRole,
+            () -> agentLoop.run(
+                sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
+        return AgentResultFormatter.format(result);
     }
 
     private String handleCronDenial(String cronId, String userId, String chatId, MessageContext context) throws Exception {

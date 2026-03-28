@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -33,6 +34,8 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -58,6 +61,9 @@ public class ApproveReflex implements AgentReflex {
 
     @Inject
     DevSecretSeeder devSeeder;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
     WorkspaceManager workspaceManager;
@@ -101,33 +107,34 @@ public class ApproveReflex implements AgentReflex {
                     return handleCronApproval(cronId.get(), userId, chatId, context);
                 }
 
+                // Per-tool approval: `approve github` where toolName.isPresent()
+                if (approve.toolName().isPresent()) {
+                    return handlePerToolApproval(
+                        approve.toolName().get(), sessionId, userId, chatId, context);
+                }
+
                 // 2. Session checkpoint — interactive approval
                 String activeRole = null;
+                AgentCheckpoint activeCheckpoint = null;
                 for (AgentRoleEnum role : AgentRoleEnum.values()) {
                     Optional<AgentCheckpoint> cpOpt = statefulAgentStore.load(sessionId, role.toScopedName());
                     if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                         activeRole = role.toScopedName();
+                        activeCheckpoint = cpOpt.get();
                         break;
                     }
                 }
 
                 if (activeRole != null) {
+                    if (approve.toolName().isEmpty()
+                            && activeCheckpoint.hasBatchToolDecisions()) {
+                        // Approve all remaining PENDING tools at once (§7.21)
+                        autoApproveAllPending(sessionId, activeRole);
+                        return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+                    }
+
                     log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
-
-                    // Resolve the original user goal from the checkpoint.
-                    // Using GOAL_RESUME_APPROVED here would cause RagContextEnricher to
-                    // embed a semantically meaningless string, returning irrelevant chunks.
-                    final String finalRole = activeRole;
-                    final String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, finalRole);
-
-                    context.setResumeSignal(true);
-                    context.setGoal(resumeGoal);
-
-                    AgentResult result = WorkspaceContext.runWithFullAutonomy(
-                            sessionId, userId, chatId, finalRole,
-                            () -> agentLoop.run(sessionId, finalRole, resumeGoal, reasoningEngine, 5, context)
-                    );
-                    return AgentResultFormatter.format(result);
+                    return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
                 }
 
                 // 3. No session checkpoint — Fix 1 guidance
@@ -155,6 +162,96 @@ public class ApproveReflex implements AgentReflex {
             log.debug("Full approval processing failure stack trace:", e);
             return ReflexResult.respond("❌ **Approval Error**: An internal fault occurred while resuming the task.", context);
         }
+    }
+
+    private String handlePerToolApproval(
+            String toolName, String sessionId, String userId,
+            String chatId, MessageContext context) throws Exception {
+
+        // Find active parallel-batch checkpoint
+        String activeRole = null;
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            Optional<AgentCheckpoint> cpOpt =
+                statefulAgentStore.load(sessionId, role.toScopedName());
+            if (cpOpt.isPresent()
+                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL
+                    && cpOpt.get().hasBatchToolDecisions()) {
+                activeRole = role.toScopedName();
+                break;
+            }
+        }
+
+        if (activeRole == null) {
+            // No parallel batch checkpoint — treat as unknown command
+            return "No parallel batch awaiting per-tool approval for this session.";
+        }
+
+        // Record the APPROVED decision for this tool
+        boolean updated = statefulAgentStore.updateBatchToolDecision(
+            sessionId, activeRole, toolName, AgentSentinels.TOOL_DECISION_APPROVED);
+
+        if (!updated) {
+            return String.format(
+                "Tool '%s' is not part of the pending batch, " +
+                "or was already decided. Use `approve` to approve all.",
+                toolName);
+        }
+
+        // Check if all tools now have decisions (§7.22)
+        if (statefulAgentStore.isAllBatchToolsDecided(sessionId, activeRole)) {
+            // All decided → trigger full batch resume
+            return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+        }
+
+        // Still some PENDING tools — inform user
+        AgentCheckpoint cp =
+            statefulAgentStore.load(sessionId, activeRole).orElseThrow();
+        List<String> stillPending = pendingToolNames(cp);
+        return String.format(
+            "✅ Approved `%s`. Still waiting for: %s\n" +
+            "Type `approve <toolName>` or `approve` to approve all remaining.",
+            toolName,
+            stillPending.stream()
+                .map(t -> "`" + t + "`")
+                .collect(Collectors.joining(", ")));
+    }
+
+    private List<String> pendingToolNames(AgentCheckpoint cp) {
+        if (!cp.hasBatchToolDecisions()) return List.of();
+        try {
+            Map<String, String> map = objectMapper.readValue(
+                cp.getBatchToolDecisions(),
+                new TypeReference<>() {});
+            return map.entrySet().stream()
+                .filter(e -> AgentSentinels.TOOL_DECISION_PENDING.equals(e.getValue()))
+                .map(Map.Entry::getKey)
+                .toList();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private void autoApproveAllPending(String sessionId, String agentRole) {
+        AgentCheckpoint cp =
+            statefulAgentStore.load(sessionId, agentRole).orElseThrow();
+        pendingToolNames(cp).forEach(toolName ->
+            statefulAgentStore.updateBatchToolDecision(
+                sessionId, agentRole, toolName,
+                AgentSentinels.TOOL_DECISION_APPROVED));
+    }
+
+    private String triggerBatchResume(
+            String sessionId, String userId, String chatId,
+            String agentRole, MessageContext context) throws Exception {
+        final String resumeGoal =
+            checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
+        context.setResumeSignal(true);
+        context.setGoal(resumeGoal);
+        AgentResult result = WorkspaceContext.runWithFullAutonomy(
+            sessionId, userId, chatId, agentRole,
+            () -> agentLoop.run(
+                sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
+        return AgentResultFormatter.format(result);
     }
 
     private String handleCronApproval(String cronId, String userId, String chatId, MessageContext context) throws Exception {
