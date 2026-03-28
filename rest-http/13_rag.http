@@ -30,7 +30,7 @@
 ###   After ingestion, the rag_chunk table must have the new row.
 ###   After Phase 64-C3, compaction_summary must NOT have "rag:" prefixed rows.
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
+### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
 ###   sqlite-vec (vec0) binary optional — FTS5 works without it
 ### ═══════════════════════════════════════════════════════════════
 

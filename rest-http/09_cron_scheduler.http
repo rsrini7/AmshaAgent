@@ -32,7 +32,7 @@
 ###   CRONFAILED  (mandatory) → job execution threw an error
 ###   CRONDELETED (non-mandatory) → job deleted
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
+### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
@@ -270,7 +270,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [CRON-14] Check audit for CRONFIRED event (run after ~90 seconds)
 # Expect: eventType=CRONFIRED in the audit list
-# If CRONFAILED appears instead: check GROQ_API_KEY and agent loop logs.
+# If CRONFAILED appears instead: check ARCCLAW_LLM_API_KEY and agent loop logs.
 GET {{baseUrl}}/api/v1/audit/session/{{cronSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 

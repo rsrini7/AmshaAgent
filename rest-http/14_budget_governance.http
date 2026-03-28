@@ -24,7 +24,7 @@
 ###   After the fix, the stored autonomy level is correctly passed to
 ###   WorkspaceContext.run() via MessageContext.
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY, GITHUB_TOKEN set
+### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY, GITHUB_TOKEN set
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080

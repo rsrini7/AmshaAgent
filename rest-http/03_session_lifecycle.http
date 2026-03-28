@@ -29,7 +29,7 @@
 ### After Phase 64-B3: session IDs are random UUIDs stored in session_registry.
 ###   (channelType=REST, channelId=sessionId, userId=apiKey) → UUID.randomUUID()
 ###
-### Prerequisites: ArcClaw running in serve mode, GROQ_API_KEY set
+### Prerequisites: ArcClaw running in serve mode, ARCCLAW_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080
