@@ -49,6 +49,22 @@ SCHEDULING RULES:
    - Example thought: "Current time is 12:33 UTC. User wants +2 minutes. Target time is 12:35 UTC. Cron: 35 12 * * *. RunOnce: true."
    - Never guess. Derive minute and hour strictly from the calculation above.
 
+   SCHEMA ENFORCEMENT — VALID PARAMETERS ONLY:
+   The schedule_task tool accepts EXACTLY THREE parameters:
+     - cronExpression  (string)  — the cron expression
+     - runOnce         (boolean) — MUST be the JSON literal true or false,
+                                   NEVER the string "true" or "false"
+     - goal            (string)  — the self-contained goal string
+
+   ANY other parameter name (timezone, delay, repeat, interval, etc.)
+   is INVALID and will cause silent failures. Do not invent parameters.
+   Timezone handling: always express the cron in UTC. If the user stated
+   a timezone, convert to UTC first, then write the converted UTC cron
+   expression. Never pass timezone as a parameter.
+
+   WRONG: {"cronExpression":"16 1 * * *","runOnce":"true","timezone":"UTC","goal":"..."}
+   RIGHT: {"cronExpression":"16 1 * * *","runOnce":true,"goal":"..."}
+
 2. ONE-SHOT vs RECURRING:
    - One-time tasks ("remind me once", "in X minutes", "tomorrow"):
        runOnce=true. Compute the EXACT target UTC datetime as a
@@ -109,8 +125,27 @@ SCHEDULING RULES:
    NEVER output an empty string.
    Output ONLY the final message or result. No scheduling.
    No time references. No tools unless needed for the action.
-   WRONG: "I have scheduled a task to say hi..."
-   RIGHT: "Hi! The current time is 12:00 UTC."
+
+   FOR MESSAGE/GREETING GOALS (say hello, send greeting, report status, etc.):
+   Do NOT call any tool. Use FINISH immediately with the message as your answer.
+   The framework delivers your output — you do not need to "send" anything.
+   The action IS writing the FINISH answer.
+
+   WRONG: Try to call a tool to "send" the message
+   WRONG: Output empty or blank text
+   RIGHT:  FINISH with the message text directly
+   Example: goal="Output the following message: Hello ArcClaw 👋"
+   → Action: FINISH
+   → Answer: "Hello ArcClaw 👋"
+
+  MANAGE_SCHEDULE LIST RESULT — FORMATTING RULE:
+   When manage_schedule with action="list" returns its result, you will
+   receive the formatted list as a tool observation (plain text).
+   You MUST immediately use the FINISH action with that text as your answer.
+   NEVER re-emit the list as a JSON object or array in your response.
+   NEVER call another tool after a list result.
+   WRONG: Returning {"ID":"...","Cron":"...",...} as your answer text.
+   RIGHT: FINISH with the formatted plain-text list you received.
 
 9. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
    You CANNOT: write files, schedule new tasks, access secrets,
@@ -204,6 +239,14 @@ IMPORTANT — REDACTED PII PLACEHOLDERS:
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 CURRENT SYSTEM TIME (UTC): {systemTimeUtc}
+USER LOCAL TIME (if stated): derive from their message; otherwise assume UTC.
+MANDATORY TIME MATH for 'in N minutes':
+  Step 1: Use SYSTEM TIME UTC above as your base. Do NOT use any other time.
+  Step 2: Add N to the UTC minute. If result > 59, carry +1 to hour.
+  Step 3: Write ONLY the UTC result into cronExpression.
+  Step 4: Show your arithmetic: "UTC now=HH:MM, +N min = HH:MM, cron: MM HH * * *"
+  NEVER convert from IST or any other timezone unless the user explicitly
+  stated their timezone in the message. The system time shown above IS UTC.
 (For 'in N minutes': cron_minute = (current_minute + N) mod 60. Increment hour if result < current_minute.)
 
 {#include prompts/github-tool-rules /}

@@ -30,6 +30,29 @@ public class ApprovalCheckpointManager {
     @Inject ObjectMapper objectMapper;
 
     /**
+     * Loads an existing non-terminal checkpoint for the session, or creates a
+     * fresh one. A checkpoint with status COMPLETED, FAILED, or CANCELLED is
+     * treated as absent — we never overwrite a terminal record in place.
+     *
+     * NOTE: DENIED is not a separate status in this system. DenyReflex stores
+     * denials as CheckpointStatus.FAILED with AgentSentinels.DENY_SENTINEL as
+     * the fail reason. Therefore FAILED covers both failed and denied checkpoints.
+     * There is no separate DENIED enum value to filter.
+     */
+    private AgentCheckpoint loadActiveOrCreate(String sessionId, String agentRole) {
+        return agentStore.load(sessionId, agentRole)
+                .filter(cp -> cp.getStatus() != CheckpointStatus.COMPLETED
+                           && cp.getStatus() != CheckpointStatus.FAILED
+                           && cp.getStatus() != CheckpointStatus.DENIED)
+                .orElseGet(() -> {
+                    AgentCheckpoint c = new AgentCheckpoint();
+                    c.setSessionId(sessionId);
+                    c.setAgentRole(agentRole);
+                    return c;
+                });
+    }
+
+    /**
      * Persists an AWAITING_APPROVAL checkpoint and returns the approval-pending AgentResult.
      * Captures the original user goal so RAG context enrichment on resume uses the
      * correct embedding query instead of the synthetic resume sentinel string.
@@ -39,20 +62,15 @@ public class ApprovalCheckpointManager {
             List<ReasoningStep> history) {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
-        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
-                .orElseGet(() -> {
-                    AgentCheckpoint c = new AgentCheckpoint();
-                    c.setSessionId(sessionId);
-                    c.setAgentRole(agentRole);
-                    return c;
-                });
+        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);
-        log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s", sessionId, toolName);
+        log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s",
+                sessionId, toolName);
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
 
@@ -70,18 +88,11 @@ public class ApprovalCheckpointManager {
             List<ParallelToolCall> calls,
             List<ReasoningStep> history) {
 
-        String sessionId  = context.sessionId();
-        String agentRole  = context.agentRole();
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
 
-        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
-            .orElseGet(() -> {
-                AgentCheckpoint c = new AgentCheckpoint();
-                c.setSessionId(sessionId);
-                c.setAgentRole(agentRole);
-                return c;
-            });
+        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
 
-        // Seed per-tool decisions: all PENDING (§7.20)
         Map<String, String> decisions = new LinkedHashMap<>();
         calls.forEach(call -> decisions.put(
             call.toolName(), AgentSentinels.TOOL_DECISION_PENDING));
@@ -91,8 +102,8 @@ public class ApprovalCheckpointManager {
             decisionsJson = objectMapper.writeValueAsString(decisions);
         } catch (Exception e) {
             log.errorf("[PARALLEL-HITL] Failed to serialize decisions for " +
-                       "session %s: %s", sessionId, e.getMessage());
-            // Fall back to whole-batch persist — no per-tool granularity
+                       "session %s: %s", sessionId,
+                       e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return persist(context, compositeName, batchJson, history);
         }
 
@@ -114,8 +125,8 @@ public class ApprovalCheckpointManager {
      * Persists an AWAITING_APPROVAL checkpoint for a parallel tool batch
      * that contains both HITL-pending and pre-executed tool results. §7.30
      *
-     * @param originalBatchJson The full batch JSON (all tools).
-     * @param hitlCalls         Only the tools requiring approval (seeds decisions).
+     * @param originalBatchJson      The full batch JSON (all tools).
+     * @param hitlCalls              Only the tools requiring approval (seeds decisions).
      * @param preExecutedResultsJson JSON map of toolName → ToolResponse for safe tools.
      */
     public AgentResult persistBatchWithPreExecuted(
@@ -129,15 +140,8 @@ public class ApprovalCheckpointManager {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
 
-        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
-            .orElseGet(() -> {
-                AgentCheckpoint c = new AgentCheckpoint();
-                c.setSessionId(sessionId);
-                c.setAgentRole(agentRole);
-                return c;
-            });
+        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
 
-        // Seed per-tool decisions only for HITL-pending tools (§7.20, §7.32)
         Map<String, String> decisions = new LinkedHashMap<>();
         hitlCalls.forEach(call ->
             decisions.put(call.toolName(), AgentSentinels.TOOL_DECISION_PENDING));
@@ -146,21 +150,22 @@ public class ApprovalCheckpointManager {
         try {
             decisionsJson = objectMapper.writeValueAsString(decisions);
         } catch (Exception e) {
-            log.errorf("[PARALLEL-HITL] Failed to serialize decisions: %s", e.getMessage());
+            log.errorf("[PARALLEL-HITL] Failed to serialize decisions: %s",
+                       e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return persist(context, compositeName, originalBatchJson, history);
         }
 
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(compositeName); // only HITL tools per §7.32
+        cp.setPendingToolName(compositeName);
         cp.setPendingToolParametersJson(originalBatchJson);
         cp.setBatchToolDecisions(decisionsJson);
-        cp.setPreExecutedResults(preExecutedResultsJson); // §7.30
+        cp.setPreExecutedResults(preExecutedResultsJson);
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);
 
-        log.infof("[STATE-MACHINE] Pausing session %s — HITL: %s | pre-executed: %d tools",
-            sessionId, compositeName, hitlCalls.size());
+        log.infof("[STATE-MACHINE] Pausing session %s — HITL tools pending: %d | batch: %s",
+            sessionId, hitlCalls.size(), compositeName);
 
         return AgentResult.awaitingApproval(
             compositeName, originalBatchJson, sessionId,

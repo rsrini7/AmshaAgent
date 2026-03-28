@@ -1,12 +1,10 @@
 package com.arcclaw.core.sandbox;
-
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
+import java.nio.file.Path;import java.util.List;
 import java.util.Map;
 
 import jakarta.inject.Inject;
@@ -86,11 +84,15 @@ public class ProcessIsolationExecutorTest {
             try {
                 Path workspaceRoot = Files.createTempDirectory("arcclaw-test-ws");
                 try {
-                    assertThrows(IOException.class, () -> executor.executeSandboxed(
+                    SandboxResult result = executor.executeSandboxed(
                             TEST_SESSION_ID,
                             workspaceRoot,
                             List.of("nonexistent-command-that-does-not-exist"),
-                            Map.of()));
+                            Map.of());
+                    assertFalse(result.success());
+                    // Allow for either a direct process error (NONE strategy) or a sandbox infra failure (PODMAN strategy)
+                    String reason = result.reason();
+                    assertTrue(reason.contains("SANDBOX_OFFLINE") || reason.contains("nonexistent-command"));
                 } finally {
                     Files.deleteIfExists(workspaceRoot);
                 }

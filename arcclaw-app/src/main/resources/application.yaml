@@ -12,6 +12,9 @@ quarkus:
   banner:
     enabled: true
     path: arcclaw-banner.txt
+  
+  jackson:
+    escape-non-ascii-characters: false
 
   index-dependency:
     arcclaw-core:
@@ -316,7 +319,7 @@ arcclaw:
   cron:
     poll-interval: 30s
     max-concurrent: 10
-    max-iterations: 2
+    max-iterations: 3
     max-lookback-window: PT5M
 
   channel:

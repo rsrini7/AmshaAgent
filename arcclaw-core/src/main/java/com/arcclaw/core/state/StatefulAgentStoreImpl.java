@@ -136,6 +136,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setPendingToolParametersJson(checkpoint.getPendingToolParametersJson());
             managed.setAutonomyLevel(checkpoint.getAutonomyLevel());
             managed.setOriginalGoal(checkpoint.getOriginalGoal());
+            // Fix 1: batch parallel HITL fields — without these, batchToolDecisions and
+            // preExecutedResults are silently discarded when an existing IN_PROGRESS
+            // checkpoint transitions to AWAITING_APPROVAL with batch data.
+            managed.setBatchToolDecisions(checkpoint.getBatchToolDecisions());
+            managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
+            // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
+            // ApprovalCheckpointManager explicitly sets updatedAt = now() before calling
+            // save() — if we don't copy it here, the DB row keeps the old timestamp and
+            // stale checkpoint cleanup never fires for re-saved checkpoints.
+            managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
         }
     }
@@ -453,7 +463,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             em.merge(cp);
             return true;
         } catch (Exception e) {
-            log.errorf("Failed to update batch tool decision: %s", e.getMessage());
+            log.errorf("Failed to update batch tool decision: %s",
+               e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return false;
         }
     }
@@ -475,7 +486,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             return map.values().stream()
                 .noneMatch(val -> AgentSentinels.TOOL_DECISION_PENDING.equals(val));
         } catch (Exception e) {
-            log.errorf("Failed to check if batch decided: %s", e.getMessage());
+            log.errorf("Failed to check if batch decided: %s",
+               e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return false;
         }
     }
