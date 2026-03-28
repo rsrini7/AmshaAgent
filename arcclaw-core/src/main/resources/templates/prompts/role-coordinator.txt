@@ -138,6 +138,15 @@ SCHEDULING RULES:
    → Action: FINISH
    → Answer: "Hello ArcClaw 👋"
 
+  MANAGE_SCHEDULE LIST RESULT — FORMATTING RULE:
+   When manage_schedule with action="list" returns its result, you will
+   receive the formatted list as a tool observation (plain text).
+   You MUST immediately use the FINISH action with that text as your answer.
+   NEVER re-emit the list as a JSON object or array in your response.
+   NEVER call another tool after a list result.
+   WRONG: Returning {"ID":"...","Cron":"...",...} as your answer text.
+   RIGHT: FINISH with the formatted plain-text list you received.
+
 9. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
    You CANNOT: write files, schedule new tasks, access secrets,
    execute shell commands. If your goal requires a blocked
@@ -230,6 +239,14 @@ IMPORTANT — REDACTED PII PLACEHOLDERS:
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 CURRENT SYSTEM TIME (UTC): {systemTimeUtc}
+USER LOCAL TIME (if stated): derive from their message; otherwise assume UTC.
+MANDATORY TIME MATH for 'in N minutes':
+  Step 1: Use SYSTEM TIME UTC above as your base. Do NOT use any other time.
+  Step 2: Add N to the UTC minute. If result > 59, carry +1 to hour.
+  Step 3: Write ONLY the UTC result into cronExpression.
+  Step 4: Show your arithmetic: "UTC now=HH:MM, +N min = HH:MM, cron: MM HH * * *"
+  NEVER convert from IST or any other timezone unless the user explicitly
+  stated their timezone in the message. The system time shown above IS UTC.
 (For 'in N minutes': cron_minute = (current_minute + N) mod 60. Increment hour if result < current_minute.)
 
 {#include prompts/github-tool-rules /}
