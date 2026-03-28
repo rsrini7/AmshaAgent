@@ -52,6 +52,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
+                .maxTokens(maxTokens) 
                 .timeout(timeout)
                 // Required by OpenRouter — identifies your app, avoids anonymous rate limits
                 .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))

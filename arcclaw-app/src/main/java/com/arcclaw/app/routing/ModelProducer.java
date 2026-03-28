@@ -25,23 +25,23 @@ public class ModelProducer {
     String provider;
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
-                    defaultValue = "${ARCCLAW_LLM_BASE_URL}")
+                defaultValue = "https://api.groq.com/openai/v1")
     String openaiBaseUrl;
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.api-key",
-                    defaultValue = "${ARCCLAW_LLM_API_KEY}")
+                    defaultValue = "not-configured")
     String openaiApiKey;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.model",
-                    defaultValue = "${ARCCLAW_INTENT_CLASSIFIER_MODEL}")
+                    defaultValue = "llama-3.1-8b-instant")
     String intentModelName;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.ollama-model",
-                    defaultValue = "${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL}")
+                    defaultValue = "llama3.2")
     String ollamaModelId;
 
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
-                    defaultValue = "${OLLAMA_BASE_URL}")
+                    defaultValue = "http://localhost:11434")
     String ollamaBaseUrl;
 
     @Inject

@@ -84,32 +84,31 @@ public class CliUtils {
         ),
     };
 
-    /** Used when ARCCLAW_LLM_PROVIDER=groq (or unset — groq is the default). */
     private static final VarSpec GROQ_KEY_SPEC = new VarSpec(
         "ARCCLAW_LLM_API_KEY",
-        "Groq Cloud API key (provider=groq, the default).",
+        "Groq Cloud API key (provider=groq). Starts with 'gsk_'.",
         "1. Sign up at https://console.groq.com",
         "2. Create an API key — it starts with 'gsk_'",
         "3. Add:  ARCCLAW_LLM_API_KEY=gsk_your_key_here"
     );
 
-    /** Used when ARCCLAW_LLM_PROVIDER=openrouter. */
     private static final VarSpec OPENROUTER_KEY_SPEC = new VarSpec(
-        "OPENROUTER_API_KEY",
-        "OpenRouter API key (provider=openrouter).",
+        "ARCCLAW_LLM_API_KEY",        // ← same key, different instructions
+        "OpenRouter API key (provider=openrouter). Starts with 'sk-or-v1-'.",
         "1. Sign up at https://openrouter.ai (free tier available)",
         "2. Create an API key — it starts with 'sk-or-v1-'",
-        "3. Add:  OPENROUTER_API_KEY=sk-or-v1-your_key_here",
-        "Free models with tool-call support: https://openrouter.ai/models?q=free"
+        "3. Add:  ARCCLAW_LLM_API_KEY=sk-or-v1-your_key_here",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://openrouter.ai/api/v1",
+        "Free models with tool support: https://openrouter.ai/models?q=free"
     );
 
-    /** Used when ARCCLAW_LLM_PROVIDER=openai. */
     private static final VarSpec OPENAI_KEY_SPEC = new VarSpec(
-        "OPENAI_API_KEY",
-        "OpenAI API key (provider=openai).",
+        "ARCCLAW_LLM_API_KEY",        // ← same key
+        "OpenAI API key (provider=openai). Starts with 'sk-'.",
         "1. Sign up at https://platform.openai.com",
-        "2. Create a project API key — it starts with 'sk-'",
-        "3. Add:  OPENAI_API_KEY=sk-your_key_here"
+        "2. Create a project API key",
+        "3. Add:  ARCCLAW_LLM_API_KEY=sk-your_key_here",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.openai.com/v1"
     );
 
     /** Required for attach mode (hard) and validated for serve mode (soft). */

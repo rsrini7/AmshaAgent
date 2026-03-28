@@ -103,7 +103,7 @@ quarkus:
       # The OpenAI extension properly parses model-name DYNAMICALLY at runtime!
       
       # Groq is OpenAI API-compatible
-      base-url: "${ARCCLAW_LLM_BASE_URL}"
+      base-url: "${ARCCLAW_LLM_BASE_URL:https://api.groq.com/openai/v1}"
       api-key: "${ARCCLAW_LLM_API_KEY}"
       timeout: 120s
       max-retries: 3
