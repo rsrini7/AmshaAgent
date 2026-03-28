@@ -76,15 +76,14 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/approve?agentRole=coordinator
-Content-Type: application/json
+GET {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-GET {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/status/coordinator
+POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
-
 
 ###
 

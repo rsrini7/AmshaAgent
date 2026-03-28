@@ -192,6 +192,15 @@ public class EngineStepHandler {
             String msg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, rootCauseChain(e));
 
+            int retryAfterSeconds = extractRetryAfter(e.getMessage(), 10);
+            if (retryAfterSeconds <= 15) { // only auto-retry for short waits
+                log.warnf("[STATE-MACHINE] Rate limit session=%s — sleeping %ds then retrying",
+                        sessionId, retryAfterSeconds);
+                try { Thread.sleep(retryAfterSeconds * 1000L); }
+                catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                return StepDecision.retryEngine("Rate limit hit, retrying now.", llmSchemaErrorCount);
+            }
+
             // If the last step has a tool observation (e.g. delegate_to_agent result),
             // return it directly as FINISH rather than FAILED — the work is already done.
             if (!history.isEmpty()) {
@@ -221,6 +230,13 @@ public class EngineStepHandler {
         return StepDecision.terminal(AgentResult.failed(
                 "ReasoningEngine error: " + e.getMessage(),
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+    }
+
+    private int extractRetryAfter(String msg, int defaultSeconds) {
+        if (msg == null) return defaultSeconds;
+        Matcher m = Pattern.compile("try again in ([0-9.]+)s").matcher(msg);
+        if (m.find()) return (int) Math.ceil(Double.parseDouble(m.group(1)));
+        return defaultSeconds;
     }
 
     /**
