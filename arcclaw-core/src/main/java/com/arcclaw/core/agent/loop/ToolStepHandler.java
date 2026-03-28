@@ -86,9 +86,11 @@ public class ToolStepHandler {
                           "in session %s — redirecting to delegate_to_agent",
                           context.sessionId());
                 return StepDecision.retryEngine(
-                    "System: You are the coordinator. Do NOT call github directly. " +
-                    "Delegate GitHub tasks to Saraswati using delegate_to_agent " +
-                    "with agent='saraswati' and a self-contained goal.", 0);
+                    "System: You called the github tool, but the user's goal contains no GitHub " +
+                    "repository or resource reference. " +
+                    "If the user asked you to involve a specialist (e.g. 'ask Shiva', 'delegate'), " +
+                    "use delegate_to_agent instead. " +
+                    "If the answer is already in context, use FINISH directly.", 0);
             }
         }
         if (toolRegistry.findTool(toolName).isPresent())

@@ -87,7 +87,8 @@ public class DelegateToAgentTool implements AgentTool {
         String outerSessionId = WorkspaceContext.requireSessionId();
 
         // Derive child session ID to isolate checkpoint rows (prevents row collisions)
-        String innerSessionId = outerSessionId + ":d:" + targetRole.toScopedName();
+        String innerSessionId = outerSessionId + ":d:" + targetRole.toScopedName()
+                                               + ":" + System.nanoTime();
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
                   targetRole.toScopedName(), goal, outerSessionId);
