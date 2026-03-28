@@ -190,8 +190,20 @@ public class EngineStepHandler {
 
         if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
             String msg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
-            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s",
-                        sessionId, rootCauseChain(e));
+            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, rootCauseChain(e));
+
+            // If the last step has a tool observation (e.g. delegate_to_agent result),
+            // return it directly as FINISH rather than FAILED — the work is already done.
+            if (!history.isEmpty()) {
+                String lastObs = history.getLast().observation();
+                if (lastObs != null && !lastObs.isBlank()
+                        && !lastObs.startsWith("⚠️")
+                        && !lastObs.startsWith("Tool execution failed")) {
+                    log.infof("[STATE-MACHINE] session %s: rate-limit on wrap-up — surfacing last tool observation as FINISH", sessionId);
+                    return StepDecision.terminal(AgentResult.finished(lastObs, List.copyOf(history)));
+                }
+            }
+
             return StepDecision.terminal(AgentResult.failed(
                     msg, AgentResult.FailureCategory.RATE_LIMIT, List.copyOf(history)));
         }

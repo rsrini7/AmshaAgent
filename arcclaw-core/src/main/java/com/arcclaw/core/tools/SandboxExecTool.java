@@ -70,6 +70,15 @@ public class SandboxExecTool implements AgentTool {
     @Override public boolean requiresSandbox() { return false; }
     public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
+    // Colons are illegal in Windows path components (drive-letter separator).
+    // Inner session IDs contain colons: {outer}:d:{role}:{uuid}
+    // Sanitize for filesystem use only — sessionId itself is never modified.
+    private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
+
+    private static String toFsName(String sessionId) {
+        return FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
+    }
+
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         try {
@@ -107,7 +116,7 @@ public class SandboxExecTool implements AgentTool {
             }
 
             String sessionId = WorkspaceContext.requireSessionId();
-            Path workspaceRoot = Path.of(workspaceRootDir, sessionId);
+            Path workspaceRoot = Path.of(workspaceRootDir, toFsName(sessionId));
 
             Map<String, String> requiredSecrets = Map.of();
             Object secretsObj = params.get("secrets");
