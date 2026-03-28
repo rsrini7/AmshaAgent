@@ -45,9 +45,21 @@ public class CompactionEventBridge {
      * Called synchronously by CompactionHandler (order=60) before firing the
      * async event. Guarantees the latch is in the map before AgentDispatchHandler
      * (order=70) runs and before getMessages() is called during prompt building.
+     * <p>
+     * If a latch already exists for this session (duplicate registration), the old
+     * latch is counted down immediately to release any blocked waiters before being
+     * replaced. This prevents threads from being stranded on an orphaned latch.
      */
     public void registerLatch(String sessionId) {
-        inFlightLatches.put(sessionId, new CountDownLatch(1));
+        CountDownLatch prev = inFlightLatches.put(sessionId, new CountDownLatch(1));
+        if (prev != null) {
+            // Duplicate registration — release any threads blocked on the old latch
+            // before replacing it, so they are not stranded for AWAIT_TIMEOUT_SECONDS.
+            log.warnf("CompactionEventBridge: overwrote existing latch for session %s — " +
+                      "possible duplicate compaction registration; releasing old waiters",
+                      sessionId);
+            prev.countDown();
+        }
         log.debugf("Compaction bridge registered in-flight latch for session %s", sessionId);
     }
 
@@ -57,6 +69,9 @@ public class CompactionEventBridge {
      * <p>
      * Fast-path: if no latch is registered (no compaction in progress), returns
      * instantly with no locking overhead.
+     * <p>
+     * On timeout, the stale map entry is removed so future calls fast-path
+     * correctly instead of re-entering the timeout loop.
      */
     public void awaitIfInFlight(String sessionId) {
         CountDownLatch latch = inFlightLatches.get(sessionId);
@@ -67,6 +82,10 @@ public class CompactionEventBridge {
             if (!completed) {
                 log.warnf("CompactionEventBridge: timed out waiting for compaction " +
                           "of session %s — proceeding with potentially stale state", sessionId);
+                // Remove the stale entry so future calls for this session fast-path
+                // correctly. Use remove(key, value) to avoid removing a newer latch
+                // that may have been registered by a concurrent registerLatch() call.
+                inFlightLatches.remove(sessionId, latch);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -80,8 +99,11 @@ public class CompactionEventBridge {
             log.debugf("Compaction bridge received request for session %s", request.sessionId());
             compactionService.compact(request.sessionId(), request.userId());
         } catch (Exception e) {
+            // e.getMessage() can be null for exceptions that override getMessage()
+            // to return null or are constructed with no message (e.g. new RuntimeException()).
             log.errorf(e, "Compaction failed for session %s: %s",
-                    request.sessionId(), e.getMessage());
+                    request.sessionId(),
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         } finally {
             // Release the store read-gate BEFORE clearing the boolean flag,
             // so awaitIfInFlight() unblocks as soon as the DB write is done.
