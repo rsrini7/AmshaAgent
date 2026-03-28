@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -13,6 +14,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
@@ -224,12 +226,16 @@ public class AgentLoop {
                     maxIterations
             );
 
-            AgentResult resumeResult = checkpointResumeHandler.handle(
-                    agentExecutionContext, resumedHistory, context);
-            if (resumeResult != null) {
+            AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);
+            if (resumeResult != null) { 
                 result = resumeResult;
             } else {
-                result = stateMachineRunner.run(agentExecutionContext, engine, resumedHistory);
+                // Fast-path: if delegate_to_agent just executed on resume, the sub-agent's
+                // answer is already in the last history step. Skip the wrap-up LLM call entirely.
+                // Guard: ⏳ prefix = sub-agent hit rate-limit — let state machine retry in that case.
+                result = tryDelegateFinishFastPath(sessionId, resumedHistory)
+                        .orElseGet(() -> stateMachineRunner.run(
+                                agentExecutionContext, engine, resumedHistory));
             }
 
             // --- CHECKPOINT FINAL STATE ---
@@ -307,6 +313,40 @@ public class AgentLoop {
             MDC.remove(MdcKeys.USER_ID); // FIX: was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
         }
+    }
+
+    /**
+     * After CheckpointResumeHandler executes a pending tool on resume, checks if
+     * the tool was delegate_to_agent with a clean result. If so, returns the
+     * sub-agent's answer directly — skipping the coordinator wrap-up LLM call
+     * (~9,800 tokens) and the re-delegation loop.
+     *
+     * Returns empty() for all other tools, forcing the normal state machine path.
+     */
+    private Optional<AgentResult> tryDelegateFinishFastPath(
+            String sessionId, List<ReasoningStep> resumedHistory) {
+
+        if (resumedHistory.isEmpty()) return Optional.empty();
+
+        ReasoningStep last = resumedHistory.getLast();
+        String toolName = last.action();
+        String observation = last.observation();
+
+        if (!ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) return Optional.empty();
+        if (observation == null || observation.isBlank()) return Optional.empty();
+
+        // ⏳ = sub-agent rate-limited — must let coordinator retry delegation
+        // ⚠️ = sub-agent system error — let coordinator decide next action
+        // "Tool execution failed" = DelegateToAgentTool caught an exception
+        if (observation.startsWith("⏳")
+                || observation.startsWith("⚠️")
+                || observation.startsWith("Tool execution failed")) {
+            return Optional.empty();
+        }
+
+        log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +
+                "for session %s — skipping coordinator wrap-up LLM call", sessionId);
+        return Optional.of(AgentResult.finished(observation, List.copyOf(resumedHistory)));
     }
 
     private void tryStampChannelInfo(String sessionId, String canonicalRole,

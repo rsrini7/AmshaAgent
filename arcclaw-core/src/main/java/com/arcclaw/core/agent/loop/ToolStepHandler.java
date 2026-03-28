@@ -216,7 +216,7 @@ public class ToolStepHandler {
             // Outer coordinator sessions must continue so the LLM can decide the next action.
             if (context.sessionId() != null
                     && context.sessionId().contains(":d:")
-                    && "github".equals(step.action())) {
+                    && ToolCapability.GITHUB.toolName().equals(step.action())) {
                 log.infof("[TOOL-GUARD] Inner session %s: github blocked — fast-pathing to FINISH " +
                         "to skip redundant wrap-up LLM call", context.sessionId());
                 return StepDecision.terminal(
@@ -224,7 +224,7 @@ public class ToolStepHandler {
             }
             return StepDecision.retryValidation(0);
         }
-        
+
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
             return StepDecision.terminal(
                     checkpointManager.persist(context, p.toolName(), p.paramsJson(), history));
