@@ -40,11 +40,13 @@ public record ReasoningStep(
      * with fields: callId, toolName, params (pre-execution), observation (post-execution).
      * See Architecture_Invariants.md §7.1.
      */
-    public static final String PARALLEL_SENTINEL = "__parallel__";
+    public static final String PARALLEL_SENTINEL_DUNDER = "__parallel__";
+
+    public static final String PARALLEL_SENTINEL_COLON_PREFIX = "parallel:";
 
     /** Convenience: true if this step represents a parallel tool batch. */
     public boolean isParallelBatch() {
-        return PARALLEL_SENTINEL.equals(this.action);
+        return PARALLEL_SENTINEL_DUNDER.equals(this.action);
     }
 
     /**
@@ -58,7 +60,7 @@ public record ReasoningStep(
             int outputTokens) {
         return new ReasoningStep(
             thought,
-            PARALLEL_SENTINEL,
+            PARALLEL_SENTINEL_DUNDER,
             batchPayload,
             null,          // observation filled in after execution
             inputTokens,

@@ -53,7 +53,8 @@ public enum SecurityEventType {
     SKILL_LOADED,       // SkillLoader completed a full load cycle
     SKILL_REFRESHED,    // Manual refresh via GET /api/v1/skills/refresh
     MCP_TOOL_INVOKED,   // External call to an internal tool via MCP server
-    STRUCTURED_OUTPUT_RETRY; // Single-retry path for schema-correction
+    STRUCTURED_OUTPUT_RETRY, // Single-retry path for schema-correction
+    DELEGATE_APPROVAL;  // Admin approved on behalf of another user. §7.33
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -64,7 +65,7 @@ public enum SecurityEventType {
         return switch (this) {
             case VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
                  PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
-                 CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED -> true;
+                 CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED, DELEGATE_APPROVAL -> true;
             default -> false;
         };
     }

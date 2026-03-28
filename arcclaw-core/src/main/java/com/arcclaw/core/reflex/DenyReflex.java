@@ -16,13 +16,13 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.DevSecretSeeder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -56,13 +56,16 @@ public class DenyReflex implements AgentReflex {
     Event<AgentJobCompleted> jobCompletedEvent;
 
     @Inject
-    DevSecretSeeder devSeeder;
+    AuditService auditService;
 
     @Inject
     ObjectMapper objectMapper;
     
     @Inject
     CheckpointResumeHandler checkpointResumeHandler;
+
+    @Inject
+    DelegateApprovalGuard delegateGuard;
 
     @Override
     public boolean matches(String input) {
@@ -87,10 +90,19 @@ public class DenyReflex implements AgentReflex {
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
-                // Seed secrets strictly INSIDE the isolated cron session
-                devSeeder.seedDevSecrets(); // no-op when auto-seed-secrets=false
+                // 1. SessionId explicit — delegation §7.33
+                // Prioritize session ID over cron ID because session IDs (numeric-hyphen-numeric)
+                // would otherwise match the cronId pattern §7.33
+                if (deny.targetSessionId().isPresent()) {
+                    String targetSid = deny.targetSessionId().get();
+                    if (!delegateGuard.isDelegate(userId)) {
+                        log.warnf("[DELEGATE-DENIED] admin=%s attempted to deny session=%s", userId, targetSid);
+                        return "❌ You are not authorized to use approval delegation.";
+                    }
+                    return handleDelegateDenial(targetSid, userId, chatId, context);
+                }
 
-                // 1. CronId explicit — always wins (Fix 3)
+                // 2. CronId explicit — always wins (Fix 3)
                 if (cronId.isPresent()) {
                     return handleCronDenial(cronId.get(), userId, chatId, context);
                 }
@@ -269,32 +281,69 @@ public class DenyReflex implements AgentReflex {
             context.setResumeSignal(true);
             context.setGoal(AgentSentinels.GOAL_DENY_APPROVED);
 
-        // "denial" keyword no longer needed as trigger, we use resumeSignal
-        AgentResult result = WorkspaceContext.run(
-                cronSessionId, cron.userId, cron.chatId,
-                AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> agentLoop.run(
-                        cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        AgentSentinels.GOAL_DENY_APPROVED,
-                        reasoningEngine, 1, context) // maxIterations=1 — denial returns immediately
+            // "denial" keyword no longer needed as trigger, we use resumeSignal
+            AgentResult result = WorkspaceContext.run(
+                    cronSessionId, cron.userId, cron.chatId,
+                    AutonomyLevel.BACKGROUND, AgentRoleEnum.COORDINATOR.toScopedName(),
+                    () -> agentLoop.run(
+                            cronSessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
+                            AgentSentinels.GOAL_DENY_APPROVED,
+                            reasoningEngine, 1, context) // maxIterations=1 — denial returns immediately
+            );
 
-        );
+            cronRepository.markFailed(cron.id, "User denied tool execution.");
 
-        cronRepository.markFailed(cron.id, "User denied tool execution.");
+            // Fallback to TELEGRAM for legacy rows missing channelType
+            ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
 
-        // Fallback to TELEGRAM for legacy rows missing channelType
-        ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
+            String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
 
-        String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
+            jobCompletedEvent.fire(new AgentJobCompleted(
+                    cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
+                    AgentResultFormatter.format(result),
+                    null));
 
-        jobCompletedEvent.fire(new AgentJobCompleted(
-                cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                AgentResultFormatter.format(result),
-                null));
-
-        return "🚫 Cron task denied and cancelled.";
+            return "🚫 Cron task denied and cancelled.";
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
         }
+    }
+
+    private String handleDelegateDenial(
+            String targetSid, String adminId, String adminChatId, MessageContext context) throws Exception {
+
+        log.infof("[DELEGATE-DENY] admin=%s denying session=%s", adminId, targetSid);
+
+        String activeRole = null;
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            Optional<AgentCheckpoint> cpOpt =
+                statefulAgentStore.load(targetSid, role.toScopedName());
+            if (cpOpt.isPresent()
+                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                activeRole = role.toScopedName();
+                break;
+            }
+        }
+
+        if (activeRole == null) {
+            return "❌ Target session not found or not awaiting approval.";
+        }
+
+        AgentCheckpoint cp = statefulAgentStore.load(targetSid, activeRole).orElseThrow(() -> new IllegalStateException(
+                        "Checkpoint disappeared between lookup and load for session " + targetSid));
+
+        // Auto-deny all tools in batch if parallel (§7.21, §7.33)
+        if (cp.hasBatchToolDecisions()) {
+            autoDenyAllPending(targetSid, activeRole);
+        }
+
+        // Log the delegated action §7.33
+        auditService.logSecurityEvent(
+            SecurityEventType.DELEGATE_APPROVAL,
+            adminId,
+            "Admin %s denied session %s".formatted(adminId, targetSid));
+
+        // Trigger resume into the admin's chat context §7.33
+        return triggerBatchResume(targetSid, adminId, adminChatId, activeRole, context);
     }
 }

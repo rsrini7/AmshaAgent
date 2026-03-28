@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.lifecycle.StaleApprovalExpired;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -25,8 +26,8 @@ public class TelegramStaleApprovalObserver {
         }
 
         String toolDisplay = event.pendingToolName() != null
-            && event.pendingToolName().startsWith("parallel:")
-            ? "batch: " + event.pendingToolName().substring("parallel:".length())
+            && event.pendingToolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX)
+            ? "batch: " + event.pendingToolName().substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length())
             : event.pendingToolName();
 
         String msg = String.format(

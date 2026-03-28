@@ -109,4 +109,61 @@ public class ApprovalCheckpointManager {
         return AgentResult.awaitingApproval(
             compositeName, batchJson, sessionId, List.copyOf(history));
     }
+
+    /**
+     * Persists an AWAITING_APPROVAL checkpoint for a parallel tool batch
+     * that contains both HITL-pending and pre-executed tool results. §7.30
+     *
+     * @param originalBatchJson The full batch JSON (all tools).
+     * @param hitlCalls         Only the tools requiring approval (seeds decisions).
+     * @param preExecutedResultsJson JSON map of toolName → ToolResponse for safe tools.
+     */
+    public AgentResult persistBatchWithPreExecuted(
+            AgentExecutionContext context,
+            String compositeName,
+            String originalBatchJson,
+            List<ParallelToolCall> hitlCalls,
+            String preExecutedResultsJson,
+            List<ReasoningStep> history) {
+
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
+
+        AgentCheckpoint cp = agentStore.load(sessionId, agentRole)
+            .orElseGet(() -> {
+                AgentCheckpoint c = new AgentCheckpoint();
+                c.setSessionId(sessionId);
+                c.setAgentRole(agentRole);
+                return c;
+            });
+
+        // Seed per-tool decisions only for HITL-pending tools (§7.20, §7.32)
+        Map<String, String> decisions = new LinkedHashMap<>();
+        hitlCalls.forEach(call ->
+            decisions.put(call.toolName(), AgentSentinels.TOOL_DECISION_PENDING));
+
+        String decisionsJson;
+        try {
+            decisionsJson = objectMapper.writeValueAsString(decisions);
+        } catch (Exception e) {
+            log.errorf("[PARALLEL-HITL] Failed to serialize decisions: %s", e.getMessage());
+            return persist(context, compositeName, originalBatchJson, history);
+        }
+
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setPendingToolName(compositeName); // only HITL tools per §7.32
+        cp.setPendingToolParametersJson(originalBatchJson);
+        cp.setBatchToolDecisions(decisionsJson);
+        cp.setPreExecutedResults(preExecutedResultsJson); // §7.30
+        cp.setOriginalGoal(context.goal());
+        cp.setUpdatedAt(LocalDateTime.now());
+        agentStore.save(cp);
+
+        log.infof("[STATE-MACHINE] Pausing session %s — HITL: %s | pre-executed: %d tools",
+            sessionId, compositeName, hitlCalls.size());
+
+        return AgentResult.awaitingApproval(
+            compositeName, originalBatchJson, sessionId,
+            List.copyOf(history));
+    }
 }

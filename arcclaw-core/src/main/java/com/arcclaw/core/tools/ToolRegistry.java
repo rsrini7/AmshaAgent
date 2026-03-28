@@ -23,6 +23,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
+import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -202,8 +203,12 @@ public class ToolRegistry {
                 
                 var command = tool.sandboxCommand(sanitizedParams);
 
-                String initialOutput = isolationExecutor.executeSandboxed(
+                SandboxResult result = isolationExecutor.executeSandboxed(
                         WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
+                if (result.isInfraFailure()) {
+                    return ToolResponse.infraFailure(result.reason());
+                }
+                String initialOutput = result.output();
 
                 String postProcessedOutput = tool.postProcessOutput(initialOutput, sanitizedParams);
 

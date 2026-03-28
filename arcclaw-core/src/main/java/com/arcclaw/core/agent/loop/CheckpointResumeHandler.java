@@ -39,7 +39,9 @@ public class CheckpointResumeHandler {
     }
 
     @Inject
-    public CheckpointResumeHandler(StatefulAgentStore agentStore, ToolRegistry toolRegistry, ObjectMapper objectMapper) {
+    public CheckpointResumeHandler(StatefulAgentStore agentStore,
+                                   ToolRegistry toolRegistry,
+                                   ObjectMapper objectMapper) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
@@ -72,10 +74,13 @@ public class CheckpointResumeHandler {
                 .orElse(AgentSentinels.GOAL_RESUME_APPROVED);
     }
 
-    public AgentResult handle(AgentExecutionContext context, List<ReasoningStep> history, MessageContext messageContext) {
+    public AgentResult handle(AgentExecutionContext context,
+                              List<ReasoningStep> history,
+                              MessageContext messageContext) {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
         String goal = context.goal();
+
         // 1. Only proceed if the context explicitly signals a resumption attempt
         if (messageContext == null || !messageContext.isResumeSignal()) {
             return null;
@@ -106,7 +111,8 @@ public class CheckpointResumeHandler {
         boolean isDenial = AgentSentinels.GOAL_DENY_APPROVED.equals(goal);
 
         if (isDenial) {
-            log.infof("[AgentLoop] User denied tool execution for session %s, tool %s", sessionId, pendingTool);
+            log.infof("[AgentLoop] User denied tool execution for session %s, tool %s",
+                    sessionId, pendingTool);
 
             checkpoint.setStatus(CheckpointStatus.FAILED);
             checkpoint.setFailReason("User denied tool execution.");
@@ -126,7 +132,8 @@ public class CheckpointResumeHandler {
         }
 
         // 4. Normal Approval Path
-        log.infof("[AgentLoop] Resuming session %s executing pending tool %s", sessionId, pendingTool);
+        log.infof("[AgentLoop] Resuming session %s executing pending tool %s",
+                sessionId, pendingTool);
 
         try {
             // Use ScopedValue context to execute the tool with FULL autonomy
@@ -199,6 +206,7 @@ public class CheckpointResumeHandler {
                 List.copyOf(history));
         }
 
+        // FIX: log the exception message instead of silently swallowing it.
         Map<String, String> decisions = Map.of();
         if (checkpoint.hasBatchToolDecisions()) {
             try {
@@ -207,12 +215,46 @@ public class CheckpointResumeHandler {
                     new TypeReference<Map<String, String>>() {}
                 );
             } catch (Exception e) {
-                log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions.", sessionId);
+                log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions — " +
+                          "defaulting to PENDING for all tools: %s",
+                          sessionId,
+                          e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            }
+        }
+
+        // §7.30: Load pre-executed results and merge or resume
+        Map<String, String> preExecuted = Map.of();
+        if (checkpoint.hasPreExecutedResults()) {
+            try {
+                preExecuted = objectMapper.readValue(
+                    checkpoint.getPreExecutedResults(),
+                    new TypeReference<Map<String, String>>() {});
+            } catch (Exception e) {
+                log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load pre-executed results — " +
+                          "will re-invoke affected tools: %s",
+                          sessionId,
+                          e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
         }
 
         List<ParallelToolCall> completed = new ArrayList<>();
         for (ParallelToolCall call : calls) {
+            // §7.30: Use pre-stored result if available — never re-execute
+            if (preExecuted.containsKey(call.toolName())) {
+                try {
+                    ToolResponse stored = objectMapper.readValue(
+                        preExecuted.get(call.toolName()), ToolResponse.class);
+                    completed.add(call.withResult(stored.output(), stored.success()));
+                    continue;
+                } catch (Exception e) {
+                    log.warnf("[PRE-EXEC-RESTORE] session=%s could not restore result for %s" +
+                              ", re-invoking: %s",
+                              sessionId, call.toolName(),
+                              e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                    // fall through to normal execution if restore failed
+                }
+            }
+
             String decision = decisions.getOrDefault(
                 call.toolName(), AgentSentinels.TOOL_DECISION_PENDING);
 
@@ -231,10 +273,12 @@ public class CheckpointResumeHandler {
                         call.toolName(), call.paramsAsString(), sessionId));
                 completed.add(call.withResult(response.output(), response.success()));
             } catch (Exception e) {
+                // FIX: null-guard e.getMessage() — some exception types return null here.
+                String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                 log.warnf("[PARALLEL-HITL-RESUME] session=%s tool=%s failed: %s",
-                          sessionId, call.toolName(), e.getMessage());
+                          sessionId, call.toolName(), errMsg);
                 completed.add(call.withResult(
-                    "Tool execution failed on resume: " + e.getMessage(), false));
+                    "Tool execution failed on resume: " + errMsg, false));
             }
         }
 
@@ -256,7 +300,7 @@ public class CheckpointResumeHandler {
 
         ReasoningStep completedStep = new ReasoningStep(
             "Human Approved (batch)",
-            ReasoningStep.PARALLEL_SENTINEL,
+            ReasoningStep.PARALLEL_SENTINEL_DUNDER,
             Map.of("batch", completedJson),
             summary,
             0, 0

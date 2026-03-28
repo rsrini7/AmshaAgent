@@ -15,12 +15,15 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.Arc;
+import io.quarkus.arc.Unremovable;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@Unremovable
 public class TelegramAgentHandler {
 
     private static final Logger log = Logger.getLogger(TelegramAgentHandler.class);

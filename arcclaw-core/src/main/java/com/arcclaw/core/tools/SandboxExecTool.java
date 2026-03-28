@@ -19,6 +19,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
+import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.sandbox.ToolExecutionException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
@@ -38,6 +39,13 @@ public class SandboxExecTool implements AgentTool {
     // receives an empty string — this sentinel prevents that.
     private static final String NO_OUTPUT_SENTINEL = "[execution produced no output]";
 
+    // ── Single source of truth for the infra-failure user message.
+    // Never copy-paste this string — always reference this constant.
+    // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
+    private static final String SANDBOX_OFFLINE_MSG =
+        "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed."+
+        "The code was NOT run. Inform the user gracefully that the execution environment is currently offline.";
+
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node", "java", "go");
 
@@ -56,11 +64,11 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
     Optional<String> configuredPythonExe;
 
-    @Override public String name() { return ToolCapability.SANDBOX_EXEC.toolName(); }
-    @Override public String description() { return ToolCapability.SANDBOX_EXEC.description(); }
+    @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
+    @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
     @Override public boolean requiresSandbox() { return false; }
-    public ToolCapability capability() { return ToolCapability.SANDBOX_EXEC; }
+    public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
@@ -147,51 +155,79 @@ public class SandboxExecTool implements AgentTool {
             for (Object arg : extraArgs) commandList.add(arg.toString());
         }
 
-        String output = isolationExecutor.executeSandboxed(
+        SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, commandList, secrets);
-        // ── Null/empty guard: LangChain4J throws "text cannot be null or blank"
-        // if ToolExecutionResultMessage receives empty text.
-        return ToolResponse.success(truncate(output));
+        if (result.isInfraFailure()) {
+            log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s",
+                    lang, sessionId, result.reason());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        return ToolResponse.success(truncate(result.output()));
     }
 
     // ── Java: write ClassName.java → javac → java -cp ────────────────────────
 
+    // Container-side mount point — must match what ProcessIsolationExecutor mounts workspaceRoot as.
+    // The Dockerfile sets WORKDIR /workspace; ProcessIsolationExecutor mounts workspaceRoot there.
+    private static final String CONTAINER_WORKSPACE = "/workspace";
+
     private ToolResponse executeJava(String sessionId, Path workspaceRoot,
-            String code, Map<String, String> secrets) throws Exception {
+        String code, Map<String, String> secrets) throws Exception {
 
         Files.createDirectories(workspaceRoot);
         String className = extractJavaClassName(code);
         Path javaFile = workspaceRoot.resolve(className + ".java");
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
-        List<String> compileCmd = List.of("javac", javaFile.toString());
+        // Use CONTAINER_WORKSPACE path for javac argument
+        List<String> compileCmd = List.of("javac",
+                CONTAINER_WORKSPACE + "/" + className + ".java");
         try {
-            isolationExecutor.executeSandboxed(sessionId, workspaceRoot, compileCmd, secrets);
+            SandboxResult compileResult = isolationExecutor.executeSandboxed(
+                    sessionId, workspaceRoot, compileCmd, secrets);
+            if (compileResult.isInfraFailure()) {
+                log.errorf("[SandboxExecTool] Infra failure (java/compile) session=%s: %s",
+                        sessionId, compileResult.reason());
+                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            }
         } catch (ToolExecutionException e) {
             return ToolResponse.failure(e.exitCode(),
                     nonBlank("Java compilation failed:\n" + e.getMessage()));
         }
 
+        // Use CONTAINER_WORKSPACE for -cp classpath argument
         String javaExe = resolveJavaExecutable();
-        List<String> runCmd = List.of(javaExe, "-cp", workspaceRoot.toString(), className);
-        String output = isolationExecutor.executeSandboxed(
+        List<String> runCmd = List.of(javaExe, "-cp", CONTAINER_WORKSPACE, className);
+        SandboxResult runResult = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        return ToolResponse.success(truncate(output));
+        if (runResult.isInfraFailure()) {
+            log.errorf("[SandboxExecTool] Infra failure (java/run) session=%s: %s",
+                    sessionId, runResult.reason());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        return ToolResponse.success(truncate(runResult.output()));
     }
 
     // ── Go: write main.go → go run ────────────────────────────────────────────
 
     private ToolResponse executeGo(String sessionId, Path workspaceRoot,
-            String code, Map<String, String> secrets) throws Exception {
+        String code, Map<String, String> secrets) throws Exception {
 
         Files.createDirectories(workspaceRoot);
         Path goFile = workspaceRoot.resolve("main.go");
         Files.writeString(goFile, code, StandardCharsets.UTF_8);
 
-        List<String> runCmd = List.of("go", "run", goFile.toString());
-        String output = isolationExecutor.executeSandboxed(
+        // Use CONTAINER_WORKSPACE path — workspaceRoot is the HOST path,
+        // which does not exist inside the Podman container.
+        List<String> runCmd = List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
+        SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        return ToolResponse.success(truncate(output));
+        if (result.isInfraFailure()) {
+            log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s",
+                    sessionId, result.reason());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        return ToolResponse.success(truncate(result.output()));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -248,10 +284,16 @@ public class SandboxExecTool implements AgentTool {
      * "text cannot be null or blank" on the next LLM call.
      */
     private String truncate(String output) {
-        if (output == null || output.isBlank()) return NO_OUTPUT_SENTINEL;
-        return output.length() > MAX_OUTPUT_CHARS
-                ? output.substring(0, MAX_OUTPUT_CHARS) + TRUNCATION_SUFFIX
-                : output;
+        if (output == null || output.isBlank()) {
+            return NO_OUTPUT_SENTINEL;
+        }
+        if (output.length() <= MAX_OUTPUT_CHARS) {
+            return output;
+        }
+        // Codepoint-safe truncation to prevent splitting UTF-16 surrogate pairs
+        int endIndex = output.offsetByCodePoints(
+                0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
+        return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
     }
 
     /**

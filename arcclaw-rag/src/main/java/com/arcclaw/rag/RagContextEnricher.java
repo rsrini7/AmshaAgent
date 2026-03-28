@@ -26,9 +26,10 @@ public class RagContextEnricher implements ContextEnricher {
     // ── Fix Bug D: without a score floor, a single document ("My name is srini")
     // is returned for every query regardless of relevance (weather, code, etc.).
     // Tune this value relative to what TwoTierMemoryService returns:
-    //   vec0 cosine similarity → [0.0, 1.0]  → 0.40 is a good floor
+    //   vec0 cosine similarity → [0.0, 1.0]  → 0.25 is a good floor
     //   FTS5 BM25 rank         → negative    → set arcclaw.rag.min-score=-1.0 to disable
-    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.40")
+    // ingested (2 chunks found) but not injected because similarity score of "who am i" vs "User name: Srini" falls below 0.40
+    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.25")
     double minScore;
 
     // ── Fix Bug A: write-intent goals must never be enriched with past RAG data.

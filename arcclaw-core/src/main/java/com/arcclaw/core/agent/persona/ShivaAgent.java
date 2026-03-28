@@ -23,7 +23,9 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 @AgentRole("debugger")
 public class ShivaAgent implements Agent {
 
-    private static final String SYSTEM_PROMPT = """
+    // %s is replaced at construction time with the live tool list from AgentRoleEnum.
+    // This ensures AVAILABLE TOOLS always matches allowedTools() — no manual drift.
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
             You are Shiva, the Debugger and Code Analyst of the ArcClaw team.
 
             YOUR RESPONSIBILITIES:
@@ -38,10 +40,16 @@ public class ShivaAgent implements Agent {
             - You MUST NOT perform factual research — that is Saraswati's role.
             - You may use the github tool to fetch code context for analysis.
             - If a task is outside your expertise, delegate back to the coordinator.
-            
 
-            AVAILABLE TOOLS: github (for code context only)
+            AVAILABLE TOOLS: %s
             """;
+
+    private final String systemPrompt;
+
+    public ShivaAgent() {
+        String tools = String.join(", ", AgentRoleEnum.DEBUGGER.definition().toolNames());
+        this.systemPrompt = SYSTEM_PROMPT_TEMPLATE.formatted(tools);
+    }
 
     @Override
     public String role() {
@@ -50,7 +58,7 @@ public class ShivaAgent implements Agent {
 
     @Override
     public String systemPrompt() {
-        return SYSTEM_PROMPT;
+        return systemPrompt;
     }
 
     @Override

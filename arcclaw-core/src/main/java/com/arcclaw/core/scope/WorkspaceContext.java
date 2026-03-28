@@ -110,6 +110,13 @@ public final class WorkspaceContext {
         return AUTONOMY.isBound() && AUTONOMY.get() != null ? AUTONOMY.get() : AutonomyLevel.SUPERVISED;
     }
 
+    public static String resolveUserId() {
+        try {
+            return WorkspaceContext.userId();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
 
     public static String userId() {
         return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "";

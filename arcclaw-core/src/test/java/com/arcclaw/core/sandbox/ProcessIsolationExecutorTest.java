@@ -34,16 +34,14 @@ public class ProcessIsolationExecutorTest {
             try {
                 Path workspaceRoot = Files.createTempDirectory("arcclaw-test-ws");
                 try {
-                    // 'java -version' works reliably on all platforms since JDK is required
-                    String output = executor.executeSandboxed(
+                    SandboxResult result = executor.executeSandboxed(
                             TEST_SESSION_ID,
                             workspaceRoot,
                             List.of("java", "-version"),
                             Map.of() // no secrets needed
                     );
-                    assertNotNull(output, "Output should not be null");
-                    // java -version writes to stderr which is redirected — output may contain
-                    // version info
+                    assertNotNull(result, "Result should not be null");
+                    assertNotNull(result.output(), "Output should not be null");
                 } finally {
                     Files.deleteIfExists(workspaceRoot);
                 }
@@ -63,12 +61,12 @@ public class ProcessIsolationExecutorTest {
             try {
                 Path workspaceRoot = Files.createTempDirectory("arcclaw-test-ws");
                 try {
-                    String output = executor.executeSandboxed(
+                    SandboxResult result = executor.executeSandboxed(
                             TEST_SESSION_ID,
                             workspaceRoot,
                             List.of("java", "-version"),
                             Map.of());
-                    assertNotNull(output);
+                    assertNotNull(result);
                 } finally {
                     Files.deleteIfExists(workspaceRoot);
                 }

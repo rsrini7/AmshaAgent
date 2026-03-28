@@ -72,8 +72,14 @@ public sealed interface ChannelCommand
         Optional<String> optArg = Optional.ofNullable(arg);
 
         return switch (cmd) {
-            case "approve" -> new Approve(parseCronId(optArg), parseToolName(optArg));
-            case "deny"    -> new Deny(parseCronId(optArg), parseToolName(optArg));
+            case "approve" -> new Approve(
+                parseCronId(optArg),
+                parseToolName(optArg),
+                parseTargetSessionId(optArg));
+            case "deny"    -> new Deny(
+                parseCronId(optArg),
+                parseToolName(optArg),
+                parseTargetSessionId(optArg));
             case "status"  -> new Status();
             case "halt"    -> new Halt();
             case "reset"   -> new Reset();
@@ -97,11 +103,17 @@ public sealed interface ChannelCommand
     }
 
     private static Optional<String> parseCronId(Optional<String> argOpt) {
-        return argOpt.filter(arg -> arg.contains("-"));
+        // Exclude session IDs (numeric-hyphen-numeric) from cronId matching §75-B2
+        return argOpt.filter(arg -> arg.contains("-") && !arg.matches("\\d+-\\d+"));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
         return argOpt.filter(arg -> !arg.contains("-") && !arg.isBlank());
+    }
+
+    private static Optional<String> parseTargetSessionId(Optional<String> argOpt) {
+        // Session IDs match pattern: digits-digits (e.g. 12345-1711234567890)
+        return argOpt.filter(arg -> arg.matches("\\d+-\\d+"));
     }
 
     // ------------------------------------------------------------------
@@ -116,7 +128,8 @@ public sealed interface ChannelCommand
      */
     record Approve(
         Optional<String> cronId,
-        Optional<String> toolName
+        Optional<String> toolName,
+        Optional<String> targetSessionId
     ) implements ChannelCommand {}
 
     /**
@@ -124,10 +137,12 @@ public sealed interface ChannelCommand
      *
      * @param cronId   if present, targets a specific cron-session approval;
      * @param toolName if present, targets a specific tool in a parallel batch
+     * @param targetSessionId if present, targets a specific session for delegation (§7.33)
      */
     record Deny(
         Optional<String> cronId,
-        Optional<String> toolName
+        Optional<String> toolName,
+        Optional<String> targetSessionId
     ) implements ChannelCommand {}
 
      /**

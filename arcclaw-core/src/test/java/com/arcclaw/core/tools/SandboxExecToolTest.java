@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
+import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.sandbox.ToolExecutionException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -189,7 +190,7 @@ class SandboxExecToolTest {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             String bigOutput = "A".repeat(10_000);
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn(bigOutput);
+                    .thenReturn(SandboxResult.success(bigOutput));
 
             Map<String, Object> params = Map.of("code", "dummy", "language", "python");
             ToolResponse r = tool.execute(params);
@@ -205,7 +206,7 @@ class SandboxExecToolTest {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             String exactOutput = "B".repeat(8192);
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn(exactOutput);
+                    .thenReturn(SandboxResult.success(exactOutput));
 
             Map<String, Object> params = Map.of("code", "dummy", "language", "python");
             ToolResponse r = tool.execute(params);
@@ -220,7 +221,7 @@ class SandboxExecToolTest {
     void null_output_returns_empty_string_success() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn(null);
+                    .thenReturn(SandboxResult.success(null));
 
             Map<String, Object> params = Map.of("code", "pass", "language", "python");
             ToolResponse r = tool.execute(params);
@@ -352,8 +353,8 @@ class SandboxExecToolTest {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             String code = "public class Main { public static void main(String[] a) { System.out.println(\"Hi\"); } }";
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn("") // javac returns empty on success
-                    .thenReturn("Hi\n"); // java run returns output
+                    .thenReturn(SandboxResult.success("")) // javac returns empty on success
+                    .thenReturn(SandboxResult.success("Hi\n")); // java run returns output
 
             Map<String, Object> params = Map.of("code", code, "language", "java");
             ToolResponse r = tool.execute(params);
@@ -410,7 +411,7 @@ class SandboxExecToolTest {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             String code = "package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"Hello\") }";
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn("Hello\n");
+                    .thenReturn(SandboxResult.success("Hello\n"));
 
             Map<String, Object> params = Map.of("code", code, "language", "go");
             ToolResponse r = tool.execute(params);
@@ -470,7 +471,7 @@ class SandboxExecToolTest {
     void all_six_languages_are_accepted() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn("ok");
+                    .thenReturn(SandboxResult.success("ok"));
 
             for (String lang : List.of("python", "python3", "node", "bash")) {
                 Map<String, Object> params = Map.of("code", "x", "language", lang);
@@ -494,4 +495,20 @@ class SandboxExecToolTest {
             return null;
         });
     }
+
+    @Test
+    void infra_failure_returns_infraFailure_toolresponse() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
+                    .thenReturn(SandboxResult.infraFailure("dial tcp: connection refused"));
+
+            Map<String, Object> params = Map.of("code", "print('hi')", "language", "python");
+            ToolResponse r = tool.execute(params);
+
+            assertTrue(r.isInfraFailure(), "Should be flagged as infra failure");
+            assertFalse(r.success());
+            assertTrue(r.output().contains("SANDBOX_OFFLINE"));
+            return null; // Return null to make it a Callable
+        });
     }
+}

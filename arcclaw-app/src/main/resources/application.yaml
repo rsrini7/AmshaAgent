@@ -263,7 +263,7 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
   rag:
-    min-score: 0.40f
+    min-score: 0.25f
     context-chunks: 5
     embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
     embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
@@ -302,6 +302,10 @@ arcclaw:
       ci-pipeline: "${ARCCLAW_API_KEY_CI:key-ci-changeme}"
     rate-limit:
       requests-per-minute: 20
+
+  hitl:
+    pre-executable-tools: ""   # (§75-A1) comma-separated tool names
+    delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs
 
   mcp:
     exposed-tools:
@@ -496,6 +500,8 @@ mp:
           level: WARN
         "org.jboss.resteasy.reactive.common.core":
           level: WARN
+        "dev.langchain4j.internal.RetryUtils":
+          level: ERROR
     console:
       enabled: false
     live-reload:
@@ -644,7 +650,7 @@ mp:
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
     workspace:
-      root-dir: /var/arcclaw/workspaces
+      root-dir: "${ARCCLAW_DATA_DIR:./data}/workspaces"
     sandbox:
       strategy: PODMAN
     autonomy:

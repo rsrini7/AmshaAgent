@@ -24,7 +24,9 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 @AgentRole("researcher")
 public class SaraswatiAgent implements Agent {
 
-    private static final String SYSTEM_PROMPT = """
+    // %s is replaced at construction time with the live tool list from AgentRoleEnum.
+    // This ensures AVAILABLE TOOLS always matches allowedTools() — no manual drift.
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
         You are Saraswati, the Research & Knowledge, Wisdom, and Facts agent of the ArcClaw team.
 
         YOUR RESPONSIBILITIES:
@@ -59,8 +61,15 @@ public class SaraswatiAgent implements Agent {
           use FINISH immediately to say so. Never repeat a tool call that
           already returned insufficient data.
 
-        AVAILABLE TOOLS: github, memory_search
+        AVAILABLE TOOLS: %s
         """;
+
+    private final String systemPrompt;
+
+    public SaraswatiAgent() {
+        String tools = String.join(", ", AgentRoleEnum.RESEARCHER.definition().toolNames());
+        this.systemPrompt = SYSTEM_PROMPT_TEMPLATE.formatted(tools);
+    }
 
     @Override
     public String role() {
@@ -69,7 +78,7 @@ public class SaraswatiAgent implements Agent {
 
     @Override
     public String systemPrompt() {
-        return SYSTEM_PROMPT;
+        return systemPrompt;
     }
 
     @Override

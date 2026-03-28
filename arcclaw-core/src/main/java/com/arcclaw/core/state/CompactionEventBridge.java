@@ -19,13 +19,18 @@ import org.jboss.logging.Logger;
  * to block getMessages() reads until any in-flight compaction for that session
  * has fully committed — preventing the TOCTOU race where the LLM prompt builder
  * reads a thin post-compaction context mid-turn and produces "Done." in 1 token.
+ * <p>
+ * Self-deadlock prevention: the compaction thread itself must NOT block on its own
+ * latch. awaitIfInFlight() is a no-op when called from the thread currently
+ * performing compaction for that session. Without this guard, the compaction thread
+ * calls getMessages() internally, hits the gate it registered, and waits for itself.
  */
 @ApplicationScoped
 public class CompactionEventBridge {
 
     private static final Logger log = Logger.getLogger(CompactionEventBridge.class);
 
-    private static final int AWAIT_TIMEOUT_SECONDS = 15;
+    private static final int AWAIT_TIMEOUT_SECONDS = 30;
 
     /**
      * Per-session latches. Registered synchronously by CompactionHandler BEFORE
@@ -33,6 +38,14 @@ public class CompactionEventBridge {
      * session will always see the latch if compaction is in progress.
      */
     private final ConcurrentHashMap<String, CountDownLatch> inFlightLatches =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Maps sessionId → the ID of the thread currently performing compaction for it.
+     * Set at the start of onCompactionRequested and cleared in finally.
+     * Used by awaitIfInFlight() to detect and skip self-deadlock.
+     */
+    private final ConcurrentHashMap<String, Long> compactionThreadIds =
             new ConcurrentHashMap<>();
 
     @Inject
@@ -45,9 +58,19 @@ public class CompactionEventBridge {
      * Called synchronously by CompactionHandler (order=60) before firing the
      * async event. Guarantees the latch is in the map before AgentDispatchHandler
      * (order=70) runs and before getMessages() is called during prompt building.
+     * <p>
+     * If a latch already exists for this session (duplicate registration), the old
+     * latch is counted down immediately to release any blocked waiters before being
+     * replaced. This prevents threads from being stranded on an orphaned latch.
      */
     public void registerLatch(String sessionId) {
-        inFlightLatches.put(sessionId, new CountDownLatch(1));
+        CountDownLatch prev = inFlightLatches.put(sessionId, new CountDownLatch(1));
+        if (prev != null) {
+            log.warnf("CompactionEventBridge: overwrote existing latch for session %s — " +
+                      "possible duplicate compaction registration; releasing old waiters",
+                      sessionId);
+            prev.countDown();
+        }
         log.debugf("Compaction bridge registered in-flight latch for session %s", sessionId);
     }
 
@@ -55,10 +78,28 @@ public class CompactionEventBridge {
      * Blocks the calling thread until any in-flight compaction for the given
      * session completes, then returns immediately.
      * <p>
-     * Fast-path: if no latch is registered (no compaction in progress), returns
-     * instantly with no locking overhead.
+     * Fast-paths:
+     * <ol>
+     *   <li>No latch registered — no compaction in progress, returns instantly.</li>
+     *   <li>Caller IS the compaction thread for this session — returns instantly to
+     *       prevent self-deadlock (compaction reads chat history via getMessages()
+     *       which would otherwise block on its own latch indefinitely).</li>
+     * </ol>
+     * On timeout, the stale map entry is removed so future calls fast-path
+     * correctly instead of re-entering the timeout loop.
      */
     public void awaitIfInFlight(String sessionId) {
+        // Self-deadlock guard: the compaction thread must never wait on its own latch.
+        // Without this, compactionService.compact() calls getMessages() internally,
+        // which calls awaitIfInFlight(), which blocks on a latch the caller owns —
+        // resulting in a 30-second timeout stall on every compaction that reads history.
+        Long ownerThreadId = compactionThreadIds.get(sessionId);
+        if (ownerThreadId != null && ownerThreadId == Thread.currentThread().getId()) {
+            log.tracef("CompactionEventBridge: skipping self-wait for compaction thread " +
+                       "on session %s", sessionId);
+            return;
+        }
+
         CountDownLatch latch = inFlightLatches.get(sessionId);
         if (latch == null) return;
 
@@ -67,6 +108,10 @@ public class CompactionEventBridge {
             if (!completed) {
                 log.warnf("CompactionEventBridge: timed out waiting for compaction " +
                           "of session %s — proceeding with potentially stale state", sessionId);
+                // Remove the stale entry so future calls for this session fast-path
+                // correctly. Two-arg remove: only removes if value still matches
+                // (safe against a concurrent registerLatch replacing it with a fresh one).
+                inFlightLatches.remove(sessionId, latch);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -76,13 +121,23 @@ public class CompactionEventBridge {
     }
 
     public void onCompactionRequested(@ObservesAsync CompactionRequest request) {
+        // Register this thread as the compaction owner BEFORE calling compact(),
+        // so any getMessages() calls inside compact() skip awaitIfInFlight().
+        compactionThreadIds.put(request.sessionId(), Thread.currentThread().getId());
         try {
             log.debugf("Compaction bridge received request for session %s", request.sessionId());
             compactionService.compact(request.sessionId(), request.userId());
         } catch (Exception e) {
             log.errorf(e, "Compaction failed for session %s: %s",
-                    request.sessionId(), e.getMessage());
+                    request.sessionId(),
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         } finally {
+            // Clear the thread ownership record first, then release the latch.
+            // Order matters: clearing first means any awaitIfInFlight() call that
+            // arrives after this point will go through the normal latch path (which
+            // will immediately return because the latch is removed next).
+            compactionThreadIds.remove(request.sessionId());
+
             // Release the store read-gate BEFORE clearing the boolean flag,
             // so awaitIfInFlight() unblocks as soon as the DB write is done.
             CountDownLatch latch = inFlightLatches.remove(request.sessionId());

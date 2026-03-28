@@ -19,6 +19,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -121,6 +122,13 @@ public class AgentCheckpoint {
     @Column(name = "pending_tool_parameters", columnDefinition = "TEXT")
     @JsonIgnore // Privacy Fix Phase 41: ensure sensitive tool parameters never leak to telemetry/JSON APIs
     private String pendingToolParametersJson;
+
+    /**
+     * JSON map of toolName → serialized ToolResponse for tools that
+     * were pre-executed before the HITL pause. §7.30
+     */
+    @Column(name = "pre_executed_results", columnDefinition = "TEXT")
+    private String preExecutedResults;
 
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
@@ -282,6 +290,13 @@ public class AgentCheckpoint {
         return updatedAt;
     }
 
+    public String getPreExecutedResults() { return preExecutedResults; }
+    public void setPreExecutedResults(String v) { this.preExecutedResults = v; }
+
+    public boolean hasPreExecutedResults() {
+        return preExecutedResults != null && !preExecutedResults.isBlank();
+    }
+
     public CheckpointStatus getStatus() {
         return status;
     }
@@ -304,7 +319,7 @@ public class AgentCheckpoint {
      */
     public boolean isParallelBatch() {
         return pendingToolName != null
-            && pendingToolName.startsWith("__parallel__:");
+            && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX);
     }
 
     /**
@@ -313,7 +328,7 @@ public class AgentCheckpoint {
      */
     public List<String> parallelToolNames() {
         if (!isParallelBatch()) return Collections.emptyList();
-        String composite = pendingToolName.substring("__parallel__:".length());
+        String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length());
         return Arrays.asList(composite.split(","));
     }
 }

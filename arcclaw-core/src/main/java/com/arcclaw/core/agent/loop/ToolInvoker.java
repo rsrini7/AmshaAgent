@@ -43,7 +43,7 @@ public class ToolInvoker {
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
             String rawObservation = response.output();
             String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
-            return new ToolResponse(response.exitCode(), sanitizedObservation, response.success());
+            return new ToolResponse(response.exitCode(), sanitizedObservation, response.success(), response.isInfraFailure());
         } catch (RequiresApprovalException e) {
             // Re-throw for runner checkpoint persistence
             throw e;

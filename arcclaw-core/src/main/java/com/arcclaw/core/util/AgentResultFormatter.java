@@ -1,5 +1,6 @@
 package com.arcclaw.core.util;
 
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 
 /**
@@ -40,9 +41,9 @@ public class AgentResultFormatter {
         StringBuilder sb = new StringBuilder();
 
         // 1. Detect parallel batch
-        boolean isBatch = compositeName != null && compositeName.startsWith("parallel:");
+        boolean isBatch = compositeName != null && compositeName.startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX);
         if (isBatch) {
-            String[] tools = compositeName.substring("parallel:".length()).split(",");
+            String[] tools = compositeName.substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length()).split(",");
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");
             for (String ts : tools) {

@@ -142,8 +142,6 @@ public class AgentLoop {
         final String canonicalRole;
         try {
             AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
-            // Preserve skill: prefix so SystemPromptBuilder sees it intact.
-            // For standard roles, normalize via toScopedName() as before.
             canonicalRole = AgentRoleEnum.isSkillRole(agentRole)
                     ? agentRole
                     : resolvedRole.toScopedName();
@@ -159,15 +157,12 @@ public class AgentLoop {
                 .register(meterRegistry)
                 .increment();
 
-            // Fall through with coordinator as safe default
             return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
                                goal, engine, maxIterations, context);
         }
 
-
         return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations, context);
     }
-
 
     /**
      * Internal execution path — called after role resolution is complete.
@@ -184,27 +179,44 @@ public class AgentLoop {
 
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
+
+        // FIX: Capture userId early into a local variable so the finally block can
+        // pass it to observers without re-reading MDC (which may be unreliable in finally).
+        // Initialized to "unknown" in case WorkspaceContext.userId() throws before assignment.
+        // WorkspaceContext.userId() is already called unconditionally later in this method
+        // (inside AgentExecutionContext construction), so this cannot introduce new failure modes.
+        final String capturedUserId = WorkspaceContext.resolveUserId();
+
         try {
+            // FIX: Store userId in MDC so it appears in structured log output alongside
+            // SESSION_ID and AGENT_ROLE. Previously USER_ID was never set here,
+            // meaning MDC.get(MdcKeys.USER_ID) in the finally block always returned null
+            // and observers always received "unknown".
+            MDC.put(MdcKeys.USER_ID, capturedUserId);
+
             // --- CHECKPOINT RESUME ---
             var existingCheckpoint = agentStore.load(sessionId, canonicalRole);
             if (existingCheckpoint.isPresent()) {
                 var checkpoint = existingCheckpoint.get();
                 CheckpointStatus status = checkpoint.getStatus();
 
-                if (status == CheckpointStatus.IN_PROGRESS || status == CheckpointStatus.AWAITING_APPROVAL) {
+                if (status == CheckpointStatus.IN_PROGRESS
+                        || status == CheckpointStatus.AWAITING_APPROVAL) {
                     List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
                     if (loadedSteps != null) {
                         resumedHistory.addAll(loadedSteps);
                     }
-                    log.infof("Resumed %d steps from active checkpoint (status=%s)", resumedHistory.size(), status);
+                    log.infof("Resumed %d steps from active checkpoint (status=%s)",
+                              resumedHistory.size(), status);
                 } else {
-                    log.debugf("Ignoring terminal checkpoint (status=%s). Starting fresh turn.", status);
+                    log.debugf("Ignoring terminal checkpoint (status=%s). Starting fresh turn.",
+                               status);
                 }
             }
 
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
-                    WorkspaceContext.userId(),
+                    capturedUserId,  // reuse already-captured value
                     WorkspaceContext.chatId(),
                     canonicalRole,
                     goal,
@@ -227,30 +239,34 @@ public class AgentLoop {
                 tryStampChannelInfo(sessionId, canonicalRole, context);
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
                 if (result instanceof AgentResult.Finished) {
-                    agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED);
+                    agentStore.saveAndFinalize(sessionId, canonicalRole,
+                        result.steps(), CheckpointStatus.COMPLETED);
                 } else if (result instanceof AgentResult.Failed f) {
                     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(), f.reason());
                 } else if (result instanceof AgentResult.LoopExceeded l) {
                     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
-                    agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
+                    agentStore.markFailed(cp.getId(),
+                        "Max iterations (" + l.maxIterations() + ") exceeded");
                 }
             }
 
             return result;
+
         } catch (StructuredOutputException e) {
             log.errorf("Structured output failure for session %s: %s", sessionId, e.getMessage());
-            result = AgentResult.failed(e.getMessage(), 
+            result = AgentResult.failed(e.getMessage(),
                     AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
-        } catch (BudgetExceededException 
-                 | BudgetWarningException e) {
+
+        } catch (BudgetExceededException | BudgetWarningException e) {
             // Re-throw so StructuredRetryLoop or higher-level components correctly
             // see the hard stop signal.
             throw e;
+
         } catch (ComplianceViolationException cve) {
-            log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",
-                    sessionId, cve.getEventType());
+            log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s " +
+                       "— halting agent.", sessionId, cve.getEventType());
             result = AgentResult.failed("COMPLIANCE_VIOLATION: " + cve.getMessage(),
                     AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
             try {
@@ -260,32 +276,41 @@ public class AgentLoop {
                 });
             } catch (Exception ignored) {}
             return result;
+
         } catch (Exception e) {
-            log.errorf("Agent execution failed for session %s: %s", sessionId, e.getMessage(), e);
-            result = AgentResult.failed("SYSTEM_ERROR: " + e.getMessage(),
+            // FIX: null-guard e.getMessage() — NullPointerException and several other JVM
+            // exception types return null from getMessage(), which would produce
+            // "SYSTEM_ERROR: null" in both the AgentResult and the checkpoint failure record.
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.errorf("Agent execution failed for session %s: %s", sessionId, errMsg, e);
+            result = AgentResult.failed("SYSTEM_ERROR: " + errMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
-                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + e.getMessage())
+                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg)
                 );
             } catch (Exception ignored) {}
             return result;
+
         } finally {
             if (result != null) {
                 String goalHash = hashUtil.sha256hex(goal);
-                String userId = MDC.get(MdcKeys.USER_ID) != null ? (String) MDC.get(MdcKeys.USER_ID) : "unknown";
                 final AgentResult finalResult = result;
-                observers.forEach(o -> o.onLoopComplete(sessionId, userId, canonicalRole, goalHash, finalResult));
+                // FIX: use capturedUserId (set early in try block) instead of
+                // MDC.get(MdcKeys.USER_ID) — cleaner and not subject to MDC lifecycle.
+                observers.forEach(o -> o.onLoopComplete(
+                    sessionId, capturedUserId, canonicalRole, goalHash, finalResult));
             }
             // --- CONTEXT TEARDOWN ---
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.AGENT_ROLE);
+            MDC.remove(MdcKeys.USER_ID); // FIX: was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
         }
     }
 
     private void tryStampChannelInfo(String sessionId, String canonicalRole,
-                                  MessageContext context) {
+                                     MessageContext context) {
         if (context == null || context.getUser() == null) {
             log.warnf("No MessageContext user for session %s — " +
                       "approval timeout notification will be skipped.", sessionId);
@@ -303,8 +328,7 @@ public class AgentLoop {
             log.warnf("Failed to stamp channel info for session %s — " +
                       "timeout notification may be skipped. Cause: %s",
                       sessionId, e.getMessage());
-            // Never re-throw — channel stamping must not corrupt the
-            // AwaitingApproval result.
+            // Never re-throw — channel stamping must not corrupt the AwaitingApproval result.
         }
     }
 
@@ -312,6 +336,7 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
         String sessionId = WorkspaceScopeHolder.getIfActive();
-        return run(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);
+        return run(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
+                   goal, engine, maxIterations);
     }
 }

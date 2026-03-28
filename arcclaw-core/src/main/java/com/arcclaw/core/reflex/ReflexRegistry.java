@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -23,9 +22,6 @@ public class ReflexRegistry {
 
     @Inject
     AuditService auditService;
-
-    @Inject
-    AuditHashUtil hashUtil;
 
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId,
                                         String input, MessageContext context) {

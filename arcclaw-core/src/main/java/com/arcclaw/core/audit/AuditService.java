@@ -38,6 +38,13 @@ public class AuditService {
         complianceAuditService.recordMandatory(sessionId, userId, agentRole, type, detail);
     }
 
+    /**
+     * Shorthand for mandatory security events (COMPLIANCE tier) without a session context.
+     */
+    public void logSecurityEvent(SecurityEventType type, String userId, String detail) {
+        recordMandatory(null, userId, null, type, detail);
+    }
+
     public void recordLoopCompletion(String sessionId, String userId, String agentRole,
                                      String goalHash, AgentResult result,
                                      int inputTokens, int outputTokens, BigDecimal usdCost) {
