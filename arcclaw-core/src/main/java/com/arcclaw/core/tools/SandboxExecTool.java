@@ -151,7 +151,7 @@ public class SandboxExecTool implements AgentTool {
         }
     }
 
-    // ── Interpreted: Python, Node, Bash ──────────────────────────────────────
+    // Interpreted: Python, Node, Bash
 
     private ToolResponse executeInterpreted(String sessionId, Path workspaceRoot,
             String lang, String code, Map<String, Object> params,
@@ -174,7 +174,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(result.output()));
     }
 
-    // ── Java: write ClassName.java → javac → java -cp ────────────────────────
+    // Java: write ClassName.java → javac → java -cp
 
     // Container-side mount point — must match what ProcessIsolationExecutor mounts workspaceRoot as.
     // The Dockerfile sets WORKDIR /workspace; ProcessIsolationExecutor mounts workspaceRoot there.
@@ -217,7 +217,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(runResult.output()));
     }
 
-    // ── Go: write main.go → go run ────────────────────────────────────────────
+    // Go: write main.go → go run
 
     private ToolResponse executeGo(String sessionId, Path workspaceRoot,
         String code, Map<String, String> secrets) throws Exception {
@@ -239,7 +239,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(result.output()));
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     List<String> buildCommand(String lang, String code) {
         return switch (lang) {

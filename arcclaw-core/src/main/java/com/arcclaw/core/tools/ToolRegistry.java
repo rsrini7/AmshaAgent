@@ -81,11 +81,31 @@ public class ToolRegistry {
         this.secretsCache = Collections.unmodifiableMap(cache);
     }
 
+    // Path safety 
+
     /**
-     * Lists all discovered tool names.
+     * Converts a session ID to a safe directory name for all OS platforms.
      *
-     * @return Unmodifiable list of tool names from CDI-discovered {@link AgentTool} beans.
+     * Windows BUG FIX: Colons (':') are illegal in Windows path components —
+     * they are reserved as drive letter separators (e.g. C:\).
+     * Delegate session IDs use the format "parentId:d:role:shortId", which
+     * causes InvalidPathException on every sandbox tool call inside a sub-agent
+     * on Windows. Example that crashed:
+     *   data/workspaces\c77013fc-...-2ad15af79f03:d:researcher:cf747207
+     *
+     * Fix: replace ':' → '_' for the directory name only.
+     * The session ID string itself is unchanged everywhere else
+     * (DB keys, chat memory, audit logs, CDI scope).
+     *
+     * Linux/Mac: ':' is legal in filenames, but normalizing it here is safe and
+     * makes workspace dirs portable across platforms.
      */
+    static String toSafeDirName(String sessionId) {
+        if (sessionId == null) return sessionId;
+        return sessionId.replace(':', '_');
+    }
+
+    // Tool listing / lookup 
     public List<String> listTools() {
         return StreamSupport.stream(discoveredTools.spliterator(), false)
                 .map(AgentTool::name)
@@ -103,6 +123,8 @@ public class ToolRegistry {
                 .filter(tool -> tool.name().equals(toolName))
                 .findFirst();
     }
+
+    // ── Invocation 
 
     /**
      * Invokes a tool by name after verifying governance constraints.
@@ -160,10 +182,12 @@ public class ToolRegistry {
                     (requiredOp == ToolOperation.NETWORK_OUTBOUND
                             || requiredOp == ToolOperation.VAULT_ACCESS
                             || requiredOp == ToolOperation.EXECUTE_SHELL)) {
-                log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
+                log.infof("Tool '%s' requires approval at level %s (operation=%s)",
+                          toolName, level, requiredOp);
                 try {
                     String paramsJson = objectMapper.writeValueAsString(params);
-                    throw new RequiresApprovalException(toolName, paramsJson, WorkspaceContext.requireSessionId());
+                    throw new RequiresApprovalException(
+                        toolName, paramsJson, WorkspaceContext.requireSessionId());
                 } catch (JsonProcessingException e) {
                     throw new RuntimeException("Failed to serialize tool parameters", e);
                 }
@@ -172,7 +196,8 @@ public class ToolRegistry {
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
             auditService.record(
-                    WorkspaceContext.requireSessionId(), resolveUserId(), WorkspaceContext.agentRole(),
+                    WorkspaceContext.requireSessionId(), resolveUserId(),
+                    WorkspaceContext.agentRole(),
                     SecurityEventType.TOOL_BLOCKED,
                     "tool=" + toolName + " op=" + requiredOp);
             throw new SecurityException(
@@ -181,10 +206,17 @@ public class ToolRegistry {
 
         log.infof("Invoking tool '%s' (operation=%s, level=%s)", toolName, requiredOp, level);
 
-        // Sandbox path
+        // Sandbox path 
         if (tool.requiresSandbox()) {
             var requiredSecrets = extractRequiredSecrets(tool);
-            var workspaceRoot   = Path.of(workspaceRootDir, WorkspaceContext.requireSessionId());
+
+            // FIX: Use toSafeDirName() to strip colons from the session ID.
+            // Windows treats ':' as a drive separator — delegate sub-agent session IDs
+            // like "parentId:d:researcher:cf747207" crash Path.of() on Windows with
+            // InvalidPathException. The safe dir name is only used for the filesystem
+            // path; the original session ID is preserved everywhere else.
+            String safeDir = toSafeDirName(WorkspaceContext.requireSessionId());
+            var workspaceRoot = Path.of(workspaceRootDir, safeDir);
 
             try {
                 if (!Files.exists(workspaceRoot)) {
@@ -200,17 +232,19 @@ public class ToolRegistry {
                 Map<String, Object> sanitizedParams = params.entrySet().stream()
                         .filter(e -> e.getValue() != null)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                
+
                 var command = tool.sandboxCommand(sanitizedParams);
 
                 SandboxResult result = isolationExecutor.executeSandboxed(
-                        WorkspaceContext.requireSessionId(), workspaceRoot, command, requiredSecrets);
+                        WorkspaceContext.requireSessionId(), workspaceRoot,
+                        command, requiredSecrets);
+
                 if (result.isInfraFailure()) {
                     return ToolResponse.infraFailure(result.reason());
                 }
-                String initialOutput = result.output();
 
-                String postProcessedOutput = tool.postProcessOutput(initialOutput, sanitizedParams);
+                String postProcessedOutput = tool.postProcessOutput(
+                    result.output(), sanitizedParams);
 
                 recordToolAudit(toolName, true);
                 return ToolResponse.success(postProcessedOutput);
@@ -235,8 +269,8 @@ public class ToolRegistry {
                     friendly = "Tool '" + toolName + "' failed: " + raw;
                 }
                 log.errorf("Tool '%s' execution failed: %s", toolName, raw);
-                log.debugf(e, "Full stacktrace for tool '%s' failure in session %s", toolName,
-                        WorkspaceContext.requireSessionId());
+                log.debugf(e, "Full stacktrace for tool '%s' failure in session %s",
+                           toolName, WorkspaceContext.requireSessionId());
                 recordToolAudit(toolName, false);
                 return ToolResponse.failure(1, friendly);
             }
@@ -263,21 +297,22 @@ public class ToolRegistry {
             Map<String, Object> params = objectMapper.readValue(paramsJson, Map.class);
             return invokeTool(toolName, params);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Failed to deserialize tool parameters for " + toolName, e);
+            throw new IllegalArgumentException(
+                "Failed to deserialize tool parameters for " + toolName, e);
         }
     }
 
+    // Secrets
     /**
      * Extracts required secrets either from cache (eagerly populated at startup) or directly via reflection.
      */
-    public Map<String, String> extractRequiredSecrets(AgentTool tool) {
+     public Map<String, String> extractRequiredSecrets(AgentTool tool) {
         Map<String, String> cached = secretsCache.get(tool.name());
         if (cached != null) return cached;
-        // Dynamic / MCP tool not in cache — fall back to live reflection
         return extractRequiredSecrets(tool.getClass(), "sandboxCommand");
     }
 
-    // Private helpers
+    // Audit / internal 
 
     /**
      * Records a TOOL_INVOKED audit event using ScopedValues — not MDC.
@@ -288,7 +323,8 @@ public class ToolRegistry {
      */
     private void recordToolAudit(String toolName, boolean success) {
         auditService.record(
-                WorkspaceContext.requireSessionId(), resolveUserId(), WorkspaceContext.agentRole(),
+                WorkspaceContext.requireSessionId(), resolveUserId(),
+                WorkspaceContext.agentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName + " success=" + success);
     }
