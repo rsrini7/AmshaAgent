@@ -1,4 +1,4 @@
-GROQ_API_KEY: "dummy-test-key"
+ARCCLAW_LLM_API_KEY: "dummy-test-key"
 
 arcclaw:
   auto-seed-secrets: false
