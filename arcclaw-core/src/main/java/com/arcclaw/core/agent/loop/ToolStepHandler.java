@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -12,6 +13,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
@@ -42,6 +44,9 @@ public class ToolStepHandler {
             "update", "edit", "pause", "resume", "clear", "disable"
     );
 
+    private static final Pattern GITHUB_RESOURCE_PATTERN = Pattern.compile(
+            "(?i)(github\\.com|[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+|gh\\s+repo|gist)");
+
     @Inject ToolRegistry toolRegistry;
     @Inject Instance<AgentObserver> observers;
     @Inject ToolInvocationGuard guard;
@@ -65,6 +70,27 @@ public class ToolStepHandler {
         }
 
         String toolName = step.action();
+        
+        // Component 5: Coordinator GitHub Misuse Guard
+        if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole())
+                && ToolCapability.GITHUB.toolName().equals(toolName)) {
+            boolean goalHasResource = context.goal() != null && GITHUB_RESOURCE_PATTERN.matcher(context.goal()).find();
+            boolean argsHaveResource = step.actionInput() != null
+                    && step.actionInput().values().stream()
+                        .filter(String.class::isInstance)
+                        .map(String.class::cast)
+                        .anyMatch(v -> GITHUB_RESOURCE_PATTERN.matcher(v).find());
+                        
+            if (!goalHasResource && !argsHaveResource) {
+                log.warnf("[TOOL-GUARD] Coordinator github with no GitHub resource " +
+                          "in session %s — redirecting to delegate_to_agent",
+                          context.sessionId());
+                return StepDecision.retryEngine(
+                    "System: You are the coordinator. Do NOT call github directly. " +
+                    "Delegate GitHub tasks to Saraswati using delegate_to_agent " +
+                    "with agent='saraswati' and a self-contained goal.", 0);
+            }
+        }
         if (toolRegistry.findTool(toolName).isPresent())
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
 

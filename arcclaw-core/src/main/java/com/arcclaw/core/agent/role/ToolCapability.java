@@ -49,6 +49,19 @@ public enum ToolCapability {
         "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} — CORRECT."),
 
     /**
+     * Ability to delegate tasks to a domain expert sub-agent.
+     * <p>
+     * REQUIRED: 'agent' (string name of the role/deity), 'goal' (string task description).
+     * The goal must be fully self-contained. Do not say "fix my code", say
+     * "fix the NullPointerException in UserAuth.java on line 42".
+     * Example: {"agent":"shiva","goal":"Analyze stack trace in app.log and fix the NPE"}
+     */
+    DELEGATE_TO_AGENT("delegate_to_agent",
+        "Delegate a task to a domain expert sub-agent. " +
+        "REQUIRED: 'agent' (string name: shiva, brahma, saraswati, brihaspati, dattatreya), 'goal' (string self-contained task description). " +
+        "Example: {\\\"agent\\\":\\\"shiva\\\",\\\"goal\\\":\\\"Analyze the stack trace in app.log and fix the NPE\\\"}"),
+
+    /**
      * Ability to ingest a document into the RAG knowledge base.
      */
     INGEST_DOCUMENT("ingest_document", "Ingest a document into the RAG knowledge base");

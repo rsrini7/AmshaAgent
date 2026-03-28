@@ -86,7 +86,7 @@ public class TelegramChannelSender implements ChannelSender {
             log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
             return;
         }
-        sendRawToChatId(recipient.channelId(), text);  // ← was platformId()
+        sendRawToChatId(recipient.channelId(), (String) text);  // ← was platformId()
     }
 
     /**

@@ -35,7 +35,7 @@ public class WorkspaceScopeProcessor {
      */
     @BuildStep
     CustomScopeBuildItem customScope() {
-        return new CustomScopeBuildItem(WorkspaceScoped.class);
+        return new CustomScopeBuildItem(org.jboss.jandex.DotName.createSimple(WorkspaceScoped.class.getName()));
     }
 
     /**

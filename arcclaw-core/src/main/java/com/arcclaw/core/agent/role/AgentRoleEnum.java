@@ -36,7 +36,7 @@ public record AgentRoleEnum(String id) {
             "coordinator",
             "Vishnu (Coordinator)",
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
-            7, true, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT), Set.of("vishnu")
+            7, true, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), Set.of("vishnu")
         ),
         "researcher", new RoleDefinition(
             "researcher",

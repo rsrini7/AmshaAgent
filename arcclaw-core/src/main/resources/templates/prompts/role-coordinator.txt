@@ -250,5 +250,8 @@ MANDATORY TIME MATH for 'in N minutes':
 (For 'in N minutes': cron_minute = (current_minute + N) mod 60. Increment hour if result < current_minute.)
 
 {#include prompts/github-tool-rules /}
+
+{#include prompts/delegate-to-agent-rules /}
+
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}

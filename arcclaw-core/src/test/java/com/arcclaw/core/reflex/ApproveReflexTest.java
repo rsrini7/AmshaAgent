@@ -91,6 +91,7 @@ class ApproveReflexTest {
 
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId("cron-session-123");
+        cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
         when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
