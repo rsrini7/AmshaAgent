@@ -292,8 +292,8 @@ arcclaw:
       keep-recent: 7
       max-tokens: 1024
       max-chars: 96000 
-      api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
-      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${quarkus.langchain4j.openai.base-url}}"
+      api-key: "${ARCCLAW_COMPACTION_API_KEY:${ARCCLAW_LLM_API_KEY}}"
+      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
   chat-memory:
