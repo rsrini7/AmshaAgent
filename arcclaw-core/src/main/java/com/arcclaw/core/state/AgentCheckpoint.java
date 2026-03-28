@@ -130,6 +130,9 @@ public class AgentCheckpoint {
     @Column(name = "pre_executed_results", columnDefinition = "TEXT")
     private String preExecutedResults;
 
+    @Column(name = "max_iterations")
+    private Integer maxIterations;
+
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -281,6 +284,9 @@ public class AgentCheckpoint {
     public void setPendingToolParametersJson(String pendingToolParametersJson) {
         this.pendingToolParametersJson = pendingToolParametersJson;
     }
+
+    public Integer getMaxIterations() { return maxIterations; }
+    public void setMaxIterations(Integer maxIterations) { this.maxIterations = maxIterations; }
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;

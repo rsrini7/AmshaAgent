@@ -131,11 +131,9 @@ public class EngineStepHandler {
                     && e.getMessage().contains("tool_use_failed");
 
             if (isToolUseFailed) {
-                // Extract failed_generation — if it's prose, the LLM already has the answer
-                // and tried to embed it in a tool call instead of calling FINISH.
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
-                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose answer — extracting as FINISH", sessionId);
+                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose — extracting as FINISH", sessionId);
                     return StepDecision.terminal(AgentResult.finished(failedGen, List.copyOf(history)));
                 }
 
@@ -152,10 +150,20 @@ public class EngineStepHandler {
                 if (rawError.contains("expected string, but got null")) {
                     correction = "System: Your previous tool call failed because you included an " +
                             "optional field with a null value. " +
-                            "RULE: When you have no value for an optional field (such as 'ref' or 'target'), " +
-                            "OMIT THE FIELD COMPLETELY — do not include it as null or as an empty string, " +
-                            "simply leave it out of the tool call entirely. " +
+                            "RULE: Omit optional fields entirely when you have no value for them. " +
                             "Retry now with only the fields that have real values.";
+
+                // ↓ NEW BRANCH — fires when delegate_to_agent is called with wrong shape
+                } else if (failedGen != null && failedGen.contains("\"agent\"")) {
+                    correction = """
+                        System: Your delegate_to_agent call was malformed. STRICT RULES:
+                        1. Call delegate_to_agent EXACTLY ONCE per turn — never batch multiple agents.
+                        2. Pass exactly TWO flat string parameters only:
+                        {"agent": "<name>", "goal": "<self-contained task>"}
+                        3. Do NOT wrap in an array []. Do NOT nest under "parameters" or any other key.
+                        4. Valid agent names (one at a time): brahma, shiva, saraswati, brihaspati, dattatreya.
+                        Retry now with a single flat call — one agent, one goal string.""";
+
                 } else {
                     correction = "System: Your previous tool call was rejected due to a schema validation error: "
                             + rawError

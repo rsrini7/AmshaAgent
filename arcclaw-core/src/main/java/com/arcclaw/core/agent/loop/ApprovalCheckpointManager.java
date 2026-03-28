@@ -66,6 +66,7 @@ public class ApprovalCheckpointManager {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
+        cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
         agentStore.save(cp);

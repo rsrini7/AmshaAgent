@@ -286,9 +286,14 @@ public class AgentSessionService {
                 MDC.put(MdcKeys.USER_ID, "rest:api");
                 return WorkspaceContext.run(sessionId, "rest:api", sessionId, AutonomyLevel.FULL, canonicalRole, ChannelType.REST_API, () -> {
                     String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
+                    // Restore original budget. Minimum 3: 1 to observe tool result,
+                    // 1 to call FINISH, 1 buffer for a schema correction retry.
+                    int resumeIterations = checkpoint.get().getMaxIterations() != null
+                        ? Math.max(3, checkpoint.get().getMaxIterations())
+                        : 3;
                     MessageContext context = createRestContext(sessionId, resumeGoal);
                     context.setResumeSignal(true);
-                    AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, 1, context);
+                    AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
                     return responseMapper.mapResult(result, false);
                 });
             });

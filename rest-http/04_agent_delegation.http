@@ -76,6 +76,18 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
 ### [DEL-3] Coordinator → Brahma (Coder): code generation delegation
 # Expect 200 Finished: Java record class from Brahma returned via coordinator.
 # Logs: TOOL_INVOKED(delegate_to_agent), inner checkpoint ":d:coder:".
