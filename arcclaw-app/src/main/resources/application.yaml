@@ -112,8 +112,7 @@ quarkus:
         log-responses: false
       chat-model:
         #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
-        #model-name: "llama-3.3-70b-versatile"
-        model-name: "meta-llama/llama-4-scout-17b-16e-instruct"
+        model-name: "${ARCCLAW_LLM_MODEL_NAME:meta-llama/llama-4-scout-17b-16e-instruct}"
         temperature: 0.1
         log-requests: false
         log-responses: false
