@@ -210,8 +210,21 @@ public class ToolStepHandler {
             final ReasoningStep blockedStep = step.withObservation(b.observation());
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), blockedStep));
+
+            // Inner sessions (sub-agents like shiva/debugger) blocked on github:
+            // the LLM would just echo FINISH next turn — skip that call entirely.
+            // Outer coordinator sessions must continue so the LLM can decide the next action.
+            if (context.sessionId() != null
+                    && context.sessionId().contains(":d:")
+                    && "github".equals(step.action())) {
+                log.infof("[TOOL-GUARD] Inner session %s: github blocked — fast-pathing to FINISH " +
+                        "to skip redundant wrap-up LLM call", context.sessionId());
+                return StepDecision.terminal(
+                    AgentResult.finished(b.observation(), List.copyOf(history)));
+            }
             return StepDecision.retryValidation(0);
         }
+        
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
             return StepDecision.terminal(
                     checkpointManager.persist(context, p.toolName(), p.paramsJson(), history));
@@ -284,6 +297,21 @@ public class ToolStepHandler {
             }
             // Goal contains mutating intent — continue so LLM can act on the listed tasks
             log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal detected, continuing loop");
+        }
+
+        // Fast-path: successful delegate_to_agent — specialist's answer IS the coordinator's
+        // final answer. Short-circuits the wrap-up LLM call (~9,500 tokens) and prevents
+        // the re-delegation loop seen in logs (coordinator re-delegates identical goal on iter 2).
+        // Guard: ⏳ prefix means sub-agent hit rate limit — let coordinator retry in that case.
+        if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)
+                && response.success()
+                && !observation.startsWith("⚠️")
+                && !observation.startsWith("⏳")
+                && !observation.startsWith("Tool execution failed")) {
+            log.infof("[STATE-MACHINE] Fast-path exit for delegate_to_agent session=%s", 
+                    context.sessionId());
+            writer.saveAnswer(context.sessionId(), observation);
+            return StepDecision.terminal(AgentResult.finished(observation, List.copyOf(history)));
         }
 
         if (!response.success()
