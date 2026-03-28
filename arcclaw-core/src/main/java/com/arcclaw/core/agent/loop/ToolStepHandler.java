@@ -28,21 +28,14 @@ import org.jboss.logging.Logger;
  * Handles tool name validation, 4-phase tool invocation,
  * and the consecutive-failure circuit breaker.
  *
- * FIX: TOOL-GUARD now silently rewrites coordinator github calls to
- * delegate_to_agent instead of returning a hint to the LLM.
+ * FIX §1: TOOL-GUARD silently rewrites coordinator github calls to
+ * delegate_to_agent instead of returning a retryEngine hint.
+ * This collapses 2–3 wasted iterations (OpenRouter ignores hints) to 1.
  *
- * Previously, the guard returned StepDecision.retryEngine(hint), which
- * relied on the LLM following the hint on the next iteration. Groq followed
- * the hint in 1 shot (2 iterations total). OpenRouter free-tier models ignored
- * the hint and called github again, exhausting the 3-iteration cron budget and
- * producing a garbage FINISH with raw tool JSON embedded in the answer.
- *
- * The rewrite approach:
- * - Intercepts in validateTool() before the LLM sees anything
- * - Builds a delegate_to_agent ReasoningStep from the original github params
- * - Returns StepDecision.proceed(rewrittenStep) so invokeToolAndObserve()
- *   executes delegate_to_agent directly — no extra LLM call, no iteration wasted
- * - delegate_to_agent fast-path in resolveOutcome() then exits in 1 iteration total
+ * FIX §2: delegate_to_agent rewrite params use key "agent" (not "role").
+ * DelegateToAgentTool.execute() calls params.get("agent") — using "role"
+ * caused "Parameter 'agent' is required." to be sent to the user on every
+ * cron HITL resume.
  */
 @ApplicationScoped
 public class ToolStepHandler {
@@ -85,43 +78,51 @@ public class ToolStepHandler {
 
         String toolName = step.action();
 
-        // TOOL-GUARD: coordinator calling github directly
-        // FIX: Instead of returning retryEngine(hint) — which relies on LLM
-        // instruction-following and burns an iteration on every failure —
-        // silently REWRITE the step to delegate_to_agent and proceed directly.
+        // ── TOOL-GUARD: coordinator calling github directly
+        // FIX §1: Silently rewrite github → delegate_to_agent instead of
+        // returning retryEngine(hint). Hint-based redirect requires LLM compliance —
+        // Groq follows it in 1 shot, OpenRouter free-tier ignores it and loops until
+        // the iteration budget is exhausted, producing a garbage FINISH answer.
         //
-        // Result: 1 iteration regardless of LLM provider compliance.
-        // Before fix with OpenRouter free: 2 wasted iterations + garbage FINISH.
+        // FIX §2: Use "agent" as the parameter key, NOT "role".
+        // DelegateToAgentTool.execute() does params.get("agent") — using "role"
+        // caused every cron HITL resume to fail with "Parameter 'agent' is required."
         if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole())
                 && ToolCapability.GITHUB.toolName().equals(toolName)) {
 
             boolean goalHasResource = context.goal() != null
                 && GITHUB_RESOURCE_PATTERN.matcher(context.goal()).find();
+            
+            // AFTER — also pass if a non-empty "target" is explicitly set.
+            // target IS the resource (username for gist, user/repo for repo ops).
+            // The guard's purpose is to block coordinator calling github with NO
+            // resource in mind — if target is set, it clearly knows what to fetch.
             boolean argsHaveResource = step.actionInput() != null
-                && step.actionInput().values().stream()
-                    .filter(String.class::isInstance)
-                    .map(String.class::cast)
-                    .anyMatch(v -> GITHUB_RESOURCE_PATTERN.matcher(v).find());
+                && (step.actionInput().values().stream()
+                        .filter(String.class::isInstance)
+                        .map(String.class::cast)
+                        .anyMatch(v -> GITHUB_RESOURCE_PATTERN.matcher(v).find())
+                    || (step.actionInput().get("target") instanceof String t && !t.isBlank()));
 
             if (!goalHasResource && !argsHaveResource) {
                 log.warnf("[TOOL-GUARD] Coordinator github with no resource in session %s " +
                           "— auto-rewriting to delegate_to_agent (was: retryEngine hint)",
                           context.sessionId());
 
-                // Build delegate_to_agent step from the original github params.
-                // researcher role has the github tool and will execute it directly.
                 String delegateGoal = buildDelegateGoal(
-                    toolName, step.actionInput() != null ? step.actionInput() : Map.of());
+                    toolName,
+                    step.actionInput() != null ? step.actionInput() : Map.of());
 
                 ReasoningStep delegateStep = new ReasoningStep(
                     step.thought(),
                     ToolCapability.DELEGATE_TO_AGENT.toolName(),
-                    Map.of("role", "researcher", "goal", delegateGoal),
+                    // FIX §2: key is "agent", NOT "role" — DelegateToAgentTool.execute()
+                    // calls params.get("agent"). Using "role" caused
+                    // "Parameter 'agent' is required." on every resume.
+                    Map.of("agent", "researcher", "goal", delegateGoal),
                     null,
                     0, 0
                 );
-                // proceed — invokeToolAndObserve() will execute delegate_to_agent,
-                // which fast-paths to FINISH via resolveOutcome() in the same iteration.
                 return StepDecision.proceedWithFailures(delegateStep, consecutiveFailures);
             }
         }
@@ -131,7 +132,8 @@ public class ToolStepHandler {
 
         if (!dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
-            log.debugf("[ToolStepHandler] '%s' resolved as dynamic MCP tool — proceeding", toolName);
+            log.debugf("[ToolStepHandler] '%s' resolved as dynamic MCP tool — proceeding",
+                       toolName);
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
         }
 
@@ -329,17 +331,14 @@ public class ToolStepHandler {
                 return StepDecision.terminal(
                     AgentResult.finished(observation, List.copyOf(history)));
             }
-            log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal detected, " +
-                       "continuing loop");
+            log.debugf("[STATE-MACHINE] manage_schedule list — mutating goal, continuing loop");
         }
 
         // Fast-path: successful delegate_to_agent.
-        // The specialist's answer IS the coordinator's final answer.
-        // Prevents the re-delegation loop and the ~9,500-token wrap-up LLM call.
-        // Guard conditions:
-        //   ⏳ = sub-agent rate-limited — let coordinator retry
-        //   ⚠️ = sub-agent system error — let coordinator decide
-        //   "Tool execution failed" = DelegateToAgentTool exception
+        // response.success() guard is REQUIRED — without it, a failed delegate
+        // (e.g. "Parameter 'agent' is required.") gets sent to Telegram as a
+        // finished answer because the error text doesn't start with ⏳/⚠️/
+        // "Tool execution failed".
         if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)
                 && response.success()
                 && !observation.startsWith("⚠️")
@@ -381,7 +380,6 @@ public class ToolStepHandler {
 
     /**
      * Converts a tool name + args map into a natural-language goal for delegate_to_agent.
-     * The researcher agent parses natural language well, so descriptive text is fine.
      *
      * Examples:
      *   github + {action=gist, command=list, target=rsrini7}
@@ -399,9 +397,11 @@ public class ToolStepHandler {
         StringBuilder sb = new StringBuilder("Use the ").append(toolName).append(" tool");
         if (!action.isBlank()  && !"null".equals(action))  sb.append(" with action=").append(action);
         if (!command.isBlank() && !"null".equals(command)) sb.append(" command=").append(command);
-        if (!target.isBlank()  && !"null".equals(target))  sb.append(" target=").append(target);
+        if (!target.isBlank()  && !"null".equals(target))  sb.append(" for user/resource=").append(target);
         sb.append(" and return the complete results.");
         return sb.toString();
+        // Produces: "Use the github tool with action=gist command=list for user/resource=rsrini7
+        //            and return the complete results."
     }
 
     private boolean isListOnlyGoal(String goal) {

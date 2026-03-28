@@ -342,12 +342,14 @@ public class AgentLoop {
         if (!ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) return Optional.empty();
         if (observation == null || observation.isBlank()) return Optional.empty();
 
-        // ⏳ = sub-agent rate-limited — must let coordinator retry delegation
-        // ⚠️ = sub-agent system error — let coordinator decide next action
-        // "Tool execution failed" = DelegateToAgentTool caught an exception
+        // FIX: also guard against tool failure messages that don't start with ⏳/⚠️.
+        // e.g. "Parameter 'agent' is required." — success=false but no sentinel prefix.
+        // Without this guard, tool errors are sent to Telegram as finished answers.
         if (observation.startsWith("⏳")
                 || observation.startsWith("⚠️")
-                || observation.startsWith("Tool execution failed")) {
+                || observation.startsWith("Tool execution failed")
+                || observation.startsWith("Parameter ")        // ← tool param validation errors
+                || observation.startsWith("❌")) {             // ← explicit failure prefix
             return Optional.empty();
         }
 

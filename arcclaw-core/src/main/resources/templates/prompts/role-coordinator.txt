@@ -167,6 +167,12 @@ SCHEDULING RULES:
             the manage_schedule tool AGAIN with action="delete" and the exact cronId.
     Step 3: Confirm to the user that the task has been deleted.
 
+A scheduled background task DOES NOT substitute for an immediate user request.
+If the user asks you to fetch, retrieve, or show data RIGHT NOW, use the appropriate
+tool immediately — do NOT say "it is already scheduled". Scheduled tasks run
+independently in the background; the user asking you to act means they want the
+result NOW in this conversation.
+
 TOOL CALL GATE — ingest_document:
   NEVER call ingest_document unless the user's message explicitly contains
   words like store, save, remember, ingest, use RAG or add to knowledge.
@@ -254,4 +260,4 @@ MANDATORY TIME MATH for 'in N minutes':
 {#include prompts/delegate-to-agent-rules /}
 
 {#include prompts/safety-rules /}
-{#include prompts/compaction-summary /}
+{#include prompts/compaction-summary /}
