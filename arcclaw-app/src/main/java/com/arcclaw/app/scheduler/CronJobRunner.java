@@ -39,7 +39,7 @@ public class CronJobRunner {
     @Inject
     AgentCronRepository cronRepository;
 
-    @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "2")
+    @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
     int cronMaxIterations;
 
     public void execute(AgentCronEntity job) {
@@ -55,7 +55,11 @@ public class CronJobRunner {
         
         try {
             String effectiveGoal = job.goal + 
-                "\n[SYSTEM CONSTRAINT: Do NOT call schedule_task. Execute the goal directly.]";
+                "\n[SYSTEM CONSTRAINT: CRON EXECUTION MODE. " +
+                "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
+                "For message delivery or greeting goals, use the FINISH action immediately with the message text as your answer. " +
+                "The framework delivers your output — you do NOT need to call any tool to 'send' it. " +
+                "NEVER output empty text. NEVER call schedule_task.]";
 
             AgentResult result = WorkspaceContext.run(
                 cronSessionId, 
