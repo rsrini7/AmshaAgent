@@ -635,7 +635,7 @@ ADD a detection + format method:
           }
           sb.append("\n");
           sb.append("**Per-tool:** `approve <toolName>` or `deny <toolName>`\n");
-          sb.append("**All at once:** `approve` (approve all) or `deny` (deny all)");
+          sb.append("**All at once:** `approve` \(approve all\) or `deny` \(deny all\)");
           return sb.toString();
       }
       // Single-tool (existing format unchanged)

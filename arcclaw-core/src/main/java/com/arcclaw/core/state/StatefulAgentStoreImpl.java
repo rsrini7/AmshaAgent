@@ -1,6 +1,8 @@
 package com.arcclaw.core.state;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -467,5 +469,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             log.errorf("Failed to check if batch decided: %s", e.getMessage());
             return false;
         }
+    }
+
+    @Override
+    @Transactional
+    public List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.status = :status " +
+                "AND c.updatedAt < :cutoff", AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("cutoff", LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC))
+                .getResultList();
     }
 }

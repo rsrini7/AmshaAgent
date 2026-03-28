@@ -529,3 +529,23 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
      the LLM. Denied tools carry observation:
      "User denied this tool execution." with success=false.
      The LLM sees the full picture and decides next steps.
+
+7.24 MUST: When a parallel batch HITL pause is sent over Telegram,
+     the message MUST include an inline keyboard with one row per tool:
+       [✅ github]  [🚫 github]
+       [✅ manage_schedule]  [🚫 manage_schedule]
+       [✅ Approve All]  [🚫 Deny All]
+     Text-based commands remain supported for non-Telegram channels.
+
+7.25 MUST: Inline keyboard callback data MUST follow the format:
+       BATCH_APPROVE:<sessionId>:<toolName>
+       BATCH_DENY:<sessionId>:<toolName>
+       BATCH_APPROVE_ALL:<sessionId>
+       BATCH_DENY_ALL:<sessionId>
+     The sessionId in the callback ensures the correct session is
+     targeted even if the user has multiple active sessions.
+
+7.26 MUST: AWAITING_APPROVAL checkpoints older than
+     arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
+     by the WorkspaceManager GC scheduler. The user MUST receive a
+     Telegram notification that their approval window expired.

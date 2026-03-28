@@ -2474,7 +2474,40 @@ Harden the API key registry against timing attacks and length oracles using HMAC
 
 - ✅ `ApiKeyRegistryTest`: Verified HMAC and constant-time scanning.
 - ✅ `ApiKeyRegistryVaryingLengthKeyTest`: Verified robustness against length oracle attacks.
-- ✅ `mvn clean verify`: All 300 tests passed.
+- ✅ `mvn clean- ✅ Verified: All Phase 72 tests passed.
+
+---
+
+# Phase 73 — Telegram Inline Keyboard & Stale Checkpoint GC ✅
+
+Implement interactive Telegram inline keyboards for parallel batch HITL approvals and a garbage collection mechanism for stale `AWAITING_APPROVAL` checkpoints.
+
+## Design Decisions
+
+> [!IMPORTANT]
+> **Telegram Inline Keyboard**: For parallel tool batches, the traditional `/approve` and `/deny` commands are augmented with interactive inline buttons. Each tool in the batch gets a row with "✅ ToolName" and "🚫 ToolName". A final row provides "Approve All" and "Deny All" options.
+> **Callback Data Encoding**: Telegram callback data is strictly capped at 64 bytes. We use a serialized format: `BATCH_ACTION:safeSessionId[:safeToolName]`.
+> **Stale Checkpoint GC**: Expands `SessionReaper` to automatically deny HITL pauses that have exceeded the TTL (default 24 hours). This ensures agent state doesn't leak or block indefinitely.
+
+## Proposed Changes
+
+### Core Module — State & GC
+1. **`BatchDecisionUtil.java`**: Utility to parse `parallel:tool1,tool2` strings and manage batch outcomes.
+2. **`StatefulAgentStore`**: Added `findStaleAwaitingApproval(Instant)` to query for expired pauses.
+3. **`SessionReaper`**: Updated to sweep stale approvals, firing a `StaleApprovalExpired` event upon auto-denial.
+
+### Telegram Module — Interactive UI
+1. **`BatchHitlKeyboardBuilder.java`**: Generates Telegram `inline_keyboard` JSON and parses callback payloads.
+2. **`TelegramChannelSender.java`**: Enhanced with `sendWithKeyboard` and `editMessage` support via Camel headers.
+3. **`TelegramCallbackHandler.java`**: New handler to process button clicks, execute reflexes, and dynamically update the message keyboard state.
+4. **`TelegramStaleApprovalObserver.java`**: Notifies users when their approval window has expired.
+
+## Verification
+- ✅ `BatchDecisionUtilTest`: Verified tool name extraction logic.
+- ✅ `WorkspaceManagerGcSweepTest`: Verified stale checkpoint auto-denial and heartbeat cleanup.
+- ✅ `TelegramChannelSenderTest`: Verified keyboard header propagation.
+- ✅ Verified `AgentDispatchHandler` correctly intercepts `parallel:` results to trigger interactive prompts.
+
 
 ---
 

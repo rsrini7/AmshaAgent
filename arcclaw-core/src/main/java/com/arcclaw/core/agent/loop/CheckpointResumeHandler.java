@@ -200,13 +200,15 @@ public class CheckpointResumeHandler {
         }
 
         Map<String, String> decisions = Map.of();
-        try {
-            decisions = objectMapper.readValue(
-                checkpoint.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {}
-            );
-        } catch (Exception e) {
-            log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions.", sessionId);
+        if (checkpoint.hasBatchToolDecisions()) {
+            try {
+                decisions = objectMapper.readValue(
+                    checkpoint.getBatchToolDecisions(),
+                    new TypeReference<Map<String, String>>() {}
+                );
+            } catch (Exception e) {
+                log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions.", sessionId);
+            }
         }
 
         List<ParallelToolCall> completed = new ArrayList<>();

@@ -8,6 +8,7 @@ import io.quarkus.runtime.StartupEvent;
 import org.apache.camel.CamelContext;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.telegram.TelegramComponent;
+import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -18,6 +19,9 @@ public class TelegramChannelRoute extends RouteBuilder {
 
     @Inject
     TelegramAgentHandler telegramAgentHandler;
+
+    @Inject
+    TelegramCallbackHandler telegramCallbackHandler;
 
     @Inject
     CamelContext camelContext;
@@ -57,7 +61,12 @@ public class TelegramChannelRoute extends RouteBuilder {
 
         from("telegram:bots?timeout=10")
                 .routeId("telegram-bot")
-                .bean(telegramAgentHandler, "receiveMessage");
+                .choice()
+                    .when(body().isInstanceOf(IncomingCallbackQuery.class))
+                        .bean(telegramCallbackHandler, "handleCallback")
+                    .otherwise()
+                        .bean(telegramAgentHandler, "receiveMessage")
+                .end(); // Added .end() here
     }
 
     void onStart(@Observes StartupEvent ev) {

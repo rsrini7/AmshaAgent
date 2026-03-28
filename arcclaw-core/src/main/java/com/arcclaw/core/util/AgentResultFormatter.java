@@ -62,13 +62,13 @@ public class AgentResultFormatter {
 
         String cronPrefix = isCron && cronId != null ? " " + cronId : "";
         if (isBatch) {
-            sb.append("To approve/deny specific tools:\n")
+            sb.append("**To approve/deny specific tools:**\n")
               .append(" `/approve").append(cronPrefix).append(" <toolName>`\n")
               .append(" `/deny").append(cronPrefix).append(" <toolName>`\n\n")
-              .append("Or decide all remaining at once:\n")
-              .append(" `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("`");
+              .append("**Or decide all at once:**\n")
+              .append(" `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("` (approve/deny all)");
         } else {
-            sb.append("Reply `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("`");
+            sb.append("Reply `/approve").append(cronPrefix).append("` or `/deny").append(cronPrefix).append("` (confirm/cancel)");
         }
 
         return sb.toString();

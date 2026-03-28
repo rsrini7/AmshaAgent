@@ -1,9 +1,12 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import java.util.List;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -125,7 +128,17 @@ public class AgentDispatchHandler implements MessageHandler {
         channelPluginRegistry.find(context.getChannelType())
             .map(ChannelPlugin::sender)
             .ifPresentOrElse(
-                s -> s.sendRaw(context.getUser(), output),
+                s -> {
+                    if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith("parallel:")) {
+                        // Pass down as a structured reply so plugins (e.g. Telegram) can build keyboards
+                        s.send(context.getUser(), List.of(
+                            new ReplyNode.Text(output),
+                            new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
+                        ));
+                    } else {
+                        s.sendRaw(context.getUser(), output);
+                    }
+                },
                 () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s — result reply dropped", context.getChannelType())
             );
 
