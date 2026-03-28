@@ -2925,3 +2925,23 @@ graph TD
 - ✅ `mvn clean verify`: 884/884 tests green, 0 failures, 0 errors.
 - ✅ All prior Phase 53–69 tests remain unaffected.
 - ✅ Import cleanup: FQN references replaced with proper imports in all modified files.
+
+---
+
+## Phase 71: Parallel Execution Hardening ✅
+
+Addressed technical debt and production resiliency vectors exposed shortly after Phase 70 functionality implementation. 
+
+### Key Improvements
+
+#### Resource Isolation & Context Integrity
+Because parallel requests execute within JDK Virtual Threads off a specific thread-local scope, standard context propagation natively breaks. Hardening fixed this boundary by manually obtaining `Context.current()` into an `otelContext` and establishing a new `otelContext.makeCurrent()` closure within each task invocation wrapped inside a managed `try-with-resources` block over `WorkspaceExecutors.newVirtualThreadPerTaskExecutor()`.
+
+#### Partial Execution Mutability
+Instead of halting entire parallel tasks when overlapping tools arise, a two-pass deduplication methodology filters redundant parallel signatures and proxies to a cached `__DUPLICATE_SUPPRESSED__` dummy observation, reducing cost latency constraints. Furthermore, independent timeout checks (`arcclaw.parallel.tool-timeout-seconds`) via `Future.get(timeout, unit)` ensure misbehaving remote providers (e.g. frozen APIs) gracefully timeout single steps while letting sibling parallel components succeed.
+
+#### Synchronization Taming
+In `CheckpointResumeHandler`, an obsolete `synchronized(history)` intrinsic lock was permanently dismantled since `resumeParallelBatch()` guarantees serial execution sequences. Additionally, `ChatMemoryWriter.write()` is now sequentially flushed directly post-batch, guaranteeing the state remains preserved on disk.
+
+#### Observability & GC Optimization
+`MetricsAgentObserver` was patched to silently discard aggregate metric events originating from the `PARALLEL_SENTINEL`. At the same time, MDC tags (`PARALLEL_BATCH_SIZE` and `PARALLEL_TOOLS`) explicitly log parallel spans across the trace collector. For memory heap compression, `ParallelToolCall` was sanitized to utilize a single static `ObjectMapper`, circumventing substantial object churn per record allocation.

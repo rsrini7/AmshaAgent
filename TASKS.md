@@ -1423,3 +1423,16 @@
 - [x] Embed `GovernanceStrategy.assertWithinBudget()` pre-flight in `ParallelToolStepExecutor`. <!-- id: 740 -->
 - [x] Embed `RateLimitTracker.isAnyBackingOff()` warning in `ParallelToolStepExecutor`. <!-- id: 741 -->
 - [x] Final verification: mvn clean verify 884/884 tests green. <!-- id: 742 -->
+
+---
+
+## Phase 71 — Parallel Tool Execution Hardening ✅
+- [x] Integrate `try-with-resources` for `ExecutorService` closing in `ParallelToolStepExecutor`.
+- [x] Implement OTel context propagation using `otelContext.makeCurrent()` and `Scope _`.
+- [x] Enforce persistence consistency by executing `chatMemoryWriter.write()` after batch execution.
+- [x] Add partial deduplication (skipping duplicated instances in the same batch).
+- [x] Apply per-tool timeouts configurable via `arcclaw.parallel.tool-timeout-seconds`.
+- [x] Inject `PARALLEL_BATCH_SIZE` and `PARALLEL_TOOLS` to MDC before metric increment in `MetricsAgentObserver`.
+- [x] Avoid duplicate counting by skipping `ReasoningStep.PARALLEL_SENTINEL` in metric calculations.
+- [x] Code Quality: Optimize `ParallelToolCall` ObjectMapper, eliminate spurious `synchronized(history)` in `CheckpointResumeHandler`.
+- [x] Final verification build: mvn clean verify passes (884 tests green).
