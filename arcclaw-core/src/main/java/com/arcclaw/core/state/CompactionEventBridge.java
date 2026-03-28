@@ -94,7 +94,7 @@ public class CompactionEventBridge {
         // which calls awaitIfInFlight(), which blocks on a latch the caller owns —
         // resulting in a 30-second timeout stall on every compaction that reads history.
         Long ownerThreadId = compactionThreadIds.get(sessionId);
-        if (ownerThreadId != null && ownerThreadId == Thread.currentThread().getId()) {
+        if (ownerThreadId != null && ownerThreadId == Thread.currentThread().threadId()) {
             log.tracef("CompactionEventBridge: skipping self-wait for compaction thread " +
                        "on session %s", sessionId);
             return;
@@ -123,7 +123,7 @@ public class CompactionEventBridge {
     public void onCompactionRequested(@ObservesAsync CompactionRequest request) {
         // Register this thread as the compaction owner BEFORE calling compact(),
         // so any getMessages() calls inside compact() skip awaitIfInFlight().
-        compactionThreadIds.put(request.sessionId(), Thread.currentThread().getId());
+        compactionThreadIds.put(request.sessionId(), Thread.currentThread().threadId());
         try {
             log.debugf("Compaction bridge received request for session %s", request.sessionId());
             compactionService.compact(request.sessionId(), request.userId());
