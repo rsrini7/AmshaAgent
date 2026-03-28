@@ -136,3 +136,70 @@ These are classic "works on my machine, crashes in production" issues that you s
 **The Issue:** Looking at the snippet for `merge(List<ScoredChunk> l1, List<ScoredChunk> l2)` inside your RAG module.
 **The Bug:** If the lists passed into `mergeRrf` or `toScoredChunks` are mutable lists attached to a shared session state (e.g., an in-memory cache of recent chat history), iterating over them while another Virtual Thread (like the background `AsyncPersistenceEngine` or a concurrent Telegram message) modifies the history will throw a `ConcurrentModificationException`.
 **The Fix:** Ensure that data passed to your RAG compaction and merge utilities are strictly immutable snapshots (`List.copyOf(...)`), or wrap the shared memory structures in thread-safe collections (`CopyOnWriteArrayList`).
+
+---
+
+Gemini Round 3:
+
+This is an incredibly robust foundation. The transition to UUIDv4 for sessions, the codified boundaries between channel adapters and core logic, and the explicit isolation of the Podman sandbox represent a Tier-1 architectural state. 
+
+Because the system is now structurally sound, the next evolution requires looking at **behavioral edge cases**—specifically how the asynchronous nature of LLMs interacts with the strict, unforgiving constraints of the Telegram Bot API.
+
+Here is a Senior Architect’s breakdown of the use cases this system is now primed for, followed by 4 hidden "ticking time bomb" failures lurking in your Telegram/Agent integration (with zero database changes required to fix them).
+
+---
+
+### 1. Prime Use Cases Unlocked by P75
+
+**A. The "On-Call" SRE / DevOps Auto-Remediator**
+* **How it works:** You expose a new skill (e.g., `kubernetes-logs`). A developer tags the bot in a Telegram outage channel: `/ask check why pod-xyz is crashing --role debugger`. 
+* **Why it shines:** The `Debugger` agent requests log execution, the `BatchHitlKeyboardBuilder` renders an Inline Keyboard in Telegram asking for execution approval, the human clicks ✅, and the sandbox safely executes the diagnostic script, parses the logs, and returns the root cause.
+
+**B. The Deep-Research Synthesizer (Asynchronous)**
+* **How it works:** A user requests a massive architectural breakdown. 
+* **Why it shines:** Instead of hanging the HTTP thread, the `AgentStateMachineRunner` loops in the background on a Virtual Thread. As it searches memory, reads docs via `IngestDocumentTool`, and writes sandbox code, it pushes real-time status updates. Finally, the `Synthesizer` role resolves conflicts and pushes a beautifully formatted MarkdownV2 report back to Telegram.
+
+**C. Unattended Cron Intelligence**
+* **How it works:** `/cron 0 9 * * * Review overnight server logs and summarize anomalies`.
+* **Why it shines:** The `AgentCronScheduler` wakes up, assigns the `Coordinator` role, executes the LLM reasoning loop in the background completely headless, and uses `ChannelCronNotificationDispatcher` to ping the Telegram user with the formatted summary when it finishes. 
+
+---
+
+### 2. Critical Hidden Failures (No DB Changes Needed)
+
+These are specific, runtime failures that will occur during extended Telegram usage. 
+
+#### Failure A: The 64-Byte Callback Truncation Trap (CRITICAL)
+**The Bug:** In `BatchHitlKeyboardBuilder.java`, you have a safeguard method `truncateCb()` that chops callback data to 64 bytes (Telegram's hard API limit). 
+**The Scenario:** 1. The callback string is `"BATCH_APPROVE:" + sessionId (36 chars) + ":" + toolName`.
+2. `"BATCH_APPROVE:" + UUID` consumes ~50 bytes. 
+3. If an LLM requests a tool named `github_create_pull_request` (26 chars), the total is 76 bytes.
+4. `truncateCb` blindly chops it to 64 bytes. The payload becomes: `BATCH_APPROVE:uuid-1234:github_create_`
+5. When the user clicks ✅, `ApproveReflex` receives the truncated tool name (`github_create_`). It searches the pending checkpoint for `github_create_pull_request`, fails to find a match, and the approval silently fails. The agent is permanently stuck `AWAITING_APPROVAL`.
+**The Fix:** You must hash the tool name, or rely on integer indexes (e.g., `BATCH_APPROVE:uuid:1` for the 1st tool in the array) in the callback data, mapping the index back to the tool name upon receiving the callback.
+
+#### Failure B: The MarkdownV2 "Backtick Breakout" (Message Drop)
+**The Bug:** In `TelegramMarkdownV2Renderer.java`, the `CodeBlock` permit blindly wraps the LLM's code output in triple backticks: `yield "```\n" + cb.code() + "\n```";`.
+**The Scenario:** 1. The LLM generates a bash script or markdown parser that contains triple backticks *inside* the code itself (e.g., `echo "```bash"`).
+2. The renderer outputs: ```` ```bash echo "```bash" ``` ````.
+3. Telegram parses the *inner* backticks as the closing tag. The remainder of the message is now treated as standard MarkdownV2 text, which requires strict escaping of characters like `-`, `>`.
+4. Because it isn't escaped, the Telegram API throws `HTTP 400 Bad Request: can't parse entities` and completely drops the agent's final message. The user sees nothing.
+**The Fix:** In `TelegramMarkdownV2Renderer`, intercept `cb.code()` and replace any internal triple backticks (e.g., with `'''` or `\`\`\``) before wrapping it.
+
+#### Failure C: The Out-of-Order Chunking Race Condition
+**The Bug:** In `TelegramChannelSender.sendRawToChatId`, if an LLM generates a response larger than 4,096 characters, you chunk it and run a fast `for` loop, calling `producerTemplate.sendBodyAndHeader(...)` for each chunk.
+**The Scenario:**
+Camel's Telegram component dispatches these HTTP requests to the Telegram API almost simultaneously. Telegram makes *no* guarantees about the ordering of rapidly fired independent messages. 
+**The Impact:** The user receives Chunk 2, then Chunk 3, then Chunk 1. The LLM's carefully synthesized architectural report is completely unreadable.
+**The Fix:** You must introduce a slight blocking delay (e.g., `Thread.sleep(250)`) between chunk dispatches, or ideally, use a synchronous HTTP client for chunking to ensure Chunk 1 returns HTTP 200 before Chunk 2 is transmitted.
+
+#### Failure D: Caffeine Eviction Race vs. Long LLM Loops
+**The Bug:** `TelegramAgentHandler` uses a Caffeine cache (`processingFlags`) with `.expireAfterAccess(Duration.ofMinutes(10))` to ensure only one message is processed per chat at a time.
+**The Scenario:**
+1. A user gives the agent a massive coding task.
+2. The agent loops 5 times, executing sandbox code, compiling, getting errors, and retrying. This takes 11 minutes.
+3. At minute 10, Caffeine automatically evicts the `AtomicBoolean` flag from memory.
+4. At minute 11, the user types `"status?"`. 
+5. Because the flag was evicted, `TelegramAgentHandler` allows the new message to enter the pipeline concurrently while the 11-minute loop is *still running*.
+6. Both Virtual Threads now concurrently mutate the `WorkspaceContext` and `PersistentChatMemoryStore` for the same session. 
+**The Fix:** Increase the `FLAG_TTL` to something well beyond your maximum possible LLM timeout + sandbox execution bounds (e.g., 30 or 60 minutes).
