@@ -217,6 +217,23 @@ if ($issues.Count -gt 0) {
 }
 """
 
+[tasks."env:recover"]
+description = "Internal: Auto-recover stranded .env files from aborted builds"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+if (Test-Path '.env.build-backup') {
+    # If an imposter .env (like a stranded build.env) exists, delete it
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    
+    # Restore the true backup
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup from a previously aborted build.'
+}
+"""
+
 [tasks."setup:wsl-crlf"]
 description = "WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
 dir = "{{config_root}}"
@@ -355,6 +372,14 @@ if ($IsWindows) {
 $containerFlag = if ($strategy -eq 'container') { '-Dquarkus.native.container-build=true' } else { '-Dquarkus.native.container-build=false' }
 
 # ── .env shield ───────────────────────────────────────────────────────────────
+# --- Auto-Heal stranded backups before shielding ---
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup before starting new build.'
+}
+
+# --- Shielding Logic ---
 $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
@@ -405,7 +430,7 @@ Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
 """
 
 [tasks."build:native-wsl2"]
-description = "WSL2: Auto-sync to Linux home, build lock-free & fast, copy binary back"
+description = "WSL2: Auto-sync to Linux home, build lock-free & fast, copy binary back to dist/"
 dir = "{{config_root}}"
 shell = "bash -c"
 quiet = true
@@ -417,9 +442,8 @@ echo "🚀 Starting Ephemeral WSL2 Build..."
 BUILD_DIR="$HOME/.cache/arcclaw-wsl-build"
 
 # --- 🛡️ SAFETY GUARD 🛡️ ---
-# Abort immediately if BUILD_DIR is empty, root, or just the home directory.
 if [ -z "$BUILD_DIR" ] || [ "$BUILD_DIR" = "/" ] || [ "$BUILD_DIR" = "$HOME" ]; then
-    echo "❌ FATAL: BUILD_DIR resolves to a protected path ('$BUILD_DIR'). Aborting rsync to prevent data loss."
+    echo "❌ FATAL: BUILD_DIR resolves to a protected path ('$BUILD_DIR'). Aborting rsync."
     exit 1
 fi
 # --------------------------
@@ -437,17 +461,25 @@ rsync -a --delete \
     ./ "$BUILD_DIR/"
 
 # 3. Run the build natively in Linux
-echo "🔨 Compiling native binary..."
+echo "🔨 Compiling native Linux binary..."
 cd "$BUILD_DIR"
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests -Dquarkus.native.container-build=false
 
-# 4. Copy the compiled binary back to Windows
-echo "🚚 Bringing binary back to Windows..."
+# 4. Copy the compiled binary directly back to Windows target/ AND dist/
+echo "🚚 Bringing Linux binary back to Windows..."
+
+# Copy to target/ (Standard Maven location)
 mkdir -p "$OLDPWD/arcclaw-app/target/"
 cp arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner "$OLDPWD/arcclaw-app/target/"
 
-echo "✅ WSL2 Build complete! Binary is waiting in your Windows target/ folder."
+# Copy directly to dist/ (Bypasses the Windows 'mise run dist' limitation)
+mkdir -p "$OLDPWD/dist/"
+cp arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner "$OLDPWD/dist/"
+
+# --- Auto-detect the exact Windows path ---
+WIN_DIST_PATH=$(wslpath -w "$OLDPWD/dist")
+echo "✅ WSL2 Build complete! Linux binary is waiting in $WIN_DIST_PATH"
 """
 
 [tasks."build:native-local"]
@@ -701,6 +733,7 @@ Write-Host '──────────────────────�
 # =============================================================================
 
 [tasks."jar:serve"]
+depends = ["env:recover"]
 description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -729,6 +762,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:chat"]
+depends = ["env:recover"]
 description = "Run packaged jar — interactive REPL (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -755,6 +789,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:attach"]
+depends = ["env:recover"]
 description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -783,6 +818,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:ask"]
+depends = ["env:recover"]
 description = 'Run packaged jar — one-shot task. Set $env:GOAL="..." then: mise run jar:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
