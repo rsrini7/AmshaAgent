@@ -123,8 +123,10 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
 fi
 
 # Load .env safely
+# Load .env safely
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
     while IFS= read -r _line || [[ -n "$_line" ]]; do
+        _line="${_line//$'\r'/}"  # <-- THE MAGIC FIX: Strips Windows carriage returns
         [[ "$_line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "${_line// }" ]] && continue
         if [[ "$_line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*) ]]; then
