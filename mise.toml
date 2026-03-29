@@ -201,7 +201,10 @@ if ($IsWindows) {
     Write-Host 'ℹ️   Not needed on native Windows — CRLF fix is for WSL2/Linux only.'
     exit 0
 }
-sudo apt-get install -y dos2unix
+if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
+    Write-Host '📦 Installing dos2unix...'
+    sudo apt-get install -y dos2unix
+}
 dos2unix mvnw
 chmod +x mvnw
 Get-ChildItem -Path '.mise/tasks' -Recurse -Filter '*.sh' | ForEach-Object {
