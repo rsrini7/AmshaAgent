@@ -28,6 +28,12 @@ rsync -a --delete \
     --exclude 'dist' \
     --exclude '.idea' \
     --exclude '.vscode' \
+    --exclude '*.md' \
+    --exclude '*.py' \
+    --exclude 'Prompts' \
+    --exclude 'docs' \
+    --exclude 'docs-main' \
+    --exclude 'rest-http' \
     --exclude '.env' \
     --exclude 'build.env' \
     ./ "$BUILD_DIR/"
