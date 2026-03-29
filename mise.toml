@@ -23,7 +23,7 @@
 # =============================================================================
 
 [tools]
-java       = "graalvm-community-25.0.2"
+java       = "temurin-25"
 maven      = "3.9"
 powershell = "7.6"
 
@@ -402,6 +402,43 @@ Write-Host '      mise run native:serve                → HTTP + MCP server on 
 Write-Host '      mise run native:chat                 → interactive REPL'
 Write-Host '      mise run native:attach               → Telegram daemon'
 Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
+"""
+
+[tasks."build:native-wsl2"]
+description = "WSL2: Auto-sync to Linux home, build lock-free & fast, copy binary back"
+dir = "{{config_root}}"
+shell = "bash -c"
+quiet = true
+run = """
+set -e
+echo "🚀 Starting Ephemeral WSL2 Build..."
+
+# 1. Define a temporary build directory in the native Linux filesystem
+BUILD_DIR="$HOME/.cache/arcclaw-wsl-build"
+mkdir -p "$BUILD_DIR"
+
+# 2. Sync source code instantly (ignoring Windows locked folders)
+echo "📦 Syncing source code to Linux filesystem (ignoring target/)..."
+rsync -a --delete \
+    --exclude '**/target' \
+    --exclude '.git' \
+    --exclude 'dist' \
+    --exclude '.idea' \
+    --exclude '.vscode' \
+    ./ "$BUILD_DIR/"
+
+# 3. Run the build natively in Linux (Bypasses all Windows locks & I/O latency)
+echo "🔨 Compiling native binary..."
+cd "$BUILD_DIR"
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
+./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests -Dquarkus.native.container-build=false
+
+# 4. Copy the compiled binary back to Windows
+echo "🚚 Bringing binary back to Windows..."
+mkdir -p "$OLDPWD/arcclaw-app/target/"
+cp arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner "$OLDPWD/arcclaw-app/target/"
+
+echo "✅ WSL2 Build complete! Binary is waiting in your Windows target/ folder."
 """
 
 [tasks."build:native-local"]
