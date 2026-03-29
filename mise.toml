@@ -175,12 +175,12 @@ Get-Content '.env' | Where-Object { $_ -match '^\\s*[^#]' } | ForEach-Object {
 }
 
 $provider = if ($vars['ARCCLAW_LLM_PROVIDER']) { $vars['ARCCLAW_LLM_PROVIDER'] } else { 'groq' }
-if ($provider -eq 'groq' -and [string]::IsNullOrEmpty($vars['GROQ_API_KEY'])) { $issues += "GROQ_API_KEY is required for provider: $provider" }
+if ($provider -eq 'groq'       -and [string]::IsNullOrEmpty($vars['GROQ_API_KEY']))       { $issues += "GROQ_API_KEY is required for provider: $provider" }
 if ($provider -eq 'openrouter' -and [string]::IsNullOrEmpty($vars['OPENROUTER_API_KEY'])) { $issues += "OPENROUTER_API_KEY is required for provider: $provider" }
-if ($provider -eq 'openai' -and [string]::IsNullOrEmpty($vars['OPENAI_API_KEY'])) { $issues += "OPENAI_API_KEY is required for provider: $provider" }
-if ($vars['ARCCLAW_VAULT_PEPPER']     -like '*changeme*')          { $issues += 'ARCCLAW_VAULT_PEPPER is still a placeholder' }
-if ($vars['ARCCLAW_AUDIT_HMAC_KEY']   -like '*changeme*')          { $issues += 'ARCCLAW_AUDIT_HMAC_KEY is still a placeholder' }
-if ($vars['ARCCLAW_API_KEY_INTERNAL'] -like '*changeme*')          { $issues += 'ARCCLAW_API_KEY_INTERNAL is still a placeholder' }
+if ($provider -eq 'openai'     -and [string]::IsNullOrEmpty($vars['OPENAI_API_KEY']))     { $issues += "OPENAI_API_KEY is required for provider: $provider" }
+if ($vars['ARCCLAW_VAULT_PEPPER']     -like '*changeme*') { $issues += 'ARCCLAW_VAULT_PEPPER is still a placeholder' }
+if ($vars['ARCCLAW_AUDIT_HMAC_KEY']   -like '*changeme*') { $issues += 'ARCCLAW_AUDIT_HMAC_KEY is still a placeholder' }
+if ($vars['ARCCLAW_API_KEY_INTERNAL'] -like '*changeme*') { $issues += 'ARCCLAW_API_KEY_INTERNAL is still a placeholder' }
 if ($issues.Count -gt 0) {
     Write-Host '⚠️   Issues found in .env:'
     $issues | ForEach-Object { Write-Host "    - $_" }
@@ -472,7 +472,7 @@ if (Test-Path '.env') {
 }
 try {
     mise use --path mise.toml java@graalvm-community-25.0.2
-    
+
     # --- JENV BYPASS ---
     $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
     $env:GRAALVM_HOME = $graalPath
@@ -910,6 +910,20 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # DIST — assemble a ready-to-run distribution folder
 # =============================================================================
 
+[tasks."env:recover"]
+description = "Internal: Auto-recover stranded .env files from aborted builds"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup from a previously aborted build.'
+}
+"""
+
 [tasks.dist]
 description = "Assemble dist/ folder: native exe + .env.example + vec0 extension + launchers"
 dir = "{{config_root}}"
@@ -932,7 +946,6 @@ Copy-Item $src "$distDir/$exeName"
 Copy-Item '.env.example' "$distDir/.env.example"
 
 $vec0Copied = 0
-# Note: we use the internal resource path as the source of truth for distribution
 @( @("arcclaw-app/src/main/resources/native/vec0/vec0-linux-x86_64.so",    "$distDir/lib/vec0.so",    'Linux'),
    @("arcclaw-app/src/main/resources/native/vec0/vec0-macos-aarch64.dylib", "$distDir/lib/vec0.dylib", 'macOS'),
    @("arcclaw-app/src/main/resources/native/vec0/vec0-windows-x86_64.dll",   "$distDir/lib/vec0.dll",   'Windows') ) | ForEach-Object {
@@ -948,11 +961,12 @@ if ($vec0Copied -eq 0) {
     Write-Host '    Ensure binaries exist in: arcclaw-app/src/main/resources/native/vec0/'
 }
 
-# ── Assemble Launchers with Strict Line Endings ─────────────────────
+# ── Copy run.ps1 as-is (Windows line endings are fine for a .ps1 file)
 Copy-Item '.mise/launchers/run.ps1.template' 'dist/run.ps1'
 
+# ── Copy run.sh with enforced LF line endings and no BOM (critical for bash)
 $runShRaw = [System.IO.File]::ReadAllText('.mise/launchers/run.sh.template')
-$runShLf = $runShRaw -replace "`r`n", "`n"
+$runShLf  = $runShRaw -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path (Resolve-Path 'dist') 'run.sh'),
     $runShLf,
@@ -966,7 +980,6 @@ Write-Host '✅  dist/ assembled. Next steps:'
 Write-Host '      cd dist && ./run.sh serve    (Linux/macOS — first run auto-configures .env)'
 Write-Host '      cd dist && ./run.ps1 serve   (Windows)'
 Write-Host ''
-
 Write-Host '-- Binaries in dist/ ----------------------------------------------------'
 if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner')     { Write-Host '  OK  runner        (Linux/macOS)' } else { Write-Host '  -   runner        (Linux/macOS) -- not built yet' }
 if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner.exe') { Write-Host '  OK  runner.exe    (Windows)'     } else { Write-Host '  -   runner.exe    (Windows)     -- not built yet' }
@@ -993,8 +1006,8 @@ if (Test-Path "dist/$runner.exe") {
     New-Item -ItemType Directory $stage | Out-Null
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner.exe"  "$stage/arcclaw.exe"
-    Copy-Item 'dist/run.ps1'      "$stage/run.ps1"
-    (Get-Content "$stage/run.ps1") `
+    # run.ps1 is fine with Set-Content (Windows line endings OK for .ps1)
+    (Get-Content 'dist/run.ps1') `
         -replace 'arcclaw-app-[^/]*-runner\\.exe', 'arcclaw.exe' `
         -replace 'arcclaw-app-[^/]*-runner',      'arcclaw' | Set-Content "$stage/run.ps1"
     Copy-Item 'dist/.env.example' "$stage/.env.example"
@@ -1007,13 +1020,14 @@ if (Test-Path "dist/$runner.exe") {
 }
 
 # Linux
+# FIX: use ReadAllText/WriteAllText to preserve LF line endings in run.sh
 if (Test-Path "dist/$runner") {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
     New-Item -ItemType Directory $stage | Out-Null
     New-Item -ItemType Directory "$stage/lib" | Out-Null
-    Copy-Item "dist/$runner"      "$stage/arcclaw"
-    Copy-Item 'dist/run.sh'       "$stage/run.sh"
-    (Get-Content "$stage/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$stage/run.sh"
+    Copy-Item "dist/$runner" "$stage/arcclaw"
+    $runShContent = [System.IO.File]::ReadAllText('dist/run.sh') -replace 'arcclaw-app-[^/]*-runner', 'arcclaw'
+    [System.IO.File]::WriteAllText("$stage/run.sh", $runShContent, [System.Text.UTF8Encoding]::new($false))
     Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.so') { Copy-Item 'dist/lib/vec0.so' "$stage/lib/vec0.so" }
     $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
@@ -1025,15 +1039,16 @@ if (Test-Path "dist/$runner") {
 }
 
 # macOS
+# FIX: use ReadAllText/WriteAllText to preserve LF line endings in run.sh
 if ((Test-Path "dist/$runner") -and (Test-Path 'dist/lib/vec0.dylib')) {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
     New-Item -ItemType Directory $stage | Out-Null
     New-Item -ItemType Directory "$stage/lib" | Out-Null
-    Copy-Item "dist/$runner"         "$stage/arcclaw"
-    Copy-Item 'dist/run.sh'          "$stage/run.sh"
-    (Get-Content "$stage/run.sh") -replace 'arcclaw-app-[^/]*-runner', 'arcclaw' | Set-Content "$stage/run.sh"
-    Copy-Item 'dist/.env.example'    "$stage/.env.example"
-    Copy-Item 'dist/lib/vec0.dylib'  "$stage/lib/vec0.dylib"
+    Copy-Item "dist/$runner" "$stage/arcclaw"
+    $runShContent = [System.IO.File]::ReadAllText('dist/run.sh') -replace 'arcclaw-app-[^/]*-runner', 'arcclaw'
+    [System.IO.File]::WriteAllText("$stage/run.sh", $runShContent, [System.Text.UTF8Encoding]::new($false))
+    Copy-Item 'dist/.env.example'   "$stage/.env.example"
+    Copy-Item 'dist/lib/vec0.dylib' "$stage/lib/vec0.dylib"
     $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
     if (Get-Command tar -ErrorAction SilentlyContinue) {
         tar -czf $archive -C $stage .
@@ -1210,27 +1225,20 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-
 if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {
     Write-Host '❌  podman is not installed or not in PATH.'
     exit 1
 }
-
 Write-Host '▶   Building arcclaw-tool-runner image via Podman...'
 podman build --no-cache -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
-if ($LASTEXITCODE -ne 0) { 
+if ($LASTEXITCODE -ne 0) {
     Write-Host "❌  Podman build failed (exit $LASTEXITCODE)"
-    exit $LASTEXITCODE 
+    exit $LASTEXITCODE
 }
-
 Write-Host ''
 Write-Host '✅  Build complete. Verifying image in local registry:'
 podman images | Select-String 'arcclaw-tool-runner'
 """
-
-# =============================================================================
-# SANDBOX TASKS
-# =============================================================================
 
 [tasks."podman:sandbox-check"]
 description = "Verify the arcclaw-tool-runner sandbox image exists"
