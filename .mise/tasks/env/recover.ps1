@@ -1,5 +1,6 @@
 #!/usr/bin/env pwsh
 #MISE description="Internal: Auto-recover stranded .env files from aborted builds"
+#MISE quiet=true
 
 $ErrorActionPreference = 'Stop'
 if (Test-Path '.env.build-backup') {
