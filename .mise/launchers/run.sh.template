@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# run.sh - ArcClaw launcher with first-run auto-setup
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXE="$SCRIPT_DIR/arcclaw-app-1.0.0-SNAPSHOT-runner"
+
+if [[ ! -f "$EXE" ]]; then echo "X  Binary not found: $EXE"; exit 1; fi
+
+if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
+    echo -e "\n  -- ArcClaw first-run setup --------------------------------------------------"
+    [[ -f "$SCRIPT_DIR/.env.example" ]] && cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env" || touch "$SCRIPT_DIR/.env"
+
+    _setsed() { 
+        if grep -q "^$1=" "$SCRIPT_DIR/.env"; then
+            sed -i.bak "s|^$1=.*|$1=$2|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        else echo "$1=$2" >> "$SCRIPT_DIR/.env"; fi
+    }
+
+    _VAULT_PEPPER="$(openssl rand -base64 32)"
+    _AUDIT_KEY="$(openssl rand -base64 32)"
+    _setsed ARCCLAW_VAULT_PEPPER     "$_VAULT_PEPPER"
+    _setsed ARCCLAW_AUDIT_HMAC_KEY   "$_AUDIT_KEY"
+    _setsed ARCCLAW_API_KEY_INTERNAL "$(openssl rand -base64 32)"
+    _setsed ARCCLAW_API_KEY_CI       "$(openssl rand -base64 32)"
+
+    echo -e "# Immutable Keys\nARCCLAW_VAULT_PEPPER=$_VAULT_PEPPER\nARCCLAW_AUDIT_HMAC_KEY=$_AUDIT_KEY" > "$SCRIPT_DIR/keys-backup.txt"
+    echo -e "  OK  Auto-generated: Crypto Keys (Backed up to keys-backup.txt)\n"
+
+    printf "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]: "
+    read -r _PROVIDER
+    _PROVIDER=${_PROVIDER:-openrouter}
+    _setsed ARCCLAW_LLM_PROVIDER "$_PROVIDER"
+
+    if [[ "$_PROVIDER" == "groq" ]]; then
+        while true; do
+            printf "  GROQ API KEY (starts with gsk_): "
+            read -r _KEY
+            [[ "$_KEY" == gsk_* ]] && break
+            echo "  X  Must start with gsk_"
+        done
+        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+    elif [[ "$_PROVIDER" == "openrouter" ]]; then
+        while true; do
+            printf "  OPENROUTER API KEY (starts with sk-or-): "
+            read -r _KEY
+            [[ "$_KEY" == sk-or-* ]] && break
+            echo "  X  Must start with sk-or-"
+        done
+        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+        _setsed ARCCLAW_LLM_BASE_URL "https://openrouter.ai/api/v1"
+    elif [[ "$_PROVIDER" == "openai" ]]; then
+        printf "  OPENAI API KEY (starts with sk-): "
+        read -r _KEY
+        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+    elif [[ "$_PROVIDER" == "ollama" ]]; then
+        _setsed ARCCLAW_LLM_BASE_URL "http://localhost:11434/v1"
+    fi
+
+    printf "\n  ARCCLAW_EMBED_API_KEY (starts with jina_): "
+    read -r _EMBED_KEY
+    _setsed ARCCLAW_EMBED_API_KEY "$_EMBED_KEY"
+
+    printf "\n  GITHUB_TOKEN  (optional -- press Enter to skip): "
+    read -r _GH_TOKEN
+    [[ -n "$_GH_TOKEN" ]] && _setsed GITHUB_TOKEN "$_GH_TOKEN"
+
+    echo -e "\n  OK  Setup complete. Starting ArcClaw...\n"
+fi
+
+# Load .env safely
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    while IFS= read -r _line || [[ -n "$_line" ]]; do
+        [[ "$_line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${_line// }" ]] && continue
+        if [[ "$_line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*) ]]; then
+            export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+        fi
+    done < "$SCRIPT_DIR/.env"
+fi
+
+export ARCCLAW_SQLITE_VEC_PATH="${ARCCLAW_SQLITE_VEC_PATH:-./lib/vec0}"
+export ARCCLAW_DATA_DIR="${ARCCLAW_DATA_DIR:-./data}"
+[[ "$(uname -s)" == "Linux" ]] && export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
+
+if [[ $# -eq 0 ]]; then
+    echo -e "\n  USAGE: ./run.sh serve | chat | attach | ask 'goal'\n"
+    exit 0
+fi
+exec "$EXE" "$@"

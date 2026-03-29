@@ -1,0 +1,76 @@
+# run.ps1 - ArcClaw launcher with first-run auto-setup
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$ErrorActionPreference = 'Stop'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$suffix = if ($env:OS -eq 'Windows_NT') { '-runner.exe' } else { '-runner' }
+$exe    = Join-Path $scriptDir "arcclaw-app-1.0.0-SNAPSHOT$suffix"
+
+if (-not (Test-Path $exe)) { Write-Host "X  Binary not found: $exe"; exit 1 }
+
+$envPath = Join-Path $scriptDir '.env'
+if (-not (Test-Path $envPath)) {
+    Write-Host "`n  -- ArcClaw first-run setup --------------------------------------------------"
+    
+    $envExample = Join-Path $scriptDir '.env.example'
+    if (Test-Path $envExample) { Copy-Item $envExample $envPath } else { New-Item $envPath -ItemType File | Out-Null }
+
+    function New-RandomBase64 { [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) })) }
+    function Set-EnvLine($file, $key, $value) {
+        $c = [System.IO.File]::ReadAllText($file)
+        if ($c -match "(?m)^$key=.*") { $c = $c -replace "(?m)^$key=.*", "$key=$value" } else { $c += "`n$key=$value" }
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+
+    $vaultPepper = New-RandomBase64
+    $auditKey    = New-RandomBase64
+    Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER'     $vaultPepper
+    Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY'   $auditKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI'       (New-RandomBase64)
+
+    $backup = "# WARNING: VAULT_PEPPER and AUDIT_HMAC_KEY are immutable.`nARCCLAW_VAULT_PEPPER=$vaultPepper`nARCCLAW_AUDIT_HMAC_KEY=$auditKey"
+    [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
+    Write-Host "  OK  Auto-generated: Crypto Keys (Backed up to keys-backup.txt)`n"
+
+    # Inject the shared prompt logic directly here so the template is fully standalone for distribution
+    $provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]"
+    if (-not $provider) { $provider = 'openrouter' }
+    Set-EnvLine $envPath 'ARCCLAW_LLM_PROVIDER' $provider
+
+    if ($provider -eq 'groq') {
+        do { $key = Read-Host "  GROQ API KEY (starts with gsk_)" } while (-not $key.StartsWith('gsk_'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+    } elseif ($provider -eq 'openrouter') {
+        do { $key = Read-Host "  OPENROUTER API KEY (starts with sk-or-)" } while (-not $key.StartsWith('sk-or-'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://openrouter.ai/api/v1'
+    } elseif ($provider -eq 'openai') {
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' (Read-Host "  OPENAI API KEY (starts with sk-)")
+    } elseif ($provider -eq 'ollama') {
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'http://localhost:11434/v1'
+    }
+
+    Set-EnvLine $envPath 'ARCCLAW_EMBED_API_KEY' (Read-Host "`n  ARCCLAW_EMBED_API_KEY (starts with jina_)")
+    
+    $ghToken = Read-Host "`n  GITHUB_TOKEN  (optional -- press Enter to skip)"
+    if ($ghToken) { Set-EnvLine $envPath 'GITHUB_TOKEN' $ghToken }
+
+    Write-Host "`n  OK  Setup complete. Starting ArcClaw...`n"
+}
+
+# Safe .env loader
+if (Test-Path $envPath) {
+    Get-Content $envPath | Where-Object { $_ -match '^[^#].*=' } | ForEach-Object {
+        $k, $v = $_ -split '=', 2
+        [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
+    }
+}
+if (-not $env:ARCCLAW_SQLITE_VEC_PATH) { $env:ARCCLAW_SQLITE_VEC_PATH = './lib/vec0' }
+if (-not $env:ARCCLAW_DATA_DIR)        { $env:ARCCLAW_DATA_DIR = './data' }
+
+if ($args.Count -eq 0) {
+    Write-Host "`n  USAGE: ./run.ps1 serve | chat | attach | ask ""goal""`n"
+    exit 0
+}
+$process = Start-Process -FilePath $exe -ArgumentList $args -NoNewWindow -Wait -PassThru
+exit $process.ExitCode
