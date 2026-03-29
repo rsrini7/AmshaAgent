@@ -23,7 +23,7 @@
 # =============================================================================
 
 [tools]
-java       = "temurin-25"
+java       = "graalvm-community-25.0.2"
 maven      = "3.9"
 powershell = "7.6"
 
@@ -200,7 +200,11 @@ $vars = @{}
 Get-Content '.env' | Where-Object { $_ -match '^\\s*[^#]' } | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { $vars[$Matches[1].Trim()] = $Matches[2].Trim() }
 }
-if ([string]::IsNullOrEmpty($vars['ARCCLAW_LLM_API_KEY']))                { $issues += 'ARCCLAW_LLM_API_KEY is empty' }
+
+$provider = if ($vars['ARCCLAW_LLM_PROVIDER']) { $vars['ARCCLAW_LLM_PROVIDER'] } else { 'groq' }
+if ($provider -eq 'groq' -and [string]::IsNullOrEmpty($vars['GROQ_API_KEY'])) { $issues += "GROQ_API_KEY is required for provider: $provider" }
+if ($provider -eq 'openrouter' -and [string]::IsNullOrEmpty($vars['OPENROUTER_API_KEY'])) { $issues += "OPENROUTER_API_KEY is required for provider: $provider" }
+if ($provider -eq 'openai' -and [string]::IsNullOrEmpty($vars['OPENAI_API_KEY'])) { $issues += "OPENAI_API_KEY is required for provider: $provider" }
 if ($vars['ARCCLAW_VAULT_PEPPER']     -like '*changeme*')          { $issues += 'ARCCLAW_VAULT_PEPPER is still a placeholder' }
 if ($vars['ARCCLAW_AUDIT_HMAC_KEY']   -like '*changeme*')          { $issues += 'ARCCLAW_AUDIT_HMAC_KEY is still a placeholder' }
 if ($vars['ARCCLAW_API_KEY_INTERNAL'] -like '*changeme*')          { $issues += 'ARCCLAW_API_KEY_INTERNAL is still a placeholder' }
@@ -975,7 +979,11 @@ if (-not (Test-Path $envPath)) {
     }
     function Set-EnvLine($file, $key, $value) {
         $c = [System.IO.File]::ReadAllText($file)
-        $c = $c -replace "(?m)^$key=.*", "$key=$value"
+        if ($c -match "(?m)^$key=.*") {
+            $c = $c -replace "(?m)^$key=.*", "$key=$value"
+        } else {
+            $c += "`n$key=$value"
+        }
         [System.IO.File]::WriteAllText($file, $c)
     }
     function Clear-EnvLine($file, $key) {
@@ -1027,12 +1035,33 @@ if (-not (Test-Path $envPath)) {
     Write-Host "  !!  Saved to keys-backup.txt -- VAULT_PEPPER is immutable, back it up"
     Write-Host ""
 
-    do {
-        $groqKey = Read-Host "  ARCCLAW_LLM_API_KEY  (https://console.groq.com -- starts with gsk_)"
-        if (-not $groqKey.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_ -- try again." }
-    } while (-not $groqKey.StartsWith('gsk_'))
-    Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $groqKey
-    Write-Host "  OK  ARCCLAW_LLM_API_KEY set."
+    $provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]"
+    if (-not $provider) { $provider = 'openrouter' }
+    Set-EnvLine $envPath 'ARCCLAW_LLM_PROVIDER' $provider
+
+    if ($provider -eq 'groq') {
+        do {
+            $key = Read-Host "  GROQ API KEY (starts with gsk_)"
+            if (-not $key.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_" }
+        } while (-not $key.StartsWith('gsk_'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+    } elseif ($provider -eq 'openrouter') {
+        do {
+            $key = Read-Host "  OPENROUTER API KEY (starts with sk-or-)"
+            if (-not $key.StartsWith('sk-or-')) { Write-Host "  X  Must start with sk-or-" }
+        } while (-not $key.StartsWith('sk-or-'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://openrouter.ai/api/v1'
+    } elseif ($provider -eq 'openai') {
+        $key = Read-Host "  OPENAI API KEY (starts with sk-)"
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+    } elseif ($provider -eq 'ollama') {
+        Write-Host "  i  Ollama selected. No API key needed. Ensure it is running on localhost:11434"
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'http://localhost:11434/v1'
+    }
+    Write-Host "  OK  LLM Provider configured as $provider."
     Write-Host ""
 
     Write-Host "  Embedding provider: jina -- API key required."
@@ -1157,7 +1186,13 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
         touch "$SCRIPT_DIR/.env"
     fi
 
-    _setsed() { sed -i.bak "s|^$1=.*|$1=$2|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"; }
+    _setsed() { 
+        if grep -q "^$1=" "$SCRIPT_DIR/.env"; then
+            sed -i.bak "s|^$1=.*|$1=$2|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"
+        else
+            echo "$1=$2" >> "$SCRIPT_DIR/.env"
+        fi
+    }
     _clearkey() { sed -i.bak "s|^$1=.*|# $1=|" "$SCRIPT_DIR/.env" && rm -f "$SCRIPT_DIR/.env.bak"; }
 
     _VAULT_PEPPER="$(openssl rand -base64 32)"
@@ -1184,14 +1219,39 @@ KEYS
     echo "  !!  Saved to keys-backup.txt -- VAULT_PEPPER is immutable, back it up"
     echo ""
 
-    while true; do
-        printf "  ARCCLAW_LLM_API_KEY  (https://console.groq.com -- starts with gsk_): "
-        read -r _GROQ_KEY
-        [[ "$_GROQ_KEY" == gsk_* ]] && break
-        echo "  X  Must start with gsk_ -- try again."
-    done
-    _setsed ARCCLAW_LLM_API_KEY "$_GROQ_KEY"
-    echo "  OK  ARCCLAW_LLM_API_KEY set."
+    printf "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]: "
+    read -r _PROVIDER
+    _PROVIDER=${_PROVIDER:-openrouter}
+    _setsed ARCCLAW_LLM_PROVIDER "$_PROVIDER"
+
+    if [[ "$_PROVIDER" == "groq" ]]; then
+        while true; do
+            printf "  GROQ API KEY (starts with gsk_): "
+            read -r _KEY
+            [[ "$_KEY" == gsk_* ]] && break
+            echo "  X  Must start with gsk_ -- try again."
+        done
+        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+        _clearkey ARCCLAW_LLM_BASE_URL
+    elif [[ "$_PROVIDER" == "openrouter" ]]; then
+        while true; do
+            printf "  OPENROUTER API KEY (starts with sk-or-): "
+            read -r _KEY
+            [[ "$_KEY" == sk-or-* ]] && break
+            echo "  X  Must start with sk-or- -- try again."
+        done
+        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+        _setsed ARCCLAW_LLM_BASE_URL "https://openrouter.ai/api/v1"
+    elif [[ "$_PROVIDER" == "openai" ]]; then
+        printf "  OPENAI API KEY (starts with sk-): "
+        read -r _KEY
+        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+        _clearkey ARCCLAW_LLM_BASE_URL
+    elif [[ "$_PROVIDER" == "ollama" ]]; then
+        echo "  i  Ollama selected. No API key needed. Ensure it is running on localhost:11434"
+        _setsed ARCCLAW_LLM_BASE_URL "http://localhost:11434/v1"
+    fi
+    echo "  OK  LLM Provider configured as $_PROVIDER."
     echo ""
 
     echo "  Embedding provider: jina -- API key required."
