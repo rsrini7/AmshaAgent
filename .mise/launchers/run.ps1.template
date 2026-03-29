@@ -20,6 +20,29 @@ if (-not (Test-Path $envPath)) {
         if ($c -match "(?m)^$key=.*") { $c = $c -replace "(?m)^$key=.*", "$key=$value" } else { $c += "`n$key=$value" }
         [System.IO.File]::WriteAllText($file, $c)
     }
+    function Clear-EnvLine($file, $key) {
+        $c = [System.IO.File]::ReadAllText($file)
+        $c = $c -replace "(?m)^$key=.*", "# $key="
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+    function Set-TelegramKeys($file) {
+        $tgToken = Read-Host "  TELEGRAM_BOT_TOKEN  (@BotFather -> /newbot)"
+        Set-EnvLine $file 'TELEGRAM_BOT_TOKEN' $tgToken
+        Write-Host "  OK  TELEGRAM_BOT_TOKEN set."
+        do {
+            $raw = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated)").Trim() -replace '\s', ''
+            if ($raw -notmatch '^[0-9]+(,[0-9]+)*$') { Write-Host "  X  Numeric only" }
+        } while ($raw -notmatch '^[0-9]+(,[0-9]+)*$')
+        Set-EnvLine $file 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS' $raw
+        Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+        do {
+            $rawu = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated)").Trim() -replace '\s', ''
+            if ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$') { Write-Host "  X  Letters, numbers and _ only" }
+        } while ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$')
+        Set-EnvLine $file 'ARCCLAW_TELEGRAM_ALLOWED_USERS' $rawu
+        Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+        Write-Host ""
+    }
 
     $vaultPepper = New-RandomBase64
     $auditKey    = New-RandomBase64
@@ -32,7 +55,6 @@ if (-not (Test-Path $envPath)) {
     [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
     Write-Host "  OK  Auto-generated: Crypto Keys (Backed up to keys-backup.txt)`n"
 
-    # Inject the shared prompt logic directly here so the template is fully standalone for distribution
     $provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]"
     if (-not $provider) { $provider = 'openrouter' }
     Set-EnvLine $envPath 'ARCCLAW_LLM_PROVIDER' $provider
@@ -54,6 +76,47 @@ if (-not (Test-Path $envPath)) {
     
     $ghToken = Read-Host "`n  GITHUB_TOKEN  (optional -- press Enter to skip)"
     if ($ghToken) { Set-EnvLine $envPath 'GITHUB_TOKEN' $ghToken }
+
+    $envText   = [System.IO.File]::ReadAllText($envPath)
+    $tgMatch   = [regex]::Match($envText, '(?m)^ARCCLAW_TELEGRAM_ENABLED=(.+)')
+    $tgEnabled = if ($tgMatch.Success) { $tgMatch.Groups[1].Value.Trim() } else { 'false' }
+    $cmd       = if ($args.Count -gt 0) { $args[0] } else { 'serve' }
+
+    if ($cmd -eq 'attach') {
+        Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ENABLED' 'true'
+        Write-Host "`n  attach mode -- Telegram configuration required."
+        Set-TelegramKeys $envPath
+    } elseif ($tgEnabled -eq 'true') {
+        Write-Host "`n  Telegram is enabled in .env.example."
+        $tgTokenPeek = Read-Host "  TELEGRAM_BOT_TOKEN  (Enter to skip and disable Telegram)"
+        if (-not $tgTokenPeek) {
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ENABLED' 'false'
+            Clear-EnvLine $envPath 'TELEGRAM_BOT_TOKEN'
+            Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS'
+            Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS'
+            Write-Host "  i   Telegram disabled. Re-run ./run.ps1 attach to configure later."
+        } else {
+            Set-EnvLine $envPath 'TELEGRAM_BOT_TOKEN' $tgTokenPeek
+            Write-Host "  OK  TELEGRAM_BOT_TOKEN set."
+            do {
+                $raw = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated)").Trim() -replace '\s', ''
+                if ($raw -notmatch '^[0-9]+(,[0-9]+)*$') { Write-Host "  X  Numeric only" }
+            } while ($raw -notmatch '^[0-9]+(,[0-9]+)*$')
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS' $raw
+            Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+            do {
+                $rawu = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated)").Trim() -replace '\s', ''
+                if ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$') { Write-Host "  X  Letters, numbers and _ only" }
+            } while ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$')
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS' $rawu
+            Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+        }
+    } else {
+        Clear-EnvLine $envPath 'TELEGRAM_BOT_TOKEN'
+        Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS'
+        Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS'
+        Write-Host "  i   Telegram not enabled -- placeholders cleared."
+    }
 
     Write-Host "`n  OK  Setup complete. Starting ArcClaw...`n"
 }
