@@ -158,27 +158,89 @@ if ($IsWindows) {
 """
 
 [tasks.setup]
-description = "First-time setup: .env, chmod +x mvnw, install temurin-25 + graalvm-community-25.0.2"
+description = "First-time setup: interactive .env wizard, chmod +x mvnw, install JDKs"
 dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
+# CRITICAL: Removed -NonInteractive so Read-Host prompts actually work!
+shell = "pwsh -Command" 
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path '.env')) {
-    Copy-Item '.env.example' '.env'
-    Write-Host '✅  .env created — fill in ARCCLAW_LLM_API_KEY, ARCCLAW_VAULT_PEPPER etc.'
+$envPath = '.env'
+
+if (-not (Test-Path $envPath)) {
+    Write-Host ""
+    Write-Host "  -- ArcClaw Local Developer Setup ------------------------------------------"
+    Copy-Item '.env.example' $envPath
+
+    # Helper functions
+    function New-RandomBase64 { [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) })) }
+    function Set-EnvLine($file, $key, $value) {
+        $c = [System.IO.File]::ReadAllText($file)
+        if ($c -match "(?m)^$key=.*") { $c = $c -replace "(?m)^$key=.*", "$key=$value" }
+        else { $c += "`n$key=$value" }
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+    function Clear-EnvLine($file, $key) {
+        $c = [System.IO.File]::ReadAllText($file)
+        $c = $c -replace "(?m)^$key=.*", "# $key="
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+
+    # 1. Auto-generate critical crypto keys
+    Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI' (New-RandomBase64)
+    Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEYS"
+    Write-Host ""
+
+    # 2. Interactive LLM Provider selection
+    $provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]"
+    if (-not $provider) { $provider = 'openrouter' }
+    Set-EnvLine $envPath 'ARCCLAW_LLM_PROVIDER' $provider
+
+    if ($provider -eq 'groq') {
+        do { $key = Read-Host "  GROQ API KEY (starts with gsk_)" } while (-not $key.StartsWith('gsk_'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+    } elseif ($provider -eq 'openrouter') {
+        do { $key = Read-Host "  OPENROUTER API KEY (starts with sk-or-)" } while (-not $key.StartsWith('sk-or-'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://openrouter.ai/api/v1'
+    } elseif ($provider -eq 'openai') {
+        $key = Read-Host "  OPENAI API KEY (starts with sk-)"
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+    } elseif ($provider -eq 'ollama') {
+        Write-Host "  i  Ollama selected. No API key needed. Ensure it is running on localhost:11434"
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'http://localhost:11434/v1'
+    }
+    Write-Host "  OK  LLM Provider configured as $provider."
+    Write-Host ""
+
+    # 3. Embeddings
+    Write-Host "  Embedding provider: jina -- API key required."
+    $embedKey = Read-Host "  ARCCLAW_EMBED_API_KEY (starts with jina_)"
+    Set-EnvLine $envPath 'ARCCLAW_EMBED_API_KEY' $embedKey
+    Write-Host "  OK  ARCCLAW_EMBED_API_KEY set."
+    Write-Host ""
+    Write-Host "  ✅ Local .env configuration complete!"
+    Write-Host "  ---------------------------------------------------------------------------"
+    Write-Host ""
 } else {
-    Write-Host 'ℹ️   .env already exists — skipping copy.'
+    Write-Host 'ℹ️   .env already exists — skipping interactive setup.'
 }
+
 if (-not $IsWindows) {
     chmod +x mvnw
     Write-Host '✅  mvnw marked executable.'
 }
+
 Write-Host 'Installing JDKs (temurin-25 + graalvm-community-25.0.2)...'
 mise install java@temurin-25
 mise install java@graalvm-community-25.0.2 --quiet
 Write-Host '✅  Both JDKs installed.'
-# Add to the setup task after JDK installs:
+
 Write-Host 'Installing usage globally (required for tab completion)...'
 mise use --global github:jdx/usage@3.0.0
 Write-Host '✅  usage installed globally.'
