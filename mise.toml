@@ -413,11 +413,20 @@ run = """
 set -e
 echo "🚀 Starting Ephemeral WSL2 Build..."
 
-# 1. Define a temporary build directory in the native Linux filesystem
+# 1. Define the temporary build directory
 BUILD_DIR="$HOME/.cache/arcclaw-wsl-build"
+
+# --- 🛡️ SAFETY GUARD 🛡️ ---
+# Abort immediately if BUILD_DIR is empty, root, or just the home directory.
+if [ -z "$BUILD_DIR" ] || [ "$BUILD_DIR" = "/" ] || [ "$BUILD_DIR" = "$HOME" ]; then
+    echo "❌ FATAL: BUILD_DIR resolves to a protected path ('$BUILD_DIR'). Aborting rsync to prevent data loss."
+    exit 1
+fi
+# --------------------------
+
 mkdir -p "$BUILD_DIR"
 
-# 2. Sync source code instantly (ignoring Windows locked folders)
+# 2. Sync source code instantly
 echo "📦 Syncing source code to Linux filesystem (ignoring target/)..."
 rsync -a --delete \
     --exclude '**/target' \
@@ -427,7 +436,7 @@ rsync -a --delete \
     --exclude '.vscode' \
     ./ "$BUILD_DIR/"
 
-# 3. Run the build natively in Linux (Bypasses all Windows locks & I/O latency)
+# 3. Run the build natively in Linux
 echo "🔨 Compiling native binary..."
 cd "$BUILD_DIR"
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
