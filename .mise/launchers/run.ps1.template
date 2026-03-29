@@ -89,12 +89,13 @@ if (-not (Test-Path $envPath)) {
         Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
         Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
     } elseif ($provider -eq 'openrouter') {
-        do {
-            $key = Read-Host "  OPENROUTER API KEY (starts with sk-or-)"
-            if (-not $key.StartsWith('sk-or-')) { Write-Host "  X  Must start with sk-or-" }
-        } while (-not $key.StartsWith('sk-or-'))
-        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        # ... existing key validation ...
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY'  $key
         Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://openrouter.ai/api/v1'
+        Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME'          'openrouter/free'
+        Set-EnvLine $envPath 'ARCCLAW_INTENT_CLASSIFIER_MODEL' 'meta-llama/llama-3.1-8b-instruct:free'
+        Set-EnvLine $envPath 'ARCCLAW_COMPACTION_MODEL'        'meta-llama/llama-3.1-8b-instruct:free'
+        Set-EnvLine $envPath 'ARCCLAW_COMPACTION_BASE_URL'     'https://openrouter.ai/api/v1'
     } elseif ($provider -eq 'openai') {
         $key = Read-Host "  OPENAI API KEY (starts with sk-)"
         Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key

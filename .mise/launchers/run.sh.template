@@ -58,6 +58,7 @@ KEYS
             echo "  X  Must start with gsk_"
         done
         _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+    # run.sh.template — openrouter branch:
     elif [[ "$_PROVIDER" == "openrouter" ]]; then
         while true; do
             printf "  OPENROUTER API KEY (starts with sk-or-): "
@@ -65,8 +66,13 @@ KEYS
             [[ "$_KEY" == sk-or-* ]] && break
             echo "  X  Must start with sk-or-"
         done
-        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
-        _setsed ARCCLAW_LLM_BASE_URL "https://openrouter.ai/api/v1"
+        _setsed ARCCLAW_LLM_API_KEY     "$_KEY"
+        _setsed ARCCLAW_LLM_BASE_URL    "https://openrouter.ai/api/v1"
+        # ── NEW: fix model IDs for OpenRouter format ──────────────────────────────
+        _setsed ARCCLAW_LLM_MODEL_NAME              "openrouter/free"
+        _setsed ARCCLAW_INTENT_CLASSIFIER_MODEL     "meta-llama/llama-3.1-8b-instruct:free"
+        _setsed ARCCLAW_COMPACTION_MODEL            "meta-llama/llama-3.1-8b-instruct:free"
+        _setsed ARCCLAW_COMPACTION_BASE_URL         "https://openrouter.ai/api/v1"
     elif [[ "$_PROVIDER" == "openai" ]]; then
         printf "  OPENAI API KEY (starts with sk-): "
         read -r _KEY
