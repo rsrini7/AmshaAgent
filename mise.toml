@@ -191,7 +191,7 @@ if ($issues.Count -gt 0) {
 """
 
 [tasks."setup:wsl-crlf"]
-description = "WSL2: fix Windows CRLF line endings in mvnw (run once after cloning on Windows)"
+description = "WSL2: fix Windows CRLF line endings in mvnw + all .mise bash task scripts"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -204,7 +204,12 @@ if ($IsWindows) {
 sudo apt-get install -y dos2unix
 dos2unix mvnw
 chmod +x mvnw
-Write-Host '✅  mvnw CRLF fixed and marked executable.'
+Get-ChildItem -Path '.mise/tasks' -Recurse -Filter '*.sh' | ForEach-Object {
+    dos2unix $_.FullName
+    chmod +x $_.FullName
+    Write-Host "✅  Fixed: $($_.Name)"
+}
+Write-Host '✅  mvnw + all task scripts CRLF fixed and marked executable.'
 """
 
 # =============================================================================
