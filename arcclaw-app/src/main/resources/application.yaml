@@ -13,9 +13,6 @@ quarkus:
     enabled: true
     path: arcclaw-banner.txt
   
-  jackson:
-    escape-non-ascii-characters: false
-
   index-dependency:
     arcclaw-core:
       group-id: com.arcclaw
