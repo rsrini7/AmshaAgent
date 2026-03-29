@@ -1226,7 +1226,7 @@ The following environment variables are read from `.env` at startup:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GROQ_API_KEY` | ✅ | — | Groq Cloud API key for LLM inference |
+| `ARCCLAW_LLM_API_KEY` | ✅ | — | Groq Cloud API key for LLM inference |
 | `GROQMODEL` | no | `llama-3.3-70b-versatile` | Primary reasoning model name |
 | `ARCCLAW_VAULT_PEPPER` | ✅ | — | Server-side pepper for Argon2id KDF. If lost, all vault secrets are unrecoverable. |
 | `ARCCLAW_API_KEY_INTERNAL` | ✅ | — | Primary REST API key |

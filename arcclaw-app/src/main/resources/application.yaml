@@ -13,9 +13,6 @@ quarkus:
     enabled: true
     path: arcclaw-banner.txt
   
-  jackson:
-    escape-non-ascii-characters: false
-
   index-dependency:
     arcclaw-core:
       group-id: com.arcclaw
@@ -103,8 +100,8 @@ quarkus:
       # The OpenAI extension properly parses model-name DYNAMICALLY at runtime!
       
       # Groq is OpenAI API-compatible
-      base-url: "https://api.groq.com/openai/v1"
-      api-key: "${GROQ_API_KEY}"
+      base-url: "${ARCCLAW_LLM_BASE_URL:https://api.groq.com/openai/v1}"
+      api-key: "${ARCCLAW_LLM_API_KEY}"
       timeout: 120s
       max-retries: 3
       embedding-model:
@@ -112,8 +109,7 @@ quarkus:
         log-responses: false
       chat-model:
         #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
-        #model-name: "llama-3.3-70b-versatile"
-        model-name: "meta-llama/llama-4-scout-17b-16e-instruct"
+        model-name: "${ARCCLAW_LLM_MODEL_NAME:meta-llama/llama-4-scout-17b-16e-instruct}"
         temperature: 0.1
         log-requests: false
         log-responses: false
@@ -293,8 +289,8 @@ arcclaw:
       keep-recent: 7
       max-tokens: 1024
       max-chars: 96000 
-      api-key: "${ARCCLAW_COMPACTION_API_KEY:${quarkus.langchain4j.openai.api-key}}"
-      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${quarkus.langchain4j.openai.base-url}}"
+      api-key: "${ARCCLAW_COMPACTION_API_KEY:${ARCCLAW_LLM_API_KEY}}"
+      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
   chat-memory:

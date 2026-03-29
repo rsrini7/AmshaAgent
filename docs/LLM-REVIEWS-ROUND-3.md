@@ -88,7 +88,7 @@ Given the trajectory of the project, here are the **strongest candidates** for P
 
 **Proposed scope**:
 - `@Observes StartupEvent` validation bean throws `IllegalStateException` if running `prod` profile with the dev-default pepper
-- Startup check also validates `GROQ_API_KEY` is non-empty and API keys are non-default
+- Startup check also validates `ARCCLAW_LLM_API_KEY` is non-empty and API keys are non-default
 - Zero new infra — pure config validation
 
 ***

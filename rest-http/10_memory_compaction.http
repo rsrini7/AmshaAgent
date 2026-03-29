@@ -39,7 +39,7 @@
 ###   Chat memory (ChatMemoryStore) is NOT wiped on session soft-reset (/reset).
 ###   Only the ReAct checkpoint state is cleared. LLM retains conversational context.
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set
+### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl  = http://localhost:8080

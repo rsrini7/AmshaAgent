@@ -70,6 +70,15 @@ public class SandboxExecTool implements AgentTool {
     @Override public boolean requiresSandbox() { return false; }
     public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
+    // Colons are illegal in Windows path components (drive-letter separator).
+    // Inner session IDs contain colons: {outer}:d:{role}:{uuid}
+    // Sanitize for filesystem use only — sessionId itself is never modified.
+    private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
+
+    private static String toFsName(String sessionId) {
+        return FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
+    }
+
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         try {
@@ -107,7 +116,7 @@ public class SandboxExecTool implements AgentTool {
             }
 
             String sessionId = WorkspaceContext.requireSessionId();
-            Path workspaceRoot = Path.of(workspaceRootDir, sessionId);
+            Path workspaceRoot = Path.of(workspaceRootDir, toFsName(sessionId));
 
             Map<String, String> requiredSecrets = Map.of();
             Object secretsObj = params.get("secrets");
@@ -142,7 +151,7 @@ public class SandboxExecTool implements AgentTool {
         }
     }
 
-    // ── Interpreted: Python, Node, Bash ──────────────────────────────────────
+    // Interpreted: Python, Node, Bash
 
     private ToolResponse executeInterpreted(String sessionId, Path workspaceRoot,
             String lang, String code, Map<String, Object> params,
@@ -165,7 +174,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(result.output()));
     }
 
-    // ── Java: write ClassName.java → javac → java -cp ────────────────────────
+    // Java: write ClassName.java → javac → java -cp
 
     // Container-side mount point — must match what ProcessIsolationExecutor mounts workspaceRoot as.
     // The Dockerfile sets WORKDIR /workspace; ProcessIsolationExecutor mounts workspaceRoot there.
@@ -208,7 +217,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(runResult.output()));
     }
 
-    // ── Go: write main.go → go run ────────────────────────────────────────────
+    // Go: write main.go → go run
 
     private ToolResponse executeGo(String sessionId, Path workspaceRoot,
         String code, Map<String, String> secrets) throws Exception {
@@ -230,7 +239,7 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success(truncate(result.output()));
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     List<String> buildCommand(String lang, String code) {
         return switch (lang) {

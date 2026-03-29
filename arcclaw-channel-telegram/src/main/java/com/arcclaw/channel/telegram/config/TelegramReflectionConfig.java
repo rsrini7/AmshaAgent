@@ -2,7 +2,6 @@ package com.arcclaw.channel.telegram.config;
 
 import com.arcclaw.channel.telegram.TelegramAgentHandler;
 import com.arcclaw.channel.telegram.TelegramCallbackHandler;
-
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**

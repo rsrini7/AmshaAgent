@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -13,6 +14,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
@@ -209,8 +211,15 @@ public class AgentLoop {
                     log.infof("Resumed %d steps from active checkpoint (status=%s)",
                               resumedHistory.size(), status);
                 } else {
-                    log.debugf("Ignoring terminal checkpoint (status=%s). Starting fresh turn.",
-                               status);
+                    // FIX: Archive the terminal checkpoint so findBySessionAndRole() (ORDER BY id DESC)
+                    // and findLatestAwaitingApproval() never return this stale row in future calls.
+                    // Without this, a COMPLETED row for (sessionId, researcher) at checkpoint_id=5
+                    // stays in the DB and shadows a newer AWAITING_APPROVAL row at checkpoint_id=6,
+                    // causing "/approve → No pending tool executions require approval".
+                    log.debugf("Ignoring terminal checkpoint (status=%s). Archiving and starting fresh turn.",
+                            status);
+                    checkpoint.setStatus(CheckpointStatus.ARCHIVED);
+                    agentStore.save(checkpoint);
                 }
             }
 
@@ -224,12 +233,16 @@ public class AgentLoop {
                     maxIterations
             );
 
-            AgentResult resumeResult = checkpointResumeHandler.handle(
-                    agentExecutionContext, resumedHistory, context);
-            if (resumeResult != null) {
+            AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);
+            if (resumeResult != null) { 
                 result = resumeResult;
             } else {
-                result = stateMachineRunner.run(agentExecutionContext, engine, resumedHistory);
+                // Fast-path: if delegate_to_agent just executed on resume, the sub-agent's
+                // answer is already in the last history step. Skip the wrap-up LLM call entirely.
+                // Guard: ⏳ prefix = sub-agent hit rate-limit — let state machine retry in that case.
+                result = tryDelegateFinishFastPath(sessionId, resumedHistory)
+                        .orElseGet(() -> stateMachineRunner.run(
+                                agentExecutionContext, engine, resumedHistory));
             }
 
             // --- CHECKPOINT FINAL STATE ---
@@ -307,6 +320,42 @@ public class AgentLoop {
             MDC.remove(MdcKeys.USER_ID); // FIX: was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
         }
+    }
+
+    /**
+     * After CheckpointResumeHandler executes a pending tool on resume, checks if
+     * the tool was delegate_to_agent with a clean result. If so, returns the
+     * sub-agent's answer directly — skipping the coordinator wrap-up LLM call
+     * (~9,800 tokens) and the re-delegation loop.
+     *
+     * Returns empty() for all other tools, forcing the normal state machine path.
+     */
+    private Optional<AgentResult> tryDelegateFinishFastPath(
+            String sessionId, List<ReasoningStep> resumedHistory) {
+
+        if (resumedHistory.isEmpty()) return Optional.empty();
+
+        ReasoningStep last = resumedHistory.getLast();
+        String toolName = last.action();
+        String observation = last.observation();
+
+        if (!ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) return Optional.empty();
+        if (observation == null || observation.isBlank()) return Optional.empty();
+
+        // FIX: also guard against tool failure messages that don't start with ⏳/⚠️.
+        // e.g. "Parameter 'agent' is required." — success=false but no sentinel prefix.
+        // Without this guard, tool errors are sent to Telegram as finished answers.
+        if (observation.startsWith("⏳")
+                || observation.startsWith("⚠️")
+                || observation.startsWith("Tool execution failed")
+                || observation.startsWith("Parameter ")        // ← tool param validation errors
+                || observation.startsWith("❌")) {             // ← explicit failure prefix
+            return Optional.empty();
+        }
+
+        log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +
+                "for session %s — skipping coordinator wrap-up LLM call", sessionId);
+        return Optional.of(AgentResult.finished(observation, List.copyOf(resumedHistory)));
     }
 
     private void tryStampChannelInfo(String sessionId, String canonicalRole,

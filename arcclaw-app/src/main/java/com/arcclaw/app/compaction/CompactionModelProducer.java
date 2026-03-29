@@ -26,20 +26,16 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.memory.compaction.api-key")
     String compactionApiKey;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.model",
-                    defaultValue = "llama-3.1-8b-instant")
+    @ConfigProperty(name = "arcclaw.memory.compaction.model", defaultValue = "llama-3.1-8b-instant")
     String modelId;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.max-tokens",
-                    defaultValue = "1024")
+    @ConfigProperty(name = "arcclaw.memory.compaction.max-tokens", defaultValue = "1024")
     int compactionMaxTokens;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
-                    defaultValue = "http://localhost:11434")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://localhost:11434")
     String ollamaBaseUrl;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.ollama-model",
-                    defaultValue = "llama3.2")
+    @ConfigProperty(name = "arcclaw.memory.compaction.ollama-model", defaultValue = "llama3.2")
     String ollamaModelId;
 
     @Inject
@@ -49,9 +45,10 @@ public class CompactionModelProducer {
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {
-        log.infof("CompactionModelProducer: provider=%s model=%s", provider, modelId);
+        log.infof("CompactionModelProducer provider=%s model=%s", provider, modelId);
         return modelFactory.createModel(
-                provider, compactionBaseUrl, compactionApiKey, modelId, compactionMaxTokens,
-                Duration.ofSeconds(10), ollamaBaseUrl, ollamaModelId);
+            provider, compactionBaseUrl, compactionApiKey,
+            modelId, compactionMaxTokens, Duration.ofSeconds(10),
+            ollamaBaseUrl, ollamaModelId);
     }
 }

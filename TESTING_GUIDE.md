@@ -114,7 +114,7 @@ For REST client testing (manual), start the app in dev or serve mode with a `.en
 **Minimum required:**
 
 ```env
-GROQ_API_KEY=gsk_your_groq_key
+ARCCLAW_LLM_API_KEY=gsk_your_groq_key
 ARCCLAW_API_KEY_INTERNAL=key-internal-changeme
 ARCCLAW_API_KEY_CI=key-ci-changeme
 ARCCLAW_VAULT_PEPPER=test-pepper-32-chars-min-xxxxxxxxxx

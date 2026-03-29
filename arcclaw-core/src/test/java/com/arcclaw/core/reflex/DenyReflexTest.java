@@ -24,6 +24,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -90,6 +91,7 @@ class DenyReflexTest {
 
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId("cron-session-1");
+        cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
         when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
 
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
@@ -172,7 +174,7 @@ class DenyReflexTest {
         MessageContext ctx = createContext("/deny cron-123");
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny cron-123", ctx);
 
-        assertEquals("⏳ Already processing your approval. Please wait.", result.commandResponse().get());
+        assertEquals("⏳ Already processing your denial. Please wait.", result.commandResponse().get());
         assertFalse(ctx.isResumeSignal());
     }
 }

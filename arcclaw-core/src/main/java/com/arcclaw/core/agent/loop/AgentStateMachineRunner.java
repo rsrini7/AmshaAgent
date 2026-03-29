@@ -189,15 +189,6 @@ public class AgentStateMachineRunner {
         return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
     }
 
-    private static final List<String> INTERNAL_ERROR_FRAGMENTS = List.of(
-            "text cannot be null or blank",
-            "NullPointerException",
-            "IllegalArgumentException",
-            "IllegalStateException",
-            "StackOverflowError",
-            "OutOfMemoryError"
-    );
-
     private boolean isRawToolCallLeak(String answer) {
         if (answer == null || answer.isBlank()) return false;
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find();
@@ -313,17 +304,37 @@ public class AgentStateMachineRunner {
         return answer;
     }
 
+    private static final Pattern INTERNAL_JVM_ERROR_PATTERN = Pattern.compile(
+        // Matches exception name in thrown form only: "ExceptionType: message"
+        // Handles both:
+        //   java.lang.NullPointerException: Cannot invoke ...   (fully qualified)
+        //   NullPointerException: Cannot invoke ...             (short form)
+        // Does NOT match:
+        //   "the NullPointerException occurs because..."        (analysis prose)
+        //   "analyzing a NullPointerException in OrderService"  (subject usage)
+        "(^|[\\n\\r])[ \\t]*((?:java\\.lang\\.)?(?:" +
+        "NullPointerException|IllegalArgumentException|" +
+        "IllegalStateException|StackOverflowError|OutOfMemoryError" +
+        "))[ \\t]*:",
+        Pattern.MULTILINE
+    );
+
+
     /**
      * Ensures raw LangChain4J / JVM internal exception messages never reach the user.
      */
-    private String sanitizeErrorForUser(String answer, String sessionId) {
+   private String sanitizeErrorForUser(String answer, String sessionId) {
         if (answer == null) return null;
-        for (String fragment : INTERNAL_ERROR_FRAGMENTS) {
-            if (answer.contains(fragment)) {
-                log.warnf("ANSWER-GUARD: sanitized internal error message '%s' for session %s",
-                        answer, sessionId);
-                return "⚠️ An internal error occurred. Please try again.";
-            }
+        // Inner sessions (:d: prefix) produce developer analysis — never sanitize.
+        // A debugger analyzing a NullPointerException will contain "NullPointerException"
+        // in its answer — that is expected and must reach the coordinator unmodified.
+        if (sessionId != null && sessionId.contains(":d:")) return answer;
+        // For outer sessions: only fire on raw JVM exception form ("ExceptionType: message"),
+        // NOT on prose discussion ("the NullPointerException occurs because...").
+        if (INTERNAL_JVM_ERROR_PATTERN.matcher(answer).find()) {
+            log.warnf("ANSWER-GUARD: sanitized internal error message '%s' for session %s",
+                    answer, sessionId);
+            return "⚠️ An internal error occurred. Please try again.";
         }
         return answer;
     }

@@ -25,7 +25,7 @@ services:
       # The OpenAI extension properly parses this dynamically at runtime!
       #- QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-llama3.2:1b}
       - QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ARCCLAW_LLM_API_KEY=${ARCCLAW_LLM_API_KEY:-}
       # FIX: Added Jina embedding key missing from previous env setups
       - ARCCLAW_EMBED_API_KEY=${ARCCLAW_EMBED_API_KEY:-}
       - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317

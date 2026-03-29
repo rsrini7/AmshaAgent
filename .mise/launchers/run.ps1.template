@@ -1,0 +1,199 @@
+# run.ps1 - ArcClaw launcher with first-run auto-setup
+# Usage: ./run.ps1 serve | chat | attach | ask "your goal"
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$ErrorActionPreference = 'Stop'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$suffix    = if ($env:OS -eq 'Windows_NT') { '-runner.exe' } else { '-runner' }
+$exe       = Join-Path $scriptDir "arcclaw-app-1.0.0-SNAPSHOT$suffix"
+
+if (-not (Test-Path $exe)) { Write-Host "X  Binary not found: $exe"; exit 1 }
+
+# ── First-run auto-setup ───────────────────────────────────────────────────────
+$envPath = Join-Path $scriptDir '.env'
+if (-not (Test-Path $envPath)) {
+    Write-Host "`n  -- ArcClaw first-run setup --------------------------------------------------"
+    Write-Host "  No .env found -- running interactive setup now.`n"
+
+    $envExample = Join-Path $scriptDir '.env.example'
+    if (Test-Path $envExample) { Copy-Item $envExample $envPath } else { New-Item $envPath -ItemType File | Out-Null }
+
+    function New-RandomBase64 { [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) })) }
+    function Set-EnvLine($file, $key, $value) {
+        $c = [System.IO.File]::ReadAllText($file)
+        if ($c -match "(?m)^$key=.*") { $c = $c -replace "(?m)^$key=.*", "$key=$value" } else { $c += "`n$key=$value" }
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+    function Clear-EnvLine($file, $key) {
+        $c = [System.IO.File]::ReadAllText($file)
+        $c = $c -replace "(?m)^$key=.*", "# $key="
+        [System.IO.File]::WriteAllText($file, $c)
+    }
+    function Set-TelegramKeys($file) {
+        $tgToken = Read-Host "  TELEGRAM_BOT_TOKEN  (@BotFather -> /newbot)"
+        Set-EnvLine $file 'TELEGRAM_BOT_TOKEN' $tgToken
+        Write-Host "  OK  TELEGRAM_BOT_TOKEN set."
+        do {
+            $raw = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated)").Trim() -replace '\s', ''
+            if ($raw -notmatch '^[0-9]+(,[0-9]+)*$') { Write-Host "  X  Numeric only, e.g. 123456789" }
+        } while ($raw -notmatch '^[0-9]+(,[0-9]+)*$')
+        Set-EnvLine $file 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS' $raw
+        Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+        do {
+            $rawu = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated)").Trim() -replace '\s', ''
+            if ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$') { Write-Host "  X  Letters, numbers and _ only" }
+        } while ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$')
+        Set-EnvLine $file 'ARCCLAW_TELEGRAM_ALLOWED_USERS' $rawu
+        Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USERS set."
+        Write-Host ""
+    }
+
+    # ── Crypto keys ───────────────────────────────────────────────────────────
+    $vaultPepper = New-RandomBase64
+    $auditKey    = New-RandomBase64
+    $apiKey      = New-RandomBase64
+    $apiKeyCi    = New-RandomBase64
+
+    Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER'     $vaultPepper
+    Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY'   $auditKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' $apiKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI'       $apiKeyCi
+
+    # FIX Issue 6: write keys-backup.txt matching run.sh.template behaviour
+    $backup  = "# ArcClaw -- auto-generated secret keys`n"
+    $backup += "# Created: $(Get-Date)`n"
+    $backup += "#`n"
+    $backup += "# WARNING: VAULT_PEPPER and AUDIT_HMAC_KEY are immutable.`n"
+    $backup += "# Changing them after first boot corrupts your vault and audit log.`n"
+    $backup += "# Store somewhere safe (password manager, encrypted backup).`n"
+    $backup += "#`n"
+    $backup += "ARCCLAW_VAULT_PEPPER=$vaultPepper`n"
+    $backup += "ARCCLAW_AUDIT_HMAC_KEY=$auditKey`n"
+    $backup += "ARCCLAW_API_KEY_INTERNAL=$apiKey`n"
+    $backup += "ARCCLAW_API_KEY_CI=$apiKeyCi`n"
+    [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
+
+    Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEY_INTERNAL - API_KEY_CI"
+    Write-Host "  !!  Saved to keys-backup.txt -- VAULT_PEPPER is immutable, back it up"
+    Write-Host ""
+
+    # ── LLM Provider ──────────────────────────────────────────────────────────
+    $provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]"
+    if (-not $provider) { $provider = 'openrouter' }
+    Set-EnvLine $envPath 'ARCCLAW_LLM_PROVIDER' $provider
+
+    if ($provider -eq 'groq') {
+        do {
+            $key = Read-Host "  GROQ API KEY (starts with gsk_)"
+            if (-not $key.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_" }
+        } while (-not $key.StartsWith('gsk_'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+    } elseif ($provider -eq 'openrouter') {
+        # ... existing key validation ...
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY'  $key
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://openrouter.ai/api/v1'
+        Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME'          'openrouter/free'
+        Set-EnvLine $envPath 'ARCCLAW_INTENT_CLASSIFIER_MODEL' 'meta-llama/llama-3.1-8b-instruct:free'
+        Set-EnvLine $envPath 'ARCCLAW_COMPACTION_MODEL'        'meta-llama/llama-3.1-8b-instruct:free'
+        Set-EnvLine $envPath 'ARCCLAW_COMPACTION_BASE_URL'     'https://openrouter.ai/api/v1'
+    } elseif ($provider -eq 'openai') {
+        $key = Read-Host "  OPENAI API KEY (starts with sk-)"
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+    } elseif ($provider -eq 'ollama') {
+        Write-Host "  i  Ollama selected. No API key needed. Ensure it is running on localhost:11434"
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'http://localhost:11434/v1'
+    }
+    Write-Host "  OK  LLM Provider configured as $provider.`n"
+
+    # ── Embeddings ────────────────────────────────────────────────────────────
+    Write-Host "  Embedding provider: jina -- API key required."
+    $embedKey = Read-Host "  ARCCLAW_EMBED_API_KEY (starts with jina_)"
+    Set-EnvLine $envPath 'ARCCLAW_EMBED_API_KEY' $embedKey
+    Write-Host "  OK  ARCCLAW_EMBED_API_KEY set.`n"
+
+    # ── GitHub token (optional) ───────────────────────────────────────────────
+    $ghToken = Read-Host "  GITHUB_TOKEN  (optional -- press Enter to skip)"
+    if ($ghToken) { Set-EnvLine $envPath 'GITHUB_TOKEN' $ghToken; Write-Host "  OK  GITHUB_TOKEN set." }
+    else { Clear-EnvLine $envPath 'GITHUB_TOKEN'; Write-Host "  i   GITHUB_TOKEN skipped." }
+    Write-Host ""
+
+    # ── Telegram ─────────────────────────────────────────────────────────────
+    $envText   = [System.IO.File]::ReadAllText($envPath)
+    $tgMatch   = [regex]::Match($envText, '(?m)^ARCCLAW_TELEGRAM_ENABLED=(.+)')
+    $tgEnabled = if ($tgMatch.Success) { $tgMatch.Groups[1].Value.Trim() } else { 'false' }
+    $cmd       = if ($args.Count -gt 0) { $args[0] } else { 'serve' }
+
+    if ($cmd -eq 'attach') {
+        Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ENABLED' 'true'
+        Write-Host "  attach mode -- Telegram configuration required.`n"
+        Set-TelegramKeys $envPath
+    } elseif ($tgEnabled -eq 'true') {
+        Write-Host "  Telegram is enabled in .env.example."
+        $tgTokenPeek = Read-Host "  TELEGRAM_BOT_TOKEN  (Enter to skip and disable Telegram)"
+        if (-not $tgTokenPeek) {
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ENABLED' 'false'
+            Clear-EnvLine $envPath 'TELEGRAM_BOT_TOKEN'
+            Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS'
+            Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS'
+            Write-Host "  i   Telegram disabled. Re-run ./run.ps1 attach to configure later.`n"
+        } else {
+            Set-EnvLine $envPath 'TELEGRAM_BOT_TOKEN' $tgTokenPeek
+            Write-Host "  OK  TELEGRAM_BOT_TOKEN set."
+            do {
+                $raw = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS  (numeric IDs, comma-separated)").Trim() -replace '\s', ''
+                if ($raw -notmatch '^[0-9]+(,[0-9]+)*$') { Write-Host "  X  Numeric only" }
+            } while ($raw -notmatch '^[0-9]+(,[0-9]+)*$')
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS' $raw
+            Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USER_IDS set."
+            do {
+                $rawu = (Read-Host "  ARCCLAW_TELEGRAM_ALLOWED_USERS  (usernames without @, comma-separated)").Trim() -replace '\s', ''
+                if ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$') { Write-Host "  X  Letters, numbers and _ only" }
+            } while ($rawu -notmatch '^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$')
+            Set-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS' $rawu
+            Write-Host "  OK  ARCCLAW_TELEGRAM_ALLOWED_USERS set.`n"
+        }
+    } else {
+        Clear-EnvLine $envPath 'TELEGRAM_BOT_TOKEN'
+        Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USER_IDS'
+        Clear-EnvLine $envPath 'ARCCLAW_TELEGRAM_ALLOWED_USERS'
+        Write-Host "  i   Telegram not enabled -- placeholders cleared.`n"
+    }
+
+    Write-Host "  OK  Setup complete. Starting ArcClaw..."
+    Write-Host "  --------------------------------------------------------------------------`n"
+}
+
+# ── Safe .env loader ──────────────────────────────────────────────────────────
+if (Test-Path $envPath) {
+    Get-Content $envPath | Where-Object { $_ -match '^[^#].*=' } | ForEach-Object {
+        $k, $v = $_ -split '=', 2
+        [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
+    }
+}
+if (-not $env:ARCCLAW_SQLITE_VEC_PATH) { $env:ARCCLAW_SQLITE_VEC_PATH = './lib/vec0' }
+if (-not $env:ARCCLAW_DATA_DIR)        { $env:ARCCLAW_DATA_DIR = './data' }
+
+if ($args.Count -eq 0) {
+    Write-Host ""
+    Write-Host "    ___                ________  "
+    Write-Host "   /   |  __________  / ____/ /___ __      __"
+    Write-Host "  / /| | / ___/ ___/ / /   / / __  / | /| / /"
+    Write-Host " / ___ |/ /  / /__  / /___/ / /_/ /| |/ |/ / "
+    Write-Host "/_/  |_/_/   \___/  \____/_/\__,_/ |__/|__/  "
+    Write-Host ""
+    Write-Host "  ArcClaw Agent Kernel"
+    Write-Host ""
+    Write-Host "  USAGE"
+    Write-Host "    ./run.ps1 serve                    Start HTTP + MCP server on :8080"
+    Write-Host "    ./run.ps1 chat                     Start interactive REPL"
+    Write-Host "    ./run.ps1 ask ""your goal here""    Run one-shot task and exit"
+    Write-Host "    ./run.ps1 attach                   Start Telegram daemon"
+    Write-Host ""
+    Write-Host "  OPTIONS (append to any command)"
+    Write-Host "    --role coordinator|researcher|architect|synthesizer|debugger"
+    Write-Host ""
+    exit 0
+}
+$process = Start-Process -FilePath $exe -ArgumentList $args -NoNewWindow -Wait -PassThru
+exit $process.ExitCode

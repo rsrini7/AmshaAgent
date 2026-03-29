@@ -24,9 +24,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.quarkus.arc.Unremovable;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;

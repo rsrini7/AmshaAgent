@@ -105,10 +105,11 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 && !isSentinelGoal
                 && !hasRecentGithubContext
                 && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
-            String guardObs = "Tool 'github' was blocked by the Tool Intent Guard: " +
-                    "the user's request does not reference a GitHub resource. " +
-                    "Please answer the user's question using your own knowledge " +
-                    "and respond with FINISH. Do not call any tools.";
+            String guardObs = "GitHub tool blocked: the goal contains no GitHub repository or resource URL. " +
+                    "If the goal contains a Java class reference (e.g. 'com.example.OrderService'), " +
+                    "that is a class name, NOT a GitHub path. " +
+                    "Analyze the stack trace or code snippet from the goal text directly. " +
+                    "FINISH with your analysis now — do NOT call any other tools.";
             log.warnf("[TOOL-INTENT-GUARD] github blocked session=%s goal='%s'",
                     sessionId, goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
             return Optional.of(new ToolInvocationGuard.GuardDecision.Blocked(guardObs));

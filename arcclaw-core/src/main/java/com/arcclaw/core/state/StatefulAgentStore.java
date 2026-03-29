@@ -150,4 +150,12 @@ public interface StatefulAgentStore {
      * Called by WorkspaceManager.terminateSession() and on resume failure.
      */
     void clearBatchResuming(String sessionId);
+
+    /**
+     * Returns the most-recent checkpoint for this session that is in
+     * {@link CheckpointStatus#AWAITING_APPROVAL} status, regardless of agentRole.
+     * Used by ApproveReflex to avoid stale-row ambiguity when multiple rows
+     * exist for the same (sessionId, agentRole) pair.
+     */
+    Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId);
 }

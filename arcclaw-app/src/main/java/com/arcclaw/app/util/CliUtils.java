@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Pre-boot CLI utilities for ArcClaw.
@@ -17,18 +18,13 @@ import java.util.List;
  *
  * <p><strong>Telegram validation strategy:</strong>
  * <ul>
- *   <li>{@code attach} mode — hard error if any Telegram var is missing.
- *       The command has no purpose without Telegram.</li>
+ *   <li>{@code attach} mode — hard error if any Telegram var is missing.</li>
  *   <li>{@code serve} mode — Telegram is optional. We soft-warn (print to
  *       stderr, do not exit) in three cases:
  *       <ol>
- *         <li>{@code ARCCLAW_TELEGRAM_ENABLED=true} but vars are missing
- *             → Telegram will fail at runtime.</li>
- *         <li>{@code TELEGRAM_BOT_TOKEN} is set but
- *             {@code ARCCLAW_TELEGRAM_ENABLED} is not true
- *             → Looks like an oversight; bot won't start.</li>
- *         <li>{@code TELEGRAM_BOT_TOKEN} set but access-control vars missing
- *             → Security hole: bot would be open to anyone.</li>
+ *         <li>{@code ARCCLAW_TELEGRAM_ENABLED=true} but vars are missing.</li>
+ *         <li>{@code TELEGRAM_BOT_TOKEN} set but ENABLED not true.</li>
+ *         <li>{@code TELEGRAM_BOT_TOKEN} set but access-control vars missing.</li>
  *       </ol>
  *   </li>
  * </ul>
@@ -39,15 +35,12 @@ public class CliUtils {
     // Required vars per mode
     // -------------------------------------------------------------------------
 
-    /** Required for every mode except bare --help / --version. */
+    /**
+     * Required for every mode except bare --help / --version.
+     * ARCCLAW_LLM_API_KEY is intentionally NOT here — it is provider-conditional.
+     * See GROQ_KEY_SPEC / OPENROUTER_KEY_SPEC / OPENAI_KEY_SPEC below.
+     */
     private static final VarSpec[] CORE_VARS = {
-        new VarSpec(
-            "GROQ_API_KEY",
-            "Groq Cloud API key (used as the LLM backend).",
-            "1. Sign up at https://console.groq.com",
-            "2. Create an API key — it starts with 'gsk_'",
-            "3. Add:  GROQ_API_KEY=gsk_your_key_here"
-        ),
         new VarSpec(
             "ARCCLAW_VAULT_PEPPER",
             "Secret pepper for the credential vault (>=32 random characters).",
@@ -90,6 +83,33 @@ public class CliUtils {
             "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"
         ),
     };
+
+    private static final VarSpec GROQ_KEY_SPEC = new VarSpec(
+        "ARCCLAW_LLM_API_KEY",
+        "Groq Cloud API key (provider=groq). Starts with 'gsk_'.",
+        "1. Sign up at https://console.groq.com",
+        "2. Create an API key — it starts with 'gsk_'",
+        "3. Add:  ARCCLAW_LLM_API_KEY=gsk_your_key_here"
+    );
+
+    private static final VarSpec OPENROUTER_KEY_SPEC = new VarSpec(
+        "ARCCLAW_LLM_API_KEY",        // ← same key, different instructions
+        "OpenRouter API key (provider=openrouter). Starts with 'sk-or-v1-'.",
+        "1. Sign up at https://openrouter.ai (free tier available)",
+        "2. Create an API key — it starts with 'sk-or-v1-'",
+        "3. Add:  ARCCLAW_LLM_API_KEY=sk-or-v1-your_key_here",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://openrouter.ai/api/v1",
+        "Free models with tool support: https://openrouter.ai/models?q=free"
+    );
+
+    private static final VarSpec OPENAI_KEY_SPEC = new VarSpec(
+        "ARCCLAW_LLM_API_KEY",        // ← same key
+        "OpenAI API key (provider=openai). Starts with 'sk-'.",
+        "1. Sign up at https://platform.openai.com",
+        "2. Create a project API key",
+        "3. Add:  ARCCLAW_LLM_API_KEY=sk-your_key_here",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.openai.com/v1"
+    );
 
     /** Required for attach mode (hard) and validated for serve mode (soft). */
     private static final VarSpec[] TELEGRAM_VARS = {
@@ -140,9 +160,25 @@ public class CliUtils {
         boolean dotEnvPresent = Files.exists(Path.of(".env"));
         List<VarSpec> missing = new ArrayList<>();
 
-        // ── Core vars — always required ───────────────────────────────────────
+        // ── Core vars — always required (no provider key here) ───────────────
         for (VarSpec spec : CORE_VARS) {
             if (!isSet(spec.key)) missing.add(spec);
+        }
+
+        // ── Provider-aware API key — selected by ARCCLAW_LLM_PROVIDER ────────
+        // Read the provider from the real environment (not Quarkus config —
+        // the CDI container hasn't started yet at this point in the boot).
+        String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
+                .map(String::toLowerCase)
+                .orElse("groq");  // groq is the default if unset
+        VarSpec providerKeySpec = switch (llmProvider) {
+            case "openrouter" -> OPENROUTER_KEY_SPEC;
+            case "openai"     -> OPENAI_KEY_SPEC;
+            case "ollama"     -> null;   // Ollama is local — no API key needed
+            default           -> GROQ_KEY_SPEC;  // groq + any unknown provider
+        };
+        if (providerKeySpec != null && !isSet(providerKeySpec.key)) {
+            missing.add(providerKeySpec);
         }
 
         // ── Telegram vars — hard required for attach, soft-warn for serve ─────
@@ -185,8 +221,8 @@ public class CliUtils {
         }
 
         System.err.println();
-        System.err.println("  " + "-".repeat(74));
-        System.err.println("  After updating .env, re-run:");
+        System.err.println("  " + "-".repeat(75));
+        System.err.println("  After setting all values, re-run your command.");
         System.err.println("    ./run.sh " + mode + "    (Linux/macOS/WSL2)");
         System.err.println("    ./run.ps1 " + mode + "   (Windows)");
         System.err.println();
@@ -194,7 +230,7 @@ public class CliUtils {
     }
 
     // -------------------------------------------------------------------------
-    // Internal helpers
+    // Private helpers
     // -------------------------------------------------------------------------
 
     /**
@@ -291,7 +327,7 @@ public class CliUtils {
     }
 
     // -------------------------------------------------------------------------
-    // Data
+    // VarSpec — unchanged, kept as class (not record) to match original
     // -------------------------------------------------------------------------
 
     private static class VarSpec {

@@ -40,9 +40,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private boolean isSchemaValidationError(String message) {
         if (message == null) return false;
         return message.contains("tool call validation failed")
-                || message.contains("did not match schema")
-                || message.contains("value must be one of")
-                || message.contains("errors:");
+            || message.contains("did not match schema")
+            || message.contains("value must be one of")
+            || message.contains("errors")
+            // OpenRouter/provider-agnostic additions:
+            || message.toLowerCase().contains("json schema")
+            || message.toLowerCase().contains("invalid_tool")
+            || message.toLowerCase().contains("tool_use_failed");
     }
 
     /**
@@ -51,12 +55,21 @@ public class LangChainReasoningEngine implements ReasoningEngine {
      */
     private boolean isRateLimitError(String message) {
         if (message == null) return false;
-        return message.contains("rate_limit_exceeded")
-                || message.contains("tokens per minute")
-                || message.contains("tokens per day")
-                || message.contains("TPM")
-                || message.contains("TPD")
-                || message.contains("Rate limit");
+        String lower = message.toLowerCase();
+        return lower.contains("ratelimitexceeded")       // Groq TPM
+                || lower.contains("tokens per minute")        // Groq verbose
+                || lower.contains("tokens per day")           // Groq TPD
+                || lower.contains("tpm")                      // Groq short
+                || lower.contains("tpd")                      // Groq short
+                || lower.contains("rate limit")               // Generic
+                // OpenRouter-specific:
+                || lower.contains("rate_limit_exceeded")      // OpenRouter JSON code
+                || lower.contains("too many requests")        // HTTP 429 text
+                || lower.contains("no credits")               // OpenRouter free tier exhausted
+                || lower.contains("per_request_limit")        // OpenRouter per-request cap
+                || lower.contains("free tier limit")          // OpenRouter free tier message
+                || lower.contains("x-ratelimit")              // Header-based hint in message
+                || message.contains("429");                   // Numeric HTTP code in message
     }
 
     /**

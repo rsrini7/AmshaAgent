@@ -13,7 +13,6 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;

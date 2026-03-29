@@ -23,7 +23,7 @@
 ###   Sessions created with FULL autonomy no longer need approval for
 ###   NETWORK_OUTBOUND tools. See 14_budget_governance.http FLOW D.
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY + GITHUB_TOKEN set.
+### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY + GITHUB_TOKEN set.
 ###   GithubTool is the only built-in tool with ToolOperation=NETWORK_OUTBOUND.
 ### ═══════════════════════════════════════════════════════════════
 

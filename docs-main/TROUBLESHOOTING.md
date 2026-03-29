@@ -2376,8 +2376,8 @@ sqlite3 arcclaw-meta.db ".indexes audit_event"
 
 ### 🔴 Failure: Missing Groq API Key During Integration Tests
 **Symptom:** `ContextCompactionServiceIntegrationTest` crashes on startup with `IllegalArgumentException: groq api key must be defined. It can be set via 'quarkus.langchain4j.groq.api-key' property.`
-**Root Cause:** The `ContextCompactionService` injects the `@Identifier("compaction")` `ChatLanguageModel` which requires a Groq API key to initialize. Using raw environment variables like `@ConfigProperty(name = "GROQ_API_KEY")` fails because MicroProfile requires dot-notation or explicit mapping.
-**Resolution:** Created a dedicated `CompactionTestProfile.java` and updated `CompactionModelProducer` to use `@ConfigProperty(name = "quarkus.langchain4j.groq.api-key")` which is mapped to `${GROQ_API_KEY}` in `application.yaml`.
+**Root Cause:** The `ContextCompactionService` injects the `@Identifier("compaction")` `ChatLanguageModel` which requires a Groq API key to initialize. Using raw environment variables like `@ConfigProperty(name = "ARCCLAW_LLM_API_KEY")` fails because MicroProfile requires dot-notation or explicit mapping.
+**Resolution:** Created a dedicated `CompactionTestProfile.java` and updated `CompactionModelProducer` to use `@ConfigProperty(name = "quarkus.langchain4j.groq.api-key")` which is mapped to `${ARCCLAW_LLM_API_KEY}` in `application.yaml`.
 
 ### 🔴 Failure: Incompatible ReasoningEngine Method Signatures in Mockito Tests
 **Symptom:** Widespread compilation and runtime failures in tests like `AgentResilienceTest`, `AgentLoopTest`, and `AgentResourceTest` asserting `Invalid use of argument matchers...`.
@@ -2409,14 +2409,14 @@ spikes. Camel route thread pool exhausts while waiting for Groq compaction LLM c
 strictly before `agentLoop.run()`. Virtual threads are unpooled — blocking them
 has zero impact on the Camel route thread pool.
 
-### 🔴 Bug: `@ConfigProperty(name = "GROQ_API_KEY")` Fails at Startup
+### 🔴 Bug: `@ConfigProperty(name = "ARCCLAW_LLM_API_KEY")` Fails at Startup
 **Symptom:** `DeploymentException: No config value of type [class java.lang.String]
-exists for: GROQ_API_KEY`
+exists for: ARCCLAW_LLM_API_KEY`
 **Root Cause:** MicroProfile `@ConfigProperty` uses dot-notation config keys.
-Raw env var names like `GROQ_API_KEY` are not valid `@ConfigProperty` names even
+Raw env var names like `ARCCLAW_LLM_API_KEY` are not valid `@ConfigProperty` names even
 when the env var exists.
 **Resolution:** Use `@ConfigProperty(name = "quarkus.langchain4j.groq.api-key")`
-which is already mapped to `${GROQ_API_KEY}` in `application.yaml`.
+which is already mapped to `${ARCCLAW_LLM_API_KEY}` in `application.yaml`.
 
 ### 🔴 Bug: `ChatLanguageModel.chat(String)` Does Not Exist
 **Symptom:** `NoSuchMethodError` or compile error: `cannot find symbol: chat(String)`.
@@ -2996,7 +2996,7 @@ In multi-threaded environments with connection pooling (Agroal), relying on a on
 2. **Discovery Limitations**: Even with Jandex, some environments fail to link implementations in the leaf module (`arcclaw-app`) to injection points in a library module (`arcclaw-core`) during the augmentation phase.
 **Resolution**:
 - **Definitive Fix**: Moved the implementation beans (`IntentClassifierService`, `TelegramAllowlistGuard`, and `ModelProducer`) from `arcclaw-app` into `arcclaw-core`. This places the beans in the same bean archive as the handlers that inject them, ensuring 100% discovery reliability.
-- **Test Fix**: Added a dummy `GROQ_API_KEY` to `arcclaw-core/src/test/resources/application.yaml` to prevent CDI boot failures in core unit tests now that `ModelProducer` is part of the core bean archive.
+- **Test Fix**: Added a dummy `ARCCLAW_LLM_API_KEY` to `arcclaw-core/src/test/resources/application.yaml` to prevent CDI boot failures in core unit tests now that `ModelProducer` is part of the core bean archive.
 
 ### 🔴 Failure: `java.lang.ClassCastException` or Mockito Type Mismatch with Sealed Interfaces
 **Symptom**: Tests fail when mocking `TelegramMessageMapper` or comparing `ChannelMessage` types.

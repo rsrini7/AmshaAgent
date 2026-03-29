@@ -48,7 +48,7 @@ TELEGRAM_BOT_TOKEN=<token from @BotFather>
 ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
 ARCCLAW_TELEGRAM_ALLOWED_USERS=<your @username without @>
 ARCCLAW_API_KEY_INTERNAL=key-internal-changeme   # or your custom key
-GROQ_API_KEY=<your groq key>                     # must start with gsk_
+ARCCLAW_LLM_API_KEY=<your groq key>                     # must start with gsk_
 ARCCLAW_VAULT_PEPPER=<32+ char random string>
 ARCCLAW_AUDIT_HMAC_KEY=<32+ char random string>
 ```
@@ -104,7 +104,7 @@ Before running any section of this guide, confirm:
 - [ ] Bot responds to a simple `Hello` message within a few seconds
 - [ ] Logs show `Resolved session <uuid> for chat <chatId>` for your chat
 - [ ] `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` contains your numeric user ID
-- [ ] `GROQ_API_KEY` is set and valid (key starts with `gsk_`)
+- [ ] `ARCCLAW_LLM_API_KEY` is set and valid (key starts with `gsk_`)
 - [ ] Boot logs show `WORM triggers installed on audit_event`
 - [ ] Boot logs show `FTS5 memory index and triggers verified`
 - [ ] Boot logs show `sqlite-vec extension loaded` OR `vector search disabled, FTS5 only`

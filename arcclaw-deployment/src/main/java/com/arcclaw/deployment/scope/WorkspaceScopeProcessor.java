@@ -8,6 +8,7 @@ import io.quarkus.arc.deployment.CustomScopeBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import org.jboss.jandex.DotName;
 
 /**
  * Quarkus build-time processor that registers the {@link WorkspaceScoped}
@@ -35,7 +36,7 @@ public class WorkspaceScopeProcessor {
      */
     @BuildStep
     CustomScopeBuildItem customScope() {
-        return new CustomScopeBuildItem(WorkspaceScoped.class);
+        return new CustomScopeBuildItem(DotName.createSimple(WorkspaceScoped.class.getName()));
     }
 
     /**

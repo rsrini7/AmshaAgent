@@ -71,5 +71,12 @@ public enum CheckpointStatus {
      * partially corrupted and MUST be flagged for human review.
      * Terminal.
      */
-    COMPROMISED
+    COMPROMISED,
+    /**
+     * Terminal status set by AgentLoop when a fresh turn starts over an existing
+     * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from
+     * all load() and findLatestAwaitingApproval() queries so they never shadow
+     * a newer AWAITING_APPROVAL row for the same (sessionId, agentRole) pair.
+     */
+    ARCHIVED
 }

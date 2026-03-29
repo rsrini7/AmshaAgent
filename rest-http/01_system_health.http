@@ -120,7 +120,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: {"answer":"4",...}
 # Exercises: SessionRegistry (Phase 64-B3), AgentLoop, GovernanceLayer,
 # LLM API (Groq), AuditService, HMAC chain.
-# Requires: GROQ_API_KEY valid (starts with gsk_).
+# Requires: ARCCLAW_LLM_API_KEY valid (starts with gsk_).
 POST {{baseUrl}}/api/v1/sessions/{{smokeSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}

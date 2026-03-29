@@ -26,7 +26,7 @@
 ###   "brihaspati"→ ARCHITECT
 ###   "dattatreya" or "datta" → SYNTHESIZER
 ###
-### Prerequisites: ArcClaw serve mode, GROQ_API_KEY set.
+### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set.
 ###   GitHub tool tests additionally require GITHUB_TOKEN in vault.
 ### ═══════════════════════════════════════════════════════════════
 
