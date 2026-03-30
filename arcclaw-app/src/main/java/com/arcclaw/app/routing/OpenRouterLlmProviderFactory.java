@@ -1,10 +1,12 @@
 package com.arcclaw.app.routing;
 
+import java.util.Map;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import java.util.Map;
 
 @ApplicationScoped
 public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {

@@ -3,10 +3,10 @@ package com.arcclaw.channel.web;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
-import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class WebJobNotifier implements ChannelJobNotifier {

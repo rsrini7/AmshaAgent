@@ -2,11 +2,11 @@ package com.arcclaw.channel.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+
+import com.arcclaw.core.agent.reasoning.AgentChatModelProvider;
 import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
 import org.mockito.Mockito;
-
-import com.arcclaw.core.agent.reasoning.AgentChatModelProvider;
 
 /**
  * Mock producer and provider to satisfy LangChain4J ChatModel dependencies

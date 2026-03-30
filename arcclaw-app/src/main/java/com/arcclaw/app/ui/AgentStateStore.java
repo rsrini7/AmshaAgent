@@ -3,8 +3,10 @@ package com.arcclaw.app.ui;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 
 /**

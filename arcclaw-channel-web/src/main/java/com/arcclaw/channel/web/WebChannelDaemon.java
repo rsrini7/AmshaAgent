@@ -2,11 +2,11 @@ package com.arcclaw.channel.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelDaemon;
 import com.arcclaw.channel.api.ChannelType;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class WebChannelDaemon implements ChannelDaemon {

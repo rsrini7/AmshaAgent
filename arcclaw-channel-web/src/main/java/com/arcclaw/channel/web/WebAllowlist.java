@@ -1,9 +1,11 @@
 package com.arcclaw.channel.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class WebAllowlist implements ChannelAllowlist {
@@ -11,8 +13,8 @@ public class WebAllowlist implements ChannelAllowlist {
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
 
-    @jakarta.inject.Inject
-    org.jboss.logging.Logger log;
+    @Inject
+    Logger log;
 
     @Override
     public boolean isAllowed(String platformUserId, String username) {

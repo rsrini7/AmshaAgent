@@ -9,12 +9,11 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
+import com.arcclaw.app.ui.dto.AgentEvent;
+import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
 import org.jboss.resteasy.reactive.RestStreamElementType;
-
-import com.arcclaw.app.ui.dto.AgentEvent;
-import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 
 /**
  * SSE endpoint to broadcast agent status updates to the Lit frontend.

@@ -1,9 +1,11 @@
 package com.arcclaw.core.tools;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
@@ -18,8 +20,8 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Component A5 — BraveWebSearchTool.
@@ -108,7 +110,7 @@ public class BraveWebSearchTool implements AgentTool {
         }
 
         try {
-            String encodedQuery = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
+            String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
             URI uri = URI.create(BRAVE_API_URL + "?q=" + encodedQuery + "&count=" + count);
 
             HttpRequest request = HttpRequest.newBuilder()

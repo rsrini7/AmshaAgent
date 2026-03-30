@@ -9,10 +9,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.event.Event;
-import com.arcclaw.core.agent.event.AgentStateChangedEvent;
+import jakarta.enterprise.inject.Instance;
 
+import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;

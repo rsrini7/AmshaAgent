@@ -31,6 +31,7 @@ import com.cronutils.parser.CronParser;
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import org.jboss.logging.Logger;
 
 /**
  * Agent tool for scheduling autonomous future tasks via cron expressions.
@@ -295,7 +296,7 @@ public class ScheduleTaskTool implements AgentTool {
         } catch (DateTimeException e) {
             // Unrecognized timezone — warn and fall back rather than propagating
             // a 400 error that would be incorrectly fast-pathed as a terminal answer.
-            org.jboss.logging.Logger.getLogger(ScheduleTaskTool.class)
+            Logger.getLogger(ScheduleTaskTool.class)
                 .warnf("[ScheduleTaskTool] Unrecognized timezone '%s' — defaulting to UTC", raw);
             return ZoneOffset.UTC;
         }

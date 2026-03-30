@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -107,7 +108,7 @@ public class McpClientService {
     public void connectStdio(String serverName, String command, List<String> args, Map<String, String> env) {
         try {
             ProcessBuilder pb = new ProcessBuilder();
-            List<String> fullCmd = new java.util.ArrayList<>();
+            List<String> fullCmd = new ArrayList<>();
             fullCmd.add(command);
             if (args != null) fullCmd.addAll(args);
             pb.command(fullCmd);

@@ -1,5 +1,6 @@
 package com.arcclaw.app.ui;
 
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -8,6 +9,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.reflex.ApproveReflex;
+import com.arcclaw.core.reflex.DenyReflex;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -51,8 +57,8 @@ public class HitlService {
         );
     }
 
-    @Inject com.arcclaw.core.reflex.ApproveReflex approveReflex;
-    @Inject com.arcclaw.core.reflex.DenyReflex denyReflex;
+    @Inject ApproveReflex approveReflex;
+    @Inject DenyReflex denyReflex;
 
     public void resolve(String taskId, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
@@ -64,14 +70,14 @@ public class HitlService {
              throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
 
-        com.arcclaw.channel.api.ChannelType chType = 
-            com.arcclaw.channel.api.ChannelType.fromString(cp.getChannelType())
-                .orElse(com.arcclaw.channel.api.ChannelType.TELEGRAM);
+        ChannelType chType = 
+            ChannelType.fromString(cp.getChannelType())
+                .orElse(ChannelType.TELEGRAM);
 
-        com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser(
+        ChannelUser user = new ChannelUser(
             cp.getChannelPlatformId(), cp.getChannelPlatformId(), "Operator", chType);
         
-        com.arcclaw.core.pipeline.MessageContext context = new com.arcclaw.core.pipeline.MessageContext(
+        MessageContext context = new MessageContext(
             cp.getChannelPlatformId(), user, null);
         context.setSessionId(cp.getSessionId());
 
@@ -87,7 +93,7 @@ public class HitlService {
             String taskId,
             String toolName,
             Map<String, Object> params,
-            java.time.Instant requestedAt,
+            Instant requestedAt,
             String agentRole
     ) {}
 }

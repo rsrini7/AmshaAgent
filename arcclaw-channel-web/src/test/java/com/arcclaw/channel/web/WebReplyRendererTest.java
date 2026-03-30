@@ -1,10 +1,11 @@
 package com.arcclaw.channel.web;
 
-import java.util.List;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.List;
+
 import com.arcclaw.channel.api.ReplyNode;
+import org.junit.jupiter.api.Test;
 
 class WebReplyRendererTest {
 

@@ -1,6 +1,7 @@
 package com.arcclaw.app.routing;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -9,9 +10,9 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
+import dev.langchain4j.model.chat.ChatModel;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -73,7 +74,7 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
         return AnthropicChatModel.builder()
                 .apiKey(token.get())
                 .modelName(modelName)
-                .timeout(config.timeout().orElse(java.time.Duration.ofMinutes(3)))
+                .timeout(config.timeout().orElse(Duration.ofMinutes(3)))
                 .logRequests(logHttp)
                 .logResponses(logHttp)
                 .build();

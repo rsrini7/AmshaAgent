@@ -5,8 +5,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -20,8 +20,8 @@ import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Component A6 — SerperWebSearchTool.

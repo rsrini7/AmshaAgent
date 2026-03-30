@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import com.arcclaw.core.security.AutonomyLevel;
@@ -51,7 +52,7 @@ class SessionHeartbeatTrackerTest {
         heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
         heartbeatTracker.bindOwner("sess1", "key-123");
 
-        heartbeatTracker.injectHeartbeat("sess1", java.time.Instant.now());
+        heartbeatTracker.injectHeartbeat("sess1", Instant.now());
 
         Optional<String> owner = heartbeatTracker.getOwner("sess1");
         assertTrue(owner.isPresent());

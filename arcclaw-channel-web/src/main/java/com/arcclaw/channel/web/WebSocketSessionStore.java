@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
+
 import io.quarkus.websockets.next.WebSocketConnection;
 
 @ApplicationScoped

@@ -1,6 +1,7 @@
 package com.arcclaw.channel.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.channel.api.IntentClassifier;
 
 /**

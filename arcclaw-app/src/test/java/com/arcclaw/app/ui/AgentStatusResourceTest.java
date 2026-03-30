@@ -1,13 +1,14 @@
 package com.arcclaw.app.ui;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.InjectMock;
-import org.junit.jupiter.api.Test;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class AgentStatusResourceTest {

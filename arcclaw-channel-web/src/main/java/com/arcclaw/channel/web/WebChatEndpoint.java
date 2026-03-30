@@ -1,15 +1,15 @@
 package com.arcclaw.channel.web;
 
-import java.time.Instant;
-import java.util.UUID;
 import java.io.StringReader;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
-
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -21,11 +21,10 @@ import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
 import io.quarkus.websockets.next.OnTextMessage;
-
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import io.quarkus.websockets.next.WebSocket;
 import io.quarkus.websockets.next.WebSocketConnection;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.jboss.logging.Logger;
 
 @WebSocket(path = "/ws/chat")
 public class WebChatEndpoint {

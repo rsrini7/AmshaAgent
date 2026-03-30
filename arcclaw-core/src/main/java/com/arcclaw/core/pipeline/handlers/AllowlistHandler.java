@@ -1,5 +1,5 @@
 package com.arcclaw.core.pipeline.handlers;
- 
+
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;

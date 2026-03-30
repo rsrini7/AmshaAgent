@@ -1,15 +1,16 @@
 package com.arcclaw.app.security;
 
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
-
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
+
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 
 /**
  * AUTH-15: Per-key session isolation.

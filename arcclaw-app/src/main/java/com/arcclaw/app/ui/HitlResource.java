@@ -4,9 +4,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.arcclaw.app.ui.dto.PendingApprovalDto;
-
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -16,6 +13,9 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import com.arcclaw.app.ui.dto.PendingApprovalDto;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @Path("hitl")
 @RunOnVirtualThread
