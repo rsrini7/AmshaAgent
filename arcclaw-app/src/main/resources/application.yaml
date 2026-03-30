@@ -23,6 +23,9 @@ quarkus:
     arcclaw-channel-telegram:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-telegram
+    arcclaw-channel-web:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-web
     arcclaw-rag:
       group-id: com.arcclaw
       artifact-id: arcclaw-rag
@@ -337,6 +340,9 @@ arcclaw:
       allowed-users: "${ARCCLAW_TELEGRAM_ALLOWED_USERS:mock-telegram-user}"
       silent-block: false
       block-response: "⛔ Access denied."
+    web:
+      enabled: "${ARCCLAW_WEB_ENABLED:true}"
+      require-auth: "${ARCCLAW_WEB_REQUIRE_AUTH:false}"
 
   pii:
     mode: REDACT_AND_FORWARD   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY

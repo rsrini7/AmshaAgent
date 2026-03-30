@@ -41,12 +41,6 @@
         <artifactId>quarkus-hibernate-validator</artifactId>
     </dependency>
 
-    <!-- WebSocket -->
-    <!-- <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-websockets-next</artifactId>
-    </dependency> -->
-
     <!-- Vert.x async -->
     <dependency>
       <groupId>io.quarkus</groupId>

@@ -1,4 +1,6 @@
 package com.arcclaw.core.pipeline.handlers;
+ 
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -19,9 +21,6 @@ public class AllowlistHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AllowlistHandler.class);
 
     @Inject
-    ChannelAllowlist allowlist;
-
-    @Inject
     ChannelPluginRegistry channelPluginRegistry;
 
     @Override
@@ -34,8 +33,19 @@ public class AllowlistHandler implements MessageHandler {
         String userId = context.getUser().platformId();
         String username = context.getUser().displayName();
 
+        Optional<ChannelAllowlist> allowlistOpt = channelPluginRegistry.find(context.getChannelType())
+                .map(ChannelPlugin::allowlist);
+
+        if (allowlistOpt.isEmpty()) {
+            log.warnf("No allowlist found for channel %s — allowing access by default.", context.getChannelType());
+            return HandleResult.CONTINUE;
+        }
+
+        ChannelAllowlist allowlist = allowlistOpt.get();
         if (!allowlist.isAllowed(userId, username)) {
-            log.warnf("[SECURITY] Blocked unauthorized user: %s (id: %s)", username, userId);
+            log.warnf("[SECURITY] Blocked unauthorized user: %s (id: %s) on channel %s", 
+                    username, userId, context.getChannelType());
+            
             if (!allowlist.isSilentBlock()) {
                 channelPluginRegistry.find(context.getChannelType())
                     .map(ChannelPlugin::sender)

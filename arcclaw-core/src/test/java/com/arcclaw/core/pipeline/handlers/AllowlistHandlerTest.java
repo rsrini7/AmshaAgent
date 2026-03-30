@@ -34,10 +34,10 @@ class AllowlistHandlerTest {
         
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
+        when(plugin.allowlist()).thenReturn(allowlist);
         when(registry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
 
         handler = new AllowlistHandler();
-        handler.allowlist = allowlist;
         handler.channelPluginRegistry = registry;
 
         ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.CLI);

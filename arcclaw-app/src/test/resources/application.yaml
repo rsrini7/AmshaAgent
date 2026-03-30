@@ -1,3 +1,6 @@
+ARCCLAW_LLM_API_KEY: "dummy-test-key"
+ARCCLAW_LLM_BASE_URL: "http://localhost:9999"
+ 
 arcclaw:
   data-dir: "target/data"
   rag:

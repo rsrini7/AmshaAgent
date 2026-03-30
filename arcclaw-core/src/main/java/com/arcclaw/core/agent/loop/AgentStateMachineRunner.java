@@ -7,8 +7,10 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.persona.AgentRole;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -71,6 +73,7 @@ public class AgentStateMachineRunner {
     @Inject SkillRegistry skillRegistry;
     @Inject @InputSanitizer.PII InputSanitizer piiScanReflex;
     @Inject AgentOtelContext agentOtelContext;
+    @Inject Event<AgentStateChangedEvent> stateChangedEvent;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
@@ -82,6 +85,9 @@ public class AgentStateMachineRunner {
 
         log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
                 context.sessionId(), piiScanReflex.sanitize(context.goal()), context.maxIterations());
+
+        // Fire initial status event §78.4
+        stateChangedEvent.fire(new AgentStateChangedEvent(context.sessionId(), context.agentRole(), "active", context.goal()));
 
         writer.saveGoal(context.sessionId(), context.goal());
 
@@ -105,7 +111,10 @@ public class AgentStateMachineRunner {
                     return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
                 }
 
-                if (engineDecision.type() == DecisionType.TERMINAL) return engineDecision.result();
+                if (engineDecision.type() == DecisionType.TERMINAL) {
+                    fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), engineDecision.result());
+                    return engineDecision.result();
+                }
                 if (engineDecision.type() == DecisionType.CONTINUE) {
                     transientError = engineDecision.transientError();
                     llmSchemaErrorCount = engineDecision.llmSchemaErrorCount();
@@ -158,7 +167,10 @@ public class AgentStateMachineRunner {
 
                 StepDecision validationDecision = toolStepHandler.validateTool(
                         context, history, step, consecutiveFailures);
-                if (validationDecision.type() == DecisionType.TERMINAL) return validationDecision.result();
+                if (validationDecision.type() == DecisionType.TERMINAL) {
+                    fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), validationDecision.result());
+                    return validationDecision.result();
+                }
                 if (validationDecision.type() == DecisionType.CONTINUE) {
                     consecutiveFailures = validationDecision.consecutiveFailures();
                     continue;
@@ -176,7 +188,10 @@ public class AgentStateMachineRunner {
 
                 StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
                         context, history, step, consecutiveFailures, skillSnapshot);
-                if (invocationDecision.type() == DecisionType.TERMINAL) return invocationDecision.result();
+                if (invocationDecision.type() == DecisionType.TERMINAL) {
+                    fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), invocationDecision.result());
+                    return invocationDecision.result();
+                }
                 consecutiveFailures = invocationDecision.consecutiveFailures();
 
             } catch (Exception e) {
@@ -191,7 +206,18 @@ public class AgentStateMachineRunner {
 
         log.warnf("StateMachine exceeded %d iterations for session=%s",
                 context.maxIterations(), context.sessionId());
-        return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+        AgentResult loopRes = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+        fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), loopRes);
+        return loopRes;
+    }
+
+    private void fireTerminalEvent(String sessionId, String role, String goal, AgentResult result) {
+        String status = switch (result) {
+            case AgentResult.Finished _ -> "idle";
+            case AgentResult.AwaitingApproval _ -> "waiting_approval";
+            default -> "error";
+        };
+        stateChangedEvent.fire(new AgentStateChangedEvent(sessionId, role, status, goal));
     }
 
     private boolean isRawToolCallLeak(String answer) {
@@ -251,7 +277,8 @@ public class AgentStateMachineRunner {
 
             return synthesizerAgent.synthesize(sessionId, combinedContext, history);
         }
-
+ 
+        stateChangedEvent.fire(new AgentStateChangedEvent(sessionId, agentRole, "idle", null));
         return AgentResult.finished(answer, List.copyOf(history));
     }
 
