@@ -1,14 +1,23 @@
 package com.arcclaw.mcp.transport;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -36,6 +45,10 @@ public class McpClientService {
 
     private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> sessionIds = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Process> processes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, OutputStream> processWriters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BufferedReader> processReaders = new ConcurrentHashMap<>();
+    
     private final AtomicInteger requestIdGen = new AtomicInteger(1);
     private HttpClient httpClient;
 
@@ -53,14 +66,7 @@ public class McpClientService {
     public void connect(String serverName, String serverUrl) {
         serverUrls.put(serverName, serverUrl);
         try {
-            ObjectNode initParams = objectMapper.createObjectNode();
-            initParams.put("protocolVersion", "2024-11-05");
-            initParams.set("capabilities", objectMapper.createObjectNode());
-            ObjectNode clientInfo = objectMapper.createObjectNode();
-            clientInfo.put("name", "arcclaw");
-            clientInfo.put("version", "1.0");
-            initParams.set("clientInfo", clientInfo);
-
+            ObjectNode initParams = createInitParams();
             HttpResponse<String> initResp = postJsonRpc(serverUrl, "initialize", initParams, null);
             if (initResp.statusCode() != 200) {
                 throw new McpConnectionException(
@@ -79,7 +85,7 @@ public class McpClientService {
                     "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
             }
             JsonNode payload = objectMapper.readTree(toolsResp.body());
-            registerTools(serverName, payload.path("result"));
+            registerTools(serverName, payload.path("result"), McpTransportType.HTTP_SSE);
 
             log.infof("Connected to HTTP/SSE MCP server '%s', registered tools: %d",
                 serverName, registry.getAll().stream()
@@ -88,28 +94,76 @@ public class McpClientService {
         } catch (McpConnectionException e) {
             throw e;
         } catch (Exception e) {
-            // IMPORTANT: restore interrupt flag if this was an InterruptedException
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new McpConnectionException(
                 "Failed to connect to HTTP MCP server: " + serverName, e);
         }
     }
 
+    /**
+     * Connect to a local MCP server via STDIO.
+     * Starts a sub-process and performs the MCP handshake over its stdin/stdout.
+     */
+    public void connectStdio(String serverName, String command, List<String> args, Map<String, String> env) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder();
+            List<String> fullCmd = new java.util.ArrayList<>();
+            fullCmd.add(command);
+            if (args != null) fullCmd.addAll(args);
+            pb.command(fullCmd);
+            if (env != null) pb.environment().putAll(env);
+            
+            log.infof("Starting local STDIO MCP server: %s (cmd: %s)", serverName, fullCmd);
+            Process process = pb.start();
+            processes.put(serverName, process);
+            processWriters.put(serverName, process.getOutputStream());
+            processReaders.put(serverName, new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)));
+
+            // 1. Initialize
+            ObjectNode initParams = createInitParams();
+            sendRequestStdio(serverName, "initialize", initParams); // wait for response
+            
+            // 2. Initialized
+            sendNotificationStdio(serverName, "notifications/initialized", objectMapper.createObjectNode());
+
+            // 3. List tools
+            JsonNode toolsResult = sendRequestStdio(serverName, "tools/list", objectMapper.createObjectNode());
+            registerTools(serverName, toolsResult, McpTransportType.STDIO);
+
+            log.infof("Connected to STDIO MCP server '%s', registered tools: %d",
+                serverName, registry.getAll().stream()
+                    .filter(t -> t.mcpServerName().equals(serverName)).count());
+
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new McpConnectionException("Failed to connect to local MCP server via STDIO: " + serverName, e);
+        }
+    }
+
+    private ObjectNode createInitParams() {
+        ObjectNode initParams = objectMapper.createObjectNode();
+        initParams.put("protocolVersion", "2024-11-05");
+        initParams.set("capabilities", objectMapper.createObjectNode());
+        ObjectNode clientInfo = objectMapper.createObjectNode();
+        clientInfo.put("name", "arcclaw");
+        clientInfo.put("version", "1.0");
+        initParams.set("clientInfo", clientInfo);
+        return initParams;
+    }
+
     @Timeout(5000)
     @Retry(maxRetries = 2, delay = 200)
     public String invoke(String serverName, String toolName, String paramsJson) {
+        if (processes.containsKey(serverName)) {
+            return invokeStdio(serverName, toolName, paramsJson);
+        }
         String url = serverUrls.get(serverName);
         if (url == null) {
             throw new McpConnectionException(
                 "No URL registered for HTTP MCP server: " + serverName);
         }
         try {
-            ObjectNode callParams = objectMapper.createObjectNode();
-            callParams.put("name", toolName);
-            callParams.set("arguments",
-                (paramsJson != null && !paramsJson.isBlank())
-                    ? objectMapper.readTree(paramsJson)
-                    : objectMapper.createObjectNode());
+            ObjectNode callParams = createCallParams(toolName, paramsJson);
 
             HttpResponse<String> resp = postJsonRpc(
                 url, "tools/call", callParams, sessionIds.get(serverName));
@@ -117,20 +171,43 @@ public class McpClientService {
                 throw new RuntimeException(
                     "tools/call failed [" + resp.statusCode() + "] for: " + toolName);
             }
-            JsonNode result = objectMapper.readTree(resp.body()).path("result");
-            JsonNode content = result.path("content");
-            if (content.isArray() && !content.isEmpty()) {
-                return content.get(0).path("text").asText();
-            }
-            return result.toString();
+            return extractTextResult(resp.body());
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            // IMPORTANT: restore interrupt flag if this was an InterruptedException
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new RuntimeException(
                 "Failed to invoke tool '" + toolName + "' on server: " + serverName, e);
         }
+    }
+
+    private String invokeStdio(String serverName, String toolName, String paramsJson) {
+        try {
+            ObjectNode callParams = createCallParams(toolName, paramsJson);
+            JsonNode result = sendRequestStdio(serverName, "tools/call", callParams);
+            return extractTextResult(objectMapper.writeValueAsString(objectMapper.createObjectNode().set("result", result)));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to invoke local tool via STDIO: " + toolName, e);
+        }
+    }
+
+    private ObjectNode createCallParams(String toolName, String paramsJson) throws Exception {
+        ObjectNode callParams = objectMapper.createObjectNode();
+        callParams.put("name", toolName);
+        callParams.set("arguments",
+            (paramsJson != null && !paramsJson.isBlank())
+                ? objectMapper.readTree(paramsJson)
+                : objectMapper.createObjectNode());
+        return callParams;
+    }
+
+    private String extractTextResult(String body) throws Exception {
+        JsonNode result = objectMapper.readTree(body).path("result");
+        JsonNode content = result.path("content");
+        if (content.isArray() && !content.isEmpty()) {
+            return content.get(0).path("text").asText();
+        }
+        return result.toString();
     }
 
     private HttpResponse<String> postJsonRpc(String baseUrl, String method,
@@ -168,7 +245,7 @@ public class McpClientService {
         httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
     }
 
-    private void registerTools(String serverName, JsonNode result) {
+    private void registerTools(String serverName, JsonNode result, McpTransportType transport) {
         JsonNode tools = result.path("tools");
         if (!tools.isArray()) return;
         for (JsonNode tool : tools) {
@@ -177,7 +254,59 @@ public class McpClientService {
             String schema = tool.has("inputSchema")
                 ? tool.path("inputSchema").toString() : "{}";
             registry.register(new DynamicToolCapability(
-                name, desc, serverName, McpTransportType.HTTP_SSE, false, schema));
+                name, desc, serverName, transport, false, schema));
         }
+    }
+
+    private JsonNode sendRequestStdio(String serverName, String method, ObjectNode params) throws Exception {
+        int id = requestIdGen.getAndIncrement();
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("jsonrpc", "2.0");
+        request.put("id", id);
+        request.put("method", method);
+        request.set("params", params);
+
+        OutputStream out = processWriters.get(serverName);
+        if (out == null) throw new IOException("No writer for MCP server: " + serverName);
+        NdjsonWriter.writeLine(out, objectMapper.writeValueAsString(request));
+
+        BufferedReader reader = processReaders.get(serverName);
+        if (reader == null) throw new IOException("No reader for MCP server: " + serverName);
+        String line = reader.readLine();
+        if (line == null) throw new IOException("MCP server closed connection unexpectedly");
+        
+        JsonNode response = objectMapper.readTree(line);
+        if (response.has("error")) {
+            throw new RuntimeException("MCP server error: " + response.get("error").toString());
+        }
+        return response.get("result");
+    }
+
+    private void sendNotificationStdio(String serverName, String method, ObjectNode params) throws Exception {
+        ObjectNode notification = objectMapper.createObjectNode();
+        notification.put("jsonrpc", "2.0");
+        notification.put("method", method);
+        notification.set("params", params);
+        
+        OutputStream out = processWriters.get(serverName);
+        if (out == null) return;
+        NdjsonWriter.writeLine(out, objectMapper.writeValueAsString(notification));
+    }
+
+    @PreDestroy
+    void cleanup() {
+        log.info("McpClientService shutting down — terminating local MCP processes");
+        processes.forEach((name, process) -> {
+            process.destroy();
+            try {
+                if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
+        });
+        processes.clear();
     }
 }

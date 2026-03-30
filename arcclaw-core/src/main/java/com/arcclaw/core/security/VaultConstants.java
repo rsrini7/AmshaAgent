@@ -16,6 +16,11 @@ public final class VaultConstants {
     public static final String SYSTEM_SESSION_ID = "SYSTEM";
 
     /**
+     * System-level key for Claude Code OAuth provider.
+     */
+    public static final String CLAUDE_CODE_OAUTH_TOKEN_KEY = "claude-code-oauth-token";
+
+    /**
      * The name of the system secret used to derive the audit hmac key.
      */
     public static final String AUDIT_HMAC_KEY_NAME = "arcclaw-audit-hmac-key";

@@ -64,7 +64,22 @@ public enum ToolCapability {
     /**
      * Ability to ingest a document into the RAG knowledge base.
      */
-    INGEST_DOCUMENT("ingest_document", "Ingest a document into the RAG knowledge base");
+    INGEST_DOCUMENT("ingest_document", "Ingest a document into the RAG knowledge base"),
+
+    /**
+     * Ability to manage a multi-step checklist for progress tracking.
+     */
+    MANAGE_CHECKLIST("CheckListTool", "Manage a project checklist to track multi-step execution progress."),
+
+    /**
+     * Ability to dynamically register a new MCP server.
+     */
+    REGISTER_MCP_SERVER("add_mcp_server", "Dynamically register a new MCP server (HTTP or STDIO) into the agent's toolbelt."),
+
+    /**
+     * Ability to search the web using Brave Search.
+     */
+    WEB_SEARCH("brave_web_search", "Search the web for real-time information using the Brave API.");
 
     private final String toolName;
     private final String description;

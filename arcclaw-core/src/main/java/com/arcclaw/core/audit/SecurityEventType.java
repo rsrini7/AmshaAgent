@@ -12,6 +12,7 @@ public enum SecurityEventType {
 
     // Tool layer
     TOOL_INVOKED,          // every ToolRegistry.invokeTool() call
+    TOOL_EXECUTED,         // recorded at the end of tool execution
     TOOL_BLOCKED,          // SecurityException from autonomy check
 
     // Approval flow
@@ -66,7 +67,7 @@ public enum SecurityEventType {
      */
     public boolean isMandatory() {
         return switch (this) {
-            case VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
+            case VAULT_ACCESS, TOOL_INVOKED, TOOL_EXECUTED, BUDGET_EXCEEDED,
                  PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
                  CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED, DELEGATE_APPROVAL,
                  UNAUTHORIZED_ACCESS -> true;
