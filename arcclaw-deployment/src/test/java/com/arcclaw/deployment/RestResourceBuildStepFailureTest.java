@@ -41,6 +41,7 @@ public class RestResourceBuildStepFailureTest {
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", ":memory:")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
+        .overrideConfigKey("quarkus.langchain4j.timeout", "10s")
         .setExpectedException(RuntimeException.class);
 
     @Test

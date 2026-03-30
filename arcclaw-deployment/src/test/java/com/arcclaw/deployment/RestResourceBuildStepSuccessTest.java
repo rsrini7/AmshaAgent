@@ -40,7 +40,8 @@ public class RestResourceBuildStepSuccessTest {
         .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", ":memory:")
-        .overrideConfigKey("arcclaw.auto-seed-secrets", "false");
+        .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
+        .overrideConfigKey("quarkus.langchain4j.timeout", "10s");
 
     @Test
     public void testBuildSucceeds() {
