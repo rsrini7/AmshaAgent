@@ -94,4 +94,10 @@ public record ReasoningStep(
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
                 this.outputTokens);
     }
+
+    /** Mapping factory: constructs a ReasoningStep from all its constituent fields. */
+    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
+            int inputTk, int outputTk) {
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk);
+    }
 }

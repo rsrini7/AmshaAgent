@@ -287,14 +287,12 @@ public class ParallelToolStepExecutor {
 
         log.infof("[PARALLEL] session=%s batch completed: %s", context.sessionId(), summary);
 
-        ReasoningStep completedBatchStep = new ReasoningStep(
+        ReasoningStep completedBatchStep = ReasoningStep.parallelBatch(
             batchStep.thought(),
-            ReasoningStep.PARALLEL_SENTINEL_DUNDER,
             completedPayload,
-            summary,
             batchStep.inputTokens(),
             batchStep.outputTokens()
-        );
+        ).withObservation(summary);
 
         history.add(completedBatchStep);
 
@@ -304,8 +302,9 @@ public class ParallelToolStepExecutor {
         // only — it does NOT manage tool-step history. No write needed here.
 
         for (ParallelToolCall c : completed) {
-            ReasoningStep toolStep = new ReasoningStep(
-                null, c.toolName(), c.params(), c.observation(), 0, 0);
+            ReasoningStep toolStep = ReasoningStep.pending(
+                null, c.toolName(), c.params(), 0, 0)
+                .withObservation(c.observation());
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), toolStep));
         }

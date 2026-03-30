@@ -51,9 +51,9 @@ class StatefulAgentStoreTest {
     void testSaveAndLoadCheckpoint() {
         WorkspaceScopeHolder.run(SESSION, () -> {
             var steps = List.of(
-                    new ReasoningStep("Analyzing the repo", "github",
+                    ReasoningStep.of("Analyzing the repo", "github",
                             Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
-                    new ReasoningStep("Done analyzing", ReasoningStep.FINISH,
+                    ReasoningStep.of("Done analyzing", ReasoningStep.FINISH,
                             Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
 
             // Save
@@ -88,7 +88,7 @@ class StatefulAgentStoreTest {
         String sessionFail = SESSION + "-fail";
         WorkspaceScopeHolder.run(sessionFail, () -> {
             var steps = List.of(
-                    new ReasoningStep("Trying something", "github",
+                    ReasoningStep.of("Trying something", "github",
                             Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
 
             var checkpoint = store.save(sessionFail, ROLE, steps);
@@ -110,7 +110,7 @@ class StatefulAgentStoreTest {
         String sessionComplete = SESSION + "-complete";
         WorkspaceScopeHolder.run(sessionComplete, () -> {
             var steps = List.of(
-                    new ReasoningStep("All done", ReasoningStep.FINISH,
+                    ReasoningStep.of("All done", ReasoningStep.FINISH,
                             Map.of("answer", "42"), "Task completed.", 0, 0));
 
             var checkpoint = store.save(sessionComplete, ROLE, steps);
@@ -131,10 +131,10 @@ class StatefulAgentStoreTest {
         String sessionUpsert = SESSION + "-upsert";
         WorkspaceScopeHolder.run(sessionUpsert, () -> {
             var steps1 = List.of(
-                    new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0));
+                    ReasoningStep.of("Step 1", "github", Map.of(), "obs1", 0, 0));
             var steps2 = List.of(
-                    new ReasoningStep("Step 1", "github", Map.of(), "obs1", 0, 0),
-                    new ReasoningStep("Step 2", "github", Map.of(), "obs2", 0, 0));
+                    ReasoningStep.of("Step 1", "github", Map.of(), "obs1", 0, 0),
+                    ReasoningStep.of("Step 2", "github", Map.of(), "obs2", 0, 0));
 
             var cp1 = store.save(sessionUpsert, ROLE, steps1);
             var cp2 = store.save(sessionUpsert, ROLE, steps2);
@@ -155,7 +155,7 @@ class StatefulAgentStoreTest {
 
             // 1) Old AWAITING_APPROVAL
             var steps1 = List.of(
-                    new ReasoningStep("Thinking 1", "github",
+                    ReasoningStep.of("Thinking 1", "github",
                             Map.of("repo", "old"), "obs", 0, 0)
             );
             var cp1 = store.save("cron-" + cronId + "-old", role, steps1);
@@ -164,7 +164,7 @@ class StatefulAgentStoreTest {
 
             // 2) Newer AWAITING_APPROVAL
             var steps2 = List.of(
-                    new ReasoningStep("Thinking 2", "github",
+                    ReasoningStep.of("Thinking 2", "github",
                             Map.of("repo", "new"), "obs", 0, 0)
             );
             var cp2 = store.save("cron-" + cronId + "-new", role, steps2);
@@ -173,7 +173,7 @@ class StatefulAgentStoreTest {
 
             // 3) COMPLETED (should be ignored)
             var steps3 = List.of(
-                    new ReasoningStep("Done", ReasoningStep.FINISH,
+                    ReasoningStep.of("Done", ReasoningStep.FINISH,
                             Map.of("answer", "42"), "Task completed.", 0, 0)
             );
             var cp3 = store.save("cron-" + cronId + "-completed", role, steps3);
@@ -203,8 +203,8 @@ class StatefulAgentStoreTest {
         String sessionFinal = SESSION + "-finalize";
         WorkspaceScopeHolder.run(sessionFinal, () -> {
             var steps = List.of(
-                    new ReasoningStep("Step A", "cmd1", Map.of("p", "v"), "obs1", 10, 5),
-                    new ReasoningStep("Step B", ReasoningStep.FINISH, Map.of("ans", "42"), "obs2", 20, 10));
+                    ReasoningStep.of("Step A", "cmd1", Map.of("p", "v"), "obs1", 10, 5),
+                    ReasoningStep.of("Step B", ReasoningStep.FINISH, Map.of("ans", "42"), "obs2", 20, 10));
 
             // Save and finalize
             var cp = store.saveAndFinalize(sessionFinal, ROLE, steps, CheckpointStatus.COMPLETED);

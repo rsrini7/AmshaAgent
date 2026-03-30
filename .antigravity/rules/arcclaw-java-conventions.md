@@ -99,3 +99,5 @@ unnecessary String objects in the hot agent loop path.
 | Approve | `POST /api/v1/sessions/{id}/approve` | `200` |
 | Session not found | any session endpoint | `404` |
 | Cross-key access | any session endpoint | `401` + `code=SESSION_ACCESS_DENIED` |
+| Terminate session (owner)   | `DELETE /api/v1/sessions/{id}` | `204` |
+| Terminate session (foreign) | `DELETE /api/v1/sessions/{id}` | `401` + `code=SESSION_ACCESS_DENIED` |

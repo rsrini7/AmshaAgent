@@ -131,14 +131,10 @@ public class ToolStepHandler {
                     toolName,
                     step.actionInput() != null ? step.actionInput() : Map.of());
 
-                ReasoningStep delegateStep = new ReasoningStep(
+                ReasoningStep delegateStep = ReasoningStep.pending(
                     step.thought(),
                     ToolCapability.DELEGATE_TO_AGENT.toolName(),
-                    // FIX §2: key is "agent", NOT "role" — DelegateToAgentTool.execute()
-                    // calls params.get("agent"). Using "role" caused
-                    // "Parameter 'agent' is required." on every resume.
                     Map.of("agent", "researcher", "goal", delegateGoal),
-                    null,
                     0, 0
                 );
                 return StepDecision.proceedWithFailures(delegateStep, consecutiveFailures);

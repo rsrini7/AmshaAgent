@@ -12,7 +12,7 @@ class AgentResultFormatterTest {
 
     @Test
     void testFormatFailed_withNormalReason_prefixesWithX() {
-        AgentResult.Failed failed = new AgentResult.Failed("Something went wrong", AgentResult.FailureCategory.SYSTEM_ERROR, List.of(), 0, 0);
+        AgentResult failed = AgentResult.failed("Something went wrong", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         String formatted = AgentResultFormatter.format(failed);
         assertEquals("❌ Something went wrong", formatted);
     }
@@ -20,7 +20,7 @@ class AgentResultFormatterTest {
     @Test
     void testFormatFailed_withRateLimitCategory_doesNotPrefixWithX() {
         // Sanitize should add ⏳
-        AgentResult.Failed failed = new AgentResult.Failed("rate limit", AgentResult.FailureCategory.RATE_LIMIT, List.of(), 0, 0);
+        AgentResult failed = AgentResult.failed("rate limit", AgentResult.FailureCategory.RATE_LIMIT, List.of());
         String formatted = AgentResultFormatter.format(failed);
         // We check that it starts with ⏳ and DOES NOT start with ❌ ⏳
         assertTrue(formatted.startsWith("⏳"));
@@ -29,7 +29,7 @@ class AgentResultFormatterTest {
 
     @Test
     void testFormatFailed_withWaitEmojiPrefix_doesNotPrefixWithX() {
-        AgentResult.Failed failed = new AgentResult.Failed("⏳ Waiting", AgentResult.FailureCategory.SYSTEM_ERROR, List.of(), 0, 0);
+        AgentResult failed = AgentResult.failed("⏳ Waiting", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         String formatted = AgentResultFormatter.format(failed);
         assertEquals("⏳ Waiting", formatted);
     }
