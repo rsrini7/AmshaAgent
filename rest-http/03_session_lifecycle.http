@@ -307,6 +307,18 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+GET {{baseUrl}}/api/v1/sessions/{{isoB.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{isoB.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
 DELETE {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
