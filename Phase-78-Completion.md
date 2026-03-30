@@ -52,7 +52,7 @@ WebSocket /ws/chat          → WebChatEndpoint (ManagedExecutor → MessagePipe
 ### Final Phase 78 Test Command
 
 ```powershell
-./mvnw clean test `
+./mvnw clean test "-Dsurefire.failIfNoSpecifiedTests=false" `
   -pl arcclaw-channel-api,arcclaw-channel-web,arcclaw-app,arcclaw-core `
   -Dtest="WebReplyRendererTest,WebChannelPluginDiscoveryTest,AgentStatusResourceTest,AgentStateMachineRunnerTest" `
   --no-transfer-progress
