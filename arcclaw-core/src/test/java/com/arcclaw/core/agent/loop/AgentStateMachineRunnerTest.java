@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.event.Event;
+import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -53,6 +55,9 @@ class AgentStateMachineRunnerTest {
 
     @SuppressWarnings("unchecked")
     private Instance<DynamicToolLookup> dynamicToolLookup = mock(Instance.class);
+ 
+    @SuppressWarnings("unchecked")
+    private Event<AgentStateChangedEvent> stateChangedEvent = mock(Event.class);
 
 
     @SuppressWarnings("unchecked")
@@ -106,6 +111,7 @@ class AgentStateMachineRunnerTest {
         runner.skillRegistry    = skillRegistry;
         runner.piiScanReflex    = piiScanReflex;
         runner.agentOtelContext = agentOtelContext;
+        runner.stateChangedEvent = stateChangedEvent;
 
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());
