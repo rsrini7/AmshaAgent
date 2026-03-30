@@ -118,7 +118,7 @@ public class SystemEnvironmentContextEnricher implements ContextEnricher {
 - `CheckListTool.java`
 - `CheckListEvent.java` (CDI event payload)
 **Modified files:**
-- `ToolCapability.java` — add `MANAGE_CHECKLIST("CheckListTool")`
+- `ToolCapability.java` — add `MANAGE_CHECKLIST("check_list")`
 
 **What to build:**
 A structured progress-tracking tool the agent uses for multi-step tasks. Ported from JavaClaw's

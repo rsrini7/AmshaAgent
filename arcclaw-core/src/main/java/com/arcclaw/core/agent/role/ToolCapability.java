@@ -69,7 +69,7 @@ public enum ToolCapability {
     /**
      * Ability to manage a multi-step checklist for progress tracking.
      */
-    MANAGE_CHECKLIST("CheckListTool", "Manage a project checklist to track multi-step execution progress."),
+    MANAGE_CHECKLIST("check_list", "Manage a project checklist to track multi-step execution progress."),
 
     /**
      * Ability to dynamically register a new MCP server.

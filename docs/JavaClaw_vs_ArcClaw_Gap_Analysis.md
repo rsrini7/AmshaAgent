@@ -119,7 +119,7 @@ public class CheckListTool implements AgentTool {
     
     @Inject SessionRegistry sessionRegistry; // to push updates
     
-    @Override public String name() { return "CheckListTool"; }
+    @Override public String name() { return "check_list"; }
     
     @Override public ToolResponse execute(Map<String, Object> params) {
         // validate + emit event to WebSocket session
@@ -391,7 +391,7 @@ public class CheckListTool implements AgentTool {
     
     @Inject Instance<CheckListEventObserver> observers;
     
-    @Override public String name() { return "CheckListTool"; }
+    @Override public String name() { return "check_list"; }
     @Override public ToolCapability capability() { return ToolCapability.MANAGE_CHECKLIST; }
     @Override public boolean requiresManualApproval(Map<String, Object> p) { return false; }
     @Override public boolean requiresSandbox() { return false; }
