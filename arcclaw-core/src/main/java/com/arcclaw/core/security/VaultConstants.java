@@ -24,4 +24,9 @@ public final class VaultConstants {
      * The name of the system secret used to derive the audit hmac key.
      */
     public static final String AUDIT_HMAC_KEY_NAME = "arcclaw-audit-hmac-key";
+
+    /**
+     * System-level key for Serper web search API key.
+     */
+    public static final String SERPER_API_KEY = "serper-api-key";
 }

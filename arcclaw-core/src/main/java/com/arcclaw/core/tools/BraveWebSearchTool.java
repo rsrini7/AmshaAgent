@@ -50,12 +50,12 @@ public class BraveWebSearchTool implements AgentTool {
 
     @Override
     public String name() {
-        return ToolCapability.WEB_SEARCH.toolName();
+        return ToolCapability.WEB_SEARCH_BRAVE.toolName();
     }
 
     @Override
     public String description() {
-        return ToolCapability.WEB_SEARCH.description();
+        return ToolCapability.WEB_SEARCH_BRAVE.description();
     }
 
     @Override

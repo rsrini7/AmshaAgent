@@ -306,6 +306,8 @@ arcclaw:
   tools:
     brave:
       api-key: "${ARCCLAW_BRAVE_API_KEY:none}"
+    serper:
+      api-key: "${ARCCLAW_SERPER_API_KEY:none}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
