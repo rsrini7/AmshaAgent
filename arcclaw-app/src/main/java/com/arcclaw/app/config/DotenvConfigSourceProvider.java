@@ -31,9 +31,6 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
     @Override
     public Iterable<ConfigSource> getConfigSources(ClassLoader forClassLoader) {
         Map<String, String> dotenvProperties = loadDotenv();
-        if (dotenvProperties.isEmpty()) {
-            return Collections.emptyList();
-        }
         return Collections.singletonList(new DotenvConfigSource(dotenvProperties));
     }
 

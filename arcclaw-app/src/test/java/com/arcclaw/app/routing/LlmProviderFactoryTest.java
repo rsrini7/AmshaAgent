@@ -26,7 +26,7 @@ class LlmProviderFactoryTest {
             // which means the spi correctly routed it to GroqLlmProviderFactory.
             factory.createModel("groq", "https://api.groq.com", "", "model", 100, null, null, null);
         });
-        assertTrue(e.getMessage().contains("Groq requires apiKey"));
+        assertTrue(e.getMessage().contains("Groq provider requires an API key"));
     }
 
     @Test
