@@ -85,6 +85,14 @@ GET {{baseUrl}}/api/v1/info
 #   arcclaw_audit_drop_total  ← must be 0 in normal operation
 GET {{baseUrl}}/q/metrics
 
+
+###
+
+GET {{baseUrl}}/api/v1/tools
+Accept: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+
 ###
 
 # ─────────────────────────────────────────────────────────────────
@@ -128,7 +136,7 @@ X-ArcClaw-API-Key: {{validKey}}
 {
     "goal": "What is 2 + 2?",
     "agentRole": "coordinator",
-    "maxIterations": 1
+    "maxIterations": 2
 }
 
 ###

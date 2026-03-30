@@ -1,4 +1,1 @@
 mvnw        text eol=lf
-mvnw.cmd    text eol=crlf
-mise.bash.toml  text eol=lf
-mise.pwsh.toml  text eol=crlf
