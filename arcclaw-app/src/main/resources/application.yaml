@@ -113,6 +113,9 @@ quarkus:
         temperature: 0.1
         log-requests: false
         log-responses: false
+        enabled: true
+    anthropic:
+      chat-model:
         enabled: false
 
   # ---------------------------------------------------------------------------
