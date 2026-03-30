@@ -34,6 +34,8 @@ public record ReasoningStep(
     /** Action value indicating a system-level observation (e.g. error) needs LLM correction. */
     public static final String OBSERVE = "OBSERVE";
 
+    public static final String ACTION_INPUT_ANSWER_KEY = "answer";
+
     /**
      * Sentinel action for a parallel LLM turn (N tool calls in one response).
      * actionInput.get("batch") contains the JSON-serialized List<ParallelToolCall>

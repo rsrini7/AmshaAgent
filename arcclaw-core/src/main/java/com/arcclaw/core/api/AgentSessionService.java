@@ -23,6 +23,8 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -52,6 +54,7 @@ public class AgentSessionService {
     private final AgentResponseMapper responseMapper;
     private final ReflexRegistry reflexRegistry;
     private final CheckpointResumeHandler checkpointResumeHandler;
+    private final AuditService auditService;
     private final ExecutorService vThreads;
 
     /**
@@ -73,6 +76,7 @@ public class AgentSessionService {
         this.responseMapper = null;
         this.reflexRegistry = null;
         this.checkpointResumeHandler = null;
+        this.auditService = null;
         this.vThreads = null;
     }
 
@@ -86,6 +90,7 @@ public class AgentSessionService {
                                AgentResponseMapper responseMapper,
                                ReflexRegistry reflexRegistry,
                                CheckpointResumeHandler checkpointResumeHandler,
+                               AuditService auditService,
                                @VirtualThreads ExecutorService vThreads) {
         this.log = log;
         this.agentLoop = agentLoop;
@@ -96,13 +101,22 @@ public class AgentSessionService {
         this.responseMapper = responseMapper;
         this.reflexRegistry = reflexRegistry;
         this.checkpointResumeHandler = checkpointResumeHandler;
+        this.auditService = auditService;
         this.vThreads = vThreads;
     }
 
     public String createSession(AutonomyLevel autonomyLevel) {
         String sessionId = UUID.randomUUID().toString();
-        log.infof("Creating new session: %s (autonomy=%s)", sessionId, autonomyLevel);
-        heartbeatTracker.recordHeartbeat(sessionId, autonomyLevel != null ? autonomyLevel : AutonomyLevel.SUPERVISED);
+        AutonomyLevel level = (autonomyLevel != null) ? autonomyLevel : AutonomyLevel.SUPERVISED;
+        log.infof("Creating new session: %s (autonomy=%s)", sessionId, level);
+        heartbeatTracker.recordHeartbeat(sessionId, level);
+
+        // Bind the requesting API key identity as owner — used for per-key isolation
+        Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
+        String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+        if (requestingKey != null && !requestingKey.isBlank()) {
+            heartbeatTracker.bindOwner(sessionId, requestingKey);
+        }
         return sessionId;
     }
 
@@ -373,6 +387,10 @@ public class AgentSessionService {
 
     public Response terminateSession(String sessionId) {
         log.infof("Terminating session:  %s", sessionId);
+
+        var sessionError = validateSession(sessionId);
+        if (sessionError.isPresent()) return sessionError.get();
+
         workspaceManager.terminateSession(sessionId);
         return Response.noContent().build();
     }
@@ -393,6 +411,7 @@ public class AgentSessionService {
     }
 
     private Optional<Response> validateSession(String sessionId) {
+        // Guard 1: session existence (unchanged)
         if (!heartbeatTracker.exists(sessionId)) {
             return Optional.of(Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of(
@@ -400,6 +419,34 @@ public class AgentSessionService {
                         "code",  "SESSION_NOT_FOUND"
                     ))
                     .build());
+        }
+
+        // Guard 2: per-key session ownership
+        // Only REST-created sessions have a bound owner.
+        // CLI and Telegram sessions have null owner → open access (correct).
+        Optional<String> owner = heartbeatTracker.getOwner(sessionId);
+        if (owner.isPresent()) {
+            Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
+            String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+            if (requestingKey != null && !owner.get().equals(requestingKey)) {
+                log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
+                          requestingKey, sessionId, owner.get());
+                
+                auditService.recordMandatory(
+                    sessionId,
+                    requestingKey,
+                    "system",
+                    SecurityEventType.UNAUTHORIZED_ACCESS,
+                    "Key " + requestingKey + " attempted cross-key session access"
+                );
+
+                return Optional.of(Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of(
+                        "error", "API key not authorized for this session",
+                        "code", "SESSION_ACCESS_DENIED"
+                    ))
+                    .build());
+            }
         }
         return Optional.empty();
     }

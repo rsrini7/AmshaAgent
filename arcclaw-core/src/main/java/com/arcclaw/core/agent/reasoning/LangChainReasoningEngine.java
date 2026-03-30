@@ -168,7 +168,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         return ReasoningStep.pending(
                                 "LLM generated valid prose — extracted from failed_generation",
                                 "FINISH",
-                                Map.of("answer", extractedProse),
+                                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse),
                                 0, 0
                         );
                     }

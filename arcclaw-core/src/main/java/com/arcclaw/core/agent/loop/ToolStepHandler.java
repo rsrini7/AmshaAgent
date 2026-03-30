@@ -78,6 +78,24 @@ public class ToolStepHandler {
 
         String toolName = step.action();
 
+        // Rescue: LLM hallucinated a tool named "finish" with a valid answer payload.
+        // Rewrite as a proper FINISH step. AgentStateMachineRunner post-validateTool
+        // FINISH re-check will route it to handleFinishAction.
+        if (ReasoningStep.FINISH.equalsIgnoreCase(toolName)
+                && step.actionInput() != null
+                && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            log.infof("[ToolStepHandler] Rescued hallucinated 'finish' tool → converting to FINISH for session %s",
+                    context.sessionId());
+            ReasoningStep rescued = ReasoningStep.pending(
+                step.thought(),
+                ReasoningStep.FINISH,
+                Map.copyOf(step.actionInput()),
+                step.inputTokens(),
+                step.outputTokens()
+            );
+            return StepDecision.proceed(rescued);
+        }
+
         // ── TOOL-GUARD: coordinator calling github directly
         // FIX §1: Silently rewrite github → delegate_to_agent instead of
         // returning retryEngine(hint). Hint-based redirect requires LLM compliance —

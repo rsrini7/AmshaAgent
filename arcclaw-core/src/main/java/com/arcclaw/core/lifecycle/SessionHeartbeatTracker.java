@@ -2,6 +2,7 @@ package com.arcclaw.core.lifecycle;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -19,7 +20,7 @@ public class SessionHeartbeatTracker {
 
     private static final Logger log = Logger.getLogger(SessionHeartbeatTracker.class);
 
-    public record SessionMetadata(Instant lastHeartbeat, AutonomyLevel autonomyLevel) {}
+    public record SessionMetadata(Instant lastHeartbeat, AutonomyLevel autonomyLevel, String ownerKeyName) {}
 
     /** Active session metadata: sessionId → last heartbeat + autonomyLevel. */
     private final ConcurrentHashMap<String, SessionMetadata> sessionData = new ConcurrentHashMap<>();
@@ -37,7 +38,10 @@ public class SessionHeartbeatTracker {
      * Record a heartbeat with an explicit autonomy level (e.g. from REST create).
      */
     public void recordHeartbeat(String sessionId, AutonomyLevel level) {
-        sessionData.put(sessionId, new SessionMetadata(Instant.now(), level));
+        // Preserve existing owner — heartbeat ticks must NOT erase ownership
+        SessionMetadata existing = sessionData.get(sessionId);
+        String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
+        sessionData.put(sessionId, new SessionMetadata(Instant.now(), level, existingOwner));
         log.debugf("Heartbeat recorded for session=%s autonomy=%s", sessionId, level);
     }
 
@@ -95,8 +99,28 @@ public class SessionHeartbeatTracker {
      * @param timestamp The heartbeat timestamp.
      */
     public void injectHeartbeat(String sessionId, Instant timestamp) {
-        sessionData.put(sessionId, new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED));
+        SessionMetadata existing = sessionData.get(sessionId);
+        String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
+        sessionData.put(sessionId, new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED, existingOwner));
         log.debugf("Heartbeat injected for session=%s timestamp=%s", sessionId, timestamp);
+    }
+
+    /**
+     * Bind an API key identity as owner of the given session.
+     * Uses computeIfPresent: if the session was already reaped, this silently no-ops.
+     */
+    public void bindOwner(String sessionId, String ownerKeyName) {
+        sessionData.computeIfPresent(sessionId, (k, existing) ->
+            new SessionMetadata(existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName));
+        log.debugf("Owner bound for session=%s owner=%s", sessionId, ownerKeyName);
+    }
+
+    /**
+     * Returns the owner key name for the given session, if one was bound.
+     */
+    public Optional<String> getOwner(String sessionId) {
+        SessionMetadata data = sessionData.get(sessionId);
+        return (data != null) ? Optional.ofNullable(data.ownerKeyName()) : Optional.empty();
     }
 
     /**
