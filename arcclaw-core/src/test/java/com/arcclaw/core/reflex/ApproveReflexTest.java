@@ -116,7 +116,7 @@ class ApproveReflexTest {
         cron.goal = "Backup databases";
         cron.status = CronStatus.AWAITING_APPROVAL;
 
-        when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
 
         MessageContext ctx = createContext("/approve");
@@ -133,13 +133,14 @@ class ApproveReflexTest {
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = "cron-789";
         cron.status = CronStatus.AWAITING_APPROVAL;
 
         // Session CP exists
-        when(statefulAgentStore.load(anyString(), eq(AgentRoleEnum.COORDINATOR.toScopedName())))
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
                 .thenReturn(Optional.of(cp));
         
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
@@ -158,8 +159,9 @@ class ApproveReflexTest {
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        when(statefulAgentStore.load(anyString(), eq(AgentRoleEnum.COORDINATOR.toScopedName())))
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
                 .thenReturn(Optional.of(cp));
         
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
@@ -186,7 +188,7 @@ class ApproveReflexTest {
         c2.goal = "Goal 2";
         c2.status = CronStatus.AWAITING_APPROVAL;
 
-        when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(c1, c2));
 
         MessageContext ctx = createContext("/approve");

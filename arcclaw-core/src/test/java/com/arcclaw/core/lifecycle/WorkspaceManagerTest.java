@@ -178,17 +178,10 @@ class WorkspaceManagerTest {
         // Assert: COMPLETED checkpoint should remain COMPLETED (not overwritten to
         // FAILED)
         WorkspaceScopeHolder.run(sessionId, () -> {
-            // markCheckpointsFailed query has "c.status != :failed" — it will still pick up
-            // COMPLETED since COMPLETED != FAILED. Let's verify the actual behavior:
-            // The query marks anything that ISN'T already FAILED. So COMPLETED gets marked
-            // FAILED.
-            // This is actually correct behavior — when a session is terminated, ALL
-            // checkpoints
-            // should be invalidated, even completed ones.
             var cp = QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "researcher"));
             assertTrue(cp.isPresent());
-            assertEquals(CheckpointStatus.FAILED, cp.get().getStatus(),
-                    "Terminated sessions should mark ALL non-FAILED checkpoints as FAILED");
+            assertEquals(CheckpointStatus.COMPLETED, cp.get().getStatus(),
+                    "Terminated sessions should skip COMPLETED checkpoints");
         });
     }
     /**

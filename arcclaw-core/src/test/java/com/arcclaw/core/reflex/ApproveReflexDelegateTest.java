@@ -3,7 +3,6 @@ package com.arcclaw.core.reflex;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +12,13 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
+import org.jboss.logging.Logger;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -20,12 +26,6 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.StatefulAgentStore;
-import org.jboss.logging.Logger;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ApproveReflexDelegateTest {
@@ -70,7 +70,7 @@ class ApproveReflexDelegateTest {
         String input = "/approve " + targetSid;
         
         when(delegateGuard.isDelegate(adminId)).thenReturn(true);
-        when(agentStore.load(eq(targetSid), anyString())).thenReturn(Optional.empty());
+        when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.empty());
         
         MessageContext context = createTestContext(targetSid, adminId, input);
         

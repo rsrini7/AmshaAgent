@@ -42,13 +42,14 @@ class GithubToolGuardInterceptorTest {
     @Test
     void testGithubBlockedWhenGoalHasNoKeywords() {
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
+                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "abc def", List.of());
 
         assertTrue(result.isPresent());
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result.get());
-        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result.get()).observation().contains("blocked by the Tool Intent Guard"));
+        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result.get()).observation().contains("GitHub tool blocked"));
     }
 
     @Test

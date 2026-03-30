@@ -48,8 +48,15 @@ class ToolStepHandlerGuardTest {
         
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
-        assertEquals(AgentStateMachineRunner.DecisionType.CONTINUE, decision.type());
-        assertTrue(decision.transientError() != null && decision.transientError().contains("use delegate_to_agent instead"));
+        // Silently rewrites to delegate_to_agent instead of blocking with hint
+        assertEquals(AgentStateMachineRunner.DecisionType.PROCEED, decision.type());
+        assertEquals("delegate_to_agent", decision.step().action());
+        // Thought is preserved from original step
+        assertEquals("thought", decision.step().thought());
+        // Parameter 'agent' should be 'researcher'
+        assertEquals("researcher", decision.step().actionInput().get("agent"));
+        // Parameter 'goal' should contain 'github'
+        assertTrue(String.valueOf(decision.step().actionInput().get("goal")).contains("github"));
     }
 
     @Test

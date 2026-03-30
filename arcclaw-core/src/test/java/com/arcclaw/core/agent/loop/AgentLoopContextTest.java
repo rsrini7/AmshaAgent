@@ -8,21 +8,21 @@ import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 
-import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.enterprise.context.RequestScoped;
-import jakarta.enterprise.inject.spi.CDI;
-import jakarta.inject.Inject;
-
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.inject.Inject;
 
 @QuarkusTest
 class AgentLoopContextTest {
@@ -35,7 +35,7 @@ class AgentLoopContextTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
+        // No-op. @InjectMock handles initialization.
     }
 
     @Test

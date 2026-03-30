@@ -320,7 +320,8 @@ class AgentStateMachineRunnerTest {
 
     @Test
     void testRateLimitReturnsRateLimitCategory() {
-        HttpException ex = new HttpException(429, "Rate limit reached");
+        // Use a wait time > 15s to trigger terminal failure instead of auto-retry
+        HttpException ex = new HttpException(429, "Rate limit reached, try again in 20s");
         when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
                 .thenThrow(ex);
 

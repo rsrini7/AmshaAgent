@@ -17,6 +17,7 @@ quarkus:
     name: arcclaw
     version: "1.0.0"
   langchain4j:
+    timeout: 10s
     chat-model:
       provider: openai
     openai:
