@@ -88,9 +88,28 @@ GET {{baseUrl}}/q/metrics
 
 ###
 
+### [HEALTH-4.0] Tools endpoint
 GET {{baseUrl}}/api/v1/tools
 Accept: application/json
 X-ArcClaw-API-Key: {{validKey}}
+
+### [HEALTH-4.1] Agent status endpoint (empty on cold start)
+GET {{baseUrl}}/api/v1/agents
+X-ArcClaw-API-Key: {{validKey}}
+
+### [HEALTH-4.2] HITL pending approvals (empty on cold start)
+GET {{baseUrl}}/api/v1/hitl
+X-ArcClaw-API-Key: {{validKey}}
+
+
+### [HEALTH-4.3] Chat stream
+POST {{baseUrl}}/api/v1/chat/stream
+X-ArcClaw-API-Key: {{validKey}}
+Content-Type: application/json
+
+{
+    "message": "Hello"
+}
 
 
 ###

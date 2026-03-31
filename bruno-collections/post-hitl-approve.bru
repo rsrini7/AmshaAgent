@@ -1,0 +1,16 @@
+meta {
+  name: POST HITL Approve
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/hitl/{{taskId}}/approve
+  body: none
+  auth: none
+}
+
+headers {
+  X-ArcClaw-API-Key: {{validKey}}
+  Content-Type: application/json
+}

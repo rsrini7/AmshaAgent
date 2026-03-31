@@ -246,6 +246,8 @@ smallrye:
         level: ERROR
       "org.jboss.resteasy.reactive.common.core":
         level: WARN
+      "jakarta.json.spi":
+        level: WARN
     console:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
@@ -517,6 +519,8 @@ mp:
           level: WARN
         "dev.langchain4j.internal.RetryUtils":
           level: ERROR
+        "jakarta.json.spi":
+          level: WARN
     console:
       enabled: false
     live-reload:

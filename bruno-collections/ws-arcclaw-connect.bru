@@ -1,0 +1,16 @@
+meta {
+  name: WS ArcClaw Connect
+  type: websocket
+  seq: 1
+}
+
+websocket {
+  url: ws://localhost:8080/ws/chat
+}
+
+body:ws {
+  {
+    "type": "message",
+    "text": "Hello ArcClaw"
+  }
+}
