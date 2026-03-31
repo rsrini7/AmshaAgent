@@ -1,10 +1,9 @@
 package com.arcclaw.channel.web;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
-
-import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class WebAllowlist implements ChannelAllowlist {

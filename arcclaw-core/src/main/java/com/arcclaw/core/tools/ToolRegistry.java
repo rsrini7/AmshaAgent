@@ -33,6 +33,13 @@ import com.arcclaw.core.security.RequiresSecrets;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
+import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
+import dev.langchain4j.model.chat.request.json.JsonEnumSchema;
+import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonSchemaElement;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -401,12 +408,74 @@ public class ToolRegistry {
                     String schema = null;
                     try {
                         var ps = tool.parametersSchema();
-                        schema = ps != null ? objectMapper.writeValueAsString(ps) : null;
-                    } catch (JsonProcessingException e) {
-                        log.warnf("Could not serialize schema for tool %s", tool.name());
+                        var schemaMap = schemaToMap(ps);   // ← convert first
+                        schema = schemaMap != null
+                            ? objectMapper.writeValueAsString(schemaMap)
+                            : null;
+                    } catch (Exception e) {
+                        log.warnf("Could not serialize schema for tool %s: %s",
+                            tool.name(), e.getMessage());  // ← now visible
                     }
                     return new ToolDescriptor(tool.name(), tool.description(), schema);
                 })
                 .toList();
+    }
+
+    private Map<String, Object> schemaToMap(JsonObjectSchema schema) {
+        if (schema == null) return null;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("type", "object");
+        if (schema.properties() != null && !schema.properties().isEmpty()) {
+            Map<String, Object> props = new LinkedHashMap<>();
+            schema.properties().forEach((k, v) -> props.put(k, elementToMap(v)));
+            result.put("properties", props);
+        }
+        if (schema.required() != null && !schema.required().isEmpty()) {
+            result.put("required", schema.required());
+        }
+        if (schema.description() != null) {
+            result.put("description", schema.description());
+        }
+        return result;
+    }
+
+    private Object elementToMap(JsonSchemaElement el) {
+        if (el == null) return null;
+        return switch (el) {
+            case JsonObjectSchema o -> schemaToMap(o);
+            case JsonStringSchema s -> {
+                var m = new LinkedHashMap<String, Object>();
+                m.put("type", "string");
+                if (s.description() != null) m.put("description", s.description());
+                yield m;
+            }
+            case JsonIntegerSchema i -> {
+                var m = new LinkedHashMap<String, Object>();
+                m.put("type", "integer");
+                if (i.description() != null) m.put("description", i.description());
+                yield m;
+            }
+            case JsonBooleanSchema b -> {
+                var m = new LinkedHashMap<String, Object>();
+                m.put("type", "boolean");
+                if (b.description() != null) m.put("description", b.description());
+                yield m;
+            }
+            case JsonArraySchema a -> {
+                var m = new LinkedHashMap<String, Object>();
+                m.put("type", "array");
+                if (a.items() != null) m.put("items", elementToMap(a.items()));
+                if (a.description() != null) m.put("description", a.description());
+                yield m;
+            }
+            case JsonEnumSchema e -> {
+                var m = new LinkedHashMap<String, Object>();
+                m.put("type", "string");
+                m.put("enum", e.enumValues());
+                if (e.description() != null) m.put("description", e.description());
+                yield m;
+            }
+            default -> Map.of("type", "any");
+        };
     }
 }
