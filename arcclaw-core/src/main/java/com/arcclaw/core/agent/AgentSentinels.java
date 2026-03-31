@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent;
 
+import java.util.regex.Pattern;
+
 /**
  * Centered sentinel strings for specialized agent logic, approval flows,
  * and state-machine transitions.
@@ -32,5 +34,22 @@ public final class AgentSentinels {
     public static boolean isCronGoal(String goal) {
         return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);
     }
+
+    public static final Pattern CONTEXT_RAG_ECHO_PATTERN = Pattern.compile(
+         "^<rag_memory>[\\s\\S]*?</rag_memory>\\s*",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // Compaction context echo guard 
+    // The LLM occasionally pastes the injected "## Retrieved Context" compaction
+    // header verbatim into its FINISH answer instead of writing a fresh response.
+    // Observed: TELEGRAM-SEND text=[## Retrieved Context\nYou initiated a session...]
+    // Fix: strip the header (and anything before the first real content line) so
+    // the user sees the summary without the raw template heading.
+    public static final Pattern CONTEXT_RETRIEVED_ECHO_PATTERN = Pattern.compile(
+        "^##\\s*Retrieved Context[^\\n]*\\n+(?:<context>[\\s\\S]*?</context>\\s*)?",
+        Pattern.CASE_INSENSITIVE
+    );
+
 }
 

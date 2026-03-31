@@ -81,7 +81,7 @@ public class RagContextEnricher implements ContextEnricher {
             log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
                     (Object) relevant.size(), chunks.size(), minScore, sessionId);
 
-            return "## Retrieved Context\n" + context + "\n\n---\n\n" + basePrompt;
+            return "## Retrieved Rag Context\n" + context + "\n\n---\n\n" + basePrompt;
 
         } catch (Exception e) {
             log.warnf("RagContextEnricher enrichment failed for session %s: %s",

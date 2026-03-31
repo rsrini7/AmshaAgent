@@ -10,6 +10,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.persona.AgentRole;
@@ -47,17 +48,6 @@ public class AgentStateMachineRunner {
                 "^[✅⏳\\s]*(done\\.?|ok\\.?)\\s*$",
                 Pattern.CASE_INSENSITIVE
             );
-
-    // ── FIX Bug 2: Compaction context echo guard ──────────────────────────────
-    // The LLM occasionally pastes the injected "## Retrieved Context" compaction
-    // header verbatim into its FINISH answer instead of writing a fresh response.
-    // Observed: TELEGRAM-SEND text=[## Retrieved Context\nYou initiated a session...]
-    // Fix: strip the header (and anything before the first real content line) so
-    // the user sees the summary without the raw template heading.
-    private static final Pattern CONTEXT_ECHO_PATTERN = Pattern.compile(
-        "^(?:##\\s*Retrieved Context[^\\n]*\\n+)+",
-        Pattern.CASE_INSENSITIVE
-    );
 
     // ── FIX Bug 1: Minimum meaningful answer length ───────────────────────────
     // Garbage 2-token responses like "'." or "." contain no alphabetic characters.
@@ -320,11 +310,10 @@ public class AgentStateMachineRunner {
             return "⚠️ Context was lost mid-response — please resend your request.";
         }
 
-        // FIX Bug 2: strip "## Retrieved Context\n..." header the LLM echoed verbatim.
         // The compaction summary is injected into context with this header; the LLM
         // occasionally treats it as its own output and includes it in the FINISH answer.
-        if (CONTEXT_ECHO_PATTERN.matcher(stripped).find()) {
-            String withoutHeader = CONTEXT_ECHO_PATTERN.matcher(stripped).replaceFirst("").strip();
+        if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
+            String withoutHeader = AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).replaceFirst("").strip();
             log.warnf("ANSWER-GUARD: stripped compaction context echo header from answer " +
                     "for session %s (remaining length=%d)", sessionId, withoutHeader.length());
             if (withoutHeader.isBlank()) {

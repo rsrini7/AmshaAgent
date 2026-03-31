@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -25,11 +26,6 @@ public class AgentResponseMapper {
     private static final Pattern REPEATING_UUID_PATTERN = Pattern.compile(
             "([0-9a-f]{4,8})\\1.*\\1.*\\1",   // same segment repeated 3+ times
             Pattern.CASE_INSENSITIVE
-    );
-
-    private static final Pattern CONTEXT_BLOCK_PATTERN = Pattern.compile(
-        "##\\s*Retrieved Context\\s*<context>.*?</context>\\s*",
-        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
     );
 
     @Inject
@@ -70,7 +66,12 @@ public class AgentResponseMapper {
     private String sanitizeAnswer(String answer) {
         if (answer == null) return null;
 
-        answer = CONTEXT_BLOCK_PATTERN.matcher(answer).replaceAll("").strip();
+        String stripped = answer.strip();
+        if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
+                // Strip leaked RAG/compaction context blocks
+                answer = AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).replaceFirst("").strip();
+        }
+
         boolean looksLikeCronConfirmation = FAKE_CRON_PATTERN.matcher(answer).find();
         boolean hasRepeatingUuid = REPEATING_UUID_PATTERN.matcher(answer).find();
 
