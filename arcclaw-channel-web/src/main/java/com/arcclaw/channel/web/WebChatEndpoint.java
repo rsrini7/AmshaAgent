@@ -54,7 +54,7 @@ public class WebChatEndpoint {
         // Resolve the ArcClaw sessionId eagerly so the UI has it from the first message.
         // This mirrors exactly what SessionResolutionHandler does on the first pipeline call.
         String arcclawSessionId = sessionIdResolver.resolveOrCreate(
-            ChannelType.WEBSOCKET.id(), platformId, platformId);
+            ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
 
         conn.sendText(buildConnectedJson(platformId, arcclawSessionId))

@@ -5,24 +5,27 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.routing.IntentRoutingProvider;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
-import org.jboss.logging.Logger;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 @Unremovable
 public class IntentClassifierService implements IntentClassifier {
+
+    private static final Logger log = Logger.getLogger(IntentClassifierService.class);
 
     @Inject
     @Identifier("intent-classifier")
@@ -126,6 +129,11 @@ public class IntentClassifierService implements IntentClassifier {
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
         if (elapsedMs > 3_000L) {
             Log.warnf("IntentClassifier SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
+        }
+
+        if (raw == null || raw.isBlank()) {
+            log.warnf("IntentClassifier SLA exceeded or null response — raw was null"); 
+            return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
         String result = sanitize(raw.trim().toLowerCase());
