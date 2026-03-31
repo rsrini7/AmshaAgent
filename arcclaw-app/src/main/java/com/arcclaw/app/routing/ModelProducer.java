@@ -36,6 +36,10 @@ public class ModelProducer {
                     defaultValue = "llama-3.1-8b-instant")
     String intentModelName;
 
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.timeout-seconds",
+                    defaultValue = "5")
+    int timeoutSeconds;
+
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.ollama-model",
                     defaultValue = "llama3.2")
     String ollamaModelId;
@@ -55,7 +59,7 @@ public class ModelProducer {
                   provider, intentModelName);
         return modelFactory.createModel(
             provider, openaiBaseUrl, openaiApiKey,
-            intentModelName, 10, Duration.ofSeconds(15),
+            intentModelName, 10, Duration.ofSeconds(timeoutSeconds),
             ollamaBaseUrl, ollamaModelId);
     }
 }

@@ -61,7 +61,7 @@ Use any WebSocket client (Postman, `wscat`, or browser console):
 
 ```bash
 # wscat (npm install -g wscat)
-wscat -c ws://localhost:8080/ws/chat
+npx wscat -c ws://localhost:8080/ws/chat
 ```
 
 **Expected response on connect:**

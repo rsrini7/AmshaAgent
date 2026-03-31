@@ -291,6 +291,7 @@ arcclaw:
     intent-classifier:
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
+      timeout-seconds: 3
   memory:
     compaction:
       enabled: true

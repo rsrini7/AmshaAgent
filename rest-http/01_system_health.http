@@ -97,8 +97,35 @@ X-ArcClaw-API-Key: {{validKey}}
 GET {{baseUrl}}/api/v1/agents
 X-ArcClaw-API-Key: {{validKey}}
 
+
 ### [HEALTH-4.2] HITL pending approvals (empty on cold start)
 GET {{baseUrl}}/api/v1/hitl
+X-ArcClaw-API-Key: {{validKey}}
+
+### [HEALTH-4.3] Agent status endpoint (non-empty when agent is running)
+# While an agent is running (between SSE `active` and `idle` events)
+GET {{baseUrl}}/api/v1/agents
+X-ArcClaw-API-Key: {{validKey}}
+
+### Step 1 — List pending approvals
+# @name hitlPending
+GET {{baseUrl}}/api/v1/hitl
+X-ArcClaw-API-Key: {{validKey}}
+Accept: application/json
+
+###
+
+### Step 2 — Approve (uses taskId from Step 1 response automatically)
+POST {{baseUrl}}/api/v1/hitl/{{hitlPending.response.body.[0].taskId}}/approve
+X-ArcClaw-API-Key: {{validKey}}
+Accept: application/json
+
+{}
+
+###
+
+### Step 3 — Reject with reason
+POST {{baseUrl}}/api/v1/hitl/{{hitlPending.response.body.[0].taskId}}/reject
 X-ArcClaw-API-Key: {{validKey}}
 
 ###

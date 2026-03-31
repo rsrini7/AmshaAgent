@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -28,6 +29,7 @@ public class HitlService {
     @Inject EntityManager em;
     @Inject ObjectMapper objectMapper;
 
+    @Transactional
     public Map<String, PendingApproval> getPendingApprovals() {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
@@ -60,6 +62,7 @@ public class HitlService {
     @Inject ApproveReflex approveReflex;
     @Inject DenyReflex denyReflex;
 
+    @Transactional
     public void resolve(String taskId, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, id);
@@ -67,25 +70,33 @@ public class HitlService {
             throw new IllegalArgumentException("No pending approval found for ID: " + taskId);
         }
         if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-             throw new IllegalStateException("Already resolved for ID: " + taskId);
+            throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
 
-        ChannelType chType = 
+        ChannelType chType =
             ChannelType.fromString(cp.getChannelType())
-                .orElse(ChannelType.TELEGRAM);
+                .orElse(ChannelType.WEBSOCKET); // ← prefer WEBSOCKET over TELEGRAM
+
+        // Guard: rest:api and similar synthetic platformIds have no real channel sender.
+        // Use the sessionId as platformId so at least WorkspaceContext resolves correctly.
+        String platformId = cp.getChannelPlatformId();
+        if (platformId == null || platformId.startsWith("rest:") || platformId.isBlank()) {
+            platformId = cp.getSessionId();
+            chType = ChannelType.WEBSOCKET;
+        }
 
         ChannelUser user = new ChannelUser(
-            cp.getChannelPlatformId(), cp.getChannelPlatformId(), "Operator", chType);
-        
-        MessageContext context = new MessageContext(
-            cp.getChannelPlatformId(), user, null);
+            platformId, platformId, "Operator", chType);
+
+        MessageContext context =
+            new MessageContext(platformId, user, null);
         context.setSessionId(cp.getSessionId());
 
         if (approved) {
-            approveReflex.execute(cp.getSessionId(), cp.getChannelPlatformId(), cp.getChannelPlatformId(), "/approve", context);
+            approveReflex.execute(cp.getSessionId(), platformId, platformId, "/approve", context);
         } else {
             String input = "/deny" + (reason != null && !reason.isBlank() ? " " + reason : "");
-            denyReflex.execute(cp.getSessionId(), cp.getChannelPlatformId(), cp.getChannelPlatformId(), input, context);
+            denyReflex.execute(cp.getSessionId(), platformId, platformId, input, context);
         }
     }
 
