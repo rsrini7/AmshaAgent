@@ -22,6 +22,14 @@ export interface ToolDto {
   autonomyRequired: string;
 }
 
+export interface SkillDto {
+    id: string;
+    name: string;
+    description: string;
+    source: string;
+    triggerPatterns: string[];
+}
+
 export interface ApprovalResultDto {
   status: 'approved' | 'rejected';
   taskId: string;

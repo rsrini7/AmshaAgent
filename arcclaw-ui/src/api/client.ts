@@ -1,4 +1,4 @@
-import { AgentStatusDto, PendingApprovalDto, ApprovalResultDto, ToolDto } from './types';
+import { AgentStatusDto, PendingApprovalDto, ApprovalResultDto, ToolDto, SkillDto } from './types';
 
 export class ArcClient {
   constructor(
@@ -51,5 +51,11 @@ export class ArcClient {
     const r = await fetch(`${this.baseUrl}/tools`, { headers: this.headers() });
     if (!r.ok) throw new Error(`GET /tools failed: ${r.status}`);
     return r.json();
+  }
+
+  async getSkills(): Promise<SkillDto[]> {
+      const r = await fetch(this.baseUrl + '/skills', { headers: this.headers() });
+      if (!r.ok) throw new Error(`GET skills failed ${r.status}`);
+      return r.json();
   }
 }
