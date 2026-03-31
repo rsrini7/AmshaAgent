@@ -17,6 +17,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
+import com.arcclaw.core.pipeline.SessionIdResolver;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -30,24 +31,41 @@ import org.jboss.logging.Logger;
 public class WebChatEndpoint {
 
     private static final Logger log = Logger.getLogger(WebChatEndpoint.class);
-    
-    // Fallback for TypedKey factory ambiguity — maps conn.id() -> arcclaw sessionId.
+
+    // conn.id() → platformId (UUID per WebSocket connection, used as channelId/userId)
     private final Map<String, String> connectionToSession = new ConcurrentHashMap<>();
+
+    // conn.id() → ArcClaw sessionId (resolved by SessionRegistry, used for REST/HITL calls)
+    private final Map<String, String> connectionToArcclawSession = new ConcurrentHashMap<>();
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject MessagePipeline messagePipeline;
     @Inject WorkspaceManager workspaceManager;
     @Inject ManagedExecutor executor;
+    @Inject SessionIdResolver sessionIdResolver;
 
     @OnOpen
     public void onOpen(WebSocketConnection conn) {
-        String sessionId = UUID.randomUUID().toString();
-        connectionToSession.put(conn.id(), sessionId);
-        sessionStore.register(sessionId, conn);
-        conn.sendText(buildConnectedJson(sessionId)).subscribe().with(
-            id -> {},
-            err -> log.warnf("Failed to send connected event to %s: %s", conn.id(), err.getMessage())
-        );
+        // platformId is the stable per-connection identity (channelId + userId)
+        String platformId = UUID.randomUUID().toString();
+        connectionToSession.put(conn.id(), platformId);
+        sessionStore.register(platformId, conn);
+
+        // Resolve the ArcClaw sessionId eagerly so the UI has it from the first message.
+        // This mirrors exactly what SessionResolutionHandler does on the first pipeline call.
+        String arcclawSessionId = sessionIdResolver.resolveOrCreate(
+            ChannelType.WEBSOCKET.id(), platformId, platformId);
+        connectionToArcclawSession.put(conn.id(), arcclawSessionId);
+
+        conn.sendText(buildConnectedJson(platformId, arcclawSessionId))
+            .subscribe().with(
+                id -> {},
+                err -> log.warnf("Failed to send connected event to %s: %s",
+                    conn.id(), err.getMessage())
+            );
+
+        log.infof("WebSocket opened: connId=%s platformId=%s arcclawSession=%s",
+            conn.id(), platformId, arcclawSessionId);
     }
 
     @OnTextMessage
@@ -58,15 +76,19 @@ public class WebChatEndpoint {
                 return;
             }
             String text = json.getString("text", "");
-            String sessionId = connectionToSession.get(conn.id());
-            if (sessionId == null) {
-                log.warn("Received message without a sessionId mapped for connection " + conn.id());
+            if (text.isBlank()) {
+                return;
+            }
+
+            String platformId = connectionToSession.get(conn.id());
+            if (platformId == null) {
+                log.warn("Received message without a platformId mapped for connection " + conn.id());
                 return;
             }
 
             ChannelUser user = new ChannelUser(
-                sessionId,
-                sessionId,
+                platformId,
+                platformId,
                 "Web User",
                 ChannelType.WEBSOCKET
             );
@@ -74,12 +96,12 @@ public class WebChatEndpoint {
             ChannelMessage.WebSocketMessage msg = new ChannelMessage.WebSocketMessage(
                 user,
                 text,
-                sessionId,
+                platformId,
                 Instant.now()
             );
 
-            MessageContext context = new MessageContext(sessionId, user, msg);
-            
+            MessageContext context = new MessageContext(platformId, user, msg);
+
             // ManagedExecutor propagates CDI context (§78-1)
             executor.runAsync(() -> messagePipeline.process(context));
 
@@ -90,27 +112,45 @@ public class WebChatEndpoint {
 
     @OnClose
     public void onClose(WebSocketConnection conn) {
-        String sessionId = connectionToSession.remove(conn.id());
-        if (sessionId != null) {
-            sessionStore.unregister(sessionId);
-            workspaceManager.terminateSession(sessionId);
+        String platformId = connectionToSession.remove(conn.id());
+        String arcclawSessionId = connectionToArcclawSession.remove(conn.id());
+
+        if (platformId != null) {
+            sessionStore.unregister(platformId);
+        }
+        // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
+        if (arcclawSessionId != null) {
+            workspaceManager.terminateSession(arcclawSessionId);
+            log.infof("WebSocket closed: connId=%s arcclawSession=%s terminated",
+                conn.id(), arcclawSessionId);
         }
     }
 
     @OnError
     public void onError(WebSocketConnection conn, Throwable t) {
-        String sessionId = connectionToSession.get(conn.id());
-        log.errorf(t, "WebSocket error for session %s (connection %s)", sessionId, conn.id());
-        if (sessionId != null) {
+        String platformId = connectionToSession.get(conn.id());
+        String arcclawSessionId = connectionToArcclawSession.get(conn.id());
+        log.errorf(t, "WebSocket error: connId=%s platformId=%s arcclawSession=%s",
+            conn.id(), platformId, arcclawSessionId);
+        if (platformId != null) {
             connectionToSession.remove(conn.id());
-            sessionStore.unregister(sessionId);
+            sessionStore.unregister(platformId);
+        }
+        if (arcclawSessionId != null) {
+            connectionToArcclawSession.remove(conn.id());
         }
     }
 
-    private String buildConnectedJson(String sessionId) {
+    /**
+     * Returns both platformId and arcclawSessionId in the connected event.
+     * The UI MUST use arcclawSessionId for all REST calls (/api/v1/hitl, /api/v1/sessions/{id}/approve).
+     * The UI MUST use platformId only as the local WebSocket reference if needed.
+     */
+    private String buildConnectedJson(String platformId, String arcclawSessionId) {
         return Json.createObjectBuilder()
             .add("type", "connected")
-            .add("sessionId", sessionId)
+            .add("sessionId", arcclawSessionId)   // use this for REST/HITL calls
+            .add("platformId", platformId)         // WebSocket connection reference
             .build()
             .toString();
     }

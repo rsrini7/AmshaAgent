@@ -101,17 +101,6 @@ X-ArcClaw-API-Key: {{validKey}}
 GET {{baseUrl}}/api/v1/hitl
 X-ArcClaw-API-Key: {{validKey}}
 
-
-### [HEALTH-4.3] Chat stream
-POST {{baseUrl}}/api/v1/chat/stream
-X-ArcClaw-API-Key: {{validKey}}
-Content-Type: application/json
-
-{
-    "message": "Hello"
-}
-
-
 ###
 
 # ─────────────────────────────────────────────────────────────────
