@@ -18,7 +18,7 @@ export interface PendingApprovalDto {
 export interface ToolDto {
   name: string;
   description: string;
-  inputSchema: string;
+  inputSchema: string | null; // serialized JSON of JsonObjectSchema
 }
 
 export interface SkillDto {

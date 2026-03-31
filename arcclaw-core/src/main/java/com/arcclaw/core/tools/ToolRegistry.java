@@ -391,4 +391,22 @@ public class ToolRegistry {
         }
         return Collections.unmodifiableMap(secrets);
     }
+
+    public record ToolDescriptor(String name, String description, String inputSchema) {}
+
+    public List<ToolDescriptor> listToolDescriptors() {
+        return StreamSupport.stream(discoveredTools.spliterator(), false)
+                .filter(AgentTool::isEnabled)
+                .map(tool -> {
+                    String schema = null;
+                    try {
+                        var ps = tool.parametersSchema();
+                        schema = ps != null ? objectMapper.writeValueAsString(ps) : null;
+                    } catch (JsonProcessingException e) {
+                        log.warnf("Could not serialize schema for tool %s", tool.name());
+                    }
+                    return new ToolDescriptor(tool.name(), tool.description(), schema);
+                })
+                .toList();
+    }
 }
