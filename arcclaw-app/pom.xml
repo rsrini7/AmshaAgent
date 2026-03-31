@@ -365,5 +365,32 @@
         <quarkus.package.jar.enabled>true</quarkus.package.jar.enabled>
       </properties>
     </profile>
+    <profile>
+      <id>copy-ui</id>
+      <!-- Explicit opt-in only — never auto-activated by IDE or default build -->
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>copy-ui-assets</id>
+                <phase>process-resources</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <copy todir="${project.build.outputDirectory}/META-INF/resources">
+                      <fileset dir="${project.parent.basedir}/arcclaw-ui/dist"
+                              erroronmissingdir="false"/>
+                    </copy>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

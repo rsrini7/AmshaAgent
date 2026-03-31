@@ -257,7 +257,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean install -pl arcclaw-app -am -DskipTests
+& $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 """
@@ -271,7 +271,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean install -am -DskipTests
+& $mvnw clean install -am -DskipTests --no-transfer-progress
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host '✅  Full build complete.'
 """
