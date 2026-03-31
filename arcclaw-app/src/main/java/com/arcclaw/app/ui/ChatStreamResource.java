@@ -24,6 +24,10 @@ public class ChatStreamResource {
 
     private final UnicastProcessor<AgentEvent> processor = UnicastProcessor.create();
 
+    // Subscribe to the UnicastProcessor ONCE — the resulting hotStream
+    // can be subscribed to many times (one per SSE connection)
+    private final Multi<AgentEvent> hotStream = processor.broadcast().toAllSubscribers();
+
     public void onStateChanged(@Observes AgentStateChangedEvent event) {
         processor.onNext(new AgentEvent(
             "status_change",
@@ -36,10 +40,10 @@ public class ChatStreamResource {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<AgentEvent> stream() {
-        // Broadcaster with a heartbeat to keep SSE connection alive
-        Multi<AgentEvent> heartBeat = Multi.createFrom().ticks().every(Duration.ofSeconds(20))
+        Multi<AgentEvent> heartbeat = Multi.createFrom().ticks().every(Duration.ofSeconds(20))
                 .map(t -> new AgentEvent("heartbeat", "system", "keep-alive"));
 
-        return Multi.createBy().merging().streams(processor.broadcast().toAllSubscribers(), heartBeat);
+        // hotStream is shared — each subscriber gets their own downstream from the broadcast
+        return Multi.createBy().merging().streams(hotStream, heartbeat);
     }
 }

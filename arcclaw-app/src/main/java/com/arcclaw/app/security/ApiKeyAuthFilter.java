@@ -97,8 +97,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
     private void logAudit(String key, String endpoint, String method, String status, String ip, long durationMs) {
         String msg = String.format("[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d", key, endpoint, method, status, ip, durationMs);
-        if ("ACCEPTED".equals(status)) {
-            log.info(msg);
+        if ("ACCEPTED".equals(status)  && endpoint.startsWith("/hitl")) {
+            log.debug(msg);
         } else {
             log.warn(msg);
         }
