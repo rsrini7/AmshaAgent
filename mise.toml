@@ -588,19 +588,59 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
-$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev `
-    '--no-transfer-progress' `
-    "-Djvm.args=$jvmArgs" `
-    '-Dquarkus.args=chat' `
-    '-Dquarkus.profile=dev' `
-    '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data' `
-    '-Ddebug=false'
 
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
+    Add-Type -TypeDefinition '
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinCon {
+            [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+            [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+        }'
+}
+
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:chat] Copied ../.env -> arcclaw-app/.env for this session'
+    }
+
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=chat' `
+        '-Dquarkus.profile=dev' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+
+} finally {
+    Get-Process -Name java -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowTitle -eq '' } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+
+    if ($IsWindows) {
+        $handle = [WinCon]::GetStdHandle(-10)
+        [WinCon]::SetConsoleMode($handle, 0x0007) | Out-Null
+    }
+
+    [Console]::TreatControlCAsInput = $false
+    $host.UI.RawUI.FlushInputBuffer()
+
+    if ($envCopied) {
+        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
+        Write-Host '[dev:chat] Cleaned up temporary arcclaw-app/.env'
+    }
+
+    Write-Host '[dev:chat] Terminal restored. Press Enter if cursor is missing.'
+}
 """
+
 
 [tasks."dev:attach"]
 depends = ["env:recover"]
@@ -610,22 +650,64 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-if (-not $env:TELEGRAM_BOT_TOKEN) {
-    Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'
-    exit 1
+
+if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
+    Add-Type -TypeDefinition '
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinCon {
+            [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+            [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+        }'
 }
-$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
-$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev `
-    '--no-transfer-progress' `
-    "-Djvm.args=$jvmArgs" `
-    '-Dquarkus.args=attach' `
-    '-Dquarkus.profile=dev' `
-    '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data' `
-    '-Ddebug=false'
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:attach] Copied ../.env -> arcclaw-app/.env for this session'
+    }
+
+    if (-not $env:TELEGRAM_BOT_TOKEN) {
+        Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'
+        exit 1
+    }
+
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=attach' `
+        '-Dquarkus.profile=dev' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+
+} finally {
+    Get-Process -Name java -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowTitle -eq '' } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+
+    if ($IsWindows) {
+        $handle = [WinCon]::GetStdHandle(-10)
+        [WinCon]::SetConsoleMode($handle, 0x0007) | Out-Null
+    }
+
+    [Console]::TreatControlCAsInput = $false
+    $host.UI.RawUI.FlushInputBuffer()
+
+    if ($envCopied) {
+        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
+        Write-Host '[dev:attach] Cleaned up temporary arcclaw-app/.env'
+    }
+
+    Write-Host '[dev:attach] Terminal restored. Press Enter if cursor is missing.'
+}
 """
+
 
 [tasks."dev:ask"]
 depends = ["env:recover"]
@@ -635,6 +717,17 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
+
+if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
+    Add-Type -TypeDefinition '
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinCon {
+            [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+            [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+        }'
+}
+
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }
 if (-not $goal) {
     Write-Host 'Usage:  $env:GOAL="Your goal here"; mise run dev:ask'
@@ -642,20 +735,50 @@ if (-not $goal) {
     Write-Host '        $env:ROLE="researcher"; $env:GOAL="..."; mise run dev:ask'
     exit 1
 }
-$qargs   = "ask $goal" + $(if ($env:ROLE) { " --role $($env:ROLE)" } else { '' })
-$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
-$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev `
-    '--no-transfer-progress' `
-    "-Djvm.args=$jvmArgs" `
-    '-Dquarkus.args=$qargs' `
-    '-Dquarkus.profile=dev' `
-    '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data' `
-    '-Ddebug=false'
 
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:ask] Copied ../.env -> arcclaw-app/.env for this session'
+    }
+
+    $qargs   = "ask $goal" + $(if ($env:ROLE) { " --role $($env:ROLE)" } else { '' })
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        "-Dquarkus.args=$qargs" `
+        '-Dquarkus.profile=dev' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+
+} finally {
+    Get-Process -Name java -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowTitle -eq '' } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+
+    if ($IsWindows) {
+        $handle = [WinCon]::GetStdHandle(-10)
+        [WinCon]::SetConsoleMode($handle, 0x0007) | Out-Null
+    }
+
+    [Console]::TreatControlCAsInput = $false
+    $host.UI.RawUI.FlushInputBuffer()
+
+    if ($envCopied) {
+        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
+        Write-Host '[dev:ask] Cleaned up temporary arcclaw-app/.env'
+    }
+
+    Write-Host '[dev:ask] Terminal restored. Press Enter if cursor is missing.'
+}
 """
+
 
 [tasks."dev:no-ui"]
 depends = ["env:recover"]
@@ -665,20 +788,59 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
-$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev `
-    '--no-transfer-progress' `
-    "-Djvm.args=$jvmArgs" `
-    '-Dquarkus.args=serve' `
-    '-Dquarkus.profile=dev' `
-    '-Dquarkus.console.enabled=false' `
-    '-Dquarkus.devui.enabled=false' `
-    '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data' `
-    '-Ddebug=false'
 
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
+    Add-Type -TypeDefinition '
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinCon {
+            [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+            [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+        }'
+}
+
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:no-ui] Copied ../.env -> arcclaw-app/.env for this session'
+    }
+
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=serve' `
+        '-Dquarkus.profile=dev' `
+        '-Dquarkus.console.enabled=false' `
+        '-Dquarkus.devui.enabled=false' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+
+} finally {
+    Get-Process -Name java -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowTitle -eq '' } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+
+    if ($IsWindows) {
+        $handle = [WinCon]::GetStdHandle(-10)
+        [WinCon]::SetConsoleMode($handle, 0x0007) | Out-Null
+    }
+
+    [Console]::TreatControlCAsInput = $false
+    $host.UI.RawUI.FlushInputBuffer()
+
+    if ($envCopied) {
+        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
+        Write-Host '[dev:no-ui] Cleaned up temporary arcclaw-app/.env'
+    }
+
+    Write-Host '[dev:no-ui] Terminal restored. Press Enter if cursor is missing.'
+}
 """
 
 [tasks."dev:kill"]
