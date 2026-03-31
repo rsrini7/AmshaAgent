@@ -1,0 +1,47 @@
+:host {
+  /* Palette */
+  --color-bg-base:            #0f172a;   /* slate-900 */
+  --color-bg-surface:         #1e293b;   /* slate-800 */
+  --color-bg-elevated:        #334155;   /* slate-700 */
+  --color-border:             #475569;   /* slate-600 */
+  --color-text-primary:       #f1f5f9;   /* slate-100 */
+  --color-text-secondary:     #94a3b8;   /* slate-400 */
+  --color-accent:             #6366f1;   /* indigo-500 */
+  --color-accent-hover:       #818cf8;   /* indigo-400 */
+  --color-success:            #22c55e;   /* green-500 */
+  --color-warning:            #f59e0b;   /* amber-500 */
+  --color-error:              #ef4444;   /* red-500 */
+  --color-info:               #3b82f6;   /* blue-500 */
+
+  /* Chat bubbles */
+  --color-user-bubble:        #312e81;   /* indigo-900 */
+  --color-assistant-bubble:   #1e293b;   /* slate-800 */
+  --color-warning-bg:         #451a03;   /* amber-950 */
+
+  /* Typography */
+  --font-family:              'Inter', system-ui, sans-serif;
+  --font-size-sm:             0.875rem;
+  --font-size-base:           1rem;
+  --font-size-lg:             1.125rem;
+  --font-weight-normal:       400;
+  --font-weight-medium:       500;
+  --font-weight-bold:         700;
+
+  /* Spacing */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+
+  /* Radius */
+  --radius-sm:  0.25rem;
+  --radius-md:  0.5rem;
+  --radius-lg:  0.75rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md:  0 4px 6px rgb(0 0 0 / 0.4);
+}

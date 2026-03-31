@@ -49,3 +49,11 @@ lib/
 .env.local
 .env.build*
 .env.backup*
+
+# Node.js
+node_modules/
+dist-tsc/
+dist-ssr/
+node/
+npm/
+*.tsbuildinfo

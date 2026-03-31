@@ -16,9 +16,9 @@
     <module>arcclaw-mcp</module>
     <module>arcclaw-rag</module>
     <module>arcclaw-deployment</module>
-    <module>arcclaw-channel-telegram</module>
     <module>arcclaw-channel-web</module>
     <module>arcclaw-app</module>
+    <module>arcclaw-ui</module>
   </modules>
 
   <properties>

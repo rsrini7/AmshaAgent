@@ -55,7 +55,7 @@ export interface AgentStatusDto {
   role: string;
   status: 'active' | 'idle' | 'waiting_approval' | 'error';
   currentTask: string | null;
-  autonomyLevel: 'supervised' | 'full' | 'minimal';
+  autonomyLevel: 'readonly' | 'background' | 'supervised' | 'full';
   tokenCount: number;       // Phase 78: always 0 — Phase 79 wires real value
 }
 

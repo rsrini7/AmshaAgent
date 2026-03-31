@@ -16,14 +16,24 @@ public class WebAllowlist implements ChannelAllowlist {
     @Inject
     Logger log;
 
+    @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
+    String internalKey;
+
+    @ConfigProperty(name = "arcclaw.api.keys.ci-pipeline", defaultValue = "key-ci-changeme")
+    String ciKey;
+
     @Override
     public boolean isAllowed(String platformUserId, String username) {
         if (!requireAuth) {
             return platformUserId != null && !platformUserId.isBlank();
         }
-        // TODO Phase 79: validate JWT bearer token from WebSocket upgrade header
-        // For now, require-auth=true is reserved for future JWT integration
-        log.warnf("require-auth=true but JWT validation not yet implemented — blocking user %s", platformUserId);
+        
+        // Phase 79: Validate raw Developer API Keys instead of JWT
+        if (internalKey.equals(platformUserId) || ciKey.equals(platformUserId)) {
+            return true;
+        }
+
+        log.warnf("require-auth=true but provided API Key (platformUserId) is invalid. Blocking user.");
         return false;
     }
 
