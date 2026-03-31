@@ -1,0 +1,2 @@
+@<Prompt file>
+check and if any discripency ask me first before prceeding. Also, ask me when you need to execute a command, do not execute by yourself, also if you are not clear and taking time, stop and ask me.
