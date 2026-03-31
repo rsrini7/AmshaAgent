@@ -1,4 +1,4 @@
-import { LitElement, css, html } from 'lit';
+import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { WsManager } from '../api/websocket';
 import { marked } from 'marked';
@@ -22,73 +22,177 @@ export class ArcChatInterface extends LitElement {
   @state() private _awaitingApproval = false;
   @state() private _denyReason = '';
   @state() private _showDenyReason = false;
+  @state() private _isTyping = false;
 
   private _ws: WsManager | null = null;
 
   static styles = css`
-    :host { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
-    h2 { color: var(--color-text-primary); margin: var(--space-6) var(--space-6) var(--space-2); font-size: var(--font-size-lg); flex-shrink: 0; }
+    :host { 
+      display: flex; flex-direction: column; height: 100%; box-sizing: border-box; 
+      background: var(--bg-base);
+    }
     
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
+    .header-title {
+      font-size: 15px; font-weight: 600; color: var(--text-primary);
+    }
+    .cluster-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 99px;
+      background: rgba(0, 212, 170, 0.1);
+      color: var(--accent-secondary);
+      font-weight: 600; font-size: 11px;
+    }
+    .pulse-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent-secondary);
+      box-shadow: 0 0 8px var(--accent-secondary);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.9; }
+      50% { transform: scale(1.05); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.9; }
+    }
+
     .messages {
       flex: 1; overflow-y: auto; display: flex; flex-direction: column;
-      gap: var(--space-4); padding: var(--space-4) var(--space-6);
+      gap: 20px; padding: 24px; scroll-behavior: smooth;
     }
     
-    .msg { 
-      max-width: 85%; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); 
-      font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-primary);
-      word-break: break-word;
+    .msg-group {
+      display: flex; flex-direction: column; gap: 6px;
+      max-width: 80%;
     }
-    .msg-user {
-      align-self: flex-end; background: var(--color-user-bubble);
-      border-bottom-right-radius: var(--radius-sm);
+    .msg-group-user { align-self: flex-end; }
+    .msg-group-assistant { align-self: flex-start; }
+    .msg-group-system { align-self: center; max-width: 100%; }
+
+    .msg-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      margin-bottom: 2px;
     }
-    .msg-assistant {
-      align-self: flex-start; background: var(--color-assistant-bubble);
-      border: 1px solid var(--color-border); border-bottom-left-radius: var(--radius-sm);
+    .msg-header-user { justify-content: flex-end; }
+
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); font-size: 14px; flex-shrink: 0;
     }
-    .msg-system {
-      align-self: center; background: transparent; color: var(--color-text-secondary);
-      font-style: italic; font-size: 0.8rem; border: none; padding: var(--space-2);
+
+    .bubble { 
+      padding: 12px 16px; border-radius: 12px;
+      font-size: 14px; line-height: 1.6; color: var(--text-primary);
+      word-break: break-word; position: relative;
     }
-    .msg-approval {
-      align-self: stretch; max-width: 100%; background: var(--color-warning-bg);
-      border: 1px solid var(--color-warning); border-radius: var(--radius-md);
+    .bubble-user {
+      background: var(--accent);
+      border-radius: 18px 18px 4px 18px;
+      box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2);
+    }
+    .bubble-assistant {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 18px 18px 18px 4px;
+    }
+    .bubble-system {
+      background: transparent; color: var(--text-muted); padding: 4px 12px;
+      font-size: 11px; border: 1px solid var(--border); border-radius: 99px;
+      text-transform: uppercase; letter-spacing: 0.05em;
     }
     
+    .timestamp {
+      font-size: 11px; color: var(--text-muted); margin-top: 2px;
+    }
+    .timestamp-user { text-align: right; }
+
+    .typing {
+      display: flex; gap: 4px; padding: 12px 16px;
+      background: var(--bg-elevated); border-radius: 18px 18px 18px 4px;
+      align-self: flex-start; border: 1px solid var(--border);
+    }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+      opacity: 0.4;
+    }
+    .dot:nth-child(1) { animation: bounce 1.4s infinite ease-in-out; }
+    .dot:nth-child(2) { animation: bounce 1.4s infinite ease-in-out -0.32s; }
+    .dot:nth-child(3) { animation: bounce 1.4s infinite ease-in-out -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    .input-wrapper {
+      padding: 0 24px 24px; flex-shrink: 0;
+    }
     .input-area {
-      padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border);
-      background: var(--color-bg-base); flex-shrink: 0;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 16px; padding: 8px 12px;
+      display: flex; align-items: flex-end; gap: 12px;
+      transition: var(--transition);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
     }
-    .input-row { display: flex; gap: var(--space-3); }
-    textarea {
-      flex: 1; background: var(--color-bg-surface); border: 1px solid var(--color-border);
-      border-radius: var(--radius-md); color: var(--color-text-primary);
-      padding: var(--space-3); font-size: var(--font-size-sm); resize: none;
-      font-family: inherit; min-height: 48px; max-height: 150px; outline: none;
+    .input-area:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 8px 24px rgba(0,0,0,0.2);
     }
-    textarea:focus { border-color: var(--color-accent); }
-    button {
-      background: var(--color-success); border: none; border-radius: var(--radius-md); 
-      color: white; cursor: pointer; padding: 0 var(--space-4); 
-      font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
-      transition: background 0.2s; white-space: nowrap;
-    }
-    button:hover:not(:disabled) { background: #16a34a; }
-    button:disabled { background: var(--color-bg-elevated); color: var(--color-text-secondary); cursor: not-allowed; }
     
-    .approval-actions { display: flex; gap: var(--space-3); width: 100%; align-items: stretch; }
-    .btn-deny { background: transparent; border: 1px solid var(--color-error); color: var(--color-error); }
-    .btn-deny:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); }
+    textarea {
+      flex: 1; background: transparent; border: none;
+      color: var(--text-primary); padding: 10px 8px;
+      font-size: 14px; font-family: inherit; line-height: 1.5;
+      resize: none; max-height: 200px; min-height: 24px; outline: none;
+    }
+    .attach-btn {
+       color: var(--text-muted); cursor: pointer; padding-bottom: 8px;
+       transition: var(--transition);
+    }
+    .attach-btn:hover { color: var(--text-primary); }
+
+    .send-btn {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+      border: none; border-radius: 12px; width: 38px; height: 38px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s, brightness 0.2s;
+      color: white; flex-shrink: 0; margin-bottom: 3px;
+    }
+    .send-btn:hover:not(:disabled) {
+      brightness: 1.1; transform: translateY(-1px);
+    }
+    .send-btn:disabled {
+      filter: grayscale(1); opacity: 0.4; cursor: not-allowed;
+    }
     
     /* Markdown Styles */
-    .msg p { margin: 0 0 0.5em 0; }
-    .msg p:last-child { margin: 0; }
-    .msg pre { background: var(--color-bg-base); padding: var(--space-3); border-radius: var(--radius-sm); overflow-x: auto; }
-    .msg code { font-family: 'Fira Code', monospace; font-size: 0.85em; background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; }
-    .msg pre code { background: transparent; padding: 0; }
-    
-    .status-text { font-size: 0.8rem; color: var(--color-text-secondary); margin-bottom: var(--space-2); }
+    .bubble pre { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin: 8px 0; overflow-x: auto; }
+    .bubble code { font-family: 'Fira Code', monospace; font-size: 0.9em; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 4px; }
+    .bubble pre code { background: transparent; padding: 0; }
+    .bubble p { margin-bottom: 8px; }
+    .bubble p:last-child { margin-bottom: 0; }
+
+    /* Approval Card - Custom Full Width Style */
+    .approval-card {
+       width: 100%; max-width: 100% !important; margin: 10px 0;
+       border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.05);
+       border-radius: 12px; overflow: hidden;
+    }
+    .approval-body { padding: 16px; border-bottom: 1px solid rgba(245, 158, 11, 0.2); }
+    .approval-actions { display: flex; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
+    .btn-approve { flex: 1; height: 38px; background: #00d4aa; color: #0a0b0f; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
+    .btn-deny { border: 1px solid rgba(255,255,255,0.1); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; }
+    textarea.deny-reason { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; color: white; }
   `;
 
   connectedCallback() {
@@ -119,25 +223,13 @@ export class ArcChatInterface extends LitElement {
         detail: { sessionId: frame.sessionId, platformId: frame.platformId },
         bubbles: true, composed: true
       }));
-      this._messages = [...this._messages, {
-        id: crypto.randomUUID(), role: 'system', text: 'Connected to ArcClaw Agent Cluster', timestamp: Date.now()
-      }];
-    } 
-    else if (frame.type === 'message' && frame.role === 'assistant') {
+    } else if (frame.type === 'message' && frame.role === 'assistant') {
+      this._isTyping = false;
       const isApproval = frame.text.includes('⏸ Approval needed');
-      
       this._messages = [...this._messages, {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        text: frame.text,
-        timestamp: Date.now(),
-        isApprovalPrompt: isApproval
+        id: crypto.randomUUID(), role: 'assistant', text: frame.text, timestamp: Date.now(), isApprovalPrompt: isApproval
       }];
-      
-      if (isApproval) {
-        this._awaitingApproval = true;
-      }
-      
+      if (isApproval) this._awaitingApproval = true;
       this._scrollToBottom();
     }
   }
@@ -145,22 +237,19 @@ export class ArcChatInterface extends LitElement {
   private _send() {
     const text = this._input.trim();
     if (!text || this._wsStatus !== 'open') return;
-    
-    this._messages = [...this._messages, {
-      id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now()
-    }];
-    
+    this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now() }];
     this._ws?.send({ type: 'message', text });
     this._input = '';
+    this._isTyping = true;
     this._scrollToBottom();
   }
   
   private _sendApprove() {
-    this._ws?.send({ type: 'message', text: '/approve' });
-    this._awaitingApproval = false;
-    this._showDenyReason = false;
-    this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text: '/approve', timestamp: Date.now() }];
-    this._scrollToBottom();
+     this._ws?.send({ type: 'message', text: '/approve' });
+     this._awaitingApproval = false;
+     this._showDenyReason = false;
+     this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text: '/approve', timestamp: Date.now() }];
+     this._scrollToBottom();
   }
   
   private _sendDeny() {
@@ -178,7 +267,6 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _scrollToBottom() {
-    // Wait for render cycle to complete
     setTimeout(() => {
       const el = this.shadowRoot?.querySelector('.messages');
       if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
@@ -187,65 +275,82 @@ export class ArcChatInterface extends LitElement {
   
   private _renderMarkdown(text: string) {
     try {
-      // Create DOM element from parsed markdown to safely inject HTML
       const template = document.createElement('div');
       template.innerHTML = marked.parse(text, { async: false }) as string;
       return template;
-    } catch {
-      return text;
-    }
+    } catch { return text; }
+  }
+
+  private _formatTime(ts: number) {
+     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   render() {
     return html`
-      <h2>Chat Session</h2>
+      <header class="chat-header">
+        <div class="header-title">Chat Session</div>
+        <div class="cluster-status">
+          Connected to ArcClaw Agent Cluster
+          <div class="status-badge">
+             <div class="pulse-dot"></div> Live
+          </div>
+        </div>
+      </header>
+      
       <div class="messages">
-        ${this._messages.map(m => html`
-          <div class="msg ${m.role === 'user' ? 'msg-user' : m.role === 'system' ? 'msg-system' : m.isApprovalPrompt ? 'msg-approval' : 'msg-assistant'}">
-            ${m.role === 'user' || m.role === 'system' ? m.text : this._renderMarkdown(m.text)}
+        ${this._messages.map(m => m.role === 'system' ? html`
+          <div class="msg-group msg-group-system">
+             <div class="bubble bubble-system">${m.text}</div>
+          </div>
+        ` : html`
+          <div class="msg-group msg-group-${m.role === 'user' ? 'user' : 'assistant'}">
+             <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
+               ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> ArcClaw Agent` : 'You'}
+             </div>
+             ${m.isApprovalPrompt ? html`
+                <div class="approval-card">
+                   <div class="approval-body">${this._renderMarkdown(m.text)}</div>
+                   <div class="approval-actions">
+                      <button class="btn-approve" @click="${this._sendApprove}">Approve Task</button>
+                      <button class="btn-deny" @click="${this._sendDeny}">Deny</button>
+                   </div>
+                </div>
+             ` : html`
+                <div class="bubble bubble-${m.role}">
+                  ${m.role === 'user' ? m.text : this._renderMarkdown(m.text)}
+                </div>
+             `}
+             <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
           </div>
         `)}
+        
+        ${this._isTyping ? html`
+          <div class="typing">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          </div>
+        ` : nothing}
       </div>
       
-      <div class="input-area">
-        ${this._wsStatus !== 'open' 
-          ? html`<div class="status-text">WebSocket: ${this._wsStatus}...</div>` 
-          : ''}
-          
-        ${this._awaitingApproval 
-          ? html`
-            <div class="approval-actions">
-              ${this._showDenyReason
-                ? html`
-                  <textarea 
-                    placeholder="Reason for denial (optional)..."
-                    .value="${this._denyReason}"
-                    @input="${(e: Event) => this._denyReason = (e.target as HTMLTextAreaElement).value}"
-                    @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._sendDeny(); } }}"
-                  ></textarea>
-                  <button class="btn-deny" @click="${this._sendDeny}">Confirm Deny</button>
-                  <button style="background: transparent; border: none; color: var(--color-text-secondary);" @click="${() => this._showDenyReason = false}">Cancel</button>
-                `
-                : html`
-                  <button @click="${this._sendApprove}">✓ Approve Task</button>
-                  <button class="btn-deny" @click="${this._sendDeny}">✗ Deny Task</button>
-                `
-              }
-            </div>
-          `
-          : html`
-            <div class="input-row">
-              <textarea
-                placeholder="Ask ArcClaw anything…"
-                .value="${this._input}"
-                ?disabled="${this._wsStatus !== 'open'}"
-                @input="${(e: Event) => this._input = (e.target as HTMLTextAreaElement).value}"
-                @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
-              ></textarea>
-              <button ?disabled="${this._wsStatus !== 'open' || !this._input.trim()}" @click="${this._send}">Send</button>
-            </div>
-          `
-        }
+      <div class="input-wrapper">
+        <div class="input-area">
+          <div class="attach-btn">📎</div>
+          <textarea
+            placeholder="Ask ArcClaw anything…"
+            .value="${this._input}"
+            ?disabled="${this._awaitingApproval}"
+            rows="1"
+            @input="${(e: Event) => {
+               this._input = (e.target as HTMLTextAreaElement).value;
+               const el = e.target as HTMLTextAreaElement;
+               el.style.height = 'auto';
+               el.style.height = el.scrollHeight + 'px';
+            }}"
+            @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
+          ></textarea>
+          <button class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
+             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
       </div>
     `;
   }

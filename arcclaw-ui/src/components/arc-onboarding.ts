@@ -12,33 +12,53 @@ export class ArcOnboarding extends LitElement {
   static styles = css`
     :host {
       display: flex; align-items: center; justify-content: center;
-      height: 100vh; background: var(--color-bg-base);
+      height: 100vh; background: var(--bg-base);
     }
     .card {
-      background: var(--color-bg-surface); border: 1px solid var(--color-border); 
-      border-radius: var(--radius-lg); padding: var(--space-8); 
-      width: 420px; display: flex; flex-direction: column; gap: var(--space-4);
-      box-shadow: var(--shadow-md);
+      background: var(--bg-surface); border: 1px solid var(--border); 
+      border-radius: 24px; padding: 48px; 
+      width: 420px; display: flex; flex-direction: column; gap: 24px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      position: relative; overflow: hidden;
     }
-    h1 { color: var(--color-info); font-size: var(--font-size-lg); margin: 0; }
-    p { color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: 1.5; margin: 0; }
-    .input-grp { display: flex; flex-direction: column; gap: var(--space-2); }
+    .card::before {
+      content: '⬡';
+      position: absolute; top: -30px; right: -30px;
+      font-size: 15rem; color: var(--accent); opacity: 0.03;
+      pointer-events: none;
+    }
+    .logo-section { display: flex; align-items: center; gap: 12px; }
+    .logo-icon { font-size: 28px; color: var(--accent); }
+    h1 { 
+      font-size: 24px; font-weight: 700; margin: 0;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    p { color: var(--text-muted); font-size: 14px; line-height: 1.6; margin: 0; }
+    
+    .input-grp { display: flex; flex-direction: column; gap: 8px; }
+    label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
     input {
-      background: var(--color-bg-base); border: 1px solid var(--color-border); 
-      border-radius: var(--radius-md); color: var(--color-text-primary); 
-      padding: var(--space-2) var(--space-3); font-size: var(--font-size-base); width: 100%;
-      font-family: inherit; outline: none;
+      background: var(--bg-elevated); border: 1px solid var(--border); 
+      border-radius: 12px; color: var(--text-primary); 
+      padding: 14px 16px; font-size: 15px; width: 100%;
+      font-family: inherit; outline: none; transition: var(--transition);
     }
-    input:focus { border-color: var(--color-accent); }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    
     button {
-      background: var(--color-success); border: none; border-radius: var(--radius-md); 
-      color: white; cursor: pointer; padding: var(--space-2) var(--space-4); 
-      font-size: var(--font-size-base); font-weight: var(--font-weight-medium);
-      transition: background 0.2s;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+      border: none; border-radius: 12px; 
+      color: white; cursor: pointer; padding: 14px; 
+      font-size: 15px; font-weight: 600;
+      transition: transform 0.2s, brightness 0.2s;
     }
-    button:hover:not(:disabled) { background: #16a34a; }
+    button:hover:not(:disabled) { brightness: 1.1; transform: translateY(-1px); }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .error { color: var(--color-error); font-size: var(--font-size-sm); }
+    .error { 
+      color: #ef4444; font-size: 12px; background: rgba(239, 68, 68, 0.1); 
+      padding: 10px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.2);
+    }
   `;
 
   private async _testConnection() {
@@ -50,16 +70,18 @@ export class ArcOnboarding extends LitElement {
       const client = new ArcClient('/api/v1', this._inputKey.trim());
       await client.getAgents();
       this._success = true;
-      this.dispatchEvent(new CustomEvent('api-key-set', { 
-        detail: { apiKey: this._inputKey.trim() }, 
-        bubbles: true, 
-        composed: true 
-      }));
+      setTimeout(() => {
+        this.dispatchEvent(new CustomEvent('api-key-set', { 
+           detail: { apiKey: this._inputKey.trim() }, 
+           bubbles: true, 
+           composed: true 
+        }));
+      }, 500);
     } catch (err: unknown) {
       if (err instanceof Error && err.message.includes('401')) {
-        this._error = 'Invalid API key';
+        this._error = 'Invalid API key. Please check your credentials.';
       } else {
-        this._error = 'Cannot reach ArcClaw on port 8080';
+        this._error = 'Cannot reach ArcClaw on port 8080. Ensure the backend is running.';
       }
     } finally {
       this._testing = false;
@@ -69,10 +91,14 @@ export class ArcOnboarding extends LitElement {
   render() {
     return html`
       <div class="card">
-        <h1>🦅 ArcClaw Setup</h1>
-        <p>Enter your ArcClaw API key to continue. The key is stored in memory only and cleared when you close the browser tab.</p>
+        <div class="logo-section">
+           <span class="logo-icon">⬡</span>
+           <h1>ArcClaw</h1>
+        </div>
+        <p>Enter your API key to access the agent cluster. Security is our priority; keys are held in memory only.</p>
         
         <div class="input-grp">
+          <label>API Key</label>
           <input
             type="password"
             placeholder="arcclaw-key-..."
@@ -87,7 +113,7 @@ export class ArcOnboarding extends LitElement {
         <button 
           @click="${this._testConnection}" 
           ?disabled="${this._testing || !this._inputKey.trim() || this._success}">
-          ${this._testing ? 'Connecting...' : this._success ? 'Connected ✓' : 'Connect'}
+          ${this._testing ? 'Syncing...' : this._success ? 'Access Granted ✓' : 'Initialize Connection'}
         </button>
       </div>
     `;

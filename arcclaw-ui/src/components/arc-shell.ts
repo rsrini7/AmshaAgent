@@ -26,8 +26,15 @@ export class ArcShell extends LitElement {
   private _pollingInterval: number | null = null;
 
   static styles = css`
-    :host { display: flex; height: 100vh; overflow: hidden; background: var(--color-bg-base); }
-    main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; position: relative; }
+    :host { 
+      display: flex; height: 100vh; overflow: hidden; 
+      background: var(--bg-base); 
+      color: var(--text-primary);
+    }
+    main { 
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; 
+      position: relative; 
+    }
     .content-area { flex: 1; min-height: 0; }
   `;
 

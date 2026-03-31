@@ -10,52 +10,99 @@ export class ArcNav extends LitElement {
   static styles = css`
     :host {
       display: flex; flex-direction: column;
-      width: 200px; background: var(--color-bg-surface);
-      border-right: 1px solid var(--color-border);
-      padding: var(--space-4) 0; height: 100vh;
+      width: 220px; background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      padding: var(--space-4) var(--space-3); height: 100vh;
+      box-sizing: border-box;
+      transition: var(--transition);
     }
     .logo {
-      color: var(--color-info); font-size: var(--font-size-lg);
-      font-weight: var(--font-weight-bold);
-      padding: var(--space-2) var(--space-6) var(--space-4);
+      display: flex; align-items: center; gap: 10px;
+      padding: var(--space-4) var(--space-3) var(--space-8);
+      font-weight: 700; font-size: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+    .logo-icon {
+      color: var(--accent);
+      width: 20px; height: 20px;
+    }
+    .logo-text {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .links {
       display: flex; flex-direction: column;
+      gap: 4px;
       flex-grow: 1;
     }
     a {
-      color: var(--color-text-secondary); padding: var(--space-2) var(--space-6);
-      text-decoration: none; font-size: var(--font-size-sm);
-      cursor: pointer; border-left: 3px solid transparent;
-      display: flex; align-items: center; gap: var(--space-2);
-      transition: background 0.1s, color 0.1s;
+      color: var(--text-muted); 
+      padding: 10px 14px;
+      text-decoration: none; font-size: 14px;
+      cursor: pointer; border-radius: 8px;
+      display: flex; align-items: center; gap: 12px;
+      transition: var(--transition);
+      position: relative;
+      font-weight: 500;
     }
     a.active {
-      color: var(--color-info);
-      border-left-color: var(--color-info);
-      background: var(--color-bg-base);
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+    a.active::before {
+      content: '';
+      position: absolute;
+      left: -12px;
+      top: 10px;
+      bottom: 10px;
+      width: 3px;
+      background: var(--accent);
+      border-radius: 0 4px 4px 0;
     }
     a:hover:not(.active) {
-      background: var(--color-bg-elevated);
-      color: var(--color-text-primary);
+      background: var(--accent-glow);
+      color: var(--text-primary);
+    }
+    icon {
+      width: 16px; height: 16px;
+      display: flex; align-items: center; justify-content: center;
     }
     .footer {
-      padding: var(--space-4) var(--space-6);
-      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: var(--space-4);
+    }
+    .version {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding-left: var(--space-3);
     }
   `;
 
   render() {
     return html`
-      <div class="logo">🦅 ArcClaw</div>
+      <div class="logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">ArcClaw</span>
+      </div>
       <div class="links">
-        <a href="#/chat" class="${this.route === '#/chat' ? 'active' : ''}">💬 Chat</a>
-        <a href="#/agents" class="${this.route === '#/agents' ? 'active' : ''}">🤖 Agents</a>
-        <a href="#/hitl" class="${this.route === '#/hitl' ? 'active' : ''}">✋ Approvals</a>
-        <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}">🔧 Skills</a>
+        <a href="#/chat" class="${this.route === '#/chat' ? 'active' : ''}">
+          <span>💬</span> Chat
+        </a>
+        <a href="#/agents" class="${this.route === '#/agents' ? 'active' : ''}">
+          <span>🤖</span> Agents
+        </a>
+        <a href="#/hitl" class="${this.route === '#/hitl' ? 'active' : ''}">
+          <span>✋</span> Approvals
+        </a>
+        <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}">
+          <span>🔧</span> Skills
+        </a>
       </div>
       <div class="footer">
         <arc-connection-badge .status="${this.sseStatus}"></arc-connection-badge>
+        <div class="version">v1.0</div>
       </div>
     `;
   }

@@ -4,34 +4,54 @@ import { customElement, property } from 'lit/decorators.js';
 @customElement('arc-connection-badge')
 export class ArcConnectionBadge extends LitElement {
   @property({ type: String }) status: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @property({ type: Number }) lastHeartbeat: number = 0;
 
   static styles = css`
     :host {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: var(--font-size-sm, 0.875rem);
-      padding: 4px 8px;
-      border-radius: var(--radius-full, 9999px);
-      background: var(--color-bg-elevated, #334155);
+      gap: 8px;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 99px;
+      background: var(--accent-glow);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      transition: var(--transition);
+      cursor: default;
     }
+    
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
+      position: relative;
     }
-    .status-connected .dot { background: var(--color-success, #22c55e); }
-    .status-disconnected .dot { background: var(--color-text-secondary, #94a3b8); }
-    .status-error .dot { background: var(--color-error, #ef4444); }
     
-    .status-connected { color: var(--color-success, #22c55e); }
-    .status-disconnected { color: var(--color-text-secondary, #94a3b8); }
-    .status-error { color: var(--color-error, #ef4444); }
+    .status-connected .dot { 
+      background: #00d4aa; 
+      box-shadow: 0 0 8px #00d4aa;
+    }
+    .status-connected .dot::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      border: 1px solid #00d4aa;
+      animation: pulse 2s infinite;
+    }
     
+    .status-disconnected .dot { background: var(--text-muted); opacity: 0.5; }
+    .status-error .dot { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+
     .label {
-      font-weight: var(--font-weight-medium, 500);
-      color: var(--color-text-primary, #f1f5f9);
+      text-transform: uppercase;
     }
   `;
 
