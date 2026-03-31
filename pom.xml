@@ -119,6 +119,10 @@
               <!-- -Dsmallrye.config.locations=file:${project.basedir}/../.env -->
               <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</jvmArgs>
               <warnIfBuildGoalMissing>false</warnIfBuildGoalMissing>
+              <debug>false</debug>        <!-- disables JDWP in quarkus:dev -->
+              <!-- OR keep debug but force suspend=n explicitly: -->
+              <!-- <debugHost>localhost</debugHost> -->
+              <!-- <suspend>false</suspend> -->
           </configuration>
         </plugin>
         <plugin>

@@ -529,12 +529,14 @@ run = """
 $ErrorActionPreference = 'Stop'
 $mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev -pl arcclaw-app -am `
+& $mvnw quarkus:dev -pl arcclaw-app -am "--no-transfer-progress"`
     "-Djvm.args=$jvmArgs" `
     '-Dquarkus.args=serve' `
     '-Dquarkus.profile=dev' `
     '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data'
+    '-Darcclaw.data-dir=../data' `
+    '-Ddebug=false'
+    
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
