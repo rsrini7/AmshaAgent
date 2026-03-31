@@ -524,21 +524,21 @@ depends = ["env:recover"]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
-quiet = true
+quiet = false
 run = """
 $ErrorActionPreference = 'Stop'
 $envCopied = $false
 
 try {
-    # If local .env doesn't exist but parent .env does, copy it over temporarily
-    if (-not (Test-Path -Path ".env") -and (Test-Path -Path "..\\.env")) {
-        Copy-Item -Path "..\\.env" -Destination ".env"
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
         $envCopied = $true
+        Write-Host '[dev] Copied ../.env -> arcclaw-app/.env for this session'
     }
 
     $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
     $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-    
+
     & $mvnw quarkus:dev `
         '--no-transfer-progress' `
         "-Djvm.args=$jvmArgs" `
@@ -548,12 +548,36 @@ try {
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
 
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
-    # Cleanup: Delete the copied .env file when the dev server closes
-    if ($envCopied) {
-        Remove-Item -Path ".env" -Force -ErrorAction SilentlyContinue
+    # Kill orphaned forked Quarkus JVM (survives Maven Ctrl+C on Windows)
+    Get-Process -Name java -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowTitle -eq '' } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+
+    # Restore terminal from Quarkus raw-mode stdin hijack
+    if ($IsWindows) {
+        $STD_INPUT_HANDLE = -10
+        $RESTORE_MODE     = 0x0007   # ENABLE_PROCESSED_INPUT | LINE_INPUT | ECHO_INPUT
+        Add-Type -TypeDefinition '
+            using System;
+            using System.Runtime.InteropServices;
+            public class WinCon {
+                [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+                [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+            }' -ErrorAction SilentlyContinue
+        $handle = [WinCon]::GetStdHandle($STD_INPUT_HANDLE)
+        [WinCon]::SetConsoleMode($handle, $RESTORE_MODE) | Out-Null
     }
+
+    [Console]::TreatControlCAsInput = $false
+    $host.UI.RawUI.FlushInputBuffer()
+
+    if ($envCopied) {
+        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
+        Write-Host '[dev] Cleaned up temporary arcclaw-app/.env'
+    }
+
+    Write-Host '[dev] Terminal restored. Press Enter if cursor is missing.'
 }
 """
 
