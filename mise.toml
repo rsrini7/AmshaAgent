@@ -527,18 +527,34 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
-$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev `
-    '--no-transfer-progress' `
-    "-Djvm.args=$jvmArgs" `
-    '-Dquarkus.args=serve' `
-    '-Dquarkus.profile=dev' `
-    '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data' `
-    '-Ddebug=false'
+$envCopied = $false
 
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+try {
+    # If local .env doesn't exist but parent .env does, copy it over temporarily
+    if (-not (Test-Path -Path ".env") -and (Test-Path -Path "..\\.env")) {
+        Copy-Item -Path "..\\.env" -Destination ".env"
+        $envCopied = $true
+    }
+
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+    
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=serve' `
+        '-Dquarkus.profile=dev' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} finally {
+    # Cleanup: Delete the copied .env file when the dev server closes
+    if ($envCopied) {
+        Remove-Item -Path ".env" -Force -ErrorAction SilentlyContinue
+    }
+}
 """
 
 [tasks."dev:chat"]
