@@ -27,6 +27,11 @@ public class AgentResponseMapper {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern CONTEXT_BLOCK_PATTERN = Pattern.compile(
+        "##\\s*Retrieved Context\\s*<context>.*?</context>\\s*",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+
     @Inject
     AuditService auditService;
 
@@ -65,6 +70,7 @@ public class AgentResponseMapper {
     private String sanitizeAnswer(String answer) {
         if (answer == null) return null;
 
+        answer = CONTEXT_BLOCK_PATTERN.matcher(answer).replaceAll("").strip();
         boolean looksLikeCronConfirmation = FAKE_CRON_PATTERN.matcher(answer).find();
         boolean hasRepeatingUuid = REPEATING_UUID_PATTERN.matcher(answer).find();
 

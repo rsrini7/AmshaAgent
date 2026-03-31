@@ -1,6 +1,7 @@
 package com.arcclaw.app.security;
 
 import java.time.Clock;
+import java.util.Set;
 
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -95,10 +96,17 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         logAudit(safeKey, path, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
     }
 
+    private static final Set<String> SILENT_POLL_PATHS = Set.of(
+        "/hitl", "/agents", "/skills", "/tools"
+    );
+
     private void logAudit(String key, String endpoint, String method, String status, String ip, long durationMs) {
         String msg = String.format("[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d", key, endpoint, method, status, ip, durationMs);
-        if ("ACCEPTED".equals(status)  && endpoint.startsWith("/hitl")) {
-            log.debug(msg);
+        boolean isSilentPoll = "ACCEPTED".equals(status) 
+                                && SILENT_POLL_PATHS.stream().anyMatch(endpoint::startsWith);
+
+        if (isSilentPoll) {
+            log.trace(msg);
         } else {
             log.warn(msg);
         }
