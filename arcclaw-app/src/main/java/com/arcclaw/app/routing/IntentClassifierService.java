@@ -5,23 +5,22 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.routing.IntentRoutingProvider;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
-import io.smallrye.common.annotation.RunOnVirtualThread;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 @Unremovable
@@ -100,7 +99,6 @@ public class IntentClassifierService implements IntentClassifier {
         this.dynamicClassifierPrompt = sb.toString();
     }
 
-    @RunOnVirtualThread  
     @Override
     public String classify(String userMessage) {
         // Fast-path routing via SPI triggers

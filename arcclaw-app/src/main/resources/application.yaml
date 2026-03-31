@@ -6,10 +6,10 @@
 quarkus:
 
   vertx:
-      resolver:
-        cache-max-ttl: 300
-        cache-negative-ttl: 0
-      prefer-native-transport: true
+    prefer-native-transport: true
+    resolver:
+      cache-max-ttl: 300
+      cache-negative-ttl: 0
 
   application:
     name: arcclaw
