@@ -527,8 +527,18 @@ shell = "pwsh -NonInteractive -Command"
 quiet = false
 run = """
 $ErrorActionPreference = 'Stop'
-$envCopied = $false
 
+if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
+    Add-Type -TypeDefinition '
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinCon {
+            [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+            [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+        }'
+}
+
+$envCopied = $false
 try {
     if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
         Copy-Item -Path '../.env' -Destination '.env'
@@ -549,24 +559,13 @@ try {
         '-Ddebug=false'
 
 } finally {
-    # Kill orphaned forked Quarkus JVM (survives Maven Ctrl+C on Windows)
     Get-Process -Name java -ErrorAction SilentlyContinue |
         Where-Object { $_.MainWindowTitle -eq '' } |
         Stop-Process -Force -ErrorAction SilentlyContinue
 
-    # Restore terminal from Quarkus raw-mode stdin hijack
     if ($IsWindows) {
-        $STD_INPUT_HANDLE = -10
-        $RESTORE_MODE     = 0x0007   # ENABLE_PROCESSED_INPUT | LINE_INPUT | ECHO_INPUT
-        Add-Type -TypeDefinition '
-            using System;
-            using System.Runtime.InteropServices;
-            public class WinCon {
-                [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
-                [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
-            }' -ErrorAction SilentlyContinue
-        $handle = [WinCon]::GetStdHandle($STD_INPUT_HANDLE)
-        [WinCon]::SetConsoleMode($handle, $RESTORE_MODE) | Out-Null
+        $handle = [WinCon]::GetStdHandle(-10)
+        [WinCon]::SetConsoleMode($handle, 0x0007) | Out-Null
     }
 
     [Console]::TreatControlCAsInput = $false

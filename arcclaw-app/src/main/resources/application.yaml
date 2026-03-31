@@ -484,6 +484,10 @@ mp:
 
 "%dev":
   quarkus:
+    mcp:
+      server:
+        stdio:
+          enabled: false
     log:
       level: DEBUG                          # single root block — no duplicate
       console:
