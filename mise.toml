@@ -522,47 +522,51 @@ Write-Host '✅  Build artifacts cleaned.'
 [tasks.dev]
 depends = ["env:recover"]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
-dir = "{{config_root}}"
+dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev -pl arcclaw-app -am "--no-transfer-progress"`
+& $mvnw quarkus:dev `
+    '--no-transfer-progress' `
     "-Djvm.args=$jvmArgs" `
     '-Dquarkus.args=serve' `
     '-Dquarkus.profile=dev' `
     '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
     '-Darcclaw.data-dir=../data' `
     '-Ddebug=false'
-    
+
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."dev:chat"]
 depends = ["env:recover"]
 description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
-dir = "{{config_root}}"
+dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev -pl arcclaw-app -am `
+& $mvnw quarkus:dev `
+    '--no-transfer-progress' `
     "-Djvm.args=$jvmArgs" `
     '-Dquarkus.args=chat' `
     '-Dquarkus.profile=dev' `
     '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data'
+    '-Darcclaw.data-dir=../data' `
+    '-Ddebug=false'
+
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."dev:attach"]
 depends = ["env:recover"]
 description = "Dev mode — Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
-dir = "{{config_root}}"
+dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
@@ -571,21 +575,23 @@ if (-not $env:TELEGRAM_BOT_TOKEN) {
     Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'
     exit 1
 }
-$mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 -Darcclaw.telegram.enabled=true'
-& $mvnw quarkus:dev -pl arcclaw-app -am `
+$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+$jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
+& $mvnw quarkus:dev `
+    '--no-transfer-progress' `
     "-Djvm.args=$jvmArgs" `
     '-Dquarkus.args=attach' `
     '-Dquarkus.profile=dev' `
     '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data'
+    '-Darcclaw.data-dir=../data' `
+    '-Ddebug=false'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."dev:ask"]
 depends = ["env:recover"]
 description = 'Dev mode — one-shot task. Set $env:GOAL="your goal" then: mise run dev:ask'
-dir = "{{config_root}}"
+dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
@@ -598,35 +604,41 @@ if (-not $goal) {
     exit 1
 }
 $qargs   = "ask $goal" + $(if ($env:ROLE) { " --role $($env:ROLE)" } else { '' })
-$mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev -pl arcclaw-app -am `
+& $mvnw quarkus:dev `
+    '--no-transfer-progress' `
     "-Djvm.args=$jvmArgs" `
-    "-Dquarkus.args=$qargs" `
+    '-Dquarkus.args=$qargs' `
     '-Dquarkus.profile=dev' `
     '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data'
+    '-Darcclaw.data-dir=../data' `
+    '-Ddebug=false'
+
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."dev:no-ui"]
 depends = ["env:recover"]
 description = "Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
-dir = "{{config_root}}"
+dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$mvnw    = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
 $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8'
-& $mvnw quarkus:dev -pl arcclaw-app -am `
+& $mvnw quarkus:dev `
+    '--no-transfer-progress' `
     "-Djvm.args=$jvmArgs" `
     '-Dquarkus.args=serve' `
     '-Dquarkus.profile=dev' `
     '-Dquarkus.console.enabled=false' `
     '-Dquarkus.devui.enabled=false' `
     '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-    '-Darcclaw.data-dir=../data'
+    '-Darcclaw.data-dir=../data' `
+    '-Ddebug=false'
+
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
