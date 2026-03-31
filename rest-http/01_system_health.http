@@ -113,20 +113,7 @@ GET {{baseUrl}}/api/v1/hitl
 X-ArcClaw-API-Key: {{validKey}}
 Accept: application/json
 
-###
-
-### Step 2 — Approve (uses taskId from Step 1 response automatically)
-POST {{baseUrl}}/api/v1/hitl/{{hitlPending.response.body.[0].taskId}}/approve
-X-ArcClaw-API-Key: {{validKey}}
-Accept: application/json
-
-{}
-
-###
-
-### Step 3 — Reject with reason
-POST {{baseUrl}}/api/v1/hitl/{{hitlPending.response.body.[0].taskId}}/reject
-X-ArcClaw-API-Key: {{validKey}}
+# use Websocket to test real approval and deny flow.
 
 ###
 
