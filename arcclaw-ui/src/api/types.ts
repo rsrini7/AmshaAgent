@@ -18,8 +18,7 @@ export interface PendingApprovalDto {
 export interface ToolDto {
   name: string;
   description: string;
-  operationType: string;
-  autonomyRequired: string;
+  inputSchema: string;
 }
 
 export interface SkillDto {

@@ -121,15 +121,6 @@ export class ArcSkillsPanel extends LitElement {
 
 
   private _renderToolCard(t: ToolDto) {
-    const opClass =
-      t.operationType === 'NETWORK_OUTBOUND' ? 'badge-op-network' :
-      t.operationType === 'READ_ONLY'        ? 'badge-op-read'    :
-                                               'badge-op-default';
-    const autClass =
-      t.autonomyRequired?.includes('super') ? 'badge-aut-supervised' :
-      t.autonomyRequired?.includes('full')  ? 'badge-aut-full'       :
-      t.autonomyRequired?.includes('read')  ? 'badge-aut-readonly'   :
-                                              'badge-aut-default';
     return html`
       <div class="card">
         <div class="header">
@@ -140,8 +131,10 @@ export class ArcSkillsPanel extends LitElement {
         </div>
         <span class="desc">${t.description || 'No description provided.'}</span>
         <div class="badges">
-          <span class="badge ${opClass}">${t.operationType || 'SYSTEM'}</span>
-          <span class="badge ${autClass}">REQ: ${t.autonomyRequired || 'UNKNOWN'}</span>
+          <span class="badge badge-op-default">MCP</span>
+          <span class="badge badge-aut-default">
+            ${t.inputSchema ? 'SCHEMA' : 'NO SCHEMA'}
+          </span>
         </div>
       </div>
     `;
