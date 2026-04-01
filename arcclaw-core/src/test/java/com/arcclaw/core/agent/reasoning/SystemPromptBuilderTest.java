@@ -9,7 +9,6 @@ import java.util.Optional;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -24,7 +23,7 @@ class SystemPromptBuilderTest {
     PromptTemplateEngine promptTemplateEngine;
 
     @Mock
-    CompactionSummaryRepository compactionSummaryRepository;
+    CompactionSummaryCache summaryCache;
 
     @Mock
     SkillRegistry skillRegistry;
@@ -35,14 +34,14 @@ class SystemPromptBuilderTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         builder = new SystemPromptBuilder(agentPersonaRegistry, promptTemplateEngine,
-                compactionSummaryRepository, skillRegistry);
+                summaryCache, skillRegistry);
     }
 
     @Test
     void testBuildSystemPrompt_sectionOrderIsPreserved() {
         // Arrange
         when(agentPersonaRegistry.getPersonaPrompt(AgentRoleEnum.COORDINATOR)).thenReturn("PERSONA_MARKER");
-        when(compactionSummaryRepository.findLatestBySessionId(any())).thenReturn(Optional.empty());
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
 
         // Act

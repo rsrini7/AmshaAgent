@@ -25,6 +25,7 @@ import com.arcclaw.core.scope.WorkspaceExecutors;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.util.PreExecutionFilter;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -231,8 +232,7 @@ public class ParallelToolStepExecutor {
                 }
             }
         } finally {
-            MDC.remove(MdcKeys.PARALLEL_BATCH_SIZE);
-            MDC.remove(MdcKeys.PARALLEL_TOOLS);
+            MdcCleaner.clear(MdcKeys.PARALLEL_BATCH_SIZE, MdcKeys.PARALLEL_TOOLS);
         }
 
         // Pass 2: Execute only ALLOWED calls in parallel (virtual threads)

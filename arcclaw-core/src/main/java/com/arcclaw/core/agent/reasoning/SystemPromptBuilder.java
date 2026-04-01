@@ -11,8 +11,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import org.jboss.logging.Logger;
 
 /**
@@ -35,13 +33,13 @@ public class SystemPromptBuilder {
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
-    private final CompactionSummaryRepository compactionSummaryRepository;
+    private final CompactionSummaryCache summaryCache;
     private final SkillRegistry skillRegistry;
 
     protected SystemPromptBuilder() {
         this.agentPersonaRegistry = null;
         this.promptTemplateEngine = null;
-        this.compactionSummaryRepository = null;
+        this.summaryCache = null;
         this.skillRegistry = null;
     }
 
@@ -51,11 +49,11 @@ public class SystemPromptBuilder {
     @Inject
     public SystemPromptBuilder(AgentPersonaRegistry agentPersonaRegistry,
                                PromptTemplateEngine promptTemplateEngine,
-                               CompactionSummaryRepository compactionSummaryRepository,
+                               CompactionSummaryCache summaryCache,
                                SkillRegistry skillRegistry) {
         this.agentPersonaRegistry = agentPersonaRegistry;
         this.promptTemplateEngine = promptTemplateEngine;
-        this.compactionSummaryRepository = compactionSummaryRepository;
+        this.summaryCache = summaryCache;
         this.skillRegistry = skillRegistry;
     }
 
@@ -274,10 +272,10 @@ public class SystemPromptBuilder {
         baseSystemPrompt += SECURITY_RULES_PROMPT;
         baseSystemPrompt += buildExecutionBoundaryRule(roleEnum);
 
-        // Build compaction summary for template injection
+        // Build compaction summary for template injection — cached for session duration
+        // to prevent redundant DB hits during the multi-turn agent loop.
         String compactionSummary = (sessionId != null)
-                ? compactionSummaryRepository.findLatestBySessionId(sessionId)
-                .map(CompactionSummaryEntity::getSummary).orElse(null)
+                ? summaryCache.getSummary(sessionId).orElse(null)
                 : null;
 
         // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)

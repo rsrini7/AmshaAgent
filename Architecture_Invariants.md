@@ -182,6 +182,17 @@ parameter schema, not the output schema, and produces silent wrong behavior in n
 
 `DelegateToAgentTool` MUST validate that the target role's capabilities are a subset of the delegating role's capabilities before constructing the sub-agent loop. Delegation that would grant the sub-agent capabilities the parent role does not have MUST be rejected with a descriptive tool observation. Transitive capability escalation via delegation chains is FORBIDDEN.
 
+## 4.11 Intent Routing Negation Safety
+
+Fast-path routing patterns in IntentRoutingProvider implementations
+MUST NOT match negations of the intent they detect (e.g. 'do NOT
+schedule' must not route to coordinator as a scheduling request).
+If a pattern is broad enough to match negations, implement
+IntentRoutingProvider.shouldSkip(String userMessage) with a
+static final Pattern negation guard. Never compile patterns
+inline — use static final Pattern per §9.1.
+
+
 
 ---
 

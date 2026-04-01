@@ -11,8 +11,14 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 @ApplicationScoped
 public class SchedulingRoutingProvider implements IntentRoutingProvider {
 
+    // NEGATION SAFETY: This pattern is intentionally specific to
+    // time-delay signals (after X min, in X hours, remind me, etc.)
+    // and does NOT match negations like "do not schedule" or
+    // "cancel my reminder". If the pattern is ever broadened,
+    // add a shouldSkip() guard via IntentRoutingProvider.shouldSkip()
+    // default method to handle negations. See Phase 80-B B4 analysis.
     private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
-        "(?i)\\b(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec)|tomorrow|" +
+        "(?i)^\\s*(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec)|tomorrow|" +
         "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|schedule|remind(\\s+me)?|" +
         "every\\s+(day|week|hour)|once\\s+a\\s+(day|week)|later)\\b"
     );
@@ -20,11 +26,12 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
     // FIX: Route free-text task-listing intents to coordinator (who has manageschedule)
     // instead of researcher/coder who do not.
     private static final Pattern LIST_TASKS_PATTERN = Pattern.compile(
-        "(?i)\\b(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?)\\b"
+        "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?)\\b"
     );
     private static final Pattern MY_TASKS_PATTERN = Pattern.compile(
-        "(?i)\\bmy\\s+(tasks?|crons?|jobs?|scheduled\\s+tasks?)\\b"
+        "(?i)^\\s*my\\s+(tasks?|crons?|jobs?|scheduled\\s+tasks?)\\b"
     );
+
     private static final Pattern STANDALONE_CRON_PATTERN = Pattern.compile(
         "(?i)^/?crons?$"
     );

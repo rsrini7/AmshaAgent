@@ -1,0 +1,61 @@
+package com.arcclaw.app.security;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Map;
+
+import jakarta.inject.Inject;
+
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import org.junit.jupiter.api.Test;
+
+@QuarkusTest
+@TestProfile(ApiKeyRegistryLookupTest.LookupProfile.class)
+class ApiKeyRegistryLookupTest {
+
+    public static class LookupProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                "arcclaw.api.keys.admin", "sk-admin-123",
+                "arcclaw.api.keys.node-1", "sk-node-456",
+                "arcclaw.audit.hmac-key", "test-secret"
+            );
+        }
+    }
+
+    @Inject
+    ApiKeyRegistry registry;
+
+    @Test
+    void testValidKeyFound() {
+        assertTrue(registry.isValidKey("sk-admin-123"));
+    }
+
+    @Test
+    void testInvalidKeyNotFound() {
+        assertFalse(registry.isValidKey("sk-wrong-key"));
+    }
+
+    @Test
+    void testGetKeyNameForValidKey() {
+        assertEquals("admin", registry.getKeyName("sk-admin-123"));
+        assertEquals("node-1", registry.getKeyName("sk-node-456"));
+    }
+
+    @Test
+    void testGetKeyNameForInvalidKey() {
+        assertNull(registry.getKeyName("sk-wrong-key"));
+    }
+
+    @Test
+    void testNullKeyIsHandled() {
+        assertFalse(registry.isValidKey(null));
+        assertNull(registry.getKeyName(null));
+    }
+}

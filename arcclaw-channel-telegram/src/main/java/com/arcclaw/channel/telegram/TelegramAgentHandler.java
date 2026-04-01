@@ -136,15 +136,15 @@ public class TelegramAgentHandler {
             log.infof("TELEGRAM-ROUTE Message received, entering pipeline for chat %s", context.getChatId());
             pipeline.process(context);
         } catch (Exception e) {
-            if ("Pipeline crash".equals(e.getMessage())) {
-                log.warnf("Expected test exception in message pipeline for chat %s: %s", context.getChatId(), e.getMessage());
-            } else {
-                log.warnf(e, "Uncaught exception in message pipeline for chat %s", context.getChatId());
-                try {
-                    sender.sendRaw(context.getUser(), "Sorry, an internal error occurred while processing your message.");
-                } catch (Exception sendEx) {
-                    log.errorf(sendEx, "Failed to send error notification to chat %s", context.getChatId());
-                }
+            log.warnf(e, "Uncaught exception in message pipeline for chat %s", 
+                context.getChatId());
+            try {
+                sender.sendRaw(context.getUser(), 
+                    "Sorry, an internal error occurred while processing your message.");
+            } catch (Exception sendEx) {
+                log.errorf(sendEx, 
+                    "Failed to send error notification to chat %s", 
+                    context.getChatId());
             }
         } finally {
             WorkspaceScopeHolder.clear();

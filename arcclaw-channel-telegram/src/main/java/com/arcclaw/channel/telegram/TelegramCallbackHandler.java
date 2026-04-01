@@ -36,6 +36,7 @@ import org.jboss.logging.Logger;
 public class TelegramCallbackHandler {
 
     private static final Logger log = Logger.getLogger(TelegramCallbackHandler.class);
+    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
     @Inject
     TelegramChannelSender sender;
@@ -102,20 +103,21 @@ public class TelegramCallbackHandler {
     }
 
     private void answerCallback(String callbackQueryId) {
-        try {
-            log.debugf("Answering callback %s", callbackQueryId);
-            String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
-            HttpClient.newHttpClient().sendAsync(
-                HttpRequest.newBuilder()
-                    .uri(URI.create(
-                        "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build(),
-                HttpResponse.BodyHandlers.discarding());
-        } catch (Exception e) {
-            log.warnf("Failed to answer callback %s: %s", callbackQueryId, e.getMessage());
-        }
+        log.debugf("Answering callback %s", callbackQueryId);
+        String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
+        HTTP_CLIENT.sendAsync(
+            HttpRequest.newBuilder()
+                .uri(URI.create(
+                    "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.discarding())
+        .exceptionally(ex -> {
+            log.warnf("Failed to answer Telegram callback %s: %s",
+                callbackQueryId, ex.getMessage());
+            return null;
+        });
     }
 
     private void updateOrRemoveKeyboard(String sessionId, String chatId, int messageId) {
