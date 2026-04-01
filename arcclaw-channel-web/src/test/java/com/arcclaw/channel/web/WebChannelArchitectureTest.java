@@ -12,8 +12,6 @@ class WebChannelArchitectureTest {
     @ArchTest
     static final ArchRule web_channel_must_not_depend_on_core_internals =
         noClasses().that().resideInAPackage("com.arcclaw.channel.web..")
-            .should().dependOnClassesThat().resideInAnyPackage(
-                "com.arcclaw.core.lifecycle..", 
-                "com.arcclaw.core.pipeline.."
-            );
+            .should().dependOnClassesThat()
+            .resideInAPackage("com.arcclaw.core..");
 }
