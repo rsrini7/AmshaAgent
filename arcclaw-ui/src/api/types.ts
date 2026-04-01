@@ -67,3 +67,29 @@ export function parseAgentPayload(payload: string): { status: string; task: stri
   if (sep === -1) return { status: payload.trim(), task: null };
   return { status: payload.slice(0, sep).trim(), task: payload.slice(sep + 3).trim() };
 }
+
+// Onboarding DTOs
+export interface OnboardingStatusDto {
+  step: number;
+  name: string;
+  provider: string | null;
+  model: string | null;
+  credentialsValidated: boolean;
+}
+
+export interface McpServerRequest {
+  name: string;
+  transport: 'sse' | 'stdio';
+  url?: string;
+  command?: string;
+  args?: string;
+  env?: string;
+}
+
+export interface OnboardingCompleteDto {
+  done: boolean;
+  redirectTo: string;
+  provider: string;
+  model: string;
+  pluginSteps: { stepId: string; title: string; configured: boolean }[];
+}

@@ -53,9 +53,33 @@ export class ArcClient {
     return r.json();
   }
 
-  async getSkills(): Promise<SkillDto[]> {
-      const r = await fetch(this.baseUrl + '/skills', { headers: this.headers() });
-      if (!r.ok) throw new Error(`GET skills failed ${r.status}`);
-      return r.json();
-  }
+    async getSkills(): Promise<SkillDto[]> {
+        const r = await fetch(this.baseUrl + '/skills', { headers: this.headers() });
+        if (!r.ok) throw new Error(`GET skills failed ${r.status}`);
+        return r.json();
+    }
+}
+
+// Onboarding — all calls go to /onboarding (no /api/v1 prefix, separate context)
+export async function onboardingStatus(): Promise<import('./types').OnboardingStatusDto> {
+  const res = await fetch('/onboarding/status', { credentials: 'include' });
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+export async function onboardingStep(step: number, body?: object): Promise<any> {
+  const res = await fetch(`/onboarding/step/${step}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`step${step} failed: ${res.status}`);
+  return res.json();
+}
+
+export async function onboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
+  const res = await fetch('/onboarding/complete', { credentials: 'include' });
+  if (!res.ok) throw new Error(`complete failed: ${res.status}`);
+  return res.json();
 }
