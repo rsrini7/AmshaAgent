@@ -241,12 +241,14 @@ public class OnboardingResource {
         if (cookie != null && cookie.getValue() != null && !cookie.getValue().isBlank()) {
             return cookie.getValue();
         }
-        // Fallback: check manual cookie header parsing if @CookieParam failed to bind
-        Map<String, Cookie> cookies = headers.getCookies();
-        if (cookies != null && cookies.containsKey(COOKIE_NAME)) {
-            Cookie c = cookies.get(COOKIE_NAME);
-            if (c.getValue() != null && !c.getValue().isBlank()) {
-                return c.getValue();
+        // Manual fallback for certain Reactive context cases
+        if (headers != null) {
+            Map<String, Cookie> cookies = headers.getCookies();
+            if (cookies != null && cookies.containsKey(COOKIE_NAME)) { // Added cookies != null check
+                Cookie c = cookies.get(COOKIE_NAME);
+                if (c != null && c.getValue() != null && !c.getValue().isBlank()) {
+                    return c.getValue();
+                }
             }
         }
         return UUID.randomUUID().toString();

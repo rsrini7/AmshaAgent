@@ -44,7 +44,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         long startTime = System.currentTimeMillis();
         String path = uriInfo.getPath();
 
-        if (path.startsWith("/info") || path.startsWith("/api/v1/info")) {
+        if (path.startsWith("/info") || path.startsWith("/api/v1/info") || path.startsWith("/onboarding")) {
             return;
         }
 
