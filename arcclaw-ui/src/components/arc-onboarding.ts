@@ -1,11 +1,13 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { onboardingStatus, onboardingStep, onboardingComplete } from '../api/client';
+import { ArcClient } from '../api/client';
 import { McpServerRequest } from '../api/types';
 import { ONBOARDING_COMPLETE_SENTINEL } from '../types/onboarding';
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
+  private _client: ArcClient = new ArcClient('/api/v1');
+
   @state() private _currentStep = 1;
   @state() private _loading = false;
   @state() private _error = '';
@@ -144,7 +146,7 @@ export class ArcOnboarding extends LitElement {
   private async _fetchStatus() {
     this._loading = true;
     try {
-      const status = await onboardingStatus();
+      const status = await this._client.onboardingStatus();
       this._currentStep = status.step;
       if (status.provider) this._provider = status.provider;
       if (status.model) this._model = status.model;
@@ -163,7 +165,7 @@ export class ArcOnboarding extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const res = await onboardingStep(this._currentStep, body);
+      const res = await this._client.onboardingStep(this._currentStep, body);
       this._currentStep = res.nextStep;
       if (this._currentStep >= 6) {
         await this._finish();
@@ -177,7 +179,7 @@ export class ArcOnboarding extends LitElement {
 
   private async _finish() {
     try {
-      const dto = await onboardingComplete();
+      const dto = await this._client.onboardingComplete();
       this.dispatchEvent(new CustomEvent('onboarding-complete', {
         detail: { provider: dto.provider, model: dto.model },
         bubbles: true,
