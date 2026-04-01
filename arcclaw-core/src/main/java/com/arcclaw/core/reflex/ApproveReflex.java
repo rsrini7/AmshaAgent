@@ -145,16 +145,10 @@ public class ApproveReflex implements AgentReflex {
                 String activeRole = latestPending
                     .map(AgentCheckpoint::getAgentRole)
                     .orElse(null);
-                AgentCheckpoint activeCheckpoint = latestPending.orElse(null);
 
                 if (activeRole != null) {
                     try {
-                        if (activeCheckpoint.hasBatchToolDecisions()) {
-                            checkpointApprovalService.approveAll(sessionId, "CLI approve");
-                        } else {
-                            log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
-                            checkpointApprovalService.approveAll(sessionId, "CLI approve");
-                        }
+                        checkpointApprovalService.approveAll(sessionId, "CLI approve");
                         return "✅ Approval processed.";
                     } catch (CheckpointResolutionException e) {
                         return "No pending approval found for this session.";

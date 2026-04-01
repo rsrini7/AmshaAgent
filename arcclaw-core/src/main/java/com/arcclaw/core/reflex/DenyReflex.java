@@ -13,10 +13,10 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
@@ -27,7 +27,6 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
@@ -98,27 +97,20 @@ public class DenyReflex implements AgentReflex {
 
                 // 4. Session checkpoint — interactive denial
                 // NOTE: deny.toolName() is always empty here — we returned above if present.
-                String activeRole = null;
-                AgentCheckpoint activeCheckpoint = null;
-                for (AgentRoleEnum role : AgentRoleEnum.values()) {
-                    Optional<AgentCheckpoint> cpOpt =
-                        statefulAgentStore.load(sessionId, role.toScopedName());
-                    if (cpOpt.isPresent()
-                            && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                        activeRole = role.toScopedName();
-                        activeCheckpoint = cpOpt.get();
-                        break;
-                    }
-                }
+                Optional<AgentCheckpoint> latestPending =
+                    statefulAgentStore.findLatestAwaitingApproval(sessionId);
+                String activeRole = latestPending
+                    .map(AgentCheckpoint::getAgentRole)
+                    .orElse(null);
 
                 if (activeRole != null) {
-                    if (activeCheckpoint.hasBatchToolDecisions()) {
-                        checkpointApprovalService.denyAll(sessionId, "CLI deny");
-                    } else {
+                    try {
                         log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
                         checkpointApprovalService.denyAll(sessionId, "CLI deny");
+                        return "🚫 Execution denied. The agent's task has been terminated.";
+                    } catch (CheckpointResolutionException e) {
+                        return "No pending denial found for this session.";
                     }
-                    return "🚫 Execution denied. The agent's task has been terminated.";
                 }
 
                 // 5. No session checkpoint — guide user to pending cron tasks
@@ -156,30 +148,29 @@ public class DenyReflex implements AgentReflex {
             String toolName, String sessionId, String userId,
             String chatId, MessageContext context) throws Exception {
 
-        String activeRole = null;
-        for (AgentRoleEnum role : AgentRoleEnum.values()) {
-            Optional<AgentCheckpoint> cpOpt =
-                statefulAgentStore.load(sessionId, role.toScopedName());
-            if (cpOpt.isPresent()
-                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL
-                    && cpOpt.get().hasBatchToolDecisions()) {
-                activeRole = role.toScopedName();
-                break;
-            }
-        }
+        Optional<AgentCheckpoint> latestPending =
+            statefulAgentStore.findLatestAwaitingApproval(sessionId);
+        String activeRole = latestPending
+            .filter(AgentCheckpoint::hasBatchToolDecisions)
+            .map(AgentCheckpoint::getAgentRole)
+            .orElse(null);
 
         if (activeRole == null) {
             return "No parallel batch awaiting per-tool approval for this session.";
         }
 
-        checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
-        return "🚫 Tool '" + toolName + "' denied.";
+        try {
+            checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
+            return "🚫 Tool '" + toolName + "' denied.";
+        } catch (CheckpointResolutionException e) {
+            return "No pending denial found for this session.";
+        }
     }
+
 
     // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
     // This method retained for handleCronApproval usage. Remove in Phase 81
     // when cron approval is also migrated to CheckpointApprovalService.
-
     private void autoDenyAllPending(String sessionId, String agentRole) {
         AgentCheckpoint cp =
             statefulAgentStore.load(sessionId, agentRole).orElseThrow();
@@ -277,16 +268,11 @@ public class DenyReflex implements AgentReflex {
 
         log.infof("[DELEGATE-DENY] admin=%s denying session=%s", adminId, targetSid);
 
-        String activeRole = null;
-        for (AgentRoleEnum role : AgentRoleEnum.values()) {
-            Optional<AgentCheckpoint> cpOpt =
-                statefulAgentStore.load(targetSid, role.toScopedName());
-            if (cpOpt.isPresent()
-                    && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                activeRole = role.toScopedName();
-                break;
-            }
-        }
+        Optional<AgentCheckpoint> latestPending =
+            statefulAgentStore.findLatestAwaitingApproval(targetSid);
+        String activeRole = latestPending
+            .map(AgentCheckpoint::getAgentRole)
+            .orElse(null);
 
         if (activeRole == null) {
             return "❌ Target session not found or not awaiting approval.";
