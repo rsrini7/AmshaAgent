@@ -81,6 +81,11 @@ These are NOT interchangeable.
 - Reflex tests MUST bind with `WorkspaceScopeHolder.call(...)`.
 - To test unauthorized/unbound-like behavior, use blank values intentionally rather than silently omitting required binding.
 
+### 2.7 Asynchronous Thread Context Propagation (§2.7 INVARIANT)
+- Any asynchronous execution that schedules work on a different thread (e.g., via `ContextAwareExecutorService`) MUST explicitly capture and propagate all 6 context identifiers from `WorkspaceContext`: `sessionId`, `userId`, `chatId`, `autonomyLevel`, `agentRole`, and `channelType`.
+- The captured context MUST be restored on the background thread using the comprehensive `WorkspaceContext.run(...)` overload before invoking the background task.
+- Failure to propagate the complete context results in loss of identity, breaking role-based access control, tool governance, and audit logging for background tasks (e.g., cron jobs, background MCP execution).
+
 ---
 
 ## 3. Runtime execution invariants

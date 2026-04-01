@@ -67,41 +67,51 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) {
 
-        String resumeGoal = resolveResumeGoal(sessionId, agentRole);
-        if (resumeGoal == null || resumeGoal.isBlank()) {
-            log.warnf("resumeAfterBatchDecision: no resume goal " +
-                "found for session %s role %s — cannot resume",
-                sessionId, agentRole);
+        // §7.29 double-resume guard
+        if (!agentStore.markBatchResuming(sessionId)) {
+            log.infof("BATCH-RESUME-GUARD: session %s already resuming", sessionId);
             return;
         }
 
-        ChannelType cType = ChannelType.fromString(channelType)
-                .orElse(ChannelType.WEBSOCKET);
-        
-        ChannelUser user = new ChannelUser(
-            userId, chatId, "Operator", cType);
-
-        ChannelMessage msg = switch (cType.name()) {
-            case "DISCORD" -> new ChannelMessage.DiscordMessage(user, resumeGoal, chatId, chatId, Instant.now());
-            case "REST_API" -> new ChannelMessage.RestApiMessage(user, resumeGoal, chatId, Instant.now());
-            case "CLI" -> new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now());
-            case "WEBSOCKET" -> new ChannelMessage.WebSocketMessage(user, resumeGoal, chatId, Instant.now());
-            default -> new ChannelMessage.TelegramMessage(user, resumeGoal, chatId, Instant.now());
-        };
-
-        MessageContext context = new MessageContext(chatId, user, msg);
-        context.setResumeSignal(true);
-        context.setGoal(resumeGoal);
-
         try {
-            WorkspaceContext.runWithFullAutonomy(
-                sessionId, userId, chatId, agentRole,
-                () -> agentLoop.run(
-                    sessionId, agentRole, resumeGoal,
-                    reasoningEngine, 5, context));
-        } catch (Exception e) {
-            log.errorf(e, "Failed to resume session %s", sessionId);
-            throw new RuntimeException("Failed to resume session", e);
+            String resumeGoal = resolveResumeGoal(sessionId, agentRole);
+            if (resumeGoal == null || resumeGoal.isBlank()) {
+                log.warnf("resumeAfterBatchDecision: no resume goal " +
+                    "found for session %s role %s — cannot resume",
+                    sessionId, agentRole);
+                return;
+            }
+
+            ChannelType cType = ChannelType.fromString(channelType)
+                    .orElse(ChannelType.WEBSOCKET);
+            
+            ChannelUser user = new ChannelUser(
+                userId, chatId, "Operator", cType);
+
+            ChannelMessage msg = switch (cType.name()) {
+                case "DISCORD" -> new ChannelMessage.DiscordMessage(user, resumeGoal, chatId, chatId, Instant.now());
+                case "REST_API" -> new ChannelMessage.RestApiMessage(user, resumeGoal, chatId, Instant.now());
+                case "CLI" -> new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now());
+                case "WEBSOCKET" -> new ChannelMessage.WebSocketMessage(user, resumeGoal, chatId, Instant.now());
+                default -> new ChannelMessage.TelegramMessage(user, resumeGoal, chatId, Instant.now());
+            };
+
+            MessageContext context = new MessageContext(chatId, user, msg);
+            context.setResumeSignal(true);
+            context.setGoal(resumeGoal);
+
+            try {
+                WorkspaceContext.runWithFullAutonomy(
+                    sessionId, userId, chatId, agentRole,
+                    () -> agentLoop.run(
+                        sessionId, agentRole, resumeGoal,
+                        reasoningEngine, 5, context));
+            } catch (Exception e) {
+                log.errorf(e, "Failed to resume session %s", sessionId);
+                throw new RuntimeException("Failed to resume session", e);
+            }
+        } finally {
+            agentStore.clearBatchResuming(sessionId);
         }
     }
 

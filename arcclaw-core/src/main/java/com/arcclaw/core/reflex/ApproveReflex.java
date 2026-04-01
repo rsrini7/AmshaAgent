@@ -14,6 +14,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -147,13 +148,17 @@ public class ApproveReflex implements AgentReflex {
                 AgentCheckpoint activeCheckpoint = latestPending.orElse(null);
 
                 if (activeRole != null) {
-                    if (activeCheckpoint.hasBatchToolDecisions()) {
-                        checkpointApprovalService.approveAll(sessionId, "CLI approve");
-                    } else {
-                        log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
-                        checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                    try {
+                        if (activeCheckpoint.hasBatchToolDecisions()) {
+                            checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                        } else {
+                            log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
+                            checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                        }
+                        return "✅ Approval processed.";
+                    } catch (CheckpointResolutionException e) {
+                        return "No pending approval found for this session.";
                     }
-                    return "✅ Approval processed.";
                 }
 
                 // 4. No session checkpoint — guide user to pending cron tasks
@@ -205,8 +210,12 @@ public class ApproveReflex implements AgentReflex {
             return "No parallel batch awaiting per-tool approval for this session.";
         }
 
-        checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
-        return "✅ Tool '" + toolName + "' approval processed.";
+        try {
+            checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
+            return "✅ Tool '" + toolName + "' approval processed.";
+        } catch (CheckpointResolutionException e) {
+            return "No pending approval found for this session.";
+        }
     }
 
     // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
