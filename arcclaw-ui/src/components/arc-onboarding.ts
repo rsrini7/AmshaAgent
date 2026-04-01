@@ -24,6 +24,8 @@ export class ArcOnboarding extends LitElement {
 
   // Step 5
   @state() private _mcpServers: McpServerRequest[] = [];
+  @state() private _showAddMcp = false;
+  @state() private _newMcp: Partial<McpServerRequest> = { transport: 'sse' };
   @state() private _validationOk = false;
 
   private readonly DEFAULT_MODELS: Record<string, string> = {
@@ -523,12 +525,7 @@ export class ArcOnboarding extends LitElement {
     try {
       const status = await this._client.onboardingStatus();
       this._currentStep = status.step;
-      if (status.provider) this._provider = status.provider;
       if (status.model) this._model = status.model;
-      
-      if (this._currentStep >= 6) {
-        await this._finish();
-      }
     } catch (e: any) {
       this._error = `Setup Error: ${e.message}`;
     } finally {
@@ -549,9 +546,6 @@ export class ArcOnboarding extends LitElement {
       }
 
       this._currentStep = res.nextStep;
-      if (this._currentStep >= 6) {
-        await this._finish();
-      }
     } catch (e: any) {
       this._error = e.message;
     } finally {
@@ -588,6 +582,7 @@ export class ArcOnboarding extends LitElement {
     if (this._currentStep > 1) {
       this._currentStep--;
       this._error = '';
+      this._loading = false;
     }
   }
 
@@ -596,7 +591,11 @@ export class ArcOnboarding extends LitElement {
   }
 
   private _addMcp() {
-    this._mcpServers = [...this._mcpServers, { name: '', transport: 'sse', url: '' }];
+    if (this._newMcp.name && this._newMcp.transport) {
+      this._mcpServers = [...this._mcpServers, this._newMcp as McpServerRequest];
+      this._newMcp = { transport: 'sse' };
+      this._showAddMcp = false;
+    }
   }
 
   private _removeMcp(index: number) {
@@ -643,18 +642,69 @@ export class ArcOnboarding extends LitElement {
       case 3: return this._step3();
       case 4: return this._step4();
       case 5: return this._step5();
-      case 6: return html`<h2>Setup Complete!</h2><p>Redirecting to ArcClaw...</p>`;
-      default: return html`<p>Loading...</p>`;
+      case 6: return this._step6();
+      default: return this._step1();
     }
+  }
+
+  private _step6() {
+    return html`
+      <div style="text-align:center; padding:var(--space-4) 0">
+        <div class="complete-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+               stroke="#22c55e" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <h2 class="wizard-title" style="margin-top:var(--space-4)">Setup Complete!</h2>
+        <p class="wizard-subtitle" style="margin-bottom:var(--space-8)">
+          Your AI infrastructure is ready. You can now start
+          chatting with your agent and assigning tasks.
+        </p>
+
+        <div class="btn-row">
+          <button class="btn-primary" @click="${this._finish}">
+            Go to Dashboard →
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   private _step1() {
     return html`
-      <h2>Welcome to ArcClaw</h2>
-      <p>Set up your AI agent in 5 steps. We'll configure your LLM provider, security, and tools.</p>
-      <button @click="${() => this._next()}" ?disabled="${this._loading}">
-        ${this._loading ? html`<span class="loader"></span>Applying...` : 'Get Started'}
-      </button>
+      <div style="text-align:center; padding: var(--space-2) 0
+                  var(--space-4)">
+        <p style="font-size:var(--font-size-sm); color:var(--text-muted);
+                  line-height:1.6; max-width:36ch; margin:0 auto">
+          Configure your AI agent infrastructure in 4 quick steps.
+        </p>
+      </div>
+
+      <div class="welcome-features">
+        <div class="feature-row">
+          <div class="feature-dot"></div>
+          Choose your LLM provider and model
+        </div>
+        <div class="feature-row">
+          <div class="feature-dot"></div>
+          Validate your API credentials securely
+        </div>
+        <div class="feature-row">
+          <div class="feature-dot"></div>
+          Define your agent's system behaviour
+        </div>
+        <div class="feature-row">
+          <div class="feature-dot"></div>
+          Optionally connect MCP tool servers
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-primary" @click="${() => this._next()}">
+          Get Started →
+        </button>
+      </div>
     `;
   }
 
@@ -831,63 +881,165 @@ export class ArcOnboarding extends LitElement {
 
   private _step4() {
     return html`
-      <h2>System Prompt</h2>
-      <p>The core instruction that defines how your ArcClaw agents behave.</p>
-      <div class="form-group">
-        <label>System Instructions</label>
-        <textarea .value="${this._systemPrompt}"
-                  @input="${(e: any) => this._systemPrompt = e.target.value}"></textarea>
+      <p style="font-size:var(--font-size-sm); color:var(--text-muted);
+                line-height:1.6; margin-bottom:var(--space-5)">
+        The core instruction that defines how your ArcClaw
+        agents behave. You can refine this later from settings.
+      </p>
+
+      <label class="field-label" for="system-prompt">
+        System Instructions
+      </label>
+      <textarea
+        id="system-prompt"
+        class="field-textarea"
+        rows="5"
+        placeholder="You are ArcClaw, a helpful AI assistant. You help users by..."
+        .value="${this._systemPrompt ?? 'You are ArcClaw, a helpful AI assistant.'}"
+        @input="${(e: any) => this._systemPrompt = e.target.value}"
+      ></textarea>
+
+      <p style="margin-top:var(--space-2); font-size:var(--font-size-xs);
+                color:var(--text-muted); line-height:1.5">
+        💡 Be specific about tone, constraints, and what the agent
+        should or shouldn't do.
+      </p>
+
+      <div class="btn-row">
+        <button class="btn-ghost" @click="${this._back}">
+          ← Back
+        </button>
+        <button class="btn-primary"
+          ?disabled="${!this._systemPrompt?.trim()}"
+          @click="${() => this._next({ systemPrompt: this._systemPrompt })}">
+          Save & Continue →
+        </button>
       </div>
-      <button @click="${() => this._next({ systemPrompt: this._systemPrompt })}" ?disabled="${this._loading}">
-        ${this._loading ? html`<span class="loader"></span>Saving...` : 'Save & Continue'}
-      </button>
     `;
   }
 
   private _step5() {
     return html`
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h2>MCP Servers (Optional)</h2>
-        <button class="secondary" style="flex: 0; padding: 8px 16px;" @click="${this._addMcp}">+ Add Server</button>
-      </div>
-      <p>Connect Multi-Context Protocol servers to grant your agent extra tools.</p>
-      
-      <div class="mcp-list">
-        ${this._mcpServers.length === 0 ? html`<p style="text-align: center; padding: 20px; opacity: 0.5;">No MCP servers added yet.</p>` : ''}
-        ${this._mcpServers.map((s, i) => html`
-          <div class="mcp-entry">
-            <button class="remove-btn" @click="${() => this._removeMcp(i)}">×</button>
-            <div class="form-group">
-              <label>Name</label>
-              <input type="text" .value="${s.name}" @input="${(e: any) => s.name = e.target.value}">
-            </div>
-            <div class="form-group">
-              <label>Transport</label>
-              <select .value="${s.transport}" @change="${(e: any) => { s.transport = e.target.value; this.requestUpdate(); }}">
-                <option value="sse">SSE (HTTP)</option>
-                <option value="stdio">Stdio (Local Process)</option>
-              </select>
-            </div>
-            ${s.transport === 'sse' ? html`
-              <div class="form-group">
-                <label>URL</label>
-                <input type="text" .value="${s.url || ''}" placeholder="http://localhost:3001/mcp"
-                       @input="${(e: any) => s.url = e.target.value}">
-              </div>
-            ` : html`
-              <div class="form-group">
-                <label>Command</label>
-                <input type="text" .value="${s.command || ''}" placeholder="npx"
-                       @input="${(e: any) => s.command = e.target.value}">
-              </div>
-            `}
-          </div>
-        `)}
-      </div>
+      <p style="font-size:var(--font-size-sm); color:var(--text-muted);
+                line-height:1.6; margin-bottom:var(--space-5)">
+        Connect external tool servers (MCP) to extend your agents
+        with web search, code execution, databases, and more.
+        <strong style="color:var(--text-primary)">Optional</strong>
+        — skip if you're not sure yet.
+      </p>
 
-      <div class="actions">
-        <button @click="${() => this._next({ mcpServers: this._mcpServers })}" ?disabled="${this._loading}">
-          ${this._loading ? html`<span class="loader"></span>Initializing...` : 'Finish Setup'}
+      <!-- Registered MCP list -->
+      ${this._mcpServers?.length ? html`
+        <div class="mcp-list">
+          ${this._mcpServers.map((s: any, i: number) => html`
+            <div class="mcp-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="var(--accent-secondary)" stroke-width="2"
+                   style="flex-shrink:0">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+              <span class="mcp-item-name">${s.name}</span>
+              <span class="mcp-item-tag">${s.transport}</span>
+              <button class="mcp-remove"
+                @click="${() => this._removeMcp(i)}"
+                aria-label="Remove ${s.name}">×</button>
+            </div>
+          `)}
+        </div>
+      ` : html`
+        <div style="text-align:center; padding:var(--space-6) 0;
+                    color:var(--text-muted); font-size:var(--font-size-sm)">
+          No MCP servers added yet
+        </div>
+      `}
+
+      <!-- Add MCP form (collapsible) -->
+      ${this._showAddMcp ? html`
+        <div style="background:var(--bg-elevated);
+                    border:1px solid var(--border-card);
+                    border-radius:var(--radius-md);
+                    padding:var(--space-4);
+                    margin-bottom:var(--space-3);
+                    animation: step-in 0.2s ease both">
+
+          <label class="field-label">Server Name</label>
+          <input class="field-input" type="text"
+            placeholder="e.g. brave-search"
+            .value="${this._newMcp?.name ?? ''}"
+            @input="${(e:any) => this._newMcp = {...this._newMcp, name: e.target.value}}"
+            style="margin-bottom:var(--space-3)"/>
+
+          <label class="field-label">Transport</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr;
+                      gap:var(--space-2); margin-bottom:var(--space-3)">
+            ${['sse','stdio'].map(t => html`
+              <div class="provider-card
+                          ${this._newMcp?.transport === t ? 'selected' : ''}"
+                   @click="${() =>
+                     this._newMcp = {...this._newMcp, transport: t as any}}">
+                <span style="font-size:var(--font-size-sm);
+                             font-weight:var(--font-weight-medium);
+                             color:var(--text-primary)">${t === 'sse' ? 'http' : t}</span>
+              </div>
+            `)}
+          </div>
+
+          ${this._newMcp?.transport === 'sse' ? html`
+            <label class="field-label">URL</label>
+            <input class="field-input" type="url"
+              placeholder="http://localhost:3100/mcp"
+              .value="${this._newMcp?.url ?? ''}"
+              @input="${(e:any) =>
+                this._newMcp = {...this._newMcp, url: e.target.value}}"
+              style="margin-bottom:var(--space-3)"/>
+          ` : html`
+            <label class="field-label">Command</label>
+            <input class="field-input" type="text"
+              placeholder="npx -y @brave/search-mcp"
+              .value="${this._newMcp?.command ?? ''}"
+              @input="${(e:any) =>
+                this._newMcp = {...this._newMcp, command: e.target.value}}"
+              style="margin-bottom:var(--space-3)"/>
+          `}
+
+          <div class="btn-row" style="margin-top:var(--space-2)">
+            <button class="btn-ghost"
+              @click="${() => this._showAddMcp = false}">
+              Cancel
+            </button>
+            <button class="btn-primary"
+              ?disabled="${!this._newMcp?.name?.trim() ||
+                           !this._newMcp?.transport}"
+              @click="${this._addMcp}">
+              Add Server
+            </button>
+          </div>
+        </div>
+      ` : html`
+        <button class="add-mcp-btn"
+          @click="${() => this._showAddMcp = true}">
+          + Add MCP Server
+        </button>
+      `}
+
+      <div class="btn-row" style="margin-top:var(--space-5)">
+        <button class="btn-ghost" @click="${this._back}">
+          ← Back
+        </button>
+        <button class="btn-ghost"
+          style="color:var(--text-muted)"
+          @click="${this._finish}">
+          Skip
+        </button>
+        <button class="btn-primary"
+          ?disabled="${this._loading}"
+          @click="${() => this._next({ mcpServers: this._mcpServers })}">
+          ${this._loading ? html`
+            <span style="display:flex;align-items:center;
+                         gap:var(--space-2);justify-content:center">
+              <span class="spinner"></span> Finishing…
+            </span>
+          ` : 'Finish Setup ✓'}
         </button>
       </div>
     `;

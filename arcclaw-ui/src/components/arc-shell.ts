@@ -14,13 +14,13 @@ import './arc-skills-panel';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
-  @state() private _apiKey = '';
+  @state() private _apiKey = localStorage.getItem('arc-api-key') || '';
   @state() private _sessionId = '';
 
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = window.location.hash || '#/onboarding';
+  @state() private _route = window.location.hash || (localStorage.getItem('arc-api-key') ? '#/chat' : '#/onboarding');
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
@@ -42,6 +42,11 @@ export class ArcShell extends LitElement {
   constructor() {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
+    this.addEventListener('onboarding-complete', () => {
+      this._onApiKeySet(new CustomEvent('api-key-set', { 
+        detail: { apiKey: ONBOARDING_COMPLETE_SENTINEL } 
+      }));
+    });
     this.addEventListener('session-ready', this._onSessionReady as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
     window.addEventListener('hashchange', () => {
@@ -59,12 +64,19 @@ export class ArcShell extends LitElement {
   }
 
   private _onApiKeySet(e: CustomEvent<{ apiKey: string }>) {
-    // Ignore the sentinel fired by the new onboarding wizard
-    if (e.detail.apiKey === ONBOARDING_COMPLETE_SENTINEL) {
+    const key = e.detail.apiKey;
+    
+    // If it's the sentinel, we transition but don't set a local key (onboarding SID handles it)
+    if (key === ONBOARDING_COMPLETE_SENTINEL) {
+      localStorage.setItem('arc-api-key', ONBOARDING_COMPLETE_SENTINEL);
+      this._apiKey = ONBOARDING_COMPLETE_SENTINEL;
+      this._route = '#/chat';
       window.location.hash = '#/chat';
       return;
     }
-    this._apiKey = e.detail.apiKey;
+
+    this._apiKey = key;
+    localStorage.setItem('arc-api-key', key);
     this._client = new ArcClient('/api/v1', this._apiKey);
     window.location.hash = '#/chat';
     
