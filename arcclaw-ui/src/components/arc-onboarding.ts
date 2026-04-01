@@ -24,6 +24,7 @@ export class ArcOnboarding extends LitElement {
 
   // Step 5
   @state() private _mcpServers: McpServerRequest[] = [];
+  @state() private _validationOk = false;
 
   private readonly DEFAULT_MODELS: Record<string, string> = {
     groq: 'llama-3.1-8b-instant',
@@ -579,6 +580,19 @@ export class ArcOnboarding extends LitElement {
   private _onProviderChange(val: string) {
     this._provider = val;
     this._model = this.DEFAULT_MODELS[val] || '';
+    this._validationOk = false;
+    this._error = '';
+  }
+
+  private _back() {
+    if (this._currentStep > 1) {
+      this._currentStep--;
+      this._error = '';
+    }
+  }
+
+  private _validateKey() {
+    this._next({ apiKey: this._apiKey });
   }
 
   private _addMcp() {
@@ -700,16 +714,118 @@ export class ArcOnboarding extends LitElement {
 
   private _step3() {
     return html`
-      <h2>Enter API Key</h2>
-      <p>Provide your key for <strong>${this._provider}</strong>. We'll validate it now.</p>
-      <div class="form-group">
-        <label>${this._provider} API Key</label>
-        <input type="password" .value="${this._apiKey}" placeholder="Enter your API key"
-               @input="${(e: any) => this._apiKey = e.target.value}">
+      <div style="margin-bottom: var(--space-5)">
+        <p style="font-size: var(--font-size-sm);
+                  color: var(--text-muted);
+                  line-height: 1.6;
+                  margin-bottom: var(--space-5)">
+          Provide your key for
+          <strong style="color:var(--text-primary);
+                         font-weight:var(--font-weight-semi)">
+            ${this._provider}
+          </strong>.
+          We'll validate it live now.
+        </p>
+
+        <label class="field-label"
+               for="api-key-input">
+          ${this._provider} API Key
+        </label>
+
+        <div style="position:relative">
+          <input
+            id="api-key-input"
+            class="field-input"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="sk-••••••••••••••••••••••••••••••••"
+            .value="${this._apiKey ?? ''}"
+            @input="${(e: any) => this._apiKey = e.target.value}"
+            @keydown="${(e: KeyboardEvent) =>
+              e.key === 'Enter' && this._validateKey()}"
+            style="padding-right: var(--space-12);
+                   font-family: 'Courier New', monospace;
+                   letter-spacing: 0.04em"
+          />
+          <!-- show/hide toggle -->
+          <button
+            type="button"
+            @click="${(e: Event) => {
+              const inp = (e.currentTarget as HTMLElement)
+                .previousElementSibling as HTMLInputElement;
+              inp.type = inp.type === 'password' ? 'text' : 'password';
+            }}"
+            style="position:absolute; right:12px; top:50%;
+                   transform:translateY(-50%);
+                   background:none; border:none; cursor:pointer;
+                   color:var(--text-muted); padding:4px;
+                   transition:color var(--transition)"
+            aria-label="Toggle key visibility"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+
+        ${this._provider === 'ollama' ? html`
+          <p style="margin-top:var(--space-2);
+                    font-size:var(--font-size-xs);
+                    color:var(--text-muted)">
+            💡 Ollama runs locally — enter any value (e.g. <code>local</code>)
+          </p>
+        ` : ''}
+
+        ${this._provider === 'claude-code' ? html`
+          <p style="margin-top:var(--space-2);
+                    font-size:var(--font-size-xs);
+                    color:var(--text-muted)">
+            💡 Claude Code uses the CLI — no API key required
+          </p>
+        ` : ''}
       </div>
-      <button @click="${() => this._next({ apiKey: this._apiKey })}" ?disabled="${this._loading || !this._apiKey}">
-        ${this._loading ? html`<span class="loader"></span>Validating...` : 'Validate Key'}
-      </button>
+
+      ${this._error ? html`
+        <div class="status-msg ${this._validationOk ? 'success' : 'error'}">
+          ${this._validationOk ? html`
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          ` : html`
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+          `}
+          ${this._error}
+        </div>
+      ` : ''}
+
+      <div class="btn-row" style="margin-top:var(--space-5)">
+        <button class="btn-ghost" @click="${this._back}">
+          ← Back
+        </button>
+        <button
+          class="btn-primary"
+          ?disabled="${this._loading ||
+                      (!this._apiKey?.trim() &&
+                       this._provider !== 'claude-code')}"
+          @click="${this._validateKey}"
+        >
+          ${this._loading ? html`
+            <span style="display:flex;align-items:center;
+                         gap:var(--space-2);justify-content:center">
+              <span class="spinner"></span> Validating…
+            </span>
+          ` : 'Validate Key →'}
+        </button>
+      </div>
     `;
   }
 
