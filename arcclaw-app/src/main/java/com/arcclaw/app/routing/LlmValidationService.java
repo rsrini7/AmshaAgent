@@ -27,18 +27,26 @@ public class LlmValidationService implements LlmValidationGateway {
     public boolean validate(String provider, String model, String apiKey) throws LlmValidationException {
         try {
             if (!"claude-code".equals(provider)) {
-                vault.store(VaultConstants.LLM_API_KEY, apiKey.getBytes(StandardCharsets.UTF_8));
+                vault.storeSystemKey(VaultConstants.LLM_API_KEY, apiKey.getBytes(StandardCharsets.UTF_8));
             }
+            String effectiveBaseUrl = switch (provider.toLowerCase()) {
+                case "groq"      -> "https://api.groq.com/openai/v1";
+                case "openai"    -> "https://api.openai.com/v1";
+                case "anthropic" -> "https://api.anthropic.com";
+                case "ollama"    -> "http://localhost:11434";
+                default          -> "";
+            };
+
             // Use the factory to create a model manually passing api key
             ChatModel chatModel = modelFactory.createModel(
                 provider,
-                null, 
-                apiKey, 
+                effectiveBaseUrl,
+                apiKey,
                 model,
-                10, 
-                Duration.ofSeconds(15), 
-                null, 
-                null 
+                10,
+                Duration.ofSeconds(15),
+                "ollama".equalsIgnoreCase(provider) ? effectiveBaseUrl : null,
+                "ollama".equalsIgnoreCase(provider) ? model : null
             );
             
             var future = CompletableFuture

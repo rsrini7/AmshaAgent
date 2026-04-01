@@ -94,8 +94,10 @@ public class OnboardingResource {
 
         log.infof("step1: sid=%s, currentStep=%s", sid, state.currentStep);
 
-        if (!state.canProceedTo(Step.PROVIDER))
+        if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.PROVIDER)) {
+            log.warnf("Forbidden jump: sid=%s tries to reach PROVIDER while at %s", sid, state.currentStep);
             return Response.status(403).cookie(createCookie(sid)).build();
+        }
 
         state.advance();
         return Response.ok(new StepResponse(2)).cookie(createCookie(sid)).build();
@@ -109,7 +111,8 @@ public class OnboardingResource {
 
         log.infof("step2: sid=%s, currentStep=%s", sid, state.currentStep);
 
-        if (!state.canProceedTo(Step.CREDENTIALS)) {
+        if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.CREDENTIALS)) {
+            log.warnf("Forbidden jump: sid=%s tries to reach CREDENTIALS while at %s", sid, state.currentStep);
             return Response.status(403).cookie(createCookie(sid)).build();
         }
 
@@ -131,8 +134,10 @@ public class OnboardingResource {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
 
-        if (!state.canProceedTo(Step.SYSTEM_PROMPT))
+        if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.SYSTEM_PROMPT)) {
+            log.warnf("Forbidden jump: sid=%s tries to reach SYSTEM_PROMPT while at %s", sid, state.currentStep);
             return Response.status(403).cookie(createCookie(sid)).build();
+        }
 
         String provider = state.selectedProvider;
 
