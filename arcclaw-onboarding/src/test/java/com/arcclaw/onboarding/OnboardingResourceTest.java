@@ -4,6 +4,8 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 
+import java.util.List;
+
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.onboarding.dto.Step2Request;
@@ -12,9 +14,8 @@ import com.arcclaw.onboarding.dto.Step4Request;
 import com.arcclaw.onboarding.dto.Step5Request;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.filter.session.SessionFilter;
 import io.restassured.http.ContentType;
-import java.util.List;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -27,95 +28,78 @@ class OnboardingResourceTest {
     @InjectMock
     SecretVault mockVault;
 
+    private static final String SID_COOKIE = "ARCCLAW_ONBOARDING_SID";
+
     @Test
     void testWizardFlow() {
-        // Mock LlmValidationGateway
         Mockito.when(mockModelFactory.validate(any(), any(), any())).thenReturn(true);
-        
-        SessionFilter sessionFilter = new SessionFilter();
 
-        // 1. GET status -> step=1 on fresh start
-        given()
-          .filter(sessionFilter)
-          .when().get("/onboarding/status")
-          .then()
-             .statusCode(200)
-             .body("step", is(1));
+        // Manual cookie tracking — SessionFilter only works with JSESSIONID, not custom cookies
+        final String[] sid = {null};
 
-        // 8. Verify 403 if steps attempted out of order (e.g., POST /step/3 before /step/2)
-        given()
-          .filter(sessionFilter)
-          .contentType(ContentType.JSON)
-          .body(new Step2Request("groq", ""))
-          .when().post("/onboarding/step/2")
-          .then()
-             .statusCode(403);
+        // 1. GET /status → step=1 on fresh start
+        String newSid = doGet("/onboarding/status", sid[0])
+            .then().statusCode(200).body("step", is(1))
+            .extract().cookie(SID_COOKIE);
+        if (newSid != null) sid[0] = newSid;
 
-        // 2. POST /onboarding/step/1 -> returns nextStep=2
-        given()
-          .filter(sessionFilter)
-          .contentType(ContentType.JSON)
-          .when().post("/onboarding/step/1")
-          .then()
-             .statusCode(200)
-             .body("nextStep", is(2));
+        // 8. Out-of-order guard: step/2 before step/1 → 403
+        doPost("/onboarding/step/2", new Step2Request("groq", ""), sid[0])
+            .then().statusCode(403);
 
-        // 3. POST /onboarding/step/2 with {"provider":"groq"} -> returns nextStep=3, default model populated
-        given()
-          .filter(sessionFilter)
-          .contentType(ContentType.JSON)
-          .body(new Step2Request("groq", ""))
-          .when().post("/onboarding/step/2")
-          .then()
-             .statusCode(200)
-             .body("nextStep", is(3));
+        // 2. POST /step/1 → nextStep=2
+        newSid = doPost("/onboarding/step/1", null, sid[0])
+            .then().statusCode(200).body("nextStep", is(2))
+            .extract().cookie(SID_COOKIE);
+        if (newSid != null) sid[0] = newSid;
 
-        // Verify status model auto population
-        given()
-          .filter(sessionFilter)
-          .when().get("/onboarding/status")
-          .then()
-             .statusCode(200)
-             .body("model", is("llama-3.1-8b-instant"));
+        // 3. POST /step/2 → nextStep=3, default model populated
+        newSid = doPost("/onboarding/step/2", new Step2Request("groq", ""), sid[0])
+            .then().statusCode(200).body("nextStep", is(3))
+            .extract().cookie(SID_COOKIE);
+        if (newSid != null) sid[0] = newSid;
 
-        // 4. POST /onboarding/step/3 with {"apiKey":"test-key"} -> mocked gateway returns true -> returns nextStep=4
-        given()
-          .filter(sessionFilter)
-          .contentType(ContentType.JSON)
-          .body(new Step3Request("test-key"))
-          .when().post("/onboarding/step/3")
-          .then()
-             .statusCode(200)
-             .body("nextStep", is(4))
-             .body("credentialsValidated", is(true));
+        // Status check: model auto-populated to llama-3.1-8b-instant
+        doGet("/onboarding/status", sid[0])
+            .then().statusCode(200).body("model", is("llama-3.1-8b-instant"));
 
-        // 5. POST /onboarding/step/4 with {"systemPrompt":"You are ArcClaw."} -> returns nextStep=5
-        given()
-          .filter(sessionFilter)
-          .contentType(ContentType.JSON)
-          .body(new Step4Request("You are ArcClaw."))
-          .when().post("/onboarding/step/4")
-          .then()
-             .statusCode(200)
-             .body("nextStep", is(5));
+        // 4. POST /step/3 → mocked gateway validates → nextStep=4
+        newSid = doPost("/onboarding/step/3", new Step3Request("test-key"), sid[0])
+            .then().statusCode(200)
+            .body("nextStep", is(4))
+            .body("valid", is(true))
+            .extract().cookie(SID_COOKIE);
+        if (newSid != null) sid[0] = newSid;
 
-        // 6. POST /onboarding/step/5 with {"mcpServers":[]} -> returns nextStep=6
-        given()
-          .filter(sessionFilter)
-          .contentType(ContentType.JSON)
-          .body(new Step5Request(List.of()))
-          .when().post("/onboarding/step/5")
-          .then()
-             .statusCode(200)
-             .body("nextStep", is(6));
+        // 5. POST /step/4 → nextStep=5
+        newSid = doPost("/onboarding/step/4", new Step4Request("You are ArcClaw."), sid[0])
+            .then().statusCode(200).body("nextStep", is(5))
+            .extract().cookie(SID_COOKIE);
+        if (newSid != null) sid[0] = newSid;
 
-        // 7. GET /onboarding/complete -> returns {"done":true, "redirectTo":"/#/chat", ...}
-        given()
-          .filter(sessionFilter)
-          .when().get("/onboarding/complete")
-          .then()
-             .statusCode(200)
-             .body("done", is(true))
-             .body("redirectTo", is("/#/chat"));
+        // 6. POST /step/5 → nextStep=6
+        newSid = doPost("/onboarding/step/5", new Step5Request(List.of()), sid[0])
+            .then().statusCode(200).body("nextStep", is(6))
+            .extract().cookie(SID_COOKIE);
+        if (newSid != null) sid[0] = newSid;
+
+        // 7. GET /complete → done=true, redirectTo=/#/chat
+        doGet("/onboarding/complete", sid[0])
+            .then().statusCode(200)
+            .body("complete", is(true))
+            .body("chatUrl", is("/#/chat"));
+    }
+
+    private Response doGet(String path, String sid) {
+        var spec = given();
+        if (sid != null) spec = spec.cookie(SID_COOKIE, sid);
+        return spec.when().get(path);
+    }
+
+    private Response doPost(String path, Object body, String sid) {
+        var spec = given().contentType(ContentType.JSON);
+        if (sid != null) spec = spec.cookie(SID_COOKIE, sid);
+        if (body != null) spec = spec.body(body);
+        return spec.when().post(path);
     }
 }

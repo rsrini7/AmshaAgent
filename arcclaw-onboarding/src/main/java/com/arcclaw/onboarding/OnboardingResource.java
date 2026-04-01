@@ -7,24 +7,31 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.StreamSupport;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.mcp.transport.McpClientService;
-import com.arcclaw.onboarding.OnboardingSession.Step;
+import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
+import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
 import com.arcclaw.onboarding.dto.CompleteResponse;
 import com.arcclaw.onboarding.dto.McpServerRequest;
 import com.arcclaw.onboarding.dto.OnboardingStatusDto;
@@ -40,17 +47,15 @@ import com.arcclaw.onboarding.spi.OnboardingStepProvider;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.jboss.logging.Logger;
 
-// removed McpConnectResource import
-
-
 @Path("/onboarding")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
 public class OnboardingResource {
 
     private static final Logger log = Logger.getLogger(OnboardingResource.class);
+    private static final String COOKIE_NAME = "ARCCLAW_ONBOARDING_SID";
 
-    @Inject OnboardingSession session;
+    @Inject OnboardingSessionRegistry registry;
     @Inject SecretVault vault;
     @Inject LlmValidationGateway llmValidationGateway;
     @Inject Instance<OnboardingStepProvider> pluginProviders;
@@ -65,88 +70,120 @@ public class OnboardingResource {
     );
 
     @GET @Path("/status")
-    public OnboardingStatusDto status() {
-        return new OnboardingStatusDto(
-            session.getCurrentStep().number,
-            session.getCurrentStep().name(),
-            session.getSelectedProvider(),
-            session.getSelectedModel(),
-            session.isCredentialsValidated()
+    public Response status(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
+
+        log.infof("status: sid=%s, currentStep=%s", sid, state.currentStep);
+
+        OnboardingStatusDto dto = new OnboardingStatusDto(
+            state.currentStep.number,
+            state.currentStep.name(),
+            state.selectedProvider,
+            state.selectedModel,
+            state.credentialsValidated
         );
+
+        return Response.ok(dto).cookie(createCookie(sid)).build();
     }
 
     @POST @Path("/step/1")
-    public Response step1() {
-        if (!session.canProceedTo(Step.PROVIDER))
-            return Response.status(403).build();
-        session.advance();
-        return Response.ok(new StepResponse(2)).build();
+    public Response step1(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
+
+        log.infof("step1: sid=%s, currentStep=%s", sid, state.currentStep);
+
+        if (!state.canProceedTo(Step.PROVIDER))
+            return Response.status(403).cookie(createCookie(sid)).build();
+
+        state.advance();
+        return Response.ok(new StepResponse(2)).cookie(createCookie(sid)).build();
     }
 
     @POST @Path("/step/2")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response step2(Step2Request req) {
-        if (!session.canProceedTo(Step.CREDENTIALS))
-            return Response.status(403).build();
+    public Response step2(Step2Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
+
+        log.infof("step2: sid=%s, currentStep=%s", sid, state.currentStep);
+
+        if (!state.canProceedTo(Step.CREDENTIALS)) {
+            return Response.status(403).cookie(createCookie(sid)).build();
+        }
+
         String model = (req.model() != null && !req.model().isBlank())
             ? req.model()
             : DEFAULT_MODELS.getOrDefault(req.provider(), "");
-        session.setSelectedProvider(req.provider());
-        session.setSelectedModel(model);
-        session.advance();
-        return Response.ok(new StepResponse(3)).build();
+
+        state.selectedProvider = req.provider();
+        state.selectedModel = model;
+        state.advance();
+
+        return Response.ok(new StepResponse(3)).cookie(createCookie(sid)).build();
     }
 
     @POST @Path("/step/3")
     @Consumes(MediaType.APPLICATION_JSON)
     @RunOnVirtualThread
-    public Response step3(Step3Request req) {
-        if (!session.canProceedTo(Step.SYSTEM_PROMPT))
-            return Response.status(403).build();
+    public Response step3(Step3Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
 
-        String provider = session.getSelectedProvider();
+        if (!state.canProceedTo(Step.SYSTEM_PROMPT))
+            return Response.status(403).cookie(createCookie(sid)).build();
+
+        String provider = state.selectedProvider;
 
         try {
             boolean valid = llmValidationGateway.validate(
-                provider, session.getSelectedModel(), req.apiKey()
+                provider, state.selectedModel, req.apiKey()
             );
 
             if (valid) {
-                session.setCredentialsValidated(true);
-                session.advance();
-                
-                // Persist to vault
+                state.credentialsValidated = true;
+                state.advance();
+
                 vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
                 vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
 
-                return Response.ok(new Step3Response(4, true, null)).build();
+                return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
             } else {
-                return Response.ok(new Step3Response(3, false, "Unexpected response from validation")).build();
+                return Response.ok(new Step3Response(3, false, "Unexpected response from validation")).cookie(createCookie(sid)).build();
             }
-
         } catch (Exception e) {
-            return Response.ok(new Step3Response(3, false, e.getMessage())).build();
+            return Response.ok(new Step3Response(3, false, e.getMessage())).cookie(createCookie(sid)).build();
         }
     }
 
     @POST @Path("/step/4")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response step4(Step4Request req) {
-        if (!session.canProceedTo(Step.MCP))
-            return Response.status(403).build();
+    public Response step4(Step4Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
+
+        if (!state.canProceedTo(Step.MCP))
+            return Response.status(403).cookie(createCookie(sid)).build();
+
         String prompt = (req.systemPrompt() == null || req.systemPrompt().isBlank())
             ? "You are ArcClaw, a helpful AI assistant."
             : req.systemPrompt();
+
         vault.storeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY, prompt.getBytes(StandardCharsets.UTF_8));
-        session.advance();
-        return Response.ok(new StepResponse(5)).build();
+        state.advance();
+
+        return Response.ok(new StepResponse(5)).cookie(createCookie(sid)).build();
     }
 
     @POST @Path("/step/5")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response step5(Step5Request req) {
-        if (!session.canProceedTo(Step.COMPLETE))
-            return Response.status(403).build();
+    public Response step5(Step5Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
+
+        if (!state.canProceedTo(Step.COMPLETE))
+            return Response.status(403).cookie(createCookie(sid)).build();
 
         List<String> registered = new ArrayList<>();
 
@@ -174,12 +211,15 @@ public class OnboardingResource {
             }
         }
 
-        session.advance();
-        return Response.ok(new Step5Response(6, registered)).build();
+        state.advance();
+        return Response.ok(new Step5Response(6, registered)).cookie(createCookie(sid)).build();
     }
 
     @GET @Path("/complete")
-    public CompleteResponse complete() {
+    public Response complete(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
+        String sid = resolveSessionId(cookie, headers);
+        OnboardingState state = registry.getOrCreate(sid);
+
         List<PluginStepDto> plugins = StreamSupport
             .stream(pluginProviders.spliterator(), false)
             .sorted(Comparator.comparingInt(OnboardingStepProvider::order))
@@ -187,11 +227,38 @@ public class OnboardingResource {
                 p.stepId(), p.title(), p.isConfigured()))
             .toList();
 
-        return new CompleteResponse(
+        CompleteResponse dto = new CompleteResponse(
             true, "/#/chat",
-            session.getSelectedProvider(),
-            session.getSelectedModel(),
+            state.selectedProvider,
+            state.selectedModel,
             plugins
         );
+
+        return Response.ok(dto).cookie(createCookie(sid)).build();
+    }
+
+    private String resolveSessionId(Cookie cookie, HttpHeaders headers) {
+        if (cookie != null && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+            return cookie.getValue();
+        }
+        // Fallback: check manual cookie header parsing if @CookieParam failed to bind
+        Map<String, Cookie> cookies = headers.getCookies();
+        if (cookies != null && cookies.containsKey(COOKIE_NAME)) {
+            Cookie c = cookies.get(COOKIE_NAME);
+            if (c.getValue() != null && !c.getValue().isBlank()) {
+                return c.getValue();
+            }
+        }
+        return UUID.randomUUID().toString();
+    }
+
+    private NewCookie createCookie(String sid) {
+        return new NewCookie.Builder(COOKIE_NAME)
+            .value(sid)
+            .path("/")
+            .maxAge(3600)
+            .httpOnly(true)
+            .sameSite(NewCookie.SameSite.STRICT)
+            .build();
     }
 }

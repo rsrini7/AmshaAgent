@@ -1,6 +1,7 @@
 package com.arcclaw.onboarding;
 
-import com.arcclaw.onboarding.OnboardingSession.Step;
+import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
+import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -8,39 +9,39 @@ class OnboardingSessionTest {
 
     @Test
     void testInitialStep() {
-        OnboardingSession session = new OnboardingSession();
-        Assertions.assertEquals(Step.WELCOME, session.getCurrentStep());
+        OnboardingState state = new OnboardingState();
+        Assertions.assertEquals(Step.WELCOME, state.currentStep);
     }
 
     @Test
     void testCanProceedTo() {
-        OnboardingSession session = new OnboardingSession();
-        Assertions.assertTrue(session.canProceedTo(Step.PROVIDER));
-        Assertions.assertFalse(session.canProceedTo(Step.CREDENTIALS));
+        OnboardingState state = new OnboardingState();
+        Assertions.assertTrue(state.canProceedTo(Step.PROVIDER));
+        Assertions.assertFalse(state.canProceedTo(Step.CREDENTIALS));
     }
 
     @Test
     void testAdvance() {
-        OnboardingSession session = new OnboardingSession();
-        session.advance();
-        Assertions.assertEquals(Step.PROVIDER, session.getCurrentStep());
-        session.advance();
-        Assertions.assertEquals(Step.CREDENTIALS, session.getCurrentStep());
+        OnboardingState state = new OnboardingState();
+        state.advance();
+        Assertions.assertEquals(Step.PROVIDER, state.currentStep);
+        state.advance();
+        Assertions.assertEquals(Step.CREDENTIALS, state.currentStep);
     }
 
     @Test
     void testAdvanceFromCompleteStays() {
-        OnboardingSession session = new OnboardingSession();
-        session.setCurrentStep(Step.COMPLETE);
-        session.advance();
-        Assertions.assertEquals(Step.COMPLETE, session.getCurrentStep());
+        OnboardingState state = new OnboardingState();
+        state.currentStep = Step.COMPLETE;
+        state.advance();
+        Assertions.assertEquals(Step.COMPLETE, state.currentStep);
     }
 
     @Test
     void testCanProceedSymmetric() {
-        OnboardingSession session = new OnboardingSession();
-        session.setCurrentStep(Step.PROVIDER);
-        Assertions.assertTrue(session.canProceedTo(Step.CREDENTIALS));
-        Assertions.assertFalse(session.canProceedTo(Step.SYSTEM_PROMPT));
+        OnboardingState state = new OnboardingState();
+        state.currentStep = Step.PROVIDER;
+        Assertions.assertTrue(state.canProceedTo(Step.CREDENTIALS));
+        Assertions.assertFalse(state.canProceedTo(Step.SYSTEM_PROMPT));
     }
 }
