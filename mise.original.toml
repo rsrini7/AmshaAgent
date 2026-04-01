@@ -189,8 +189,8 @@ if (-not (Test-Path $envPath)) {
     # 1. Auto-generate critical crypto keys
     Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER' (New-RandomBase64)
     Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY' (New-RandomBase64)
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' (New-RandomBase64)
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_INTERNAL' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_CI' (New-RandomBase64)
     Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEYS"
     Write-Host ""
 
@@ -269,7 +269,7 @@ if ($provider -eq 'openrouter' -and [string]::IsNullOrEmpty($vars['OPENROUTER_AP
 if ($provider -eq 'openai' -and [string]::IsNullOrEmpty($vars['OPENAI_API_KEY'])) { $issues += "OPENAI_API_KEY is required for provider: $provider" }
 if ($vars['ARCCLAW_VAULT_PEPPER']     -like '*changeme*')          { $issues += 'ARCCLAW_VAULT_PEPPER is still a placeholder' }
 if ($vars['ARCCLAW_AUDIT_HMAC_KEY']   -like '*changeme*')          { $issues += 'ARCCLAW_AUDIT_HMAC_KEY is still a placeholder' }
-if ($vars['ARCCLAW_API_KEY_INTERNAL'] -like '*changeme*')          { $issues += 'ARCCLAW_API_KEY_INTERNAL is still a placeholder' }
+if ($vars['ARCCLAW_API_KEYS_INTERNAL'] -like '*changeme*')          { $issues += 'ARCCLAW_API_KEYS_INTERNAL is still a placeholder' }
 if ($issues.Count -gt 0) {
     Write-Host '⚠️   Issues found in .env:'
     $issues | ForEach-Object { Write-Host "    - $_" }
@@ -1161,8 +1161,8 @@ if (-not (Test-Path $envPath)) {
 
     Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER'     $vaultPepper
     Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY'   $auditKey
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' $apiKey
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI'       $apiKeyCi
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_INTERNAL' $apiKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_CI'       $apiKeyCi
 
     $backup  = "# ArcClaw -- auto-generated secret keys`n"
     $backup += "# Created: $(Get-Date)`n#`n"
@@ -1171,8 +1171,8 @@ if (-not (Test-Path $envPath)) {
     $backup += "# Store somewhere safe (password manager, encrypted backup).`n#`n"
     $backup += "ARCCLAW_VAULT_PEPPER=$vaultPepper`n"
     $backup += "ARCCLAW_AUDIT_HMAC_KEY=$auditKey`n"
-    $backup += "ARCCLAW_API_KEY_INTERNAL=$apiKey`n"
-    $backup += "ARCCLAW_API_KEY_CI=$apiKeyCi`n"
+    $backup += "ARCCLAW_API_KEYS_INTERNAL=$apiKey`n"
+    $backup += "ARCCLAW_API_KEYS_CI=$apiKeyCi`n"
     [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
 
     Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEY_INTERNAL - API_KEY_CI"
@@ -1346,8 +1346,8 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
 
     _setsed ARCCLAW_VAULT_PEPPER     "$_VAULT_PEPPER"
     _setsed ARCCLAW_AUDIT_HMAC_KEY   "$_AUDIT_KEY"
-    _setsed ARCCLAW_API_KEY_INTERNAL "$_API_KEY"
-    _setsed ARCCLAW_API_KEY_CI       "$_API_KEY_CI"
+    _setsed ARCCLAW_API_KEYS_INTERNAL "$_API_KEY"
+    _setsed ARCCLAW_API_KEYS_CI       "$_API_KEY_CI"
 
     cat > "$SCRIPT_DIR/keys-backup.txt" << KEYS
 # ArcClaw - auto-generated secret keys
@@ -1355,8 +1355,8 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
 # WARNING: VAULT_PEPPER and AUDIT_HMAC_KEY are immutable.
 ARCCLAW_VAULT_PEPPER=$_VAULT_PEPPER
 ARCCLAW_AUDIT_HMAC_KEY=$_AUDIT_KEY
-ARCCLAW_API_KEY_INTERNAL=$_API_KEY
-ARCCLAW_API_KEY_CI=$_API_KEY_CI
+ARCCLAW_API_KEYS_INTERNAL=$_API_KEY
+ARCCLAW_API_KEYS_CI=$_API_KEY_CI
 KEYS
 
     echo "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEY_INTERNAL - API_KEY_CI"

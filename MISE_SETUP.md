@@ -551,8 +551,8 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 | `ARCCLAW_LLM_API_KEY` | `.env` | Required, starts with `gsk_` |
 | `ARCCLAW_VAULT_PEPPER` | `.env` | ≥32 bytes, never change after first boot |
 | `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
-| `ARCCLAW_API_KEY_INTERNAL` | `.env` | Bearer token for REST API |
-| `ARCCLAW_API_KEY_CI` | `.env` | CI/CD read-only key |
+| `ARCCLAW_API_KEYS_INTERNAL` | `.env` | Bearer token for REST API |
+| `ARCCLAW_API_KEYS_CI` | `.env` | CI/CD read-only key |
 | `ARCCLAW_EMBED_API_KEY` | `.env` | Jina AI embedding key (starts with `jina_`) |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
 | `GOAL` | shell env | Goal string for `jar:ask`, `dev:ask`, `native:ask` |

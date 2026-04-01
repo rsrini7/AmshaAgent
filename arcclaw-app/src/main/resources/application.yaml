@@ -310,8 +310,8 @@ arcclaw:
     max-messages: 20
   api:
     keys:
-      internal: "${ARCCLAW_API_KEY_INTERNAL:key-internal-changeme}"
-      ci-pipeline: "${ARCCLAW_API_KEY_CI:key-ci-changeme}"
+      internal: "${ARCCLAW_API_KEYS_INTERNAL:key-internal-changeme}"
+      ci-pipeline: "${ARCCLAW_API_KEYS_CI:key-ci-changeme}"
     rate-limit:
       requests-per-minute: 20
   

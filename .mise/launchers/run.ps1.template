@@ -55,8 +55,8 @@ if (-not (Test-Path $envPath)) {
 
     Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER'     $vaultPepper
     Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY'   $auditKey
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' $apiKey
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI'       $apiKeyCi
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_INTERNAL' $apiKey
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_CI'       $apiKeyCi
 
     # FIX Issue 6: write keys-backup.txt matching run.sh.template behaviour
     $backup  = "# ArcClaw -- auto-generated secret keys`n"
@@ -68,8 +68,8 @@ if (-not (Test-Path $envPath)) {
     $backup += "#`n"
     $backup += "ARCCLAW_VAULT_PEPPER=$vaultPepper`n"
     $backup += "ARCCLAW_AUDIT_HMAC_KEY=$auditKey`n"
-    $backup += "ARCCLAW_API_KEY_INTERNAL=$apiKey`n"
-    $backup += "ARCCLAW_API_KEY_CI=$apiKeyCi`n"
+    $backup += "ARCCLAW_API_KEYS_INTERNAL=$apiKey`n"
+    $backup += "ARCCLAW_API_KEYS_CI=$apiKeyCi`n"
     [System.IO.File]::WriteAllText((Join-Path $scriptDir 'keys-backup.txt'), $backup)
 
     Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEY_INTERNAL - API_KEY_CI"

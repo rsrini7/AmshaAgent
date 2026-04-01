@@ -9,8 +9,8 @@
 ###   CI key       : key-ci-changeme          (name: "ci-pipeline")
 ###
 ### In production, override via:
-###   ARCCLAW_API_KEY_INTERNAL=<your-key>
-###   ARCCLAW_API_KEY_CI=<your-key>
+###   ARCCLAW_API_KEYS_INTERNAL=<your-key>
+###   ARCCLAW_API_KEYS_CI=<your-key>
 ###
 ### Rate limit: sliding window, 20 requests/minute PER KEY.
 ###   21st request within 60 seconds → HTTP 429

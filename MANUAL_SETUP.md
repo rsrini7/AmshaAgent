@@ -259,8 +259,8 @@ Set in `.env`:
 ```env
 ARCCLAW_VAULT_PEPPER=<generated>        # immutable — do not change after first boot
 ARCCLAW_AUDIT_HMAC_KEY=<generated>      # immutable — do not change after first boot
-ARCCLAW_API_KEY_INTERNAL=<generated>
-ARCCLAW_API_KEY_CI=<generated>          # optional, for CI smoke tests
+ARCCLAW_API_KEYS_INTERNAL=<generated>
+ARCCLAW_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 ```
 
 ### 5.4 Set Required API Keys
@@ -920,8 +920,8 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `ARCCLAW_LLM_API_KEY` | ✅ | — | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
 | `ARCCLAW_VAULT_PEPPER` | ✅ | — | Min 32 bytes. **Immutable after first boot.** |
 | `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | — | Min 32 bytes. **Immutable after first boot.** |
-| `ARCCLAW_API_KEY_INTERNAL` | ✅ | — | Bearer token for REST API (`Authorization: Bearer`). |
-| `ARCCLAW_API_KEY_CI` | Optional | — | CI/CD read-only API key. |
+| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | — | Bearer token for REST API (`Authorization: Bearer`). |
+| `ARCCLAW_API_KEYS_CI` | Optional | — | CI/CD read-only API key. |
 | `ARCCLAW_EMBED_API_KEY` | ✅ | — | Jina AI key (default provider). Starts with `jina_`. |
 | `ARCCLAW_EMBED_PROVIDER` | Optional | `jina` | `jina` \| `openai` \| `ollama` |
 | `ARCCLAW_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768. |

@@ -13,13 +13,13 @@ import './arc-skills-panel';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
-  @state() private _apiKey = localStorage.getItem('arc-api-key') || '';
+  @state() private _apiKey = (localStorage.getItem('arc-api-key') === '__onboarding_complete__' ? '' : (localStorage.getItem('arc-api-key') || ''));
   @state() private _sessionId = '';
 
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = window.location.hash || (localStorage.getItem('arc-api-key') ? '#/chat' : '#/onboarding');
+  @state() private _route = window.location.hash || (localStorage.getItem('arc-api-key') && localStorage.getItem('arc-api-key') !== '__onboarding_complete__' ? '#/chat' : '#/onboarding');
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;

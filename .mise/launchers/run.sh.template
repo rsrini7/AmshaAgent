@@ -26,8 +26,8 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
     _AUDIT_KEY="$(openssl rand -base64 32)"
     _setsed ARCCLAW_VAULT_PEPPER     "$_VAULT_PEPPER"
     _setsed ARCCLAW_AUDIT_HMAC_KEY   "$_AUDIT_KEY"
-    _setsed ARCCLAW_API_KEY_INTERNAL "$(openssl rand -base64 32)"
-    _setsed ARCCLAW_API_KEY_CI       "$(openssl rand -base64 32)"
+    _setsed ARCCLAW_API_KEYS_INTERNAL "$(openssl rand -base64 32)"
+    _setsed ARCCLAW_API_KEYS_CI       "$(openssl rand -base64 32)"
 
     cat > "$SCRIPT_DIR/keys-backup.txt" << KEYS
 # ArcClaw -- auto-generated secret keys
