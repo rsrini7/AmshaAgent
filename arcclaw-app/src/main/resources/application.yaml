@@ -324,6 +324,7 @@ arcclaw:
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
     delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs
+    timeout-hours: 24
 
   mcp:
     exposed-tools:

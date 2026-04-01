@@ -3,6 +3,7 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -615,5 +616,27 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public void clearBatchResuming(String sessionId) {
         resumingBatches.remove(sessionId);
+    }
+
+    /**
+     * §7.35 — Returns true if the latest AWAITING_APPROVAL checkpoint for this
+     * session has been waiting longer than {@code timeoutHours}, or if no such
+     * checkpoint exists.
+     */
+    @Override
+    @Transactional
+    public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
+        Optional<AgentCheckpoint> cpOpt = findLatestAwaitingApproval(sessionId);
+        if (cpOpt.isEmpty()) {
+            return true; // no checkpoint = nothing to approve = treat as expired
+        }
+        AgentCheckpoint cp = cpOpt.get();
+        if (cp.getUpdatedAt() == null) {
+            return true; // no timestamp = cannot verify freshness = treat as expired
+        }
+        LocalDateTime cutoff = LocalDateTime.ofInstant(
+                Instant.now().minus(timeoutHours, ChronoUnit.HOURS),
+                ZoneOffset.UTC);
+        return cp.getUpdatedAt().isBefore(cutoff);
     }
 }

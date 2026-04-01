@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
@@ -274,9 +275,18 @@ public class SystemPromptBuilder {
 
         // Build compaction summary for template injection — cached for session duration
         // to prevent redundant DB hits during the multi-turn agent loop.
-        String compactionSummary = (sessionId != null)
-                ? summaryCache.getSummary(sessionId).orElse(null)
-                : null;
+        // Q1 SAFETY: summaryCache is @WorkspaceScoped. If called outside an active
+        // workspace scope (e.g. structured output from a test context), the CDI proxy
+        // throws ContextNotActiveException. Fall back to null (no summary) gracefully.
+        String compactionSummary = null;
+        if (sessionId != null) {
+            try {
+                compactionSummary = summaryCache.getSummary(sessionId).orElse(null);
+            } catch (ContextNotActiveException e) {
+                log.debugf("CompactionSummaryCache: @WorkspaceScoped not active for " +
+                           "session %s — skipping compaction summary injection", sessionId);
+            }
+        }
 
         // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)
         //    so the tool list reflects what the skill's capabilities actually permit.

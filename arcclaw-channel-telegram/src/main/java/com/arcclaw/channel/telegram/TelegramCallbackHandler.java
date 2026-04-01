@@ -53,6 +53,9 @@ public class TelegramCallbackHandler {
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
 
+    @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
+    long hitlTimeoutHours;
+
     public void handleCallback(Exchange exchange) {
         IncomingCallbackQuery query = exchange.getIn().getBody(IncomingCallbackQuery.class);
         if (query == null) return;
@@ -78,6 +81,19 @@ public class TelegramCallbackHandler {
         ChannelMessage.TelegramMessage message = new ChannelMessage.TelegramMessage(user, commandText, chatId, Instant.now());
         MessageContext ctx = new MessageContext(chatId, user, message);
         String sessionId = getSessionId(event);
+
+        // §7.35 HITL expiry guard: reject stale callback button presses BEFORE
+        // routing to any reflex. This is independent of and complementary to
+        // the SessionReaper GC auto-deny scheduler (§7.26).
+        if (agentStore.isCheckpointExpired(sessionId, hitlTimeoutHours)) {
+            log.warnf("HITL-EXPIRED: callback for session %s rejected — " +
+                      "approval window has expired", sessionId);
+            answerCallback(query.getId());
+            sender.sendRaw(user,
+                "⏱ This approval request has expired. " +
+                "Please start a new request.");
+            return;
+        }
 
         for (AgentReflex reflex : reflexes) {
             if (reflex.matches(commandText)) {

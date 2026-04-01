@@ -605,3 +605,5 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 §7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in arcclaw.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity — /approve <sessionId> <toolName> is also valid.
 
 §7.34 MUST: Web UI tool approval MUST be per-tool granular. The REST HITL endpoint MUST accept toolName as a parameter (in the JSON request body via CheckpointApprovalRequest). Passing no toolName is valid only for bulk Approve All / Deny All operations.
+
+§7.35 TelegramCallbackHandler MUST reject any callback whose sessionId maps to a checkpoint older than arcclaw.hitl.timeout-hours before routing to any reflex. This guard is independent of and complementary to the WorkspaceManager GC auto-deny scheduler (§7.26).
