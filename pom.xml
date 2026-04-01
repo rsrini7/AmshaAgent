@@ -20,6 +20,7 @@
     <module>arcclaw-channel-web</module>
     <module>arcclaw-app</module>
     <module>arcclaw-ui</module>
+    <module>arcclaw-onboarding</module>
   </modules>
 
   <properties>

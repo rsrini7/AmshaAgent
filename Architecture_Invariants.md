@@ -610,3 +610,55 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 §7.36 MUST: The `ApprovalStateMachine` in `arcclaw-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
 
+
+---
+
+## 16. New Module Creation (Phase 83A+)
+
+### 16.1 Dependency Cycle Prevention
+- NEW modules MUST NOT depend on `arcclaw-app`. 
+- `arcclaw-app` is the "leaf" of the dependency tree for runtime features.
+- If a new module needs logic from `arcclaw-app` (e.g., `LlmModelFactory`), that logic MUST be extracted into an SPI/Gateway in `arcclaw-core`.
+- The new module depends only on the SPI interface; `arcclaw-app` provides the `@ApplicationScoped` implementation.
+
+### 16.2 Test Configuration Boilerplate
+- EVERY new module MUST include `src/test/resources/application.yaml`.
+- The test configuration MUST provide dummy values for core properties required by scanned beans:
+  - `arcclaw.vault.pepper`: "mock-pepper"
+  - `quarkus.langchain4j.openai.timeout`: "30s"
+  - `arcclaw.data-dir`: "target/data"
+- Standardize the `hibernate-orm.packages` list to include `com.arcclaw.core.*` entity packages to avoid `UnsatisfiedDependency` for `EntityManager`.
+
+### 16.3 CDI Discovery (Jandex)
+- Refer to §15. Every module MUST have `jandex-maven-plugin` and `beans.xml`.
+- Without Jandex, internal beans will be **silently ignored** when the module is consumed.
+
+### 16.4 Session Management (§16.4 INVARIANT)
+- ArcClaw primarily uses RESTEasy Reactive (`quarkus-rest`).
+- Since RESTEasy Reactive does NOT support CDI `@SessionScoped` by default (due to bypassing the Servlet layer), wizard state (like onboarding) MUST use `@ApplicationScoped` if session-isolated state is not strictly required by the multi-user runtime model.
+- If true session isolation is required in a Reactive module, implement a manual session registry keyed by a `UUID` stored in a secure Cookie.
+
+### 16.5 Core Mocking in Tests
+- Tests that trigger bean-scanning of core handlers MUST satisfy their dependencies via `@ApplicationScoped` mocks in `src/test/java`:
+  - `IntentClassifier` (satisfies `IntentClassificationHandler`)
+  - `AgentChatModelProvider` (satisfies `ChatModel` injections)
+  - `ChatModel` with `@Identifier("compaction")` (satisfies `CompactionService`)
+
+## 17. General Java Guards
+
+- Null-check `e.getMessage()` before use — several JVM exception types return `null`.
+  Use: `e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()`. Prefer `String.format(...)` / `log.infof(...)` over concatenation in log statements. `MDC` values removed in `finally` blocks only — never remove in `catch`.
+
+## 18. REST Status Code Conventions
+
+| Operation | Endpoint pattern | Expected status |
+|---|---|---|
+| Create session | `POST /api/v1/sessions` | `201` |
+| Run agent (sync) | `POST /api/v1/sessions/{id}/run` | `200` |
+| Approve | `POST /api/v1/sessions/{id}/approve` | `200` |
+| Onboarding Status | `GET /onboarding/status` | `200` |
+| Advance Wizard | `POST /onboarding/step/{N}` | `200` |
+| Session not found | any session endpoint | `404` |
+| Cross-key access | any session endpoint | `401` + `code=SESSION_ACCESS_DENIED` |
+| Terminate session (owner)   | `DELETE /api/v1/sessions/{id}` | `204` |
+| Terminate session (foreign) | `DELETE /api/v1/sessions/{id}` | `401` + `code=SESSION_ACCESS_DENIED` |
