@@ -2,7 +2,6 @@ import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
 import { McpServerRequest } from '../api/types';
-import { ONBOARDING_COMPLETE_SENTINEL } from '../types/onboarding';
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
@@ -557,12 +556,13 @@ export class ArcOnboarding extends LitElement {
     try {
       const dto = await this._client.onboardingComplete();
       this.dispatchEvent(new CustomEvent('onboarding-complete', {
-        detail: { provider: dto.provider, model: dto.model },
+        detail: { apiKey: dto.apiKey, provider: dto.provider, model: dto.model },
         bubbles: true,
         composed: true,
       }));
+      this._apiKey = dto.apiKey;
       this.dispatchEvent(new CustomEvent('api-key-set', {
-        detail: { apiKey: ONBOARDING_COMPLETE_SENTINEL },
+        detail: { apiKey: dto.apiKey },
         bubbles: true,
         composed: true,
       }));

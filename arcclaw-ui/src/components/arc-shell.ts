@@ -3,7 +3,6 @@ import { customElement, state } from 'lit/decorators.js';
 import { AgentStatusDto, PendingApprovalDto, AgentEvent } from '../api/types';
 import { ArcClient } from '../api/client';
 import { SseManager } from '../api/sse';
-import { ONBOARDING_COMPLETE_SENTINEL } from '../types/onboarding';
 
 import './arc-onboarding';
 import './arc-nav';
@@ -42,11 +41,6 @@ export class ArcShell extends LitElement {
   constructor() {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
-    this.addEventListener('onboarding-complete', () => {
-      this._onApiKeySet(new CustomEvent('api-key-set', { 
-        detail: { apiKey: ONBOARDING_COMPLETE_SENTINEL } 
-      }));
-    });
     this.addEventListener('session-ready', this._onSessionReady as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
     window.addEventListener('hashchange', () => {
@@ -66,15 +60,6 @@ export class ArcShell extends LitElement {
   private _onApiKeySet(e: CustomEvent<{ apiKey: string }>) {
     const key = e.detail.apiKey;
     
-    // If it's the sentinel, we transition but don't set a local key (onboarding SID handles it)
-    if (key === ONBOARDING_COMPLETE_SENTINEL) {
-      localStorage.setItem('arc-api-key', ONBOARDING_COMPLETE_SENTINEL);
-      this._apiKey = ONBOARDING_COMPLETE_SENTINEL;
-      this._route = '#/chat';
-      window.location.hash = '#/chat';
-      return;
-    }
-
     this._apiKey = key;
     localStorage.setItem('arc-api-key', key);
     this._client = new ArcClient('/api/v1', this._apiKey);

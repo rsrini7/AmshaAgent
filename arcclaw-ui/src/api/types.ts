@@ -87,6 +87,7 @@ export interface McpServerRequest {
 }
 
 export interface OnboardingCompleteDto {
+  apiKey: string;
   complete: boolean;
   chatUrl: string;
   provider: string;
