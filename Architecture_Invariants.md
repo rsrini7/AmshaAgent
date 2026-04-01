@@ -644,6 +644,18 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `AgentChatModelProvider` (satisfies `ChatModel` injections)
   - `ChatModel` with `@Identifier("compaction")` (satisfies `CompactionService`)
 
+### 16.6 JVM Shutdown Hang in Tests (§16.6 INVARIANT)
+- Some Quarkus modules (especially those with `arcclaw-mcp` or `AsyncPersistenceEngine`) may hang for 30+ seconds during JVM shutdown in tests because of non-daemon background threads.
+- DO NOT rely on default Surefire timeouts. EVERY new module MUST configure the `maven-surefire-plugin` with:
+  - `<forkCount>1</forkCount>` (Avoid forkCount=0 due to Quarkus classloader conflicts)
+  - `<reuseForks>true</reuseForks>`
+  - `<forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>` (Forces a hard kill after 10s if graceful shutdown fails)
+- Additionally, `src/test/resources/application.yaml` MUST include:
+  - `quarkus.transaction-manager.enable-recovery: false`
+  - `quarkiverse.mcp.server.http.enabled: false`
+  - `quarkiverse.mcp.server.stdio.enabled: false`
+  - `quarkus.shutdown.timeout: 5S`
+
 ## 17. General Java Guards
 
 - Null-check `e.getMessage()` before use — several JVM exception types return `null`.

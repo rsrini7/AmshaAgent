@@ -104,7 +104,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <forkedProcessExitTimeoutInSeconds>60</forkedProcessExitTimeoutInSeconds>
+          <forkCount>1</forkCount>
+          <reuseForks>true</reuseForks>
+          <forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>
           <systemPropertyVariables>
             <quarkus.http.test-port>0</quarkus.http.test-port>
             <quarkus.shutdown.timeout>5S</quarkus.shutdown.timeout>
