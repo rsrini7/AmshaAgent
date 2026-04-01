@@ -60,8 +60,8 @@ class CheckpointResumeHandlerPreExecTest {
         cp.setPendingToolName("parallel|safe,unsafe");
         
         var calls = List.of(
-            new ParallelToolCall("c1", "safe", Map.of(), null, true),
-            new ParallelToolCall("c2", "unsafe", Map.of(), null, true)
+            new ParallelToolCall("c1", "safe", Map.of(), "{}", null, true),
+            new ParallelToolCall("c2", "unsafe", Map.of(), "{}", null, true)
         );
         cp.setPendingToolParametersJson(objectMapper.writeValueAsString(calls));
         

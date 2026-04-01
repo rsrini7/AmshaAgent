@@ -22,8 +22,9 @@ import org.jboss.logging.Logger;
  * {@code getRoleBinding()} switch. Templates live at:
  * {@code arcclaw-core/src/main/resources/templates/prompts/role-*.txt}
  * <p>
- * The switch is exhaustive — adding a new {@link AgentRoleEnum} without
- * a corresponding {@code case} causes a compile error (not a silent default).
+ * <p>
+ * Unknown roles throw IllegalStateException at runtime rather than silently
+ * falling back to coordinator tool rules.
  */
 @ApplicationScoped
 public class PromptTemplateEngine {
@@ -106,14 +107,9 @@ public class PromptTemplateEngine {
             case "debugger"    -> debuggerTemplate;
             case "architect"   -> architectTemplate;
             case "synthesizer" -> synthesizerTemplate;
-            default -> {
-                log.warnf("[PromptTemplateEngine] No Qute template registered for role '%s'. " +
-                            "Falling back to coordinator tool rules. " +
-                            "To fix: create templates/prompts/role-%s.txt in arcclaw-core/src/main/resources. " +
-                            "The coordinator tool ruleset includes GitHub, memory-search, schedule, and manage-schedule.",
-                            role.id(), role.id());
-                yield coordinatorTemplate;
-            }
+            default -> throw new IllegalStateException(
+                "No Qute template registered for role '" + role.id() + "'. " +
+                "Create templates/prompts/role-" + role.id() + ".txt in arcclaw-core/src/main/resources to fix.");
         };
     }
 }

@@ -75,7 +75,13 @@ public class ReasoningStepParser {
                         ? req.id()
                         : req.name() + "-" + UUID.randomUUID();
                     Map<String, Object> params = deserializeParams(sessionId, req.arguments());
-                    calls.add(ParallelToolCall.pending(callId, req.name(), params));
+                    String paramsJson = "{}";
+                    try {
+                        paramsJson = objectMapper.writeValueAsString(params);
+                    } catch (Exception e) {
+                        log.warnf("Failed to serialize params for tool %s: %s", req.name(), e.getMessage());
+                    }
+                    calls.add(ParallelToolCall.pending(callId, req.name(), params, paramsJson));
                 }
 
                 Map<String, Object> batchPayload;

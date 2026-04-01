@@ -12,12 +12,9 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
 
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.pipeline.MessagePipeline;
-import com.arcclaw.core.pipeline.SessionIdResolver;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -25,7 +22,6 @@ import io.quarkus.websockets.next.OnTextMessage;
 import io.quarkus.websockets.next.WebSocket;
 import io.quarkus.websockets.next.WebSocketConnection;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 @WebSocket(path = "/ws/chat")
@@ -40,10 +36,8 @@ public class WebChatEndpoint {
     private final Map<String, String> connectionToArcclawSession = new ConcurrentHashMap<>();
 
     @Inject WebSocketSessionStore sessionStore;
-    @Inject MessagePipeline messagePipeline;
-    @Inject WorkspaceManager workspaceManager;
-    @Inject ManagedExecutor executor;
-    @Inject SessionIdResolver sessionIdResolver;
+    @Inject ChannelServices channelServices;
+
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
 
@@ -77,7 +71,7 @@ public class WebChatEndpoint {
 
         // Resolve the ArcClaw sessionId eagerly so the UI has it from the first message.
         // This mirrors exactly what SessionResolutionHandler does on the first pipeline call.
-        String arcclawSessionId = sessionIdResolver.resolveOrCreate(
+        String arcclawSessionId = channelServices.resolveOrCreateSession(
             ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
 
@@ -124,10 +118,8 @@ public class WebChatEndpoint {
                 Instant.now()
             );
 
-            MessageContext context = new MessageContext(platformId, user, msg);
-
-            // ManagedExecutor propagates CDI context (§78-1)
-            executor.runAsync(() -> messagePipeline.process(context));
+            // ChannelServices.processAsync propagates CDI context and handles pipeline orchestration
+            channelServices.processAsync(msg);
 
         } catch (Exception e) {
             log.warnf(e, "Failed to process incoming WebSocket message: %s", message);
@@ -136,32 +128,31 @@ public class WebChatEndpoint {
 
     @OnClose
     public void onClose(WebSocketConnection conn) {
-        String platformId = connectionToSession.remove(conn.id());
-        String arcclawSessionId = connectionToArcclawSession.remove(conn.id());
-
-        if (platformId != null) {
-            sessionStore.unregister(platformId);
-        }
-        // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
-        if (arcclawSessionId != null) {
-            workspaceManager.terminateSession(arcclawSessionId);
-            log.infof("WebSocket closed: connId=%s arcclawSession=%s terminated",
-                conn.id(), arcclawSessionId);
-        }
+        cleanup(conn, "closed");
     }
 
     @OnError
     public void onError(WebSocketConnection conn, Throwable t) {
-        String platformId = connectionToSession.get(conn.id());
-        String arcclawSessionId = connectionToArcclawSession.get(conn.id());
-        log.errorf(t, "WebSocket error: connId=%s platformId=%s arcclawSession=%s",
-            conn.id(), platformId, arcclawSessionId);
+        cleanup(conn, "error: " + t.getMessage());
+    }
+
+    private void cleanup(WebSocketConnection conn, String reason) {
+        String connId = conn.id();
+        String platformId = connectionToSession.remove(connId);
+        String arcclawSessionId = connectionToArcclawSession.remove(connId);
+
         if (platformId != null) {
-            connectionToSession.remove(conn.id());
             sessionStore.unregister(platformId);
         }
+        
+        // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
         if (arcclawSessionId != null) {
-            connectionToArcclawSession.remove(conn.id());
+            channelServices.terminateSession(arcclawSessionId);
+            log.infof("WebSocket %s: connId=%s arcclawSession=%s terminated",
+                reason, connId, arcclawSessionId);
+        } else {
+            log.debugf("WebSocket %s: connId=%s (platformId=%s) — no ArcClaw session found for termination",
+                reason, connId, platformId);
         }
     }
 

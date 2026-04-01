@@ -1,5 +1,6 @@
 package com.arcclaw.channel.web;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -36,6 +37,7 @@ public class WebChannelDaemon implements ChannelDaemon {
     // if there's a lifecycle observer, or just leave it out if the framework doesn't 
     // call it via the API. The prompt had a stop() method for logging.
     // For now we will add a method that can be called on bean destruction or similar if needed.
+    @PreDestroy
     public void stop() {
         int count = sessionStore.all().size();
         sessionStore.closeAll();

@@ -2,7 +2,7 @@ package com.arcclaw.app.session;
 
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -12,6 +12,8 @@ import jakarta.persistence.NoResultException;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.pipeline.SessionIdResolver;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.jboss.logging.Logger;
 
 /**
@@ -34,7 +36,10 @@ public class SessionRegistry implements SessionIdResolver {
     @Inject
     EntityManager em;
 
-    private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+    private final Cache<String, ReentrantLock> userLocks = Caffeine.newBuilder()
+        .maximumSize(50_000)
+        .expireAfterAccess(30, TimeUnit.MINUTES)
+        .build();
 
     protected String lookupSession(String channelType, String channelId, String userId) {
         try {
@@ -67,7 +72,7 @@ public class SessionRegistry implements SessionIdResolver {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public String resolveOrCreate(String channelType, String channelId, String userId) {
         String key = channelType + ":" + channelId + ":" + userId;
-        ReentrantLock lock = userLocks.computeIfAbsent(key, k -> new ReentrantLock());
+        ReentrantLock lock = userLocks.get(key, k -> new ReentrantLock());
         lock.lock();
         try {
             String existing = lookupSession(channelType, channelId, userId);

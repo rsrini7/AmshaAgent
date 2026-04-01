@@ -31,8 +31,8 @@ class P75IntegrationTest {
     @Test
     void testPreExecutionFilter_MixedTools() {
         var calls = List.of(
-            new ParallelToolCall("1", "safe_read", Map.of(), null, true),
-            new ParallelToolCall("2", "unsafe_write", Map.of(), null, true)
+            new ParallelToolCall("1", "safe_read", Map.of(), "{}", null, true),
+            new ParallelToolCall("2", "unsafe_write", Map.of(), "{}", null, true)
         );
         var result = PreExecutionFilter.split(calls, AutonomyLevel.SUPERVISED, Set.of("safe_read"));
         

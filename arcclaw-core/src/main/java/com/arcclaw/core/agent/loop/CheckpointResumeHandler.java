@@ -338,7 +338,7 @@ public class CheckpointResumeHandler {
                     WorkspaceContext.chatId(),
                     agentRole,
                     () -> toolRegistry.invokeTool(
-                        call.toolName(), call.paramsAsString(), sessionId));
+                        call.toolName(), call.paramsJson(), sessionId));
                 completed.add(call.withResult(response.output(), response.success()));
             } catch (Exception e) {
                 // FIX: null-guard e.getMessage() — some exception types return null here.

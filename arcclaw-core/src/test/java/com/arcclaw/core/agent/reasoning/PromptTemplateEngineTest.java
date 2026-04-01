@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.reasoning;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -67,20 +68,18 @@ class PromptTemplateEngineTest {
     }
 
     @Test
-    void unknownDynamicRoleGetsCoordinatorToolRulesAndDoesNotThrow() {
-        // AgentRoleEnum.fromString("security-auditor") returns an open role
-        AgentRoleEnum unknown = AgentRoleEnum.fromString("security-auditor");
-        // Must NOT throw — must return non-blank content
-        String prompt = promptTemplateEngine.buildSystemPrompt(unknown, null, Instant.now());
-        assertNotNull(prompt);
-        assertFalse(prompt.isBlank());
-        // Must contain coordinator tool rules as fallback evidence
-        assertTrue(prompt.toUpperCase().contains("PERMITTED TOOLS"));
+    void unknownDynamicRoleThrowsException() {
+        // AgentRoleEnum.fromString("unknown_role_test") returns an open role without a template
+        AgentRoleEnum unknown = AgentRoleEnum.fromString("unknown_role_test");
+        
+        // P81-C requirement: Unknown roles throw IllegalStateException
+        assertThrows(IllegalStateException.class, () ->
+            promptTemplateEngine.buildSystemPrompt(unknown, null, Instant.now()));
     }
 
     @Test
-    void allSixBuiltInRolesResolveToTheirOwnTemplate() {
-        // None of the built-in 6 should trigger the WARN path
+    void allBuiltInRolesResolveToTheirOwnTemplate() {
+        // All defined roles in AgentRoleEnum must have corresponding templates
         for (AgentRoleEnum role : AgentRoleEnum.values()) {
             assertDoesNotThrow(() -> promptTemplateEngine.buildSystemPrompt(role, null, Instant.now()));
         }
