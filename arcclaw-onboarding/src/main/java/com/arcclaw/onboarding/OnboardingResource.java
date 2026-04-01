@@ -46,6 +46,7 @@ import com.arcclaw.onboarding.dto.Step5Response;
 import com.arcclaw.onboarding.dto.StepResponse;
 import com.arcclaw.onboarding.spi.OnboardingStepProvider;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @Path("/onboarding")
@@ -63,6 +64,9 @@ public class OnboardingResource {
     @Any
     Instance<OnboardingStepProvider> pluginProviders;
     @Inject McpClientService mcpClientService;
+
+    @ConfigProperty(name = "arcclaw.api-keys.internal")
+    String internalApiKey;
 
     private static final Map<String, String> DEFAULT_MODELS = Map.of(
         "groq",        "llama-3.1-8b-instant",
@@ -242,22 +246,12 @@ public class OnboardingResource {
                 p.stepId(), p.title(), p.isConfigured()))
             .toList();
 
-        // Retrieve a valid API key to hand over to the UI.
-        // We'll look for 'admin' or just take the first one available.
-        String key = "arcclaw-admin-key"; // Default fallback
-        try {
-            // Since registry uses a map, we can't easily get the raw key from the hmacToKeyName map,
-            // but we can try to look at the config property directly or just provide a standard one.
-            // For now, if the registry has any keys, we would ideally pick one.
-            // But let's check a well-known env var or use the fallback.
-            // If the user hasn't set one, arcclaw uses 'arcclaw-admin-key' by default in many dev environments.
-        } catch (Exception e) {}
-
         CompleteResponse dto = new CompleteResponse(
-            key,
-            true, "/#/chat",
+            true,
+            "#/chat",
             state.selectedProvider,
             state.selectedModel,
+            internalApiKey,
             plugins
         );
 

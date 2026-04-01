@@ -86,3 +86,11 @@ export class ArcClient {
       return res.json();
     }
 }
+
+export async function getOnboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
+  const res = await fetch('/onboarding/complete', {
+    credentials: 'include'
+  });
+  if (!res.ok) throw new Error(`complete failed: ${res.status}`);
+  return res.json();
+}

@@ -87,10 +87,10 @@ export interface McpServerRequest {
 }
 
 export interface OnboardingCompleteDto {
-  apiKey: string;
   complete: boolean;
   chatUrl: string;
   provider: string;
   model: string;
-  pluginSteps: { stepId: string; title: string; configured: boolean }[];
+  serviceKey: string;
+  pluginSteps: Array<{stepId:string; title:string; isConfigured:boolean}>;
 }

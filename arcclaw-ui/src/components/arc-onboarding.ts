@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { ArcClient } from '../api/client';
+import { ArcClient, getOnboardingComplete } from '../api/client';
 import { McpServerRequest } from '../api/types';
 
 @customElement('arc-onboarding')
@@ -554,17 +554,10 @@ export class ArcOnboarding extends LitElement {
 
   private async _finish() {
     try {
-      const dto = await this._client.onboardingComplete();
-      this.dispatchEvent(new CustomEvent('onboarding-complete', {
-        detail: { apiKey: dto.apiKey, provider: dto.provider, model: dto.model },
-        bubbles: true,
-        composed: true,
-      }));
-      this._apiKey = dto.apiKey;
+      const result = await getOnboardingComplete();
       this.dispatchEvent(new CustomEvent('api-key-set', {
-        detail: { apiKey: dto.apiKey },
-        bubbles: true,
-        composed: true,
+        bubbles: true, composed: true,
+        detail: { key: result.serviceKey }
       }));
     } catch (e: any) {
       this._error = `Finalizing Error: ${e.message}`;
