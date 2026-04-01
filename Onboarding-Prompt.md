@@ -1,7 +1,7 @@
-# PROMPT — PHASE 81: arcclaw-onboarding — Guided Setup Wizard (Tier A)
+# PROMPT — PHASE 83A: arcclaw-onboarding — Guided Setup Wizard (Tier A)
 
 Role: Senior Java Architect & Senior Java Developer + Frontend TypeScript Engineer
-Task: Phase 81 — Implement the guided first-run onboarding wizard for ArcClaw as two
+Task: Phase 83A — Implement the guided first-run onboarding wizard for ArcClaw as two
 coordinated deliverables:
   (A) New Maven module `arcclaw-onboarding` — pure JSON REST API (no Qute, no HTMX).
   (B) New Lit component `arc-onboarding.ts` added to `arcclaw-ui` (Phase 79 must be done).
@@ -71,7 +71,7 @@ public interface OnboardingStepProvider {
 }
 ```
 
-No implementations in Phase 81. The interface is the deliverable.
+No implementations in Phase 83A. The interface is the deliverable.
 
 ***
 
@@ -231,7 +231,7 @@ public record PluginStepDto(String stepId, String title, boolean isConfigured) {
 
 ***
 
-### Phase 81 Tests (Part A)
+### Phase 83A Tests (Part A)
 
 **`OnboardingSessionTest`** (unit test):
 - Initial step is WELCOME (1).
@@ -591,7 +591,7 @@ export class ArcOnboarding extends LitElement {
 
 ***
 
-## Phase 81 Delivery Checklist
+## Phase 83A Delivery Checklist
 - [ ] `arcclaw-onboarding` module created: `pom.xml`, `beans.xml`, jandex plugin, no Qute
 - [ ] `OnboardingStepProvider` SPI interface created
 - [ ] `OnboardingSession` `@SessionScoped` bean with `canProceedTo()` + `advance()`
