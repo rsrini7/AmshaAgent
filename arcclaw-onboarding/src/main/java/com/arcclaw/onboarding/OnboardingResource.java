@@ -114,6 +114,11 @@ public class OnboardingResource {
             if (valid) {
                 session.setCredentialsValidated(true);
                 session.advance();
+                
+                // Persist to vault
+                vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
+                vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
+
                 return Response.ok(new Step3Response(4, true, null)).build();
             } else {
                 return Response.ok(new Step3Response(3, false, "Unexpected response from validation")).build();

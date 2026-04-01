@@ -1,10 +1,9 @@
 package com.arcclaw.onboarding;
 
+import jakarta.enterprise.context.SessionScoped;
 import java.io.Serializable;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
-@ApplicationScoped
+@SessionScoped
 public class OnboardingSession implements Serializable {
 
     public enum Step {

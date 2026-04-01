@@ -14,13 +14,13 @@
     <module>arcclaw-channel-api</module>
     <module>arcclaw-core</module>
     <module>arcclaw-mcp</module>
+    <module>arcclaw-onboarding</module>
     <module>arcclaw-rag</module>
     <module>arcclaw-deployment</module>
     <module>arcclaw-channel-telegram</module>
     <module>arcclaw-channel-web</module>
     <module>arcclaw-app</module>
     <module>arcclaw-ui</module>
-    <module>arcclaw-onboarding</module>
   </modules>
 
   <properties>
