@@ -4,30 +4,19 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.reflex.AgentReflex;
-import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.BatchDecisionUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arcclaw.channel.api.hitl.ApprovalDecision;
+import com.arcclaw.channel.api.hitl.ApprovalGateway;
+import com.arcclaw.channel.api.hitl.ApprovalOutcome;
+import com.arcclaw.channel.api.hitl.ApprovalResult;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
-import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -42,19 +31,10 @@ public class TelegramCallbackHandler {
     TelegramChannelSender sender;
 
     @Inject
-    Instance<AgentReflex> reflexes;
-
-    @Inject
-    StatefulAgentStore agentStore;
-
-    @Inject
-    ObjectMapper objectMapper;
+    ApprovalGateway approvalGateway;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
-
-    @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
-    long hitlTimeoutHours;
 
     public void handleCallback(Exchange exchange) {
         IncomingCallbackQuery query = exchange.getIn().getBody(IncomingCallbackQuery.class);
@@ -69,53 +49,60 @@ public class TelegramCallbackHandler {
 
         log.infof("TELEGRAM-CALLBACK: %s from user=%s chat=%s msg=%d", data, userId, chatId, messageId);
 
-        Optional<BatchHitlKeyboardBuilder.BatchCallbackEvent> evOpt = BatchHitlKeyboardBuilder.parseCallback(data);
-        if (evOpt.isEmpty()) return;
-
-        BatchHitlKeyboardBuilder.BatchCallbackEvent event = evOpt.get();
-        String commandText = formCommandText(event);
-
-        if (commandText == null) return;
-
-        ChannelUser user = new ChannelUser(userId, chatId, null, ChannelType.TELEGRAM);
-        ChannelMessage.TelegramMessage message = new ChannelMessage.TelegramMessage(user, commandText, chatId, Instant.now());
-        MessageContext ctx = new MessageContext(chatId, user, message);
-        String sessionId = getSessionId(event);
-
-        // §7.35 HITL expiry guard: reject stale callback button presses BEFORE
-        // routing to any reflex. This is independent of and complementary to
-        // the SessionReaper GC auto-deny scheduler (§7.26).
-        if (agentStore.isCheckpointExpired(sessionId, hitlTimeoutHours)) {
-            log.warnf("HITL-EXPIRED: callback for session %s rejected — " +
-                      "approval window has expired", sessionId);
+        BatchHitlKeyboardBuilder.BatchCallbackEvent event = BatchHitlKeyboardBuilder.parseCallback(data).orElse(null);
+        if (event == null) {
             answerCallback(query.getId());
-            sender.sendRaw(user,
-                "⏱ This approval request has expired. " +
-                "Please start a new request.");
             return;
         }
 
-        for (AgentReflex reflex : reflexes) {
-            if (reflex.matches(commandText)) {
-                try {
-                    ReflexResult result = reflex.execute(sessionId, userId, chatId, commandText, ctx);
+        ChannelUser user = new ChannelUser(userId, chatId, null, ChannelType.TELEGRAM);
 
-                    if (result.commandResponse().isPresent() && !result.commandResponse().get().isBlank()) {
-                        sender.sendRaw(ctx.getUser(), result.commandResponse().get());
-                    }
+        String sessionId;
+        String toolName;
+        ApprovalDecision decision;
 
-                    updateOrRemoveKeyboard(sessionId, chatId, messageId);
-                    answerCallback(query.getId());
-                    return;
-                } catch (Exception e) {
-                    log.error("Reflex execution failed from callback", e);
-                    sender.sendRaw(ctx.getUser(), "❌ Failed to process callback");
-                    answerCallback(query.getId());
-                    return;
+        if (event instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool a) {
+            sessionId = a.sessionId();
+            toolName = a.toolName();
+            decision = ApprovalDecision.APPROVE;
+        } else if (event instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool d) {
+            sessionId = d.sessionId();
+            toolName = d.toolName();
+            decision = ApprovalDecision.REJECT;
+        } else {
+            answerCallback(query.getId());
+            return;
+        }
+
+        try {
+            ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
+
+            switch (result.outcome()) {
+                case APPROVED, PARTIAL_STILL_PENDING -> sender.sendRaw(user, "✅ Approved: " + toolName);
+                case REJECTED -> sender.sendRaw(user, "❌ Rejected: " + toolName);
+                case EXPIRED -> sender.sendRaw(user, "⏱ Approval expired");
+                case NOT_FOUND -> sender.sendRaw(user, "⚠️ Session not found");
+                case ALREADY_DECIDED -> {
+                    // Answer callback silently, no visible message
                 }
             }
+
+            // If completely done, we can remove the keyboard entirely
+            if (result.outcome() == ApprovalOutcome.APPROVED ||
+                result.outcome() == ApprovalOutcome.REJECTED ||
+                result.outcome() == ApprovalOutcome.EXPIRED ||
+                // Wait, if it's already decided, we shouldn't necessarily remove it unless it's done. 
+                // A better check is if remainingPendingTools == 0 and outcome != ALREADY_DECIDED (since ALREADY_DECIDED is a no-op)
+                (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0)) {
+                sender.editMessage(chatId, messageId, "Approval process completed.", null);
+            }
+
+            answerCallback(query.getId());
+        } catch (Exception e) {
+            log.error("Failed to process callback", e);
+            sender.sendRaw(user, "❌ Failed to process callback");
+            answerCallback(query.getId());
         }
-        answerCallback(query.getId());
     }
 
     private void answerCallback(String callbackQueryId) {
@@ -134,52 +121,5 @@ public class TelegramCallbackHandler {
                 callbackQueryId, ex.getMessage());
             return null;
         });
-    }
-
-    private void updateOrRemoveKeyboard(String sessionId, String chatId, int messageId) {
-        String activeRole = null;
-        for (AgentRoleEnum role : AgentRoleEnum.values()) {
-            Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, role.toScopedName());
-            if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                activeRole = role.toScopedName();
-                break;
-            }
-        }
-
-        if (activeRole != null) {
-            AgentCheckpoint cp = agentStore.load(sessionId, activeRole).orElseThrow();
-            List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-            if (!pending.isEmpty()) {
-                // Update keyboard
-                InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(sessionId, pending);
-                sender.editMessage(chatId, messageId, "Please review remaining operations:", markup);
-                return;
-            }
-        }
-
-        // Remove keyboard completely
-        sender.editMessage(chatId, messageId, "Approval process completed.", null);
-    }
-
-    private String getSessionId(BatchHitlKeyboardBuilder.BatchCallbackEvent event) {
-        return switch (event) {
-            case BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool a -> a.sessionId();
-            case BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool d -> d.sessionId();
-            case BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveAll aa -> aa.sessionId();
-            case BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyAll da -> da.sessionId();
-        };
-    }
-
-    private String formCommandText(BatchHitlKeyboardBuilder.BatchCallbackEvent event) {
-        if (event instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool a) {
-            return "/approve " + a.toolName();
-        } else if (event instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool d) {
-            return "/deny " + d.toolName();
-        } else if (event instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveAll) {
-            return "/approve";
-        } else if (event instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyAll) {
-            return "/deny";
-        }
-        return null;
     }
 }

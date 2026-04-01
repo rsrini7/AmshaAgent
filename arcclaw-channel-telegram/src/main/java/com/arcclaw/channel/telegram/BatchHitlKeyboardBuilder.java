@@ -47,21 +47,6 @@ class BatchHitlKeyboardBuilder {
             rows.add(row);
         }
 
-        // Final row
-        List<InlineKeyboardButton> finalRow = new ArrayList<>();
-        
-        InlineKeyboardButton approveAllBtn = new InlineKeyboardButton();
-        approveAllBtn.setText("✅ Approve All");
-        approveAllBtn.setCallbackData(truncateCb("BATCH_APPROVE_ALL|" + safeSessionId));
-        finalRow.add(approveAllBtn);
-
-        InlineKeyboardButton denyAllBtn = new InlineKeyboardButton();
-        denyAllBtn.setText("🚫 Deny All");
-        denyAllBtn.setCallbackData(truncateCb("BATCH_DENY_ALL|" + safeSessionId));
-        finalRow.add(denyAllBtn);
-
-        rows.add(finalRow);
-
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         markup.setInlineKeyboard(rows);
         return markup;
@@ -100,8 +85,6 @@ class BatchHitlKeyboardBuilder {
                 if (parts.length < 3) yield Optional.empty();
                 yield Optional.of(new BatchCallbackEvent.DenyTool(sessionId, parts[2]));
             }
-            case "BATCH_APPROVE_ALL" -> Optional.of(new BatchCallbackEvent.ApproveAll(sessionId));
-            case "BATCH_DENY_ALL" -> Optional.of(new BatchCallbackEvent.DenyAll(sessionId));
             default -> Optional.empty();
         };
     }
@@ -109,7 +92,5 @@ class BatchHitlKeyboardBuilder {
     sealed interface BatchCallbackEvent {
         record ApproveTool(String sessionId, String toolName) implements BatchCallbackEvent {}
         record DenyTool(String sessionId, String toolName) implements BatchCallbackEvent {}
-        record ApproveAll(String sessionId) implements BatchCallbackEvent {}
-        record DenyAll(String sessionId) implements BatchCallbackEvent {}
     }
 }

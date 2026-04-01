@@ -42,6 +42,8 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 - Channel-neutral flows MUST NOT default missing channel metadata to a specific channel implementation.
 - New channels must fit the channel SPI without changing core engine behavior.
 - Any fallback to Telegram is LEGACY and should be removed, not copied.
+- **P82 SPI Enforcement:** Channel modules (e.g., `arcclaw-channel-telegram`) MUST NOT import `com.arcclaw.core.*`. All interaction with core HITL state MUST flow through the `com.arcclaw.channel.api.hitl.ApprovalGateway` SPI.
+
 
 ### 1.5 Channel type policy
 - POLICY: WorkspaceContext.channelType() returns Optional<String>. Use requireChannelType() only at call sites where a missing channelType is a fatal invariant violation. Use channelType().orElse("UNKNOWN") at call sites where a fallback is acceptable (e.g., audit logging only).
@@ -146,6 +148,8 @@ warning is forever suppressed. The ordering is: check → log → CAS, never CAS
 - Internal role identity is the role name, not deity display text.
 - Alias handling belongs in parsing/resolution code, not scattered across business logic.
 - Template selection over roles must remain exhaustive.
+- **P82 Data-Driven Personas:** Agent personas are collapsed into the `DefaultAgent` implementation. System prompts MUST be loaded from `src/main/resources/templates/personas/{role}.txt` via Qute. Class-per-persona inheritance is FORBIDDEN.
+
 
 ### 4.5 Channel plugin contract
 - New channel implementations must satisfy the channel SPI contract cleanly.
@@ -555,12 +559,12 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
      Text-based commands remain supported for non-Telegram channels.
 
 7.25 MUST: Inline keyboard callback data MUST follow the format:
-       BATCH_APPROVE:<sessionId>:<toolName>
-       BATCH_DENY:<sessionId>:<toolName>
-       BATCH_APPROVE_ALL:<sessionId>
-       BATCH_DENY_ALL:<sessionId>
+       BATCH_APPROVE|<sessionId>|<toolName>
+       BATCH_DENY|<sessionId>|<toolName>
      The sessionId in the callback ensures the correct session is
      targeted even if the user has multiple active sessions.
+     Use pipe separator (`|`) to prevent collision with namespaced tools (e.g. `github:read`).
+
 
 7.26 MUST: AWAITING_APPROVAL checkpoints older than
      arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
@@ -603,3 +607,6 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 §7.34 MUST: Web UI tool approval MUST be per-tool granular. The REST HITL endpoint MUST accept toolName as a parameter (in the JSON request body via CheckpointApprovalRequest). Passing no toolName is valid only for bulk Approve All / Deny All operations.
 
 §7.35 TelegramCallbackHandler MUST reject any callback whose sessionId maps to a checkpoint older than arcclaw.hitl.timeout-hours before routing to any reflex. This guard is independent of and complementary to the WorkspaceManager GC auto-deny scheduler (§7.26).
+
+§7.36 MUST: The `ApprovalStateMachine` in `arcclaw-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
+

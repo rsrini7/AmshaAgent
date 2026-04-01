@@ -13,6 +13,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.channel.api.hitl.ApprovalDecision;
+import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
+import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
@@ -56,7 +59,7 @@ public class SessionReaper {
     SessionHeartbeatTracker heartbeatTracker;
 
     @Inject
-    Event<StaleApprovalExpired> staleApprovalEvent;
+    Event<ApprovalDecisionEvent> decisionEvents;
 
     @Inject
     StatefulAgentStore agentStore;
@@ -229,13 +232,13 @@ public class SessionReaper {
         em.merge(fresh);
 
         // Notify user via channel event
-        staleApprovalEvent.fireAsync(new StaleApprovalExpired(
-                cp.getSessionId(),
-                cp.getAgentRole(),
-                null, // userId not stored in AgentCheckpoint — derive from session if needed by observers
-                cp.getChannelType(),
-                cp.getChannelPlatformId(),
-                cp.getPendingToolName()
+        decisionEvents.fireAsync(new ApprovalDecisionEvent(
+            cp.getSessionId(),
+            cp.getChannelType(),
+            cp.getChannelPlatformId(),
+            cp.getPendingToolName(),
+            ApprovalDecision.REJECT,
+            ApprovalOutcome.EXPIRED
         ));
 
         compactionInFlight.remove(cp.getSessionId());

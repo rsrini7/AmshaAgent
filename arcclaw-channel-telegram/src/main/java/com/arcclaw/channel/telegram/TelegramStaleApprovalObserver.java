@@ -6,8 +6,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.lifecycle.StaleApprovalExpired;
+import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
+import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
@@ -22,16 +22,20 @@ public class TelegramStaleApprovalObserver {
     @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
     long hitlTimeoutHours;
 
-    void onStaleApproval(@ObservesAsync StaleApprovalExpired event) {
+    void onApprovalDecision(@ObservesAsync ApprovalDecisionEvent event) {
+
+        if (event.outcome() != ApprovalOutcome.EXPIRED) {
+            return;
+        }
 
         if (!ChannelType.TELEGRAM.name().equalsIgnoreCase(event.channelType())) {
             return; // only handle Telegram channel
         }
 
-        String toolDisplay = event.pendingToolName() != null
-            && event.pendingToolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)
-            ? "batch: " + event.pendingToolName().substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
-            : event.pendingToolName();
+        String toolDisplay = event.toolName() != null
+            && event.toolName().startsWith("parallel|")
+            ? "batch: " + event.toolName().substring("parallel|".length())
+            : event.toolName();
 
         // §7.28: escape at call site for MarkdownV2
         String msg = String.format(

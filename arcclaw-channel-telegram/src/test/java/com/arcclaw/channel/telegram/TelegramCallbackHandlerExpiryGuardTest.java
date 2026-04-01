@@ -8,16 +8,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-import java.util.Optional;
-
-import jakarta.enterprise.inject.Instance;
-
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.reflex.AgentReflex;
-import com.arcclaw.core.reflex.ReflexResult;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arcclaw.channel.api.hitl.ApprovalDecision;
+import com.arcclaw.channel.api.hitl.ApprovalGateway;
+import com.arcclaw.channel.api.hitl.ApprovalOutcome;
+import com.arcclaw.channel.api.hitl.ApprovalResult;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.Chat;
@@ -31,28 +26,19 @@ class TelegramCallbackHandlerExpiryGuardTest {
 
     private TelegramCallbackHandler handler;
     private TelegramChannelSender sender;
-    private StatefulAgentStore agentStore;
-    private AgentReflex reflex;
+    private ApprovalGateway approvalGateway;
     private Exchange exchange;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setup() {
         handler = new TelegramCallbackHandler();
         sender = mock(TelegramChannelSender.class);
-        agentStore = mock(StatefulAgentStore.class);
-        reflex = mock(AgentReflex.class);
+        approvalGateway = mock(ApprovalGateway.class);
         exchange = mock(Exchange.class);
 
-        Instance<AgentReflex> reflexes = mock(Instance.class);
-        when(reflexes.iterator()).thenAnswer(inv -> List.of(reflex).iterator());
-
         handler.sender = sender;
-        handler.reflexes = reflexes;
-        handler.agentStore = agentStore;
-        handler.objectMapper = new ObjectMapper();
+        handler.approvalGateway = approvalGateway;
         handler.botToken = "dummy-token"; // To prevent NPE on http client creation logging
-        handler.hitlTimeoutHours = 24L;
 
         // Stub exchange
         Message message = mock(Message.class);
@@ -71,41 +57,36 @@ class TelegramCallbackHandlerExpiryGuardTest {
         query.setMessage(tgMessage);
 
         User user = new User();
-        user.setId(2002L); // Change back to string if needed, assuming User is still Long
+        user.setId(2002L);
         query.setFrom(user);
 
         when(message.getBody(IncomingCallbackQuery.class)).thenReturn(query);
     }
 
     @Test
-    void isCheckpointExpired_true_rejectsCall() throws Exception {
+    void isCheckpointExpired_true_rejectsCall() {
         // mock expired
-        when(agentStore.isCheckpointExpired("test-session", 24L)).thenReturn(true);
-        when(reflex.matches(anyString())).thenReturn(true);
+        when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
+            .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0));
 
         handler.handleCallback(exchange);
 
-        // Verify reflex was NOT called
-        verify(reflex, never()).execute(anyString(), anyString(), anyString(), anyString(), any());
-        
         // Verify user is notified
-        verify(sender).sendRaw(any(ChannelUser.class), eq("⏱ This approval request has expired. Please start a new request."));
+        verify(sender).sendRaw(any(ChannelUser.class), eq("⏱ Approval expired"));
     }
 
     @Test
-    void isCheckpointExpired_false_proceedsToReflex() throws Exception {
+    void isCheckpointExpired_false_proceedsToApprove() {
         // mock not expired
-        when(agentStore.isCheckpointExpired("test-session", 24L)).thenReturn(false);
-        when(reflex.matches(anyString())).thenReturn(true);
-        when(reflex.execute(anyString(), anyString(), anyString(), anyString(), any()))
-            .thenReturn(new ReflexResult(Optional.empty(), "dummy input"));
+        when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
+            .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0));
 
         handler.handleCallback(exchange);
 
-        // Verify reflex WAS called
-        verify(reflex).execute(eq("test-session"), eq("2002"), eq("1001"), eq("/approve dummy_tool"), any());
+        // Verify approve message was sent
+        verify(sender).sendRaw(any(ChannelUser.class), eq("✅ Approved: dummy_tool"));
 
         // Verify no expiry message was sent
-        verify(sender, never()).sendRaw(any(ChannelUser.class), eq("⏱ This approval request has expired. Please start a new request."));
+        verify(sender, never()).sendRaw(any(ChannelUser.class), eq("⏱ Approval expired"));
     }
 }
