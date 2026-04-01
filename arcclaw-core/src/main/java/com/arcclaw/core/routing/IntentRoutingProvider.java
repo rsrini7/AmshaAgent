@@ -32,4 +32,12 @@ public interface IntentRoutingProvider {
     default int priority() {
         return 100;
     }
+
+    /**
+     * Returns true if this provider should skip fast-path matching for the
+     * given message (e.g. if the message contains a negation). §4.11
+     */
+    default boolean shouldSkip(String userMessage) {
+        return false;
+    }
 }

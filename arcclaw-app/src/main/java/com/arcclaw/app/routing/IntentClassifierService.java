@@ -102,12 +102,19 @@ public class IntentClassifierService implements IntentClassifier {
     public String classify(String userMessage) {
         // Fast-path routing via SPI triggers
         for (IntentRoutingProvider provider : sortedProviders) {
+            // §4.11 Negation Safety Guard
+            if (provider.shouldSkip(userMessage)) {
+                log.debugf("CLASSIFIER: %s skipped (negation detected)", 
+                          provider.getClass().getSimpleName());
+                continue;
+            }
+
             for (Pattern p : provider.fastPathTriggers()) {
                 if (p.matcher(userMessage).find()) {
                     String role = provider.fastPathRole()
                             .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
                     log.debugf("CLASSIFIER fast-path: match in %s -> %s", 
-                              provider.getClass().getSimpleName(), role);
+                               provider.getClass().getSimpleName(), role);
                     return role;
                 }
             }

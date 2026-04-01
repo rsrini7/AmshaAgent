@@ -11,20 +11,27 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 @ApplicationScoped
 public class SchedulingRoutingProvider implements IntentRoutingProvider {
 
-    // NEGATION SAFETY: This pattern is intentionally specific to
-    // time-delay signals (after X min, in X hours, remind me, etc.)
-    // and does NOT match negations like "do not schedule" or
-    // "cancel my reminder". If the pattern is ever broadened,
-    // add a shouldSkip() guard via IntentRoutingProvider.shouldSkip()
-    // default method to handle negations. See Phase 80-B B4 analysis.
+    // NEGATION SAFETY §4.11: This pattern is non-anchored to allow natural phrasing 
+    // (e.g. "please remind me"), but "schedule" is removed because it's too broad.
+    // Time signals like "tomorrow" or "in 30 min" are specific enough.
+    // Broader negations (e.g. "do not schedule") are filtered via shouldSkip().
     private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
-        "(?i)^\\s*(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec)|tomorrow|" +
-        "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|schedule|remind(\\s+me)?|" +
-        "every\\s+(day|week|hour)|once\\s+a\\s+(day|week)|later)\\b"
+        "(?i)\\b(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec|week)[a-z]*|tomorrow|" +
+        "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|remind(\\s+me)?|" +
+        "every\\s+(day|week|hour)[a-z]*|once\\s+a\\s+(day|week)|later)\\b",
+        Pattern.CASE_INSENSITIVE
     );
 
-    // FIX: Route free-text task-listing intents to coordinator (who has manageschedule)
-    // instead of researcher/coder who do not.
+    // Filter out explicit negations to prevent fast-path false positives (§4.11)
+    private static final Pattern SCHEDULING_NEGATION_PATTERN =
+        Pattern.compile(
+            "(?i)(don'?t|do not|not|never|stop|cancel|no longer)"
+            + "\\s{0,10}(want to |need to |going to )?"
+            + "(schedule|remind|set.{0,15}reminder)",
+            Pattern.CASE_INSENSITIVE
+        );
+
+    // FAST-PATH for listing tasks — still anchored as these are command-like
     private static final Pattern LIST_TASKS_PATTERN = Pattern.compile(
         "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?)\\b"
     );
@@ -40,10 +47,15 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
     public List<Pattern> fastPathTriggers() {
         return List.of(
             SCHEDULING_GUARD_PATTERN,
-            LIST_TASKS_PATTERN,       // "list tasks", "show my crons", "view jobs"
-            MY_TASKS_PATTERN,         // "my tasks", "my crons"
-            STANDALONE_CRON_PATTERN   // bare "cron" or "crons" (slash or plain)
+            LIST_TASKS_PATTERN,       
+            MY_TASKS_PATTERN,         
+            STANDALONE_CRON_PATTERN   
         );
+    }
+
+    @Override
+    public boolean shouldSkip(String userMessage) {
+        return SCHEDULING_NEGATION_PATTERN.matcher(userMessage).find();
     }
 
     @Override
@@ -51,7 +63,6 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
         return List.of(
             "SCHEDULING IS ABSOLUTE PRIORITY — evaluated before any other rule: " +
             "If the user message contains ANY time-delay signal, you MUST route to 'coordinator'.",
-            // FIX: Explicitly tell the LLM classifier that listing tasks belongs to coordinator.
             "Task/cron listing ('list tasks', 'show crons', 'my tasks') MUST route to 'coordinator' " +
             "because only coordinator has the manageschedule tool."
         );
