@@ -138,22 +138,29 @@ public class OnboardingResource {
 
         try {
             boolean valid = llmValidationGateway.validate(
-                provider, state.selectedModel, req.apiKey()
+                provider, 
+                state.selectedModel, 
+                req.apiKey()
             );
 
-            if (valid) {
-                state.credentialsValidated = true;
-                state.advance();
+            log.infof("step3 validation: sid=%s, provider=%s, valid=%b", sid, provider, valid);
 
-                vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
-                vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
-
-                return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
-            } else {
-                return Response.ok(new Step3Response(3, false, "Unexpected response from validation")).cookie(createCookie(sid)).build();
+            if (!valid) {
+                return Response.ok(new Step3Response(3, false, "Invalid API key or model combination"))
+                    .cookie(createCookie(sid)).build();
             }
+
+            state.credentialsValidated = true;
+            state.advance();
+
+            vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
+            vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
+
+            return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
+
         } catch (Exception e) {
-            return Response.ok(new Step3Response(3, false, e.getMessage())).cookie(createCookie(sid)).build();
+            log.errorf(e, "Validation error for sid=%s", sid);
+            return Response.status(400).entity(new Step3Response(3, false, e.getMessage())).build();
         }
     }
 
@@ -241,10 +248,9 @@ public class OnboardingResource {
         if (cookie != null && cookie.getValue() != null && !cookie.getValue().isBlank()) {
             return cookie.getValue();
         }
-        // Manual fallback for certain Reactive context cases
         if (headers != null) {
             Map<String, Cookie> cookies = headers.getCookies();
-            if (cookies != null && cookies.containsKey(COOKIE_NAME)) { // Added cookies != null check
+            if (cookies != null && cookies.containsKey(COOKIE_NAME)) {
                 Cookie c = cookies.get(COOKIE_NAME);
                 if (c != null && c.getValue() != null && !c.getValue().isBlank()) {
                     return c.getValue();

@@ -34,109 +34,483 @@ export class ArcOnboarding extends LitElement {
   };
 
   static styles = css`
-    :host {
-      display: flex; align-items: center; justify-content: center;
-      height: 100vh; background: var(--bg-base);
-      font-family: 'Inter', sans-serif;
-    }
-    .card {
-      background: var(--bg-surface); border: 1px solid var(--border); 
-      border-radius: 24px; padding: 48px; 
-      width: 420px; display: flex; flex-direction: column; gap: 24px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-      position: relative; overflow: hidden;
-      transition: width 0.3s ease;
-    }
-    .card.wide {
-      width: 560px;
-    }
-    .card::before {
-      content: '⬡';
-      position: absolute; top: -30px; right: -30px;
-      font-size: 15rem; color: var(--accent); opacity: 0.03;
-      pointer-events: none;
-    }
-    .progress-bar {
-      display: flex; gap: 8px; justify-content: center; margin-bottom: 8px;
-    }
-    .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--bg-elevated); border: 1px solid var(--border);
-      transition: background 0.3s, border-color 0.3s;
-    }
-    .dot.active {
-      background: var(--accent); border-color: var(--accent);
-      box-shadow: 0 0 10px var(--accent-glow);
-    }
-    .logo-section { display: flex; align-items: center; gap: 12px; }
-    .logo-icon { font-size: 28px; color: var(--accent); }
-    h1 { 
-      font-size: 24px; font-weight: 700; margin: 0;
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    h2 { font-size: 18px; margin: 0; color: var(--text-primary); }
-    p { color: var(--text-muted); font-size: 14px; line-height: 1.6; margin: 0; }
-    
-    .error { 
-      color: #ef4444; font-size: 12px; background: rgba(239, 68, 68, 0.1); 
-      padding: 10px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.2);
-    }
+  :host {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--bg-base);
+    font-family: var(--font-family);
+    padding: var(--space-6) var(--space-4);
+  }
 
-    .form-group { display: flex; flex-direction: column; gap: 8px; }
-    label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
-    
-    input, select, textarea {
-      background: var(--bg-elevated); border: 1px solid var(--border); 
-      border-radius: 12px; color: var(--text-primary); 
-      padding: 14px 16px; font-size: 15px; width: 100%;
-      font-family: inherit; outline: none; transition: var(--transition);
-      box-sizing: border-box;
-    }
-    input:focus, select:focus, textarea:focus { 
-      border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); 
-    }
-    textarea { min-height: 100px; resize: vertical; }
+  /* ── Wizard card ──────────────────────────────────────── */
+  .wizard-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+    overflow: hidden;
+    position: relative;
+    animation: card-in 0.4s cubic-bezier(0.16,1,0.3,1) both;
+  }
 
-    .actions { display: flex; gap: 12px; margin-top: 12px; }
-    button {
-      flex: 1;
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
-      border: none; border-radius: 12px; 
-      color: white; cursor: pointer; padding: 14px; 
-      font-size: 15px; font-weight: 600;
-      transition: transform 0.2s, brightness 0.2s, opacity 0.2s;
-    }
-    button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    button.secondary {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      color: var(--text-primary);
-    }
+  [data-theme="dark"] .wizard-card,
+  :host-context([data-theme="dark"]) .wizard-card {
+    background: linear-gradient(145deg, #13151f 0%, #111318 100%);
+    border-color: rgba(255,255,255,0.06);
+  }
 
-    .mcp-entry {
-      border: 1px solid var(--border); border-radius: 12px; padding: 16px;
-      display: flex; flex-direction: column; gap: 12px; position: relative;
-    }
-    .remove-btn {
-      position: absolute; top: 8px; right: 8px; background: none; border: none;
-      color: #ef4444; cursor: pointer; font-size: 18px; padding: 4px;
-    }
-    .mcp-list { display: flex; flex-direction: column; gap: 16px; max-height: 300px; overflow-y: auto; padding-right: 4px; }
-    
-    /* Scrollbar */
-    .mcp-list::-webkit-scrollbar { width: 4px; }
-    .mcp-list::-webkit-scrollbar-track { background: transparent; }
-    .mcp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+  }
 
-    .loader {
-      display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
-      border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;
-      margin-right: 8px; vertical-align: middle;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  `;
+  /* Gradient top line */
+  .wizard-card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg,
+      var(--accent) 0%, var(--accent-secondary) 100%);
+  }
+
+  /* ── Header ───────────────────────────────────────────── */
+  .wizard-header {
+    padding: var(--space-8) var(--space-8) var(--space-6);
+    text-align: center;
+  }
+
+  .brand-mark {
+    width: 44px; height: 44px;
+    margin: 0 auto var(--space-4);
+    background: linear-gradient(135deg,
+      var(--accent) 0%, var(--accent-secondary) 100%);
+    border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px var(--accent-glow);
+  }
+
+  .brand-mark svg { color: #fff; }
+
+  .wizard-title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: var(--space-2);
+  }
+
+  .wizard-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* ── Progress stepper ─────────────────────────────────── */
+  .stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0 var(--space-8) var(--space-6);
+  }
+
+  .step-dot-wrap {
+    display: flex; align-items: center; flex: 1;
+  }
+  .step-dot-wrap:last-child { flex: none; }
+
+  .step-dot {
+    width: 28px; height: 28px; flex-shrink: 0;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--border);
+    background: var(--bg-elevated);
+    display: flex; align-items: center; justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semi);
+    color: var(--text-muted);
+    transition: all var(--transition);
+    position: relative; z-index: 1;
+  }
+
+  .step-dot.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 0 4px var(--accent-glow);
+  }
+
+  .step-dot.done {
+    border-color: var(--accent-secondary);
+    background: var(--accent-secondary);
+    color: #fff;
+  }
+
+  .step-connector {
+    flex: 1; height: 2px;
+    background: var(--border);
+    margin: 0 -1px;
+    transition: background var(--transition-slow);
+  }
+
+  .step-connector.done {
+    background: linear-gradient(90deg,
+      var(--accent-secondary) 0%, var(--accent) 100%);
+  }
+
+  /* ── Body ─────────────────────────────────────────────── */
+  .wizard-body {
+    padding: 0 var(--space-8) var(--space-8);
+    animation: step-in 0.28s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  @keyframes step-in {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── Labels ───────────────────────────────────────────── */
+  .field-label {
+    display: block;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semi);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+  }
+
+  /* ── Provider cards (replaces native <select>) ────────── */
+  .provider-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+
+  .provider-card {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-card);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative; overflow: hidden;
+  }
+
+  .provider-card:hover {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .provider-card.selected {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .provider-card.selected::after {
+    content: "✓";
+    position: absolute; top: 6px; right: 8px;
+    font-size: var(--font-size-xs);
+    color: var(--accent);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .provider-icon {
+    width: 32px; height: 32px; flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: var(--font-weight-bold);
+  }
+
+  .provider-icon svg { width: 18px; height: 18px; }
+
+  .provider-name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+  }
+
+  .provider-tag {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* ── Input fields ─────────────────────────────────────── */
+  .field-input, .field-textarea, .field-select {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    transition: border-color var(--transition), box-shadow var(--transition),
+                background var(--transition);
+    outline: none;
+    -webkit-appearance: none;
+  }
+
+  .field-input:focus, .field-textarea:focus, .field-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+    background: var(--bg-surface);
+  }
+
+  .field-input::placeholder, .field-textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  .field-textarea {
+    min-height: 100px; resize: vertical;
+    line-height: 1.6;
+  }
+
+  /* ── Model selector (still a <select> but styled) ─────── */
+  .model-select-wrap {
+    position: relative; margin-top: var(--space-5);
+  }
+
+  .model-select-wrap::after {
+    content: "";
+    position: absolute; right: 14px; top: 50%;
+    transform: translateY(-50%);
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--text-muted);
+    pointer-events: none;
+  }
+
+  /* ── Status messages ──────────────────────────────────── */
+  .status-msg {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    margin-top: var(--space-4);
+    animation: step-in 0.2s ease both;
+  }
+
+  .status-msg.success {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(34,197,94,0.2);
+  }
+
+  .status-msg.error {
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid rgba(239,68,68,0.2);
+  }
+
+  .status-msg.loading {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border: 1px solid var(--border-focus);
+  }
+
+  /* ── MCP server list ──────────────────────────────────── */
+  .mcp-list {
+    display: flex; flex-direction: column;
+    gap: var(--space-2); margin-bottom: var(--space-4);
+  }
+
+  .mcp-item {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    animation: step-in 0.2s ease both;
+  }
+
+  .mcp-item-name {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+  }
+
+  .mcp-item-tag {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    background: var(--bg-base);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border);
+  }
+
+  .mcp-remove {
+    width: 24px; height: 24px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all var(--transition);
+    flex-shrink: 0;
+  }
+
+  .mcp-remove:hover {
+    background: var(--error-bg);
+    color: var(--error);
+    border-color: rgba(239,68,68,0.3);
+  }
+
+  .add-mcp-btn {
+    width: 100%;
+    padding: var(--space-3);
+    background: transparent;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .add-mcp-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-subtle);
+  }
+
+  /* ── Action buttons ───────────────────────────────────── */
+  .btn-row {
+    display: flex; gap: var(--space-3);
+    margin-top: var(--space-6);
+  }
+
+  .btn-primary {
+    flex: 1;
+    padding: var(--space-3) var(--space-6);
+    background: linear-gradient(135deg,
+      var(--accent) 0%, color-mix(in srgb, var(--accent) 70%,
+      var(--accent-secondary) 30%) 100%);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #fff;
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semi);
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative; overflow: hidden;
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px var(--accent-glow);
+    filter: brightness(1.1);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+    filter: brightness(0.95);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.45; cursor: not-allowed;
+    transform: none; filter: none;
+    box-shadow: none;
+  }
+
+  /* Shimmer on primary btn */
+  .btn-primary::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(105deg,
+      transparent 30%, rgba(255,255,255,0.12) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0.5s ease;
+  }
+
+  .btn-primary:hover::after { transform: translateX(100%); }
+
+  .btn-ghost {
+    padding: var(--space-3) var(--space-5);
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .btn-ghost:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-subtle);
+  }
+
+  /* ── Loading spinner ──────────────────────────────────── */
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Welcome step ─────────────────────────────────────── */
+  .welcome-features {
+    display: flex; flex-direction: column;
+    gap: var(--space-3); margin: var(--space-6) 0;
+  }
+
+  .feature-row {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+  }
+
+  .feature-dot {
+    width: 8px; height: 8px; flex-shrink: 0;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg,
+      var(--accent), var(--accent-secondary));
+  }
+
+  /* ── Complete step ────────────────────────────────────── */
+  .complete-icon {
+    width: 64px; height: 64px; margin: 0 auto var(--space-4);
+    background: var(--success-bg);
+    border-radius: var(--radius-full);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    border: 2px solid rgba(34,197,94,0.2);
+    animation: pulse-success 1.5s ease infinite alternate;
+  }
+
+  @keyframes pulse-success {
+    from { box-shadow: 0 0 0 0 var(--success-bg); }
+    to   { box-shadow: 0 0 0 12px transparent; }
+  }
+`;
+
 
   async connectedCallback() {
     super.connectedCallback();
@@ -166,6 +540,13 @@ export class ArcOnboarding extends LitElement {
     this._error = '';
     try {
       const res = await this._client.onboardingStep(this._currentStep, body);
+      
+      // Step 3 specific validation feedback
+      if (this._currentStep === 3 && res.valid === false) {
+        this._error = res.error || 'Invalid API Key';
+        return; // Don't advance if invalid
+      }
+
       this._currentStep = res.nextStep;
       if (this._currentStep >= 6) {
         await this._finish();
@@ -195,8 +576,7 @@ export class ArcOnboarding extends LitElement {
     }
   }
 
-  private _onProviderChange(e: Event) {
-    const val = (e.target as HTMLSelectElement).value;
+  private _onProviderChange(val: string) {
     this._provider = val;
     this._model = this.DEFAULT_MODELS[val] || '';
   }
@@ -211,21 +591,33 @@ export class ArcOnboarding extends LitElement {
 
   render() {
     return html`
-      <div class="card ${this._currentStep === 5 ? 'wide' : ''}">
-        <div class="progress-bar">
+      <div class="wizard-card ${this._currentStep === 5 ? 'wide' : ''}">
+        <div class="wizard-header">
+          <div class="brand-mark">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h1 class="wizard-title">ArcClaw</h1>
+          <p class="wizard-subtitle">AI Agent Infrastructure</p>
+        </div>
+
+        <div class="stepper">
           ${[1, 2, 3, 4, 5].map(s => html`
-            <div class="dot ${this._currentStep >= s ? 'active' : ''}"></div>
+            <div class="step-dot-wrap">
+              <div class="step-dot ${this._currentStep === s ? 'active' : this._currentStep > s ? 'done' : ''}">
+                ${this._currentStep > s ? '✓' : s}
+              </div>
+              ${s < 5 ? html`<div class="step-connector ${this._currentStep > s ? 'done' : ''}"></div>` : ''}
+            </div>
           `)}
         </div>
 
-        <div class="logo-section">
-          <span class="logo-icon">⬡</span>
-          <h1>ArcClaw</h1>
+        ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
+
+        <div class="wizard-body">
+          ${this._renderStep()}
         </div>
-
-        ${this._error ? html`<div class="error">${this._error}</div>` : ''}
-
-        ${this._renderStep()}
       </div>
     `;
   }
@@ -253,26 +645,56 @@ export class ArcOnboarding extends LitElement {
   }
 
   private _step2() {
+    const providers = [
+      { id:'groq',        name:'Groq',        tag:'Fast inference',  icon:'G',  color:'#f55036' },
+      { id:'openai',      name:'OpenAI',       tag:'GPT-4o series',   icon:'O',  color:'#10a37f' },
+      { id:'ollama',      name:'Ollama',       tag:'Local / private', icon:'🦙', color:'#666' },
+      { id:'anthropic',   name:'Anthropic',    tag:'Claude series',   icon:'A',  color:'#cc785c' },
+      { id:'claude-code', name:'Claude Code',  tag:'CLI tool',        icon:'C',  color:'#8b5cf6' },
+    ];
     return html`
-      <h2>Choose your LLM Provider</h2>
-      <div class="form-group">
-        <label>Provider</label>
-        <select .value="${this._provider}" @change="${this._onProviderChange}">
-          <option value="groq">Groq</option>
-          <option value="openai">OpenAI</option>
-          <option value="ollama">Ollama</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="claude-code">Claude Code</option>
-        </select>
+      <span class="field-label">Provider</span>
+      <div class="provider-grid">
+        ${providers.map(p => html`
+          <div
+            class="provider-card ${this._provider === p.id ? 'selected' : ''}"
+            @click="${() => this._onProviderChange(p.id)}"
+            role="radio"
+            aria-checked="${this._provider === p.id}"
+            tabindex="0"
+            @keydown="${(e: KeyboardEvent) =>
+              (e.key==='Enter'||e.key===' ') && this._onProviderChange(p.id)}"
+          >
+            <div class="provider-icon"
+                 style="background:${p.color}22;color:${p.color}">
+              ${p.icon}
+            </div>
+            <div>
+              <div class="provider-name">${p.name}</div>
+              <div class="provider-tag">${p.tag}</div>
+            </div>
+          </div>
+        `)}
       </div>
-      <div class="form-group">
-        <label>Model (Optional)</label>
-        <input type="text" .value="${this._model}" placeholder="${this.DEFAULT_MODELS[this._provider]}"
-               @input="${(e: any) => this._model = e.target.value}">
+      <div class="model-select-wrap">
+        <span class="field-label">Model</span>
+        <input
+          class="field-input"
+          type="text"
+          placeholder="${this._provider === 'groq' ? 'llama-3.1-8b-instant' :
+                         this._provider === 'openai' ? 'gpt-4o-mini' :
+                         this._provider === 'ollama' ? 'llama3.2' :
+                         this._provider === 'anthropic' ? 'claude-haiku-4-5' :
+                         'claude-sonnet-4-5'}"
+          .value="${this._model}"
+          @input="${(e:any) => this._model = e.target.value}"
+        />
       </div>
-      <button @click="${() => this._next({ provider: this._provider, model: this._model })}" ?disabled="${this._loading}">
-        ${this._loading ? html`<span class="loader"></span>Connecting...` : 'Continue'}
-      </button>
+      <div class="btn-row">
+        <button class="btn-primary"
+          ?disabled="${!this._provider}"
+          @click="${() => this._next({ provider: this._provider, model: this._model })}">Continue →</button>
+      </div>
     `;
   }
 
