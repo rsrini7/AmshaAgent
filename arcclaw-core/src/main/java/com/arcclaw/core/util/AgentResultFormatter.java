@@ -43,6 +43,7 @@ public class AgentResultFormatter {
     public static String format(AgentResult result) {
         String reply = switch (result) {
             case AgentResult.Finished f       -> sanitize(f.answer());
+            case AgentResult.StructuredFinished sf -> sanitize(sf.answer());
             case AgentResult.AwaitingApproval a -> formatHitlMessage(
                     a.toolName(), a.paramsJson(), null, false);
             case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
@@ -100,11 +101,11 @@ public class AgentResultFormatter {
         StringBuilder sb = new StringBuilder();
 
         boolean isBatch = compositeName != null
-            && compositeName.startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX);
+            && compositeName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
 
         if (isBatch) {
             String[] tools = compositeName
-                .substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length())
+                .substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
                 .split(",");
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");

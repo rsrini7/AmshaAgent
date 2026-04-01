@@ -337,7 +337,7 @@ public class ParallelToolStepExecutor {
         PreExecutionFilter.SplitResult split =
             PreExecutionFilter.split(calls, autonomy, safeTools);
 
-        String compositeName = ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX +
+        String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX +
             calls.stream().map(ParallelToolCall::toolName)
                  .collect(Collectors.joining(","));
 
@@ -372,7 +372,7 @@ public class ParallelToolStepExecutor {
 
         // Rebuild compositeName with ONLY the HITL-pending tools §7.32 (UI constraint)
         // Note: originalBatchJson still contains ALL calls for context.
-        String hitlCompositeName = ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX +
+        String hitlCompositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX +
             split.hitlPending().stream()
             .map(ParallelToolCall::toolName)
             .collect(Collectors.joining(","));

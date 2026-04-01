@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -47,6 +48,7 @@ public class DenyReflex implements AgentReflex {
     @Inject ObjectMapper objectMapper;
     @Inject CheckpointResumeHandler checkpointResumeHandler;
     @Inject DelegateApprovalGuard delegateGuard;
+    @Inject CheckpointApprovalService checkpointApprovalService;
 
     @Override
     public boolean matches(String input) {
@@ -110,21 +112,12 @@ public class DenyReflex implements AgentReflex {
                 }
 
                 if (activeRole != null) {
-                    // Fix 3: removed dead `deny.toolName().isEmpty() &&` guard —
-                    // at this point toolName is always empty (we returned early if present).
-                    // Consistent with the equivalent fix in ApproveReflex.
                     if (activeCheckpoint.hasBatchToolDecisions()) {
-                        autoDenyAllPending(sessionId, activeRole);
-                        return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+                        checkpointApprovalService.denyAll(sessionId, "CLI deny");
+                    } else {
+                        log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
+                        checkpointApprovalService.denyAll(sessionId, "CLI deny");
                     }
-
-                    log.infof("[DenyReflex] User denied pending tool execution for session: %s",
-                              sessionId);
-                    AgentCheckpoint cp =
-                        statefulAgentStore.load(sessionId, activeRole).orElseThrow();
-                    cp.setStatus(CheckpointStatus.FAILED);
-                    cp.setFailReason(AgentSentinels.DENY_SENTINEL);
-                    statefulAgentStore.save(cp);
                     return "🚫 Execution denied. The agent's task has been terminated.";
                 }
 
@@ -179,31 +172,13 @@ public class DenyReflex implements AgentReflex {
             return "No parallel batch awaiting per-tool approval for this session.";
         }
 
-        boolean updated = statefulAgentStore.updateBatchToolDecision(
-            sessionId, activeRole, toolName, AgentSentinels.TOOL_DECISION_DENIED);
-
-        if (!updated) {
-            return String.format(
-                "Tool '%s' is not part of the pending batch, " +
-                "or was already decided. Use `deny` to deny all.",
-                toolName);
-        }
-
-        if (statefulAgentStore.isAllBatchToolsDecided(sessionId, activeRole)) {
-            return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
-        }
-
-        AgentCheckpoint cp =
-            statefulAgentStore.load(sessionId, activeRole).orElseThrow();
-        List<String> stillPending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-        return String.format(
-            "🚫 Denied `%s`. Still waiting for: %s\n" +
-            "Type `approve <toolName>` or `deny <toolName>` to decide remaining.",
-            toolName,
-            stillPending.stream()
-                .map(t -> "`" + t + "`")
-                .collect(Collectors.joining(", ")));
+        checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
+        return "🚫 Tool '" + toolName + "' denied.";
     }
+
+    // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
+    // This method retained for handleCronApproval usage. Remove in Phase 81
+    // when cron approval is also migrated to CheckpointApprovalService.
 
     private void autoDenyAllPending(String sessionId, String agentRole) {
         AgentCheckpoint cp =
@@ -217,26 +192,15 @@ public class DenyReflex implements AgentReflex {
     private String triggerBatchResume(
             String sessionId, String userId, String chatId,
             String agentRole, MessageContext context) throws Exception {
-
-        if (!statefulAgentStore.markBatchResuming(sessionId)) {
-            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — " +
-                      "ignoring duplicate trigger.", sessionId);
-            return "⏳ Already processing your denial. Please wait.";
-        }
-
-        try {
-            final String resumeGoal =
-                checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
-            context.setResumeSignal(true);
-            context.setGoal(resumeGoal);
-            AgentResult result = WorkspaceContext.runWithFullAutonomy(
-                sessionId, userId, chatId, agentRole,
-                () -> agentLoop.run(
-                    sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
-            return AgentResultFormatter.format(result);
-        } finally {
-            statefulAgentStore.clearBatchResuming(sessionId);
-        }
+        // PHASE 80-A12: delegating to CheckpointResumeHandler.
+        // This wrapper retained for handleCronApproval and
+        // handleDelegateApproval which still pass MessageContext.
+        // Remove in Phase 81 when those paths are also migrated.
+        checkpointResumeHandler.resumeAfterBatchDecision(
+            sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
+            context.getUser().channel().name()
+        );
+        return "✅ Resuming task...";
     }
 
     private String handleCronDenial(

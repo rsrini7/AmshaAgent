@@ -11,6 +11,7 @@ import io.quarkus.qute.TemplateData;
  */
 public sealed interface AgentResult
         permits AgentResult.Finished,
+                AgentResult.StructuredFinished,
                 AgentResult.AwaitingApproval,
                 AgentResult.LoopExceeded,
                 AgentResult.Failed {
@@ -31,6 +32,15 @@ public sealed interface AgentResult
     @TemplateData
     record Finished(
             String answer,
+            List<ReasoningStep> steps,
+            int totalInputTokens,
+            int totalOutputTokens
+    ) implements AgentResult {}
+
+    @TemplateData
+    record StructuredFinished(
+            String answer,
+            Object structured,
             List<ReasoningStep> steps,
             int totalInputTokens,
             int totalOutputTokens
@@ -67,6 +77,10 @@ public sealed interface AgentResult
 
     static AgentResult finished(String answer, List<ReasoningStep> steps) {
         return new Finished(answer, steps, sumIn(steps), sumOut(steps));
+    }
+
+    static AgentResult structuredFinished(String answer, Object structured, List<ReasoningStep> steps) {
+        return new StructuredFinished(answer, structured, steps, sumIn(steps), sumOut(steps));
     }
 
     static AgentResult awaitingApproval(String toolName, String paramsJson, String sessionId, List<ReasoningStep> steps) {

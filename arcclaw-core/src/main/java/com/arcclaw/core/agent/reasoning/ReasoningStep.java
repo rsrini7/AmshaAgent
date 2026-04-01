@@ -44,7 +44,7 @@ public record ReasoningStep(
      */
     public static final String PARALLEL_SENTINEL_DUNDER = "__parallel__";
 
-    public static final String PARALLEL_SENTINEL_COLON_PREFIX = "parallel:";
+    public static final String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
 
     /** Convenience: true if this step represents a parallel tool batch. */
     public boolean isParallelBatch() {

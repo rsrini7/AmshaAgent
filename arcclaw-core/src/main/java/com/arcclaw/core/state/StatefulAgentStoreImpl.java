@@ -131,14 +131,59 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setPendingToolParametersJson(checkpoint.getPendingToolParametersJson());
             managed.setAutonomyLevel(checkpoint.getAutonomyLevel());
             managed.setOriginalGoal(checkpoint.getOriginalGoal());
-            // Fix 1: batch parallel HITL fields — without these, batchToolDecisions and
-            // preExecutedResults are silently discarded when an existing IN_PROGRESS
-            // checkpoint transitions to AWAITING_APPROVAL with batch data.
-            managed.setBatchToolDecisions(checkpoint.getBatchToolDecisions());
+
+            // A16 — Stale Join Guard: merge batch decisions to prevent overwriting active decisions
+            if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL 
+                    && managed.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                mergeBatchDecisions(managed, checkpoint);
+            } else {
+                managed.setBatchToolDecisions(checkpoint.getBatchToolDecisions());
+            }
+
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
             // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
+        }
+    }
+
+    private void mergeBatchDecisions(AgentCheckpoint managed, AgentCheckpoint incoming) {
+        if (incoming.getBatchToolDecisions() == null) return;
+        if (managed.getBatchToolDecisions() == null) {
+            managed.setBatchToolDecisions(incoming.getBatchToolDecisions());
+            return;
+        }
+        try {
+            Map<String, String> managedMap = objectMapper.readValue(
+                managed.getBatchToolDecisions(),
+                new TypeReference<Map<String, String>>() {});
+            Map<String, String> incomingMap = objectMapper.readValue(
+                incoming.getBatchToolDecisions(),
+                new TypeReference<Map<String, String>>() {});
+
+            boolean changed = false;
+            for (Map.Entry<String, String> entry : managedMap.entrySet()) {
+                String tool = entry.getKey();
+                String managedDecision = entry.getValue();
+                String incomingDecision = incomingMap.get(tool);
+
+                // If managed has a real decision, and incoming is still pending, keep the decision
+                if (!AgentSentinels.TOOL_DECISION_PENDING.equals(managedDecision)
+                        && AgentSentinels.TOOL_DECISION_PENDING.equals(incomingDecision)) {
+                    incomingMap.put(tool, managedDecision);
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                managed.setBatchToolDecisions(objectMapper.writeValueAsString(incomingMap));
+            } else {
+                managed.setBatchToolDecisions(incoming.getBatchToolDecisions());
+            }
+        } catch (Exception e) {
+            log.warnf("Failed to merge batch tool decisions for cp id=%d: %s",
+                managed.getId(), e.getMessage());
+            managed.setBatchToolDecisions(incoming.getBatchToolDecisions());
         }
     }
 

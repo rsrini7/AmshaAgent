@@ -21,6 +21,7 @@ public class AgentStateObserver implements AgentObserver {
             String agentRole, String goalHash, AgentResult result) {
         String status = switch (result) {
             case AgentResult.Finished _         -> "idle";
+            case AgentResult.StructuredFinished _ -> "idle";
             case AgentResult.AwaitingApproval _ -> "awaiting_approval";
             case AgentResult.LoopExceeded _     -> "idle";
             case AgentResult.Failed _           -> "idle";

@@ -13,6 +13,7 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -73,6 +74,9 @@ public class ApproveReflex implements AgentReflex {
 
     @Inject
     DelegateApprovalGuard delegateGuard;
+
+    @Inject
+    CheckpointApprovalService checkpointApprovalService;
 
     /**
      * Resolves the original user goal from a paused checkpoint so
@@ -144,13 +148,12 @@ public class ApproveReflex implements AgentReflex {
 
                 if (activeRole != null) {
                     if (activeCheckpoint.hasBatchToolDecisions()) {
-                        autoApproveAllPending(sessionId, activeRole);
-                        return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+                        checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                    } else {
+                        log.infof("[ApproveReflex] User approved pending tool execution for session: %s", sessionId);
+                        checkpointApprovalService.approveAll(sessionId, "CLI approve");
                     }
-
-                    log.infof("[ApproveReflex] User approved pending tool execution for session: %s",
-                              sessionId);
-                    return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
+                    return "✅ Approval processed.";
                 }
 
                 // 4. No session checkpoint — guide user to pending cron tasks
@@ -202,34 +205,13 @@ public class ApproveReflex implements AgentReflex {
             return "No parallel batch awaiting per-tool approval for this session.";
         }
 
-        // Record the APPROVED decision for this tool
-        boolean updated = statefulAgentStore.updateBatchToolDecision(
-            sessionId, activeRole, toolName, AgentSentinels.TOOL_DECISION_APPROVED);
-
-        if (!updated) {
-            return String.format(
-                "Tool '%s' is not part of the pending batch, " +
-                "or was already decided. Use `approve` to approve all.",
-                toolName);
-        }
-
-        // Check if all tools now have decisions (§7.22)
-        if (statefulAgentStore.isAllBatchToolsDecided(sessionId, activeRole)) {
-            return triggerBatchResume(sessionId, userId, chatId, activeRole, context);
-        }
-
-        // Still some PENDING tools — inform user
-        AgentCheckpoint cp =
-            statefulAgentStore.load(sessionId, activeRole).orElseThrow();
-        List<String> stillPending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-        return String.format(
-            "✅ Approved `%s`. Still waiting for: %s\n" +
-            "Type `approve <toolName>` or `approve` to approve all remaining.",
-            toolName,
-            stillPending.stream()
-                .map(t -> "`" + t + "`")
-                .collect(Collectors.joining(", ")));
+        checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
+        return "✅ Tool '" + toolName + "' approval processed.";
     }
+
+    // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
+    // This method retained for handleCronApproval usage. Remove in Phase 81
+    // when cron approval is also migrated to CheckpointApprovalService.
 
     private void autoApproveAllPending(String sessionId, String agentRole) {
         AgentCheckpoint cp =
@@ -243,28 +225,15 @@ public class ApproveReflex implements AgentReflex {
     private String triggerBatchResume(
             String sessionId, String userId, String chatId,
             String agentRole, MessageContext context) throws Exception {
-
-        // §7.29: Prevent double-resume from concurrent callback taps.
-        if (!statefulAgentStore.markBatchResuming(sessionId)) {
-            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — " +
-                      "ignoring duplicate trigger.", sessionId);
-            return "⏳ Already processing your approval. Please wait.";
-        }
-
-        try {
-            final String resumeGoal =
-                checkpointResumeHandler.resolveResumeGoal(sessionId, agentRole);
-            context.setResumeSignal(true);
-            context.setGoal(resumeGoal);
-            AgentResult result = WorkspaceContext.runWithFullAutonomy(
-                sessionId, userId, chatId, agentRole,
-                () -> agentLoop.run(
-                    sessionId, agentRole, resumeGoal, reasoningEngine, 5, context));
-            return AgentResultFormatter.format(result);
-        } finally {
-            // Always clear — success or exception.
-            statefulAgentStore.clearBatchResuming(sessionId);
-        }
+        // PHASE 80-A12: delegating to CheckpointResumeHandler.
+        // This wrapper retained for handleCronApproval and
+        // handleDelegateApproval which still pass MessageContext.
+        // Remove in Phase 81 when those paths are also migrated.
+        checkpointResumeHandler.resumeAfterBatchDecision(
+            sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
+            context.getUser().channel().name()
+        );
+        return "✅ Resuming task...";
     }
 
     private String handleCronApproval(
@@ -317,6 +286,13 @@ public class ApproveReflex implements AgentReflex {
 
             switch (result) {
                 case AgentResult.Finished _ -> {
+                    if (cron.runOnce)
+                        cronRepository.markCompleted(cron.id, Instant.now());
+                    else
+                        cronRepository.markFired(cron.id, Instant.now(),
+                            CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+                }
+                case AgentResult.StructuredFinished _ -> {
                     if (cron.runOnce)
                         cronRepository.markCompleted(cron.id, Instant.now());
                     else

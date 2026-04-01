@@ -42,7 +42,7 @@ class CheckpointResumeHandlerPreExecTest {
 
     @BeforeEach
     void setup() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, null);
     }
 
     @Test

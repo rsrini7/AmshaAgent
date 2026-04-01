@@ -64,8 +64,8 @@ public class TelegramChannelSender implements ChannelSender {
             .map(n -> (ReplyNode.ApprovalPrompt) n)
             .findFirst();
 
-        if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX)) {
-            String toolNamesStr = promptOpt.get().toolName().substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length());
+        if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+            String toolNamesStr = promptOpt.get().toolName().substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
             List<String> list = Arrays.asList(toolNamesStr.split(","));
             InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(promptOpt.get().sessionId(), list);
             // §7.28: escape at call site — rendered text from renderer.render() is already

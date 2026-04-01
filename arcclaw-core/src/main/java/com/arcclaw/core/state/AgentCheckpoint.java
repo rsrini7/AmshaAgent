@@ -325,7 +325,7 @@ public class AgentCheckpoint {
      */
     public boolean isParallelBatch() {
         return pendingToolName != null
-            && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX);
+            && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
     }
 
     /**
@@ -334,7 +334,7 @@ public class AgentCheckpoint {
      */
     public List<String> parallelToolNames() {
         if (!isParallelBatch()) return Collections.emptyList();
-        String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length());
+        String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
         return Arrays.asList(composite.split(","));
     }
 }

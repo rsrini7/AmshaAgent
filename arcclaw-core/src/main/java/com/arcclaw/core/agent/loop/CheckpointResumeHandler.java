@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,8 +9,12 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -31,20 +36,73 @@ public class CheckpointResumeHandler {
     private final StatefulAgentStore agentStore;
     private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper;
+    private final AgentLoop agentLoop;
+    private final ReasoningEngine reasoningEngine;
 
     protected CheckpointResumeHandler() {
         this.agentStore = null;
         this.toolRegistry = null;
         this.objectMapper = null;
+        this.agentLoop = null;
+        this.reasoningEngine = null;
     }
 
     @Inject
     public CheckpointResumeHandler(StatefulAgentStore agentStore,
                                    ToolRegistry toolRegistry,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   AgentLoop agentLoop,
+                                   ReasoningEngine reasoningEngine) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
+        this.agentLoop = agentLoop;
+        this.reasoningEngine = reasoningEngine;
+    }
+
+    public void resumeAfterBatchDecision(
+            String sessionId,
+            String agentRole,
+            String userId,
+            String chatId,
+            String channelType) {
+
+        String resumeGoal = resolveResumeGoal(sessionId, agentRole);
+        if (resumeGoal == null || resumeGoal.isBlank()) {
+            log.warnf("resumeAfterBatchDecision: no resume goal " +
+                "found for session %s role %s — cannot resume",
+                sessionId, agentRole);
+            return;
+        }
+
+        ChannelType cType = ChannelType.fromString(channelType)
+                .orElse(ChannelType.WEBSOCKET);
+        
+        ChannelUser user = new ChannelUser(
+            userId, chatId, "Operator", cType);
+
+        ChannelMessage msg = switch (cType.name()) {
+            case "DISCORD" -> new ChannelMessage.DiscordMessage(user, resumeGoal, chatId, chatId, Instant.now());
+            case "REST_API" -> new ChannelMessage.RestApiMessage(user, resumeGoal, chatId, Instant.now());
+            case "CLI" -> new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now());
+            case "WEBSOCKET" -> new ChannelMessage.WebSocketMessage(user, resumeGoal, chatId, Instant.now());
+            default -> new ChannelMessage.TelegramMessage(user, resumeGoal, chatId, Instant.now());
+        };
+
+        MessageContext context = new MessageContext(chatId, user, msg);
+        context.setResumeSignal(true);
+        context.setGoal(resumeGoal);
+
+        try {
+            WorkspaceContext.runWithFullAutonomy(
+                sessionId, userId, chatId, agentRole,
+                () -> agentLoop.run(
+                    sessionId, agentRole, resumeGoal,
+                    reasoningEngine, 5, context));
+        } catch (Exception e) {
+            log.errorf(e, "Failed to resume session %s", sessionId);
+            throw new RuntimeException("Failed to resume session", e);
+        }
     }
 
     /**
