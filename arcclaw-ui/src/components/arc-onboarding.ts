@@ -554,7 +554,7 @@ export class ArcOnboarding extends LitElement {
 
   private async _finish() {
     try {
-      const result = await getOnboardingComplete();
+      const result = await getOnboardingComplete(this._client.baseUrl);
       this.dispatchEvent(new CustomEvent('api-key-set', {
         bubbles: true, composed: true,
         detail: { key: result.serviceKey }

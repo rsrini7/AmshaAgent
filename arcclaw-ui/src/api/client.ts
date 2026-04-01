@@ -2,7 +2,7 @@ import { AgentStatusDto, PendingApprovalDto, ApprovalResultDto, ToolDto, SkillDt
 
 export class ArcClient {
   constructor(
-    private readonly baseUrl: string,
+    public readonly baseUrl: string,
     private readonly apiKey?: string
   ) {}
 
@@ -87,8 +87,8 @@ export class ArcClient {
     }
 }
 
-export async function getOnboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
-  const res = await fetch('/onboarding/complete', {
+export async function getOnboardingComplete(baseUrl: string): Promise<import('./types').OnboardingCompleteDto> {
+  const res = await fetch(`${baseUrl}/onboarding/complete`, {
     credentials: 'include'
   });
   if (!res.ok) throw new Error(`complete failed: ${res.status}`);
