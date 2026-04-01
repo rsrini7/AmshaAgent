@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -55,10 +56,13 @@ public class CheckpointApprovalServiceTest {
     }
 
     @Test
-    void test_approveTool_noOpWhenNoCheckpoint() {
+    void test_approveTool_throwsWhenNoCheckpoint() {
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.empty());
 
-        checkpointApprovalService.approveTool("s1", "github", "test");
+        Assertions.assertThrows(
+            CheckpointResolutionException.class, 
+            () -> checkpointApprovalService.approveTool("s1", "github", "test")
+        );
 
         verify(agentStore, never()).updateBatchToolDecision(any(), any(), any(), any());
         verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
@@ -69,7 +73,7 @@ public class CheckpointApprovalServiceTest {
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
-        cp.setPendingToolName("parallel:github,sandboxexec");
+        cp.setPendingToolName("parallel|github,sandboxexec");
         cp.setBatchToolDecisions("{\"github\":\"PENDING\",\"sandboxexec\":\"PENDING\"}");
         
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));

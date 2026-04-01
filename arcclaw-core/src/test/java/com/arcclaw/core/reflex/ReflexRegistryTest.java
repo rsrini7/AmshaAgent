@@ -182,7 +182,7 @@ class ReflexRegistryTest {
 
     @Test
     void testDenyReflexWithNoPendingApproval() {
-        when(statefulAgentStore.load(anyString(), anyString()))
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
                 .thenReturn(Optional.empty());
 
         ReflexResult result = reflexRegistry.processIfReflex(
@@ -198,7 +198,7 @@ class ReflexRegistryTest {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setSessionId("session-deny");
         cp.setAgentRole("coordinator");
-        when(statefulAgentStore.load("session-deny", "coordinator"))
+        when(statefulAgentStore.findLatestAwaitingApproval("session-deny"))
                 .thenReturn(Optional.of(cp));
 
         reflexRegistry.processIfReflex("session-deny", "user-1","chat-1", "/deny", createContext("/deny"));
