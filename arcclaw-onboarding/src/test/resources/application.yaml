@@ -10,6 +10,8 @@ arcclaw:
       bot-token: "test-bot-token"
   cron:
     max-lookback-window: PT999H
+  mcp:
+    server-enabled: false
 quarkus:
   langchain4j:
     openai:
@@ -22,6 +24,13 @@ quarkus:
   thread-pool:
     shutdown-timeout: 3
     shutdown-interrupt-timeout: 2
+  transaction-manager:
+    enable-recovery: false
+    default-transaction-timeout: 10
+  narayana-jta:
+    transaction-status-manager-enable: false
+  shutdown:
+    timeout: 5S
   scheduler:
     enabled: false
   datasource:
