@@ -49,6 +49,17 @@ export class ArcShell extends LitElement {
         window.location.hash = '#/onboarding';
       }
     });
+
+    const storedKey = localStorage.getItem('arc-api-key');
+    if (storedKey) {
+      this._client = new ArcClient('/api/v1', storedKey);
+      this.updateComplete.then(() => {
+        this._fetchAgents();
+        this._fetchApprovals();
+        this._startSse();
+        this._startPolling();
+      });
+    }
   }
 
   disconnectedCallback() {

@@ -11,7 +11,7 @@ export class ArcClient {
       'Content-Type': 'application/json',
     };
     if (this.apiKey) {
-      h['X-ArcClaw-API-Key'] = this.apiKey;
+      h['X-ARCCLAW-API-KEY'] = this.apiKey;
     }
     return h;
   }
