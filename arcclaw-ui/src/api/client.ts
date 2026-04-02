@@ -76,7 +76,10 @@ export class ArcClient {
         headers: body ? { 'Content-Type': 'application/json' } : {},
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!res.ok) throw new Error(`step${step} failed: ${res.status}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Step ${step} failed: ${res.status}`);
+      }
       return res.json();
     }
 
