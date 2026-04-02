@@ -213,13 +213,15 @@ public class CommandDispatchHandler implements MessageHandler {
         }
 
         if(result != null){
-            result.commandResponse().ifPresent(response ->
+            result.commandResponse().ifPresent(response -> {
+                if (response.isBlank()) return;
                 channelPluginRegistry.find(context.getChannelType())
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
                         s -> s.sendRaw(context.getUser(), response),
                         () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                    )
+                    );
+                }
             );
         }
     }

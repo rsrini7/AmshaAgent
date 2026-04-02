@@ -112,7 +112,7 @@ public class DenyReflex implements AgentReflex {
                         } else {
                             checkpointApprovalService.denyAll(sessionId, "CLI deny");
                         }
-                        return "🚫 Execution denied. The agent's task has been terminated.";
+                        return "";
                     } catch (CheckpointResolutionException e) {
                         return "No pending denial found for this session.";
                     }

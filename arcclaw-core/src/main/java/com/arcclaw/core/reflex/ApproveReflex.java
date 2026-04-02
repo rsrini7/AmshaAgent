@@ -154,7 +154,7 @@ public class ApproveReflex implements AgentReflex {
                         } else {
                             checkpointApprovalService.approveAll(sessionId, "CLI approve");
                         }
-                        return "✅ Approval processed.";
+                        return "";
                     } catch (CheckpointResolutionException e) {
                         return "No pending approval found for this session.";
                     }
@@ -211,7 +211,7 @@ public class ApproveReflex implements AgentReflex {
 
         try {
             checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
-            return "✅ Tool '" + toolName + "' approval processed.";
+            return "";
         } catch (CheckpointResolutionException e) {
             return "No pending approval found for this session.";
         }
