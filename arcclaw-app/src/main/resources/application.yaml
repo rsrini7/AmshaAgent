@@ -4,13 +4,6 @@
 # =============================================================================
 
 quarkus:
-
-  http:
-    cors: true
-    cors.origins: http://localhost:3000
-    cors.headers: X-ARCCLAW-API-KEY,Content-Type
-    cors.methods: GET,POST,PATCH,DELETE,OPTIONS
-
   vertx:
     prefer-native-transport: true
     use-async-dns: true
@@ -59,7 +52,7 @@ quarkus:
     cors:
       enabled: true
       origins: "${ARCCLAW_CORS_ORIGINS:http://localhost:3000,http://localhost:8080}"
-      headers: "X-ArcClaw-API-Key,Content-Type,Accept"
+      headers: "X-ArcClaw-API-Key,X-ARCCLAW-API-KEY,Content-Type,Accept"
       methods: "GET,POST,PATCH,DELETE,OPTIONS"
     limits:
       max-body-size: 10M
