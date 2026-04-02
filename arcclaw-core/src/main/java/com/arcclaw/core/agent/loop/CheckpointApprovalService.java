@@ -2,13 +2,12 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
@@ -23,7 +22,6 @@ public class CheckpointApprovalService {
     @Inject StatefulAgentStore agentStore;
     @Inject CheckpointResumeHandler resumeHandler;
     @Inject ObjectMapper objectMapper;
-    @Inject AsyncPersistenceEngine asyncEngine;
 
     @Transactional
     public void approveTool(String sessionId, String toolName, String reason) {
@@ -34,13 +32,6 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "APPROVED");
         log.infof("Approved tool %s for session %s reason: %s", toolName, sessionId, reason);
-        asyncEngine.persistAndWait(cp)
-                   .orTimeout(5, TimeUnit.SECONDS)
-                   .exceptionally(ex -> {
-                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
-                       return null;
-                   })
-                   .join();
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
         if (allDecided) {
@@ -57,13 +48,6 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "DENIED");
         log.infof("Denied tool %s for session %s reason: %s", toolName, sessionId, reason);
-        asyncEngine.persistAndWait(cp)
-                   .orTimeout(5, TimeUnit.SECONDS)
-                   .exceptionally(ex -> {
-                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
-                       return null;
-                   })
-                   .join();
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
         if (allDecided) {
@@ -92,17 +76,6 @@ public class CheckpointApprovalService {
             }
         }
         
-        // Reload fresh state after all decisions are written
-        cp = agentStore.findLatestAwaitingApproval(sessionId)
-                       .orElse(cp);
-                       
-        asyncEngine.persistAndWait(cp)
-                   .orTimeout(5, TimeUnit.SECONDS)
-                   .exceptionally(ex -> {
-                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
-                       return null;
-                   })
-                   .join();
         log.infof("Approved ALL tools for session %s reason: %s", sessionId, reason);
         resumeCheckpoint(cp);
     }
@@ -128,17 +101,6 @@ public class CheckpointApprovalService {
             }
         }
         
-        // Reload fresh state after all decisions are written
-        cp = agentStore.findLatestAwaitingApproval(sessionId)
-                       .orElse(cp);
-                       
-        asyncEngine.persistAndWait(cp)
-                   .orTimeout(5, TimeUnit.SECONDS)
-                   .exceptionally(ex -> {
-                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
-                       return null;
-                   })
-                   .join();
         log.infof("Denied ALL tools for session %s reason: %s", sessionId, reason);
         resumeCheckpoint(cp);
     }

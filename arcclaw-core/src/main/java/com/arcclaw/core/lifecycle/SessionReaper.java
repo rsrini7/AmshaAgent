@@ -133,17 +133,8 @@ public class SessionReaper {
                 .getResultList();
 
         if (!approvalZombies.isEmpty()) {
-            log.warnf("Zombie recovery: found %d orphaned AWAITING_APPROVAL checkpoint(s) — marking FAILED",
+            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — leaving as-is",
                     approvalZombies.size());
-            Instant now = Instant.now();
-            for (var checkpoint : approvalZombies) {
-                checkpoint.setStatus(CheckpointStatus.FAILED);
-                checkpoint.setFailedAt(now);
-                checkpoint.setFailReason("JVM crash recovery: approval was pending at shutdown");
-                em.merge(checkpoint);
-                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                        checkpoint.getId(), checkpoint.getSessionId(), checkpoint.getAgentRole());
-            }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
         }
