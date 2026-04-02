@@ -43,25 +43,49 @@
       opacity: 0.025;
       background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)"/></svg>');
     }
-    /* Theme toggle button */
+    /* Utility and Theme Rail */
+    #app-utility-rail {
+      position: fixed;
+      top: 14px;
+      right: 16px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    #app-utility-rail > * {
+      pointer-events: auto;
+    }
+
     #theme-toggle {
-      position: fixed; top: 14px; right: 16px; z-index: 1000;
-      width: 36px; height: 36px;
+      width: 40px;
+      height: 40px;
       border: 1px solid var(--border);
       border-radius: var(--radius-full);
       background: var(--bg-elevated);
       color: var(--text-muted);
       cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: background var(--transition), color var(--transition),
-                  border-color var(--transition), box-shadow var(--transition);
-      backdrop-filter: blur(8px);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition:
+        background var(--transition),
+        color var(--transition),
+        border-color var(--transition),
+        box-shadow var(--transition),
+        transform var(--transition);
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow-sm);
     }
+
     #theme-toggle:hover {
       background: var(--accent-subtle);
       color: var(--accent);
       border-color: var(--border-focus);
       box-shadow: 0 0 0 3px var(--accent-glow);
+      transform: translateY(-1px);
     }
     #theme-toggle svg { pointer-events: none; }
   </style>
@@ -77,18 +101,20 @@
   </script>
 </head>
 <body>
-  <button id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark">
-    <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24"
-         fill="none" stroke="currentColor" stroke-width="2" display="none">
-      <circle cx="12" cy="12" r="5"/>
-      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42
-               M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-    </svg>
-    <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24"
-         fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-    </svg>
-  </button>
+  <div id="app-utility-rail" aria-hidden="false">
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark">
+      <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2" display="none">
+        <circle cx="12" cy="12" r="5"/>
+        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42
+                 M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>
+      <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
   <arc-shell></arc-shell>
   <script type="module" src="/src/main.ts"></script>
   <script>

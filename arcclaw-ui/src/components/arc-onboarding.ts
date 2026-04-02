@@ -247,7 +247,6 @@ export class ArcOnboarding extends LitElement {
     margin-top: 1px;
   }
 
-  /* ── Input fields ─────────────────────────────────────── */
   .field-input, .field-textarea, .field-select {
     width: 100%;
     padding: var(--space-3) var(--space-4);
@@ -261,6 +260,58 @@ export class ArcOnboarding extends LitElement {
                 background var(--transition);
     outline: none;
     -webkit-appearance: none;
+  }
+
+  .input-shell {
+    position: relative;
+    width: 100%;
+  }
+
+  .input-shell .field-input {
+    width: 100%;
+    padding-right: 4.25rem !important;
+  }
+
+  .input-trailing-btn {
+    position: absolute;
+    top: 50%;
+    right: 0.75rem;
+    transform: translateY(-50%);
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      color var(--transition),
+      border-color var(--transition),
+      background var(--transition),
+      box-shadow var(--transition);
+    backdrop-filter: blur(8px);
+  }
+
+  .input-trailing-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .input-trailing-btn:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .input-trailing-btn svg {
+    width: 1rem;
+    height: 1rem;
+    pointer-events: none;
   }
 
   .field-input:focus, .field-textarea:focus, .field-select:focus {
@@ -740,11 +791,11 @@ export class ArcOnboarding extends LitElement {
         <input
           class="field-input"
           type="text"
-          placeholder="${this._provider === 'groq' ? 'llama-3.1-8b-instant' :
+          placeholder="${this._provider === 'groq' ? 'meta-llama/llama-4-scout-17b-16e-instruct' :
                          this._provider === 'openai' ? 'gpt-4o-mini' :
                          this._provider === 'ollama' ? 'llama3.2' :
                          this._provider === 'anthropic' ? 'claude-haiku-4-5' :
-                         this._provider === 'openrouter' ? 'google/gemini-2.0-flash-001' :
+                         this._provider === 'openrouter' ? 'openrouter/free' :
                          'claude-sonnet-4-5'}"
           .value="${this._model}"
           @input="${(e:any) => this._model = e.target.value}"
@@ -778,7 +829,7 @@ export class ArcOnboarding extends LitElement {
           ${this._provider} API Key
         </label>
 
-        <div style="position:relative">
+        <div class="input-shell">
           <input
             id="api-key-input"
             class="field-input"
@@ -790,23 +841,17 @@ export class ArcOnboarding extends LitElement {
             @input="${(e: any) => this._apiKey = e.target.value}"
             @keydown="${(e: KeyboardEvent) =>
               e.key === 'Enter' && this._validateKey()}"
-            style="padding-right: var(--space-12);
-                   font-family: 'Courier New', monospace;
+            style="font-family: 'Courier New', monospace;
                    letter-spacing: 0.04em"
           />
-          <!-- show/hide toggle -->
           <button
             type="button"
+            class="input-trailing-btn"
             @click="${(e: Event) => {
               const inp = (e.currentTarget as HTMLElement)
                 .previousElementSibling as HTMLInputElement;
               inp.type = inp.type === 'password' ? 'text' : 'password';
             }}"
-            style="position:absolute; right:12px; top:50%;
-                   transform:translateY(-50%);
-                   background:none; border:none; cursor:pointer;
-                   color:var(--text-muted); padding:4px;
-                   transition:color var(--transition)"
             aria-label="Toggle key visibility"
           >
             <svg width="16" height="16" viewBox="0 0 24 24"

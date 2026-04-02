@@ -37,6 +37,72 @@ export class ArcShell extends LitElement {
       position: relative; 
     }
     .content-area { flex: 1; min-height: 0; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 64px;
+      padding: 0 1.5rem;
+      padding-right: 5.5rem; /* reserves space for fixed theme toggle */
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--bg-base);
+      z-index: 10;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+      flex-shrink: 0;
+    }
+
+    .connection-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.625rem;
+      max-width: min(420px, calc(100vw - 180px));
+      padding: 0.5rem 0.875rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
+      color: var(--text-muted);
+      font-size: var(--font-size-sm);
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      backdrop-filter: blur(10px);
+    }
+
+    .connection-pill .status-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 999px;
+      background: var(--accent-secondary);
+      box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 900px) {
+      .topbar {
+        padding-right: 4.75rem;
+      }
+
+      .connection-pill {
+        max-width: 220px;
+        font-size: var(--font-size-xs);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .connection-pill {
+        display: none;
+      }
+    }
   `;
 
   constructor() {
@@ -191,6 +257,23 @@ export class ArcShell extends LitElement {
       >
         ${this._apiKey ? html`<arc-nav .route="${this._route}" .sseStatus="${this._sseStatus}"></arc-nav>` : ''}
         <main>
+          ${this._apiKey ? html`
+            <header class="topbar">
+              <div style="font-weight: 600; font-size: 0.9rem;">
+                ${this._route === '#/chat' ? 'Chat Session' : 
+                  this._route === '#/agents' ? 'Agent Status' :
+                  this._route === '#/hitl' ? 'Approvals' :
+                  this._route === '#/skills' ? 'Skills' :
+                  this._route === '#/settings' ? 'Settings' : ''}
+              </div>
+              <div class="topbar-right">
+                <div class="connection-pill">
+                  <div class="status-dot" style="background: ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : 'var(--text-muted)'}"></div>
+                  Connected to ArcClaw Agent Cluster
+                </div>
+              </div>
+            </header>
+          ` : nothing}
           ${this._renderRoute()}
         </main>
       </div>

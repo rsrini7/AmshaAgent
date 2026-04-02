@@ -287,16 +287,6 @@ export class ArcChatInterface extends LitElement {
 
   render() {
     return html`
-      <header class="chat-header">
-        <div class="header-title">Chat Session</div>
-        <div class="cluster-status">
-          Connected to ArcClaw Agent Cluster
-          <div class="status-badge">
-             <div class="pulse-dot"></div> Live
-          </div>
-        </div>
-      </header>
-      
       <div class="messages">
         ${this._messages.map(m => m.role === 'system' ? html`
           <div class="msg-group msg-group-system">
