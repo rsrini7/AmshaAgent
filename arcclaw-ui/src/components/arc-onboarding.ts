@@ -834,7 +834,9 @@ export class ArcOnboarding extends LitElement {
             @keydown="${(e: KeyboardEvent) =>
               e.key === 'Enter' && this._validateKey()}"
             style="font-family: 'Courier New', monospace;
-                   letter-spacing: 0.04em"
+                   letter-spacing: 0.04em;
+                   padding-right: 5.5rem !important;
+                   box-sizing: border-box !important;"
           />
           <button
             type="button"
