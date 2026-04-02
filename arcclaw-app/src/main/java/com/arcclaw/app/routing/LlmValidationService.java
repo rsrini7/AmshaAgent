@@ -37,6 +37,7 @@ public class LlmValidationService implements LlmValidationGateway {
                 case "groq"      -> "https://api.groq.com/openai/v1";
                 case "openai"    -> "https://api.openai.com/v1";
                 case "anthropic" -> "https://api.anthropic.com";
+                case "openrouter"-> "https://openrouter.ai/api/v1";
                 case "ollama"    -> "http://localhost:11434";
                 default          -> "";
             };

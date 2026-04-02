@@ -28,11 +28,12 @@ export class ArcOnboarding extends LitElement {
   @state() private _validationOk = false;
 
   private readonly DEFAULT_MODELS: Record<string, string> = {
-    groq: 'llama-3.1-8b-instant',
+    groq: 'meta-llama/llama-4-scout-17b-16e-instruct',
     openai: 'gpt-4o-mini',
     ollama: 'llama3.2',
     anthropic: 'claude-haiku-4-5',
     'claude-code': 'claude-sonnet-4-5',
+    openrouter: 'openrouter/free',
   };
 
   static styles = css`
@@ -708,6 +709,7 @@ export class ArcOnboarding extends LitElement {
       { id:'ollama',      name:'Ollama',       tag:'Local / private', icon:'🦙', color:'#666' },
       { id:'anthropic',   name:'Anthropic',    tag:'Claude series',   icon:'A',  color:'#cc785c' },
       { id:'claude-code', name:'Claude Code',  tag:'CLI tool',        icon:'C',  color:'#8b5cf6' },
+      { id:'openrouter',  name:'OpenRouter',   tag:'Unified API',     icon:'R',  color:'#6561f5' },
     ];
     return html`
       <span class="field-label">Provider</span>
@@ -742,6 +744,7 @@ export class ArcOnboarding extends LitElement {
                          this._provider === 'openai' ? 'gpt-4o-mini' :
                          this._provider === 'ollama' ? 'llama3.2' :
                          this._provider === 'anthropic' ? 'claude-haiku-4-5' :
+                         this._provider === 'openrouter' ? 'google/gemini-2.0-flash-001' :
                          'claude-sonnet-4-5'}"
           .value="${this._model}"
           @input="${(e:any) => this._model = e.target.value}"

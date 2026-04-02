@@ -69,11 +69,12 @@ public class OnboardingResource {
     String internalApiKey;
 
     private static final Map<String, String> DEFAULT_MODELS = Map.of(
-        "groq",        "llama-3.1-8b-instant",
+        "groq",        "meta-llama/llama-4-scout-17b-16e-instruct",
         "openai",      "gpt-4o-mini",
         "ollama",      "llama3.2",
         "anthropic",   "claude-haiku-4-5",
-        "claude-code", "claude-sonnet-4-5"
+        "claude-code", "claude-sonnet-4-5",
+        "openrouter",  "openrouter/free"
     );
 
     @GET @Path("/status")
