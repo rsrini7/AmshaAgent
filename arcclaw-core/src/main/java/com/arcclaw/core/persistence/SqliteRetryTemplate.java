@@ -1,6 +1,7 @@
 package com.arcclaw.core.persistence;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.ThreadLocalRandom;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -18,18 +19,25 @@ public class SqliteRetryTemplate {
             try {
                 return action.call();
             } catch (Exception e) {
-                if (!SqliteErrorStrings.isBusy(e)) throw e;   // not a BUSY error — rethrow immediately
+                if (!SqliteErrorStrings.isBusy(e)) throw e; // not BUSY — rethrow immediately
                 lastException = e;
+
+                // Exponential backoff: base * 2^attempt + random jitter (0–50ms)
+                // Prevents retry stampede when multiple threads fail at same time
+                long delay = (backoffMs * (1L << attempt))
+                           + ThreadLocalRandom.current().nextLong(0, 50);
+
                 log.warnf("SQLite BUSY on [%s], attempt %d/%d — retrying in %dms",
-                          operationName, attempt, maxAttempts, backoffMs);
+                          operationName, attempt, maxAttempts, delay);
+
                 if (attempt < maxAttempts) {
-                    long delay = backoffMs * (1L << attempt); // Exponential backoff: base * 2^attempt
                     Thread.sleep(delay);
                 }
             }
         }
-        throw new RuntimeException("SQLite BUSY after " + maxAttempts + " attempts on [" + operationName + "]",
-                                   lastException);
+        throw new RuntimeException(
+            "SQLite BUSY after " + maxAttempts + " attempts on [" + operationName + "]",
+            lastException);
     }
 
     public void executeVoid(String operationName, int maxAttempts, long backoffMs,
