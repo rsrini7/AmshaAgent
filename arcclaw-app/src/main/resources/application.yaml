@@ -7,9 +7,10 @@ quarkus:
 
   vertx:
     prefer-native-transport: true
+    use-async-dns: true
     resolver:
-      cache-max-ttl: 300
-      cache-negative-ttl: 0
+      cache-max-time-to-live: 300
+      cache-negative-time-to-live: 0
 
   application:
     name: arcclaw
