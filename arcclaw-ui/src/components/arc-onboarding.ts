@@ -249,7 +249,11 @@ export class ArcOnboarding extends LitElement {
 
   .field-input, .field-textarea, .field-select {
     width: 100%;
-    padding: var(--space-3) var(--space-4);
+    box-sizing: border-box;
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
     background: var(--bg-elevated);
     border: 1.5px solid var(--border);
     border-radius: var(--radius-md);
@@ -262,55 +266,43 @@ export class ArcOnboarding extends LitElement {
     -webkit-appearance: none;
   }
 
-  .input-shell {
+  .api-key-field {
     position: relative;
     width: 100%;
   }
 
-  .input-shell .field-input {
-    width: 100%;
-    padding-right: 4.25rem !important;
+  .field-input.has-trailing-action {
+    padding-right: 5.5rem !important;
   }
 
-  .input-trailing-btn {
+  .field-action-btn {
     position: absolute;
     top: 50%;
-    right: 0.75rem;
+    right: 0.875rem;
     transform: translateY(-50%);
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 3rem;
+    height: 3rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+    border: 0;
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
     color: var(--text-muted);
+    z-index: 2;
     cursor: pointer;
-    transition:
-      color var(--transition),
-      border-color var(--transition),
-      background var(--transition),
-      box-shadow var(--transition);
-    backdrop-filter: blur(8px);
+    flex-shrink: 0;
+    transition: color var(--transition), background var(--transition), box-shadow var(--transition);
   }
 
-  .input-trailing-btn:hover {
+  .field-action-btn:hover {
     color: var(--text-primary);
-    border-color: var(--accent);
     background: var(--accent-subtle);
-    box-shadow: 0 0 0 3px var(--accent-glow);
   }
 
-  .input-trailing-btn:focus-visible {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-  }
-
-  .input-trailing-btn svg {
-    width: 1rem;
-    height: 1rem;
+  .field-action-btn svg {
+    width: 1.1rem;
+    height: 1.1rem;
     pointer-events: none;
   }
 
@@ -829,10 +821,10 @@ export class ArcOnboarding extends LitElement {
           ${this._provider} API Key
         </label>
 
-        <div class="input-shell">
+        <div class="api-key-field">
           <input
             id="api-key-input"
-            class="field-input"
+            class="field-input has-trailing-action"
             type="password"
             autocomplete="off"
             spellcheck="false"
@@ -846,7 +838,7 @@ export class ArcOnboarding extends LitElement {
           />
           <button
             type="button"
-            class="input-trailing-btn"
+            class="field-action-btn"
             @click="${(e: Event) => {
               const inp = (e.currentTarget as HTMLElement)
                 .previousElementSibling as HTMLInputElement;
