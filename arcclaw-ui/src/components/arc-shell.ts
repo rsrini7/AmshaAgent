@@ -10,6 +10,7 @@ import './arc-chat-interface';
 import './arc-agent-status';
 import './arc-hitl-panel';
 import './arc-skills-panel';
+import './arc-settings';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
@@ -171,6 +172,8 @@ export class ArcShell extends LitElement {
         return html`<arc-hitl-panel class="content-area" .apiKey="${this._apiKey}" .approvals="${this._pendingApprovals}"></arc-hitl-panel>`;
       case '#/skills':
         return html`<arc-skills-panel class="content-area" .apiKey="${this._apiKey}"></arc-skills-panel>`;
+      case '#/settings':
+        return html`<arc-settings class="content-area" .apiKey="${this._apiKey}"></arc-settings>`;
       case '#/onboarding':
       default:
         return html`<arc-onboarding class="content-area"></arc-onboarding>`;

@@ -11,7 +11,7 @@ arcclaw:
   api:
     keys:
       internal: "key-internal-changeme"
-      ci-pipeline: "key-ci-changeme"
+      ci: "key-ci-changeme"
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
   channel:

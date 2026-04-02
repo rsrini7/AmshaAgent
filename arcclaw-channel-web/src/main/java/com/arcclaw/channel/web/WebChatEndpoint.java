@@ -44,7 +44,7 @@ public class WebChatEndpoint {
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalKey;
 
-    @ConfigProperty(name = "arcclaw.api.keys.ci-pipeline", defaultValue = "key-ci-changeme")
+    @ConfigProperty(name = "arcclaw.api.keys.ci", defaultValue = "key-ci-changeme")
     String ciKey;
 
     @OnOpen

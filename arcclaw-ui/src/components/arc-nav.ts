@@ -99,6 +99,9 @@ export class ArcNav extends LitElement {
         <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}">
           <span>🔧</span> Skills
         </a>
+        <a href="#/settings" class="${this.route === '#/settings' ? 'active' : ''}">
+          <span>⚙</span> Settings
+        </a>
       </div>
       <div class="footer">
         <arc-connection-badge .status="${this.sseStatus}"></arc-connection-badge>

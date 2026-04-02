@@ -94,3 +94,49 @@ export async function getOnboardingComplete(baseUrl: string): Promise<import('./
   if (!res.ok) throw new Error(`complete failed: ${res.status}`);
   return res.json();
 }
+
+export async function getSettings(apiKey: string) {
+  const res = await fetch('/settings', {
+    headers: { 'X-ARCCLAW-API-KEY': apiKey }
+  });
+  if (!res.ok) throw new Error(`settings ${res.status}`);
+  return res.json();
+}
+
+export async function patchProvider(apiKey: string, body: object) {
+  const res = await fetch('/settings/provider', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-ARCCLAW-API-KEY': apiKey
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `PATCH failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function patchPrompt(apiKey: string, prompt: string) {
+  const res = await fetch('/settings/prompt', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-ARCCLAW-API-KEY': apiKey
+    },
+    body: JSON.stringify({ systemPrompt: prompt })
+  });
+  if (!res.ok) throw new Error(`prompt update failed`);
+  return res.json();
+}
+
+export async function resetOnboarding(apiKey: string) {
+  const res = await fetch('/settings/reset', {
+    method: 'POST',
+    headers: { 'X-ARCCLAW-API-KEY': apiKey }
+  });
+  if (!res.ok) throw new Error(`reset failed`);
+  return res.json();
+}

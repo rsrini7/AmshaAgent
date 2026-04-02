@@ -76,4 +76,8 @@ public class OnboardingSessionRegistry {
     public void remove(String sessionId) {
         sessions.invalidate(sessionId);
     }
+
+    public void invalidateAll() {
+        sessions.invalidateAll();
+    }
 }

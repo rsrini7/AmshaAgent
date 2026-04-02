@@ -66,7 +66,7 @@ class SessionOwnershipIT {
 
     @Test
     void foreignKey_cannotRunAgainstAnotherKeysSession() {
-        // AUTH-15: ci-pipeline key must NOT be able to POST /run on internal's session
+        // AUTH-15: ci key must NOT be able to POST /run on internal's session
         given()
                 .header(API_KEY_HEADER, KEY_CI)
                 .contentType("application/json")
