@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -361,10 +362,9 @@ public class AsyncPersistenceEngine {
             } catch (Exception e) {
                 lastException = e;
                 if (isSqliteBusy(e)) {
-                    long backoff = BACKOFF_BASE_MS * attempt;
-                    log.warnf(
-                            "[AsyncPersistenceEngine] SQLite BUSY on attempt %d/%d for session=%s — retrying in %dms. Error: %s",
-                            attempt, MAX_RETRIES, event.getSessionId(), backoff, e.getMessage());
+                    long backoff = (BACKOFF_BASE_MS * (1L << attempt)) + ThreadLocalRandom.current().nextLong(0, 50);  // exponential + jitter
+                    log.warnf("[AsyncPersistenceEngine] SQLite BUSY on attempt %d/%d for session=%s — retrying in %dms. Error: %s", 
+                                    attempt, MAX_RETRIES, event.getSessionId(), backoff, e.getMessage());
                     sleepQuietly(backoff);
                 } else {
                     // Non-BUSY error — check if it's a shutdown race before logging as ERROR
