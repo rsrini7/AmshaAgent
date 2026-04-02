@@ -114,15 +114,25 @@ public class CheckpointApprovalService {
     }
     
     private void resumeCheckpoint(AgentCheckpoint cp) {
-        String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId();
-        String channelId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId();
-        String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
-        
+        // Reload fresh — cp may be stale from before updateBatchToolDecision committed
+        AgentCheckpoint fresh = agentStore.findLatestAwaitingApproval(cp.getSessionId())
+            .orElse(cp);
+
+        String userId = fresh.getChannelPlatformId() != null
+                    ? fresh.getChannelPlatformId() : fresh.getSessionId();
+        String channelId = fresh.getChannelPlatformId() != null
+                        ? fresh.getChannelPlatformId() : fresh.getSessionId();
+        String channelType = fresh.getChannelType() != null
+                        ? fresh.getChannelType() : "websocket";
+
+        log.debugf("resumeCheckpoint: session=%s channelType=%s channelId=%s",
+                fresh.getSessionId(), channelType, channelId);
+
         resumeHandler.resumeAfterBatchDecision(
-            cp.getSessionId(), cp.getAgentRole(), userId, channelId, channelType);
-        
-        agentSseService.publish(cp.getSessionId(), new AgentSseService.HitlEvent(
-            cp.getSessionId(), "RESUMED", null, null, null, Instant.now()
+            fresh.getSessionId(), fresh.getAgentRole(), userId, channelId, channelType);
+
+        agentSseService.publish(fresh.getSessionId(), new AgentSseService.HitlEvent(
+            fresh.getSessionId(), "RESUMED", null, null, null, Instant.now()
         ));
     }
 }
