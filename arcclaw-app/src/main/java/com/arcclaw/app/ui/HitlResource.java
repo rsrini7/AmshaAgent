@@ -24,6 +24,7 @@ import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
+import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped
 @Path("hitl")
@@ -38,6 +39,7 @@ public class HitlResource {
     @GET
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
         if (!apiKeyValidator.isValid(apiKey)) {
             return Multi.createFrom().failure(

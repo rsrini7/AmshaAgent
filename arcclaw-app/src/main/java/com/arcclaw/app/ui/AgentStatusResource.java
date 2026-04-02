@@ -19,6 +19,7 @@ import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.security.AutonomyLevel;
 import io.smallrye.mutiny.Multi;
+import org.jboss.resteasy.reactive.RestStreamElementType;
 
 /**
  * Provides a read-only view of current agent states for the Lit UI.
@@ -37,6 +38,7 @@ public class AgentStatusResource {
     @GET
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<AgentSseService.SseEvent> agentEvents(@QueryParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
         if (!apiKeyValidator.isValid(apiKey)) {
             return Multi.createFrom().failure(

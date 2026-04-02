@@ -158,7 +158,9 @@ export class ArcShell extends LitElement {
 
     es.onmessage = (e) => {
       try {
-        const data = JSON.parse(e.data);
+        const payload = typeof e.data === 'string' ? e.data.trim() : '';
+        if (!payload || (payload[0] !== '{' && payload[0] !== '[')) return;
+        const data = JSON.parse(payload);
         if (!data.type && !data.status) return; // heartbeat — ignore
         onEvent(data);
       } catch (err) {
