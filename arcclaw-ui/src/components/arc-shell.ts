@@ -111,10 +111,11 @@ export class ArcShell extends LitElement {
 
   private _startPolling() {
     this._stopPolling();
-    // Poll /hitl every 10 seconds
+    // Only poll as a fallback every 10 seconds if SSE is NOT healthy
     this._pollingInterval = window.setInterval(() => {
-      if (this._sseStatus === 'connected') {
+      if (this._sseStatus !== 'connected') {
         this._fetchApprovals();
+        this._fetchAgents();
       }
     }, 10000);
   }
@@ -133,10 +134,11 @@ export class ArcShell extends LitElement {
       this._apiKey,
       (event: AgentEvent) => {
         if (event.eventType === 'status_change') {
-          // Re-fetch all agents on any status change to ensure full state sync
+          // Re-fetch state immediately on any status change
           this._fetchAgents();
+          this._fetchApprovals();
         } else if (event.eventType === 'heartbeat') {
-          // Just confirms connection is alive, maybe update a timestamp if needed
+          // Just confirms connection is alive
         }
       },
       (status) => {
