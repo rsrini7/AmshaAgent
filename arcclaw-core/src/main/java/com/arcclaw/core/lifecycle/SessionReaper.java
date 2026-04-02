@@ -17,6 +17,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
@@ -49,32 +50,16 @@ public class SessionReaper {
 
     private volatile boolean shuttingDown = false;
 
-    @Inject
-    WorkspaceManager workspaceManager;
-
-    @Inject
-    EntityManager em;
-
-    @Inject
-    SessionHeartbeatTracker heartbeatTracker;
-
-    @Inject
-    Event<ApprovalDecisionEvent> decisionEvents;
-
-    @Inject
-    StatefulAgentStore agentStore;
-
-    @Inject
-    ObjectMapper objectMapper;
-
-    @Inject
-    SessionAuditSequencer auditSequencer;
-
-    @Inject
-    SqliteRetryTemplate retryTemplate;
-
-    @Inject
-    CompactionInFlightFlag compactionInFlight;
+    @Inject WorkspaceManager workspaceManager;
+    @Inject EntityManager em;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
+    @Inject Event<ApprovalDecisionEvent> decisionEvents;
+    @Inject StatefulAgentStore agentStore;
+    @Inject ObjectMapper objectMapper;
+    @Inject SessionAuditSequencer auditSequencer;
+    @Inject SqliteRetryTemplate retryTemplate;
+    @Inject CompactionInFlightFlag compactionInFlight;
+    @Inject AgentSseService agentSseService;   // ← NEW
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
@@ -102,7 +87,7 @@ public class SessionReaper {
     }
 
     private void doRecoverZombies() {
-        // 1. Recover IN_PROGRESS zombies
+        // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
                 AgentCheckpoint.class)
@@ -125,7 +110,7 @@ public class SessionReaper {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
 
-        // 2. Recover AWAITING_APPROVAL zombies
+        // 2. AWAITING_APPROVAL — leave alive, queue SSE replay for when UI connects
         List<AgentCheckpoint> approvalZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
                 AgentCheckpoint.class)
@@ -133,8 +118,21 @@ public class SessionReaper {
                 .getResultList();
 
         if (!approvalZombies.isEmpty()) {
-            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — leaving as-is",
+            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — leaving as-is, queuing SSE replay",
                     approvalZombies.size());
+            for (var checkpoint : approvalZombies) {
+                log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
+                        checkpoint.getId(),
+                        checkpoint.getSessionId(),
+                        checkpoint.getAgentRole(),
+                        checkpoint.getPendingToolName());
+                // Queue the event so UI gets it when it subscribes after restart
+                agentSseService.republishOnSubscribe(
+                    checkpoint.getSessionId(),
+                    checkpoint.getPendingToolName(),
+                    checkpoint.getPendingToolParametersJson()
+                );
+            }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
         }
@@ -206,7 +204,6 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.REQUIRED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
-        // Auto-deny all pending tools if it's a batch
         if (cp.hasBatchToolDecisions()) {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
                 agentStore.updateBatchToolDecision(
@@ -214,7 +211,6 @@ public class SessionReaper {
                     AgentSentinels.TOOL_DECISION_DENIED));
         }
 
-        // Reload to pick up the decisions written by REQUIRES_NEW transactions above
         AgentCheckpoint fresh = agentStore.load(cp.getSessionId(), cp.getAgentRole())
             .orElse(cp);
         fresh.setStatus(CheckpointStatus.FAILED);
@@ -222,7 +218,7 @@ public class SessionReaper {
         fresh.setFailReason("Approval timed out after " + hitlTimeoutHours + " hours.");
         em.merge(fresh);
 
-        // Notify user via channel event
+        // Notify channel
         decisionEvents.fireAsync(new ApprovalDecisionEvent(
             cp.getSessionId(),
             cp.getChannelType(),
@@ -231,6 +227,9 @@ public class SessionReaper {
             ApprovalDecision.REJECT,
             ApprovalOutcome.EXPIRED
         ));
+
+        // Clean up SSE
+        agentSseService.complete(cp.getSessionId());
 
         compactionInFlight.remove(cp.getSessionId());
         workspaceManager.terminateSession(cp.getSessionId());
