@@ -576,8 +576,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW) 
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
+        em.clear();
         Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return false;
 
