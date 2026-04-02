@@ -1,0 +1,1 @@
+\[ppl-ai-file-upload\.s3\.amazonaws\]\(https:[^)]+\)
