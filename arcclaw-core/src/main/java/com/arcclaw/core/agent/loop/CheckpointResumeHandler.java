@@ -88,11 +88,11 @@ public class CheckpointResumeHandler {
             ChannelUser user = new ChannelUser(
                 userId, chatId, "Operator", cType);
 
-            ChannelMessage msg = switch (cType.name()) {
-                case "DISCORD" -> new ChannelMessage.DiscordMessage(user, resumeGoal, chatId, chatId, Instant.now());
-                case "REST_API" -> new ChannelMessage.RestApiMessage(user, resumeGoal, chatId, Instant.now());
-                case "CLI" -> new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now());
-                case "WEBSOCKET" -> new ChannelMessage.WebSocketMessage(user, resumeGoal, chatId, Instant.now());
+            ChannelMessage msg = switch (cType.id()) {
+                case "discord" -> new ChannelMessage.DiscordMessage(user, resumeGoal, chatId, chatId, Instant.now());
+                case "rest_api" -> new ChannelMessage.RestApiMessage(user, resumeGoal, chatId, Instant.now());
+                case "cli" -> new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now());
+                case "websocket" -> new ChannelMessage.WebSocketMessage(user, resumeGoal, chatId, Instant.now());
                 default -> new ChannelMessage.TelegramMessage(user, resumeGoal, chatId, Instant.now());
             };
 
@@ -267,6 +267,7 @@ public class CheckpointResumeHandler {
             log.errorf("[PARALLEL-HITL-RESUME] session=%s: failed to parse batch: %s",
                        sessionId, e.getMessage());
             checkpoint.setStatus(CheckpointStatus.FAILED);
+            checkpoint.setFailReason("Failed to parse parallel tool batch: " + e.getMessage());
             agentStore.save(checkpoint);
             return AgentResult.failed(
                 "Failed to resume parallel tool batch — corrupt checkpoint.",

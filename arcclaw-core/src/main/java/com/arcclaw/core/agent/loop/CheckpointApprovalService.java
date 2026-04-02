@@ -31,10 +31,7 @@ public class CheckpointApprovalService {
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "APPROVED");
         log.infof("Approved tool %s for session %s reason: %s", toolName, sessionId, reason);
         if (agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole())) {
-            String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : sessionId;
-            String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
-            resumeHandler.resumeAfterBatchDecision(
-                sessionId, cp.getAgentRole(), userId, cp.getChannelPlatformId(), channelType);
+            resumeCheckpoint(cp);
         }
     }
 
@@ -48,10 +45,7 @@ public class CheckpointApprovalService {
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "DENIED");
         log.infof("Denied tool %s for session %s reason: %s", toolName, sessionId, reason);
         if (agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole())) {
-            String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : sessionId;
-            String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
-            resumeHandler.resumeAfterBatchDecision(
-                sessionId, cp.getAgentRole(), userId, cp.getChannelPlatformId(), channelType);
+            resumeCheckpoint(cp);
         }
     }
 
@@ -66,9 +60,7 @@ public class CheckpointApprovalService {
             agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, "APPROVED");
         }
         log.infof("Approved ALL tools for session %s reason: %s", sessionId, reason);
-        String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : sessionId;
-        String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
-        resumeHandler.resumeAfterBatchDecision(sessionId, cp.getAgentRole(), userId, cp.getChannelPlatformId(), channelType);
+        resumeCheckpoint(cp);
     }
 
     @Transactional
@@ -82,8 +74,15 @@ public class CheckpointApprovalService {
             agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, "DENIED");
         }
         log.infof("Denied ALL tools for session %s reason: %s", sessionId, reason);
-        String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : sessionId;
+        resumeCheckpoint(cp);
+    }
+    
+    private void resumeCheckpoint(AgentCheckpoint cp) {
+        String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId();
+        String channelId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId();
         String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
-        resumeHandler.resumeAfterBatchDecision(sessionId, cp.getAgentRole(), userId, cp.getChannelPlatformId(), channelType);
+        
+        resumeHandler.resumeAfterBatchDecision(
+            cp.getSessionId(), cp.getAgentRole(), userId, channelId, channelType);
     }
 }
