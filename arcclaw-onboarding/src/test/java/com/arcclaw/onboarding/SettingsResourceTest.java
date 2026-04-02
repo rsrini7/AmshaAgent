@@ -2,18 +2,18 @@ package com.arcclaw.onboarding;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.is;
-
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.InjectMock;
-import io.restassured.http.ContentType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.onboarding.dto.PromptUpdateRequest;
 import com.arcclaw.onboarding.dto.ProviderUpdateRequest;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
+import io.restassured.specification.RequestSpecification;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class SettingsResourceTest {
@@ -21,23 +21,47 @@ public class SettingsResourceTest {
     @InjectMock
     LlmValidationGateway llmValidationGateway;
 
+    private static final String API_KEY = "key-internal-changeme";
+
     @BeforeEach
     void setup() throws Exception {
         when(llmValidationGateway.validate(anyString(), anyString(), anyString())).thenReturn(true);
     }
 
+    private RequestSpecification givenAuth() {
+        return given()
+            .header("X-ArcClaw-API-Key", API_KEY);
+    }
+
     @Test
     void testGetSettings() {
-        given()
+        givenAuth()
           .when().get("/settings")
           .then()
              .statusCode(200);
     }
 
     @Test
+    void testGetPrompt() {
+        givenAuth()
+            .when().get("/settings/prompt")
+            .then()
+            .statusCode(200)
+            .body("systemPrompt", is(""));
+    }
+
+    @Test
+    void testUnauthorized() {
+        given()
+          .when().get("/settings")
+          .then()
+             .statusCode(401);
+    }
+
+    @Test
     void testPatchPrompt() {
         PromptUpdateRequest req = new PromptUpdateRequest("Test prompt");
-        given()
+        givenAuth()
           .contentType(ContentType.JSON)
           .body(req)
           .when().patch("/settings/prompt")
@@ -51,7 +75,7 @@ public class SettingsResourceTest {
         when(llmValidationGateway.validate(anyString(), anyString(), anyString())).thenReturn(false);
 
         ProviderUpdateRequest req = new ProviderUpdateRequest("openai", "gpt-4o", "bad-key");
-        given()
+        givenAuth()
           .contentType(ContentType.JSON)
           .body(req)
           .when().patch("/settings/provider")
@@ -61,7 +85,7 @@ public class SettingsResourceTest {
 
     @Test
     void testPostReset() {
-        given()
+        givenAuth()
           .when().post("/settings/reset")
           .then()
              .statusCode(200)

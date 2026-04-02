@@ -7,10 +7,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -36,15 +38,28 @@ public class SettingsResource {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
 
+    @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
+    String internalApiKey;
+
+    private void checkAuth(String key) {
+        if (key == null || !key.equals(internalApiKey)) {
+            throw new WebApplicationException(
+                Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Unauthorized: Invalid or missing API Key"))
+                    .build());
+        }
+    }
+
     @GET
-    public SettingsDto getSettings() {
+    public SettingsDto getSettings(@HeaderParam("X-ArcClaw-API-Key") String key) {
+        checkAuth(key);
         String provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, "");
         String model    = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
         String prompt   = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         boolean hasKey  = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
 
         String displayPrompt = prompt.length() > 200
-            ? prompt.substring(0, 200) + "…"
+            ? prompt.substring(0, 199) + "…"
             : prompt;
 
         return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion);
@@ -52,7 +67,8 @@ public class SettingsResource {
 
     @GET
     @Path("/prompt")
-    public Response getPrompt() {
+    public Response getPrompt(@HeaderParam("X-ArcClaw-API-Key") String key) {
+        checkAuth(key);
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         return Response.ok(Map.of("systemPrompt", prompt)).build();
     }
@@ -61,7 +77,8 @@ public class SettingsResource {
     @Path("/provider")
     @Consumes(MediaType.APPLICATION_JSON)
     @RunOnVirtualThread
-    public Response updateProvider(ProviderUpdateRequest req) {
+    public Response updateProvider(@HeaderParam("X-ArcClaw-API-Key") String key, ProviderUpdateRequest req) {
+        checkAuth(key);
         if (req.provider() == null || req.provider().isBlank()) {
             return Response.status(400)
                 .entity(Map.of("error", "provider is required")).build();
@@ -100,7 +117,8 @@ public class SettingsResource {
     @PATCH
     @Path("/prompt")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response updatePrompt(PromptUpdateRequest req) {
+    public Response updatePrompt(@HeaderParam("X-ArcClaw-API-Key") String key, PromptUpdateRequest req) {
+        checkAuth(key);
         if (req.systemPrompt() == null || req.systemPrompt().isBlank()) {
             return Response.status(400)
                 .entity(Map.of("error", "systemPrompt is required")).build();
@@ -111,7 +129,8 @@ public class SettingsResource {
 
     @POST
     @Path("/reset")
-    public Response reset() {
+    public Response reset(@HeaderParam("X-ArcClaw-API-Key") String key) {
+        checkAuth(key);
         registry.invalidateAll();
         return Response.ok(Map.of("reset", true,
             "message", "Onboarding sessions cleared. Refresh to re-run the wizard.")).build();

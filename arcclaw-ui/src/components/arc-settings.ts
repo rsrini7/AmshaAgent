@@ -206,7 +206,7 @@ export class ArcSettings extends LitElement {
         <input class="field-input" type="password" .value="${this._inputApiKey}" @input="${(e:any) => this._inputApiKey = e.target.value}" placeholder="sk-••••••••••••" autocomplete="new-password" />
 
         <div style="margin-top:var(--space-4)">
-          <button class="btn-primary" ?disabled="${this._loading}" @click="${this._saveProvider}">Validate & Save</button>
+          <button class="btn-primary" ?disabled="${this._loading}" @click="${() => this._saveProvider()}">Validate & Save</button>
         </div>
       </div>
     `;
@@ -218,7 +218,7 @@ export class ArcSettings extends LitElement {
         <span class="field-label">System Prompt</span>
         <textarea class="field-textarea" .value="${this._systemPrompt}" @input="${(e:any) => this._systemPrompt = e.target.value}"></textarea>
         <div style="margin-top:var(--space-4)">
-          <button class="btn-primary" ?disabled="${this._loading}" @click="${this._savePrompt}">Save Prompt</button>
+          <button class="btn-primary" ?disabled="${this._loading}" @click="${() => this._savePrompt()}">Save Prompt</button>
         </div>
       </div>
     `;
@@ -229,7 +229,7 @@ export class ArcSettings extends LitElement {
       <div class="section">
         <p style="color:var(--text-muted);font-size:var(--font-size-sm);line-height:1.5;">Resetting onboarding will clear your session and force you to re-run the wizard. Your existing API keys are not deleted until overwritten.</p>
         <div style="margin-top:var(--space-4)">
-          <button class="btn-danger" ?disabled="${this._loading}" @click="${this._reset}">Reset & Re-Onboard</button>
+          <button class="btn-danger" ?disabled="${this._loading}" @click="${() => this._reset()}">Reset & Re-Onboard</button>
         </div>
       </div>
     `;
