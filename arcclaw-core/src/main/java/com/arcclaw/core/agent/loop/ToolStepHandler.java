@@ -280,7 +280,8 @@ public class ToolStepHandler {
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
             return StepDecision.terminal(
-                    checkpointManager.persist(context, p.toolName(), p.paramsJson(), history));
+                    checkpointManager.persist(context, p.toolName(), p.paramsJson(), history,
+                                              context.channelType(), context.channelPlatformId()));
         }
         return null; // PROCEED
     }
@@ -294,7 +295,8 @@ public class ToolStepHandler {
         } catch (RequiresApprovalException e) {
             return new InvokeResult.ShortCircuit(StepDecision.terminal(
                     checkpointManager.persist(context,
-                        e.getToolName(), e.getToolParametersJson(), history)));
+                        e.getToolName(), e.getToolParametersJson(), history,
+                        context.channelType(), context.channelPlatformId())));
         }
     }
 

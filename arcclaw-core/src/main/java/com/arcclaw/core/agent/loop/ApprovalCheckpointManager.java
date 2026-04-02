@@ -71,9 +71,10 @@ public class ApprovalCheckpointManager {
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
 
-        // ← Stamp channel info BEFORE save so it's persisted atomically
-        if (channelType != null) cp.setChannelType(channelType);
-        if (channelPlatformId != null) cp.setChannelPlatformId(channelPlatformId);
+        if (context.hasChannelInfo()) {
+            cp.setChannelType(context.channelType());
+            cp.setChannelPlatformId(context.channelPlatformId());
+        }
 
         agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s " +
@@ -124,9 +125,10 @@ public class ApprovalCheckpointManager {
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
 
-        // ← Stamp channel info BEFORE save
-        if (channelType != null) cp.setChannelType(channelType);
-        if (channelPlatformId != null) cp.setChannelPlatformId(channelPlatformId);
+        if (context.hasChannelInfo()) {
+            cp.setChannelType(context.channelType());
+            cp.setChannelPlatformId(context.channelPlatformId());
+        }
 
         agentStore.save(cp);
 
@@ -181,9 +183,10 @@ public class ApprovalCheckpointManager {
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());
 
-        // ← Stamp channel info BEFORE save
-        if (channelType != null) cp.setChannelType(channelType);
-        if (channelPlatformId != null) cp.setChannelPlatformId(channelPlatformId);
+        if (context.hasChannelInfo()) {
+            cp.setChannelType(context.channelType());
+            cp.setChannelPlatformId(context.channelPlatformId());
+        }
 
         agentStore.save(cp);
 

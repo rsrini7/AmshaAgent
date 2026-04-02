@@ -51,7 +51,7 @@ class CheckpointResumeHandlerPreExecTest {
         String agentRole = "COORDINATOR";
         
         AgentExecutionContext context = new AgentExecutionContext(
-            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5);
+            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5, null, null);
 
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId(sessionId);

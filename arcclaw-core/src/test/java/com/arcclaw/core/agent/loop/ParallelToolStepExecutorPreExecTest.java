@@ -63,7 +63,7 @@ class ParallelToolStepExecutorPreExecTest {
         String agentRole = "COORDINATOR";
         
         AgentExecutionContext context = new AgentExecutionContext(
-            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5);
+            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5, null, null);
             
         var calls = List.of(
             new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true),
@@ -100,7 +100,9 @@ class ParallelToolStepExecutorPreExecTest {
             contains("safe_read"), // original contains both
             argThat(list -> list.size() == 1 && list.get(0).toolName().equals("unsafe_write")),
             contains("pre-exec-data"),
-            anyList()
+            anyList(),
+            any(),
+            any()
         );
     }
 }

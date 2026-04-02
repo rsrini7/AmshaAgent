@@ -77,7 +77,7 @@ class CheckpointResumeHandlerTest {
     @Test
     void testReturnsNullOnNonResumptionGoal() {
         MessageContext ctx = createContext("some normal goal", false);
-        AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", "some normal goal", AutonomyLevel.FULL, 5);
+        AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", "some normal goal", AutonomyLevel.FULL, 5, null, null);
         AgentResult result = handler.handle(context, new ArrayList<>(), ctx);
         assertNull(result);
     }
@@ -94,7 +94,7 @@ class CheckpointResumeHandlerTest {
         when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
 
         MessageContext ctx = createContext(AgentSentinels.GOAL_DENY_APPROVED, true);
-        AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_DENY_APPROVED, AutonomyLevel.FULL, 5);
+        AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_DENY_APPROVED, AutonomyLevel.FULL, 5, null, null);
         AgentResult result = handler.handle(context, new ArrayList<>(), ctx);
 
         assertNotNull(result);
@@ -122,7 +122,7 @@ class CheckpointResumeHandlerTest {
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_RESUME_APPROVED, AutonomyLevel.FULL, 5);
+            AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_RESUME_APPROVED, AutonomyLevel.FULL, 5, null, null);
             AgentResult result = handler.handle(context, history, ctx);
 
             assertNull(result); // Null means continue loop
@@ -152,7 +152,7 @@ class CheckpointResumeHandlerTest {
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_RESUME_APPROVED, AutonomyLevel.FULL, 5);
+            AgentExecutionContext context = new AgentExecutionContext("session", "user", "chat", "coordinator", AgentSentinels.GOAL_RESUME_APPROVED, AutonomyLevel.FULL, 5, null, null);
             AgentResult result = handler.handle(context, history, ctx);
 
             assertNotNull(result);

@@ -345,7 +345,8 @@ public class ParallelToolStepExecutor {
         if (split.preExecutable().isEmpty()) {
             return StepDecision.terminal(
                 checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, history));
+                    context, compositeName, originalBatchJson, calls, history,
+                    context.channelType(), context.channelPlatformId()));
         }
 
         // Pre-execute the safe tools now (§7.30)
@@ -383,13 +384,15 @@ public class ParallelToolStepExecutor {
         } catch (Exception e) {
             log.errorf("Failed to serialize pre-executed results: %s", e.getMessage());
             return StepDecision.terminal(checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, history));
+                    context, compositeName, originalBatchJson, calls, history,
+                    context.channelType(), context.channelPlatformId()));
         }
 
         return StepDecision.terminal(
             checkpointManager.persistBatchWithPreExecuted(
                 context, hitlCompositeName, originalBatchJson,
-                split.hitlPending(), preResultsJson, history));
+                split.hitlPending(), preResultsJson, history,
+                context.channelType(), context.channelPlatformId()));
     }
 
     private ToolResponse invokeTool(ParallelToolCall call, String sessionId) {

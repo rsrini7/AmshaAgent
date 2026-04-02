@@ -228,6 +228,9 @@ public class AgentLoop {
                 }
             }
 
+            String channelType = context != null && context.getUser() != null ? context.getUser().channel().name() : null;
+            String channelPlatformId = context != null && context.getUser() != null ? context.getUser().platformId() : null;
+
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,  // reuse already-captured value
@@ -235,7 +238,9 @@ public class AgentLoop {
                     canonicalRole,
                     goal,
                     WorkspaceContext.autonomy(),
-                    maxIterations
+                    maxIterations,
+                    channelType,
+                    channelPlatformId
             );
 
             AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);
