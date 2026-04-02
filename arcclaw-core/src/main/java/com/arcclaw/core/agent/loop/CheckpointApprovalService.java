@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -33,7 +34,13 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "APPROVED");
         log.infof("Approved tool %s for session %s reason: %s", toolName, sessionId, reason);
-        asyncEngine.persistAndWait(cp).join();
+        asyncEngine.persistAndWait(cp)
+                   .orTimeout(5, TimeUnit.SECONDS)
+                   .exceptionally(ex -> {
+                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
+                       return null;
+                   })
+                   .join();
         if (agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole())) {
             resumeCheckpoint(cp);
         }
@@ -48,7 +55,13 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "DENIED");
         log.infof("Denied tool %s for session %s reason: %s", toolName, sessionId, reason);
-        asyncEngine.persistAndWait(cp).join();
+        asyncEngine.persistAndWait(cp)
+                   .orTimeout(5, TimeUnit.SECONDS)
+                   .exceptionally(ex -> {
+                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
+                       return null;
+                   })
+                   .join();
         if (agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole())) {
             resumeCheckpoint(cp);
         }
@@ -74,7 +87,18 @@ public class CheckpointApprovalService {
                 }
             }
         }
-        asyncEngine.persistAndWait(cp).join();
+        
+        // Reload fresh state after all decisions are written
+        cp = agentStore.findLatestAwaitingApproval(sessionId)
+                       .orElse(cp);
+                       
+        asyncEngine.persistAndWait(cp)
+                   .orTimeout(5, TimeUnit.SECONDS)
+                   .exceptionally(ex -> {
+                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
+                       return null;
+                   })
+                   .join();
         log.infof("Approved ALL tools for session %s reason: %s", sessionId, reason);
         resumeCheckpoint(cp);
     }
@@ -99,7 +123,18 @@ public class CheckpointApprovalService {
                 }
             }
         }
-        asyncEngine.persistAndWait(cp).join();
+        
+        // Reload fresh state after all decisions are written
+        cp = agentStore.findLatestAwaitingApproval(sessionId)
+                       .orElse(cp);
+                       
+        asyncEngine.persistAndWait(cp)
+                   .orTimeout(5, TimeUnit.SECONDS)
+                   .exceptionally(ex -> {
+                       log.errorf(ex, "persistAndWait timed out or failed for session %s", sessionId);
+                       return null;
+                   })
+                   .join();
         log.infof("Denied ALL tools for session %s reason: %s", sessionId, reason);
         resumeCheckpoint(cp);
     }
