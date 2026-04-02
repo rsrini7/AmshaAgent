@@ -41,7 +41,9 @@ public class CheckpointApprovalService {
                        return null;
                    })
                    .join();
-        if (agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole())) {
+        boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
+        log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
+        if (allDecided) {
             resumeCheckpoint(cp);
         }
     }
@@ -62,7 +64,9 @@ public class CheckpointApprovalService {
                        return null;
                    })
                    .join();
-        if (agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole())) {
+        boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
+        log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
+        if (allDecided) {
             resumeCheckpoint(cp);
         }
     }

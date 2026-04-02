@@ -148,7 +148,12 @@ public class ApproveReflex implements AgentReflex {
 
                 if (activeRole != null) {
                     try {
-                        checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                        List<String> pending = BatchDecisionUtil.pendingToolNames(latestPending.get(), objectMapper);
+                        if (pending.size() == 1) {
+                            checkpointApprovalService.approveTool(sessionId, pending.get(0), "CLI approve");
+                        } else {
+                            checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                        }
                         return "✅ Approval processed.";
                     } catch (CheckpointResolutionException e) {
                         return "No pending approval found for this session.";

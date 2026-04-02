@@ -66,6 +66,15 @@ public class ApprovalCheckpointManager {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolParametersJson(paramsJson);
+        
+        try {
+            Map<String, String> decisions = new LinkedHashMap<>();
+            decisions.put(toolName, AgentSentinels.TOOL_DECISION_PENDING);
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
+        } catch (Exception e) {
+            log.errorf("Failed to serialize batch decisions for single tool %s: %s", toolName, e.getMessage());
+        }
+
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
         cp.setUpdatedAt(LocalDateTime.now());

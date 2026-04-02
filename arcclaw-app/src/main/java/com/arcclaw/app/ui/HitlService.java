@@ -2,6 +2,7 @@ package com.arcclaw.app.ui;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -13,6 +14,7 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -72,13 +74,23 @@ public class HitlService {
             if (toolName != null && !toolName.isBlank()) {
                 checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
             } else {
-                checkpointApprovalService.approveAll(cp.getSessionId(), reason);
+                List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+                if (pending.size() == 1) {
+                    checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
+                } else {
+                    checkpointApprovalService.approveAll(cp.getSessionId(), reason);
+                }
             }
         } else {
             if (toolName != null && !toolName.isBlank()) {
                 checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
             } else {
-                checkpointApprovalService.denyAll(cp.getSessionId(), reason);
+                List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+                if (pending.size() == 1) {
+                    checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
+                } else {
+                    checkpointApprovalService.denyAll(cp.getSessionId(), reason);
+                }
             }
         }
     }
