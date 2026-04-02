@@ -12,6 +12,7 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,8 @@ public class SettingsResourceTest {
     @InjectMock
     LlmValidationGateway llmValidationGateway;
 
-    private static final String API_KEY = "key-internal-changeme";
+    @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
+    String internalApiKey;
 
     @BeforeEach
     void setup() throws Exception {
@@ -30,7 +32,7 @@ public class SettingsResourceTest {
 
     private RequestSpecification givenAuth() {
         return given()
-            .header("X-ArcClaw-API-Key", API_KEY);
+            .header("X-ArcClaw-API-Key", internalApiKey);
     }
 
     @Test
@@ -43,11 +45,20 @@ public class SettingsResourceTest {
 
     @Test
     void testGetPrompt() {
+        PromptUpdateRequest req = new PromptUpdateRequest("Prompt from test");
+        givenAuth()
+            .contentType(ContentType.JSON)
+            .body(req)
+            .when().patch("/settings/prompt")
+            .then()
+            .statusCode(200)
+            .body("updated", is(true));
+
         givenAuth()
             .when().get("/settings/prompt")
             .then()
             .statusCode(200)
-            .body("systemPrompt", is(""));
+            .body("systemPrompt", is("Prompt from test"));
     }
 
     @Test
