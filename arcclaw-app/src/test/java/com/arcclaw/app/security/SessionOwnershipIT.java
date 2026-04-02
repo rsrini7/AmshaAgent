@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import io.quarkus.test.junit.QuarkusTest;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -22,9 +23,6 @@ import org.junit.jupiter.api.TestInstance;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SessionOwnershipIT {
 
-    // Exact values from arcclaw.api.keys in application.yaml
-    private static final String KEY_INTERNAL   = "key-internal-changeme";
-    private static final String KEY_CI         = "key-ci-changeme";
     private static final String API_KEY_HEADER = "X-ArcClaw-Api-Key";
 
     // Expected owner key NAMES (the map keys, not the secret values)
@@ -34,12 +32,18 @@ class SessionOwnershipIT {
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
+    @ConfigProperty(name = "arcclaw.api.keys.internal")
+    String keyInternal;
+
+    @ConfigProperty(name = "arcclaw.api.keys.ci")
+    String keyCi;
+
     private String sessionOwnedByInternal;
 
     @BeforeEach
     void createSession() {
         sessionOwnedByInternal = given()
-                .header(API_KEY_HEADER, KEY_INTERNAL)
+                .header(API_KEY_HEADER, keyInternal)
                 .contentType("application/json")
                 .body("{\"autonomyLevel\":\"SUPERVISED\"}")
                 .when()
@@ -55,7 +59,7 @@ class SessionOwnershipIT {
     @Test
     void owningKey_canGetStatusOfOwnSession() {
         given()
-                .header(API_KEY_HEADER, KEY_INTERNAL)
+                .header(API_KEY_HEADER, keyInternal)
                 .when()
                 .get("/api/v1/sessions/{sessionId}/status", sessionOwnedByInternal)
                 .then()
@@ -68,7 +72,7 @@ class SessionOwnershipIT {
     void foreignKey_cannotRunAgainstAnotherKeysSession() {
         // AUTH-15: ci key must NOT be able to POST /run on internal's session
         given()
-                .header(API_KEY_HEADER, KEY_CI)
+                .header(API_KEY_HEADER, keyCi)
                 .contentType("application/json")
                 .body("{\"agentRole\":\"coordinator\",\"goal\":\"steal\"}")
                 .when()
@@ -81,7 +85,7 @@ class SessionOwnershipIT {
     @Test
     void foreignKey_cannotApproveAnotherKeysSession() {
         given()
-                .header(API_KEY_HEADER, KEY_CI)
+                .header(API_KEY_HEADER, keyCi)
                 .contentType("application/json")
                 .body("{\"agentRole\":\"coordinator\"}")
                 .when()
@@ -94,7 +98,7 @@ class SessionOwnershipIT {
     @Test
     void foreignKey_cannotTerminateAnotherKeysSession() {
         given()
-                .header(API_KEY_HEADER, KEY_CI)
+                .header(API_KEY_HEADER, keyCi)
                 .when()
                 .delete("/api/v1/sessions/{sessionId}", sessionOwnedByInternal)
                 .then()
