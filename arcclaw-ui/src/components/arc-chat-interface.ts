@@ -208,7 +208,7 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _connect() {
-    const wsUrl = `ws://localhost:8080/ws/chat?key=${encodeURIComponent(this.apiKey)}`;
+    const wsUrl = `ws://localhost:8080/ws/chat?apiKey=${encodeURIComponent(this.apiKey)}`;
     this._ws = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),
