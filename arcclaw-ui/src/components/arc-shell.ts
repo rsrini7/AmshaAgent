@@ -134,8 +134,15 @@ export class ArcShell extends LitElement {
     onEvent: (data: any) => void,
     onFallback: () => void
   ): EventSource | null {
+    
     if (typeof EventSource === 'undefined') {
       console.warn('EventSource not supported, using polling fallback');
+      onFallback();
+      return null;
+    }
+
+    if (!this._sessionId || !this._apiKey) {
+      console.warn('Session ID or API key not available, skipping SSE');
       onFallback();
       return null;
     }
@@ -151,7 +158,9 @@ export class ArcShell extends LitElement {
 
     es.onmessage = (e) => {
       try {
-        onEvent(JSON.parse(e.data));
+        const data = JSON.parse(e.data);
+        if (!data.type && !data.status) return; // heartbeat — ignore
+        onEvent(data);
       } catch (err) {
         console.warn('SSE message parse error:', err);
       }

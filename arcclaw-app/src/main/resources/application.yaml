@@ -5,6 +5,12 @@
 
 quarkus:
 
+  http:
+    cors: true
+    cors.origins: http://localhost:3000
+    cors.headers: X-ARCCLAW-API-KEY,Content-Type
+    cors.methods: GET,POST,PATCH,DELETE,OPTIONS
+
   vertx:
     prefer-native-transport: true
     use-async-dns: true

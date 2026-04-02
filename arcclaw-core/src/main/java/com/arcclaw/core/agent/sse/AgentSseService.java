@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.sse;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,34 +24,42 @@ public class AgentSseService {
      * Subscribe to SSE events for a session.
      * If a pending event exists (e.g. zombie AWAITING_APPROVAL from restart),
      * it is replayed immediately on subscribe.
+     * Includes a 25-second heartbeat to keep the connection alive through
+     * proxies and browsers that close idle SSE connections.
      */
     public Multi<SseEvent> subscribe(String sessionId) {
         BroadcastProcessor<SseEvent> proc = processors
             .computeIfAbsent(sessionId, id -> BroadcastProcessor.create());
 
-        Multi<SseEvent> stream = proc.toHotStream()
-            .onItem().castTo(SseEvent.class);
-
-        // Replay any pending event immediately on connect
+        // Replay any pending event immediately on connect (zombie approval from restart)
         SseEvent pending = pendingEvents.remove(sessionId);
         if (pending != null) {
             proc.onNext(pending);
         }
 
-        return stream;
+        // Heartbeat stream — every 25s to prevent proxy/browser idle timeout
+        Multi<SseEvent> heartbeat = Multi.createFrom().ticks()
+            .every(Duration.ofSeconds(25))
+            .map(tick -> (SseEvent) new HeartbeatEvent(Instant.now()));
+
+        // Merge live events + heartbeat
+        return Multi.createBy().merging().streams(
+            proc.toHotStream().onItem().castTo(SseEvent.class),
+            heartbeat
+        );
     }
 
     /**
      * Publish a live event to any active subscriber for this session.
      * If no subscriber exists yet, the event is dropped (live events only).
+     * AWAITING_APPROVAL events are also stored for late-connecting subscribers.
      */
     public void publish(String sessionId, SseEvent event) {
         BroadcastProcessor<SseEvent> proc = processors.get(sessionId);
         if (proc != null) {
             proc.onNext(event);
         }
-        // For AWAITING_APPROVAL events, also store as pending
-        // so late-connecting UI gets it on subscribe
+        // Store AWAITING_APPROVAL so UI gets it even if SSE connects after event fires
         if (event instanceof HitlEvent h && "AWAITING_APPROVAL".equals(h.type())) {
             pendingEvents.put(sessionId, event);
         }
@@ -58,7 +67,7 @@ public class AgentSseService {
 
     /**
      * Called by SessionReaper on startup for surviving AWAITING_APPROVAL checkpoints.
-     * Stores the event so the UI gets it when it connects/subscribes.
+     * Stores the event so the UI gets it when it subscribes after restart.
      */
     public void republishOnSubscribe(String sessionId, String toolName, String toolParams) {
         pendingEvents.put(sessionId, new HitlEvent(
@@ -73,6 +82,7 @@ public class AgentSseService {
 
     /**
      * Complete and remove the processor for a session (on COMPLETED/FAILED).
+     * Cleans up both the active processor and any pending replay events.
      */
     public void complete(String sessionId) {
         BroadcastProcessor<SseEvent> proc = processors.remove(sessionId);
@@ -97,6 +107,10 @@ public class AgentSseService {
         String sessionId,
         String agentRole,
         String status,      // RUNNING, COMPLETED, FAILED
+        Instant timestamp
+    ) implements SseEvent {}
+
+    public record HeartbeatEvent(
         Instant timestamp
     ) implements SseEvent {}
 }
