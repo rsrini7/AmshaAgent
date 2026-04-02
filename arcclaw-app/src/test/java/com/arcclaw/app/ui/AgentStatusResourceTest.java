@@ -2,10 +2,11 @@ package com.arcclaw.app.ui;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+
+import jakarta.inject.Inject;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
 import io.quarkus.test.InjectMock;
@@ -19,13 +20,12 @@ class AgentStatusResourceTest {
     @InjectMock
     AgentStateStore stateStore;
 
-    @InjectMock
+    @Inject
     ApiKeyRegistry apiKeyRegistry;
 
     @BeforeEach
     void setup() {
-        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        apiKeyRegistry.register("test-key", "key-internal-changeme");
     }
 
     @Test

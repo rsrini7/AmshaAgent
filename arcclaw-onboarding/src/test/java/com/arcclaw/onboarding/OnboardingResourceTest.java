@@ -59,9 +59,9 @@ class OnboardingResourceTest {
             .extract().cookie(SID_COOKIE);
         if (newSid != null) sid[0] = newSid;
 
-        // Status check: model auto-populated to llama-3.1-8b-instant
+        // Status check: model auto-populated to meta-llama/llama-4-scout-17b-16e-instruct
         doGet("/onboarding/status", sid[0])
-            .then().statusCode(200).body("model", is("llama-3.1-8b-instant"));
+            .then().statusCode(200).body("model", is("meta-llama/llama-4-scout-17b-16e-instruct"));
 
         // 4. POST /step/3 → mocked gateway validates → nextStep=4
         newSid = doPost("/onboarding/step/3", new Step3Request("test-key"), sid[0])

@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -23,6 +24,9 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
@@ -64,6 +68,7 @@ public class AgentStateMachineRunner {
     @Inject @InputSanitizer.PII InputSanitizer piiScanReflex;
     @Inject AgentOtelContext agentOtelContext;
     @Inject Event<AgentStateChangedEvent> stateChangedEvent;
+    @Inject StatefulAgentStore agentStore;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
@@ -175,6 +180,13 @@ public class AgentStateMachineRunner {
                 // skillSnapshot fetched lazily — only when a real tool invocation is about to happen.
                 // FINISH, CONTINUE, and schema-retry paths never pay this cost.
                 List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
+
+                // FIX ISSUE 5: Guard condition to ensure approval was formally flushed.
+                Optional<AgentCheckpoint> cpOpt = agentStore.load(context.sessionId(), context.agentRole());
+                if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                    log.warnf("Session %s is still AWAITING_APPROVAL. Refusing to invoke tool until state is flushed as IN_PROGRESS.", context.sessionId());
+                    return AgentResult.failed("State corrupted: tool execution attempted before approval persistence completed.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+                }
 
                 StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
                         context, history, step, consecutiveFailures, skillSnapshot);

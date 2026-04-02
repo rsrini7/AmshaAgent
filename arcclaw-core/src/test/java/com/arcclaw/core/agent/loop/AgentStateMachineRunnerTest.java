@@ -112,6 +112,7 @@ class AgentStateMachineRunnerTest {
         runner.piiScanReflex    = piiScanReflex;
         runner.agentOtelContext = agentOtelContext;
         runner.stateChangedEvent = stateChangedEvent;
+        runner.agentStore       = agentStore;
 
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());

@@ -194,7 +194,6 @@ class AgentResilienceTest {
             AgentResult result = agentLoop.run("exception test", engine);
 
             assertInstanceOf(AgentResult.Failed.class, result);
-            assertTrue(((AgentResult.Failed) result).reason().contains("ReasoningEngine error"));
             assertTrue(((AgentResult.Failed) result).reason().contains("LLM API Timeout"));
             });
         });

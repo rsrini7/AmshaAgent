@@ -3,7 +3,9 @@ package com.arcclaw.core.agent.loop;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,11 +20,13 @@ public class CheckpointApprovalServiceTest {
 
     @Mock StatefulAgentStore agentStore;
     @Mock CheckpointResumeHandler resumeHandler;
+    @Mock AsyncPersistenceEngine asyncEngine;
     @InjectMocks CheckpointApprovalService checkpointApprovalService;
 
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
+        when(asyncEngine.persistAndWait(any())).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     @Test

@@ -3,8 +3,6 @@ package com.arcclaw.app.skill;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
@@ -26,13 +24,12 @@ class SkillApiTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
-    @InjectMock
+    @Inject
     ApiKeyRegistry apiKeyRegistry;
 
     @BeforeEach
     void setup() {
-        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        apiKeyRegistry.register("test-key", "key-internal-changeme");
         // Run in a programmatic transaction to ensure it's committed before REST calls
         repository.deleteAll();
         // Defensive refresh to start with empty registry

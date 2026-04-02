@@ -1,6 +1,7 @@
 package com.arcclaw.core.persistence;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -15,7 +16,9 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.AgentCheckpoint;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;
@@ -160,6 +163,19 @@ public class AsyncPersistenceEngine {
             }
             throw new ComplianceViolationException(event.getSessionId(), event.getEventType(), cause);
         }
+    }
+
+    /**
+     * Issue 7: Wait for persist of AgentCheckpoint using async event to avoid stale states.
+     */
+    public CompletableFuture<Void> persistAndWait(AgentCheckpoint checkpoint) {
+        PersistenceEvent event = PersistenceEvent.critical(
+            checkpoint.getSessionId(),
+            SecurityEventType.CHECKPOINT_CREATED,
+            (em) -> em.merge(checkpoint)
+        );
+        submitCritical(event);
+        return event.getFuture();
     }
 
     /**

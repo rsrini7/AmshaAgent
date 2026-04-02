@@ -3,8 +3,6 @@ package com.arcclaw.app.routing;
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 
@@ -38,13 +36,12 @@ class SkillPersonaRoutingTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
-    @InjectMock
+    @Inject
     ApiKeyRegistry apiKeyRegistry;
 
     @BeforeEach
     void setup() {
-        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        apiKeyRegistry.register("test-key", "key-internal-changeme");
 
         repository.deleteAll();
         

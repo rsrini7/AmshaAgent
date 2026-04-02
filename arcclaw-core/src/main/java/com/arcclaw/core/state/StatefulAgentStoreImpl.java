@@ -191,6 +191,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
+        em.clear();
         return findBySessionAndRole(sessionId, agentRole);
     }
 
@@ -209,6 +210,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -485,6 +487,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      * archived by AgentLoop never interfere with the live checkpoint.
      */
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
