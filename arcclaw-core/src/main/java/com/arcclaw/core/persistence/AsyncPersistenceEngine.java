@@ -7,6 +7,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -23,6 +24,8 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
@@ -363,8 +366,12 @@ public class AsyncPersistenceEngine {
                 lastException = e;
                 if (isSqliteBusy(e)) {
                     long backoff = (BACKOFF_BASE_MS * (1L << attempt)) + ThreadLocalRandom.current().nextLong(0, 50);  // exponential + jitter
-                    log.warnf("[AsyncPersistenceEngine] SQLite BUSY on attempt %d/%d for session=%s — retrying in %dms. Error: %s", 
-                                    attempt, MAX_RETRIES, event.getSessionId(), backoff, e.getMessage());
+                    // Extract only the root cause chain
+                    String compactTrace = ExceptionUtils.getThrowableList(e).stream()
+                            .map(t -> t.getClass().getSimpleName() + ": " + t.getMessage())
+                            .collect(Collectors.joining("\n  -> "));
+                    log.warnf("[AsyncPersistenceEngine] SQLite BUSY on attempt %d/%d for session=%s — retrying in %dms.\nCause Chain:\n%s", 
+                                    attempt, MAX_RETRIES, event.getSessionId(), backoff, compactTrace);
                     sleepQuietly(backoff);
                 } else {
                     // Non-BUSY error — check if it's a shutdown race before logging as ERROR
