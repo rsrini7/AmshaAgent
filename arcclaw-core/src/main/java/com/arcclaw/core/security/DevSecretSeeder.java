@@ -58,27 +58,24 @@ public class DevSecretSeeder {
      * which uses CDI default priority (2000) and therefore fires after this.
      */
     public void onStart(@Observes @Priority(100) StartupEvent ev) {
-        // 1. Dev/test — generate a random ephemeral HMAC key (acceptable for local dev)
+        // 1. Dev/test — generate a random ephemeral HMAC key
         if ("dev".equals(profile) || "test".equals(profile)) {
             seedAuditHmacKey();
         }
 
-        // 2. Prod/cli with auto-seed enabled — read the stable key from .env
-        //    This must run before StartupSecurityValidator checks vault.systemKeyExists()
+        // 2. Prod/cli with auto-seed enabled — read stable key from .env
         if (autoSeedEnabled && !"dev".equals(profile) && !"test".equals(profile)) {
             seedAuditHmacKeyFromEnv();
         }
 
         if (!autoSeedEnabled) {
-            log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). Skipping tool secret seeding.");
-            return;
+            log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
+                       "Skipping tool secret seeding.");
         }
-
-        // 3. Seed tool tokens (requires active WorkspaceContext/SessionId if called later)
     }
 
     // -------------------------------------------------------------------------
-    // Private — HMAC key seeding
+    // Private — HMAC key seeding (unchanged)
     // -------------------------------------------------------------------------
 
     /**
@@ -119,19 +116,16 @@ public class DevSecretSeeder {
                 .getOptionalValue("ARCCLAW_AUDIT_HMAC_KEY", String.class)
                 .orElse(null);
         if (envValue == null || envValue.isBlank()) {
-            log.warnf("DevSecretSeeder: ARCCLAW_AUDIT_HMAC_KEY not set in config — " +
-                      "vault HMAC key cannot be seeded. " +
-                      "Set it in .env (generate with: openssl rand -base64 32).");
+            log.warnf("DevSecretSeeder: ARCCLAW_AUDIT_HMAC_KEY not set in config.");
             return;
         }
         byte[] keyBytes = null;
         try {
             keyBytes = Base64.getDecoder().decode(envValue.trim());
             secretVault.storeSystemKey(keyName, keyBytes);
-            log.infof("DevSecretSeeder: seeded %s from ARCCLAW_AUDIT_HMAC_KEY env var.", keyName);
+            log.infof("DevSecretSeeder: seeded %s from ARCCLAW_AUDIT_HMAC_KEY.", keyName);
         } catch (IllegalArgumentException e) {
-            log.errorf("DevSecretSeeder: ARCCLAW_AUDIT_HMAC_KEY is not valid Base64 — " +
-                       "regenerate with: openssl rand -base64 32");
+            log.errorf("DevSecretSeeder: ARCCLAW_AUDIT_HMAC_KEY is not valid Base64.");
         } catch (Exception e) {
             log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, e.getMessage());
         } finally {
@@ -140,39 +134,29 @@ public class DevSecretSeeder {
     }
 
     // -------------------------------------------------------------------------
-    // Public — tool secret seeding (called after WorkspaceContext is active)
+    // Public — tool secret seeding
+    // Called by DevSecretSeederStartup after @Priority(100) core seeder runs
     // -------------------------------------------------------------------------
 
     /**
-     * Call this AFTER {@code WorkspaceContext.run()} is active.
+     * Seeds tool secrets from .env into the SYSTEM vault.
+     * Uses storeSystemKey() — no active WorkspaceSession required.
+     * Safe to call at startup before any session is bound.
      */
     public void seedDevSecrets() {
         if (!autoSeedEnabled) {
             return;
         }
-        seedFromHostEnv("GITHUB_TOKEN");
+        seedFromHostEnvAsSystemKey("GITHUB_TOKEN");
     }
 
-    private void seedFromHostEnv(String vaultKeyName) {
-        // Idempotency check — avoid re-deriving Argon2id key on every message
-        try {
-            var optionalKey = secretVault.get(vaultKeyName);
-            if (optionalKey.isPresent()) {
-                // CRITICAL SECURITY PATTERN: Heap Privacy
-                // Close VaultKey immediately to zero-out the decrypted byte array
-                // and prevent plaintext exposure during a memory dump.
-                try (VaultKey _ = optionalKey.get()) {
-                    log.debugf("Secret seeder: %s already in vault for this session, skipping.", vaultKeyName);
-                }
-                return;
-            }
-        } catch (Exception e) {
-            log.debugf("Secret seeder: vault check for %s failed (%s), proceeding to seed.",
-                    vaultKeyName, e.getMessage());
+    private void seedFromHostEnvAsSystemKey(String vaultKeyName) {
+        // Idempotency — skip if already in system vault
+        if (secretVault.systemKeyExists(vaultKeyName)) {
+            log.debugf("Secret seeder: %s already in system vault, skipping.", vaultKeyName);
+            return;
         }
 
-        // Use Quarkus ConfigProvider — reads from .env (via DotenvConfigSourceProvider),
-        // system properties, and OS environment variables in priority order.
         String hostValue = ConfigProvider.getConfig()
                 .getOptionalValue(vaultKeyName, String.class)
                 .orElse(null);
@@ -185,12 +169,13 @@ public class DevSecretSeeder {
 
         byte[] secretBytes = hostValue.getBytes(StandardCharsets.UTF_8);
         try {
-            secretVault.store(vaultKeyName, secretBytes);
-            log.infof("Secret seeder: %s seeded into SecretVault from config.", vaultKeyName);
+            // storeSystemKey() uses SYSTEM_SESSION_ID — no WorkspaceScope needed
+            secretVault.storeSystemKey(vaultKeyName, secretBytes);
+            log.infof("Secret seeder: %s seeded into system vault from config.", vaultKeyName);
         } catch (Exception e) {
-            log.warnf("Secret seeder: failed to seed %s into vault: %s", vaultKeyName, e.getMessage());
+            log.warnf("Secret seeder: failed to seed %s into system vault: %s",
+                      vaultKeyName, e.getMessage());
         } finally {
-            // Zero the raw bytes before garbage collection
             Arrays.fill(secretBytes, (byte) 0);
         }
     }

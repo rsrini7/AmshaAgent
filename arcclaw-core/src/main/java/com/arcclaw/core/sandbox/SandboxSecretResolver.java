@@ -8,9 +8,12 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class SandboxSecretResolver {
+
+    private static final Logger log = Logger.getLogger(SandboxSecretResolver.class);
 
     private final SecretVault secretVault;
 
@@ -25,6 +28,10 @@ public class SandboxSecretResolver {
 
     /**
      * Resolves vault secrets for container injection as raw byte arrays.
+     * <p>
+     * Resolution order:
+     * 1. Session vault (per-user, workspace-scoped)
+     * 2. System vault (seeded at startup from .env via DevSecretSeeder)
      * <p>
      * Fail-closed contract:
      * - null map     → IllegalArgumentException (programming error in caller)
@@ -48,20 +55,41 @@ public class SandboxSecretResolver {
             String envVar = entry.getKey();
             String vaultKeyName = entry.getValue();
 
-            var optionalKey = secretVault.get(vaultKeyName);
-
-            if (optionalKey.isPresent()) {
-                try (VaultKey key = optionalKey.get()) {
-                    // SECURE TRANSFER: direct byte array copy — no String materialization.
-                    // The VaultKey source bytes are zeroed on close() above.
-                    byte[] src = key.get();
-                    byte[] copy = new byte[src.length];
-                    System.arraycopy(src, 0, copy, 0, src.length);
-                    resolved.put(envVar, copy);
+            // 1. Try session vault first (workspace-scoped, per-user)
+            VaultKey resolvedKey = null;
+            try {
+                var sessionKey = secretVault.get(vaultKeyName);
+                if (sessionKey.isPresent()) {
+                    resolvedKey = sessionKey.get();
+                    log.debugf("SandboxSecretResolver: resolved %s from session vault", vaultKeyName);
                 }
-            } else {
-                // FAIL-CLOSED: no hardcoded substitutions, no System.getenv() fallback.
+            } catch (Exception e) {
+                // Session vault unavailable (e.g. no active WorkspaceScope) — fall through
+                log.debugf("SandboxSecretResolver: session vault unavailable for %s (%s), " +
+                           "trying system vault", vaultKeyName, e.getMessage());
+            }
+
+            // 2. Fall back to system vault (seeded at startup from .env)
+            if (resolvedKey == null) {
+                var systemKey = secretVault.retrieveSystemKey(vaultKeyName);
+                if (systemKey.isPresent()) {
+                    resolvedKey = systemKey.get();
+                    log.debugf("SandboxSecretResolver: resolved %s from system vault", vaultKeyName);
+                }
+            }
+
+            // 3. Fail-closed — no hardcoded substitutions, no System.getenv() fallback
+            if (resolvedKey == null) {
                 throw new SecurityException("Required secret not in vault: " + vaultKeyName);
+            }
+
+            try (VaultKey key = resolvedKey) {
+                // SECURE TRANSFER: direct byte array copy — no String materialization.
+                // The VaultKey source bytes are zeroed on close() above.
+                byte[] src = key.get();
+                byte[] copy = new byte[src.length];
+                System.arraycopy(src, 0, copy, 0, src.length);
+                resolved.put(envVar, copy);
             }
         }
         return resolved;
