@@ -25,6 +25,8 @@ export class ArcShell extends LitElement {
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
   private _pollingInterval: number | null = null;
+  private _hitlEs: EventSource | null = null;
+  private _agentEs: EventSource | null = null;
 
   static styles = css`
     :host { 
@@ -133,6 +135,29 @@ export class ArcShell extends LitElement {
     super.disconnectedCallback();
     this._stopPolling();
     this._sseManager?.disconnect();
+    this._hitlEs?.close();
+    this._agentEs?.close();
+  }
+
+  private _connectSse(url: string, onEvent: (data: any) => void, onFallback: () => void) {
+    if (typeof EventSource === 'undefined') {
+        onFallback();
+        return null;
+    }
+    const es = new EventSource(url);
+    let sseActive = true;
+    es.onmessage = (e) => {
+        onEvent(JSON.parse(e.data));
+    };
+    es.onerror = () => {
+        if (sseActive) {
+            sseActive = false;
+            es.close();
+            console.warn('SSE failed, falling back to polling:', url);
+            onFallback();
+        }
+    };
+    return es;
   }
 
   private _onApiKeySet(e: CustomEvent<{ key: string }>) {
@@ -154,6 +179,57 @@ export class ArcShell extends LitElement {
 
   private _onSessionReady(e: CustomEvent<{ sessionId: string, platformId: string }>) {
     this._sessionId = e.detail.sessionId;
+    
+    // Start specific SSE push endpoints
+    this._hitlEs?.close();
+    this._agentEs?.close();
+
+    const startPollingFallback = () => {
+       this._startPolling();
+    };
+
+    if (this._sessionId) {
+      this._hitlEs = this._connectSse(
+          `/api/v1/hitl/events?sessionId=${this._sessionId}`,
+          (event) => this._handleHitlEvent(event),
+          startPollingFallback
+      );
+      this._agentEs = this._connectSse(
+          `/api/v1/agents/events?sessionId=${this._sessionId}`,
+          (event) => this._handleAgentEvent(event),
+          startPollingFallback
+      );
+    }
+  }
+  
+  private _handleHitlEvent(event: any) {
+    if (event.type === 'AWAITING_APPROVAL') {
+      const existing = this._pendingApprovals.find(a => a.taskId === event.sessionId && a.toolName === event.toolName);
+      if (!existing) {
+         let paramsObj = {};
+         try { paramsObj = JSON.parse(event.toolParams || '{}'); } catch(e) {}
+         this._pendingApprovals = [...this._pendingApprovals, {
+            taskId: event.sessionId,
+            toolName: event.toolName,
+            params: paramsObj,
+            requestedAt: event.timestamp || new Date().toISOString(),
+            agentName: 'Agent'
+         } as PendingApprovalDto];
+      }
+    } else {
+      this._pendingApprovals = this._pendingApprovals.filter(a => !(a.taskId === event.sessionId && (a.toolName === event.toolName || !event.toolName)));
+    }
+  }
+
+  private _handleAgentEvent(event: any) {
+     const idx = this._agents.findIndex(a => a.agentName === event.agentRole || a.role === event.agentRole);
+     if (idx >= 0) {
+        const updated = [...this._agents];
+        updated[idx] = { ...updated[idx], status: event.status };
+        this._agents = updated;
+     } else {
+       this._fetchAgents();
+     }
   }
   
   private _onApprovalAction(_e: CustomEvent<{ taskId: string, action: string }>) {
@@ -177,13 +253,13 @@ export class ArcShell extends LitElement {
 
   private _startPolling() {
     this._stopPolling();
-    // Only poll as a fallback every 10 seconds if SSE is NOT healthy
-    this._pollingInterval = window.setInterval(() => {
-      if (this._sseStatus !== 'connected') {
-        this._fetchApprovals();
-        this._fetchAgents();
-      }
-    }, 10000);
+    // Fallback: poll every 10 seconds
+    const poll = async () => {
+      await this._fetchApprovals();
+      await this._fetchAgents();
+    };
+    poll(); // immediate first call
+    this._pollingInterval = window.setInterval(poll, 10000);
   }
 
   private _stopPolling() {

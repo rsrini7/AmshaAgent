@@ -38,13 +38,10 @@ export class ArcClient {
   }
 
   async rejectHitl(taskId: string, reason: string): Promise<ApprovalResultDto> {
-    const customHeaders = this.headers();
-    (customHeaders as Record<string, string>)['Content-Type'] = 'text/plain';
-
     const r = await fetch(`${this.baseUrl}/hitl/${taskId}/reject`, {
-      method: 'POST',
-      headers: customHeaders,
-      body: reason || 'Rejected by user',
+        method: 'POST',
+        headers: this.headers(),  // application/json
+        body: JSON.stringify({ reason: reason || 'Rejected by user' }),
     });
     if (!r.ok) throw new Error(`POST /hitl/${taskId}/reject failed: ${r.status}`);
     return r.json();

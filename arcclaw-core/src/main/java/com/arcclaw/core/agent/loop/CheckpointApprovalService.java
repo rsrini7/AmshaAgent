@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -7,7 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
@@ -22,6 +23,7 @@ public class CheckpointApprovalService {
     @Inject StatefulAgentStore agentStore;
     @Inject CheckpointResumeHandler resumeHandler;
     @Inject ObjectMapper objectMapper;
+    @Inject AgentSseService agentSseService;
 
     @Transactional
     public void approveTool(String sessionId, String toolName, String reason) {
@@ -32,6 +34,9 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "APPROVED");
         log.infof("Approved tool %s for session %s reason: %s", toolName, sessionId, reason);
+        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+            sessionId, "APPROVED", toolName, null, reason, Instant.now()
+        ));
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
         if (allDecided) {
@@ -48,6 +53,9 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "DENIED");
         log.infof("Denied tool %s for session %s reason: %s", toolName, sessionId, reason);
+        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+            sessionId, "DENIED", toolName, null, reason, Instant.now()
+        ));
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
         if (allDecided) {
@@ -112,5 +120,9 @@ public class CheckpointApprovalService {
         
         resumeHandler.resumeAfterBatchDecision(
             cp.getSessionId(), cp.getAgentRole(), userId, channelId, channelType);
+        
+        agentSseService.publish(cp.getSessionId(), new AgentSseService.HitlEvent(
+            cp.getSessionId(), "RESUMED", null, null, null, Instant.now()
+        ));
     }
 }

@@ -70,7 +70,7 @@ quarkus:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       # pool-interceptor: com.arcclaw.core.persistence.FtsConnectionInterceptor
       min-size: 1
-      max-size: 5
+      max-size: 1
       transactions: enabled
 
   hibernate-orm:

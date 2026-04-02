@@ -12,13 +12,16 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import io.smallrye.mutiny.Multi;
 
 @ApplicationScoped
 @Path("hitl")
@@ -27,6 +30,14 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 public class HitlResource {
 
     @Inject HitlService hitlService;
+    @Inject AgentSseService agentSseService;
+
+    @GET
+    @Path("/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId) {
+        return agentSseService.subscribe(sessionId);
+    }
 
     @GET
     public List<PendingApprovalDto> listPending() {

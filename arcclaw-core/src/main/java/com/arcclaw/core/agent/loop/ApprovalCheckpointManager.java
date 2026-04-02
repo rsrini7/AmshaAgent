@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -28,6 +30,7 @@ public class ApprovalCheckpointManager {
 
     @Inject StatefulAgentStore agentStore;
     @Inject ObjectMapper objectMapper;
+    @Inject AgentSseService agentSseService;
 
     /**
      * Loads an existing non-terminal checkpoint for the session, or creates a
@@ -81,6 +84,9 @@ public class ApprovalCheckpointManager {
         agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s",
                 sessionId, toolName);
+        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+            sessionId, "AWAITING_APPROVAL", toolName, paramsJson, null, Instant.now()
+        ));
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
 
@@ -127,6 +133,9 @@ public class ApprovalCheckpointManager {
 
         log.infof("[STATE-MACHINE] Pausing session %s for parallel HITL: %s",
                   sessionId, compositeName);
+        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+            sessionId, "AWAITING_APPROVAL", compositeName, batchJson, null, Instant.now()
+        ));
         return AgentResult.awaitingApproval(
             compositeName, batchJson, sessionId, List.copyOf(history));
     }
@@ -177,6 +186,9 @@ public class ApprovalCheckpointManager {
         log.infof("[STATE-MACHINE] Pausing session %s — HITL tools pending: %d | batch: %s",
             sessionId, hitlCalls.size(), compositeName);
 
+        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+            sessionId, "AWAITING_APPROVAL", compositeName, originalBatchJson, null, Instant.now()
+        ));
         return AgentResult.awaitingApproval(
             compositeName, originalBatchJson, sessionId,
             List.copyOf(history));

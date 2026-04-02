@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -15,6 +16,7 @@ import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
@@ -85,6 +87,9 @@ public class AgentLoop {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    AgentSseService agentSseService;
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
@@ -245,7 +250,6 @@ public class AgentLoop {
                                 agentExecutionContext, engine, resumedHistory));
             }
 
-            // --- CHECKPOINT FINAL STATE ---
             if (result instanceof AgentResult.AwaitingApproval awaiting) {
                 log.debugf("Session %s paused, waiting for human approval — tool=%s",
                         sessionId, awaiting.toolName());
@@ -254,13 +258,22 @@ public class AgentLoop {
                 if (result instanceof AgentResult.Finished) {
                     agentStore.saveAndFinalize(sessionId, canonicalRole,
                         result.steps(), CheckpointStatus.COMPLETED);
+                    agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "COMPLETED", Instant.now()
+                    ));
                 } else if (result instanceof AgentResult.Failed f) {
                     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(), f.reason());
+                    agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "FAILED", Instant.now()
+                    ));
                 } else if (result instanceof AgentResult.LoopExceeded l) {
                     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(),
                         "Max iterations (" + l.maxIterations() + ") exceeded");
+                    agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "FAILED", Instant.now()
+                    ));
                 }
             }
 

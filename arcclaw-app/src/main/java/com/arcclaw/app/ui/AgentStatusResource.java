@@ -8,11 +8,14 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
 import com.arcclaw.app.ui.dto.AgentStatusDto;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.security.AutonomyLevel;
+import io.smallrye.mutiny.Multi;
 
 /**
  * Provides a read-only view of current agent states for the Lit UI.
@@ -25,6 +28,14 @@ public class AgentStatusResource {
     @Inject AgentStateStore stateStore;
 
     @Inject SessionHeartbeatTracker sessionHeartbeatTracker;
+    @Inject AgentSseService agentSseService;
+
+    @GET
+    @Path("/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    public Multi<AgentSseService.SseEvent> agentEvents(@QueryParam("sessionId") String sessionId) {
+        return agentSseService.subscribe(sessionId);
+    }
  
     @GET
     public List<AgentStatusDto> listAgents() {
