@@ -53,7 +53,7 @@ quarkus:
       enabled: true
       origins: "${ARCCLAW_CORS_ORIGINS:http://localhost:3000,http://localhost:8080}"
       headers: "X-ArcClaw-API-Key,Content-Type,Accept"
-      methods: "GET,POST,OPTIONS"
+      methods: "GET,POST,PATCH,DELETE,OPTIONS"
     limits:
       max-body-size: 10M
 
@@ -313,7 +313,7 @@ arcclaw:
       internal: "${ARCCLAW_API_KEYS_INTERNAL:key-internal-changeme}"
       ci: "${ARCCLAW_API_KEYS_CI:key-ci-changeme}"
     rate-limit:
-      requests-per-minute: 20
+      requests-per-minute: 60
   
   tools:
     brave:
