@@ -149,11 +149,13 @@ public class ApproveReflex implements AgentReflex {
                 if (activeRole != null) {
                     try {
                         List<String> pending = BatchDecisionUtil.pendingToolNames(latestPending.get(), objectMapper);
+                        AgentCheckpoint cp = null;
                         if (pending.size() == 1) {
-                            checkpointApprovalService.approveTool(sessionId, pending.get(0), "CLI approve");
+                            cp = checkpointApprovalService.approveTool(sessionId, pending.get(0), "CLI approve");
                         } else {
-                            checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                            cp = checkpointApprovalService.approveAll(sessionId, "CLI approve");
                         }
+                        checkpointApprovalService.triggerResume(cp);
                         return "";
                     } catch (CheckpointResolutionException e) {
                         return "No pending approval found for this session.";
@@ -210,7 +212,8 @@ public class ApproveReflex implements AgentReflex {
         }
 
         try {
-            checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
+            AgentCheckpoint cp = checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
+            checkpointApprovalService.triggerResume(cp);
             return "";
         } catch (CheckpointResolutionException e) {
             return "No pending approval found for this session.";

@@ -107,11 +107,13 @@ public class DenyReflex implements AgentReflex {
                     try {
                         log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
                         List<String> pending = BatchDecisionUtil.pendingToolNames(latestPending.get(), objectMapper);
+                        AgentCheckpoint cp = null;
                         if (pending.size() == 1) {
-                            checkpointApprovalService.denyTool(sessionId, pending.get(0), "CLI deny");
+                            cp = checkpointApprovalService.denyTool(sessionId, pending.get(0), "CLI deny");
                         } else {
-                            checkpointApprovalService.denyAll(sessionId, "CLI deny");
+                            cp = checkpointApprovalService.denyAll(sessionId, "CLI deny");
                         }
+                        checkpointApprovalService.triggerResume(cp);
                         return "";
                     } catch (CheckpointResolutionException e) {
                         return "No pending denial found for this session.";
@@ -165,7 +167,8 @@ public class DenyReflex implements AgentReflex {
         }
 
         try {
-            checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
+            AgentCheckpoint cp = checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
+            checkpointApprovalService.triggerResume(cp);
             return "🚫 Tool '" + toolName + "' denied.";
         } catch (CheckpointResolutionException e) {
             return "No pending denial found for this session.";

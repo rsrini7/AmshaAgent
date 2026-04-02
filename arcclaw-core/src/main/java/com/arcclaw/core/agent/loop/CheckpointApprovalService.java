@@ -24,10 +24,13 @@ public class CheckpointApprovalService {
     @Inject CheckpointResumeHandler resumeHandler;
     @Inject ObjectMapper objectMapper;
     @Inject AgentSseService agentSseService;
-    @Inject CheckpointApprovalService self;  // ← self-injection for REQUIRES_NEW boundary
 
+    /**
+     * Returns the checkpoint if all tools are decided and resume should be triggered,
+     * null otherwise. Caller MUST call triggerResume() after this transaction commits.
+     */
     @Transactional
-    public void approveTool(String sessionId, String toolName, String reason) {
+    public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) {
             throw new CheckpointResolutionException(
@@ -41,13 +44,11 @@ public class CheckpointApprovalService {
         ));
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
-        if (allDecided) {
-            self.resumeCheckpointAfterCommit(cp);
-        }
+        return allDecided ? cp : null;
     }
 
     @Transactional
-    public void denyTool(String sessionId, String toolName, String reason) {
+    public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) {
             throw new CheckpointResolutionException(
@@ -61,13 +62,11 @@ public class CheckpointApprovalService {
         ));
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         log.debugf("isAllBatchToolsDecided for session %s = %b", sessionId, allDecided);
-        if (allDecided) {
-            self.resumeCheckpointAfterCommit(cp);
-        }
+        return allDecided ? cp : null;
     }
 
     @Transactional
-    public void approveAll(String sessionId, String reason) {
+    public AgentCheckpoint approveAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) {
             throw new CheckpointResolutionException(
@@ -76,9 +75,8 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         if (cp.getBatchToolDecisions() == null) {
             log.warnf("No batch tool decisions found for session %s, cannot approveAll", sessionId);
-            return;
+            return null;
         }
-
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         if (pendingTools != null) {
             for (String pending : pendingTools) {
@@ -88,13 +86,12 @@ public class CheckpointApprovalService {
                 }
             }
         }
-
         log.infof("Approved ALL tools for session %s reason: %s", sessionId, reason);
-        self.resumeCheckpointAfterCommit(cp);
+        return cp;
     }
 
     @Transactional
-    public void denyAll(String sessionId, String reason) {
+    public AgentCheckpoint denyAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) {
             throw new CheckpointResolutionException(
@@ -103,9 +100,8 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         if (cp.getBatchToolDecisions() == null) {
             log.warnf("No batch tool decisions found for session %s, cannot denyAll", sessionId);
-            return;
+            return null;
         }
-
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         if (pendingTools != null) {
             for (String pending : pendingTools) {
@@ -115,25 +111,17 @@ public class CheckpointApprovalService {
                 }
             }
         }
-
         log.infof("Denied ALL tools for session %s reason: %s", sessionId, reason);
-        self.resumeCheckpointAfterCommit(cp);
+        return cp;
     }
 
     /**
-     * Runs resumeCheckpoint in a REQUIRES_NEW transaction so the outer
-     * approveTool/denyTool/approveAll/denyAll transaction suspends before
-     * resumeAfterBatchDecision starts writing. This prevents SQLITE_BUSY_SNAPSHOT
-     * caused by the outer transaction holding a write lock on agent_checkpoint
-     * while the resume tries to write the same table.
+     * Must be called OUTSIDE any active transaction, after approveTool/denyTool/
+     * approveAll/denyAll has committed. This ensures the SQLite write lock is fully
+     * released before resumeAfterBatchDecision attempts its own writes.
      */
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void resumeCheckpointAfterCommit(AgentCheckpoint cp) {
-        resumeCheckpoint(cp);
-    }
-
-    private void resumeCheckpoint(AgentCheckpoint cp) {
-        // Reload fresh — cp may be stale from before updateBatchToolDecision committed
+    public void triggerResume(AgentCheckpoint cp) {
+        if (cp == null) return;
         AgentCheckpoint fresh = agentStore.findLatestAwaitingApproval(cp.getSessionId())
             .orElse(cp);
 
