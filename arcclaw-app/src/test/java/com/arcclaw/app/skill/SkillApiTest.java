@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.is;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
@@ -13,6 +14,8 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @QuarkusTest
 class SkillApiTest {
@@ -23,8 +26,13 @@ class SkillApiTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
+    @InjectMock
+    ApiKeyRegistry apiKeyRegistry;
+
     @BeforeEach
     void setup() {
+        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
         // Run in a programmatic transaction to ensure it's committed before REST calls
         repository.deleteAll();
         // Defensive refresh to start with empty registry

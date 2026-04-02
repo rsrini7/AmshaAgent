@@ -8,6 +8,7 @@ import java.time.Instant;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.skill.AgentSkillEntity;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @QuarkusTest
 class SkillPersonaRoutingTest {
@@ -35,8 +38,14 @@ class SkillPersonaRoutingTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
+    @InjectMock
+    ApiKeyRegistry apiKeyRegistry;
+
     @BeforeEach
     void setup() {
+        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+
         repository.deleteAll();
         
         String yaml = """
