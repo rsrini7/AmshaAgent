@@ -29,4 +29,11 @@ public class EncryptedSecretRepository {
                 .setParameter("sessionId", sessionId)
                 .executeUpdate();
     }
+
+    public void deleteByKey(String sessionId, String keyName) {
+        EncryptedSecret entity = findByKey(sessionId, keyName);
+        if (entity != null) {
+            em.remove(entity);
+        }
+    }
 }

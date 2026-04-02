@@ -153,6 +153,8 @@ export class ArcSettings extends LitElement {
     try {
       this._loading = true; this._error = ''; this._success = '';
       await resetOnboarding(this.apiKey);
+      localStorage.removeItem('arc-api-key');
+      window.location.hash = '#/onboarding';
       window.location.reload();
     } catch (e: any) {
       this._error = e.message;

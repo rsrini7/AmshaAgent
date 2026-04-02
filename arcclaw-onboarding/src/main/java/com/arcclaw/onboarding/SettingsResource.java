@@ -132,8 +132,15 @@ public class SettingsResource {
     public Response reset(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
         registry.invalidateAll();
+        
+        // Clear all LLM related keys to force re-onboarding (§reset-fix)
+        vault.removeSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+        vault.removeSystemKey(VaultConstants.LLM_MODEL_KEY);
+        vault.removeSystemKey(VaultConstants.LLM_API_KEY);
+        vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
+        
         return Response.ok(Map.of("reset", true,
-            "message", "Onboarding sessions cleared. Refresh to re-run the wizard.")).build();
+            "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard.")).build();
     }
 
     private String readVaultString(String key, String fallback) {

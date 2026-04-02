@@ -203,4 +203,10 @@ public class SecretVaultImpl implements SecretVault {
             throw e;
         }
     }
+
+    @Override
+    @Transactional
+    public void removeSystemKey(String keyName) {
+        repository.deleteByKey(VaultConstants.SYSTEM_SESSION_ID, keyName);
+    }
 }
