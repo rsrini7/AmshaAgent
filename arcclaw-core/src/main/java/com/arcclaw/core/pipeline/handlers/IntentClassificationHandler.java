@@ -12,6 +12,7 @@ import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
 
@@ -77,16 +78,21 @@ public class IntentClassificationHandler implements MessageHandler {
         } catch (HttpException e) {
             if (e.statusCode() == 429 ||
                     (e.getMessage() != null && e.getMessage().contains("rate limit"))) {
-                log.warnf("Intent classifier rate limited for chat %s — defaulting to coordinator: %s",
-                    context.getChatId(), e.getMessage());
+                log.warnf("Intent classifier rate limited for chat %s — defaulting to coordinator",
+                    context.getChatId());
                 channelPluginRegistry.find(context.getChannelType())
                     .map(ChannelPlugin::sender)
                     .ifPresent(s -> s.sendRaw(context.getUser(),
                         "⏳ Rate limited on classification — defaulting to coordinator."));
-                context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
             } else {
-                throw e;
+                String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+                log.errorf("Intent classification failed (HTTP %d) for chat %s: %s",
+                        e.statusCode(), context.getChatId(), sanitizedMsg);
+                channelPluginRegistry.find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), sanitizedMsg));
             }
+            context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
         } catch (Exception e) {
             log.warnf("Intent classification failed for chat %s — defaulting to coordinator: %s",
                 context.getChatId(), e.getMessage());

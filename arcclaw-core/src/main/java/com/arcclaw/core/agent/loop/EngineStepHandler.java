@@ -113,7 +113,16 @@ public class EngineStepHandler {
 
             String rawError = e.getMessage() != null ? e.getMessage() : "";
 
-            // Groq-specific: LLM tried a tool not registered in this role's schema.
+            // 1. Terminal 400s: Model/Auth/Role configuration errors that retrying won't fix.
+            if (rawError.contains("model_not_found") || rawError.contains("does not exist") || rawError.contains("invalid_api_key")) {
+                String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(rawError);
+                log.warnf("[STATE-MACHINE] session %s: terminal configuration error (400): %s",
+                        sessionId, sanitizedMsg);
+                return StepDecision.terminal(AgentResult.failed(sanitizedMsg,
+                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+            }
+
+            // 2. Groq-specific: LLM tried a tool not registered in this role's schema.
             // Retrying will never help — terminal immediately with a clear message.
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = extractUnavailableToolName(rawError);
@@ -179,7 +188,8 @@ public class EngineStepHandler {
             if (llmSchemaErrorCount >= 2) {
                 log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
                 return StepDecision.terminal(AgentResult.failed(
-                        "SCHEMA_ERROR", AgentResult.FailureCategory.SCHEMA_ERROR,
+                        "The agent encountered repeated tool schema errors and could not complete your request. Please try rephrasing your goal.",
+                        AgentResult.FailureCategory.SCHEMA_ERROR,
                         List.copyOf(history)));
             }
             return StepDecision.retryEngine(
@@ -227,8 +237,9 @@ public class EngineStepHandler {
 
         log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
         log.debugf("ReasoningEngine failure cause chain for session %s: %s", sessionId, rootCauseChain(e));
+        String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
         return StepDecision.terminal(AgentResult.failed(
-                "ReasoningEngine error: " + e.getMessage(),
+                sanitizedMsg,
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
     }
 
