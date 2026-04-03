@@ -9,7 +9,6 @@ import java.util.concurrent.ExecutorService;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
@@ -43,6 +42,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.MdcKeys;
 import io.quarkus.virtual.threads.VirtualThreads;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 

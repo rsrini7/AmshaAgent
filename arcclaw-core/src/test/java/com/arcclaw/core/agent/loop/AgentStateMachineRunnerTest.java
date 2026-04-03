@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentObserver;
@@ -31,6 +32,7 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
 import io.opentelemetry.api.trace.Span;
@@ -59,7 +61,7 @@ class AgentStateMachineRunnerTest {
     @SuppressWarnings("unchecked")
     private Event<AgentStateChangedEvent> stateChangedEvent = mock(Event.class);
 
-    private com.arcclaw.core.agent.sse.AgentSseService agentSseService = mock(com.arcclaw.core.agent.sse.AgentSseService.class);
+    private AgentSseService agentSseService = mock(AgentSseService.class);
 
 
     @SuppressWarnings("unchecked")
@@ -87,7 +89,7 @@ class AgentStateMachineRunnerTest {
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager();
         checkpointManager.agentStore = agentStore;
         checkpointManager.agentSseService = agentSseService;
-        checkpointManager.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        checkpointManager.objectMapper = new ObjectMapper();
 
 
         // Wire EngineStepHandler

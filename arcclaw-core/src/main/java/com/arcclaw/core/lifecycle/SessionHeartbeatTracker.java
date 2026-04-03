@@ -1,6 +1,7 @@
 package com.arcclaw.core.lifecycle;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -157,8 +158,8 @@ public class SessionHeartbeatTracker {
      * Returns all session IDs owned by the given key name (userId).
      * Used for tenant-scoped queries (e.g. F27 HitlService isolation).
      */
-    public java.util.List<String> getSessionIdsByOwner(String ownerKeyName) {
-        if (ownerKeyName == null) return java.util.List.of();
+    public List<String> getSessionIdsByOwner(String ownerKeyName) {
+        if (ownerKeyName == null) return List.of();
         return sessionData.entrySet().stream()
                 .filter(e -> ownerKeyName.equals(e.getValue().ownerKeyName()))
                 .map(Map.Entry::getKey)

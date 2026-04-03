@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -73,7 +75,7 @@ class WorkspaceManagerTest {
             var cp = agentStore.save("zombie-session-1", "coordinator", steps);
             QuarkusTransaction.requiringNew().run(() -> {
                 em.createQuery("UPDATE AgentCheckpoint c SET c.updatedAt = :backdate WHERE c.id = :id")
-                  .setParameter("backdate", java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(20))
+                  .setParameter("backdate", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(20))
                   .setParameter("id", cp.getId())
                   .executeUpdate();
             });

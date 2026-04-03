@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -18,8 +19,6 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.transaction.Transactional.TxType;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.

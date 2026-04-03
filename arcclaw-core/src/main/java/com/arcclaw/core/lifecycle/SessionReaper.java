@@ -2,6 +2,8 @@ package com.arcclaw.core.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -92,9 +94,9 @@ public class SessionReaper {
         // active checkpoints running on other nodes during rolling/canary deployments.
         // FIX: Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
         // Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly.
-        java.time.LocalDateTime cutoff = java.time.LocalDateTime.ofInstant(
-                Instant.now().minus(java.time.Duration.ofMinutes(15)),
-                java.time.ZoneOffset.UTC);
+        LocalDateTime cutoff = LocalDateTime.ofInstant(
+                Instant.now().minus(Duration.ofMinutes(15)),
+                ZoneOffset.UTC);
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)

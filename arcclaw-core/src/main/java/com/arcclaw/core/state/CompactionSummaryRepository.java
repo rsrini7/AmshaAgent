@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -23,7 +24,7 @@ public class CompactionSummaryRepository {
     EntityManager em;
 
     @Inject
-    jakarta.enterprise.inject.Instance<CompactionSummaryRepository> self;
+    Instance<CompactionSummaryRepository> self;
 
     @Transactional
     public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {

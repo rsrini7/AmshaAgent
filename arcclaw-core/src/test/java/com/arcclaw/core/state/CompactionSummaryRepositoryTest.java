@@ -9,12 +9,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.Test;
-
-import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class CompactionSummaryRepositoryTest {

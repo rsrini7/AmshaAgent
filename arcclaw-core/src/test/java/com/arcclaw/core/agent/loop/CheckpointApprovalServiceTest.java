@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -21,7 +22,7 @@ public class CheckpointApprovalServiceTest {
     @Mock StatefulAgentStore agentStore;
     @Mock CheckpointResumeHandler resumeHandler;
     @Mock AsyncPersistenceEngine asyncEngine;
-    @Mock com.arcclaw.core.agent.sse.AgentSseService agentSseService;
+    @Mock AgentSseService agentSseService;
     @InjectMocks CheckpointApprovalService checkpointApprovalService;
 
     @BeforeEach

@@ -7,6 +7,7 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -14,7 +15,6 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
-import jakarta.transaction.Transactional.TxType;
 
 @ApplicationScoped
 public class CheckpointApprovalService {

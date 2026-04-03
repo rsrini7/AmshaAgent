@@ -8,12 +8,14 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -27,6 +29,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -40,8 +43,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import static org.mockito.Mockito.mockStatic;
 
 @QuarkusTest
 class ApproveReflexTest {
@@ -85,10 +86,10 @@ class ApproveReflexTest {
                 .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
                 .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(java.util.concurrent.Callable.class)))
-                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(1)).call());
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(java.util.concurrent.Callable.class)))
-                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(3)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(3)).call());
     }
 
     @AfterEach

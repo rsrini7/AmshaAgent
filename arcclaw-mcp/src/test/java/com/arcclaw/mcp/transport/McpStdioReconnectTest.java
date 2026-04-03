@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -25,7 +26,7 @@ public class McpStdioReconnectTest {
     void setup() {
         service = new McpClientService();
         service.objectMapper = mapper;
-        service.executor = mock(org.eclipse.microprofile.context.ManagedExecutor.class);
+        service.executor = mock(ManagedExecutor.class);
         service.init();
     }
 

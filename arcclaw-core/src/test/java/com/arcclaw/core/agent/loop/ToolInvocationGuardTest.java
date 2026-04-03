@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tool.ToolGuardInterceptor;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +53,7 @@ class ToolInvocationGuardTest {
         when(guard.dynamicToolLookup.isUnsatisfied()).thenReturn(true);
 
         // Root Cause 1: Assume tool exists by default to allow hitl/autonomy tests to proceed
-        var mockTool = mock(com.arcclaw.core.tools.AgentTool.class);
+        var mockTool = mock(AgentTool.class);
         when(mockToolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
         when(mockToolRegistry.findTool("tool")).thenReturn(Optional.of(mockTool));
     }

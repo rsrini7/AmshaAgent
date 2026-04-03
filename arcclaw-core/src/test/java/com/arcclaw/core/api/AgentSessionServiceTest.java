@@ -12,19 +12,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
@@ -42,8 +36,16 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.MdcKeys;
-
-import jakarta.ws.rs.core.Response;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class AgentSessionServiceTest {
@@ -100,17 +102,17 @@ class AgentSessionServiceTest {
         mockedContext = mockStatic(WorkspaceContext.class);
 
         // Default behavior: just execute the lambda
-        mockedContext.when(() -> com.arcclaw.core.scope.WorkspaceContext.run(anyString(), anyString(), anyString(), any(com.arcclaw.core.security.AutonomyLevel.class), anyString(), any(com.arcclaw.channel.api.ChannelType.class), any(java.util.concurrent.Callable.class)))
-                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(6)).call());
+        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
         
-        mockedScope.when(() -> com.arcclaw.core.scope.WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
                 .thenAnswer(inv -> {
                     ((Runnable) inv.getArgument(1)).run();
                     return null;
                 });
         
-        mockedScope.when(() -> com.arcclaw.core.scope.WorkspaceScopeHolder.call(anyString(), any(java.util.concurrent.Callable.class)))
-                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(1)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
 
         // Ensure session exists by default so we don't return 404 in validateSession.
         // Marked lenient to avoid UnnecessaryStubbingException in tests that don't call validateSession.
@@ -235,7 +237,7 @@ class AgentSessionServiceTest {
             return null;
         }).when(vThreads).execute(any(Runnable.class));
 
-        jakarta.ws.rs.container.AsyncResponse asyncResponse = mock(jakarta.ws.rs.container.AsyncResponse.class);
+        AsyncResponse asyncResponse = mock(AsyncResponse.class);
         service.runAsync("sess1", request, asyncResponse);
         
         verify(checkpointApprovalService).denyAll("sess1", "Human denied via REST");
@@ -254,7 +256,7 @@ class AgentSessionServiceTest {
             return null;
         }).when(vThreads).execute(any(Runnable.class));
 
-        jakarta.ws.rs.container.AsyncResponse asyncResponse = mock(jakarta.ws.rs.container.AsyncResponse.class);
+        AsyncResponse asyncResponse = mock(AsyncResponse.class);
         service.runAsync("sess1", request, asyncResponse);
         
         verify(checkpointApprovalService).approveAll("sess1", "Human approved via REST");

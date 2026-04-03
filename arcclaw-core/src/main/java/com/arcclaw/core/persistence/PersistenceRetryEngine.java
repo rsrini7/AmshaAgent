@@ -10,7 +10,6 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
-
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 

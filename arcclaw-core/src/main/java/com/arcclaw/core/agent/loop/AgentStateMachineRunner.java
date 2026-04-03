@@ -373,7 +373,7 @@ public class AgentStateMachineRunner {
         return answer;
     }
 
-    private static final java.util.regex.Pattern PROSE_CODE_PATTERN = java.util.regex.Pattern.compile(
+    private static final Pattern PROSE_CODE_PATTERN = Pattern.compile(
             "(?si)here(?:[''']?s| is) a[n]? .{0,60}(?:program|function|class|method|algorithm|implementation|snippet|code|script).*```.*"
     );
 

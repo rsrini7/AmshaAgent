@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
@@ -23,7 +24,6 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import jakarta.transaction.Transactional.TxType;
 
 @ApplicationScoped
 public class ApprovalStateMachine implements ApprovalGateway {

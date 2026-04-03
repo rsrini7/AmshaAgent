@@ -14,11 +14,10 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -37,12 +36,13 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 @QuarkusTest
 class DenyReflexTest {
@@ -85,10 +85,10 @@ class DenyReflexTest {
                 .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
                 .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(java.util.concurrent.Callable.class)))
-                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(1)).call());
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(java.util.concurrent.Callable.class)))
-                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(3)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(3)).call());
     }
 
     @AfterEach

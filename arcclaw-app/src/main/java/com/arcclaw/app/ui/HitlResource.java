@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -53,7 +54,7 @@ public class HitlResource {
     }
 
     @GET
-    public Response listPending(@jakarta.ws.rs.HeaderParam("X-ARCCLAW-API-KEY") String apiKey,
+    public Response listPending(@HeaderParam("X-ARCCLAW-API-KEY") String apiKey,
                                 @QueryParam("apiKey") String apiKeyParam) {
         // Header first, fall back to query param (same pattern as ApiKeyAuthFilter)
         String key = (apiKey != null && !apiKey.isBlank()) ? apiKey : apiKeyParam;

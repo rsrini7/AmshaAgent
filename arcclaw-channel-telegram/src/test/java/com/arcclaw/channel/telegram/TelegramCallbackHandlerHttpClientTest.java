@@ -10,11 +10,17 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,7 +57,7 @@ class TelegramCallbackHandlerHttpClientTest {
     @Test
     void bugA3_answerCallback_appliesFiveSecondTimeout() throws Exception {
         // 1. Setup mock HttpClient
-        HttpClient mockClient = org.mockito.Mockito.mock(HttpClient.class);
+        HttpClient mockClient = Mockito.mock(HttpClient.class);
         
         // 2. Overwrite the static final HTTP_CLIENT field via reflection magic
         Field field = TelegramCallbackHandler.class.getDeclaredField("HTTP_CLIENT");
@@ -67,8 +73,8 @@ class TelegramCallbackHandlerHttpClientTest {
         }
         
         // Fix NPE: mock the method to return a valid CompletableFuture instead of null
-        org.mockito.Mockito.when(mockClient.sendAsync(any(), any()))
-            .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null));
+        Mockito.when(mockClient.sendAsync(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
         
         HttpClient originalClient = (HttpClient) field.get(null);
         try {
@@ -80,14 +86,14 @@ class TelegramCallbackHandlerHttpClientTest {
             method.invoke(handler, "test-cb-id");
 
             // 4. Capture the HttpRequest
-            org.mockito.ArgumentCaptor<java.net.http.HttpRequest> requestCaptor = 
-                org.mockito.ArgumentCaptor.forClass(java.net.http.HttpRequest.class);
+            ArgumentCaptor<HttpRequest> requestCaptor = 
+                ArgumentCaptor.forClass(HttpRequest.class);
             verify(mockClient).sendAsync(requestCaptor.capture(), any());
 
-            java.net.http.HttpRequest captured = requestCaptor.getValue();
+            HttpRequest captured = requestCaptor.getValue();
             assertTrue(captured.timeout().isPresent(), "Request MUST have a timeout configured");
-            org.junit.jupiter.api.Assertions.assertEquals(
-                java.time.Duration.ofSeconds(5), captured.timeout().get(),
+            Assertions.assertEquals(
+                Duration.ofSeconds(5), captured.timeout().get(),
                 "Timeout MUST be exactly 5 seconds (§C3)");
 
         } finally {

@@ -1,14 +1,16 @@
 package com.arcclaw.core;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 import jakarta.transaction.Transactional;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
 import com.arcclaw.core.lifecycle.SessionReaper;
+import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStoreImpl;
+import org.junit.jupiter.api.Test;
 
 public class TxReflectionTest {
 
@@ -27,7 +29,7 @@ public class TxReflectionTest {
         
         // Assert markApprovalTimedOut is NOT_SUPPORTED
         Method markApprovalTimedOut = SessionReaper.class.getDeclaredMethod("markApprovalTimedOut", 
-            com.arcclaw.core.state.AgentCheckpoint.class);
+            AgentCheckpoint.class);
         Transactional tx = markApprovalTimedOut.getAnnotation(Transactional.class);
         assertNotNull(tx, "markApprovalTimedOut must be annotated with @Transactional");
         assertEquals(Transactional.TxType.NOT_SUPPORTED, tx.value(),

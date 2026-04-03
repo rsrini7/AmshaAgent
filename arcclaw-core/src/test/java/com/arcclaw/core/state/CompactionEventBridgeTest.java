@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Optional;
+
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import org.junit.jupiter.api.Test;
@@ -30,7 +32,7 @@ class CompactionEventBridgeTest {
     @Test
     void testDelegatesToServiceAndReleasesLockOnSuccess() {
         CompactionRequest request = new CompactionRequest("session1", "user1");
-        when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(java.util.Optional.empty());
+        when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         
         bridge.onCompactionRequested(request);
 
@@ -41,7 +43,7 @@ class CompactionEventBridgeTest {
     @Test
     void testReleasesLockOnFailure() {
         CompactionRequest request = new CompactionRequest("session1", "user1");
-        when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(java.util.Optional.empty());
+        when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(compactionService.compact(anyString(), anyString())).thenThrow(new RuntimeException("Compaction failed"));
 
         bridge.onCompactionRequested(request);

@@ -16,7 +16,6 @@ import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
-
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;
