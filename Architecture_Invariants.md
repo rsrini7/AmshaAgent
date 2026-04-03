@@ -281,161 +281,6 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - Channel daemons must be safe when unconfigured.
 - `isConfigured()` exists to prevent startup crashes due to absent optional channel config.
 
----
-
-## 8. Sandbox and security rules
-
-### 8.1 Secret handling
-- Secrets must not be stored as immutable Strings when a zeroable `char[]` or byte[] lifecycle is required.
-- Clear sensitive material immediately after use where the implementation already expects this.
-
-### 8.2 Vault session identity
-- System-level vault operations must use the dedicated system session identifier constant.
-- Do not inline magic literals for system-session behavior.
-
-### 8.3 Encryption invariants
-- Associated authenticated data must remain bound to secret identity/key name.
-- Do not weaken AAD binding or replace misuse-resistant encryption choices casually.
-
-### 8.4 Seeder ordering
-- Startup observers depending on dev-seeded secrets must execute after the seeder priority window.
-
-### 8.5 Tool execution safety
-- Sandbox/protected tools must default to isolated execution unless explicitly documented otherwise.
-- Opting out of isolation is exceptional and requires strong justification.
-
-## 8.6 Sandbox tool exception contract
-
-`SandboxExecTool.execute()` MUST follow this exception contract:
-- `BudgetExceededException` — MUST propagate (not catch); `AgentStateMachineRunner` handles it.
-- `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` — MUST catch
-  and return `ToolResponse.failure(message)`. Never propagate to `ToolInvoker`.
-- Output exceeding 8192 characters MUST be truncated at exactly 8192 with suffix
-  `[output truncated at 8192 chars]`. Never include raw Java stack traces in tool output.
-
-
----
-
-## 9. Performance and reliability rules
-
-### 9.1 Regex/pattern compilation
-- Reusable regex/pattern objects must be `static final`.
-- Do not compile patterns per request, per message, or inside hot-path methods.
-
-### 9.2 Time measurement
-- Use `System.nanoTime()` for elapsed durations.
-- Do not use wall-clock time for duration measurement.
-
-### 9.3 Async persistence backpressure
-- Mandatory persistence events must never be dropped.
-- Telemetry may degrade under bounded overflow only where explicitly designed.
-- Backpressure behavior must be observable via metrics/logging.
-
-### 9.4 Logging
-- Do not log secrets or unsafe raw payloads by default.
-- Debug facilities that expose prompts, tokens, or raw content must remain explicitly gated.
-
----
-
-## 10. Configuration rules
-
-### 10.1 Profile coverage
-- Config changes must be reviewed across all relevant profiles and test overrides.
-- Do not update one profile block and assume the others are safe.
-
-### 10.2 Test-profile stability
-- Test-only configuration that disables hot-reload or optional runtime behaviors must remain explicit and intentional.
-
-### 10.3 Path resolution
-- OS-native binaries and dynamic extensions must be resolved using normalized absolute paths when runtime behavior depends on working directory.
-- Do not rely on launch-directory-relative behavior for native libs.
-
-## 10.4 Test profile skill reload
-
-The test profile MUST explicitly set:
-  arcclaw.skills.hot-reload: false
-
-Omitting this causes `SkillRegistry` to watch the filesystem during tests, producing
-flaky failures when skill YAML files are rewritten by concurrent Maven forks.
-
-
----
-
-## 11. Test discipline
-
-### 11.1 Protected endpoint tests
-- Tests for protected endpoints must include valid auth headers when the purpose is to test business behavior.
-- A 401 for missing auth is not a passing business test.
-
-### 11.2 Health tests
-- Health checks may need test alternatives when production dependencies are intentionally absent in CI/test environments.
-- Use CDI alternatives intentionally, not hidden environment dependencies.
-
-### 11.3 Architecture-sensitive tests
-The following areas require regression tests whenever touched:
-- channel plugin discovery
-- LLM provider SPI resolution
-- workspace/session binding
-- checkpoint resume/deny lifecycle
-- SQLite vec fallback and path resolution
-- MCP framing behavior
-- native-sensitive template/reflection behavior
-- sandbox circuit-breaker behavior
-
----
-
-## 12. Legacy traps to avoid
-
-- Do not copy framework workaround comments into new code without proving the workaround is still necessary.
-- Do not add new stringly-typed conventions when a canonical accessor/type already exists.
-- Do not solve architecture drift by adding more markdown-only warnings.
-- Do not treat “works in dev mode” as proof of correctness for native mode, test mode, or cross-module execution.
-- Do not introduce adapter-specific behavior into core just because Telegram is currently the busiest channel.
-
----
-
-## 13. When this file must change
-
-Update this file when:
-- a real invariant is added or removed,
-- an old workaround becomes obsolete,
-- an invariant is moved from documentation into code/test/build enforcement,
-- module boundaries or lifecycle rules materially change.
-
-Do not update this file for:
-- minor code style,
-- one-off incidents already covered by tests,
-- temporary experiments.
-
----
-
-## 14. Enforcement backlog
-
-The long-term goal is to shrink this document.
-
-Every time an invariant here can be enforced by:
-- startup validator,
-- build step,
-- architecture test,
-- CDI decorator/interceptor,
-- dedicated helper API,
-- typed wrapper/value object,
-- failing integration test,
-
----
-
-## 15. Module CDI discovery contract
-
-Every non-app, non-deployment Maven module that contains CDI beans MUST:
-1. Include `jandex-maven-plugin` in its `pom.xml` build section.
-2. Include `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`.
-
-Without Jandex, `@ApplicationScoped` beans in library modules are **silently invisible**
-to the Quarkus CDI container — no error, no warning, just missing beans.
-This applies to every `arcclaw-channel-*` module added in P67 and beyond.
-
----
-
 ## §7. Parallel Tool Execution
 
 7.1 MUST: A parallel LLM turn (N tool calls in one ChatResponse) MUST
@@ -610,6 +455,158 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 §7.36 MUST: The `ApprovalStateMachine` in `arcclaw-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
 
+---
+
+## 8. Sandbox and security rules
+
+### 8.1 Secret handling
+- Secrets must not be stored as immutable Strings when a zeroable `char[]` or byte[] lifecycle is required.
+- Clear sensitive material immediately after use where the implementation already expects this.
+
+### 8.2 Vault session identity
+- System-level vault operations must use the dedicated system session identifier constant.
+- Do not inline magic literals for system-session behavior.
+
+### 8.3 Encryption invariants
+- Associated authenticated data must remain bound to secret identity/key name.
+- Do not weaken AAD binding or replace misuse-resistant encryption choices casually.
+
+### 8.4 Seeder ordering
+- Startup observers depending on dev-seeded secrets must execute after the seeder priority window.
+
+### 8.5 Tool execution safety
+- Sandbox/protected tools must default to isolated execution unless explicitly documented otherwise.
+- Opting out of isolation is exceptional and requires strong justification.
+
+## 8.6 Sandbox tool exception contract
+
+`SandboxExecTool.execute()` MUST follow this exception contract:
+- `BudgetExceededException` — MUST propagate (not catch); `AgentStateMachineRunner` handles it.
+- `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` — MUST catch
+  and return `ToolResponse.failure(message)`. Never propagate to `ToolInvoker`.
+- Output exceeding 8192 characters MUST be truncated at exactly 8192 with suffix
+  `[output truncated at 8192 chars]`. Never include raw Java stack traces in tool output.
+
+
+---
+
+## 9. Performance and reliability rules
+
+### 9.1 Regex/pattern compilation
+- Reusable regex/pattern objects must be `static final`.
+- Do not compile patterns per request, per message, or inside hot-path methods.
+
+### 9.2 Time measurement
+- Use `System.nanoTime()` for elapsed durations.
+- Do not use wall-clock time for duration measurement.
+
+### 9.3 Async persistence backpressure
+- Mandatory persistence events must never be dropped.
+- Telemetry may degrade under bounded overflow only where explicitly designed.
+- Backpressure behavior must be observable via metrics/logging.
+
+### 9.4 Logging
+- Do not log secrets or unsafe raw payloads by default.
+- Debug facilities that expose prompts, tokens, or raw content must remain explicitly gated.
+
+---
+
+## 10. Configuration rules
+
+### 10.1 Profile coverage
+- Config changes must be reviewed across all relevant profiles and test overrides.
+- Do not update one profile block and assume the others are safe.
+
+### 10.2 Test-profile stability
+- Test-only configuration that disables hot-reload or optional runtime behaviors must remain explicit and intentional.
+
+### 10.3 Path resolution
+- OS-native binaries and dynamic extensions must be resolved using normalized absolute paths when runtime behavior depends on working directory.
+- Do not rely on launch-directory-relative behavior for native libs.
+
+## 10.4 Test profile skill reload
+
+The test profile MUST explicitly set:
+  arcclaw.skills.hot-reload: false
+
+Omitting this causes `SkillRegistry` to watch the filesystem during tests, producing
+flaky failures when skill YAML files are rewritten by concurrent Maven forks.
+
+
+---
+
+## 11. Test discipline
+
+### 11.1 Protected endpoint tests
+- Tests for protected endpoints must include valid auth headers when the purpose is to test business behavior.
+- A 401 for missing auth is not a passing business test.
+
+### 11.2 Health tests
+- Health checks may need test alternatives when production dependencies are intentionally absent in CI/test environments.
+- Use CDI alternatives intentionally, not hidden environment dependencies.
+
+### 11.3 Architecture-sensitive tests
+The following areas require regression tests whenever touched:
+- channel plugin discovery
+- LLM provider SPI resolution
+- workspace/session binding
+- checkpoint resume/deny lifecycle
+- SQLite vec fallback and path resolution
+- MCP framing behavior
+- native-sensitive template/reflection behavior
+- sandbox circuit-breaker behavior
+
+---
+
+## 12. Legacy traps to avoid
+
+- Do not copy framework workaround comments into new code without proving the workaround is still necessary.
+- Do not add new stringly-typed conventions when a canonical accessor/type already exists.
+- Do not solve architecture drift by adding more markdown-only warnings.
+- Do not treat “works in dev mode” as proof of correctness for native mode, test mode, or cross-module execution.
+- Do not introduce adapter-specific behavior into core just because Telegram is currently the busiest channel.
+
+---
+
+## 13. When this file must change
+
+Update this file when:
+- a real invariant is added or removed,
+- an old workaround becomes obsolete,
+- an invariant is moved from documentation into code/test/build enforcement,
+- module boundaries or lifecycle rules materially change.
+
+Do not update this file for:
+- minor code style,
+- one-off incidents already covered by tests,
+- temporary experiments.
+
+---
+
+## 14. Enforcement backlog
+
+The long-term goal is to shrink this document.
+
+Every time an invariant here can be enforced by:
+- startup validator,
+- build step,
+- architecture test,
+- CDI decorator/interceptor,
+- dedicated helper API,
+- typed wrapper/value object,
+- failing integration test,
+
+---
+
+## 15. Module CDI discovery contract
+
+Every non-app, non-deployment Maven module that contains CDI beans MUST:
+1. Include `jandex-maven-plugin` in its `pom.xml` build section.
+2. Include `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`.
+
+Without Jandex, `@ApplicationScoped` beans in library modules are **silently invisible**
+to the Quarkus CDI container — no error, no warning, just missing beans.
+This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ---
 
