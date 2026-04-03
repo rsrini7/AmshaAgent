@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -39,6 +40,9 @@ public class CronJobRunner {
     @Inject
     AgentCronRepository cronRepository;
 
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
     int cronMaxIterations;
 
@@ -52,6 +56,13 @@ public class CronJobRunner {
         cronRepository.setDeliveryId(job.id, executionId);
 
         String cronSessionId = "cron-" + job.id + "-" + executionId;
+
+        // Register session in heartbeat tracker so it is visible in the UI Approvals tab.
+        // Background jobs use BACKGROUND autonomy as a starting point.
+        heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
+        if (job.userId != null) {
+            heartbeatTracker.tryBindOwner(cronSessionId, job.userId);
+        }
         
         try {
             String effectiveGoal = job.goal + 

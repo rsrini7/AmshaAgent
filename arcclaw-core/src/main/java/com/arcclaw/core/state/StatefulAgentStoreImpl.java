@@ -283,6 +283,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
         String sessionPrefix = "cron-" + cronId + "-";
 

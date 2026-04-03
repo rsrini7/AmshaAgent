@@ -7,12 +7,12 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.arcclaw.core.security.SessionOwnerResolver;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**

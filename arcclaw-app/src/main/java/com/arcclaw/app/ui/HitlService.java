@@ -2,6 +2,7 @@ package com.arcclaw.app.ui;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -59,7 +60,7 @@ public class HitlService {
         List<String> ownedSessionIds = heartbeatTracker.getSessionIdsByOwner(userId);
         List<String> unownedSessionIds = heartbeatTracker.getUnownedSessionIds();
 
-        List<String> visibleSessionIds = new java.util.ArrayList<>(ownedSessionIds);
+        List<String> visibleSessionIds = new ArrayList<>(ownedSessionIds);
         visibleSessionIds.addAll(unownedSessionIds);
 
         if (visibleSessionIds.isEmpty()) {
