@@ -110,11 +110,30 @@ public class CheckpointResumeHandler {
 
             AgentResult result;
             try {
+                // §84-B B6: Iteration Ceiling for REST/Background resume.
+                // Prevents infinite consumption resets. CAP at maxResumeIterations (5),
+                // but ensure FLOOR of 3 so the agent has enough budget to observe
+                // the tool result and call FINISH.
+                int maxResumeIterations = 5;
+                int original = agentStore.load(sessionId, agentRole)
+                        .map(cp -> cp.getMaxIterations() != null ? cp.getMaxIterations() : maxResumeIterations)
+                        .orElse(maxResumeIterations);
+ 
+                int used = agentStore.load(sessionId, agentRole)
+                        .map(AgentCheckpoint::getIterationsUsed)
+                        .orElse(0);
+ 
+                int remaining = Math.max(0, original - used);
+                int budget = Math.max(3, Math.min(remaining, maxResumeIterations));
+ 
+                log.infof("Resuming session=%s budget=%d (original=%d, used=%d)",
+                        sessionId, budget, original, used);
+ 
                 result = WorkspaceContext.runWithFullAutonomy(
                     sessionId, userId, chatId, agentRole,
                     () -> agentLoop.run(
                         sessionId, agentRole, resumeGoal,
-                        reasoningEngine, 5, context));
+                        reasoningEngine, budget, context));
             } catch (Exception e) {
                 log.errorf(e, "Failed to resume session %s", sessionId);
                 channelPluginRegistry.find(cType.id())

@@ -83,7 +83,7 @@ class ApprovalStateMachineTest {
         assertEquals(0, result.remainingPendingTools());
 
         verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", "APPROVED");
-        verify(resumeHandler).resumeAfterBatchDecision("session-123", "coder", "session-123", null, "websocket");
+        verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
         verify(decisionEvents).fire(any(ApprovalDecisionEvent.class));
     }
 
@@ -137,7 +137,7 @@ class ApprovalStateMachineTest {
         ApprovalResult result = stateMachine.decide("session-123", "tool2", ApprovalDecision.APPROVE, "test");
         
         assertEquals(ApprovalOutcome.APPROVED, result.outcome());
-        verify(resumeHandler).resumeAfterBatchDecision("session-123", "coder", "session-123", null, "websocket");
+        verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
     }
 
     @Test

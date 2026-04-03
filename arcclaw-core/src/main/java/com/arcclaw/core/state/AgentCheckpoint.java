@@ -133,6 +133,9 @@ public class AgentCheckpoint {
     @Column(name = "max_iterations")
     private Integer maxIterations;
 
+    @Column(name = "iterations_used")
+    private int iterationsUsed = 0;
+
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -287,6 +290,9 @@ public class AgentCheckpoint {
 
     public Integer getMaxIterations() { return maxIterations; }
     public void setMaxIterations(Integer maxIterations) { this.maxIterations = maxIterations; }
+
+    public int getIterationsUsed() { return iterationsUsed; }
+    public void setIterationsUsed(int iterationsUsed) { this.iterationsUsed = iterationsUsed; }
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;

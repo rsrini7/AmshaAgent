@@ -83,8 +83,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
-            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s",
-                       sessionId, agentRole, autonomy);
+            checkpoint.setIterationsUsed(steps.size());
+            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s, used=%d",
+                       sessionId, agentRole, autonomy, steps.size());
         } else {
             checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId(sessionId);
@@ -92,6 +93,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
+            checkpoint.setIterationsUsed(steps.size());
             em.persist(checkpoint);
 
             String userId = (String) MDC.get(MdcKeys.USER_ID);
@@ -142,6 +144,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             }
 
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
+            managed.setIterationsUsed(checkpoint.getIterationsUsed());
             // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
