@@ -36,12 +36,12 @@ public class HitlServiceTest {
         // Session for userA
         String sessionA = "session-userA";
         heartbeatTracker.recordHeartbeat(sessionA);
-        heartbeatTracker.bindOwner(sessionA, "userA");
+        heartbeatTracker.tryBindOwner(sessionA, "userA");
 
         // Session for userB
         String sessionB = "session-userB";
         heartbeatTracker.recordHeartbeat(sessionB);
-        heartbeatTracker.bindOwner(sessionB, "userB");
+        heartbeatTracker.tryBindOwner(sessionB, "userB");
 
         // Checkpoint for userA
         AgentCheckpoint cpA = new AgentCheckpoint();

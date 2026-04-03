@@ -62,12 +62,9 @@ public class HitlResource {
         if (userId == null) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
-        var existingOwner = heartbeatTracker.getOwner(sessionId);
-        if (existingOwner.isEmpty()) {
-            // First SSE access for this session — bind the caller as owner.
-            heartbeatTracker.bindOwner(sessionId, userId);
-        } else if (!existingOwner.get().equals(userId)) {
-            // Session belongs to a different user — reject.
+        
+        if (!heartbeatTracker.tryBindOwner(sessionId, userId)) {
+            // Either session reaped, or owned by someone else.
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
 

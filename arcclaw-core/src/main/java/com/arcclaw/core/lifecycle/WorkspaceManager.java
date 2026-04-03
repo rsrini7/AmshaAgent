@@ -63,6 +63,14 @@ public class WorkspaceManager {
      * Terminate a workspace session completely.
      */
     public void terminateSession(String sessionId) {
+        // F12: Safety guard to prevent termination during an active resume.
+        // If the session is currently resuming its batch (e.g., calling tools),
+        // we must not delete the workspace yet.
+        if (statefulAgentStore.isBatchResuming(sessionId)) {
+            log.warnf("Rejecting session termination for %s: session is currently RESUMING.", sessionId);
+            throw new IllegalStateException("Cannot terminate session while it is actively resuming its batch");
+        }
+
         log.infof("Terminating session: %s", sessionId);
 
         // 1. Remove from heartbeat tracking

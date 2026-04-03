@@ -127,7 +127,7 @@ public class AgentSessionService {
         Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
         String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
         if (requestingKey != null && !requestingKey.isBlank()) {
-            heartbeatTracker.bindOwner(sessionId, requestingKey);
+            heartbeatTracker.tryBindOwner(sessionId, requestingKey);
         }
         return sessionId;
     }

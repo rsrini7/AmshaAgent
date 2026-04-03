@@ -140,7 +140,7 @@ class AgentSessionServiceTest {
         try {
             String sessionId = service.createSession(AutonomyLevel.FULL);
             assertNotNull(sessionId);
-            verify(heartbeatTracker).bindOwner(sessionId, "key-owner-123");
+            verify(heartbeatTracker).tryBindOwner(sessionId, "key-owner-123");
         } finally {
             MDC.remove(MdcKeys.USER_ID);
         }
@@ -151,7 +151,7 @@ class AgentSessionServiceTest {
         MDC.remove(MdcKeys.USER_ID);
         String sessionId = service.createSession(AutonomyLevel.SUPERVISED);
         assertNotNull(sessionId);
-        verify(heartbeatTracker, Mockito.never()).bindOwner(anyString(), anyString());
+        verify(heartbeatTracker, Mockito.never()).tryBindOwner(anyString(), anyString());
     }
 
     @Test

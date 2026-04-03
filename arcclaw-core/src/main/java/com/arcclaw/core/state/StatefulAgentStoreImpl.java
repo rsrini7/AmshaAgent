@@ -1,5 +1,6 @@
 package com.arcclaw.core.state;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -49,11 +50,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {};
 
     /**
-     * In-memory set of sessionIds currently in the process of resuming
-     * a parallel batch. Prevents double-resume from concurrent callbacks.
+     * In-memory map of sessionIds to the start time of a resume operation.
+     * Prevents double-resume from concurrent callbacks.
      * §7.29 — NOT persisted; cleared on session termination.
+     * F7: Stores Instant to allow TTL-based cleanup of orphaned markers.
      */
-    private final ConcurrentHashMap<String, Boolean>
+    private final ConcurrentHashMap<String, Instant>
         resumingBatches = new ConcurrentHashMap<>();
 
     @Inject ObjectMapper objectMapper;
@@ -579,8 +581,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional(Transactional.TxType.REQUIRES_NEW) 
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
+        return withRetry(() -> self.doIsAllBatchToolsDecided(sessionId, agentRole), "isAllBatchDecided");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doIsAllBatchToolsDecided(String sessionId, String agentRole) {
         em.clear();
         Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return false;
@@ -627,14 +633,23 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      */
     @Override
     public boolean markBatchResuming(String sessionId) {
-        // putIfAbsent returns null if the key was NOT present → this
-        // caller is first → safe to proceed.
-        return resumingBatches.putIfAbsent(sessionId, Boolean.TRUE) == null;
+        // F7: Use Instant.now() instead of Boolean.TRUE for TTL tracking.
+        return resumingBatches.putIfAbsent(sessionId, Instant.now()) == null;
     }
 
     @Override
     public boolean isBatchResuming(String sessionId) {
-        return resumingBatches.getOrDefault(sessionId, false);
+        Instant start = resumingBatches.get(sessionId);
+        if (start == null) return false;
+
+        // F7: TTL Guard. If the entry is older than 30 minutes, assume the 
+        // thread died or finally block failed to run (e.g. OOM/SIGKILL previously).
+        if (Duration.between(start, Instant.now()).toMinutes() > 30) {
+            log.warnf("Found orphaned resume marker for session %s (started %s) — ignoring.", sessionId, start);
+            resumingBatches.remove(sessionId);
+            return false;
+        }
+        return true;
     }
 
     @Override

@@ -117,14 +117,27 @@ public class SessionHeartbeatTracker {
     }
 
     /**
-     * Bind an API key identity as owner of the given session.
-     * Uses computeIfPresent: if the session was already reaped, this silently no-ops.
+     * Atomically bind an API key identity as owner of the session, if not already owned.
+     * 
+     * @return true if the session is now owned by this user (or already was).
+     *         false if the session is owned by someone else or doesn't exist.
      */
-    public void bindOwner(String sessionId, String ownerKeyName) {
-        sessionData.computeIfPresent(sessionId, (k, existing) ->
-            new SessionMetadata(existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName, 
-            existing.totalInputTokens(), existing.totalOutputTokens() ));
-        log.debugf("Owner bound for session=%s owner=%s", sessionId, ownerKeyName);
+    public boolean tryBindOwner(String sessionId, String ownerKeyName) {
+        if (ownerKeyName == null) return false;
+        
+        SessionMetadata result = sessionData.computeIfPresent(sessionId, (k, existing) -> {
+            if (existing.ownerKeyName() == null || existing.ownerKeyName().equals(ownerKeyName)) {
+                // Not owned yet, or already owned by this user → bind/keep.
+                return new SessionMetadata(
+                    existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName, 
+                    existing.totalInputTokens(), existing.totalOutputTokens());
+            }
+            // Owned by someone else → no change.
+            return existing;
+        });
+
+        if (result == null) return false; // Session reaped/doesn't exist
+        return ownerKeyName.equals(result.ownerKeyName());
     }
 
     public void recordTokens(String sessionId, long inputTokens, long outputTokens) {

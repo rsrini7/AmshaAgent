@@ -55,6 +55,6 @@ public class ChannelServicesImpl implements ChannelServices {
 
     @Override
     public void bindSessionOwner(String sessionId, String ownerKeyName) {
-        heartbeatTracker.bindOwner(sessionId, ownerKeyName);
+        heartbeatTracker.tryBindOwner(sessionId, ownerKeyName);
     }
 }

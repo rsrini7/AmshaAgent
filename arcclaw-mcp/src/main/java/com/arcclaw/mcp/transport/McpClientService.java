@@ -162,10 +162,18 @@ public class McpClientService {
     @Timeout(10000)
     @Retry(maxRetries = 2, delay = 1000, retryOn = {IOException.class})
     public String invoke(String serverName, String toolName, String paramsJson) {
-        if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
-            log.infof("reconnecting dead MCP server: %s", serverName);
-            StdioConfig cfg = stdioConfigs.get(serverName);
-            connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+        // N3: Guard reconnection logic with per-server lock to prevent race where 
+        // parallel calls strike a dead server and all try to connectStdio simultaneously.
+        ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
+                log.infof("reconnecting dead MCP server: %s", serverName);
+                StdioConfig cfg = stdioConfigs.get(serverName);
+                connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+            }
+        } finally {
+            lock.unlock();
         }
 
         if (processes.containsKey(serverName)) {
