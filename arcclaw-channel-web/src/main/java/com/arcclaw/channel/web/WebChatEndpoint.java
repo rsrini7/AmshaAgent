@@ -81,26 +81,11 @@ public class WebChatEndpoint {
             ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
 
-        // F27/§85-A: Bind owner to the session in the heartbeat tracker if an API key is present.
-        // This ensures the user who initiated the WebSocket is the only one who can access
-        // this session's metadata, HITL approvals, and audit trails.
-        String effectiveKey = conn.handshakeRequest().header("X-ArcClaw-API-Key");
-        if (effectiveKey == null || effectiveKey.isBlank()) {
-            effectiveKey = conn.handshakeRequest().header("Sec-WebSocket-Protocol");
-        }
-        if (effectiveKey == null || effectiveKey.isBlank()) {
-            String q = conn.handshakeRequest().query();
-            if (q != null && q.contains("apiKey=")) {
-                effectiveKey = q.split("apiKey=")[1].split("&")[0];
-            }
-        }
-
-        if (effectiveKey != null && !effectiveKey.isBlank()) {
-            ownerResolver.resolveOwner(effectiveKey).ifPresent(userId -> {
-                channelServices.bindSessionOwner(arcclawSessionId, userId);
-                log.debugf("Bound session %s to owner %s (WebSocket)", arcclawSessionId, userId);
-            });
-        }
+        // §85-B: Proactively initialize session presence in the heartbeat tracker.
+        // The browser WebSocket API cannot send custom headers, so ownership
+        // binding happens lazily when the UI hits HitlResource/AgentResource SSE
+        // endpoints (which DO carry the apiKey as a query param).
+        channelServices.recordHeartbeat(arcclawSessionId);
 
         conn.sendText(buildConnectedJson(platformId, arcclawSessionId))
             .subscribe().with(

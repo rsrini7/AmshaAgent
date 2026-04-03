@@ -49,6 +49,11 @@ public class ChannelServicesImpl implements ChannelServices {
     }
 
     @Override
+    public void recordHeartbeat(String sessionId) {
+        heartbeatTracker.recordHeartbeat(sessionId);
+    }
+
+    @Override
     public void bindSessionOwner(String sessionId, String ownerKeyName) {
         heartbeatTracker.bindOwner(sessionId, ownerKeyName);
     }

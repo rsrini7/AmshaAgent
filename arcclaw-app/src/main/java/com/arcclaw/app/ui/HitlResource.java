@@ -53,15 +53,22 @@ public class HitlResource {
                 new WebApplicationException(Response.Status.BAD_REQUEST));
         }
 
-        // F27/§85-A: Cross-tenant ownership check for SSE subscription.
+        // §85-B: Lazy ownership binding for SSE subscription.
+        // The browser WebSocket API cannot send custom headers, so ownership
+        // is NOT established at WebSocket open time. Instead, the first SSE
+        // request that carries a valid apiKey lazily binds the owner.
+        // If the session already has a different owner, reject.
         String userId = apiKeyValidator.resolveUserId(apiKey);
         if (userId == null) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
-
-        // Check if the user owns this session
-        if (!heartbeatTracker.getOwner(sessionId).map(userId::equals).orElse(false)) {
-             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
+        var existingOwner = heartbeatTracker.getOwner(sessionId);
+        if (existingOwner.isEmpty()) {
+            // First SSE access for this session — bind the caller as owner.
+            heartbeatTracker.bindOwner(sessionId, userId);
+        } else if (!existingOwner.get().equals(userId)) {
+            // Session belongs to a different user — reject.
+            return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
 
         return agentSseService.subscribe(sessionId);
