@@ -90,7 +90,11 @@ public class SessionReaper {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
         // D1.2: Added 15-minute grace period based on updatedAt to protect
         // active checkpoints running on other nodes during rolling/canary deployments.
-        Instant cutoff = Instant.now().minus(java.time.Duration.ofMinutes(15));
+        // FIX: Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
+        // Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly.
+        java.time.LocalDateTime cutoff = java.time.LocalDateTime.ofInstant(
+                Instant.now().minus(java.time.Duration.ofMinutes(15)),
+                java.time.ZoneOffset.UTC);
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)

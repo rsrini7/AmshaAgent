@@ -71,8 +71,12 @@ class WorkspaceManagerTest {
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
             var steps = List.of(ReasoningStep.pending("thinking", "action", Map.of()));
             var cp = agentStore.save("zombie-session-1", "coordinator", steps);
-            cp.setUpdatedAt(java.time.LocalDateTime.now().minusMinutes(20));
-            agentStore.save(cp);
+            QuarkusTransaction.requiringNew().run(() -> {
+                em.createQuery("UPDATE AgentCheckpoint c SET c.updatedAt = :backdate WHERE c.id = :id")
+                  .setParameter("backdate", java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(20))
+                  .setParameter("id", cp.getId())
+                  .executeUpdate();
+            });
         });
 
         // Verify it's IN_PROGRESS
