@@ -51,8 +51,18 @@ public class HitlService {
         }
         int effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
+        // §85-B: Include both owned sessions AND unowned sessions (Telegram, CLI).
+        // Telegram/CLI sessions never go through AgentSessionService.createSession()
+        // or the WebSocket lazy-bind path, so they have ownerKeyName = null.
+        // An authenticated UI user should see approvals from all their owned sessions
+        // plus any unowned (global) sessions.
         List<String> ownedSessionIds = heartbeatTracker.getSessionIdsByOwner(userId);
-        if (ownedSessionIds.isEmpty()) {
+        List<String> unownedSessionIds = heartbeatTracker.getUnownedSessionIds();
+
+        List<String> visibleSessionIds = new java.util.ArrayList<>(ownedSessionIds);
+        visibleSessionIds.addAll(unownedSessionIds);
+
+        if (visibleSessionIds.isEmpty()) {
             return Map.of();
         }
 
@@ -62,7 +72,7 @@ public class HitlService {
                 "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("sessionIds", ownedSessionIds)
+                .setParameter("sessionIds", visibleSessionIds)
                 .setMaxResults(effectiveLimit)
                 .getResultList()
                 .stream()

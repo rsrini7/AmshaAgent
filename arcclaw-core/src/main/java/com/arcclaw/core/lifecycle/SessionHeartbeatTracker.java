@@ -167,6 +167,18 @@ public class SessionHeartbeatTracker {
     }
 
     /**
+     * Returns all session IDs that have NO owner bound.
+     * These are typically Telegram/CLI sessions that never went through
+     * AgentSessionService.createSession() or the WebSocket lazy-bind path.
+     */
+    public List<String> getUnownedSessionIds() {
+        return sessionData.entrySet().stream()
+                .filter(e -> e.getValue().ownerKeyName() == null)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    /**
      * Returns all active sessions owned by the given key name (userId).
      * Used for tenant-scoped session listing (e.g. AgentResource.listSessions()).
      */
