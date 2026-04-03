@@ -28,6 +28,7 @@ public class HitlService {
 
     @Inject EntityManager em;
     @Inject ObjectMapper objectMapper;
+    @Inject CheckpointApprovalService checkpointApprovalService;
 
     @Transactional
     public Map<String, PendingApproval> getPendingApprovals() {
@@ -59,8 +60,6 @@ public class HitlService {
         );
     }
 
-    @Inject CheckpointApprovalService checkpointApprovalService;
-
     @Transactional(TxType.NOT_SUPPORTED)   // ← was @Transactional
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
@@ -72,28 +71,32 @@ public class HitlService {
             throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
 
+        AgentCheckpoint resolvedCp;
         if (approved) {
-            if (toolName != null && !toolName.isBlank()) {
-                checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
-            } else {
+            if (toolName != null && !toolName.isBlank())
+                resolvedCp = checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
+            else {
                 List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-                if (pending.size() == 1) {
-                    checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
-                } else {
-                    checkpointApprovalService.approveAll(cp.getSessionId(), reason);
-                }
+                if (pending.size() == 1)
+                    resolvedCp = checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
+                else
+                    resolvedCp = checkpointApprovalService.approveAll(cp.getSessionId(), reason);
             }
         } else {
-            if (toolName != null && !toolName.isBlank()) {
-                checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
-            } else {
+            if (toolName != null && !toolName.isBlank())
+                resolvedCp = checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
+            else {
                 List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-                if (pending.size() == 1) {
-                    checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
-                } else {
-                    checkpointApprovalService.denyAll(cp.getSessionId(), reason);
-                }
+                if (pending.size() == 1)
+                    resolvedCp = checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
+                else
+                    resolvedCp = checkpointApprovalService.denyAll(cp.getSessionId(), reason);
             }
+        }
+
+        // mirrors DenyReflex/ApproveReflex — triggers AgentLoop resume/denial path
+        if (resolvedCp != null) {
+            checkpointApprovalService.triggerResume(resolvedCp);
         }
     }
 

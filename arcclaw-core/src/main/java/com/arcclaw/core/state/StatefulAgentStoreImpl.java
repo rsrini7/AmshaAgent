@@ -546,6 +546,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             "updateBatchToolDecision");
     }
 
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doUpdateBatchToolDecision(String sessionId, String agentRole,
                                              String toolName, String decision) {
         em.clear();

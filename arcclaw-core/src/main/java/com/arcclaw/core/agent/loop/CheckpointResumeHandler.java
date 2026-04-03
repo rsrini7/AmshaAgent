@@ -154,15 +154,28 @@ public class CheckpointResumeHandler {
         }
     }
 
-    // --- rest of the file unchanged below ---
-
     public String resolveResumeGoal(String sessionId, String agentRole) {
         return agentStore.load(sessionId, agentRole)
-                .map(cp -> {
-                    String og = cp.getOriginalGoal();
-                    return (og != null && !og.isBlank()) ? og : AgentSentinels.GOAL_RESUME_APPROVED;
-                })
-                .orElse(AgentSentinels.GOAL_RESUME_APPROVED);
+            .map(cp -> {
+                // If all decisions in the batch are DENIED, route to the denial handler
+                if (cp.hasBatchToolDecisions()) {
+                    try {
+                        Map<String, String> decisions = objectMapper.readValue(
+                            cp.getBatchToolDecisions(),
+                            new TypeReference<Map<String, String>>() {}
+                        );
+                        boolean allDenied = !decisions.isEmpty() &&
+                            decisions.values().stream()
+                                .allMatch(AgentSentinels.TOOL_DECISION_DENIED::equals);
+                        if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
+                    } catch (Exception e) {
+                        log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", sessionId);
+                    }
+                }
+                String og = cp.getOriginalGoal();
+                return og != null && !og.isBlank() ? og : AgentSentinels.GOAL_RESUME_APPROVED;
+            })
+            .orElse(AgentSentinels.GOAL_RESUME_APPROVED);
     }
 
     public AgentResult handle(AgentExecutionContext context,
