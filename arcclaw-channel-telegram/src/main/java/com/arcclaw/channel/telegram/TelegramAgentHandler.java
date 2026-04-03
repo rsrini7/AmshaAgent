@@ -97,7 +97,8 @@ public class TelegramAgentHandler {
         channelServices.processAsync(channelMessage)
             .handle((res, ex) -> {
                 if (ex != null) {
-                    log.errorf(ex, "Uncaught exception in message processing for chat %s", chatId);
+                    log.errorf("Uncaught exception in message processing for chat %s: %s", chatId, ex.getMessage());
+                    log.debug("Full exception trace during async processing:", ex);
                     sender.sendRaw(user, "Sorry, an internal error occurred while processing your message.");
                 }
                 flag.set(false);
