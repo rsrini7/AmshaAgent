@@ -327,6 +327,10 @@ public class ApproveReflex implements AgentReflex {
                     AgentResultFormatter.format(result),
                     result instanceof AgentResult.Failed f ? f.category() : null));
 
+            // Clear the resume lock BEFORE termination — the agent loop is done,
+            // so the F12 guard in terminateSession no longer needs to protect us.
+            statefulAgentStore.clearBatchResuming(cronSessionId);
+
             try {
                 workspaceManager.terminateSession(cronSessionId);
             } catch (Exception e) {
@@ -337,6 +341,7 @@ public class ApproveReflex implements AgentReflex {
 
             return "";
         } finally {
+            // Defensive: ensure lock is always released even on exceptions.
             statefulAgentStore.clearBatchResuming(cronSessionId);
         }
     }

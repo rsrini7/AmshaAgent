@@ -58,11 +58,11 @@ public class CronJobRunner {
         String cronSessionId = "cron-" + job.id + "-" + executionId;
 
         // Register session in heartbeat tracker so it is visible in the UI Approvals tab.
-        // Background jobs use BACKGROUND autonomy as a starting point.
+        // Background/cron sessions are intentionally left UNOWNED so they appear via
+        // getUnownedSessionIds() for all authenticated UI users. Binding to job.userId
+        // (Telegram user ID e.g. 945307929) would make them invisible because the UI
+        // authenticates with an API key whose identity doesn't match the Telegram ID.
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
-        if (job.userId != null) {
-            heartbeatTracker.tryBindOwner(cronSessionId, job.userId);
-        }
         
         try {
             String effectiveGoal = job.goal + 
