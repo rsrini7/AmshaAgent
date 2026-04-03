@@ -146,7 +146,7 @@ class AsyncPersistenceEngineTest {
                 new RuntimeException("JPA error",
                         new RuntimeException("SQLITE_BUSY: database is locked")));
 
-        assertTrue(AsyncPersistenceEngine.isSqliteBusy(outer));
+        assertTrue(PersistenceRetryEngine.isSqliteBusy(outer));
     }
 
     @Test

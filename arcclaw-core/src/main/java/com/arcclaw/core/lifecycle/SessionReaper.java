@@ -145,7 +145,7 @@ public class SessionReaper {
      * Skips sessions that are AWAITING_APPROVAL (handled by sweepTimedOutApprovals).
      * NO @Transactional — delegates to split read/write methods.
      */
-    @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
+    @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}", delayed = "PT90S")
     public void gcSweep() {
         if (shuttingDown) return;
         if (heartbeatTracker.activeSessionCount() == 0) return;
