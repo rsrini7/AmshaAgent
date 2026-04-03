@@ -614,6 +614,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .getResultList();
     }
 
+    /**
+     * Attempts to acquire the local JVM resume lock for a session.
+     * <p>
+     * <strong>D1.1/F7 Tradeoff Documented:</strong> This is a JVM-local
+     * ConcurrentHashMap. It protects against concurrent duplicate resumes hitting
+     * the SAME pod (e.g., impatient user clicking 'Approve' twice). It DOES NOT
+     * protect against cross-pod races during rolling restarts or if a load balancer
+     * sprays two approvals to different pods. Moving to a persistent lock (e.g. 
+     * Redis or row-level SQLite lock) is required for full distributed exactly-once
+     * resuming, if ever strictly required by an orchestrator setup.
+     */
     @Override
     public boolean markBatchResuming(String sessionId) {
         // putIfAbsent returns null if the key was NOT present → this

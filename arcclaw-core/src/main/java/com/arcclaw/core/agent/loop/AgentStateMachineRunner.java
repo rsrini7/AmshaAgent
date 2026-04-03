@@ -246,7 +246,7 @@ public class AgentStateMachineRunner {
 
         answer = sanitizeErrorForUser(answer, sessionId);
 
-        if (answer != null && isGeneratedCodeBlock(answer)) {
+        if (answer != null && isGeneratedCodeBlock(answer, agentRole)) {
             if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
                 String refusal = "I'm " + agentRole + " — I don't generate code. " +
                         "Please ask Brahma (coder) for code generation tasks.";
@@ -373,15 +373,28 @@ public class AgentStateMachineRunner {
         return answer;
     }
 
-    private boolean isGeneratedCodeBlock(String text) {
+    private static final java.util.regex.Pattern PROSE_CODE_PATTERN = java.util.regex.Pattern.compile(
+            "(?si)here(?:[''']?s| is) a[n]? .{0,60}(?:program|function|class|method|algorithm|implementation|snippet|code|script).*```.*"
+    );
+
+    private boolean isGeneratedCodeBlock(String text, String agentRole) {
         if (text == null) return false;
         String stripped = text.stripLeading();
-        if (stripped.startsWith("```")) return true;
-        if (stripped.matches("(?si)here[''']?s a .{0,60}(program|function|class|"
-                + "method|algorithm|implementation|snippet|code).*```.*")) return true;
-        if (stripped.matches("(?si)here is a .{0,60}(program|function|class|"
-                + "method|algorithm|implementation|snippet|code).*```.*")) return true;
-        return false;
+
+        // For non-coder roles, if they just output a ``` block (e.g. for logs or quoting),
+        // we shouldn't falsely block them. But if they actively announce code generation
+        // using the prose pattern, we catch them.
+        boolean isCoder = AgentRoleEnum.fromString(agentRole).definition().canGenerateCode();
+        
+        if (!isCoder) {
+            // Non-coder: only block if they explicitly announce code generation prose.
+            // If they just use Markdown blocks for structured logs, allow it.
+            return PROSE_CODE_PATTERN.matcher(stripped).find();
+        } else {
+            // Coder: we catch it faster for metrics / labeling, though they won't be blocked anyway.
+            if (stripped.startsWith("```")) return true;
+            return PROSE_CODE_PATTERN.matcher(stripped).find();
+        }
     }
 
     // ── Shared types ──────────────────────────────────────────────────────────

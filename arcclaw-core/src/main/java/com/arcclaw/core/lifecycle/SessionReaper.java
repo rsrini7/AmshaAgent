@@ -88,10 +88,14 @@ public class SessionReaper {
 
     private void doRecoverZombies() {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
+        // D1.2: Added 15-minute grace period based on updatedAt to protect
+        // active checkpoints running on other nodes during rolling/canary deployments.
+        Instant cutoff = Instant.now().minus(java.time.Duration.ofMinutes(15));
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
+                .setParameter("cutoff", cutoff)
                 .getResultList();
 
         if (!inProgressZombies.isEmpty()) {
