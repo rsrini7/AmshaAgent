@@ -143,15 +143,23 @@ public class AgentCronScheduler {
             }
 
             // Dispatch to managed virtual thread
-            vThreads.execute(() -> {
-                MDC.put(MdcKeys.USER_ID, job.userId);
-                try {
-                    jobRunner.execute(job);
-                } finally {
-                    concurrencyLimiter.release();
-                    MdcCleaner.clearAll();
-                }
-            });
+            try {
+                vThreads.execute(() -> {
+                    MDC.put(MdcKeys.USER_ID, job.userId);
+                    try {
+                        jobRunner.execute(job);
+                    } finally {
+                        concurrencyLimiter.release();
+                        MdcCleaner.clearAll();
+                    }
+                });
+            } catch (Exception e) {
+                log.errorf("Failed to dispatch cron job %s: %s",
+                        job.id, e.getMessage());
+                concurrencyLimiter.release();
+                // Release claim so it can be picked up later
+                cronRepository.releaseClaimToActive(job.id);
+            }
         }
     }
 }

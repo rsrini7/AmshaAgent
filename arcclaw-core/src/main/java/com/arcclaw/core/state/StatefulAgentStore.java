@@ -144,6 +144,12 @@ public interface StatefulAgentStore {
      * §7.29
      */
     boolean markBatchResuming(String sessionId);
+ 
+    /**
+     * Returns true if the session is currently marked as RESUMING in-memory.
+     * §7.29
+     */
+    boolean isBatchResuming(String sessionId);
 
     /**
      * Clears the RESUMING flag for the session. §7.29

@@ -622,6 +622,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public boolean isBatchResuming(String sessionId) {
+        return resumingBatches.getOrDefault(sessionId, false);
+    }
+
+    @Override
     public void clearBatchResuming(String sessionId) {
         resumingBatches.remove(sessionId);
     }

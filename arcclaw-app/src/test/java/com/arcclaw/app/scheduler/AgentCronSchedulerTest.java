@@ -117,6 +117,29 @@ class AgentCronSchedulerTest {
                 t.isAfter(Instant.now().minus(6, ChronoUnit.MINUTES)) &&
                 t.isBefore(Instant.now().minus(4, ChronoUnit.MINUTES))));
     }
+ 
+    @Test
+    void testSemaphoreReleasedOnRejection() {
+        AgentCronEntity job = createDueJob(true);
+        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
+        when(cronRepository.claimForFire(job.id)).thenReturn(true);
+ 
+        // Mock executor to throw RejectedExecutionException
+        doAnswer(invocation -> {
+            throw new java.util.concurrent.RejectedExecutionException("Mock rejection");
+        }).when(vThreadsMock).execute(any(Runnable.class));
+ 
+        int initialPermits = scheduler.getAvailablePermits();
+ 
+        scheduler.pollAndDispatch();
+ 
+        // Verify permits are same as before (acquired and then released in catch)
+        org.junit.jupiter.api.Assertions.assertEquals(initialPermits, scheduler.getAvailablePermits(),
+                "Semaphore permits should be recovered after RejectedExecutionException");
+ 
+        // Verify DB claim was released
+        verify(cronRepository).releaseClaimToActive(job.id);
+    }
 
     @Test
     void testSchedulerHasNoProducerTemplateField() {

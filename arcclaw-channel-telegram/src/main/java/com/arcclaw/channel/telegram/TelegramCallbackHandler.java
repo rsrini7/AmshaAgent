@@ -112,6 +112,7 @@ public class TelegramCallbackHandler {
             HttpRequest.newBuilder()
                 .uri(URI.create(
                     "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                .timeout(java.time.Duration.ofSeconds(5))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build(),

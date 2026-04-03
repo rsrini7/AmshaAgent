@@ -161,6 +161,10 @@ public class SessionReaper {
                 log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
                 return;
             }
+            if (agentStore.isBatchResuming(sessionId)) {
+                log.infof("GC sweep: skipping session=%s (RESUMING)", sessionId);
+                return;
+            }
             log.warnf("GC sweep: session=%s expired", sessionId);
             compactionInFlight.remove(sessionId);
             workspaceManager.terminateSession(sessionId);
