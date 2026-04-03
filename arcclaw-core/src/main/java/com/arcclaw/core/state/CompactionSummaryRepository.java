@@ -52,7 +52,7 @@ public class CompactionSummaryRepository {
         self.get().syncFtsBestEffort(sessionId, summaryText);
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void syncFtsBestEffort(String sessionId, String summaryText) {
         try {
             // Manual FTS Sync: DELETE then INSERT (standalone pattern)
