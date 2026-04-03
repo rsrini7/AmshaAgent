@@ -153,9 +153,9 @@ public class AgentCronScheduler {
                         MdcCleaner.clearAll();
                     }
                 });
-            } catch (Exception e) {
+            } catch (java.util.concurrent.RejectedExecutionException e) {
                 log.errorf("Failed to dispatch cron job %s: %s",
-                        job.id, e.getMessage());
+                        job.id, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 concurrencyLimiter.release();
                 // Release claim so it can be picked up later
                 cronRepository.releaseClaimToActive(job.id);

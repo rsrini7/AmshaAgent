@@ -25,7 +25,7 @@ import org.jboss.logging.Logger;
 public class TelegramCallbackHandler {
 
     private static final Logger log = Logger.getLogger(TelegramCallbackHandler.class);
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
     @Inject
     TelegramChannelSender sender;
