@@ -20,7 +20,11 @@ import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -76,11 +80,18 @@ public class SerperWebSearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("query", "The search query to send to Serper.")
-            .addIntegerProperty("count", "Number of organic results (1-10). Default: 5. (must be an integer, e.g. 5 not \"5\")")
+            .addProperty("query", JsonStringSchema.builder()
+                .description("The search query to send to Serper.")
+                .build())
+            .addProperty("count", JsonIntegerSchema.builder()
+                // Concrete examples force small models to stay on-type
+                .description("Number of organic results to return. " +
+                            "MUST be a JSON integer — correct: 5, wrong: \"5\". " +
+                            "Allowed range: 1-10. Omit to use the default of 5.")
+                .build())
             // Use 2-arg version to avoid potential MethodNotFound error (Fix I1)
-            .addEnumProperty("type", List.of("search", "news")) 
-            .required("query")
+            .addEnumProperty("type", List.of("search", "news"))
+            .required("query")  // keep count optional so model can omit it safely
             .build();
     }
 
