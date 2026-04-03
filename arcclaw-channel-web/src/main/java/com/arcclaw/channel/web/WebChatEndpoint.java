@@ -37,6 +37,7 @@ public class WebChatEndpoint {
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject ChannelServices channelServices;
+    @Inject com.arcclaw.core.security.SessionOwnerResolver ownerResolver;
 
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
@@ -51,11 +52,18 @@ public class WebChatEndpoint {
     public void onOpen(WebSocketConnection conn) {
         if (requireAuth) {
             String apiKey = conn.handshakeRequest().header("X-ArcClaw-API-Key");
-            // Some websockets pass auth via subprotocol if browser doesn't support custom headers
+            // browsers can't send custom headers, so check subprotocol and query param
             if (apiKey == null || apiKey.isBlank()) {
                 apiKey = conn.handshakeRequest().header("Sec-WebSocket-Protocol");
             }
-            if (!internalKey.equals(apiKey) && !ciKey.equals(apiKey)) {
+            if (apiKey == null || apiKey.isBlank()) {
+                String query = conn.handshakeRequest().query();
+                if (query != null && query.contains("apiKey=")) {
+                    apiKey = query.split("apiKey=")[1].split("&")[0];
+                }
+            }
+
+            if (!ownerResolver.isValid(apiKey)) {
                 log.warnf("WebSocket rejected: invalid API key from connId=%s", conn.id());
                 // We must send error then close
                 conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid API key\"}");
@@ -69,11 +77,30 @@ public class WebChatEndpoint {
         connectionToSession.put(conn.id(), platformId);
         sessionStore.register(platformId, conn);
 
-        // Resolve the ArcClaw sessionId eagerly so the UI has it from the first message.
-        // This mirrors exactly what SessionResolutionHandler does on the first pipeline call.
         String arcclawSessionId = channelServices.resolveOrCreateSession(
             ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
+
+        // F27/§85-A: Bind owner to the session in the heartbeat tracker if an API key is present.
+        // This ensures the user who initiated the WebSocket is the only one who can access
+        // this session's metadata, HITL approvals, and audit trails.
+        String effectiveKey = conn.handshakeRequest().header("X-ArcClaw-API-Key");
+        if (effectiveKey == null || effectiveKey.isBlank()) {
+            effectiveKey = conn.handshakeRequest().header("Sec-WebSocket-Protocol");
+        }
+        if (effectiveKey == null || effectiveKey.isBlank()) {
+            String q = conn.handshakeRequest().query();
+            if (q != null && q.contains("apiKey=")) {
+                effectiveKey = q.split("apiKey=")[1].split("&")[0];
+            }
+        }
+
+        if (effectiveKey != null && !effectiveKey.isBlank()) {
+            ownerResolver.resolveOwner(effectiveKey).ifPresent(userId -> {
+                channelServices.bindSessionOwner(arcclawSessionId, userId);
+                log.debugf("Bound session %s to owner %s (WebSocket)", arcclawSessionId, userId);
+            });
+        }
 
         conn.sendText(buildConnectedJson(platformId, arcclawSessionId))
             .subscribe().with(

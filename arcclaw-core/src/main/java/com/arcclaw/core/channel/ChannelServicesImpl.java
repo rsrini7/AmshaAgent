@@ -11,6 +11,8 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.pipeline.SessionIdResolver;
+import com.arcclaw.core.security.SessionOwnerResolver;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
@@ -22,6 +24,8 @@ public class ChannelServicesImpl implements ChannelServices {
     @Inject MessagePipeline messagePipeline;
     @Inject WorkspaceManager workspaceManager;
     @Inject SessionIdResolver sessionIdResolver;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
+    @Inject SessionOwnerResolver ownerResolver;
     @Inject ManagedExecutor executor;
 
     @Override
@@ -42,5 +46,10 @@ public class ChannelServicesImpl implements ChannelServices {
     @Override
     public void terminateSession(String sessionId) {
         workspaceManager.terminateSession(sessionId);
+    }
+
+    @Override
+    public void bindSessionOwner(String sessionId, String ownerKeyName) {
+        heartbeatTracker.bindOwner(sessionId, ownerKeyName);
     }
 }

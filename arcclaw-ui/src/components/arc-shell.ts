@@ -190,11 +190,19 @@ export class ArcShell extends LitElement {
     this._apiKey = key;
     localStorage.setItem('arc-api-key', key);
     this._client = new ArcClient('/api/v1', this._apiKey);
+
+    // Close stale HITL/Agent SSE connections bound to the previous key.
+    // They will be re-opened with the new key once session-ready fires.
+    this._hitlEs?.close();
+    this._hitlEs = null;
+    this._agentEs?.close();
+    this._agentEs = null;
+    this._stopPolling();
+
     window.location.hash = '#/chat';
     this._fetchAgents();
     this._fetchApprovals();
     this._startSse();
-    // No polling started here — only on SSE fallback
   }
 
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
