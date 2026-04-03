@@ -18,6 +18,8 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.transaction.Transactional.TxType;
+
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
  */
@@ -59,7 +61,7 @@ public class HitlService {
 
     @Inject CheckpointApprovalService checkpointApprovalService;
 
-    @Transactional
+    @Transactional(TxType.NOT_SUPPORTED)   // ← was @Transactional
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, id);

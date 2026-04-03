@@ -325,6 +325,11 @@ is blocked until that connection is released.
 | `denyAll()` | `@Transactional(NOT_SUPPORTED)` | Same |
 | `triggerResume()` | None / not annotated | In the transaction-free zone (§5.9) |
 | `persistBatchWithPreExecuted()` | Via `agentStore.save()` (REQUIRES_NEW) | Inherits REQUIRES_NEW from store |
+| `HitlService.resolve()` | `@Transactional(NOT_SUPPORTED)` | App-layer entry point for UI approval;
+|                         |                                 | delegates directly to approveTool() which
+|                         |                                 | is already NOT_SUPPORTED. An outer REQUIRED
+|                         |                                 | tx here re-introduces the REQUIRED→REQUIRES_NEW
+|                         |                                 | deadlock via the app→core call path. |
 
 MUST NOT change any of these to `@Transactional` or `@Transactional(REQUIRED)`.
 Doing so re-introduces the SQLITE_BUSY failure pattern described in §5.8.
