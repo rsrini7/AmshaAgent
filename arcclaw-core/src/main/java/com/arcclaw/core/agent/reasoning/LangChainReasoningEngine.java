@@ -45,8 +45,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             || message.contains("errors")
             // OpenRouter/provider-agnostic additions:
             || message.toLowerCase().contains("json schema")
-            || message.toLowerCase().contains("invalid_tool")
-            || message.toLowerCase().contains("tool_use_failed");
+            || message.toLowerCase().contains("invalid_tool");
     }
 
     /**

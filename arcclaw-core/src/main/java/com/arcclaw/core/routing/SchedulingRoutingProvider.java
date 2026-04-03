@@ -43,13 +43,19 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
         "(?i)^/?crons?$"
     );
 
+    // FAST-PATH for hybrid intents (e.g. "remind me to fetch") §7.36
+    private static final Pattern SCHEDULE_RESEARCH_ACTION_PATTERN = Pattern.compile(
+        "(?i)^(remind me|schedule to)\\s+(fetch|get|search|find|check)\\b.*"
+    );
+
     @Override
     public List<Pattern> fastPathTriggers() {
         return List.of(
             SCHEDULING_GUARD_PATTERN,
             LIST_TASKS_PATTERN,       
             MY_TASKS_PATTERN,         
-            STANDALONE_CRON_PATTERN   
+            STANDALONE_CRON_PATTERN,
+            SCHEDULE_RESEARCH_ACTION_PATTERN
         );
     }
 

@@ -70,7 +70,17 @@ public class CronJobRunner {
                 "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
                 "For message delivery or greeting goals, use the FINISH action immediately with the message text as your answer. " +
                 "The framework delivers your output — you do NOT need to call any tool to 'send' it. " +
-                "NEVER output empty text. NEVER call schedule_task.]";
+                "NEVER output empty text. NEVER call schedule_task.]" +
+                "\n\n## GitHub Tool Result Handling (CRON MODE)" +
+                "\nWhen you call the github tool and receive a repository description:" +
+                "\n- The tool may return rich text (Markdown or HTML) including headings, bold text, links, and badges." +
+                "\n- DO NOT try to treat this description as JSON or as a function schema. It is plain text content." +
+                "\n- If the tool call succeeds but the provider reports tool_use_failed with a failed_generation field that already contains the repository description:" +
+                "\n  - Extract the human-readable description text from failed_generation." +
+                "\n  - Summarize it into 1–3 concise bullet points for the user." +
+                "\n  - Then FINISH with that summary as your answer." +
+                "\n- Only treat a tool call as a hard failure if there is no description text and the error is a network/auth problem." +
+                "\n- NEVER retry the same GitHub call more than once in CRON mode if description text is already present.";
 
             ChannelType type = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
 

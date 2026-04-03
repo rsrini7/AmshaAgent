@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.persona;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +47,11 @@ public class DefaultAgent implements Agent {
     public String systemPrompt() {
         TemplateInstance instance = promptTemplate.instance();
         instance.data("tools", String.join(", ", roleEnum.definition().toolNames()));
+
+        // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
+        instance.data("CURRENT_UTC_ISO", Instant.now().toString());
+        instance.data("USER_TZ_OFFSET", "UTC+05:30 IST");
+
         return instance.render();
     }
 
