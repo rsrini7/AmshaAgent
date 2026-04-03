@@ -133,7 +133,14 @@ public class AgentSessionService {
     }
 
     public Map<String, Instant> listSessions() {
-        return heartbeatTracker.activeSessions();
+        Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
+        String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+
+        if (requestingKey == null || requestingKey.isBlank()) {
+            return Map.of(); // Anonymous/System can't list active sessions via REST
+        }
+
+        return heartbeatTracker.activeSessionsByOwner(requestingKey);
     }
 
     public Response runSync(String sessionId, RunAgentRequest request) {
@@ -431,7 +438,7 @@ public class AgentSessionService {
     }
 
     public Response terminateSession(String sessionId) {
-        log.infof("Terminating session:  %s", sessionId);
+        log.infof("Terminating session: %s", sessionId);
 
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
@@ -455,7 +462,7 @@ public class AgentSessionService {
         return Optional.empty();
     }
 
-    private Optional<Response> validateSession(String sessionId) {
+    public Optional<Response> validateSession(String sessionId) {
         // Guard 1: session existence (unchanged)
         if (!heartbeatTracker.exists(sessionId)) {
             return Optional.of(Response.status(Response.Status.NOT_FOUND)

@@ -27,9 +27,15 @@ public class AuditResource {
     @Inject
     AuditVerifier auditVerifier;
 
+    @Inject
+    AgentSessionService sessionService;
+
     @GET
     @Path("/session/{sessionId}")
     public Response getSessionAudit(@PathParam("sessionId") String sessionId) {
+        var authError = sessionService.validateSession(sessionId);
+        if (authError.isPresent()) return authError.get();
+
         List<AuditEvent> events = auditEventRepository.findBySessionId(sessionId);
         
         List<AuditEventResponse> responseRows = events.stream()
@@ -42,6 +48,9 @@ public class AuditResource {
     @GET
     @Path("/{sessionId}/verify")
     public Response verifySessionChain(@PathParam("sessionId") String sessionId) {
+        var authError = sessionService.validateSession(sessionId);
+        if (authError.isPresent()) return authError.get();
+
         AuditVerifier.VerificationResult result = auditVerifier.verifyChain(sessionId);
         return Response.ok(result).build();
     }

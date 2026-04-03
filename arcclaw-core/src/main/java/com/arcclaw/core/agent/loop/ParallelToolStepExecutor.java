@@ -113,7 +113,7 @@ public class ParallelToolStepExecutor {
                 String blockedObs = String.format(
                     "[PARALLEL-BATCH-BLOCKED] Tool '%s' was blocked: %s",
                     call.toolName(), blocked.observation());
-                ReasoningStep failedStep = batchStep.withObservation(blockedObs);
+                ReasoningStep failedStep = batchStep.withObservation(blockedObs, false);
                 history.add(failedStep);
                 return StepDecision.retryValidation(consecutiveFailures + 1);
             }
@@ -287,12 +287,14 @@ public class ParallelToolStepExecutor {
 
         log.infof("[PARALLEL] session=%s batch completed: %s", context.sessionId(), summary);
 
+        boolean allSuccess = completed.stream().allMatch(ParallelToolCall::success);
+
         ReasoningStep completedBatchStep = ReasoningStep.parallelBatch(
             batchStep.thought(),
             completedPayload,
             batchStep.inputTokens(),
             batchStep.outputTokens()
-        ).withObservation(summary);
+        ).withObservation(summary, allSuccess);
 
         history.add(completedBatchStep);
 

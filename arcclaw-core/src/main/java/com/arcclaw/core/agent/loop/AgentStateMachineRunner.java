@@ -181,15 +181,24 @@ public class AgentStateMachineRunner {
                 // FINISH, CONTINUE, and schema-retry paths never pay this cost.
                 List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
 
-                // FIX ISSUE 5: Guard condition to ensure approval was formally flushed.
-                Optional<AgentCheckpoint> cpOpt = agentStore.load(context.sessionId(), context.agentRole());
-                if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                // B2 (F22): Guard condition to ensure approval was formally flushed.
+                // Uses hot-path status cache to avoid DB read pressure.
+                if (context.isStatusDirty()) {
+                    Optional<AgentCheckpoint> cpOpt = agentStore.load(context.sessionId(), context.agentRole());
+                    context.setLastCheckpointStatus(cpOpt.map(AgentCheckpoint::getStatus).orElse(null));
+                }
+
+                if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                     log.warnf("Session %s is still AWAITING_APPROVAL. Refusing to invoke tool until state is flushed as IN_PROGRESS.", context.sessionId());
                     return AgentResult.failed("State corrupted: tool execution attempted before approval persistence completed.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
                 }
 
                 StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
                         context, history, step, consecutiveFailures, skillSnapshot);
+
+                if (invocationDecision.result() instanceof AgentResult.AwaitingApproval) {
+                    context.markStatusDirty(); // Status will change to AWAITING_APPROVAL
+                }
                 if (invocationDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), invocationDecision.result());
                     return invocationDecision.result();
@@ -270,6 +279,7 @@ public class AgentStateMachineRunner {
             String combinedContext = history.stream()
                     .filter(s -> s.observation() != null
                             && !s.observation().isBlank()
+                            && (s.success() == null || s.success())
                             && !"Task completed.".equals(s.observation()))
                     .map(s -> "Thought: " + s.thought() + "\nFinding: " + s.observation())
                     .collect(Collectors.joining("\n\n"));

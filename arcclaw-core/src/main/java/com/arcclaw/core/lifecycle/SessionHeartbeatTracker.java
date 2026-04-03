@@ -167,6 +167,20 @@ public class SessionHeartbeatTracker {
     }
 
     /**
+     * Returns all active sessions owned by the given key name (userId).
+     * Used for tenant-scoped session listing (e.g. AgentResource.listSessions()).
+     */
+    public Map<String, Instant> activeSessionsByOwner(String ownerKeyName) {
+        if (ownerKeyName == null) return Map.of();
+        return sessionData.entrySet().stream()
+                .filter(e -> ownerKeyName.equals(e.getValue().ownerKeyName()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().lastHeartbeat()
+                ));
+    }
+
+    /**
      * Iterate over all sessions whose last heartbeat is before the cutoff,
      * invoking the action for each expired sessionId.
      * Safe for concurrent modification — ConcurrentHashMap.forEach() is used internally.

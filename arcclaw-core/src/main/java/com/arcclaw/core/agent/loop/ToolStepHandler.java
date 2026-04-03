@@ -165,7 +165,7 @@ public class ToolStepHandler {
                 "Please choose a valid tool or use FINISH to complete.",
                 toolName, toolRegistry.listTools());
         log.warnf("[ToolStepHandler] Hallucinated tool '%s' intercepted", toolName);
-        final ReasoningStep completedStep = step.withObservation(errorObs);
+        final ReasoningStep completedStep = step.withObservation(errorObs, false);
         history.add(completedStep);
         observers.forEach(o -> o.onStepComplete(
             context.sessionId(), context.agentRole(), completedStep));
@@ -218,7 +218,7 @@ public class ToolStepHandler {
 
         // Phase 3 — Observe
         String observation = buildObservation(response);
-        final ReasoningStep completedStep = step.withObservation(observation);
+        final ReasoningStep completedStep = step.withObservation(observation, response.success());
         history.add(completedStep);
         observers.forEach(o -> o.onStepComplete(
             context.sessionId(), context.agentRole(), completedStep));
@@ -241,7 +241,7 @@ public class ToolStepHandler {
             final ReasoningStep blockedStep = step.withObservation(
                     "Tool execution is not permitted in READONLY mode. " +
                     "Answer using only your existing knowledge. " +
-                    "Do not attempt to call any tools.");
+                    "Do not attempt to call any tools.", false);
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), blockedStep));
@@ -254,7 +254,7 @@ public class ToolStepHandler {
                 history, context.goal(), skillSnapshot);
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
-            final ReasoningStep dedupStep = step.withObservation(d.cachedObservation());
+            final ReasoningStep dedupStep = step.withObservation(d.cachedObservation(), true);
             history.add(dedupStep);
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), dedupStep));
@@ -262,7 +262,7 @@ public class ToolStepHandler {
         }
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
-            final ReasoningStep blockedStep = step.withObservation(b.observation());
+            final ReasoningStep blockedStep = step.withObservation(b.observation(), false);
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), blockedStep));

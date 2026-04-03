@@ -23,6 +23,7 @@ import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.jboss.resteasy.reactive.RestStreamElementType;
@@ -36,6 +37,7 @@ public class HitlResource {
     @Inject HitlService hitlService;
     @Inject AgentSseService agentSseService;
     @Inject ApiKeyValidator apiKeyValidator;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
 
     @GET
     @Path("/events")
@@ -50,6 +52,18 @@ public class HitlResource {
             return Multi.createFrom().failure(
                 new WebApplicationException(Response.Status.BAD_REQUEST));
         }
+
+        // F27/§85-A: Cross-tenant ownership check for SSE subscription.
+        String userId = apiKeyValidator.resolveUserId(apiKey);
+        if (userId == null) {
+            return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
+        }
+
+        // Check if the user owns this session
+        if (!heartbeatTracker.getOwner(sessionId).map(userId::equals).orElse(false)) {
+             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
+        }
+
         return agentSseService.subscribe(sessionId);
     }
 
