@@ -47,6 +47,14 @@ class ToolInvocationGuardTest {
         guard.objectMapper = objectMapper;
         guard.toolRegistry = mockToolRegistry;
         guard.interceptors = mockInterceptors;
+        
+        guard.dynamicToolLookup = mock(Instance.class);
+        when(guard.dynamicToolLookup.isUnsatisfied()).thenReturn(true);
+
+        // Root Cause 1: Assume tool exists by default to allow hitl/autonomy tests to proceed
+        var mockTool = mock(com.arcclaw.core.tools.AgentTool.class);
+        when(mockToolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
+        when(mockToolRegistry.findTool("tool")).thenReturn(Optional.of(mockTool));
     }
 
     @Test
@@ -64,7 +72,6 @@ class ToolInvocationGuardTest {
 
     @Test
     void testFailedToolObservationIsNotCached() {
-        when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
         ReasoningStep past = ReasoningStep.pending("thought", "tool", Map.of("arg", 1), 0, 0);
         // observation is null by default
         List<ReasoningStep> history = List.of(past);
@@ -79,7 +86,6 @@ class ToolInvocationGuardTest {
     void testHitlPauseForApproval() {
         workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
-            when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal", List.of());
@@ -92,7 +98,6 @@ class ToolInvocationGuardTest {
     void testFullAutonomySkipsHitl() {
         workspaceRun("s1", AutonomyLevel.FULL, () -> {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
-            when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal", List.of());

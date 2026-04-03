@@ -285,7 +285,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId LIKE :sessionPrefix " +
                 "  AND c.status = :status " +
-                "ORDER BY c.updatedAt DESC",
+                "ORDER BY c.id DESC",
                 AgentCheckpoint.class);
         q.setParameter("sessionPrefix", sessionPrefix + "%");
         q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
@@ -520,7 +520,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
         TypedQuery<AutonomyLevel> q = em.createQuery(
                 "SELECT c.autonomyLevel FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
+                "WHERE c.sessionId = :sid ORDER BY c.id DESC",
                 AutonomyLevel.class);
         q.setParameter("sid", sessionId);
         q.setMaxResults(1);

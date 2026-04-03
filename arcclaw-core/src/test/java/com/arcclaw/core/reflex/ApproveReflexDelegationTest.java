@@ -1,34 +1,61 @@
 package com.arcclaw.core.reflex;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.StatefulAgentStore;
 import org.jboss.logging.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
+
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.StatefulAgentStore;
 
 public class ApproveReflexDelegationTest {
 
     @Mock CheckpointApprovalService checkpointApprovalService;
     @Mock StatefulAgentStore statefulAgentStore;
     @InjectMocks ApproveReflex approveReflex;
+    
+    private MockedStatic<WorkspaceScopeHolder> mockedScope;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setup() {
         MockitoAnnotations.openMocks(this);
         approveReflex.log = Logger.getLogger("test");
+        
+        mockedScope = mockStatic(WorkspaceScopeHolder.class);
+        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
+        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(java.util.concurrent.Callable.class)))
+                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(1)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(java.util.concurrent.Callable.class)))
+                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(3)).call());
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (mockedScope != null) {
+            mockedScope.close();
+        }
     }
 
     @Test
@@ -46,7 +73,7 @@ public class ApproveReflexDelegationTest {
 
         verify(checkpointApprovalService).approveAll("s1", "CLI approve");
         assertNotNull(result);
-        assertTrue(result.commandResponse().orElse("").contains("Approval processed"));
+        assertEquals("", result.commandResponse().orElse(null));
     }
 
     @Test

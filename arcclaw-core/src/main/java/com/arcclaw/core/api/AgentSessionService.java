@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
@@ -60,6 +61,7 @@ public class AgentSessionService {
     private final CheckpointApprovalService checkpointApprovalService;
     private final AuditService auditService;
     private final ExecutorService vThreads;
+    private final int maxResumeIterations;
 
     /**
      * Non-slash reflex prefixes that must bypass the agent loop and route
@@ -83,6 +85,7 @@ public class AgentSessionService {
         this.checkpointApprovalService = null;
         this.auditService = null;
         this.vThreads = null;
+        this.maxResumeIterations = 0;
     }
 
     @Inject
@@ -97,7 +100,8 @@ public class AgentSessionService {
                                CheckpointResumeHandler checkpointResumeHandler,
                                CheckpointApprovalService checkpointApprovalService,
                                AuditService auditService,
-                               @VirtualThreads ExecutorService vThreads) {
+                               @VirtualThreads ExecutorService vThreads,
+                               @ConfigProperty(name = "arcclaw.approval.max-resume-iterations", defaultValue = "5") int maxResumeIterations) {
         this.log = log;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
@@ -110,6 +114,7 @@ public class AgentSessionService {
         this.checkpointApprovalService = checkpointApprovalService;
         this.auditService = auditService;
         this.vThreads = vThreads;
+        this.maxResumeIterations = maxResumeIterations;
     }
 
     public String createSession(AutonomyLevel autonomyLevel) {
@@ -340,9 +345,10 @@ public class AgentSessionService {
                     String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
                     // Restore original budget. Minimum 3: 1 to observe tool result,
                     // 1 to call FINISH, 1 buffer for a schema correction retry.
-                    int resumeIterations = checkpoint.get().getMaxIterations() != null
-                        ? Math.max(3, checkpoint.get().getMaxIterations())
-                        : 3;
+                    // B6: apply safe ceiling on resume iterations to prevent unbounded loops
+                int resumeIterations = checkpoint.get().getMaxIterations() != null
+                        ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations)
+                        : maxResumeIterations;
                     MessageContext context = createRestContext(sessionId, resumeGoal);
                     context.setResumeSignal(true);
                     AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
@@ -380,7 +386,8 @@ public class AgentSessionService {
                 }
 
                 MDC.put(MdcKeys.USER_ID, "rest:api");
-                agentStore.markFailed(checkpoint.get().getId(), "Human denied via REST");
+                AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
+                checkpointApprovalService.triggerResume(cp);
                 return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
             });
         } catch (Exception e) {

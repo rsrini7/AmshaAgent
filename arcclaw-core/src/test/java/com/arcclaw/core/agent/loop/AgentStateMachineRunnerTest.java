@@ -59,6 +59,8 @@ class AgentStateMachineRunnerTest {
     @SuppressWarnings("unchecked")
     private Event<AgentStateChangedEvent> stateChangedEvent = mock(Event.class);
 
+    private com.arcclaw.core.agent.sse.AgentSseService agentSseService = mock(com.arcclaw.core.agent.sse.AgentSseService.class);
+
 
     @SuppressWarnings("unchecked")
     Instance<AgentObserver> observers = mock(Instance.class);
@@ -84,6 +86,8 @@ class AgentStateMachineRunnerTest {
         // Wire ApprovalCheckpointManager
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager();
         checkpointManager.agentStore = agentStore;
+        checkpointManager.agentSseService = agentSseService;
+        checkpointManager.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
 
         // Wire EngineStepHandler

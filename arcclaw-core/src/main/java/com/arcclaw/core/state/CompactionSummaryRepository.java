@@ -22,6 +22,9 @@ public class CompactionSummaryRepository {
     @Inject
     EntityManager em;
 
+    @Inject
+    jakarta.enterprise.inject.Instance<CompactionSummaryRepository> self;
+
     @Transactional
     public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {
         CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
@@ -45,15 +48,26 @@ public class CompactionSummaryRepository {
         }
         em.flush(); // Ensure main is written before FTS sync
 
-        // Manual FTS Sync: DELETE then INSERT (standalone pattern)
-        em.createNativeQuery("DELETE FROM fts.compaction_summary_fts WHERE sessionId = ?1")
-                .setParameter(1, sessionId)
-                .executeUpdate();
+        // Manual FTS Sync (isolated tx to prevent indexing failure from rolling back main write)
+        self.get().syncFtsBestEffort(sessionId, summaryText);
+    }
 
-        em.createNativeQuery("INSERT INTO fts.compaction_summary_fts(sessionId, summary) VALUES (?1, ?2)")
-                .setParameter(1, sessionId)
-                .setParameter(2, summaryText)
-                .executeUpdate();
+    @Transactional
+    public void syncFtsBestEffort(String sessionId, String summaryText) {
+        try {
+            // Manual FTS Sync: DELETE then INSERT (standalone pattern)
+            em.createNativeQuery("DELETE FROM fts.compaction_summary_fts WHERE sessionId = ?1")
+                    .setParameter(1, sessionId)
+                    .executeUpdate();
+
+            em.createNativeQuery("INSERT INTO fts.compaction_summary_fts(sessionId, summary) VALUES (?1, ?2)")
+                    .setParameter(1, sessionId)
+                    .setParameter(2, summaryText)
+                    .executeUpdate();
+        } catch (Exception e) {
+            log.errorf("FTS index failed for sessionId=%s — non-fatal for main write: %s", 
+                    sessionId, e.getMessage());
+        }
     }
 
     @Transactional

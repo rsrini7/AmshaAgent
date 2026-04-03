@@ -166,9 +166,10 @@ public class SandboxExecTool implements AgentTool {
 
         SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, commandList, secrets);
-        if (result.isInfraFailure()) {
+        if (result == null || result.isInfraFailure()) {
+            String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s",
-                    lang, sessionId, result.reason());
+                    lang, sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
         return ToolResponse.success(truncate(result.output()));
@@ -194,9 +195,10 @@ public class SandboxExecTool implements AgentTool {
         try {
             SandboxResult compileResult = isolationExecutor.executeSandboxed(
                     sessionId, workspaceRoot, compileCmd, secrets);
-            if (compileResult.isInfraFailure()) {
+            if (compileResult == null || compileResult.isInfraFailure()) {
+                String reason = compileResult != null ? compileResult.reason() : "Sandbox executor returned null";
                 log.errorf("[SandboxExecTool] Infra failure (java/compile) session=%s: %s",
-                        sessionId, compileResult.reason());
+                        sessionId, reason);
                 return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
             }
         } catch (ToolExecutionException e) {
@@ -209,9 +211,10 @@ public class SandboxExecTool implements AgentTool {
         List<String> runCmd = List.of(javaExe, "-cp", CONTAINER_WORKSPACE, className);
         SandboxResult runResult = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        if (runResult.isInfraFailure()) {
+        if (runResult == null || runResult.isInfraFailure()) {
+            String reason = runResult != null ? runResult.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (java/run) session=%s: %s",
-                    sessionId, runResult.reason());
+                    sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
         return ToolResponse.success(truncate(runResult.output()));
@@ -231,9 +234,10 @@ public class SandboxExecTool implements AgentTool {
         List<String> runCmd = List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
         SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        if (result.isInfraFailure()) {
+        if (result == null || result.isInfraFailure()) {
+            String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s",
-                    sessionId, result.reason());
+                    sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
         return ToolResponse.success(truncate(result.output()));

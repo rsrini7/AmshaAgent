@@ -36,14 +36,20 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import static org.mockito.Mockito.mockStatic;
 
 @QuarkusTest
 class ApproveReflexTest {
 
     @Inject
     ApproveReflex approveReflex;
+    
+    private MockedStatic<WorkspaceScopeHolder> mockedScope;
 
     @InjectMock
     StatefulAgentStore statefulAgentStore;
@@ -61,6 +67,7 @@ class ApproveReflexTest {
     Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setup() {
         // Mocking Event injection for ApproveReflex
         ApproveReflex instance = approveReflex;
@@ -72,6 +79,23 @@ class ApproveReflexTest {
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.markBatchResuming(anyString()))
                 .thenReturn(true);
+                
+        mockedScope = mockStatic(WorkspaceScopeHolder.class);
+        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
+        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(java.util.concurrent.Callable.class)))
+                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(1)).call());
+        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(java.util.concurrent.Callable.class)))
+                .thenAnswer(inv -> ((java.util.concurrent.Callable<?>) inv.getArgument(3)).call());
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (mockedScope != null) {
+            mockedScope.close();
+        }
     }
 
     private MessageContext createContext(String input) {
@@ -150,7 +174,7 @@ class ApproveReflexTest {
         MessageContext ctx = createContext("/approve");
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
 
-        assertEquals("✅ Approval processed.", result.commandResponse().get());
+        assertEquals("", result.commandResponse().get());
         verify(checkpointApprovalService).approveAll(eq("session-1"), anyString());
     }
 

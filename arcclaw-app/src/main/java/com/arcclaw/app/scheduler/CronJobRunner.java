@@ -61,14 +61,17 @@ public class CronJobRunner {
                 "The framework delivers your output — you do NOT need to call any tool to 'send' it. " +
                 "NEVER output empty text. NEVER call schedule_task.]";
 
+            ChannelType type = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
+
             AgentResult result = WorkspaceContext.run(
                 cronSessionId, 
                 job.userId, 
                 job.chatId, 
                 AutonomyLevel.BACKGROUND, 
                 AgentRoleEnum.COORDINATOR.toScopedName(), 
+                type,
                 () -> {
-                    MessageContext context = createCronContext(job, cronSessionId, executionId, effectiveGoal);
+                    MessageContext context = createCronContext(job, cronSessionId, executionId, effectiveGoal, type);
                     return agentLoop.run(
                         cronSessionId,
                         AgentRoleEnum.COORDINATOR.toScopedName(),
@@ -87,8 +90,8 @@ public class CronJobRunner {
         }
     }
 
-    private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal) {
-        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
+    private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal, ChannelType channelType) {
+        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", channelType);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, Instant.now());
         return new MessageContext(job.chatId, user, msg);
     }

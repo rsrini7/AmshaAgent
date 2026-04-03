@@ -214,6 +214,7 @@ public class ApproveReflex implements AgentReflex {
         try {
             AgentCheckpoint cp = checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
             checkpointApprovalService.triggerResume(cp);
+            //return "✅ Tool '" + toolName + "' approved.";
             return "";
         } catch (CheckpointResolutionException e) {
             return "No pending approval found for this session.";
