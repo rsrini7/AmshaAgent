@@ -1,6 +1,7 @@
 package com.arcclaw.core.hitl;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -13,11 +14,13 @@ import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.transaction.Transactional.TxType;
@@ -85,8 +88,20 @@ public class ApprovalStateMachine implements ApprovalGateway {
             // If any tool was approved? Reusing the approval model.
             // Actually, we can just say APPROVED if this was approve, REJECTED if reject.
             // Wait, normally if all decided, we trigger resume
-            outcome = (decision == ApprovalDecision.APPROVE) ? ApprovalOutcome.APPROVED : ApprovalOutcome.REJECTED;
-            
+            Map<String, String> decisions;
+            try {
+                decisions = objectMapper.readValue(
+                    cp.getBatchToolDecisions(), new TypeReference<Map<String, String>>() {});
+                decisions.put(toolName, decisionStr);  // merge the current just-committed decision
+            } catch (Exception e) {
+                decisions = Map.of(toolName, decisionStr);  // safe fallback
+            }
+            final Map<String, String> finalDecisions = decisions;
+
+            boolean anyApproved = allTools.stream()
+                .anyMatch(t -> AgentSentinels.TOOL_DECISION_APPROVED.equals(finalDecisions.get(t)));
+            outcome = anyApproved ? ApprovalOutcome.APPROVED : ApprovalOutcome.REJECTED;
+                        
             String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : sessionId;
             String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
             resumeHandler.resumeAfterBatchDecision(

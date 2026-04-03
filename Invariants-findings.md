@@ -475,6 +475,8 @@ LIMIT ?3
 
 ### 🟡 MEDIUM — F27: `HitlService.getPendingApprovals()` — fetches ALL `AWAITING_APPROVAL` checkpoints with no pagination, no user filter
 
+In a multi-user deployment this exposes every user's pending tool names, parameters, and session IDs to anyone with a valid API key. For your current single-user self-hosted setup this is not a live P0, but it must be fixed before any multi-user or SaaS deployment. So, filter by sessions owned by the requesting API key and add ORDER BY c.id DESC LIMIT 50
+
 **File:** `HitlService.java`
 
 ```java
@@ -562,33 +564,6 @@ The following matrix maps each high-risk use case to the findings most likely to
 | **Canary/rolling deploy during active agent** | Zombie recovery marks active sessions FAILED | F11 |
 | **Multi-tenant SaaS deployment** | Search quality degraded by shared BM25 corpus; cross-tenant approval list exposure | F26, F27 |
 | **Synthesizer with failed sub-agents** | Error messages pollute synthesis context | F28 |
-
----
-
-## Recommended P0 Sprint (Three in Next Commit)
-
-These three fixes address zero-day correctness issues that will manifest in any multi-user or parallel-tool production deployment:
-
-**1. `ApprovalStateMachine.decide()` — derive outcome from full decision map:**
-```java
-// After all tools decided, check if any were APPROVED
-boolean anyApproved = allTools.stream()
-    .anyMatch(t -> "APPROVED".equals(finalDecisions.get(t)));
-outcome = anyApproved ? ApprovalOutcome.APPROVED : ApprovalOutcome.REJECTED;
-```
-
-**2. `HitlService.getPendingApprovals()` — add per-key filter and pagination:**
-```java
-// Filter to sessions owned by the requesting key; add ORDER BY + LIMIT
-```
-
-**3. `AgentSessionService` — route `/deny` and `/approve` through `ApprovalStateMachine`:**
-```java
-// Replace the isDeny fast-path with:
-approvalGateway.decide(sessionId, null, ApprovalDecision.REJECT, "Human denied via REST");
-// For /approve parallel batch:
-approvalGateway.decide(sessionId, null, ApprovalDecision.APPROVE, "Human approved via REST");
-```
 
 ---
 

@@ -19,6 +19,7 @@ import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -74,6 +75,9 @@ class AgentSessionServiceTest {
     CheckpointResumeHandler checkpointResumeHandler;
 
     @Mock
+    CheckpointApprovalService checkpointApprovalService;
+
+    @Mock
     ExecutorService vThreads;
 
     @Mock
@@ -91,7 +95,7 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, auditService, vThreads);
+                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, checkpointApprovalService, auditService, vThreads);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
