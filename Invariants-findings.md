@@ -475,23 +475,7 @@ LIMIT ?3
 
 ### 🟡 MEDIUM — F27: `HitlService.getPendingApprovals()` — fetches ALL `AWAITING_APPROVAL` checkpoints with no pagination, no user filter
 
-In a multi-user deployment this exposes every user's pending tool names, parameters, and session IDs to anyone with a valid API key. For your current single-user self-hosted setup this is not a live P0, but it must be fixed before any multi-user or SaaS deployment. So, filter by sessions owned by the requesting API key and add ORDER BY c.id DESC LIMIT 50
-
-**File:** `HitlService.java`
-
-```java
-@Transactional
-public Map<String, PendingApproval> getPendingApprovals() {
-    return em.createQuery(
-        "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
-        AgentCheckpoint.class)
-        .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-        .getResultList()   // ← no LIMIT, no user filter
-        ...
-}
-```
-
-In a multi-user deployment, this query returns every AWAITING_APPROVAL checkpoint from every user. `HitlResource.listPending()` exposes this at `GET /hitl` with only API key auth (not per-user filtered). So User A can see User B's pending tool names, parameters, and session IDs. This is a **cross-tenant data exposure** issue. **Fix:** Filter by the requesting API key's bound sessions (`heartbeatTracker.getOwner(sessionId) == currentKey`), and add `ORDER BY updatedAt DESC LIMIT 50` to prevent unbounded result sets.
+In a multi-user deployment this exposes every user's pending tool names, parameters, and session IDs to anyone with a valid API key. For your current single-user self-hosted setup this is not a live P0, but it must be fixed before any multi-user or SaaS deployment. **Fix (RESOLVED F27 via Phase 85-A):** Filtered by the requesting API key's bound sessions (`heartbeatTracker.getSessionIdsByOwner(userId)`), and added `ORDER BY id DESC LIMIT 50` to prevent unbounded result sets. Tested in `HitlServiceTest`.
 
 ---
 

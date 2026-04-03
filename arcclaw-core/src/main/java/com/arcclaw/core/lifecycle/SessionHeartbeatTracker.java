@@ -154,6 +154,18 @@ public class SessionHeartbeatTracker {
     }
 
     /**
+     * Returns all session IDs owned by the given key name (userId).
+     * Used for tenant-scoped queries (e.g. F27 HitlService isolation).
+     */
+    public java.util.List<String> getSessionIdsByOwner(String ownerKeyName) {
+        if (ownerKeyName == null) return java.util.List.of();
+        return sessionData.entrySet().stream()
+                .filter(e -> ownerKeyName.equals(e.getValue().ownerKeyName()))
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    /**
      * Iterate over all sessions whose last heartbeat is before the cutoff,
      * invoking the action for each expired sessionId.
      * Safe for concurrent modification — ConcurrentHashMap.forEach() is used internally.

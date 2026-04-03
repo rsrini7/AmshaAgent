@@ -12,6 +12,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
@@ -30,12 +31,40 @@ public class HitlService {
     @Inject ObjectMapper objectMapper;
     @Inject CheckpointApprovalService checkpointApprovalService;
 
+    @Inject SessionHeartbeatTracker heartbeatTracker;
+
+    private static final int MAX_LIMIT = 50;
+
+    /**
+     * Returns pending approvals scoped to the given userId.
+     * <p>
+     * F27/§85-A: The old unfiltered query exposed all users' pending approvals.
+     * Now uses {@link SessionHeartbeatTracker#getSessionIdsByOwner(String)} to
+     * restrict results to sessions owned by the requesting user only.
+     *
+     * @param userId  trusted user identity (from API key, never from LLM)
+     * @param limit   max results to return (capped at {@value #MAX_LIMIT})
+     */
     @Transactional
-    public Map<String, PendingApproval> getPendingApprovals() {
+    public Map<String, PendingApproval> getPendingApprovals(String userId, int limit) {
+        if (userId == null || userId.isBlank()) {
+            return Map.of();
+        }
+        int effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+
+        List<String> ownedSessionIds = heartbeatTracker.getSessionIdsByOwner(userId);
+        if (ownedSessionIds.isEmpty()) {
+            return Map.of();
+        }
+
         return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status " +
+                "AND c.sessionId IN (:sessionIds) " +
+                "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("sessionIds", ownedSessionIds)
+                .setMaxResults(effectiveLimit)
                 .getResultList()
                 .stream()
                 .map(this::mapToPending)

@@ -70,7 +70,7 @@ public class DefaultAgent implements Agent {
 
         try {
             String json = objectMapper.writeValueAsString(result);
-            history.add(new ReasoningStep(
+            history.add(ReasoningStep.of(
                 "I have synthesized the specialist findings into a final resolution.",
                 ReasoningStep.FINISH,
                 Map.of("answer", result.finalResolution(), "structured", json),

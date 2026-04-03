@@ -27,7 +27,8 @@ public record ReasoningStep(
         Map<String, Object> actionInput,
         String observation,
         int inputTokens,
-        int outputTokens) {
+        int outputTokens,
+        Boolean success) {
 
     /** Action value indicating the loop should terminate with a final answer. */
     public static final String FINISH = "FINISH";
@@ -69,7 +70,8 @@ public record ReasoningStep(
             batchPayload,
             null,          // observation filled in after execution
             inputTokens,
-            outputTokens
+            outputTokens,
+            null
         );
     }
 
@@ -78,29 +80,41 @@ public record ReasoningStep(
      * until known.
      */
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput) {
-        return new ReasoningStep(thought, action, actionInput, null, 0, 0);
+        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null);
     }
 
     /** Create a step with tokens explicitly provided. */
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput, int inputTk,
             int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk);
+        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk, null);
     }
 
     /** Create a step representing a schema/parsing error to trigger LLM retry. */
     public static ReasoningStep schemaError(String observation, int inputTk, int outputTk) {
-        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk);
+        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false);
     }
 
-    /** Create a copy of this step with the observation filled in. */
+    /** Create a copy of this step with the observation filled in, without success metadata. */
     public ReasoningStep withObservation(String observation) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens);
+                this.outputTokens, this.success);
+    }
+
+    /** Create a copy of this step with the observation and success metadata filled in. */
+    public ReasoningStep withObservation(String observation, Boolean success) {
+        return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
+                this.outputTokens, success);
+    }
+
+    /** Mapping factory: constructs a ReasoningStep from all its constituent fields (legacy). */
+    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
+            int inputTk, int outputTk) {
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, null);
     }
 
     /** Mapping factory: constructs a ReasoningStep from all its constituent fields. */
     public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
-            int inputTk, int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk);
+            int inputTk, int outputTk, Boolean success) {
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success);
     }
 }

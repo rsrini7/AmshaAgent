@@ -53,8 +53,23 @@ public class HitlResource {
     }
 
     @GET
-    public List<PendingApprovalDto> listPending() {
-        return hitlService.getPendingApprovals().values().stream()
+    public Response listPending(@jakarta.ws.rs.HeaderParam("X-ARCCLAW-API-KEY") String apiKey,
+                                @QueryParam("apiKey") String apiKeyParam) {
+        // Header first, fall back to query param (same pattern as ApiKeyAuthFilter)
+        String key = (apiKey != null && !apiKey.isBlank()) ? apiKey : apiKeyParam;
+        if (!apiKeyValidator.isValid(key)) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Missing or invalid API key"))
+                    .build();
+        }
+        String userId = apiKeyValidator.resolveUserId(key);
+        if (userId == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Cannot resolve user identity"))
+                    .build();
+        }
+
+        List<PendingApprovalDto> result = hitlService.getPendingApprovals(userId, 50).values().stream()
             .map(pending -> new PendingApprovalDto(
                 pending.taskId(),
                 pending.toolName(),
@@ -63,6 +78,7 @@ public class HitlResource {
                 pending.agentRole()
             ))
             .collect(Collectors.toList());
+        return Response.ok(result).build();
     }
 
     @POST

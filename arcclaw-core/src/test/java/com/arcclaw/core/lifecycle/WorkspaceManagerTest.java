@@ -70,7 +70,9 @@ class WorkspaceManagerTest {
         // Arrange: create an IN_PROGRESS checkpoint (simulates a crash)
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
             var steps = List.of(ReasoningStep.pending("thinking", "action", Map.of()));
-            agentStore.save("zombie-session-1", "coordinator", steps);
+            var cp = agentStore.save("zombie-session-1", "coordinator", steps);
+            cp.setUpdatedAt(java.time.LocalDateTime.now().minusMinutes(20));
+            agentStore.save(cp);
         });
 
         // Verify it's IN_PROGRESS

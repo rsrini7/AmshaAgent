@@ -21,12 +21,16 @@ class CompactionEventBridgeTest {
     @Mock
     private CompactionInFlightFlag compactionInFlight;
 
+    @Mock
+    private StatefulAgentStore agentStore;
+
     @InjectMocks
     private CompactionEventBridge bridge;
 
     @Test
     void testDelegatesToServiceAndReleasesLockOnSuccess() {
         CompactionRequest request = new CompactionRequest("session1", "user1");
+        when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(java.util.Optional.empty());
         
         bridge.onCompactionRequested(request);
 
@@ -37,6 +41,7 @@ class CompactionEventBridgeTest {
     @Test
     void testReleasesLockOnFailure() {
         CompactionRequest request = new CompactionRequest("session1", "user1");
+        when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(java.util.Optional.empty());
         when(compactionService.compact(anyString(), anyString())).thenThrow(new RuntimeException("Compaction failed"));
 
         bridge.onCompactionRequested(request);
