@@ -118,6 +118,15 @@ These are NOT interchangeable.
   from both triggering `AgentLoop.run()` simultaneously for the same session.
   `clearBatchResuming()` MUST be called in the `finally` block of the resume path and
   by `WorkspaceManager.terminateSession()`.
+- MUST NOT call `resumeCheckpoint()` / `AgentLoop.run(isResumeSignal=true)` for 
+  denial decisions. Denial is a termination, not a resume. A dedicated 
+  `rejectAndTerminate()` path MUST mark the checkpoint FAILED, notify the user 
+  via channel, and call `WorkspaceManager.terminateSession()` without entering 
+  the agent loop.
+- `HitlService.resolve()` MUST call `resumeCheckpoint()` (for approvals) or 
+  `rejectAndTerminate()` (for denials) after the decision update. The decision 
+  methods (`approveTool`, `denyAll`) update DB state only — they do NOT trigger 
+  resume themselves.
 
 ### 3.5 Structured retry budget behavior
 - Soft budget warnings may be logged and tolerated for retry behavior.

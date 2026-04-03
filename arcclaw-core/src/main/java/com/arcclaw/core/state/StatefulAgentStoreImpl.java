@@ -538,7 +538,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public boolean updateBatchToolDecision(String sessionId, String agentRole,
                                            String toolName, String decision) {
         return withRetry(
@@ -546,7 +546,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             "updateBatchToolDecision");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doUpdateBatchToolDecision(String sessionId, String agentRole,
                                              String toolName, String decision) {
         em.clear();

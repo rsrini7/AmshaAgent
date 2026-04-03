@@ -565,32 +565,11 @@ The following matrix maps each high-risk use case to the findings most likely to
 
 ---
 
-## Recommended P0 Sprint (Fix in Next Commit)
+## Recommended P0 Sprint (Three in Next Commit)
 
-These six fixes address zero-day correctness issues that will manifest in any multi-user or parallel-tool production deployment:
+These three fixes address zero-day correctness issues that will manifest in any multi-user or parallel-tool production deployment:
 
-**1. `SessionReaper.markApprovalTimedOut` → `@Transactional(NOT_SUPPORTED)`**
-```java
-// Before:
-@Transactional(Transactional.TxType.REQUIRED)
-void markApprovalTimedOut(AgentCheckpoint cp) { ... }
-
-// After:
-@Transactional(Transactional.TxType.NOT_SUPPORTED)
-void markApprovalTimedOut(AgentCheckpoint cp) { ... }
-```
-
-**2. `StatefulAgentStoreImpl.updateBatchToolDecision` — remove duplicate `@REQUIRES_NEW` from interface override:**
-```java
-// Before: @REQUIRES_NEW on BOTH override AND doUpdate method
-// After: Only doUpdateBatchToolDecision carries @REQUIRES_NEW
-@Override
-public boolean updateBatchToolDecision(...) {
-    return withRetry(() -> self.doUpdateBatchToolDecision(...), "updateBatchToolDecision");
-}
-```
-
-**3. `ApprovalStateMachine.decide()` — derive outcome from full decision map:**
+**1. `ApprovalStateMachine.decide()` — derive outcome from full decision map:**
 ```java
 // After all tools decided, check if any were APPROVED
 boolean anyApproved = allTools.stream()
@@ -598,32 +577,17 @@ boolean anyApproved = allTools.stream()
 outcome = anyApproved ? ApprovalOutcome.APPROVED : ApprovalOutcome.REJECTED;
 ```
 
-**4. `HitlService.getPendingApprovals()` — add per-key filter and pagination:**
+**2. `HitlService.getPendingApprovals()` — add per-key filter and pagination:**
 ```java
 // Filter to sessions owned by the requesting key; add ORDER BY + LIMIT
 ```
 
-**5. `AgentSessionService` — route `/deny` and `/approve` through `ApprovalStateMachine`:**
+**3. `AgentSessionService` — route `/deny` and `/approve` through `ApprovalStateMachine`:**
 ```java
 // Replace the isDeny fast-path with:
 approvalGateway.decide(sessionId, null, ApprovalDecision.REJECT, "Human denied via REST");
 // For /approve parallel batch:
 approvalGateway.decide(sessionId, null, ApprovalDecision.APPROVE, "Human approved via REST");
-```
-
-**6. `McpClientService.sendRequestStdio()` — add per-server `ReentrantLock`:**
-```java
-private final ConcurrentHashMap<String, ReentrantLock> stdioLocks = new ConcurrentHashMap<>();
-
-private JsonNode sendRequestStdio(String serverName, String method, ObjectNode params) throws Exception {
-    ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
-    lock.lock();
-    try {
-        // ... existing read/write logic ...
-    } finally {
-        lock.unlock();
-    }
-}
 ```
 
 ---
