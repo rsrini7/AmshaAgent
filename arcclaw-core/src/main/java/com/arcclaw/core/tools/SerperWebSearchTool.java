@@ -77,7 +77,7 @@ public class SerperWebSearchTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
             .addStringProperty("query", "The search query to send to Serper.")
-            .addIntegerProperty("count", "Number of organic results (1-10). Default: 5.")
+            .addIntegerProperty("count", "Number of organic results (1-10). Default: 5. (must be an integer, e.g. 5 not \"5\")")
             // Use 2-arg version to avoid potential MethodNotFound error (Fix I1)
             .addEnumProperty("type", List.of("search", "news")) 
             .required("query")

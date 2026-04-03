@@ -69,11 +69,17 @@ quarkus:
       url: "jdbc:sqlite:${ARCCLAW_DATA_DIR:./data}/arcclaw-meta.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE"
       # pool-interceptor: com.arcclaw.core.persistence.FtsConnectionInterceptor
       min-size: 1
-      #Max Size minimum 2
       #Connection 1 = JTA transaction writes (approval/deny)
       #Connection 2 = AsyncPersistenceEngine audit/telemetry writes
-      max-size: 2
+      #Connection 3 = for REQUIRES_NEW under concurrent approval + async audit drain
+      max-size: 3
       transactions: enabled
+      # ✅ ADD THESE — validates connections before handing back to callers
+      # prevents broken/post-BUSY connections from being reused (the cron cascade fix)
+      background-validation-interval: PT30S
+      validation-query-sql: "SELECT 1"
+      # Discard connections that Narayana has marked broken after XA failures
+      idle-removal-interval: PT60S
       acquisition-timeout: 60 # ← seconds, default is often 5
       # This must be LONGER than SQLite busy_timeout (10s)
       # so Agroal waits for SQLite to release before giving up

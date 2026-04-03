@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -25,6 +26,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+
+import jakarta.transaction.Transactional.TxType;
 
 /**
  * Polls {@code agentcron} table and dispatches due cron jobs to the {@link CronJobRunner}.
@@ -86,11 +89,19 @@ public class AgentCronScheduler {
     @Scheduled(every = "${arcclaw.cron.poll-interval:30s}",
                concurrentExecution = ConcurrentExecution.SKIP)
     @ActivateRequestContext
+    @Transactional(TxType.NOT_SUPPORTED)
     void pollAndDispatch() {
-        // Step 0 — Crash recovery
-        cronRepository.reclaimStaleCrons(
-                Instant.now().minus(5, ChronoUnit.MINUTES));
-
+        try {
+            // Step 0 — Crash recovery
+            cronRepository.reclaimStaleCrons(
+                    Instant.now().minus(5, ChronoUnit.MINUTES));
+        } catch (Exception e) {
+                // Isolate: a broken connection/Narayana state must not abort the whole poll cycle
+                log.warnf("Cron zombie recovery failed (skipping this cycle): %s",
+                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                return;
+        }
+        
         // Step 1 — Query due rows (read-only transaction)
         List<AgentCronEntity> due = cronRepository.findDueCrons();
         if (due.isEmpty()) return;
