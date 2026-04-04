@@ -357,6 +357,7 @@
         <quarkus.native.additional-build-args>
           -H:+ReportExceptionStackTraces,
           -J-Xmx8g,
+          --initialize-at-run-time=io.quarkus.websockets.next.runtime.SecuritySupport,
           --initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder,
           --initialize-at-run-time=io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$SnakeCaseObjectMapperHolder
         </quarkus.native.additional-build-args>
