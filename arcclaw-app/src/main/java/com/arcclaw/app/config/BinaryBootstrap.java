@@ -24,8 +24,30 @@ public class BinaryBootstrap {
         loadDotEnv(binaryDir);
         extractEnvExampleIfNeeded(binaryDir);
         
-        setDefaultIfAbsent("ARCCLAW_RAG_VEC_PATH", binaryDir.resolve("lib/vec0").toString());
-        setDefaultIfAbsent("ARCCLAW_DATA_DIR", binaryDir.resolve("data").toString());
+        // 1. Resolve and Provision Data Directory
+        String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
+                System.getenv().getOrDefault("ARCCLAW_DATA_DIR", binaryDir.resolve("data").toString()));
+        try {
+            Path dirPath = Path.of(rawDataDir).toAbsolutePath().normalize();
+            Files.createDirectories(dirPath);
+            Files.createDirectories(dirPath.resolve("workspaces"));
+            System.setProperty("ARCCLAW_DATA_DIR", dirPath.toString());
+        } catch (IOException e) {
+            System.err.println("[ArcClaw] ⚠️  Warning: Failed to create data directory: " + e.getMessage());
+        }
+
+        // 2. Resolve and Provision Native Libraries (sqlite-vec)
+        String vecPath = System.getProperty("ARCCLAW_RAG_VEC_PATH",
+                System.getenv().getOrDefault("ARCCLAW_RAG_VEC_PATH", binaryDir.resolve("lib/vec0").toString()));
+        try {
+            Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
+            if (vecPath.endsWith("vec0")) { // Base path for extraction
+                Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
+            }
+            System.setProperty("ARCCLAW_RAG_VEC_PATH", absVecPath.toString());
+        } catch (Exception e) {
+            System.err.println("[ArcClaw] ⚠️  Warning: Failed to provision sqlite-vec: " + e.getMessage());
+        }
     }
 
     private static Path resolveBinaryDir() {
