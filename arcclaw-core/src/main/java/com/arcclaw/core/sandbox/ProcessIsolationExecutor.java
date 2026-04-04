@@ -63,6 +63,9 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
     String podmanPath;
 
+    @ConfigProperty(name = "arcclaw.sandbox.allow-insecure-fallback", defaultValue = "false")
+    boolean allowInsecureFallback;
+
     public int getPodmanFailureThreshold() {
         return circuitBreaker.getPodmanFailureThreshold();
     }
@@ -134,6 +137,11 @@ public class ProcessIsolationExecutor {
                     // that need the runner image. The correct response is infraFailure so
                     // the agent surfaces the error to the user immediately.
                     log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, e.getMessage());
+                    if (allowInsecureFallback) {
+                        log.warnf("[SANDBOX] allow-insecure-fallback enabled — degrading to host execution for session %s", sessionId);
+                        return SandboxResult.success(namespaceExecutor.executeInNamespace(
+                                workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                    }
                     return SandboxResult.infraFailure(
                             "SANDBOX_OFFLINE: The sandbox image is missing. " +
                             "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
@@ -150,6 +158,11 @@ public class ProcessIsolationExecutor {
                     String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                     log.errorf("Podman execution failed (session=%s): %s", sessionId, errMsg);
                     circuitBreaker.recordFailure(stateAtCall);
+                    if (allowInsecureFallback) {
+                        log.warnf("[SANDBOX] allow-insecure-fallback enabled — degrading to host execution for session %s (Podman error: %s)", sessionId, errMsg);
+                        return SandboxResult.success(namespaceExecutor.executeInNamespace(
+                                workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                    }
                     return SandboxResult.infraFailure(
                             "SANDBOX_OFFLINE: Podman is unavailable — " + errMsg);
                 }
