@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import org.jboss.logging.Logger;
@@ -55,6 +56,9 @@ public class PromptTemplateEngine {
     @Location("prompts/role-synthesizer")
     Template synthesizerTemplate;
 
+    @Inject
+    ToolRegistry toolRegistry;
+
     /**
      * Renders the system prompt section for the given role.
      *
@@ -70,9 +74,12 @@ public class PromptTemplateEngine {
         }
 
         // Sort capabilities for deterministic LLM prompt ordering
-        // (RoleDefinition.capabilities() returns an immutable Set — order is undefined)
+        // (RoleDefinition.capabilities() returns an immutable Set — order is undefined).
+        // HARD FILTER: only include tools that are actually enabled in the registry.
+        // This prevents hallucinations where the LLM tries to call a tool that lacks API keys.
         List<ToolCapability> sortedCapabilities = role.definition().capabilities()
                 .stream()
+                .filter(cap -> toolRegistry.findTool(cap.toolName()).isPresent())
                 .sorted(Comparator.comparing(ToolCapability::toolName))
                 .toList();
 

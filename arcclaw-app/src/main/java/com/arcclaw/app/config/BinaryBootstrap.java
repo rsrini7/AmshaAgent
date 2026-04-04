@@ -220,8 +220,9 @@ public class BinaryBootstrap {
             } catch (IOException ignored) {}
         }
 
-        // Always ensure ARCCLAW_LLM_PROVIDER is in .env even if it wasn't "missing"
+        // Always ensure ARCCLAW_LLM_PROVIDER and auto-seed are in .env
         patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
+        patchEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
 
         System.err.println();
         System.err.println("╔══════════════════════════════════════════════════════════╗");

@@ -68,6 +68,10 @@ public class DevSecretSeeder {
             seedAuditHmacKeyFromEnv();
         }
 
+        if (autoSeedEnabled) {
+            seedDevSecrets();
+        }
+
         if (!autoSeedEnabled) {
             log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
                        "Skipping tool secret seeding.");
@@ -148,6 +152,8 @@ public class DevSecretSeeder {
             return;
         }
         seedFromHostEnvAsSystemKey("GITHUB_TOKEN");
+        seedFromHostEnvAsSystemKey("ARCCLAW_SERPER_API_KEY");
+        seedFromHostEnvAsSystemKey("ARCCLAW_BRAVE_API_KEY");
     }
 
     private void seedFromHostEnvAsSystemKey(String vaultKeyName) {
