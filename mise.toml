@@ -1082,7 +1082,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
-depends = ["env:recover", "build-app"]
+depends = ["env:recover", "build:full"]
 description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
