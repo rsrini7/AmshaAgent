@@ -150,10 +150,9 @@ public class CliUtils {
     public static void validateRequiredEnvVars(String[] args) {
         String mode = args.length > 0 ? args[0].toLowerCase() : "";
 
-        // No validation needed for help/version flags or bare invocation
+        // No validation needed for help/version flags
         if (mode.equals("--help") || mode.equals("-h")
-                || mode.equals("--version") || mode.equals("-v")
-                || mode.isEmpty()) {
+                || mode.equals("--version") || mode.equals("-v")) {
             return;
         }
 
@@ -316,7 +315,7 @@ public class CliUtils {
      * </ul>
      */
     private static boolean isSet(String key) {
-        String val = System.getenv(key);
+        String val = System.getProperty(key, System.getenv(key));
         if (val == null || val.isBlank()) return false;
         if (val.contains("changeme"))      return false;
         if (val.contains("<"))             return false;

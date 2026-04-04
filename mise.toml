@@ -1185,8 +1185,9 @@ quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $suffix  = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$exeName = "arcclaw-app-1.0.0-SNAPSHOT$suffix"
-$src     = "arcclaw-app/target/$exeName"
+$runnerSrc = "arcclaw-app-1.0.0-SNAPSHOT$suffix"
+$src     = "arcclaw-app/target/$runnerSrc"
+$distExe = if ($IsWindows) { "arcclaw.exe" } else { "arcclaw" }
 $distDir = 'dist'
 
 if (-not (Test-Path $src)) {
@@ -1195,7 +1196,7 @@ if (-not (Test-Path $src)) {
 }
 
 New-Item -ItemType Directory -Force "$distDir/lib" | Out-Null
-Copy-Item $src "$distDir/$exeName"
+Copy-Item $src "$distDir/$distExe"
 
 $vec0Copied = 0
 @( @("arcclaw-app/src/main/resources/native/vec0/vec0-linux-x86_64.so",    "$distDir/lib/vec0.so",    'Linux'),
@@ -1218,13 +1219,13 @@ if ($vec0Copied -eq 0) {
 Write-Host ''
 Write-Host "✅  dist assembled — binary is self-contained."
 Write-Host "Run directly (no run.sh needed):"
-Write-Host "  Linux/macOS : ./$exeName serve"
-Write-Host "  Windows     : .\\$exeName serve"
+Write-Host "  Linux/macOS : ./$distExe serve"
+Write-Host "  Windows     : .\\$distExe serve"
 Write-Host "On first run with no .env present, .env.example is auto-extracted."
 Write-Host ''
 Write-Host '-- Binaries in dist/ ----------------------------------------------------'
-if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner')     { Write-Host '  OK  runner        (Linux/macOS)' } else { Write-Host '  -   runner        (Linux/macOS) -- not built yet' }
-if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner.exe') { Write-Host '  OK  runner.exe    (Windows)'     } else { Write-Host '  -   runner.exe    (Windows)     -- not built yet' }
+if (Test-Path 'dist/arcclaw')     { Write-Host '  OK  arcclaw       (Linux/macOS)' } else { Write-Host '  -   arcclaw       (Linux/macOS) -- not built yet' }
+if (Test-Path 'dist/arcclaw.exe') { Write-Host '  OK  arcclaw.exe   (Windows)'     } else { Write-Host '  -   arcclaw.exe   (Windows)     -- not built yet' }
 Write-Host '-------------------------------------------------------------------------'
 Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
@@ -1238,7 +1239,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 $version = '1.0.0'
 $out     = 'dist/release'
-$runner  = 'arcclaw-app-1.0.0-SNAPSHOT-runner'
+$runner  = 'arcclaw'
 New-Item -ItemType Directory -Force $out | Out-Null
 $packed = 0
 
@@ -1246,9 +1247,9 @@ $packed = 0
 if (Test-Path "dist/$runner.exe") {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
     New-Item -ItemType Directory $stage | Out-Null
-    New-Item -ItemType Directory "$stage/lib" | Out-Null
-    Copy-Item "dist/$runner.exe"  "$stage/arcclaw.exe"
-    if (Test-Path 'dist/lib/vec0.dll') { Copy-Item 'dist/lib/vec0.dll' "$stage/lib/vec0.dll" }
+    Copy-Item "dist/$runner.exe" "$stage/arcclaw.exe"
+    if (Test-Path '.env.example') { Copy-Item '.env.example' "$stage/.env.example" }
+    if (Test-Path 'dist/lib') { Copy-Item 'dist/lib' "$stage/lib" -Recurse }
     $archive = "$out/arcclaw-$version-windows-x64.zip"
     Compress-Archive -Path "$stage/*" -DestinationPath $archive -Force
     Remove-Item $stage -Recurse -Force
@@ -1261,9 +1262,9 @@ if (Test-Path "dist/$runner.exe") {
 if (Test-Path "dist/$runner") {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
     New-Item -ItemType Directory $stage | Out-Null
-    New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner" "$stage/arcclaw"
-    if (Test-Path 'dist/lib/vec0.so') { Copy-Item 'dist/lib/vec0.so' "$stage/lib/vec0.so" }
+    if (Test-Path '.env.example') { Copy-Item '.env.example' "$stage/.env.example" }
+    if (Test-Path 'dist/lib') { Copy-Item 'dist/lib' "$stage/lib" -Recurse }
     $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
     if (Get-Command tar -ErrorAction SilentlyContinue) {
         tar -czf $archive -C $stage .
@@ -1277,9 +1278,9 @@ if (Test-Path "dist/$runner") {
 if ((Test-Path "dist/$runner") -and (Test-Path 'dist/lib/vec0.dylib')) {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
     New-Item -ItemType Directory $stage | Out-Null
-    New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner" "$stage/arcclaw"
-    Copy-Item 'dist/lib/vec0.dylib' "$stage/lib/vec0.dylib"
+    if (Test-Path '.env.example') { Copy-Item '.env.example' "$stage/.env.example" }
+    if (Test-Path 'dist/lib') { Copy-Item 'dist/lib' "$stage/lib" -Recurse }
     $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
     if (Get-Command tar -ErrorAction SilentlyContinue) {
         tar -czf $archive -C $stage .

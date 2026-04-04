@@ -3,7 +3,6 @@ package com.arcclaw.app;
 import java.time.Instant;
 import java.util.UUID;
 
-import java.lang.ScopedValue;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
