@@ -70,6 +70,9 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.java-executable")
     Optional<String> configuredJavaExe;
 
+    @ConfigProperty(name = "arcclaw.sandbox.javac-executable")
+    Optional<String> configuredJavacExe;
+
     @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
     @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
@@ -196,7 +199,8 @@ public class SandboxExecTool implements AgentTool {
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
         // Use CONTAINER_WORKSPACE path for javac argument
-        List<String> compileCmd = List.of("javac",
+        String javacExe = resolveJavacExecutable();
+        List<String> compileCmd = List.of(javacExe,
                 CONTAINER_WORKSPACE + "/" + className + ".java");
         try {
             SandboxResult compileResult = isolationExecutor.executeSandboxed(
@@ -276,6 +280,10 @@ public class SandboxExecTool implements AgentTool {
             }
         }
         return resolveExecutable("java", configuredJavaExe);
+    }
+
+    String resolveJavacExecutable() {
+        return resolveExecutable("javac", configuredJavacExe);
     }
 
     String resolveGoExecutable() {
