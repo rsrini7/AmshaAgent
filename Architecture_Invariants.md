@@ -42,7 +42,10 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 - Channel-neutral flows MUST NOT default missing channel metadata to a specific channel implementation.
 - New channels must fit the channel SPI without changing core engine behavior.
 - Any fallback to Telegram is LEGACY and should be removed, not copied.
-- **P82 SPI Enforcement:** Channel modules (e.g., `arcclaw-channel-telegram`) MUST NOT import `com.arcclaw.core.*`. All interaction with core HITL state MUST flow through the `com.arcclaw.channel.api.hitl.ApprovalGateway` SPI.
+- **P82-85 SPI Enforcement:** Channel modules (e.g., `arcclaw-channel-telegram`, `arcclaw-channel-web`) MUST NOT import `com.arcclaw.core.*` directly. 
+  - Interaction with core HITL state MUST flow through the `com.arcclaw.channel.api.hitl.ApprovalGateway` SPI.
+  - Identity validation (API keys) MUST flow through `com.arcclaw.channel.api.ChannelServices.isValidIdentity()`. 
+  - Direct injection of `com.arcclaw.core.security.SessionOwnerResolver` in channel modules is FORBIDDEN as it violates architectural boundaries and fails CDI resolution in module-level tests.
 
 
 ### 1.5 Channel type policy
@@ -570,6 +573,11 @@ The constraint that JAX-RS resources injecting `EntityManager` MUST have `@RunOn
 is enforced at **build time** by `RestResourceBuildStep`. Violations fail the build with a
 `ValidationError` — they do NOT surface as runtime `BlockingOperationNotAllowedException`.
 Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
+
+### 6.6 Static run-time objects
+- MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
+- GraalVM attempts to store these objects in the "image heap" at build time, leading to `UnsupportedFeatureException` (An object of type ... was found in the image heap).
+- Use `@ApplicationScoped` instance fields or `@PostConstruct` lazy initialization to ensure these objects are created at run-time.
 
 
 ---
