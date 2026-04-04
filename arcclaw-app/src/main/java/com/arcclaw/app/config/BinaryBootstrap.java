@@ -29,8 +29,10 @@ public class BinaryBootstrap {
                 System.getenv().getOrDefault("ARCCLAW_DATA_DIR", binaryDir.resolve("data").toString()));
         try {
             Path dirPath = Path.of(rawDataDir).toAbsolutePath().normalize();
-            Files.createDirectories(dirPath);
-            Files.createDirectories(dirPath.resolve("workspaces"));
+            if (!Files.exists(dirPath)) {
+                Files.createDirectories(dirPath);
+                Files.createDirectories(dirPath.resolve("workspaces"));
+            }
             System.setProperty("ARCCLAW_DATA_DIR", dirPath.toString());
         } catch (IOException e) {
             System.err.println("[ArcClaw] ⚠️  Warning: Failed to create data directory: " + e.getMessage());
@@ -41,7 +43,7 @@ public class BinaryBootstrap {
                 System.getenv().getOrDefault("ARCCLAW_RAG_VEC_PATH", binaryDir.resolve("lib/vec0").toString()));
         try {
             Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
-            if (vecPath.endsWith("vec0")) { // Base path for extraction
+            if (vecPath.contains("vec0")) { // Base path for extraction
                 Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
             }
             System.setProperty("ARCCLAW_RAG_VEC_PATH", absVecPath.toString());
@@ -51,30 +53,37 @@ public class BinaryBootstrap {
     }
 
     private static Path resolveBinaryDir() {
-        // 1. ProcessHandle (GraalVM supported)
-        String command = ProcessHandle.current().info().command().orElse("");
-        if (!command.isEmpty()) {
-            Path p = Path.of(command).toAbsolutePath().getParent();
-            if (Files.exists(p)) return p;
+        // 1. If running as Native Image (GraalVM)
+        if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+            String command = ProcessHandle.current().info().command().orElse("");
+            if (!command.isEmpty()) {
+                try {
+                    Path p = Path.of(command).toAbsolutePath().getParent();
+                    if (Files.exists(p)) return p;
+                } catch (Exception ignored) {}
+            }
         }
 
-        // 2. /proc/self/exe (Linux fallback)
+        // 2. Fallback for JAR or IDE: Use the location of the JAR file
         try {
-            Path procPath = Path.of("/proc/self/exe");
-            if (Files.exists(procPath)) {
-                return procPath.toRealPath().getParent();
+            var codeSource = BinaryBootstrap.class.getProtectionDomain().getCodeSource();
+            if (codeSource != null) {
+                Path classPath = Path.of(codeSource.getLocation().toURI());
+                if (Files.isRegularFile(classPath)) { // It's a JAR or regular file
+                    return classPath.getParent().toAbsolutePath();
+                }
             }
         } catch (Exception ignored) {}
 
-        // 3. Current Directory fallback
-        return Path.of("").toAbsolutePath();
+        // 3. Fallback: Current Working Directory
+        return Path.of(System.getProperty("user.dir")).toAbsolutePath();
     }
 
     private static void reexecWithLdPreloadIfNeeded(String[] args) {
         String os = System.getProperty("os.name").toLowerCase();
         if (!os.contains("linux")) return;
         if (System.getenv("ARCCLAW_LD_PRELOAD_SET") != null) return;
-        if (System.getenv("LD_PRELOAD") != null) return; // Skip re-exec if already set by caller (e.g. mise)
+        if (System.getenv("LD_PRELOAD") != null) return; // Skip re-exec if already set by caller
 
         String libmPath = null;
         String[] candidates = {

@@ -222,8 +222,8 @@ public class CliUtils {
         System.err.println();
         System.err.println("  " + "-".repeat(75));
         System.err.println("  After setting all values, re-run your command.");
-        System.err.println("    ./run.sh " + mode + "    (Linux/macOS/WSL2)");
-        System.err.println("    ./run.ps1 " + mode + "   (Windows)");
+        System.err.println("    ./arcclaw " + mode + "    (Linux/macOS/WSL2)");
+        System.err.println("    .\\arcclaw.exe " + mode + "   (Windows)");
         System.err.println();
         System.exit(1);
     }
@@ -254,7 +254,7 @@ public class CliUtils {
         if (!enabled && !hasToken && !hasUserIds && !hasUsers) {
             System.err.println();
             System.err.println("  INFO: Telegram channel is not configured (optional).");
-            System.err.println("        To enable: set these in your .env and run ./run.sh attach:");
+            System.err.println("        To enable: set these in your .env and run ./arcclaw attach (or arcclaw.exe attach):");
             System.err.println("          ARCCLAW_TELEGRAM_ENABLED=true");
             System.err.println("          TELEGRAM_BOT_TOKEN=<token from @BotFather>");
             System.err.println("          ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>");
@@ -275,7 +275,7 @@ public class CliUtils {
                 System.err.println("  WARN: ARCCLAW_TELEGRAM_ENABLED=true but Telegram vars are missing:");
                 missingKeys.forEach(k -> System.err.println("        - " + k));
                 System.err.println("        Telegram will fail at runtime. Add the missing vars to .env");
-                System.err.println("        or run in attach mode:  ./run.sh attach");
+                System.err.println("        or run in attach mode:  ./arcclaw attach");
                 System.err.println();
             }
             return;
@@ -287,7 +287,7 @@ public class CliUtils {
             System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but ARCCLAW_TELEGRAM_ENABLED is not 'true'.");
             System.err.println("        Telegram will NOT start in serve mode.");
             System.err.println("        To enable: add  ARCCLAW_TELEGRAM_ENABLED=true  to your .env");
-            System.err.println("        To run as Telegram daemon: ./run.sh attach");
+            System.err.println("        To run as Telegram daemon: ./arcclaw attach");
             System.err.println();
         }
 
