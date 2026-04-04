@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
+import com.arcclaw.app.config.BinaryBootstrap;
 import com.arcclaw.app.config.Vec0NativeLibraryInstaller;
 import com.arcclaw.app.util.CliUtils;
 import io.quarkus.runtime.Quarkus;
@@ -52,6 +53,8 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     public static void main(String... args) {
 
+        BinaryBootstrap.bootstrap(args);
+
         // 1. Validate required env vars early — before Quarkus boots.
         //    Shows a clear setup guide if anything is missing, then exits.
         //    Does NOT load .env — Quarkus handles config loading itself.
@@ -90,8 +93,8 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         //    Must fire earlier than CDI StartupEvent to ensure Agroal connection
         //    pooling doesn't fail on first boot when Interceptors try to load it.
         try {
-            String vecPath = System.getProperty("ARCCLAW_SQLITE_VEC_PATH",
-                    System.getenv().getOrDefault("ARCCLAW_SQLITE_VEC_PATH", "./lib/vec0"));
+            String vecPath = System.getProperty("ARCCLAW_RAG_VEC_PATH",
+                    System.getenv().getOrDefault("ARCCLAW_RAG_VEC_PATH", "./lib/vec0"));
 
             Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
             if (vecPath.endsWith("vec0")) { // it's a directory link-base
@@ -100,7 +103,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
             }
 
             // Pin the absolute path so Quarkus config picks it up uniformly.
-            System.setProperty("ARCCLAW_SQLITE_VEC_PATH", absVecPath.toString());
+            System.setProperty("ARCCLAW_RAG_VEC_PATH", absVecPath.toString());
 
         } catch (Exception e) {
             System.err.println("[ArcClaw] ⚠️  WARNING: Failed to auto-install sqlite-vec.");

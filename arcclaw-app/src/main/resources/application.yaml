@@ -218,6 +218,8 @@ smallrye:
         - "META-INF/native-image/**"
         - "skills/index.txt"
         - "skills/**.md"
+        - "env-example"
+        - "native/vec0/**"
         # - "*.yaml" 
 
   # ---------------------------------------------------------------------------

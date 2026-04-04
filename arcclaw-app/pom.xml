@@ -317,6 +317,18 @@
         <version>3.1.0</version>
         <executions>
           <execution>
+            <id>sync-env-example</id>
+            <phase>generate-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <copy file="${project.basedir}/../.env.example"
+                      tofile="${project.basedir}/src/main/resources/env-example"
+                      overwrite="true"/>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
             <id>copy-ui-assets</id>
             <phase>process-resources</phase>
             <goals>

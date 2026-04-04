@@ -154,7 +154,7 @@ A production-grade, enterprise AI Agent Kernel built with:
   (@WorkspaceScoped in-memory), IngestDocumentTool, EmbeddingModelProducer.
   Bug fix: GlobalKnowledgeBase persists raw text via CompactionSummaryEntity.
   Bug fix: TwoTierMemoryService merges non-empty text during RRF.
-  Registered in AppReflectionConfig. ARCCLAW_SQLITE_VEC_PATH in .env + application.yaml.
+  Registered in AppReflectionConfig. ARCCLAW_RAG_VEC_PATH in .env + application.yaml.
 - Phase 62: Build-Time BAML Schema Generation.
   AgentFunctionProcessor (arcclaw-deployment): Jandex build-step, generates JSON
   schema from @AgentFunction SAM RETURN TYPE via SchemaFactoryWrapper.

@@ -157,6 +157,28 @@ if ($IsWindows) {
 }
 """
 
+# [tasks."setup:sync-env-example"]
+# description = "Create symlink: root .env.example → arcclaw-app/src/main/resources/env-example"
+# dir = "{{config_root}}"
+# shell = "pwsh -NonInteractive -Command"
+# run = """
+#   $src = Resolve-Path ".env.example"
+#   $dst = "arcclaw-app/src/main/resources/env-example"
+#   if (Test-Path $dst) { Remove-Item $dst -Force }
+#   try {
+#       New-Item -ItemType SymbolicLink -Path $dst -Target $src | Out-Null
+#       Write-Host "✅ Symlinked: $dst -> $src"
+#   } catch {
+#       # Fallback to copy if symlink creation fails (Windows without Developer Mode)
+#       Copy-Item $src -Destination $dst -Force
+#       Write-Host "⚠️  Symlink failed, copied instead. Enable Developer Mode for true symlink."
+#   }
+# """
+
+[tasks.setup]
+# depends = ["setup:sync-env-example"]
+alias = "s"
+
 [tasks."setup:env-check"]
 description = "Validate .env — warn about missing or placeholder values"
 dir = "{{config_root}}"
@@ -299,7 +321,7 @@ Write-Host '✅  Tests complete.'
 """
 
 [tasks."build:native"]
-depends = ["env:recover"]
+depends = ["env:recover", "build:ui-copy"]
 description = "Native binary — Podman container (default on Linux/macOS) or local GraalVM — auto-detects, auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -402,7 +424,7 @@ Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
 """
 
 [tasks."build:native-local"]
-depends = ["env:recover"]
+depends = ["env:recover", "build:ui-copy"]
 description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1065,7 +1087,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-$env:ARCCLAW_SQLITE_VEC_PATH = "./lib/vec0"
+$env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" serve
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1084,7 +1106,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-$env:ARCCLAW_SQLITE_VEC_PATH = "./lib/vec0"
+$env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" chat
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1104,7 +1126,7 @@ if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
-$env:ARCCLAW_SQLITE_VEC_PATH = "./lib/vec0"
+$env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" attach
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1131,7 +1153,7 @@ if (-not (Test-Path $runner)) {
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $cmdArgs = @('ask', $goal)
 if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
-$env:ARCCLAW_SQLITE_VEC_PATH = "./lib/vec0"
+$env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
 $env:ARCCLAW_DATA_DIR = "./data"
 & "./$runner" @cmdArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1174,7 +1196,6 @@ if (-not (Test-Path $src)) {
 
 New-Item -ItemType Directory -Force "$distDir/lib" | Out-Null
 Copy-Item $src "$distDir/$exeName"
-Copy-Item '.env.example' "$distDir/.env.example"
 
 $vec0Copied = 0
 @( @("arcclaw-app/src/main/resources/native/vec0/vec0-linux-x86_64.so",    "$distDir/lib/vec0.so",    'Linux'),
@@ -1192,24 +1213,14 @@ if ($vec0Copied -eq 0) {
     Write-Host '    Ensure binaries exist in: arcclaw-app/src/main/resources/native/vec0/'
 }
 
-# ── Copy run.ps1 as-is (Windows line endings are fine for a .ps1 file)
-Copy-Item '.mise/launchers/run.ps1.template' 'dist/run.ps1'
-
-# ── Copy run.sh with enforced LF line endings and no BOM (critical for bash)
-$runShRaw = [System.IO.File]::ReadAllText('.mise/launchers/run.sh.template')
-$runShLf  = $runShRaw -replace "`r`n", "`n"
-[System.IO.File]::WriteAllText(
-    (Join-Path (Resolve-Path 'dist') 'run.sh'),
-    $runShLf,
-    [System.Text.UTF8Encoding]::new($false)
-)
-
-if (-not $IsWindows) { chmod +x dist/run.sh }
+# if (-not $IsWindows) { chmod +x dist/run.sh }
 
 Write-Host ''
-Write-Host '✅  dist/ assembled. Next steps:'
-Write-Host '      cd dist && ./run.sh serve    (Linux/macOS — first run auto-configures .env)'
-Write-Host '      cd dist && ./run.ps1 serve   (Windows)'
+Write-Host "✅  dist assembled — binary is self-contained."
+Write-Host "Run directly (no run.sh needed):"
+Write-Host "  Linux/macOS : ./$exeName serve"
+Write-Host "  Windows     : .\\$exeName serve"
+Write-Host "On first run with no .env present, .env.example is auto-extracted."
 Write-Host ''
 Write-Host '-- Binaries in dist/ ----------------------------------------------------'
 if (Test-Path 'dist/arcclaw-app-1.0.0-SNAPSHOT-runner')     { Write-Host '  OK  runner        (Linux/macOS)' } else { Write-Host '  -   runner        (Linux/macOS) -- not built yet' }
@@ -1237,11 +1248,6 @@ if (Test-Path "dist/$runner.exe") {
     New-Item -ItemType Directory $stage | Out-Null
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner.exe"  "$stage/arcclaw.exe"
-    # run.ps1 is fine with Set-Content (Windows line endings OK for .ps1)
-    (Get-Content 'dist/run.ps1') `
-        -replace 'arcclaw-app-[^/]*-runner\\.exe', 'arcclaw.exe' `
-        -replace 'arcclaw-app-[^/]*-runner',      'arcclaw' | Set-Content "$stage/run.ps1"
-    Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.dll') { Copy-Item 'dist/lib/vec0.dll' "$stage/lib/vec0.dll" }
     $archive = "$out/arcclaw-$version-windows-x64.zip"
     Compress-Archive -Path "$stage/*" -DestinationPath $archive -Force
@@ -1257,9 +1263,6 @@ if (Test-Path "dist/$runner") {
     New-Item -ItemType Directory $stage | Out-Null
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner" "$stage/arcclaw"
-    $runShContent = [System.IO.File]::ReadAllText('dist/run.sh') -replace 'arcclaw-app-[^/]*-runner', 'arcclaw'
-    [System.IO.File]::WriteAllText("$stage/run.sh", $runShContent, [System.Text.UTF8Encoding]::new($false))
-    Copy-Item 'dist/.env.example' "$stage/.env.example"
     if (Test-Path 'dist/lib/vec0.so') { Copy-Item 'dist/lib/vec0.so' "$stage/lib/vec0.so" }
     $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
     if (Get-Command tar -ErrorAction SilentlyContinue) {
@@ -1276,9 +1279,6 @@ if ((Test-Path "dist/$runner") -and (Test-Path 'dist/lib/vec0.dylib')) {
     New-Item -ItemType Directory $stage | Out-Null
     New-Item -ItemType Directory "$stage/lib" | Out-Null
     Copy-Item "dist/$runner" "$stage/arcclaw"
-    $runShContent = [System.IO.File]::ReadAllText('dist/run.sh') -replace 'arcclaw-app-[^/]*-runner', 'arcclaw'
-    [System.IO.File]::WriteAllText("$stage/run.sh", $runShContent, [System.Text.UTF8Encoding]::new($false))
-    Copy-Item 'dist/.env.example'   "$stage/.env.example"
     Copy-Item 'dist/lib/vec0.dylib' "$stage/lib/vec0.dylib"
     $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
     if (Get-Command tar -ErrorAction SilentlyContinue) {
