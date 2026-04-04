@@ -278,6 +278,9 @@ public class BinaryBootstrap {
             for (String hint : spec.howToGet) {
                 System.err.println("  │  " + hint);
             }
+            if (spec.key.equals("ARCCLAW_VAULT_PEPPER")) {
+                System.err.println("  │  ⚠️  WARNING: Changing this will make existing encrypted data undecryptable.");
+            }
             System.err.println("  │");
 
             String value;
