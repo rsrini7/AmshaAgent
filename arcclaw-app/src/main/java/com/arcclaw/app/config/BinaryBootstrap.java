@@ -206,7 +206,24 @@ public class BinaryBootstrap {
         System.err.println("  Press Enter to skip a value (you can fill it in .env later).");
         System.err.println();
 
+        boolean skipTelegram = false;
         for (CliUtils.VarSpec spec : missing) {
+            // Optional: Ask for Telegram enablement once when the first telegram var is hit
+            if (spec.key.startsWith("TELEGRAM_") || spec.key.startsWith("ARCCLAW_TELEGRAM_")) {
+                if (skipTelegram) continue;
+                String response = console.readLine("  ┌─ Enable Telegram integration? [y/N]: ");
+                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                    skipTelegram = true;
+                    // If they said NO, explicitly disable it in .env to prevent later warnings
+                    patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "false");
+                    System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "false");
+                    continue;
+                } else {
+                    patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "true");
+                    System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "true");
+                }
+            }
+
             boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
 
             System.err.println("  ┌─ " + spec.key);

@@ -278,7 +278,7 @@ cp -r dist/* ../arcclaw-app/src/main/resources/META-INF/resources/
 """
 
 [tasks.build-app]
-depends = ["dev:kill"]
+depends = ["dev:kill", "env:recover"]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -286,13 +286,31 @@ quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
+$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+
+# --- Shield .env (secrets) from the build ---
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into JAR.'
+}
+
+try {
+    $env:MAVEN_OPTS = $mOpts
+    & $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress
+    if ($LASTEXITCODE -ne 0) { throw "Maven build failed (exit $LASTEXITCODE)" }
+    Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
+} finally {
+    if ($envBackup) {
+        Rename-Item '.env.build-backup' '.env'
+        Write-Host 'ℹ️   .env restored.'
+    }
+}
 """
 
 [tasks."build:full"]
+depends = ["env:recover"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -300,13 +318,31 @@ quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean install -am -DskipTests --no-transfer-progress
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host '✅  Full build complete.'
+$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+
+# --- Shield .env (secrets) from the build ---
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into build.'
+}
+
+try {
+    $env:MAVEN_OPTS = $mOpts
+    & $mvnw clean install -am -DskipTests --no-transfer-progress
+    if ($LASTEXITCODE -ne 0) { throw "Maven full build failed (exit $LASTEXITCODE)" }
+    Write-Host '✅  Full build complete.'
+} finally {
+    if ($envBackup) {
+        Rename-Item '.env.build-backup' '.env'
+        Write-Host 'ℹ️   .env restored.'
+    }
+}
 """
 
 [tasks."build:test"]
+depends = ["env:recover"]
 description = "Build and run all tests"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -314,10 +350,27 @@ quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-& $mvnw clean verify -am "-Dquarkus.test.profile=test"
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host '✅  Tests complete.'
+$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+
+# --- Shield .env (secrets) from the tests ---
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) — tests will use clean defaults.'
+}
+
+try {
+    $env:MAVEN_OPTS = $mOpts
+    & $mvnw clean verify -am "-Dquarkus.test.profile=test"
+    if ($LASTEXITCODE -ne 0) { throw "Tests failed (exit $LASTEXITCODE)" }
+    Write-Host '✅  Tests complete.'
+} finally {
+    if ($envBackup) {
+        Rename-Item '.env.build-backup' '.env'
+        Write-Host 'ℹ️   .env restored.'
+    }
+}
 """
 
 [tasks."build:native"]

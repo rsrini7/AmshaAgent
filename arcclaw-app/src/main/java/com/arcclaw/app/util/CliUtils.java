@@ -142,7 +142,6 @@ public class CliUtils {
      * Called by BinaryBootstrap for interactive first-run setup.
      */
     public static List<VarSpec> getMissingVarSpecs(String[] args) {
-        String mode = args.length > 0 ? args[0].toLowerCase() : "";
         List<VarSpec> missing = new ArrayList<>();
 
         for (VarSpec spec : CORE_VARS) {
@@ -161,10 +160,8 @@ public class CliUtils {
         };
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
 
-        if (mode.equals("attach")) {
-            for (VarSpec spec : TELEGRAM_VARS) {
-                if (!isSet(spec.key)) missing.add(spec);
-            }
+        for (VarSpec spec : TELEGRAM_VARS) {
+            if (!isSet(spec.key)) missing.add(spec);
         }
         return missing;
     }

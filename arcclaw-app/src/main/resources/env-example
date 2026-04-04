@@ -57,8 +57,6 @@ ARCCLAW_LLM_PROVIDER=groq
 # Used for all agent reasoning (coordinator, researcher, coder, debugger, etc.)
 ARCCLAW_LLM_API_KEY=
 
-ARCCLAW_LLM_BASE_URL=
-
 # ARCCLAW_LLM_BASE_URL=https://api.groq.com/openai/v1
 # ARCCLAW_LLM_BASE_URL=https://openrouter.ai/api/v1
 
