@@ -86,10 +86,13 @@ if (-not (Test-Path $envPath)) {
             $key = Read-Host "  GROQ API KEY (starts with gsk_)"
             if (-not $key.StartsWith('gsk_')) { Write-Host "  X  Must start with gsk_" }
         } while (-not $key.StartsWith('gsk_'))
-        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
-        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY'  $key
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://api.groq.com/openai/v1'
     } elseif ($provider -eq 'openrouter') {
-        # ... existing key validation ...
+        do {
+            $key = (Read-Host "  OPENROUTER API KEY (starts with sk-or-)").Trim()
+            if (-not $key.StartsWith('sk-or-')) { Write-Host "  X  Must start with sk-or-" }
+        } while (-not $key.StartsWith('sk-or-'))
         Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY'  $key
         Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://openrouter.ai/api/v1'
         Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME'          'openrouter/free'
@@ -97,9 +100,12 @@ if (-not (Test-Path $envPath)) {
         Set-EnvLine $envPath 'ARCCLAW_COMPACTION_MODEL'        'meta-llama/llama-3.1-8b-instruct:free'
         Set-EnvLine $envPath 'ARCCLAW_COMPACTION_BASE_URL'     'https://openrouter.ai/api/v1'
     } elseif ($provider -eq 'openai') {
-        $key = Read-Host "  OPENAI API KEY (starts with sk-)"
-        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
-        Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+        do {
+            $key = (Read-Host "  OPENAI API KEY (starts with sk-)").Trim()
+            if (-not $key.StartsWith('sk-')) { Write-Host "  X  Must start with sk-" }
+        } while (-not $key.StartsWith('sk-'))
+        Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY'  $key
+        Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://api.openai.com/v1'
     } elseif ($provider -eq 'ollama') {
         Write-Host "  i  Ollama selected. No API key needed. Ensure it is running on localhost:11434"
         Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'http://localhost:11434/v1'

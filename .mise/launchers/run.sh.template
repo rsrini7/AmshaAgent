@@ -57,7 +57,8 @@ KEYS
             [[ "$_KEY" == gsk_* ]] && break
             echo "  X  Must start with gsk_"
         done
-        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+        _setsed ARCCLAW_LLM_API_KEY  "$_KEY"
+        _setsed ARCCLAW_LLM_BASE_URL "https://api.groq.com/openai/v1"
     # run.sh.template — openrouter branch:
     elif [[ "$_PROVIDER" == "openrouter" ]]; then
         while true; do
@@ -74,9 +75,14 @@ KEYS
         _setsed ARCCLAW_COMPACTION_MODEL            "meta-llama/llama-3.1-8b-instruct:free"
         _setsed ARCCLAW_COMPACTION_BASE_URL         "https://openrouter.ai/api/v1"
     elif [[ "$_PROVIDER" == "openai" ]]; then
-        printf "  OPENAI API KEY (starts with sk-): "
-        read -r _KEY
-        _setsed ARCCLAW_LLM_API_KEY "$_KEY"
+        while true; do
+            printf "  OPENAI API KEY (starts with sk-): "
+            read -r _KEY
+            [[ "$_KEY" == sk-* ]] && break
+            echo "  X  Must start with sk-"
+        done
+        _setsed ARCCLAW_LLM_API_KEY  "$_KEY"
+        _setsed ARCCLAW_LLM_BASE_URL "https://api.openai.com/v1"
     elif [[ "$_PROVIDER" == "ollama" ]]; then
         echo "  i  Ollama selected. No API key needed. Ensure it is running on localhost:11434"
         _setsed ARCCLAW_LLM_BASE_URL "http://localhost:11434/v1"
