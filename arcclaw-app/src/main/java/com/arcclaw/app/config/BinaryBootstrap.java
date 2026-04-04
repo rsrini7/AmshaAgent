@@ -272,6 +272,32 @@ public class BinaryBootstrap {
                 System.err.println();
             }
 
+            if (spec.key.equals("ARCCLAW_SERPER_API_KEY")) {
+                System.err.println("  ┌─ Serper Search Integration");
+                System.err.println("  │  Enable Google Search for Researcher agent via Serper.dev?");
+                System.err.println("  │");
+                String response = console.readLine("  └─ Configure Serper? [y/N]: ");
+                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                    System.err.println("     [skipped]");
+                    System.err.println();
+                    continue;
+                }
+                System.err.println();
+            }
+
+            if (spec.key.equals("ARCCLAW_BRAVE_API_KEY")) {
+                System.err.println("  ┌─ Brave Search Integration");
+                System.err.println("  │  Enable Brave Search for Researcher agent?");
+                System.err.println("  │");
+                String response = console.readLine("  └─ Configure Brave? [y/N]: ");
+                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                    System.err.println("     [skipped]");
+                    System.err.println();
+                    continue;
+                }
+                System.err.println();
+            }
+
             boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
             System.err.println("  ┌─ " + spec.key);
             System.err.println("  │  " + spec.description);
