@@ -1,13 +1,19 @@
 package com.arcclaw.app.config;
 
 import java.io.BufferedReader;
+import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.arcclaw.app.util.CliUtils;
 
 /**
  * Bootstraps the application by resolving the binary directory, loading .env files,
@@ -17,12 +23,20 @@ public class BinaryBootstrap {
 
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
+    // Keys whose input should be hidden
+    private static final Set<String> SENSITIVE_KEYS = Set.of(
+        "ARCCLAW_LLM_API_KEY", "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
+        "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
+        "ARCCLAW_API_KEYS_ADMIN", "ARCCLAW_VAULT_MASTER_KEY", "TELEGRAM_BOT_TOKEN",
+        "ARCCLAW_BRAVE_API_KEY", "ARCCLAW_SERPER_API_KEY", "GITHUB_TOKEN"
+    );
+
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
-        extractEnvExampleIfNeeded(binaryDir);
+        interactiveSetupIfNeeded(binaryDir, args);
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -154,6 +168,103 @@ public class BinaryBootstrap {
             }
         } catch (IOException e) {
             System.err.println("[ArcClaw] ⚠️  Warning: Failed to read .env: " + e.getMessage());
+        }
+    }
+
+    private static void interactiveSetupIfNeeded(Path binaryDir, String[] args) {
+        List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
+        if (missing.isEmpty()) return;
+
+        Console console = System.console();
+
+        // Non-interactive (CI / piped): extract example and let CliUtils print the error
+        if (console == null) {
+            extractEnvExampleIfNeeded(binaryDir);
+            return;
+        }
+
+        Path envFile = binaryDir.resolve(".env");
+
+        // If no .env yet, seed it from embedded env-example so comments are preserved
+        if (!Files.exists(envFile)) {
+            try (InputStream in = BinaryBootstrap.class.getResourceAsStream("/env-example")) {
+                if (in != null) {
+                    Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException e) {
+                System.err.println("[ArcClaw] ⚠️  Could not seed .env from example: " + e.getMessage());
+            }
+        }
+
+        System.err.println();
+        System.err.println("╔══════════════════════════════════════════════════════════╗");
+        System.err.println("║         ArcClaw — First-Run Interactive Setup            ║");
+        System.err.println("╚══════════════════════════════════════════════════════════╝");
+        System.err.println();
+        System.err.println("  " + missing.size() + " required value(s) need configuration.");
+        System.err.println("  Saved to: " + envFile);
+        System.err.println("  Press Enter to skip a value (you can fill it in .env later).");
+        System.err.println();
+
+        for (CliUtils.VarSpec spec : missing) {
+            boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
+
+            System.err.println("  ┌─ " + spec.key);
+            System.err.println("  │  " + spec.description);
+            for (String hint : spec.howToGet) {
+                System.err.println("  │  " + hint);
+            }
+            System.err.println("  │");
+
+            String value;
+            if (sensitive) {
+                char[] pw = console.readPassword("  └─ Enter value (input hidden): ");
+                value = (pw != null) ? new String(pw).trim() : "";
+            } else {
+                String line = console.readLine("  └─ Enter value: ");
+                value = (line != null) ? line.trim() : "";
+            }
+
+            if (value.isBlank()) {
+                System.err.println("     [skipped — add manually to: " + envFile + "]");
+            } else {
+                patchEnvFile(envFile, spec.key, value);
+                System.setProperty(spec.key, value);
+                System.err.println("     ✓ Saved");
+            }
+            System.err.println();
+        }
+
+        System.err.println("[ArcClaw] ✓ Setup complete. Configuration saved to: " + envFile);
+        System.err.println();
+    }
+
+    /**
+     * Replaces the value of an existing KEY=... line in-place, or appends
+     * KEY=value at the end if the key is not found.
+     */
+    private static void patchEnvFile(Path envFile, String key, String value) {
+        try {
+            if (!Files.exists(envFile)) {
+                Files.writeString(envFile, key + "=" + value + System.lineSeparator());
+                return;
+            }
+            String content = Files.readString(envFile);
+            // Replace KEY=<anything> line (including blank values and placeholders)
+            String patched = content.replaceAll(
+                "(?m)^" + Pattern.quote(key) + "=.*$",
+                Matcher.quoteReplacement(key + "=" + value)
+            );
+            if (!patched.equals(content)) {
+                Files.writeString(envFile, patched);
+            } else {
+                // Key not present in file at all — append it
+                Files.writeString(envFile,
+                    System.lineSeparator() + key + "=" + value + System.lineSeparator(),
+                    StandardOpenOption.APPEND);
+            }
+        } catch (IOException e) {
+            System.err.println("[ArcClaw] ⚠️  Could not update .env: " + e.getMessage());
         }
     }
 

@@ -138,6 +138,38 @@ public class CliUtils {
     // -------------------------------------------------------------------------
 
     /**
+     * Returns missing required VarSpecs for the given mode.
+     * Called by BinaryBootstrap for interactive first-run setup.
+     */
+    public static List<VarSpec> getMissingVarSpecs(String[] args) {
+        String mode = args.length > 0 ? args[0].toLowerCase() : "";
+        List<VarSpec> missing = new ArrayList<>();
+
+        for (VarSpec spec : CORE_VARS) {
+            if (!isSet(spec.key)) missing.add(spec);
+        }
+
+        String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
+                .orElseGet(() -> System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"))
+                .toLowerCase();
+        
+        VarSpec providerKeySpec = switch (llmProvider) {
+            case "openrouter" -> OPENROUTER_KEY_SPEC;
+            case "openai"     -> OPENAI_KEY_SPEC;
+            case "ollama"     -> null;
+            default           -> GROQ_KEY_SPEC;
+        };
+        if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
+
+        if (mode.equals("attach")) {
+            for (VarSpec spec : TELEGRAM_VARS) {
+                if (!isSet(spec.key)) missing.add(spec);
+            }
+        }
+        return missing;
+    }
+
+    /**
      * Validates required environment variables before Quarkus boots.
      *
      * <p>Peeks at {@code args[0]} to determine which vars are required.
@@ -329,12 +361,12 @@ public class CliUtils {
     // VarSpec — unchanged, kept as class (not record) to match original
     // -------------------------------------------------------------------------
 
-    private static class VarSpec {
-        final String key;
-        final String description;
-        final String[] howToGet;
+    public static class VarSpec {
+        public final String key;
+        public final String description;
+        public final String[] howToGet;
 
-        VarSpec(String key, String description, String... howToGet) {
+        public VarSpec(String key, String description, String... howToGet) {
             this.key = key;
             this.description = description;
             this.howToGet = howToGet;
