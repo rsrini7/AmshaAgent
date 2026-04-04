@@ -413,16 +413,16 @@ arcclaw:
     rate-limit-backoff-seconds: 30
 
   sandbox:
-    enabled: true
-    strategy: PODMAN    # options: DIRECT | PODMAN | NAMESPACE
-    podman-path: podman
-    container-image: "arcclaw-tool-runner:latest"
-    timeout-seconds: 30
-    network: none
-    tool-runner-user: "65534"
-    memory-limit: "512m"    # Fix C2
-    cpu-limit: "0.5"        # Fix C2
-    tmpfs-path: /run/arcclaw/secrets
+    enabled: "${ARCCLAW_SANDBOX_ENABLED:true}"
+    strategy: "${ARCCLAW_SANDBOX_STRATEGY:PODMAN}"
+    podman-path: "${ARCCLAW_SANDBOX_PODMAN_PATH:podman}"
+    container-image: "${ARCCLAW_SANDBOX_CONTAINER_IMAGE:arcclaw-tool-runner:latest}"
+    timeout-seconds: "${ARCCLAW_SANDBOX_TIMEOUT_SECONDS:30}"
+    network: "${ARCCLAW_SANDBOX_NETWORK:none}"
+    tool-runner-user: "${ARCCLAW_SANDBOX_USER:65534}"
+    memory-limit: "${ARCCLAW_SANDBOX_MEMORY_LIMIT:512m}"
+    cpu-limit: "${ARCCLAW_SANDBOX_CPU_LIMIT:0.5}"
+    tmpfs-path: "${ARCCLAW_SANDBOX_TMPFS_PATH:/run/arcclaw/secrets}"
     # Executable overrides (auto-discovered on host PATH if omitted)
     python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
     go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"

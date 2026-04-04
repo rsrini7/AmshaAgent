@@ -256,6 +256,16 @@ public class CheckpointResumeHandler {
                     agentRole,
                     () -> toolRegistry.invokeTool(pendingTool, pendingParams, sessionId));
 
+            if (resumeResponse.isInfraFailure()) {
+                log.errorf("Infrastructure failure during tool resume for session %s: %s",
+                        sessionId, resumeResponse.output());
+                return AgentResult.failed(
+                        "⚠️ The sandbox execution environment is currently offline. " +
+                        "Your code was not executed. Please try again later.",
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history));
+            }
+
             history.add(ReasoningStep.pending(
                     "Human Approved",
                     pendingTool,
