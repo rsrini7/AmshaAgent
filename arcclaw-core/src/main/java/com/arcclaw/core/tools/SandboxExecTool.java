@@ -64,6 +64,12 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
     Optional<String> configuredPythonExe;
 
+    @ConfigProperty(name = "arcclaw.sandbox.go-executable")
+    Optional<String> configuredGoExe;
+
+    @ConfigProperty(name = "arcclaw.sandbox.java-executable")
+    Optional<String> configuredJavaExe;
+
     @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
     @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
@@ -231,7 +237,8 @@ public class SandboxExecTool implements AgentTool {
 
         // Use CONTAINER_WORKSPACE path — workspaceRoot is the HOST path,
         // which does not exist inside the Podman container.
-        List<String> runCmd = List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
+        String goExe = resolveGoExecutable();
+        List<String> runCmd = List.of(goExe, "run", CONTAINER_WORKSPACE + "/main.go");
         SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
         if (result == null || result.isInfraFailure()) {
@@ -256,26 +263,62 @@ public class SandboxExecTool implements AgentTool {
     }
 
     String resolvePythonExecutable() {
-        return configuredPythonExe
-                .filter(exe -> !exe.isBlank())
-                .orElse(IS_WINDOWS ? "python" : "python3");
+        return resolveExecutable(IS_WINDOWS ? "python" : "python3", configuredPythonExe);
     }
 
-    /**
-     * Resolves java executable. On Windows, uses the running JVM's java.exe
-     * to guarantee we use the same JDK that is running ArcClaw, bypassing
-     * any PATH ambiguity (e.g., a different JRE on PATH).
-     * Package-private for unit tests.
-     */
     String resolveJavaExecutable() {
-        if (IS_WINDOWS) {
+        // Special case: On Windows, use the running JVM's java.exe if available
+        if (IS_WINDOWS && configuredJavaExe.isEmpty()) {
             String javaHome = System.getProperty("java.home");
             if (javaHome != null) {
                 Path javaExe = Path.of(javaHome, "bin", "java.exe");
                 if (Files.exists(javaExe)) return javaExe.toString();
             }
         }
-        return "java";
+        return resolveExecutable("java", configuredJavaExe);
+    }
+
+    String resolveGoExecutable() {
+        return resolveExecutable("go", configuredGoExe);
+    }
+
+    /**
+     * Generic OS-aware executable resolver.
+     * 1. Returns configured value if non-blank.
+     * 2. Checks common host directories based on OS.
+     * 3. Falls back to original command name (relying on system PATH).
+     */
+    private String resolveExecutable(String command, Optional<String> config) {
+        if (config.isPresent() && !config.get().isBlank()) {
+            return config.get();
+        }
+
+        List<String> candidates;
+        if (IS_WINDOWS) {
+            String suffix = command.endsWith(".exe") ? "" : ".exe";
+            candidates = List.of(
+                "C:\\Program Files\\Go\\bin\\" + command + suffix,
+                "C:\\Program Files (x86)\\Go\\bin\\" + command + suffix
+            );
+        } else {
+            // Linux + macOS common search paths
+            candidates = List.of(
+                "/opt/homebrew/bin/" + command,
+                "/usr/local/bin/" + command,
+                "/usr/bin/" + command,
+                "/bin/" + command,
+                "/snap/bin/" + command,
+                "/usr/local/go/bin/" + command
+            );
+        }
+
+        for (String path : candidates) {
+            if (Files.exists(Path.of(path))) {
+                return path;
+            }
+        }
+
+        return command;
     }
 
     /**

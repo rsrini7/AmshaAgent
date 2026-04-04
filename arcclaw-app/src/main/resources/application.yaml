@@ -423,7 +423,10 @@ arcclaw:
     memory-limit: "512m"    # Fix C2
     cpu-limit: "0.5"        # Fix C2
     tmpfs-path: /run/arcclaw/secrets
-    # python-executable: "C:\\Python313\\python.exe"
+    # Executable overrides (auto-discovered on host PATH if omitted)
+    python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
+    go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"
+    java-executable: "${ARCCLAW_SANDBOX_JAVA_EXECUTABLE:}"
     circuit-breaker:
       failure-threshold: 3   # was 2; gives LLM one retry for param errors
 
