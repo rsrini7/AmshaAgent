@@ -3,6 +3,7 @@ package com.arcclaw.core.channel;
 import java.util.concurrent.CompletableFuture;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
@@ -25,7 +26,7 @@ public class ChannelServicesImpl implements ChannelServices {
     @Inject WorkspaceManager workspaceManager;
     @Inject SessionIdResolver sessionIdResolver;
     @Inject SessionHeartbeatTracker heartbeatTracker;
-    @Inject SessionOwnerResolver ownerResolver;
+    @Inject Instance<SessionOwnerResolver> ownerResolver;
     @Inject ManagedExecutor executor;
 
     @Override
