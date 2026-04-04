@@ -44,7 +44,8 @@ public class SandboxExecTool implements AgentTool {
     // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
     private static final String SANDBOX_OFFLINE_MSG =
         "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed."+
-        "The code was NOT run. Inform the user gracefully that the execution environment is currently offline.";
+        "The code was NOT run. Inform the user gracefully that the execution environment is currently offline."+
+        "or set .env file ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback";
 
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node", "java", "go");
