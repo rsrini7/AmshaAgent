@@ -53,7 +53,7 @@ public class BinaryBootstrap {
     }
 
     private static Path resolveBinaryDir() {
-        // 1. If running as Native Image (GraalVM)
+        // 1. Native Image (GraalVM) — resolve to binary's actual location
         if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
             String command = ProcessHandle.current().info().command().orElse("");
             if (!command.isEmpty()) {
@@ -62,20 +62,14 @@ public class BinaryBootstrap {
                     if (Files.exists(p)) return p;
                 } catch (Exception ignored) {}
             }
+            // /proc/self/exe fallback for Linux native
+            try {
+                Path proc = Path.of("/proc/self/exe");
+                if (Files.exists(proc)) return proc.toRealPath().getParent();
+            } catch (Exception ignored) {}
         }
 
-        // 2. Fallback for JAR or IDE: Use the location of the JAR file
-        try {
-            var codeSource = BinaryBootstrap.class.getProtectionDomain().getCodeSource();
-            if (codeSource != null) {
-                Path classPath = Path.of(codeSource.getLocation().toURI());
-                if (Files.isRegularFile(classPath)) { // It's a JAR or regular file
-                    return classPath.getParent().toAbsolutePath();
-                }
-            }
-        } catch (Exception ignored) {}
-
-        // 3. Fallback: Current Working Directory
+        // 2. JAR / dev / IDE mode — always use CWD (where the user runs from)
         return Path.of(System.getProperty("user.dir")).toAbsolutePath();
     }
 
@@ -125,6 +119,11 @@ public class BinaryBootstrap {
     }
 
     static void loadDotEnv(Path dir) {
+        // In native mode: this is the only .env loader — Quarkus config system
+        //   hasn't started yet and DotenvConfigSourceProvider won't fire.
+        // In JAR/dev mode: this front-runs Quarkus so CliUtils.validateRequiredEnvVars()
+        //   can see the values before CDI starts. DotenvConfigSourceProvider will
+        //   also load them — no conflict since we check env/sysprop before setting.
         Path envFile = dir.resolve(".env");
         if (!Files.exists(envFile)) return;
 
