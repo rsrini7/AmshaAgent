@@ -301,7 +301,9 @@ arcclaw:
     embed-timeout-seconds: 30
     # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
     embed-dimensions: ${ARCCLAW_EMBED_DIMENSIONS:768}
-    vec-extension-path: "${ARCCLAW_SQLITE_VEC_PATH:./lib/vec0}"
+    # Path where sqlite-vec native lib is extracted/loaded from.
+    # The OS-specific extension (.so, .dll) is added automatically.
+    vec-extension-path: "${ARCCLAW_RAG_VEC_PATH:./lib/vec0}"
   auto-seed-secrets: "${ARCCLAW_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true
