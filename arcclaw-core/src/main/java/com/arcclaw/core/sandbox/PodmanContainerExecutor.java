@@ -150,6 +150,8 @@ public class PodmanContainerExecutor {
                 podmanCmd.add(containerImage);
                 podmanCmd.addAll(command);
 
+                log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
+
                 var pb = new ProcessBuilder(podmanCmd);
 
                 // FIX: check mkdirs() return value — silent failure leaves ProcessBuilder

@@ -234,9 +234,9 @@ ARCCLAW_SANDBOX_ENABLED=true
 # [PODMAN-SPECIFIC] Change if image is tagged differently (e.g. localhost/...)
 ARCCLAW_SANDBOX_CONTAINER_IMAGE=arcclaw-tool-runner:latest
 
-# [PODMAN-SPECIFIC] Change to 'bridge' if 'none' causes errors in your environment.
-# 'bridge' is now the default to allow tools (like GitHub) internet access.
-ARCCLAW_SANDBOX_NETWORK=bridge
+# [PODMAN-SPECIFIC] Change to 'bridge' or 'slirp4netns' if 'host' is restricted.
+# 'host' is now the default to ensure tools (like GitHub) work out-of-the-box.
+ARCCLAW_SANDBOX_NETWORK=host
 
 # [PODMAN-SPECIFIC] Transport mechanism for passing secrets into the container.
 # options: tmpfs (Tier 1 secure) | tmpdir (Dev/macOS fallback)

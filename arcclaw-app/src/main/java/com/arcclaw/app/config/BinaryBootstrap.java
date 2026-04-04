@@ -223,7 +223,7 @@ public class BinaryBootstrap {
         // Always ensure ARCCLAW_LLM_PROVIDER and auto-seed are in .env
         patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
         patchEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
-        patchEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "bridge");
+        patchEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
 
         // Use tmpdir specifically on macOS to avoid /run/arcclaw read-only warnings
         String defaultTransport = System.getProperty("os.name", "").toLowerCase().contains("mac") ? "tmpdir" : "tmpfs";
