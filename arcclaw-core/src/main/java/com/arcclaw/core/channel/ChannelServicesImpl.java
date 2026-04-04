@@ -58,4 +58,9 @@ public class ChannelServicesImpl implements ChannelServices {
     public void bindSessionOwner(String sessionId, String ownerKeyName) {
         heartbeatTracker.tryBindOwner(sessionId, ownerKeyName);
     }
+
+    @Override
+    public boolean isValidIdentity(String credential) {
+        return ownerResolver.isResolvable() && ownerResolver.get().isValid(credential);
+    }
 }

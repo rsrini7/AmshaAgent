@@ -15,7 +15,6 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.security.SessionOwnerResolver;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -38,7 +37,6 @@ public class WebChatEndpoint {
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject ChannelServices channelServices;
-    @Inject SessionOwnerResolver ownerResolver;
 
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
@@ -64,7 +62,7 @@ public class WebChatEndpoint {
                 }
             }
 
-            if (!ownerResolver.isValid(apiKey)) {
+            if (!channelServices.isValidIdentity(apiKey)) {
                 log.warnf("WebSocket rejected: invalid API key from connId=%s", conn.id());
                 // We must send error then close
                 conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid API key\"}");

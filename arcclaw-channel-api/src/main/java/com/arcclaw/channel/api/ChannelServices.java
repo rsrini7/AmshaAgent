@@ -37,4 +37,9 @@ public interface ChannelServices {
      * by channel-created sessions (e.g. WebSocket).
      */
      void bindSessionOwner(String sessionId, String ownerKeyName);
+ 
+    /**
+     * Checks whether a raw identity credential (e.g. API key) is valid.
+     */
+    boolean isValidIdentity(String credential);
 }
