@@ -26,7 +26,9 @@ import org.jboss.logging.Logger;
 public class TelegramCallbackHandler {
 
     private static final Logger log = Logger.getLogger(TelegramCallbackHandler.class);
-    private static HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     @Inject
     TelegramChannelSender sender;
@@ -109,7 +111,7 @@ public class TelegramCallbackHandler {
     private void answerCallback(String callbackQueryId) {
         log.debugf("Answering callback %s", callbackQueryId);
         String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
-        HTTP_CLIENT.sendAsync(
+        httpClient.sendAsync(
             HttpRequest.newBuilder()
                 .uri(URI.create(
                     "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
