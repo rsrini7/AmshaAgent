@@ -49,7 +49,7 @@ public class DevSecretSeeder {
     @ConfigProperty(name = "arcclaw.auto-seed-secrets", defaultValue = "false")
     boolean autoSeedEnabled;
 
-    @ConfigProperty(name = "quarkus.profile")
+    @ConfigProperty(name = "quarkus.profile", defaultValue = "dev")
     String profile;
 
     /**

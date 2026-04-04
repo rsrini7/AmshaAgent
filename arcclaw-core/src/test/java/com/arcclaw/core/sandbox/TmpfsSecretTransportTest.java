@@ -29,7 +29,7 @@ public class TmpfsSecretTransportTest {
         secrets.put("KEY2", secret2);
 
         Path envFilePath = null;
-        try (TmpfsSecretTransport transport = new TmpfsSecretTransport(sessionId, tempDir.toString())) {
+        try (TmpfsSecretTransport transport = new TmpfsSecretTransport(sessionId, tempDir.toString(), "tmpfs")) {
             
             // 1. Prepare
             List<String> commandArgs = transport.prepare(secrets);
@@ -68,7 +68,7 @@ public class TmpfsSecretTransportTest {
 
     @Test
     void testEmptySecretsList(@TempDir Path tempDir) throws IOException {
-        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("sessionX", tempDir.toString())) {
+        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("sessionX", tempDir.toString(), "tmpfs")) {
             List<String> args = transport.prepare(Map.of());
             assertTrue(args.isEmpty(), "No secrets should yield no podman args");
         }
@@ -86,7 +86,7 @@ public class TmpfsSecretTransportTest {
         assertTrue(Files.exists(staleSecret));
         assertTrue(Files.exists(otherFile));
         
-        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", tempDir.toString())) {
+        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", tempDir.toString(), "tmpfs")) {
             transport.sweepStaleTmpFiles(tempDir);
         }
         
@@ -97,7 +97,7 @@ public class TmpfsSecretTransportTest {
     @Test
     void testSweepStaleTmpFilesNonExistentDir() {
         Path nonExistent = Path.of("/tmp/this-dir-should-not-exist-12345");
-        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", "/dev/shm")) {
+        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", "/dev/shm", "tmpfs")) {
             assertDoesNotThrow(() -> transport.sweepStaleTmpFiles(nonExistent));
         }
     }
