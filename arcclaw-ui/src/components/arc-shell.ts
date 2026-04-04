@@ -226,13 +226,13 @@ export class ArcShell extends LitElement {
     };
 
     this._hitlEs = this._connectSse(
-      `/api/v1/hitl/events?sessionId=${this._sessionId}&apiKey=${this._apiKey}`,
+      `/api/v1/hitl/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
       (event) => this._handleHitlEvent(event),
       startPollingOnce
     );
 
     this._agentEs = this._connectSse(
-      `/api/v1/agents/events?sessionId=${this._sessionId}&apiKey=${this._apiKey}`,
+      `/api/v1/agents/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
       (event) => this._handleAgentEvent(event),
       startPollingOnce
     );
