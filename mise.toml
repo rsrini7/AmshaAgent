@@ -278,7 +278,7 @@ cp -r dist/* ../arcclaw-app/src/main/resources/META-INF/resources/
 """
 
 [tasks.build-app]
-depends = ["dev:kill", "env:recover"]
+depends = ["dev:kill", "env:recover", "build:ui-copy"]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -310,7 +310,7 @@ try {
 """
 
 [tasks."build:full"]
-depends = ["env:recover"]
+depends = ["env:recover", "build:ui-copy"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -603,7 +603,7 @@ Write-Host '✅  Build artifacts cleaned.'
 # =============================================================================
 
 [tasks.dev]
-depends = ["env:recover"]
+depends = ["env:recover", "build:ui-copy"]
 description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1082,7 +1082,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
-depends = ["env:recover"]
+depends = ["env:recover", "build-app"]
 description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
