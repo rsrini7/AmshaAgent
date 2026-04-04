@@ -170,10 +170,4 @@ public class BinaryBootstrap {
             System.err.println("[ArcClaw] No .env found. Use the existing .env.example:  cp .env.example .env");
         }
     }
-
-    private static void setDefaultIfAbsent(String key, String defaultValue) {
-        if (System.getenv(key) == null && System.getProperty(key) == null) {
-            System.setProperty(key, defaultValue);
-        }
-    }
 }
