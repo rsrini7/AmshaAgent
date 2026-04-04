@@ -198,36 +198,21 @@ public class SandboxExecTool implements AgentTool {
         Path javaFile = workspaceRoot.resolve(className + ".java");
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
-        // Use CONTAINER_WORKSPACE path for javac argument
-        String javacExe = resolveJavacExecutable();
-        List<String> compileCmd = List.of(javacExe,
-                CONTAINER_WORKSPACE + "/" + className + ".java");
-        try {
-            SandboxResult compileResult = isolationExecutor.executeSandboxed(
-                    sessionId, workspaceRoot, compileCmd, secrets);
-            if (compileResult == null || compileResult.isInfraFailure()) {
-                String reason = compileResult != null ? compileResult.reason() : "Sandbox executor returned null";
-                log.errorf("[SandboxExecTool] Infra failure (java/compile) session=%s: %s",
-                        sessionId, reason);
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
-            }
-        } catch (ToolExecutionException e) {
-            return ToolResponse.failure(e.exitCode(),
-                    nonBlank("Java compilation failed:\n" + e.getMessage()));
-        }
-
-        // Use CONTAINER_WORKSPACE for -cp classpath argument
+        // JDK 11+ / JEP 330: Run single-file source code directly.
+        // This avoids creating .class files and bypasses traditional compilation disk-write errors.
         String javaExe = resolveJavaExecutable();
-        List<String> runCmd = List.of(javaExe, "-cp", CONTAINER_WORKSPACE, className);
-        SandboxResult runResult = isolationExecutor.executeSandboxed(
+        List<String> runCmd = List.of(javaExe,
+                CONTAINER_WORKSPACE + "/" + className + ".java");
+
+        SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        if (runResult == null || runResult.isInfraFailure()) {
-            String reason = runResult != null ? runResult.reason() : "Sandbox executor returned null";
-            log.errorf("[SandboxExecTool] Infra failure (java/run) session=%s: %s",
+        if (result == null || result.isInfraFailure()) {
+            String reason = result != null ? result.reason() : "Sandbox executor returned null";
+            log.errorf("[SandboxExecTool] Infra failure (java) session=%s: %s",
                     sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
-        return ToolResponse.success(truncate(runResult.output()));
+        return ToolResponse.success(truncate(result.output()));
     }
 
     // Go: write main.go → go run
