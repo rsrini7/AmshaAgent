@@ -172,29 +172,48 @@ public class BinaryBootstrap {
     }
 
     private static void interactiveSetupIfNeeded(Path binaryDir, String[] args) {
-        List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
-        if (missing.isEmpty()) return;
-
         Console console = System.console();
-
-        // Non-interactive (CI / piped): extract example and let CliUtils print the error
+        // Non-interactive (CI / piped): extract example and exit early
         if (console == null) {
             extractEnvExampleIfNeeded(binaryDir);
             return;
         }
 
+        // 1. Initial State: LLM Provider selection determines what VarSpecs we need.
+        // We prompt this BEFORE getMissingVarSpecs so the key hints (Groq/OpenRouter/etc) are correct.
+        if (System.getProperty("ARCCLAW_LLM_PROVIDER") == null && System.getenv("ARCCLAW_LLM_PROVIDER") == null) {
+            System.err.println();
+            System.err.println("  ┌─ LLM Provider Select");
+            System.err.println("  │  1. Groq (default) - ultra fast, free tier available");
+            System.err.println("  │  2. OpenRouter - access any model (Llama 3, Claude, etc.)");
+            System.err.println("  │  3. OpenAI - direct connection");
+            System.err.println("  │  4. Ollama - local only (no API key required)");
+            System.err.println("  │");
+            String choice = console.readLine("  └─ Select provider [1-4, Default: 1]: ");
+            String provider = switch (choice != null ? choice.trim() : "") {
+                case "2" -> "openrouter";
+                case "3" -> "openai";
+                case "4" -> "ollama";
+                default  -> "groq";
+            };
+            System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
+            // Will be persisted to .env during the loop below
+        }
+
+        List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
+        if (missing.isEmpty()) return;
+
         Path envFile = binaryDir.resolve(".env");
 
-        // If no .env yet, seed it from embedded env-example so comments are preserved
+        // Seed .env from example if missing so we have a place to patch
         if (!Files.exists(envFile)) {
             try (InputStream in = BinaryBootstrap.class.getResourceAsStream("/env-example")) {
-                if (in != null) {
-                    Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
-                }
-            } catch (IOException e) {
-                System.err.println("[ArcClaw] ⚠️  Could not seed .env from example: " + e.getMessage());
-            }
+                if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ignored) {}
         }
+
+        // Always ensure ARCCLAW_LLM_PROVIDER is in .env even if it wasn't "missing"
+        patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
 
         System.err.println();
         System.err.println("╔══════════════════════════════════════════════════════════╗");
@@ -207,25 +226,30 @@ public class BinaryBootstrap {
         System.err.println();
 
         boolean skipTelegram = false;
+        boolean askedTelegram = false;
         for (CliUtils.VarSpec spec : missing) {
-            // Optional: Ask for Telegram enablement once when the first telegram var is hit
+            // Optional: Ask for Telegram enablement once
             if (spec.key.startsWith("TELEGRAM_") || spec.key.startsWith("ARCCLAW_TELEGRAM_")) {
-                if (skipTelegram) continue;
-                String response = console.readLine("  ┌─ Enable Telegram integration? [y/N]: ");
-                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
-                    skipTelegram = true;
-                    // If they said NO, explicitly disable it in .env to prevent later warnings
-                    patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "false");
-                    System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "false");
-                    continue;
-                } else {
-                    patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "true");
-                    System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "true");
+                if (!askedTelegram) {
+                    System.err.println("  ┌─ Telegram Integration");
+                    System.err.println("  │  Would you like to enable the Telegram bot interface?");
+                    System.err.println("  │");
+                    String response = console.readLine("  └─ Enable Telegram? [y/N]: ");
+                    askedTelegram = true;
+                    if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                        skipTelegram = true;
+                        patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "false");
+                        System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "false");
+                    } else {
+                        patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "true");
+                        System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "true");
+                        System.err.println();
+                    }
                 }
+                if (skipTelegram) continue;
             }
 
             boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
-
             System.err.println("  ┌─ " + spec.key);
             System.err.println("  │  " + spec.description);
             for (String hint : spec.howToGet) {
