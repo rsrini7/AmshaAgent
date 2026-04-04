@@ -319,7 +319,7 @@ public class AgentStateMachineRunner {
         // FIX Bug 1: garbage punctuation-only response from thin-context LLM output
         // e.g. "'." (2 tokens) produced when compaction race starves the LLM of context.
         if (stripped.length() < MIN_ANSWER_ALPHA_LENGTH
-                && !stripped.chars().anyMatch(Character::isLetter)) {
+                && !stripped.chars().anyMatch(Character::isLetterOrDigit)) {
             log.warnf("ANSWER-GUARD: punctuation-only %d-char answer '%s' suppressed " +
                     "for session %s — likely caused by compaction race producing thin context.",
                     stripped.length(), stripped, sessionId);
