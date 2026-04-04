@@ -163,6 +163,18 @@ public class CliUtils {
         for (VarSpec spec : TELEGRAM_VARS) {
             if (!isSet(spec.key)) missing.add(spec);
         }
+
+        if (!isSet("GITHUB_TOKEN")) {
+            missing.add(new VarSpec(
+                "GITHUB_TOKEN",
+                "Optional GitHub Personal Access Token (classic or fine-grained).",
+                "Recommended for searching and managing code in GitHub repositories.",
+                "1. Go to https://github.com/settings/tokens",
+                "2. Create a token with 'repo' and 'workflow' scopes (or relevant fine-grained scopes)",
+                "3. Add:  GITHUB_TOKEN=ghp_your_key_here"
+            ));
+        }
+
         return missing;
     }
 
@@ -274,7 +286,8 @@ public class CliUtils {
      * </ol>
      */
     private static void warnTelegramIfPartial() {
-        boolean enabled    = "true".equalsIgnoreCase(System.getenv("ARCCLAW_TELEGRAM_ENABLED"));
+        String val = System.getProperty("ARCCLAW_TELEGRAM_ENABLED", System.getenv("ARCCLAW_TELEGRAM_ENABLED"));
+        boolean enabled    = "true".equalsIgnoreCase(val);
         boolean hasToken   = isSet("TELEGRAM_BOT_TOKEN");
         boolean hasUserIds = isSet("ARCCLAW_TELEGRAM_ALLOWED_USER_IDS");
         boolean hasUsers   = isSet("ARCCLAW_TELEGRAM_ALLOWED_USERS");

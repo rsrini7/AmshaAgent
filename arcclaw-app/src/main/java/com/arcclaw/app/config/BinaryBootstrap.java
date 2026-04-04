@@ -29,7 +29,7 @@ public class BinaryBootstrap {
     private static final Set<String> SENSITIVE_KEYS = Set.of(
         "ARCCLAW_LLM_API_KEY", "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
         "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
-        "ARCCLAW_API_KEYS_ADMIN", "ARCCLAW_VAULT_MASTER_KEY", "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_BOT_TOKEN",
         "ARCCLAW_BRAVE_API_KEY", "ARCCLAW_SERPER_API_KEY", "GITHUB_TOKEN"
     );
 
@@ -255,6 +255,21 @@ public class BinaryBootstrap {
                     }
                 }
                 if (skipTelegram) continue;
+            }
+
+            // Optional: Ask for GitHub token
+            if (spec.key.equals("GITHUB_TOKEN")) {
+                System.err.println("  ┌─ GitHub repository access");
+                System.err.println("  │  Would you like to provide a GitHub token for the Coder/Researcher tools?");
+                System.err.println("  │  (Search and edit repositories directly from ArcClaw)");
+                System.err.println("  │");
+                String response = console.readLine("  └─ Configure GitHub? [y/N]: ");
+                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                    System.err.println("     [skipped]");
+                    System.err.println();
+                    continue;
+                }
+                System.err.println();
             }
 
             boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
