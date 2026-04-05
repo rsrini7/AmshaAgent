@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
  */
 public class CronTimeResolver {
 
-    // Handles: "in 5 min", "in a min", "in an hour" (future), "after 10 minutes" 
+    // Handles: "in 5 min", "in a min", "in an hour" (future), "after 10 minutes", "in one minute"
     private static final Pattern IN_MINUTES_PATTERN =
-            Pattern.compile("(?:in|after)\\s+(a|an|\\d+)\\s*min(?:utes?)?",
+            Pattern.compile("(?:in|after)\\s+(?:exactly\\s+)?(a|an|one|\\d+)\\s*min(?:utes?)?",
                     Pattern.CASE_INSENSITIVE);
 
     private static final Pattern AT_TIME_PATTERN =
@@ -45,7 +45,7 @@ public class CronTimeResolver {
         var m1 = IN_MINUTES_PATTERN.matcher(msg);
         if (m1.find()) {
             String q = m1.group(1);
-            long minutes = (q.equalsIgnoreCase("a") || q.equalsIgnoreCase("an"))
+            long minutes = (q.equalsIgnoreCase("a") || q.equalsIgnoreCase("an") || q.equalsIgnoreCase("one"))
                     ? 1L
                     : Long.parseLong(q);
             return nowUtc.plusMinutes(minutes);

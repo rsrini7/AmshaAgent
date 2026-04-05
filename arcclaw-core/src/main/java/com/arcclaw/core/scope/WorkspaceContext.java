@@ -19,6 +19,7 @@ public final class WorkspaceContext {
     public static final ScopedValue<AutonomyLevel> AUTONOMY = ScopedValue.newInstance();
     public static final ScopedValue<String> AGENT_ROLE = ScopedValue.newInstance();
     public static final ScopedValue<String> CHANNEL_TYPE = ScopedValue.newInstance();
+    public static final ScopedValue<String> SUGGESTED_CRON = ScopedValue.newInstance();
 
 
     private WorkspaceContext() {
@@ -146,5 +147,9 @@ public final class WorkspaceContext {
                 "CHANNEL_TYPE not bound — violates Architecture_Invariants.md §1.4. " +
                 "Ensure all channel entry points bind ChannelType via " +
                 "WorkspaceContext.run(..., channelType, ...)."));
+    }
+
+    public static String suggestedCron() {
+        return SUGGESTED_CRON.isBound() ? SUGGESTED_CRON.get() : null;
     }
 }
