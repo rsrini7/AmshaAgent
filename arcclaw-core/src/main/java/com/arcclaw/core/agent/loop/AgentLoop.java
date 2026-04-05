@@ -144,7 +144,14 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
-        return run(sessionId, agentRole, goal, engine, maxIterations, null);
+        
+        // Fix 2 — Ensure storage goals have enough budget (min 3 steps)
+        int budget = maxIterations;
+        if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
+            budget = Math.max(budget, 3);
+        }
+        
+        return run(sessionId, agentRole, goal, engine, budget, null);
     }
 
     @ActivateRequestContext
