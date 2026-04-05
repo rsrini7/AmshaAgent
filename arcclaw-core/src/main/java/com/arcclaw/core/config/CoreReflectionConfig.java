@@ -29,6 +29,7 @@ import com.arcclaw.core.tools.ManageScheduleTool;
 import com.arcclaw.core.tools.MemorySearchTool;
 import com.arcclaw.core.tools.SandboxExecTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -56,6 +57,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         CreateSessionResponse.class,
         SessionStatusResponse.class,
         AuditEventResponse.class,
+        ToolRegistry.ToolDescriptor.class,
         AuditEvent.class,
         AuditOutcome.class,
         SecurityEventType.class,
