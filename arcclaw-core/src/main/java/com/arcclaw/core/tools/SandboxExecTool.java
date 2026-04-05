@@ -263,7 +263,8 @@ public class SandboxExecTool implements AgentTool {
         try {
             String code = (String) params.get("code");
             String lang = (String) params.get("language");
-            if (code == null || lang == null) return ToolResponse.failure(1, "code and language required");
+            if (lang == null) return ToolResponse.failure(1, "Parameter 'language' is required.");
+            if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
             lang = lang.toLowerCase();
 
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
@@ -322,8 +323,11 @@ public class SandboxExecTool implements AgentTool {
         SandboxResult result = isolationExecutor.executeSandboxed(sessionId, workspaceRoot, runCmd, secrets);
         if (result == null || result.isInfraFailure()) {
             String reason = result != null ? result.reason() : "Sandbox executor returned null";
-            log.errorf("[SandboxExecTool] Infra failure (java-fallback) session=%s: %s", sessionId, reason);
+            log.errorf("[SandboxExecTool] Infra failure (java-fallback) sessionId=%s: %s", sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        if (!result.success()) {
+            return ToolResponse.failure(1, result.reason());
         }
         return ToolResponse.success(truncate(result.output()));
     }
@@ -344,6 +348,9 @@ public class SandboxExecTool implements AgentTool {
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s", lang, sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
+        if (!result.success()) {
+            return ToolResponse.failure(1, result.reason());
+        }
         return ToolResponse.success(truncate(result.output()));
     }
 
@@ -360,6 +367,9 @@ public class SandboxExecTool implements AgentTool {
                 String reason = result != null ? result.reason() : "Sandbox executor returned null";
                 log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s", sessionId, reason);
                 return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            }
+            if (!result.success()) {
+                return ToolResponse.failure(1, result.reason());
             }
             return ToolResponse.success(truncate(result.output()));
         } catch (IOException e) {

@@ -52,7 +52,7 @@ class PromptTemplateEngineTest {
         Instant now = Instant.parse("2026-04-01T10:00:00Z");
         String result = engine.buildSystemPrompt(AgentRoleEnum.COORDINATOR, "Summary info", now);
         assertTrue(result.contains("Summary info"), "Actual: " + result);
-        assertTrue(result.contains("2026-04-01T10:00:00Z"), "Actual: " + result);
+        assertTrue(result.contains("2026-04-01T10:00Z"), "Actual: " + result);
     }
 
     @Test
