@@ -16,8 +16,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
-import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
+import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
