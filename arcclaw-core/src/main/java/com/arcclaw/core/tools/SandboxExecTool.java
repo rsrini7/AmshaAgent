@@ -105,6 +105,21 @@ public class SandboxExecTool implements AgentTool {
     }
 
     @Override
+    public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
+        String lang = (String) params.get("language");
+        String code = (String) params.get("code");
+        if (lang == null || code == null) return;
+        lang = lang.toLowerCase();
+
+        if ("java".equals(lang)) {
+            String className = extractJavaClassName(code);
+            Files.writeString(workspaceRoot.resolve(className + ".java"), code);
+        } else if ("go".equals(lang)) {
+            Files.writeString(workspaceRoot.resolve("main.go"), code);
+        }
+    }
+
+    @Override
     public ToolResponse execute(Map<String, Object> params) {
         // This is now only called when requiresSandbox() is false or as a manual fallback.
         // The ToolRegistry normally uses sandboxCommand() when requiresSandbox() is true.

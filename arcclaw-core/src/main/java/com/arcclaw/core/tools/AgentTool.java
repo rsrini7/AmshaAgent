@@ -1,5 +1,7 @@
 package com.arcclaw.core.tools;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -120,4 +122,10 @@ public interface AgentTool {
     default boolean isEnabled() {
         return true;
     }
+
+    /**
+     * Prepares the workspace on the host before the sandbox starts.
+     * Override this to write files that the sandbox command needs.
+     */
+    default void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {}
 }

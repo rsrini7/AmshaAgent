@@ -249,6 +249,8 @@ public class ToolRegistry {
                     Files.createDirectories(workspaceRoot);
                 }
 
+                tool.prepareWorkspace(workspaceRoot, sanitizedParams);
+
                 var command = tool.sandboxCommand(sanitizedParams);
 
                 SandboxResult result = isolationExecutor.executeSandboxed(
