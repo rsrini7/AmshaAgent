@@ -184,10 +184,14 @@ public class ProcessIsolationExecutor {
      * Podman mounts workspaceRoot as /workspace itself, so no rewriting needed there.
      */
     private List<String> rewriteContainerPaths(List<String> command, Path workspaceRoot) {
-        String hostPath = workspaceRoot.toAbsolutePath().toString()
+        final String containerRoot = "/workspace";
+        final String hostRoot = workspaceRoot.toAbsolutePath().toString()
                 .replace("\\", "/");   // normalize Windows backslashes → forward slashes
+
         return command.stream()
-                .map(arg -> arg.replace("/workspace", hostPath))
+                .map(arg -> arg.startsWith(containerRoot)
+                        ? hostRoot + arg.substring(containerRoot.length())
+                        : arg)
                 .toList();
     }
 }
