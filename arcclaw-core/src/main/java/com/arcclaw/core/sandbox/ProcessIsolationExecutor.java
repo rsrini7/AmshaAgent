@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -171,7 +172,11 @@ public class ProcessIsolationExecutor {
         } catch (ToolExecutionException e) {
             return SandboxResult.failure(e.getMessage());
         } catch (Exception e) {
-            return SandboxResult.infraFailure("SANDBOX_OFFLINE: " + e.getMessage());
+            String msg = e.getMessage();
+            if (e instanceof TimeoutException || (msg != null && msg.contains("exceeded"))) {
+                msg = "Execution timed out.";
+            }
+            return SandboxResult.infraFailure("SANDBOX_OFFLINE: " + (msg != null ? msg : "Unknown error"));
         }
     }
 

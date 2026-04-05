@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -219,7 +220,7 @@ public class SandboxExecTool implements AgentTool {
                 "-source", "21",
                 "-target", "21",
                 "-d", outputDir.toString(),
-                javaFile.toString()
+                javaFile.toAbsolutePath().toString()
         );
         pb.redirectErrorStream(true); // merge stderr → stdout for full compiler output
         pb.directory(outputDir.toFile());
@@ -290,6 +291,9 @@ public class SandboxExecTool implements AgentTool {
             };
         } catch (BudgetExceededException e) {
             throw e;
+        } catch (TimeoutException e) {
+            log.errorf("[SandboxExecTool] Execution timed out: %s", e.getMessage());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         } catch (Exception e) {
             String msg = e.getMessage();
             return ToolResponse.failure(1, msg != null && !msg.isBlank()
