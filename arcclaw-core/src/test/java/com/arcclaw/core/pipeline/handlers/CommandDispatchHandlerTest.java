@@ -53,6 +53,7 @@ class CommandDispatchHandlerTest {
         handler = new CommandDispatchHandler();
         handler.reflexRegistry = reflexRegistry;
         handler.channelPluginRegistry = channelPluginRegistry;
+        handler.defaultTimezone = "Asia/Kolkata";
         mockedContext = mockStatic(WorkspaceContext.class);
         
         @SuppressWarnings("unchecked")

@@ -15,6 +15,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
@@ -286,6 +287,8 @@ public class SandboxExecTool implements AgentTool {
                 case "go"   -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
                 default     -> executeInterpreted(sessionId, workspaceRoot, lang, code, params, requiredSecrets);
             };
+        } catch (BudgetExceededException e) {
+            throw e;
         } catch (Exception e) {
             String msg = e.getMessage();
             return ToolResponse.failure(1, msg != null && !msg.isBlank()
@@ -381,8 +384,8 @@ public class SandboxExecTool implements AgentTool {
             case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
             case "bash"              -> List.of("bash", "-c", code);
             case "node"              -> List.of("node", "-e", code);
-            default -> throw new IllegalStateException(
-                    "buildCommand() called for file-based lang: " + lang);
+            default -> throw new IllegalArgumentException(
+                    "Unsupported language '" + lang + "'. Only Java, Python, Go, Node, and Bash are supported.");
         };
     }
 

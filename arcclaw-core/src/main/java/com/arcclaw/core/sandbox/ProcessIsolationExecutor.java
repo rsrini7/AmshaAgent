@@ -111,17 +111,14 @@ public class ProcessIsolationExecutor {
             List<String> command,
             Map<String, String> requiredSecrets) throws Exception {
 
-        if (!sandboxEnabled) {
-            log.debugf("Sandbox disabled — executing directly (session=%s)", sessionId);
-            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
-        }
-
-        if (SandboxStrategy.NONE == sandboxStrategy) {
-            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
-        }
-
-        if (SandboxStrategy.DIRECT == sandboxStrategy) {
-            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+        try {
+            if (!sandboxEnabled || SandboxStrategy.NONE == sandboxStrategy || SandboxStrategy.DIRECT == sandboxStrategy) {
+                return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+            }
+        } catch (ToolExecutionException e) {
+            return SandboxResult.failure(e.getMessage());
+        } catch (Exception e) {
+            return SandboxResult.infraFailure("SANDBOX_OFFLINE: " + e.getMessage());
         }
 
         if (SandboxStrategy.PODMAN == sandboxStrategy) {

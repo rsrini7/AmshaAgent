@@ -52,7 +52,8 @@ class GithubToolTest {
             "target", "rsrini7"
         );
         var cmd = tool.sandboxCommand(params);
-        assertTrue(cmd.contains("rsrini7"));
+        // cmd is ["gh", "api", "users/rsrini7/repos?per_page=30"]
+        assertTrue(cmd.stream().anyMatch(s -> s.contains("rsrini7")));
     }
 
     @Test

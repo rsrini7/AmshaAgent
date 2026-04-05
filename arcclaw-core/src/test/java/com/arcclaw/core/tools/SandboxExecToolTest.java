@@ -146,7 +146,7 @@ class SandboxExecToolTest {
             ToolResponse r = tool.execute(params);
 
             assertFalse(r.success());
-            assertTrue(r.output().contains("Unsupported language"));
+            assertTrue(r.output().contains("Unsupported language"), "Actual: " + r.output());
             verifyNoInteractions(mockIsolationExecutor);
             return null;
         });
@@ -490,7 +490,7 @@ class SandboxExecToolTest {
             Map<String, Object> params = Map.of("code", "puts 'hi'", "language", "ruby");
             ToolResponse r = tool.execute(params);
             assertFalse(r.success());
-            assertTrue(r.output().contains("Unsupported language"));
+            assertTrue(r.output().contains("Unsupported language"), "Expected 'Unsupported language' in: " + r.output());
             verifyNoInteractions(mockIsolationExecutor);
             return null;
         });

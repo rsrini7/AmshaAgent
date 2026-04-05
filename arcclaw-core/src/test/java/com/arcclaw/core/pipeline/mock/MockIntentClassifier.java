@@ -1,12 +1,14 @@
 package com.arcclaw.core.pipeline.mock;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.IntentClassifier;
+import io.quarkus.test.Mock;
 
-@io.quarkus.test.Mock
+@Mock
 @ApplicationScoped
-@jakarta.annotation.Priority(1000)
+@Priority(1000)
 public class MockIntentClassifier implements IntentClassifier {
     @Override
     public String classify(String userMessage) {
