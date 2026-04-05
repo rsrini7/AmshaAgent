@@ -54,12 +54,37 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         BinaryBootstrap.bootstrap(args);
 
         // 2. Validate required env vars early — before Quarkus boots.
-        //    Shows a clear setup guide if anything is missing, then exits.
-        //    Does NOT load .env — Quarkus handles config loading itself.
         CliUtils.validateRequiredEnvVars(args);
 
-        // 3. Boot Quarkus — config system, CDI, and all extensions start here.
+        // 3. If no command provided, show USAGE and exit (fast-path, no Quarkus boot needed)
+        if (args.length == 0) {
+            printUsageGuide();
+            return;
+        }
+
+        // 4. Boot Quarkus — config system, CDI, and all extensions start here.
         Quarkus.run(ArcClawCli.class, args);
+    }
+
+    private static void printUsageGuide() {
+        // ASCII Banner (from arcclaw-banner.txt)
+        System.out.println("    ___                ________  ");
+        System.out.println("   /   |  __________  / ____/ /___ __      __");
+        System.out.println("  / /| | / ___/ ___/ / /   / / __ `/ | /| / /");
+        System.out.println(" / ___ |/ /  / /__  / /___/ / /_/ /| |/ |/ / ");
+        System.out.println("/_/  |_/_/   \\___/  \\____/_/\\__,_/ |__/|__/  ");
+        System.out.println();
+        System.out.println("  ArcClaw Agent Kernel :: Zero-Setup Distribution");
+        System.out.println();
+        System.out.println("  USAGE");
+        System.out.println("    ./arcclaw serve                   Start HTTP + MCP server on :8080");
+        System.out.println("    ./arcclaw chat                    Start interactive REPL");
+        System.out.println("    ./arcclaw ask 'your goal here'    Run one-shot task and exit");
+        System.out.println("    ./arcclaw attach                  Start Telegram daemon");
+        System.out.println();
+        System.out.println("  OPTIONS (append to any command)");
+        System.out.println("    --role coordinator|researcher|architect|synthesizer|debugger");
+        System.out.println();
     }
 
     // QuarkusApplication — runs AFTER CDI container is ready
@@ -74,18 +99,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     @Override
     public void run() {
-        // Default action if no subcommand is provided: Show USAGE guide (matching .mise templates)
-        System.out.println();
-        System.out.println("  ArcClaw Agent Kernel");
-        System.out.println();
-        System.out.println("  USAGE");
-        System.out.println("    ./arcclaw serve                   Start HTTP + MCP server on :8080");
-        System.out.println("    ./arcclaw chat                    Start interactive REPL");
-        System.out.println("    ./arcclaw ask 'your goal here'    Run one-shot task and exit");
-        System.out.println("    ./arcclaw attach                  Start Telegram daemon");
-        System.out.println();
-        System.out.println("  OPTIONS (append to any command)");
-        System.out.println("    --role coordinator|researcher|architect|synthesizer|debugger");
-        System.err.println();
+        // Fallback for help/usage handled by Picocli when no subcommand matches
+        new CommandLine(this, factory).usage(System.out);
     }
 }
