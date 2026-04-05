@@ -59,6 +59,10 @@ public class AgentStateMachineRunner {
     // length that has zero alphabetic content and route to retry prompt.
     private static final int MIN_ANSWER_ALPHA_LENGTH = 3;
 
+    private static final int LOG_GOAL_MAX = 80;
+    private static final String GOAL_LOG_FMT =
+            "StateMachine starting session=%s goal=%s maxIterations=%d";
+
     @Inject EngineStepHandler engineStepHandler;
     @Inject ToolStepHandler toolStepHandler;
     @Inject ChatMemoryWriter writer;
@@ -78,8 +82,14 @@ public class AgentStateMachineRunner {
         int consecutiveFailures = 0;
         String transientError = null;
 
-        log.infof("StateMachine starting session=%s goal=%s maxIterations=%d",
-                context.sessionId(), piiScanReflex.sanitize(context.goal()), context.maxIterations());
+        if (log.isInfoEnabled()) {
+            String raw = context.goal();
+            String sanitized = piiScanReflex.sanitize(raw);
+            String preview = sanitized.length() > LOG_GOAL_MAX
+                    ? sanitized.substring(0, LOG_GOAL_MAX) + "…"
+                    : sanitized;
+            log.infof(GOAL_LOG_FMT, context.sessionId(), preview, context.maxIterations());
+        }
 
         // Fire initial status event §78.4
         stateChangedEvent.fire(new AgentStateChangedEvent(context.sessionId(), context.agentRole(), "active", context.goal()));

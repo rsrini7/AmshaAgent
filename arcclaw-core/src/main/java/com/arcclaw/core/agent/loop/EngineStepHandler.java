@@ -50,7 +50,13 @@ public class EngineStepHandler {
         ReasoningStep step;
         try {
             String goal = context.goal();
-            String currentGoal = transientError != null ? goal + "\n\n" + transientError : goal;
+            String currentGoal = goal;
+            if (!context.systemNote().isBlank()) {
+                currentGoal = currentGoal + "\n\n" + context.systemNote();
+            }
+            if (transientError != null) {
+                currentGoal = currentGoal + "\n\n" + transientError;
+            }
             step = engine.nextStep(context, context.agentRole(), currentGoal,
                     Collections.unmodifiableList(history));
 

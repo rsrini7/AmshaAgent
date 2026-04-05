@@ -75,7 +75,7 @@ class CheckpointResumeHandlerTest {
     }
 
     private AgentExecutionContext createCtx(String sessionId, String goal) {
-        return new AgentExecutionContext(sessionId, "user", "chat", "coordinator", goal, AutonomyLevel.FULL, 5, null, null, null);
+        return new AgentExecutionContext(sessionId, "user", "chat", "coordinator", goal, AutonomyLevel.FULL, 5, null, null, null, null);
     }
 
     @Test

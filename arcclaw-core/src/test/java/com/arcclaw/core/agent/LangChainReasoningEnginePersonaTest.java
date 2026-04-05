@@ -81,7 +81,7 @@ class LangChainReasoningEnginePersonaTest {
     }
 
     private AgentExecutionContext createCtx(String sessionId) {
-        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null);
+        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
     }
 
     @Test

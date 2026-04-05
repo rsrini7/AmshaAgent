@@ -233,6 +233,10 @@ smallrye:
         level: ERROR
       "com.arcclaw":
         level: DEBUG
+      "com.arcclaw.core.agent.loop.AgentStateMachineRunner":
+        level: WARN       # ← suppress goal logging noise (isInfoEnabled guard handles the rest)
+      "com.arcclaw.core.sandbox.PodmanContainerExecutor":
+        level: WARN       # ← suppress container start/stop/exec noise
       "io.quarkus":
         level: INFO
       "org.apache.camel.component.telegram":

@@ -82,10 +82,15 @@ public class CheckpointResumeHandler {
         }
 
         try {
-            String resumeGoal = resolveResumeGoal(sessionId, agentRole);
+            AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
+            if (checkpoint == null) {
+                log.warnf("resumeAfterBatchDecision: no checkpoint found for session %s role %s", sessionId, agentRole);
+                return;
+            }
+
+            String resumeGoal = resolveResumeGoal(checkpoint);
             if (resumeGoal == null || resumeGoal.isBlank()) {
-                log.warnf("resumeAfterBatchDecision: no resume goal " +
-                    "found for session %s role %s — cannot resume",
+                log.warnf("resumeAfterBatchDecision: no resume goal found for session %s role %s",
                     sessionId, agentRole);
                 return;
             }
@@ -110,18 +115,9 @@ public class CheckpointResumeHandler {
 
             AgentResult result;
             try {
-                // §84-B B6: Iteration Ceiling for REST/Background resume.
-                // Prevents infinite consumption resets. CAP at maxResumeIterations (5),
-                // but ensure FLOOR of 3 so the agent has enough budget to observe
-                // the tool result and call FINISH.
                 int maxResumeIterations = 5;
-                int original = agentStore.load(sessionId, agentRole)
-                        .map(cp -> cp.getMaxIterations() != null ? cp.getMaxIterations() : maxResumeIterations)
-                        .orElse(maxResumeIterations);
- 
-                int used = agentStore.load(sessionId, agentRole)
-                        .map(AgentCheckpoint::getIterationsUsed)
-                        .orElse(0);
+                int original = checkpoint.getMaxIterations() != null ? checkpoint.getMaxIterations() : maxResumeIterations;
+                int used = checkpoint.getIterationsUsed();
  
                 int remaining = Math.max(0, original - used);
                 int budget = Math.max(3, Math.min(remaining, maxResumeIterations));
@@ -133,6 +129,7 @@ public class CheckpointResumeHandler {
                     sessionId, userId, chatId, agentRole,
                     () -> agentLoop.run(
                         sessionId, agentRole, resumeGoal,
+                        checkpoint.getSystemNote(),
                         reasoningEngine, budget, context));
             } catch (Exception e) {
                 log.errorf(e, "Failed to resume session %s", sessionId);
@@ -175,26 +172,28 @@ public class CheckpointResumeHandler {
 
     public String resolveResumeGoal(String sessionId, String agentRole) {
         return agentStore.load(sessionId, agentRole)
-            .map(cp -> {
-                // If all decisions in the batch are DENIED, route to the denial handler
-                if (cp.hasBatchToolDecisions()) {
-                    try {
-                        Map<String, String> decisions = objectMapper.readValue(
-                            cp.getBatchToolDecisions(),
-                            new TypeReference<Map<String, String>>() {}
-                        );
-                        boolean allDenied = !decisions.isEmpty() &&
-                            decisions.values().stream()
-                                .allMatch(AgentSentinels.TOOL_DECISION_DENIED::equals);
-                        if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
-                    } catch (Exception e) {
-                        log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", sessionId);
-                    }
-                }
-                String og = cp.getOriginalGoal();
-                return og != null && !og.isBlank() ? og : AgentSentinels.GOAL_RESUME_APPROVED;
-            })
+            .map(this::resolveResumeGoal)
             .orElse(AgentSentinels.GOAL_RESUME_APPROVED);
+    }
+
+    public String resolveResumeGoal(AgentCheckpoint cp) {
+        // If all decisions in the batch are DENIED, route to the denial handler
+        if (cp.hasBatchToolDecisions()) {
+            try {
+                Map<String, String> decisions = objectMapper.readValue(
+                    cp.getBatchToolDecisions(),
+                    new TypeReference<Map<String, String>>() {}
+                );
+                boolean allDenied = !decisions.isEmpty() &&
+                    decisions.values().stream()
+                        .allMatch(AgentSentinels.TOOL_DECISION_DENIED::equals);
+                if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
+            } catch (Exception e) {
+                log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", cp.getSessionId());
+            }
+        }
+        String og = cp.getOriginalGoal();
+        return og != null && !og.isBlank() ? og : AgentSentinels.GOAL_RESUME_APPROVED;
     }
 
     public AgentResult handle(AgentExecutionContext context,

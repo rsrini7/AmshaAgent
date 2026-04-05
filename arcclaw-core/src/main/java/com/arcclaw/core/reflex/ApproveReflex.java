@@ -295,7 +295,9 @@ public class ApproveReflex implements AgentReflex {
                     cronSessionId, cron.userId, cron.chatId,
                     AutonomyLevel.BACKGROUND, cronRole,
                     () -> agentLoop.run(
-                        cronSessionId, cronRole, resumeGoal, reasoningEngine, 5, context));
+                        cronSessionId, cronRole, resumeGoal,
+                        pendingCheckpoint.getSystemNote(),
+                        reasoningEngine, 5, context));
 
             switch (result) {
                 case AgentResult.Finished _ -> {

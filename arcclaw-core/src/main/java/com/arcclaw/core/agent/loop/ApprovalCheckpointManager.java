@@ -69,6 +69,7 @@ public class ApprovalCheckpointManager {
 
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
+        cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(LocalDateTime.now());
 
         if (context.hasChannelInfo()) {
@@ -123,6 +124,7 @@ public class ApprovalCheckpointManager {
         cp.setPendingToolParametersJson(batchJson);
         cp.setBatchToolDecisions(decisionsJson);
         cp.setOriginalGoal(context.goal());
+        cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(LocalDateTime.now());
 
         if (context.hasChannelInfo()) {
@@ -181,6 +183,7 @@ public class ApprovalCheckpointManager {
         cp.setBatchToolDecisions(decisionsJson);
         cp.setPreExecutedResults(preExecutedResultsJson);
         cp.setOriginalGoal(context.goal());
+        cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(LocalDateTime.now());
 
         if (context.hasChannelInfo()) {

@@ -65,8 +65,8 @@ public class CronJobRunner {
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
         
         try {
-            String effectiveGoal = job.goal + 
-                "\n[SYSTEM CONSTRAINT: CRON EXECUTION MODE. " +
+            String systemNote = 
+                "[SYSTEM CONSTRAINT: CRON EXECUTION MODE. " +
                 "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
                 "For message delivery or greeting goals, use the FINISH action immediately with the message text as your answer. " +
                 "The framework delivers your output — you do NOT need to call any tool to 'send' it. " +
@@ -92,11 +92,12 @@ public class CronJobRunner {
                 AgentRoleEnum.COORDINATOR.toScopedName(), 
                 type,
                 () -> {
-                    MessageContext context = createCronContext(job, cronSessionId, executionId, effectiveGoal, type);
+                    MessageContext context = createCronContext(job, cronSessionId, executionId, job.goal, type);
                     return agentLoop.run(
                         cronSessionId,
                         AgentRoleEnum.COORDINATOR.toScopedName(),
-                        effectiveGoal,
+                        job.goal,
+                        systemNote,
                         engine,
                         cronMaxIterations,
                         context

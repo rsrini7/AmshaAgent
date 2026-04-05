@@ -144,7 +144,7 @@ class AgentStateMachineRunnerTest {
     private AgentExecutionContext createCtx() {
         return new AgentExecutionContext(
                 "session-1", "user-1", "chat-1", "coordinator",
-                "goal", AutonomyLevel.FULL, 5, null, null, null);
+                "goal", AutonomyLevel.FULL, 5, null, null, null, null);
     }
 
 
@@ -178,7 +178,7 @@ class AgentStateMachineRunnerTest {
 
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
 
@@ -248,7 +248,7 @@ class AgentStateMachineRunnerTest {
 
 
             AgentExecutionContext ctx = new AgentExecutionContext(
-                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, null, null, null);
+                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, null, null, null, null);
             AgentResult result = runner.run(ctx, engine, List.of());
 
 

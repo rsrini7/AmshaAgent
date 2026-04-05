@@ -28,6 +28,7 @@ public final class AgentExecutionContext {
     private final int maxIterations;
     private final String channelType;
     private final String channelPlatformId;
+    private final String systemNote;
     private final Map<String, Object> data;
 
     // Hot-path cache (§7.22 / F22)
@@ -44,6 +45,7 @@ public final class AgentExecutionContext {
             int maxIterations,
             String channelType,
             String channelPlatformId,
+            String systemNote,
             Map<String, Object> data
     ) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
@@ -57,6 +59,7 @@ public final class AgentExecutionContext {
         this.maxIterations = maxIterations;
         this.channelType = channelType;
         this.channelPlatformId = channelPlatformId;
+        this.systemNote = systemNote;
         this.data = data != null ? Collections.unmodifiableMap(data) : Collections.emptyMap();
     }
 
@@ -65,6 +68,7 @@ public final class AgentExecutionContext {
     public String chatId() { return chatId; }
     public String agentRole() { return agentRole; }
     public String goal() { return goal; }
+    public String systemNote() { return systemNote != null ? systemNote : ""; }
     public AutonomyLevel autonomyLevel() { return autonomyLevel; }
     public int maxIterations() { return maxIterations; }
     public String channelType() { return channelType; }
@@ -102,6 +106,7 @@ public final class AgentExecutionContext {
                 req.goal(),
                 autonomyLevel,
                 max,
+                null,
                 null,
                 null,
                 null
