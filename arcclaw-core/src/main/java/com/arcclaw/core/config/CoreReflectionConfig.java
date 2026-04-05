@@ -83,5 +83,5 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         "com.github.benmanes.caffeine.cache.SSMSA"
     }
 )
-public class ReflectionConfig {
+public class CoreReflectionConfig {
 }
