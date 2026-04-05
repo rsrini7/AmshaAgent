@@ -28,7 +28,7 @@ maven      = "3.9"
 powershell = "7.6"
 
 [env]
-_.file = ".env"
+"_.file" = ".env"
 
 # ARCCLAW_VEC_EXT and ARCCLAW_DATA_DIR are intentionally NOT set here.
 # quarkus:dev forks Maven inside arcclaw-app/ → needs ../lib/vec0 and ../data.
