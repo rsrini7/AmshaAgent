@@ -31,8 +31,9 @@ quarkus:
     # extension, and extension runtime beans aren't auto-discovered by Arc.
     # These channel modules have their own test suites.
     exclude-types:
-      - com.arcclaw.channel.telegram.*
-      - com.arcclaw.channel.web.*
+      - com.arcclaw.channel.telegram.TelegramAgentHandler
+      - com.arcclaw.channel.telegram.TelegramCallbackHandler
+      - com.arcclaw.channel.web.WebChatEndpoint
   mcp:
     server:
       stdio:
