@@ -185,18 +185,25 @@ public class PodmanContainerExecutor {
                 }
 
                 pb.directory(workspaceDir);
-                pb.redirectErrorStream(true); // merge stderr into stdout — prevents output buffer deadlock
 
                 var process = pb.start();
                 transport.deliver(process);
 
-                // START reading stdout in background BEFORE waitFor() —
+                // START reading stdout/stderr in background BEFORE waitFor() —
                 // prevents pipe buffer deadlock when output exceeds ~64KB
-                var outputFuture = CompletableFuture.supplyAsync(() -> {
+                var stdoutFuture = CompletableFuture.supplyAsync(() -> {
                     try {
                         return new String(process.getInputStream().readAllBytes());
                     } catch (IOException e) {
                         log.warnf("Failed to drain sandbox stdout: %s", e.getMessage());
+                        return "";
+                    }
+                });
+                var stderrFuture = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return new String(process.getErrorStream().readAllBytes());
+                    } catch (IOException e) {
+                        log.warnf("Failed to drain sandbox stderr: %s", e.getMessage());
                         return "";
                     }
                 });
@@ -206,26 +213,31 @@ public class PodmanContainerExecutor {
 
                 if (!finished) {
                     process.destroyForcibly();
-                    outputFuture.cancel(true);
+                    stdoutFuture.cancel(true);
+                    stderrFuture.cancel(true);
                     throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
                 }
 
                 // Safe to get now — process has exited and stdout is fully drained
-                String output;
+                String stdout = "";
+                String stderr = "";
                 try {
-                    output = outputFuture.get(5, TimeUnit.SECONDS);
+                    stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
+                    stderr = stderrFuture.get(5, TimeUnit.SECONDS);
                 } catch (Exception e) {
                     log.errorf("Error retrieving sandbox output: %s", e.getMessage());
-                    output = "";
                 }
 
                 int exitCode = process.exitValue();
 
                 if (exitCode != 0) {
+                    // Specific exit code for tool logic failure (standard for LLM tools)
+                    String raw = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
+
                     // Intercept the "Image Not Found" case.
                     // FIX: use sandboxImage field instead of hardcoded literal
                     // so the warning stays accurate if the image name is overridden in config.
-                    if (output.contains("not known") || output.contains("not found")) {
+                    if (raw != null && (raw.contains("not known") || raw.contains("not found"))) {
                         log.warnf("**====================================================================**");
                         log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.",
                                   sandboxImage);
@@ -237,18 +249,18 @@ public class PodmanContainerExecutor {
 
                     // Handle other infrastructure failures (exit 125)
                     if (exitCode == 125) {
-                        throw new IOException("Podman engine failure (exit 125): " + output);
+                        throw new IOException("Podman engine failure (exit 125): " + raw);
                     }
 
-                    // Specific exit code for tool logic failure (standard for LLM tools)
-                    String cleanOutput = (output == null || output.isBlank())
-                            ? "Container exited with code " + exitCode
-                            : output.trim();
+                    String cleanOutput = (raw == null || raw.isBlank())
+                            ? "(tool returned no output)"
+                            : raw.trim();
                     throw new ToolExecutionException(cleanOutput, exitCode);
                 }
 
                 span.setStatus(StatusCode.OK);
-                return output;
+                String result = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
+                return (result == null || result.isBlank()) ? "(tool returned no output)" : result;
 
             } catch (Exception e) {
                 span.recordException(e);

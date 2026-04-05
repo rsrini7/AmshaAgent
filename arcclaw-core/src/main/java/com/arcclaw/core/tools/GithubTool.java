@@ -137,7 +137,7 @@ public class GithubTool implements AgentTool {
         if ("repo".equals(action) && "view".equals(command)) {
             return List.of(
                     "gh", "repo", "view", target,
-                    "--json", "name,description,url,topics,stargazerCount,updatedAt"
+                    "--json", "name,description,url,repositoryTopics,primaryLanguage,visibility,stargazerCount,updatedAt"
             );
         }
 
