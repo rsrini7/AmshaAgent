@@ -74,6 +74,18 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     @Override
     public void run() {
-        new CommandLine(this, factory).usage(System.out);
+        // Default action if no subcommand is provided: Show USAGE guide (matching .mise templates)
+        System.out.println();
+        System.out.println("  ArcClaw Agent Kernel");
+        System.out.println();
+        System.out.println("  USAGE");
+        System.out.println("    ./arcclaw serve                   Start HTTP + MCP server on :8080");
+        System.out.println("    ./arcclaw chat                    Start interactive REPL");
+        System.out.println("    ./arcclaw ask 'your goal here'    Run one-shot task and exit");
+        System.out.println("    ./arcclaw attach                  Start Telegram daemon");
+        System.out.println();
+        System.out.println("  OPTIONS (append to any command)");
+        System.out.println("    --role coordinator|researcher|architect|synthesizer|debugger");
+        System.err.println();
     }
 }
