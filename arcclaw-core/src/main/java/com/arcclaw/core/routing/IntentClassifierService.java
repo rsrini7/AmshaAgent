@@ -1,4 +1,4 @@
-package com.arcclaw.app.routing;
+package com.arcclaw.core.routing;
 
 import java.util.Comparator;
 import java.util.List;
@@ -14,7 +14,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.routing.IntentRoutingProvider;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;

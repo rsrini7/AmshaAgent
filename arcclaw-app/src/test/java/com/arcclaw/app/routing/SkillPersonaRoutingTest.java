@@ -9,6 +9,7 @@ import java.time.Instant;
 import jakarta.inject.Inject;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.routing.IntentClassifierService;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.skill.AgentSkillEntity;

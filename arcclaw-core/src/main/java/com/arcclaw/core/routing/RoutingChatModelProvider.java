@@ -1,4 +1,4 @@
-package com.arcclaw.app.routing;
+package com.arcclaw.core.routing;
 
 import dev.langchain4j.model.chat.ChatModel;
 
