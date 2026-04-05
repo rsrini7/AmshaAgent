@@ -58,7 +58,7 @@ public class EngineStepHandler {
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
                     log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
-                    if (llmSchemaErrorCount >= 2) {
+                    if (llmSchemaErrorCount >= 4) {
                         log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", context.sessionId());
                         return StepDecision.terminal(AgentResult.failed(
                                 "The agent could not complete this request due to repeated formatting errors.",
@@ -146,7 +146,7 @@ public class EngineStepHandler {
                 }
 
                 llmSchemaErrorCount++;
-                if (llmSchemaErrorCount >= 2) {
+                if (llmSchemaErrorCount >= 4) {
                     log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
                     return StepDecision.terminal(AgentResult.failed(
                             "The agent could not complete this request due to repeated tool schema errors. " +
@@ -184,7 +184,7 @@ public class EngineStepHandler {
             }
 
             llmSchemaErrorCount++;
-            if (llmSchemaErrorCount >= 2) {
+            if (llmSchemaErrorCount >= 4) {
                 log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
                 return StepDecision.terminal(AgentResult.failed(
                         "The agent encountered repeated tool schema errors and could not complete your request. Please try rephrasing your goal.",

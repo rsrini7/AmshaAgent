@@ -15,6 +15,9 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.model-name")
     String modelName;
 
+    @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
+    boolean logHttp;
+
     @Override
     public String providerName() {
         return "openai";
@@ -25,6 +28,8 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
+                .logRequests(logHttp)
+                .logResponses(logHttp)
                 .build();
     }
 }
