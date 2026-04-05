@@ -365,17 +365,24 @@ public class BinaryBootstrap {
                 return;
             }
             String content = Files.readString(envFile);
-            // Replace KEY=<anything> line (including blank values and placeholders)
-            String patched = content.replaceAll(
-                "(?m)^" + Pattern.quote(key) + "=.*$",
-                Matcher.quoteReplacement(key + "=" + value)
-            );
-            if (!patched.equals(content)) {
-                Files.writeString(envFile, patched);
+            
+            // Check if key exists (even if it's commented out or has a different value)
+            Pattern pattern = Pattern.compile("(?m)^" + Pattern.quote(key) + "=.*$");
+            Matcher matcher = pattern.matcher(content);
+            
+            if (matcher.find()) {
+                // Key exists - update it if the value is different
+                String currentLine = matcher.group();
+                String newLine = key + "=" + value;
+                if (!currentLine.equals(newLine)) {
+                    String patched = matcher.replaceAll(Matcher.quoteReplacement(newLine));
+                    Files.writeString(envFile, patched);
+                }
             } else {
                 // Key not present in file at all — append it
+                String separator = content.endsWith(System.lineSeparator()) ? "" : System.lineSeparator();
                 Files.writeString(envFile,
-                    System.lineSeparator() + key + "=" + value + System.lineSeparator(),
+                    separator + key + "=" + value + System.lineSeparator(),
                     StandardOpenOption.APPEND);
             }
         } catch (IOException e) {

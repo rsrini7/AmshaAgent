@@ -5,6 +5,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.AuditEventResponse;
+import com.arcclaw.core.api.dto.CreateSessionRequest;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
@@ -50,6 +51,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         ReasoningStep.class,
         ParallelToolCall.class,
         AgentResult.class,
+        CreateSessionRequest.class,
         RunAgentRequest.class,
         CreateSessionResponse.class,
         SessionStatusResponse.class,
