@@ -58,7 +58,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
             List<ChatMessage> memory = chatMemoryStore.getMessages(sessionId);
             if (memory != null) {
                 String currentArgsJson = objectMapper.writeValueAsString(params);
-                String matchPrefix = currentArgsJson.substring(0, Math.min(20, currentArgsJson.length()));
+                String matchPrefix = currentArgsJson.substring(0, Math.min(80, currentArgsJson.length()));
                 for (ChatMessage msg : memory) {
                     if (msg instanceof AiMessage ai && ai.text() != null && ai.text().contains(matchPrefix)) {
                         log.debugf("[DEDUP-GUARD] Cross-loop github match for session %s. Allowing reuse.", sessionId);

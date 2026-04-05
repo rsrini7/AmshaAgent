@@ -423,6 +423,7 @@ arcclaw:
     podman-path: "${ARCCLAW_SANDBOX_PODMAN_PATH:podman}"
     podman-image: "${ARCCLAW_SANDBOX_PODMAN_IMAGE:localhost/arcclaw-tool-runner:latest}"
     timeout-seconds: "${ARCCLAW_SANDBOX_TIMEOUT_SECONDS:30}"
+    network-timeout-seconds: "${ARCCLAW_SANDBOX_NETWORK_TIMEOUT_SECONDS:60}"
     network: "${ARCCLAW_SANDBOX_NETWORK:host}"
     secret-transport: "${ARCCLAW_SANDBOX_SECRET_TRANSPORT:tmpfs}"
     tool-runner-user: "${ARCCLAW_SANDBOX_USER:sandbox}"

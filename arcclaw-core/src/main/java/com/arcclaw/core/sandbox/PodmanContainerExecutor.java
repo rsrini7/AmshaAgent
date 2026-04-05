@@ -41,6 +41,9 @@ public class PodmanContainerExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.timeout-seconds", defaultValue = "30")
     long timeoutSeconds;
 
+    @ConfigProperty(name = "arcclaw.sandbox.network-timeout-seconds", defaultValue = "60")
+    long networkTimeoutSeconds;
+
     @ConfigProperty(name = "arcclaw.sandbox.memory-limit", defaultValue = "512m")
     String containerMemoryLimit;
 
@@ -183,23 +186,17 @@ public class PodmanContainerExecutor {
                 var process = pb.start();
                 transport.deliver(process);
 
-                // FIX: waitFor() BEFORE readAllBytes().
-                //
-                // The original order was: readAllBytes() → waitFor().
-                // readAllBytes() blocks until the process stream is closed (i.e., the process
-                // has already exited), so waitFor() would always return true immediately and
-                // the timeout check `if (!finished)` was unreachable for hanging processes.
-                //
                 // Correct order:
                 //   1. waitFor(timeout) — enforces the deadline.
                 //   2. If timed out → destroyForcibly() → throw.
                 //   3. readAllBytes() — safe after process exits; output is buffered in the pipe
                 //      and available regardless of whether we read before or after exit.
-                boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+                long effectiveTimeout = resolveTimeout(command);
+                boolean finished = process.waitFor(effectiveTimeout, TimeUnit.SECONDS);
 
                 if (!finished) {
                     process.destroyForcibly();
-                    throw new ToolExecutionException("Tool timed out after " + timeoutSeconds + "s");
+                    throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
                 }
 
                 // Process has exited — drain the buffered output now.
@@ -247,6 +244,17 @@ public class PodmanContainerExecutor {
                 activeContainerNames.remove(containerName); // deregister on normal exit or exception
             }
         }
+    }
+
+    private long resolveTimeout(List<String> command) {
+        // Detect network calls: gh, curl, wget, python -m pip, etc.
+        if (!command.isEmpty()) {
+            String first = command.get(0).toLowerCase();
+            if (first.equals("gh") || first.equals("curl") || first.equals("wget")) {
+                return networkTimeoutSeconds;
+            }
+        }
+        return timeoutSeconds;
     }
 
     private void checkImageAvailable() throws SandboxImageMissingException {
