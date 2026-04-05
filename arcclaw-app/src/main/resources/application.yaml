@@ -294,6 +294,8 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
+  agent:
+    default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
     min-score: 0.25f
     context-chunks: 5
@@ -641,6 +643,8 @@ mp:
 
   arcclaw:
     data-dir: "target/data"
+    agent:
+      default-timezone: "UTC"
     rag:
       vec-extension-path: "target/lib/vec0"
     skills:

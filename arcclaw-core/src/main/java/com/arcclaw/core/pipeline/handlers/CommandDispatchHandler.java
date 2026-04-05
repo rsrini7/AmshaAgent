@@ -20,12 +20,16 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.CronTimeResolver;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class CommandDispatchHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(CommandDispatchHandler.class);
+
+    @ConfigProperty(name = "arcclaw.agent.default-timezone", defaultValue = "Asia/Kolkata")
+    String defaultTimezone;
 
     @Inject
     ReflexRegistry reflexRegistry;
@@ -118,7 +122,7 @@ public class CommandDispatchHandler implements MessageHandler {
             case ChannelCommand.Unknown u -> {
                 // Pre-compute scheduling metadata for antigravity (Java-side arithmetic)
                 ZonedDateTime nowUtc = ZonedDateTime.now(ZoneOffset.UTC);
-                ZoneId userZone = ZoneId.of("Asia/Kolkata"); // Default or from context
+                ZoneId userZone = ZoneId.of(defaultTimezone);
                 ZonedDateTime targetUtc = CronTimeResolver.resolveTargetTime(context.getMessage().text(), nowUtc, userZone);
                 
                 if (targetUtc != null) {

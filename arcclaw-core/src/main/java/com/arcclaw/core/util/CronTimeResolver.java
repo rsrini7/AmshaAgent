@@ -61,6 +61,6 @@ public class CronTimeResolver {
             return local.withZoneSameInstant(ZoneOffset.UTC);
         }
 
-        return nowUtc.plusMinutes(5); // safe fallback
+        return null; // No match = not a scheduling request; caller skips injection
     }
 }

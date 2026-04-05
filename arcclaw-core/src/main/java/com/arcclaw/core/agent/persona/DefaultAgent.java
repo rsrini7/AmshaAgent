@@ -1,6 +1,9 @@
 package com.arcclaw.core.agent.persona;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +30,7 @@ public class DefaultAgent implements Agent {
 
     private final AgentRoleEnum roleEnum;
     private final Template promptTemplate;
+    private final String defaultTimezone;
 
     @Inject
     StructuredOutputEngine structuredOutputEngine;
@@ -34,9 +38,10 @@ public class DefaultAgent implements Agent {
     @Inject
     ObjectMapper objectMapper;
 
-    public DefaultAgent(AgentRoleEnum roleEnum, Template promptTemplate) {
+    public DefaultAgent(AgentRoleEnum roleEnum, Template promptTemplate, String defaultTimezone) {
         this.roleEnum = roleEnum;
         this.promptTemplate = promptTemplate;
+        this.defaultTimezone = defaultTimezone;
     }
 
     @Override
@@ -51,7 +56,12 @@ public class DefaultAgent implements Agent {
 
         // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
         instance.data("CURRENT_UTC_ISO", Instant.now().toString());
-        instance.data("USER_TZ_OFFSET", "UTC+05:30 IST");
+
+        ZoneId zoneId = ZoneId.of(defaultTimezone);
+        ZonedDateTime localNow = ZonedDateTime.now(zoneId);
+        
+        instance.data("USER_TZ_OFFSET", zoneId.getRules().getOffset(Instant.now()).toString() + " " + zoneId.getId());
+        instance.data("CURRENT_LOCAL_TIME", localNow.format(DateTimeFormatter.ofPattern("HH:mm z")));
 
         // Antigravity — pass all dynamic metadata from the pipeline context
         if (context != null && context.data() != null) {
