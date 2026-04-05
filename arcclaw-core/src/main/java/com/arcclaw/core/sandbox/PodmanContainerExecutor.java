@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -189,21 +190,35 @@ public class PodmanContainerExecutor {
                 var process = pb.start();
                 transport.deliver(process);
 
-                // Correct order:
-                //   1. waitFor(timeout) — enforces the deadline.
-                //   2. If timed out → destroyForcibly() → throw.
-                //   3. readAllBytes() — safe after process exits; output is buffered in the pipe
-                //      and available regardless of whether we read before or after exit.
+                // START reading stdout in background BEFORE waitFor() —
+                // prevents pipe buffer deadlock when output exceeds ~64KB
+                var outputFuture = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return new String(process.getInputStream().readAllBytes());
+                    } catch (IOException e) {
+                        log.warnf("Failed to drain sandbox stdout: %s", e.getMessage());
+                        return "";
+                    }
+                });
+
                 long effectiveTimeout = resolveTimeout(command);
                 boolean finished = process.waitFor(effectiveTimeout, TimeUnit.SECONDS);
 
                 if (!finished) {
                     process.destroyForcibly();
+                    outputFuture.cancel(true);
                     throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
                 }
 
-                // Process has exited — drain the buffered output now.
-                var output = new String(process.getInputStream().readAllBytes());
+                // Safe to get now — process has exited and stdout is fully drained
+                String output;
+                try {
+                    output = outputFuture.get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.errorf("Error retrieving sandbox output: %s", e.getMessage());
+                    output = "";
+                }
+
                 int exitCode = process.exitValue();
 
                 if (exitCode != 0) {
