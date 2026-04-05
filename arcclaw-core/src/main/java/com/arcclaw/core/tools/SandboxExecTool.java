@@ -141,7 +141,10 @@ public class SandboxExecTool implements AgentTool {
                 String className = extractJavaClassName(code);
                 yield List.of("java", "-cp", CONTAINER_WORKSPACE, className);
             }
+            case "python", "python3" -> List.of("python3", CONTAINER_WORKSPACE + "/script.py");
+            case "bash"              -> List.of("bash",    CONTAINER_WORKSPACE + "/script.sh");
             case "go" -> List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
+            case "node" -> List.of("node", CONTAINER_WORKSPACE + "/script.js");
             default   -> buildCommand(lang, code);
         };
     }
@@ -171,10 +174,22 @@ public class SandboxExecTool implements AgentTool {
             // so java -cp /workspace finds the .class file at runtime.
             compileJavaOnHost(javaFile, workspaceRoot);
 
+        } else if ("python".equals(lang) || "python3".equals(lang)) {
+            // Write to file — avoids shell quote-stripping of f-strings, 
+            // double quotes, and special chars when passed via -c to Podman.
+            Files.createDirectories(workspaceRoot);
+            Files.writeString(workspaceRoot.resolve("script.py"), code, StandardCharsets.UTF_8);
+
         } else if ("go".equals(lang)) {
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("main.go"), code, StandardCharsets.UTF_8);
-        }
+        } else if ("node".equals(lang)) {
+            Files.createDirectories(workspaceRoot);
+            Files.writeString(workspaceRoot.resolve("script.js"), code, StandardCharsets.UTF_8);
+        } else if ("bash".equals(lang)) {
+            Files.createDirectories(workspaceRoot);
+            Files.writeString(workspaceRoot.resolve("script.sh"), code, StandardCharsets.UTF_8);
+        } 
     }
 
     /**
@@ -357,6 +372,9 @@ public class SandboxExecTool implements AgentTool {
 
     List<String> buildCommand(String lang, String code) {
         return switch (lang) {
+            // Python, node, and bash are now file-based via prepareWorkspace + sandboxCommand.
+            // -c / -e is kept ONLY for the interpreted host-fallback path (execute() → executeInterpreted())
+            // where ProcessBuilder performs a direct OS exec() — no shell intermediary, quotes preserved.
             case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
             case "bash"              -> List.of("bash", "-c", code);
             case "node"              -> List.of("node", "-e", code);
