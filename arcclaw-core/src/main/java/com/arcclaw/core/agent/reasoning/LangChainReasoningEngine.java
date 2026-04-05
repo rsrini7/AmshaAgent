@@ -177,6 +177,22 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
+                        // LLM wrote code explanation (```...```) instead of executing 
+                        // This is the most common failure: goal says "execute" but LLM sends a plan
+                        if (goalRequestsExecution(goal) && proseIsUnexecutedCodePlan(extractedProse)) {
+                            log.warnf("[LangChainReasoningEngine] Goal='{}' requests execution but LLM " +
+                                            "returned code plan (has ``` fences) for session {} — injecting correction",
+                                    goal, sessionId);
+                            return ReasoningStep.pending(
+                                    "LLM returned code explanation instead of calling sandbox_exec",
+                                    "OBSERVE", Map.of(), 0, 0
+                            ).withObservation(
+                                    "STOP. The user asked you to EXECUTE the code — not explain it. " +
+                                    "Do NOT output markdown, steps, or code blocks. " +
+                                    "Call sandbox_exec RIGHT NOW with the complete code as your ONLY response."
+                            );
+                        }
+
                         log.infof("[LangChainReasoningEngine] Prose extracted directly from " +
                                 "failed_generation — returning as FINISH (0 extra LLM calls)");
                         return ReasoningStep.pending(
@@ -282,6 +298,31 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // Detect embedded tool call JSON: must have tool name + code/language params
         return (lower.contains("\"sandbox_exec\"") || lower.contains("sandbox_exec"))
                && (lower.contains("\"code\"") || lower.contains("\"language\""));
+    }
+
+    /**
+     * Returns true if the original goal requested execution.
+     */
+    private boolean goalRequestsExecution(String goal) {
+        if (goal == null) return false;
+        String lower = goal.toLowerCase();
+        return lower.contains("execute")
+                || lower.contains("must execute")
+                || lower.contains("and execute")
+                || lower.contains("run it")
+                || lower.contains("run the")
+                || lower.contains("share result")
+                || lower.contains("share the result")
+                || lower.contains("share generated")
+                || lower.contains("try same");
+    }
+
+    /**
+     * Returns true if the prose contains markdown code fences.
+     */
+    private boolean proseIsUnexecutedCodePlan(String prose) {
+        if (prose == null) return false;
+        return prose.contains("```");
     }
 
     /**
