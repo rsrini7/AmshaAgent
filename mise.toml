@@ -272,11 +272,18 @@ run = ["java -version", "mise ls java"]
 [tasks."build:ui-copy"]
 description = "Build UI and copy to Quarkus resources"
 alias = "buc"
-run = [
-    "cd arcclaw-ui && npm run build",
-    "mkdir -p arcclaw-app/src/main/resources/META-INF/resources",
-    "cp -r arcclaw-ui/dist/* arcclaw-app/src/main/resources/META-INF/resources/"
-]
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+  $ErrorActionPreference = 'Stop'
+  cd arcclaw-ui 
+  npm run build
+  cd ..
+  $target = "arcclaw-app/src/main/resources/META-INF/resources"
+  if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
+  Copy-Item -Path "arcclaw-ui/dist/*" -Destination $target -Recurse -Force
+  Write-Host "✅  UI built and copied to $target"
+"""
 
 [tasks.build-app]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]

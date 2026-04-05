@@ -53,9 +53,6 @@ mkdir -p "$OLDPWD/arcclaw-app/target/"
 # Sync the ENTIRE target folder back to Windows (classes, jars, and the native runner)
 rsync -a "$BUILD_DIR/arcclaw-app/target/" "$OLDPWD/arcclaw-app/target/"
 
-# Copy the Linux binary directly to dist/ for the 'dist:pack' task
-mkdir -p "$OLDPWD/dist/"
-cp "$OLDPWD/arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner" "$OLDPWD/dist/"
 
 # Return to the Windows mount directory
 cd "$OLDPWD"
