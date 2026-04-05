@@ -251,7 +251,8 @@ public class PodmanContainerExecutor {
 
     private void checkImageAvailable() throws SandboxImageMissingException {
         try {
-            Process p = new ProcessBuilder(podmanPath, "image", "exists", sandboxImage)
+            // Using inspect is more reliable across name forms (bare vs localhost/ prefix).
+            Process p = new ProcessBuilder(podmanPath, "image", "inspect", "--format", "{{.Id}}", sandboxImage)
                 .start();
             boolean ok = p.waitFor(3, TimeUnit.SECONDS);
             if (!ok || p.exitValue() != 0) {
