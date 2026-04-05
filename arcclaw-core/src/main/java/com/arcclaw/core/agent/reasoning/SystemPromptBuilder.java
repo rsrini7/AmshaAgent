@@ -318,7 +318,7 @@ public class SystemPromptBuilder {
                 // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
                 // a prior coordinator turn and trying to call it in a role that does not have it.
                 // This block is a hard LLM-level instruction to prevent that contamination.
-                + buildToolContaminationGuard(roleEnum);
+                + buildToolContaminationGuard(context, roleEnum);
 
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
         String finalPrompt = baseSystemPrompt + strictBinding;
@@ -377,10 +377,13 @@ public class SystemPromptBuilder {
      * error that occurs when the LLM reads the conversation history and tries to reuse
      * a tool that was available to a different persona in a prior message.
      */
-    private String buildToolContaminationGuard(AgentRoleEnum roleEnum) {
+    private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        boolean isBackground = context != null && context.autonomyLevel() == com.arcclaw.core.security.AutonomyLevel.BACKGROUND;
         String toolList = roleEnum.definition().toolNames()
                 .stream()
                 .filter(name -> toolRegistry.findTool(name).isPresent())
+                .filter(name -> !isBackground || 
+                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
 
