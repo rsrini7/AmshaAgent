@@ -142,6 +142,7 @@ public class PodmanContainerExecutor {
                         "--env", "GOCACHE=/tmp/go-cache",
                         "--env", "GOPATH=/tmp/go-path",
                         "--env", "GOMAXPROCS=1",
+                        "--env", "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
                         "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
                         "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));

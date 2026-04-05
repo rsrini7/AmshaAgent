@@ -97,7 +97,7 @@ public class SandboxExecTool implements AgentTool {
         return switch (lang) {
             case "java" -> {
                 String className = extractJavaClassName(code);
-                yield List.of("java", CONTAINER_WORKSPACE + "/" + className + ".java");
+                yield List.of("java", "--source", "21", CONTAINER_WORKSPACE + "/" + className + ".java");
             }
             case "go"   -> List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
             default     -> buildCommand(lang, code);
@@ -189,6 +189,7 @@ public class SandboxExecTool implements AgentTool {
         // This avoids creating .class files and bypasses traditional compilation disk-write errors.
         String javaExe = resolveJavaExecutable();
         List<String> runCmd = List.of(javaExe,
+                "--source", "21",
                 CONTAINER_WORKSPACE + "/" + className + ".java");
 
         SandboxResult result = isolationExecutor.executeSandboxed(
