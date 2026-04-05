@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="WSL2: Auto-sync to Linux home, build lock-free & fast, copy binary back"
 #MISE quiet=true
-#MISE depends=["setup:wsl-crlf"]
+#MISE depends=["setup:wsl-crlf", "build:ui-copy"]
 
 set -e
 

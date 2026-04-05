@@ -531,7 +531,7 @@ try {
 """
 
 [tasks."build:native-lowmem"]
-depends = ["env:recover"]
+depends = ["env:recover", "build:ui-copy"]
 description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
