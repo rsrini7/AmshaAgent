@@ -39,19 +39,17 @@ public class BinaryBootstrap {
         "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI", "ARCCLAW_API_KEYS_ADMIN"
     );
 
-    public static void bootstrap(String[] args) {
-        // Force UTF-8 for Windows console rendering
-        if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
-            if (System.getProperty("file.encoding") == null) System.setProperty("file.encoding", "UTF-8");
-            if (System.getProperty("stdout.encoding") == null) System.setProperty("stdout.encoding", "UTF-8");
-            if (System.getProperty("sun.stdout.encoding") == null) System.setProperty("sun.stdout.encoding", "UTF-8");
-            if (System.getProperty("sun.stderr.encoding") == null) System.setProperty("sun.stderr.encoding", "UTF-8");
-        }
+    private static final Set<String> BASE64_KEYS = Set.of(
+        "ARCCLAW_VAULT_PEPPER", "ARCCLAW_AUDIT_HMAC_KEY",
+        "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI", "ARCCLAW_API_KEYS_ADMIN"
+    );
 
+    public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
+        validateAndAutoFixSecurityKeys(binaryDir);
         interactiveSetupIfNeeded(binaryDir, args);
         
         // 1. Resolve and Provision Data Directory
@@ -424,5 +422,35 @@ public class BinaryBootstrap {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private static void validateAndAutoFixSecurityKeys(Path binaryDir) {
+        Path envFile = binaryDir.resolve(".env");
+        boolean anyFixed = false;
+
+        for (String key : BASE64_KEYS) {
+            String value = System.getProperty(key, System.getenv(key));
+            if (value == null || value.isBlank()) continue; // Missing — handled by interactive setup
+
+            boolean valid = false;
+            try {
+                byte[] decoded = Base64.getDecoder().decode(value);
+                valid = decoded.length >= 16; // Must be at least 128-bit
+            } catch (IllegalArgumentException ignored) {}
+
+            if (!valid) {
+                String generated = generateRandomValue();
+                System.err.println("[ArcClaw] ⚠️  " + key + " has invalid Base64 — auto-regenerating.");
+                patchEnvFile(envFile, key, generated);
+                System.setProperty(key, generated);
+                anyFixed = true;
+            }
+        }
+
+        if (anyFixed) {
+            System.err.println("[ArcClaw] ✓ Security keys regenerated. Reload .env if needed.");
+            // Reload so Quarkus config picks up the fixed values
+            loadDotEnv(binaryDir);
+        }
     }
 }

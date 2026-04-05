@@ -66,27 +66,22 @@ public class TelegramChannelRoute extends RouteBuilder {
     
     void onStart(@Observes StartupEvent ev) {
         log.infof("Telegram Route onStart (enabled=%b, contextStatus=%s)", enabled, camelContext.getStatus());
-        if (!enabled) return;
-        if (isPlaceholderToken()) {
-            log.warn("Telegram bot token is a placeholder — skipping self-registration.");
-            return;
-        }
+        if (!enabled || isPlaceholderToken()) return;
 
-        // Run synchronously if Stopped to avoid BeanRepository race in native mode
         try {
+            if (System.getProperty("org.graalvm.nativeimage.imagecode") == null) {
+                camelContext.getLifecycleStrategies()
+                    .removeIf(s -> s.getClass().getName().contains("JmxManagement"));
+            }
+
             if (camelContext.getStatus().isStopped()) {
-                // Skips JMX logic which is irrelevant and unsafe in native mode
-                if (System.getProperty("org.graalvm.nativeimage.imagecode") == null) {
-                    camelContext.getLifecycleStrategies()
-                        .removeIf(s -> s.getClass().getName().contains("JmxManagement"));
-                }
-                
                 log.info("Starting CamelContext manually...");
                 camelContext.start();
             }
 
             if (camelContext.getRoute("telegram-bot") == null) {
                 log.info("Registering Telegram route...");
+                // ← DO NOT wrap in Thread/VirtualThread/lambda — must run on this CDI thread
                 camelContext.addRoutes(this);
                 camelContext.getRouteController().startRoute("telegram-bot");
                 log.infof("Telegram route started. Status=%s",
