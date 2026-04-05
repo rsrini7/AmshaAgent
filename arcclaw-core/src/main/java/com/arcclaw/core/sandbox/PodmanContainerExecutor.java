@@ -62,7 +62,7 @@ public class PodmanContainerExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.secret-transport", defaultValue = "tmpfs")
     String secretTransportMode;
 
-    @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "65534")
+    @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "sandbox")
     String toolRunnerUser;
 
     private static final String CONTAINER_PIDS_LIMIT = "64";
@@ -139,6 +139,8 @@ public class PodmanContainerExecutor {
                         "--cap-drop=ALL",
                         "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                         "--user=" + toolRunnerUser + ":" + toolRunnerUser,
+                        "--env", "GOCACHE=/tmp/go-cache",
+                        "--env", "GOPATH=/tmp/go-path",
                         "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
                         "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));
@@ -221,7 +223,10 @@ public class PodmanContainerExecutor {
                     }
 
                     // Specific exit code for tool logic failure (standard for LLM tools)
-                    throw new ToolExecutionException(output, exitCode);
+                    String cleanOutput = (output == null || output.isBlank())
+                            ? "Container exited with code " + exitCode
+                            : output.trim();
+                    throw new ToolExecutionException(cleanOutput, exitCode);
                 }
 
                 span.setStatus(StatusCode.OK);
