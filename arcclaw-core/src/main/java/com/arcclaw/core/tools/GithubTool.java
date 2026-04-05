@@ -127,10 +127,9 @@ public class GithubTool implements AgentTool {
             String owner = (target != null && !target.isBlank()) ? target : "@me";
             return List.of(
                     "gh", "api",
-                    "users/" + owner + "/repos",
-                    "--paginate"
-                    // No --jq — returns raw JSON array, more robust against shell quoting issues
-                    // and provides the LLM with all fields (stars, language, etc.) for better reasoning.
+                    "users/" + owner + "/repos?per_page=100"
+                    // Single HTTP request — no pagination loop, no timeout risk.
+                    // 100 is GitHub's max per_page, sufficient for most accounts. 
             );
         }
 
