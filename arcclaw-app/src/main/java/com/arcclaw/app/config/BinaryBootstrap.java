@@ -15,10 +15,9 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import com.arcclaw.core.sandbox.SandboxStrategy;
-
 
 import com.arcclaw.app.util.CliUtils;
+import com.arcclaw.core.sandbox.SandboxStrategy;
 
 /**
  * Bootstraps the application by resolving the binary directory, loading .env files,
@@ -463,32 +462,30 @@ public class BinaryBootstrap {
     private static void validateAndAutoFixSecurityKeys(Path binaryDir) {
         Path envFile = binaryDir.resolve(".env");
         boolean anyFixed = false;
-
         for (String key : BASE64_KEYS) {
             String value = System.getProperty(key, System.getenv(key));
-            if (value == null || value.isBlank()) continue; // Missing — handled by interactive setup
-
+            if (value == null || value.isBlank()) continue;
             boolean valid = false;
             try {
                 byte[] decoded = Base64.getDecoder().decode(value);
-                valid = decoded.length >= 16; // Must be at least 128-bit
+                valid = decoded.length >= 16;
             } catch (IllegalArgumentException ignored) {}
-
             if (!valid) {
-                String generated = generateRandomValue();
-                System.err.println("[ArcClaw] ⚠️  " + key + " has invalid Base64 — auto-regenerating.");
-                patchEnvFile(envFile, key, generated);
-                System.setProperty(key, generated);
-                anyFixed = true;
+                try {
+                    String generated = Base64.getEncoder().encodeToString(
+                        SecureRandom.getInstanceStrong().generateSeed(32));
+                    System.err.println("[ArcClaw] ⚠️  " + key + " invalid Base64 — regenerating.");
+                    patchEnvFile(envFile, key, generated);
+                    System.setProperty(key, generated);
+                    anyFixed = true;
+                } catch (Exception e) {
+                    System.err.println("[ArcClaw] ❌ Failed to generate security key for " + key + ": " + e.getMessage());
+                }
             }
         }
-
-        if (anyFixed) {
-            System.err.println("[ArcClaw] ✓ Security keys regenerated. Reload .env if needed.");
-            // Reload so Quarkus config picks up the fixed values
-            loadDotEnv(binaryDir);
-        }
+        if (anyFixed) loadDotEnv(binaryDir); // reload so Quarkus config picks up fixed values
     }
+
     private static void validateAndAutoFixLlmConfig(Path binaryDir) {
         Path envFile = binaryDir.resolve(".env");
         String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", System.getenv("ARCCLAW_LLM_PROVIDER"));

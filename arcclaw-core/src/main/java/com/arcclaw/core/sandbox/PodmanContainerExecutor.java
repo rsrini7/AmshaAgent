@@ -26,14 +26,17 @@ public class PodmanContainerExecutor {
 
     private static final Logger log = Logger.getLogger(PodmanContainerExecutor.class);
 
+    private static volatile boolean podmanAvailable = false;
+    private static volatile long lastChecked = 0;
+
     @Inject
     AgentOtelContext otelContext;
 
     @Inject
     SandboxSecretResolver secretResolver;
 
-    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "arcclaw-tool-runner:latest")
-    String containerImage;
+    @ConfigProperty(name = "arcclaw.sandbox.podman-image", defaultValue = "localhost/arcclaw-tool-runner:latest")
+    String sandboxImage;
 
     @ConfigProperty(name = "arcclaw.sandbox.timeout-seconds", defaultValue = "30")
     long timeoutSeconds;
@@ -103,6 +106,8 @@ public class PodmanContainerExecutor {
             Map<String, String> requiredSecrets) throws Exception {
 
         var resolvedSecrets = secretResolver.resolveSecrets(requiredSecrets);
+        
+        checkPodmanAvailable();
 
         // Use the unified Tier 1 tmpfs secure transport.
         // The transport strictly zeroes the memory arrays when closed.
@@ -115,7 +120,7 @@ public class PodmanContainerExecutor {
                     + "-" + Long.toHexString(System.nanoTime());
 
             Span span = otelContext.childSpan(sessionId, "tool.container_exec");
-            span.setAttribute("container.image", containerImage);
+            span.setAttribute("container.image", sandboxImage);
             span.setAttribute("container.name", containerName);
             span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
 
@@ -145,10 +150,9 @@ public class PodmanContainerExecutor {
                     podmanCmd.add("--cpus=" + containerCpuLimit);
                 }
 
-                // Inject the transport args (e.g. --env-file /run/arcclaw/secrets/<nonce>.env)
                 podmanCmd.addAll(transportArgs);
 
-                podmanCmd.add(containerImage);
+                podmanCmd.add(sandboxImage);
                 podmanCmd.addAll(command);
 
                 log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
@@ -199,16 +203,16 @@ public class PodmanContainerExecutor {
 
                 if (exitCode != 0) {
                     // Intercept the "Image Not Found" case.
-                    // FIX: use containerImage field instead of hardcoded literal
+                    // FIX: use sandboxImage field instead of hardcoded literal
                     // so the warning stays accurate if the image name is overridden in config.
                     if (output.contains("not known") || output.contains("not found")) {
                         log.warnf("**====================================================================**");
                         log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.",
-                                  containerImage);
+                                  sandboxImage);
                         log.warnf("To use the secure Podman sandbox, please build the runner image:");
                         log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
                         log.warnf("**====================================================================**");
-                        throw new SandboxImageMissingException("Missing sandbox image: " + containerImage);
+                        throw new SandboxImageMissingException("Missing sandbox image: " + sandboxImage);
                     }
 
                     // Handle other infrastructure failures (exit 125)
@@ -234,6 +238,32 @@ public class PodmanContainerExecutor {
                 span.end();
                 activeContainerNames.remove(containerName); // deregister on normal exit or exception
             }
+        }
+    }
+
+    private void checkPodmanAvailable() throws PodmanUnavailableException {
+        long now = System.currentTimeMillis();
+        if (now - lastChecked < 60_000) {
+            if (!podmanAvailable) throw new PodmanUnavailableException("Podman recently checked and unavailable");
+            return;
+        }
+
+        try {
+            Process p = new ProcessBuilder(podmanPath, "info")
+                .redirectErrorStream(true)
+                .start();
+            boolean ok = p.waitFor(3, TimeUnit.SECONDS);
+            if (!ok || p.exitValue() != 0) {
+                podmanAvailable = false;
+                lastChecked = now;
+                throw new PodmanUnavailableException("podman info failed or timed out");
+            }
+            podmanAvailable = true;
+            lastChecked = now;
+        } catch (IOException | InterruptedException e) {
+            podmanAvailable = false;
+            lastChecked = now;
+            throw new PodmanUnavailableException("Podman not reachable: " + e.getMessage());
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.arcclaw.core.tools;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,8 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,14 +15,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
-import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
-import com.arcclaw.core.sandbox.ToolExecutionException;
+import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -47,9 +43,6 @@ public class SandboxExecTool implements AgentTool {
         "The code was NOT run. Inform the user gracefully that the execution environment is currently offline."+
         "or set .env file ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback";
 
-    private static final Set<String> ALLOWED_LANGUAGES =
-            Set.of("python", "python3", "bash", "node", "java", "go");
-
     private static final Pattern JAVA_CLASS_PATTERN =
             Pattern.compile("(?:public\\s+)?class\\s+(\\w+)", Pattern.MULTILINE);
 
@@ -57,7 +50,15 @@ public class SandboxExecTool implements AgentTool {
             System.getProperty("os.name", "").toLowerCase().contains("win");
 
     @Inject ProcessIsolationExecutor isolationExecutor;
-    @Inject ObjectMapper objectMapper;
+
+    // Colons are illegal in Windows path components (drive-letter separator).
+    // Inner session IDs contain colons: {outer}:d:{role}:{uuid}
+    // Sanitize for filesystem use only — sessionId itself is never modified.
+    private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
+
+    private static String toFsName(String sessionId) {
+        return FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
+    }
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = ".data/workspaces")
     String workspaceRootDir;
@@ -77,64 +78,57 @@ public class SandboxExecTool implements AgentTool {
     @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
     @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
-    @Override public boolean requiresSandbox() { return false; }
+    @Override public boolean requiresSandbox() { return true; }
     public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
-    // Colons are illegal in Windows path components (drive-letter separator).
-    // Inner session IDs contain colons: {outer}:d:{role}:{uuid}
-    // Sanitize for filesystem use only — sessionId itself is never modified.
-    private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
+    @Override
+    public List<String> sandboxCommand(Map<String, Object> params) {
+        String code = (String) params.get("code");
+        String lang = (String) params.get("language");
+        if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
+        if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
+        lang = lang.toLowerCase();
 
-    private static String toFsName(String sessionId) {
-        return FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
+        // Security scanner check - prevent dangerous patterns before generating the command
+        String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
+        if (violation != null) {
+            log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s",
+                    WorkspaceContext.requireSessionId(), violation);
+            throw new IllegalArgumentException("🚫 Execution blocked: " + violation);
+        }
+
+        return switch (lang) {
+            case "java" -> {
+                String className = extractJavaClassName(code);
+                yield List.of("java", CONTAINER_WORKSPACE + "/" + className + ".java");
+            }
+            case "go"   -> List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
+            default     -> buildCommand(lang, code);
+        };
     }
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        // This is now only called when requiresSandbox() is false or as a manual fallback.
+        // The ToolRegistry normally uses sandboxCommand() when requiresSandbox() is true.
         try {
-            // Defensive unwrap: LLMs occasionally echo JSON Schema {"properties":{...}}
-            if (params.size() == 1 && params.containsKey("properties")
-                    && params.get("properties") instanceof Map<?, ?> inner) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> unwrapped = (Map<String, Object>) inner;
-                params = unwrapped;
-            }
-
             String code = (String) params.get("code");
             String lang = (String) params.get("language");
-
-            if (code == null) {
-                return ToolResponse.failure(1, "Parameter 'code' is required.");
-            }
-            if (lang == null) {
-                return ToolResponse.failure(1,
-                        "Parameter 'language' is required. Allowed: " + ALLOWED_LANGUAGES +
-                        ". Example: {\"code\":\"print('hi')\",\"language\":\"python\"}");
-            }
+            if (code == null || lang == null) return ToolResponse.failure(1, "code and language required");
             lang = lang.toLowerCase();
 
-            if (!ALLOWED_LANGUAGES.contains(lang)) {
-                return ToolResponse.failure(1,
-                        "Unsupported language: " + lang + ". Allowed: " + ALLOWED_LANGUAGES);
-            }
-
+            // Safety scanner check for fallback execution path
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
             if (violation != null) {
-                log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s",
-                        WorkspaceContext.requireSessionId(), violation);
                 return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);
             }
 
             String sessionId = WorkspaceContext.requireSessionId();
             Path workspaceRoot = Path.of(workspaceRootDir, toFsName(sessionId));
 
+            // TODO: secret extraction for direct path - sandboxCommand() path handles
+            // secrets via SandboxSecretResolver. execute() fallback path intentionally skips.
             Map<String, String> requiredSecrets = Map.of();
-            Object secretsObj = params.get("secrets");
-            if (secretsObj instanceof Map<?, ?> secretsMap) {
-                requiredSecrets = objectMapper.convertValue(secretsMap,
-                        objectMapper.getTypeFactory().constructMapType(
-                                Map.class, String.class, String.class));
-            }
 
             return switch (lang) {
                 case "java" -> executeJava(sessionId, workspaceRoot, code, requiredSecrets);
@@ -142,22 +136,10 @@ public class SandboxExecTool implements AgentTool {
                 default     -> executeInterpreted(sessionId, workspaceRoot, lang, code,
                                                   params, requiredSecrets);
             };
-
-        } catch (ToolExecutionException e) {
-            return ToolResponse.failure(e.exitCode(),
-                    nonBlank("Execution failed: " + e.getMessage()));
-        } catch (TimeoutException | InterruptedException e) {
-            return ToolResponse.failure(1, "Sandbox execution timed out.");
-        } catch (SecurityException e) {
-            return ToolResponse.failure(1,
-                    nonBlank("Sandbox security violation: " + e.getMessage()));
-        } catch (BudgetExceededException e) {
-            throw e;
         } catch (Exception e) {
-            log.errorf(e, "SandboxExecTool unexpected error for session %s",
-                    WorkspaceContext.requireSessionId());
-            return ToolResponse.failure(1,
-                    nonBlank("Sandbox error: " + e.getMessage()));
+            String msg = e.getMessage();
+            return ToolResponse.failure(1, msg != null && !msg.isBlank() 
+                ? msg : "Sandbox execution failed with no details.");
         }
     }
 
@@ -218,9 +200,7 @@ public class SandboxExecTool implements AgentTool {
 
     // Go: write main.go → go run
 
-    private ToolResponse executeGo(String sessionId, Path workspaceRoot,
-        String code, Map<String, String> secrets) throws Exception {
-
+    private ToolResponse executeGo(String sessionId, Path workspaceRoot, String code, Map<String, String> secrets) throws Exception {
         Files.createDirectories(workspaceRoot);
         Path goFile = workspaceRoot.resolve("main.go");
         Files.writeString(goFile, code, StandardCharsets.UTF_8);
@@ -229,15 +209,25 @@ public class SandboxExecTool implements AgentTool {
         // which does not exist inside the Podman container.
         String goExe = resolveGoExecutable();
         List<String> runCmd = List.of(goExe, "run", CONTAINER_WORKSPACE + "/main.go");
-        SandboxResult result = isolationExecutor.executeSandboxed(
-                sessionId, workspaceRoot, runCmd, secrets);
-        if (result == null || result.isInfraFailure()) {
-            String reason = result != null ? result.reason() : "Sandbox executor returned null";
-            log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s",
-                    sessionId, reason);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        try {
+            SandboxResult result = isolationExecutor.executeSandboxed(
+                    sessionId, workspaceRoot, runCmd, secrets);
+            if (result == null || result.isInfraFailure()) {
+                String reason = result != null ? result.reason() : "Sandbox executor returned null";
+                log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s",
+                        sessionId, reason);
+                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            }
+            return ToolResponse.success(truncate(result.output()));
+        } catch (IOException e) {
+            if (e.getMessage().contains("No such file or directory")) {
+                return ToolResponse.failure(1,
+                    "Go runtime not found on this system. " +
+                    "Install Go or rephrase the task to use Python/Node instead."
+                );
+            }
+            throw e;
         }
-        return ToolResponse.success(truncate(result.output()));
     }
 
     // Helpers
@@ -324,13 +314,4 @@ public class SandboxExecTool implements AgentTool {
         return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
     }
 
-    /**
-     * Ensures error messages passed to ToolResponse.failure() are never null/blank.
-     * A blank failure message would also cause "text cannot be null or blank" when
-     * LangChain4J wraps the tool result into a ToolExecutionResultMessage.
-     */
-    private String nonBlank(String message) {
-        if (message == null || message.isBlank()) return "Sandbox execution failed with no details.";
-        return message;
-    }
 }

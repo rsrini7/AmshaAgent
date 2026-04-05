@@ -13,7 +13,7 @@ import org.eclipse.microprofile.health.Readiness;
 @ApplicationScoped
 public class PodmanImageHealthCheck implements HealthCheck {
 
-    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "arcclaw-tool-runner:latest")
+    @ConfigProperty(name = "arcclaw.sandbox.podman-image", defaultValue = "arcclaw-tool-runner:latest")
     String containerImage;
 
     @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
