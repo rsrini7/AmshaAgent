@@ -7,11 +7,25 @@ import javax.sql.DataSource;
 import jakarta.inject.Inject;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+import java.util.Map;
+
 @QuarkusTest
+@TestProfile(FtsConnectionInterceptorVecFallbackTest.MissingBinaryProfile.class)
 class FtsConnectionInterceptorVecFallbackTest {
+
+    public static class MissingBinaryProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            // Force a non-existent path to guarantee the fallback pathway is tested
+            return Collections.singletonMap("arcclaw.rag.vec-extension-path", "/tmp/non_existent_vec0");
+        }
+    }
 
     @Inject
     DataSource dataSource;
