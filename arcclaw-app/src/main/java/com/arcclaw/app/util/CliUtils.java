@@ -89,8 +89,10 @@ public class CliUtils {
         "Groq Cloud API key (provider=groq). Starts with 'gsk_'.",
         "1. Sign up at https://console.groq.com",
         "2. Create an API key — it starts with 'gsk_'",
-        "3. Add:  ARCCLAW_LLM_API_KEY=gsk_your_key_here"
+        "3. Add:  ARCCLAW_LLM_API_KEY=gsk_your_key_here",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.groq.com/openai/v1"
     );
+
 
     private static final VarSpec OPENROUTER_KEY_SPEC = new VarSpec(
         "ARCCLAW_LLM_API_KEY",        // ← same key, different instructions
@@ -159,6 +161,12 @@ public class CliUtils {
             default           -> GROQ_KEY_SPEC;
         };
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
+        if (providerKeySpec != null && !isSet("ARCCLAW_LLM_BASE_URL")) {
+             missing.add(new VarSpec("ARCCLAW_LLM_BASE_URL", 
+                 "Base URL for the selected LLM provider (" + llmProvider + ").",
+                 "Example: " + providerKeySpec.howToGet[providerKeySpec.howToGet.length-1]));
+        }
+
 
         for (VarSpec spec : TELEGRAM_VARS) {
             if (!isSet(spec.key)) missing.add(spec);

@@ -12,6 +12,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,7 +52,9 @@ public class BinaryBootstrap {
         loadDotEnv(binaryDir);
         validateAndAutoFixSecurityKeys(binaryDir);
         validateAndAutoFixLlmConfig(binaryDir);
+        validateSandboxTools();
         interactiveSetupIfNeeded(binaryDir, args);
+
 
         
         // 1. Resolve and Provision Data Directory
@@ -526,10 +529,40 @@ public class BinaryBootstrap {
             if (!targetValue.equals(current)) {
                 System.err.println("[ArcClaw] ℹ️  " + key + " is inconsistent with provider — auto-setting to: " + targetValue);
                 patchEnvFile(envFile, key, targetValue);
-                System.setProperty(key, targetValue);
             }
         }
     }
+
+    private static void validateSandboxTools() {
+
+        String strategy = System.getProperty("ARCCLAW_SANDBOX_STRATEGY", System.getenv("ARCCLAW_SANDBOX_STRATEGY"));
+        if (strategy == null || strategy.isBlank()) strategy = "PODMAN";
+
+        if ("PODMAN".equalsIgnoreCase(strategy)) {
+            if (!canRun("podman", "--version")) {
+                System.err.println("[ArcClaw] ⚠️  Podman not found — sandbox will be OFFLINE.");
+                System.err.println("           Install Podman or set ARCCLAW_SANDBOX_STRATEGY=DIRECT/NONE.");
+            }
+        } else if ("DIRECT".equalsIgnoreCase(strategy)) {
+             // Check common host tools if we're in direct mode
+             String[] tools = {"python", "node", "go", "java"};
+             for (String tool : tools) {
+                if (!canRun(tool, tool.equals("java") || tool.equals("go") ? "version" : "--version")) {
+                    System.err.println("[ArcClaw] ⚠️  " + tool + " not found on host — " + tool + " execution will fail.");
+                }
+             }
+        }
+    }
+
+    private static boolean canRun(String... cmd) {
+        try {
+            Process p = new ProcessBuilder(cmd).start();
+            return p.waitFor(2, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
+
 
 
