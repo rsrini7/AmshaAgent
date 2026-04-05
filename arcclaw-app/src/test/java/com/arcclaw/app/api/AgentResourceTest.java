@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -51,7 +52,7 @@ class AgentResourceTest {
 
                 ReasoningStep finishStep = ReasoningStep.pending("Calculated final answer", ReasoningStep.FINISH,
                                 Map.of("response", "42"), 0, 0);
-                Mockito.when(reasoningEngine.nextStep(any(), anyString(), anyString(), any())).thenReturn(finishStep);
+                Mockito.when(reasoningEngine.nextStep(any(AgentExecutionContext.class), anyString(), anyString(), any())).thenReturn(finishStep);
 
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
                                 .thenReturn(AgentResult.finished("42", List.of()));
