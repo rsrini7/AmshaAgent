@@ -193,8 +193,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
-                        log.infof("[LangChainReasoningEngine] Prose extracted directly from " +
-                                "failed_generation — returning as FINISH (0 extra LLM calls)");
+                        log.infof("[LangChainReasoningEngine] Coordinator prose-answer pattern detected " +
+                                "(no tools, no code fences) for session %s — finishing", sessionId);
                         return ReasoningStep.pending(
                                 "LLM generated valid prose — extracted from failed_generation",
                                 "FINISH",

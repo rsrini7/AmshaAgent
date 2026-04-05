@@ -79,8 +79,11 @@ public class SandboxExecTool implements AgentTool {
         "environment is currently offline, or set " +
         "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
 
-    private static final Pattern JAVA_CLASS_PATTERN =
-            Pattern.compile("(?:public\\s+)?class\\s+(\\w+)", Pattern.MULTILINE);
+    private static final Pattern PUBLIC_TYPE_PATTERN =
+            Pattern.compile("(?:^|\\n)\\s*public\\s+(?:class|record|interface|enum)\\s+(\\w+)", Pattern.MULTILINE);
+
+    private static final Pattern ANY_TYPE_PATTERN =
+            Pattern.compile("(?:public\\s+)?(?:class|record|interface|enum)\\s+(\\w+)", Pattern.MULTILINE);
 
     static final boolean IS_WINDOWS =
             System.getProperty("os.name", "").toLowerCase().contains("win");
@@ -416,10 +419,15 @@ public class SandboxExecTool implements AgentTool {
      * Prefers the public class; falls back to first class found; defaults to "Main".
      * Package-private for unit tests.
      */
+    /**
+     * Extracts the primary type name (class, record, enum, interface) from Java source.
+     * Prefers public types to ensure correct file mapping for javac.
+     * Falls back to "Main" if no type is found.
+     */
     String extractJavaClassName(String code) {
-        Matcher m = Pattern.compile("public\\s+class\\s+(\\w+)", Pattern.MULTILINE).matcher(code);
+        Matcher m = PUBLIC_TYPE_PATTERN.matcher(code);
         if (m.find()) return m.group(1);
-        m = JAVA_CLASS_PATTERN.matcher(code);
+        m = ANY_TYPE_PATTERN.matcher(code);
         if (m.find()) return m.group(1);
         return "Main";
     }
