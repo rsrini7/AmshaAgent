@@ -1,61 +1,79 @@
 package com.arcclaw.deployment;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.jandex.DotName;
-import java.util.stream.Collectors;
-import java.util.List;
+import org.jboss.logging.Logger;
 
+/**
+ * Registers runtime beans from arcclaw-core and arcclaw-app as CDI beans.
+ * <p>
+ * Because arcclaw-core declares itself as a Quarkus extension
+ * (META-INF/quarkus-extension.properties), its classes are NOT
+ * auto-discovered by Arc for CDI bean management. They must be
+ * explicitly registered here via {@link AdditionalBeanBuildItem}.
+ */
 public class ArcClawBeanProcessor {
 
+    private static final Logger log = Logger.getLogger(ArcClawBeanProcessor.class);
+
+    private static final DotName APP_SCOPED =
+            DotName.createSimple("jakarta.enterprise.context.ApplicationScoped");
+    private static final DotName DEPENDENT =
+            DotName.createSimple("jakarta.enterprise.context.Dependent");
+    private static final DotName SINGLETON =
+            DotName.createSimple("jakarta.inject.Singleton");
+
+    /**
+     * Scans the combined Jandex index for all CDI-annotated beans inside
+     * {@code com.arcclaw.core} and registers them with Arc.
+     */
     @BuildStep
-    public AdditionalBeanBuildItem registerCoreBeans(CombinedIndexBuildItem index) {
-        // Register all ApplicationScoped beans from com.arcclaw.core packages
-        // Since arcclaw-core is an extension module, its beans must be explicitly
-        // registered or the package must be indexed for discovery.
-        // We ensure all core service implementations are available.
-        
+    AdditionalBeanBuildItem registerCoreBeans(CombinedIndexBuildItem index) {
         List<String> beans = index.getIndex()
                 .getKnownClasses().stream()
                 .filter(ci -> ci.name().toString().startsWith("com.arcclaw.core"))
-                .filter(ci -> ci.hasAnnotation(DotName.createSimple("jakarta.enterprise.context.ApplicationScoped")))
+                .filter(ci -> ci.hasAnnotation(APP_SCOPED)
+                           || ci.hasAnnotation(DEPENDENT)
+                           || ci.hasAnnotation(SINGLETON))
                 .map(ci -> ci.name().toString())
                 .collect(Collectors.toList());
 
-        AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder();
-        for (String bean : beans) {
-            builder.addBeanClass(bean);
+        log.infof("[ArcClawBeanProcessor] Found %d core beans in combined index", beans.size());
+        if (beans.isEmpty()) {
+            log.warn("[ArcClawBeanProcessor] No core beans found — " +
+                     "falling back to explicit registration");
+            return explicitCoreBeans();
         }
-        return builder.build();
-    }
-    
-    @BuildStep
-    public AdditionalBeanBuildItem registerAppBeans(CombinedIndexBuildItem index) {
-         // Some beans in arcclaw-app might also need explicit registration if not picked up
-         List<String> beans = index.getIndex()
-                .getKnownClasses().stream()
-                .filter(ci -> ci.name().toString().startsWith("com.arcclaw.app"))
-                .filter(ci -> ci.hasAnnotation(DotName.createSimple("jakarta.enterprise.context.ApplicationScoped")))
-                .map(ci -> ci.name().toString())
-                .collect(Collectors.toList());
 
-        AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder();
-        for (String bean : beans) {
-            builder.addBeanClass(bean);
-        }
+        AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder()
+                .setUnremovable();
+        beans.forEach(builder::addBeanClass);
         return builder.build();
     }
 
-    @BuildStep
-    public UnremovableBeanBuildItem markCoreBeansUnremovable() {
-        // Mark all core beans as unremovable to ensure they're available for injection across modules.
-        return UnremovableBeanBuildItem.beanClassNames(
-            "com.arcclaw.core.routing.IntentClassifierService",
-            "com.arcclaw.core.channel.ChannelServicesImpl",
-            "com.arcclaw.core.hitl.ApprovalStateMachine",
-            "com.arcclaw.core.routing.ModelProducer"
-        );
+    private AdditionalBeanBuildItem explicitCoreBeans() {
+        return AdditionalBeanBuildItem.builder()
+                .addBeanClass(com.arcclaw.core.channel.ChannelServicesImpl.class)
+                .addBeanClass(com.arcclaw.core.hitl.ApprovalStateMachine.class)
+                .addBeanClass(com.arcclaw.core.routing.IntentClassifierService.class)
+                .addBeanClass(com.arcclaw.core.routing.ModelProducer.class)
+                .addBeanClass(com.arcclaw.core.routing.LlmModelFactory.class)
+                .addBeanClass(com.arcclaw.core.channel.ChannelPluginRegistry.class)
+                .addBeanClass(com.arcclaw.core.pipeline.MessagePipeline.class)
+                .addBeanClass(com.arcclaw.core.lifecycle.WorkspaceManager.class)
+                .addBeanClass(com.arcclaw.core.security.DestructiveVocabularyFilter.class)
+                .addBeanClass(com.arcclaw.core.persistence.AsyncPersistenceEngine.class)
+                .addBeanClass(com.arcclaw.core.persistence.FtsConnectionInterceptor.class)
+                .addBeanClass(com.arcclaw.core.audit.AuditSchemaEnforcer.class)
+                .addBeanClass(com.arcclaw.core.audit.TelemetryAuditService.class)
+                .addBeanClass(com.arcclaw.core.tools.ToolRegistry.class)
+                .addBeanClass(com.arcclaw.core.reflex.ReflexRegistry.class)
+                .setUnremovable()
+                .build();
     }
 }
