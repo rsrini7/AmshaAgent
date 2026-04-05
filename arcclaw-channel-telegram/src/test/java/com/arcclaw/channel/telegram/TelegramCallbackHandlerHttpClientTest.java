@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.time.Duration;
@@ -39,19 +38,15 @@ class TelegramCallbackHandlerHttpClientTest {
 
     @Test
     void bugA3_singletonInstance_multipleFieldCallsUseSameObject() throws Exception {
-        Field field = TelegramCallbackHandler.class.getDeclaredField("HTTP_CLIENT");
+        Field field = TelegramCallbackHandler.class.getDeclaredField("httpClient");
         field.setAccessible(true);
         
-        // Assert initial state is not null (static initialization check)
-        HttpClient client1 = (HttpClient) field.get(null);
-        assertNotNull(client1, "HTTP_CLIENT MUST be initialized at class load time");
+        // Assert initial state is not null
+        HttpClient client1 = (HttpClient) field.get(handler);
+        assertNotNull(client1, "httpClient MUST be initialized");
 
-        HttpClient client2 = (HttpClient) field.get(null);
-        assertSame(client1, client2, "HTTP_CLIENT must be a static singleton instance");
-        
-        // Final modifier verification removed to allow Mockito replacement
-        int modifiers = field.getModifiers();
-        assertTrue(Modifier.isStatic(modifiers), "HTTP_CLIENT MUST be declared static");
+        HttpClient client2 = (HttpClient) field.get(handler);
+        assertSame(client1, client2, "httpClient must be a stable instance on the bean");
     }
 
     @Test
@@ -59,26 +54,17 @@ class TelegramCallbackHandlerHttpClientTest {
         // 1. Setup mock HttpClient
         HttpClient mockClient = Mockito.mock(HttpClient.class);
         
-        // 2. Overwrite the static final HTTP_CLIENT field via reflection magic
-        Field field = TelegramCallbackHandler.class.getDeclaredField("HTTP_CLIENT");
+        // 2. Overwrite the instance httpClient field
+        Field field = TelegramCallbackHandler.class.getDeclaredField("httpClient");
         field.setAccessible(true);
-        
-        // Remove 'final' modifier using reflection (required for some JDKs/environments)
-        try {
-            Field modifiersField = Field.class.getDeclaredField("modifiers");
-            modifiersField.setAccessible(true);
-            modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-        } catch (Exception e) {
-            // Might fail on newer JDKs, but field.set() might still work if we're lucky or using specific JUnit/Mockito setup
-        }
         
         // Fix NPE: mock the method to return a valid CompletableFuture instead of null
         Mockito.when(mockClient.sendAsync(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
         
-        HttpClient originalClient = (HttpClient) field.get(null);
+        HttpClient originalClient = (HttpClient) field.get(handler);
         try {
-            field.set(null, mockClient);
+            field.set(handler, mockClient);
             
             // 3. Invoke answerCallback
             Method method = TelegramCallbackHandler.class.getDeclaredMethod("answerCallback", String.class);
@@ -98,7 +84,7 @@ class TelegramCallbackHandlerHttpClientTest {
 
         } finally {
             // Restore original client to avoid collateral damage to other tests
-            field.set(null, originalClient);
+            field.set(handler, originalClient);
         }
     }
 }
