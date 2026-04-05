@@ -54,7 +54,7 @@ public final class AgentErrorMessageUtil {
         }
 
         if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
-            return "⏳ I'm a little busy right now - please give me a moment and try again.\" in " + extractWaitTime(apiMessage) + ".";
+            return "⏳ I'm a little busy right now - please give me a moment and try again in " + extractWaitTime(apiMessage) + ".";
         }
 
         if (apiMessage.contains("over capacity")) {

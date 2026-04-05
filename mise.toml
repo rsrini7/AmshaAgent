@@ -227,14 +227,14 @@ if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
     Write-Host '📦 Installing dos2unix...'
     sudo apt-get install -y dos2unix
 }
-dos2unix mvnw
+dos2unix mvnw mise.toml arcclaw-ui/package.json
 chmod +x mvnw
 Get-ChildItem -Path '.mise/tasks' -Recurse -Filter '*.sh' | ForEach-Object {
     dos2unix $_.FullName
     chmod +x $_.FullName
     Write-Host "✅  Fixed: $($_.Name)"
 }
-Write-Host '✅  mvnw + all task scripts CRLF fixed and marked executable.'
+Write-Host '✅  mvnw + mise.toml + all task scripts CRLF fixed.'
 """
 
 # =============================================================================
@@ -271,11 +271,12 @@ run = ["java -version", "mise ls java"]
 
 [tasks."build:ui-copy"]
 description = "Build UI and copy to Quarkus resources"
-run = """
-cd arcclaw-ui && npm run build
-mkdir -p ../arcclaw-app/src/main/resources/META-INF/resources
-cp -r dist/* ../arcclaw-app/src/main/resources/META-INF/resources/
-"""
+alias = "buc"
+run = [
+    "cd arcclaw-ui && npm run build",
+    "mkdir -p arcclaw-app/src/main/resources/META-INF/resources",
+    "cp -r arcclaw-ui/dist/* arcclaw-app/src/main/resources/META-INF/resources/"
+]
 
 [tasks.build-app]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]
