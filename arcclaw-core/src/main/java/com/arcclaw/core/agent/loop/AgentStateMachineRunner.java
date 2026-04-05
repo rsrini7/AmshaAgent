@@ -83,8 +83,10 @@ public class AgentStateMachineRunner {
         String transientError = null;
 
         if (log.isInfoEnabled()) {
-            String raw = context.goal();
-            String sanitized = piiScanReflex.sanitize(raw);
+            String raw = context.goal() != null ? context.goal() : "";
+            String sanitized = piiScanReflex != null ? piiScanReflex.sanitize(raw) : raw;
+            if (sanitized == null) sanitized = raw;
+            
             String preview = sanitized.length() > LOG_GOAL_MAX
                     ? sanitized.substring(0, LOG_GOAL_MAX) + "…"
                     : sanitized;

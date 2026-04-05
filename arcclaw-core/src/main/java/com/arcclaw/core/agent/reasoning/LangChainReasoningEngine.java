@@ -123,7 +123,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // BACKGROUND autonomy (CRON/Background tasks) physically strips scheduling tools 
         // from the tool list so the LLM cannot see or call them in its schema.
         boolean isBackgroundSession = 
-            context.autonomyLevel() == AutonomyLevel.BACKGROUND;
+            context.autonomyLevel() == AutonomyLevel.BACKGROUND
+            || (context.sessionId() != null && context.sessionId().startsWith("cron-"));
  
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .filter(allowedTools::contains)

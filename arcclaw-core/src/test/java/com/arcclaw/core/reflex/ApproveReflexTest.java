@@ -25,6 +25,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
@@ -64,6 +65,15 @@ class ApproveReflexTest {
     @InjectMock
     AgentCronRepository cronRepository;
 
+    @InjectMock
+    com.arcclaw.core.agent.reasoning.ReasoningEngine reasoningEngine;
+
+    @InjectMock
+    CheckpointResumeHandler checkpointResumeHandler;
+
+    @InjectMock
+    com.arcclaw.core.lifecycle.WorkspaceManager workspaceManager;
+
     @SuppressWarnings("unchecked")
     Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);
 
@@ -80,6 +90,9 @@ class ApproveReflexTest {
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.markBatchResuming(anyString()))
                 .thenReturn(true);
+ 
+        when(checkpointResumeHandler.resolveResumeGoal(anyString(), anyString()))
+                .thenReturn("Resume Goal");
                 
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
@@ -124,7 +137,7 @@ class ApproveReflexTest {
 
         when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
         when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Cron Success", List.of()));
 
         MessageContext ctx = createContext("/approve " + cronId);
