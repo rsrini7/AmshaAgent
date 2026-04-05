@@ -18,9 +18,22 @@ public class CoderRoutingProvider implements IntentRoutingProvider {
             "hello.?world|factorial|prime|palindrome|anagram)",
             Pattern.CASE_INSENSITIVE
         );
-
+    
     private static final Pattern EXECUTION_PATTERN =
-        Pattern.compile("(?i)^\\s*(run|execute|simply|simplify)\\s+.*(it|the code|result)", Pattern.CASE_INSENSITIVE);
+        Pattern.compile(
+            "(?i)(" +
+            // Original: execute/run/simplify it
+            "^\\s*(run|execute|simply|simplify)\\s+.*(it|the code|result|program)|" +
+            // NEW: "can you execute it", "just run it", "run it now"
+            "^\\s*(can\\s+you\\s+)?(execute|run)\\s+it|" +
+            "^\\s*just\\s+(run|execute)\\s+it|" +
+            // NEW: "try same in java/python/go/node/bash"
+            "try\\s+same\\s+in\\s+(java|python|go|node|bash|javascript|typescript|kotlin|ruby)|" +
+            // NEW: "execute it and share result" (no 'simplify' prefix needed)
+            "^\\s*(execute|run)\\s+it" +
+            ")",
+            Pattern.CASE_INSENSITIVE
+        );
 
     @Override
     public List<Pattern> fastPathTriggers() {
