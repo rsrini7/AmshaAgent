@@ -1072,7 +1072,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
-depends = ["env:recover", "build:full"]
 description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1112,6 +1111,13 @@ Write-Host "▶   Starting JAR in dev profile — mode: $cmd"
 & java @jvmArgs -jar $jar $cmd
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
+
+[tasks."jar:run-dev-dep"]
+depends = ["env:recover", "build:full"]
+description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
+dir = "{{config_root}}"
+# We call mise directly, passing the argument the user provided (or defaulting to 'serve')
+run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
 
 # =============================================================================
 # NATIVE BINARY TASKS

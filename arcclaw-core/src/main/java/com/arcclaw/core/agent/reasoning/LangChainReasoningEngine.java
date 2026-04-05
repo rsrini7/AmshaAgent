@@ -180,8 +180,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         // LLM wrote code explanation (```...```) instead of executing 
                         // This is the most common failure: goal says "execute" but LLM sends a plan
                         if (goalRequestsExecution(goal) && proseIsUnexecutedCodePlan(extractedProse)) {
-                            log.warnf("[LangChainReasoningEngine] Goal='{}' requests execution but LLM " +
-                                            "returned code plan (has ``` fences) for session {} — injecting correction",
+                            log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
+                                            "returned code plan (has ``` fences) for session %s — injecting correction",
                                     goal, sessionId);
                             return ReasoningStep.pending(
                                     "LLM returned code explanation instead of calling sandbox_exec",
