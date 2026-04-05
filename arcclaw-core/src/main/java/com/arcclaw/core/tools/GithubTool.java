@@ -133,7 +133,15 @@ public class GithubTool implements AgentTool {
             );
         }
 
-        // All other cases (gist list, repo view, gist view) use gh CLI directly
+        // ── Case 3: repo view — use --json to get a compact summary instead of full README ──
+        if ("repo".equals(action) && "view".equals(command)) {
+            return List.of(
+                    "gh", "repo", "view", target,
+                    "--json", "name,description,url,topics,stargazerCount,updatedAt"
+            );
+        }
+
+        // Case 4: gist list, gist view, etc. use gh CLI directly
         cmd.add("gh");
         cmd.add(action);
         cmd.add(command);
