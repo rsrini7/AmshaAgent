@@ -433,7 +433,6 @@ arcclaw:
     python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
     go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"
     java-executable: "${ARCCLAW_SANDBOX_JAVA_EXECUTABLE:}"
-    javac-executable: "${ARCCLAW_SANDBOX_JAVAC_EXECUTABLE:}"
     allow-insecure-fallback: "${ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK:false}"
     circuit-breaker:
       failure-threshold: 3   # was 2; gives LLM one retry for param errors

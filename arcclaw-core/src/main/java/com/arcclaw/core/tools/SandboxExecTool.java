@@ -72,9 +72,6 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.java-executable")
     Optional<String> configuredJavaExe;
 
-    @ConfigProperty(name = "arcclaw.sandbox.javac-executable")
-    Optional<String> configuredJavacExe;
-
     @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
     @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
@@ -263,10 +260,6 @@ public class SandboxExecTool implements AgentTool {
             }
         }
         return resolveExecutable("java", configuredJavaExe);
-    }
-
-    String resolveJavacExecutable() {
-        return resolveExecutable("javac", configuredJavacExe);
     }
 
     String resolveGoExecutable() {
