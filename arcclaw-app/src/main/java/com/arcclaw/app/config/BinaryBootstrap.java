@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.arcclaw.core.sandbox.SandboxStrategy;
+
 
 import com.arcclaw.app.util.CliUtils;
 
@@ -534,16 +536,15 @@ public class BinaryBootstrap {
     }
 
     private static void validateSandboxTools() {
+        String strategyStr = System.getProperty("ARCCLAW_SANDBOX_STRATEGY", System.getenv("ARCCLAW_SANDBOX_STRATEGY"));
+        SandboxStrategy strategy = SandboxStrategy.fromString(strategyStr);
 
-        String strategy = System.getProperty("ARCCLAW_SANDBOX_STRATEGY", System.getenv("ARCCLAW_SANDBOX_STRATEGY"));
-        if (strategy == null || strategy.isBlank()) strategy = "PODMAN";
-
-        if ("PODMAN".equalsIgnoreCase(strategy)) {
+        if (SandboxStrategy.PODMAN == strategy) {
             if (!canRun("podman", "--version")) {
                 System.err.println("[ArcClaw] ⚠️  Podman not found — sandbox will be OFFLINE.");
                 System.err.println("           Install Podman or set ARCCLAW_SANDBOX_STRATEGY=DIRECT/NONE.");
             }
-        } else if ("DIRECT".equalsIgnoreCase(strategy)) {
+        } else if (SandboxStrategy.DIRECT == strategy) {
              // Check common host tools if we're in direct mode
              String[] tools = {"python", "node", "go", "java"};
              for (String tool : tools) {

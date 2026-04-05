@@ -117,7 +117,8 @@ public class PodmanContainerExecutor {
             Span span = otelContext.childSpan(sessionId, "tool.container_exec");
             span.setAttribute("container.image", containerImage);
             span.setAttribute("container.name", containerName);
-            span.setAttribute("sandbox.strategy", ProcessIsolationExecutor.SANDBOX_STRATEGY_PODMAN);
+            span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
+
 
             // Track before start — avoids race on early failure.
             activeContainerNames.add(containerName);

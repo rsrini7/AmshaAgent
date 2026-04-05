@@ -40,7 +40,6 @@ public class ProcessIsolationExecutor {
 
     private static final Logger log = Logger.getLogger(ProcessIsolationExecutor.class);
 
-    public static final String SANDBOX_STRATEGY_PODMAN = "PODMAN";
 
     @Inject
     SandboxCircuitBreaker circuitBreaker;
@@ -54,8 +53,9 @@ public class ProcessIsolationExecutor {
     @Inject
     DirectExecutor directExecutor;
 
-    @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = SANDBOX_STRATEGY_PODMAN)
-    String sandboxStrategy;
+    @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
+    SandboxStrategy sandboxStrategy;
+
 
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
     boolean sandboxEnabled;
@@ -77,7 +77,8 @@ public class ProcessIsolationExecutor {
     /** Startup availability check — degrades gracefully if Podman not installed. */
     @PostConstruct
     void checkPodmanAvailability() {
-        if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
+        if (SandboxStrategy.PODMAN == sandboxStrategy) {
+
             try {
                 var pb = new ProcessBuilder(podmanPath, "--version");
                 pb.redirectErrorStream(true);
@@ -114,11 +115,16 @@ public class ProcessIsolationExecutor {
             return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
         }
 
-        if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
+        if (SandboxStrategy.NONE == sandboxStrategy) {
             return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
         }
 
-        if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
+        if (SandboxStrategy.DIRECT == sandboxStrategy) {
+            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+        }
+
+        if (SandboxStrategy.PODMAN == sandboxStrategy) {
+
             if (circuitBreaker.shouldAttemptPodman()) {
                 CircuitBreakerState stateAtCall = circuitBreaker.getState();
                 try {
