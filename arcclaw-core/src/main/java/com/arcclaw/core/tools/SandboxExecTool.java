@@ -126,8 +126,15 @@ public class SandboxExecTool implements AgentTool {
             String sessionId = WorkspaceContext.requireSessionId();
             Path workspaceRoot = Path.of(workspaceRootDir, toFsName(sessionId));
 
-            // TODO: secret extraction for direct path - sandboxCommand() path handles
-            // secrets via SandboxSecretResolver. execute() fallback path intentionally skips.
+            // Secrets are intentionally empty on the direct-execution fallback path.
+            // The sandboxCommand() → PodmanContainerExecutor path injects secrets
+            // securely via SandboxSecretResolver + tmpfs transport.
+            // DirectExecutor has no secure secret injection mechanism — tools that
+            // require secrets (e.g. GitHub token) should only run via Podman.
+            if (params.containsKey("secrets")) {
+                log.warnf("[SandboxExecTool] 'secrets' parameter ignored on direct host fallback — " +
+                          "Podman unavailable. session=%s", WorkspaceContext.requireSessionId());
+            }
             Map<String, String> requiredSecrets = Map.of();
 
             return switch (lang) {
