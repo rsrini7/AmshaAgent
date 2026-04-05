@@ -87,6 +87,27 @@ X-ArcClaw-API-Key: {{validKey}}
     "maxIterations": 1
 }
 
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+
 ###
 
 ### [MEM-3] Third turn — build on the context
@@ -199,6 +220,27 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator", 
     "maxIterations": 1
 }
+
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
 
 ###
 
@@ -511,6 +553,26 @@ X-ArcClaw-API-Key: {{validKey}}
     "goal": "Search your memory for any previous discussions about Argon2id or AES-GCM-SIV.",
     "agentRole": "researcher",
     "maxIterations": 2
+}
+
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/status/researcher
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "researcher",
+    "maxIterations": 1
 }
 
 ###
