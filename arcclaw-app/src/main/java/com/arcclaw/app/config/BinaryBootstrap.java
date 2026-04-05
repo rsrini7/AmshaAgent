@@ -40,6 +40,14 @@ public class BinaryBootstrap {
     );
 
     public static void bootstrap(String[] args) {
+        // Force UTF-8 for Windows console rendering
+        if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            if (System.getProperty("file.encoding") == null) System.setProperty("file.encoding", "UTF-8");
+            if (System.getProperty("stdout.encoding") == null) System.setProperty("stdout.encoding", "UTF-8");
+            if (System.getProperty("sun.stdout.encoding") == null) System.setProperty("sun.stdout.encoding", "UTF-8");
+            if (System.getProperty("sun.stderr.encoding") == null) System.setProperty("sun.stderr.encoding", "UTF-8");
+        }
+
         Path binaryDir = resolveBinaryDir();
         
         reexecWithLdPreloadIfNeeded(args);
@@ -415,6 +423,6 @@ public class BinaryBootstrap {
     private static String generateRandomValue() {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
     }
 }

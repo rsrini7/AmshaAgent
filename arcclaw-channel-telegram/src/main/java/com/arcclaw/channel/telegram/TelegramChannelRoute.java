@@ -63,6 +63,7 @@ public class TelegramChannelRoute extends RouteBuilder {
                 .end(); // Added .end() here
     }
 
+    
     void onStart(@Observes StartupEvent ev) {
         log.infof("Telegram Route onStart (enabled=%b, contextStatus=%s)", enabled, camelContext.getStatus());
         if (!enabled) return;
@@ -71,41 +72,31 @@ public class TelegramChannelRoute extends RouteBuilder {
             return;
         }
 
-        Thread.ofVirtual().name("telegram-route-registrar").start(() -> {
-            try {
-                if (camelContext.getStatus().isStopped()) {
-                    // WHY removeIf instead of camelContext.disableJMX():
-                    // disableJMX() is guarded by isNew() check in AbstractCamelContext.
-                    // In Quarkus dev mode, StartupEvent fires after INITIALIZED state —
-                    // disableJMX() silently no-ops, leaving JmxManagementLifecycleStrategy
-                    // registered. Calling camelContext.start() then NPEs at
-                    // JmxManagementLifecycleStrategy.onContextStarting():189.
-                    // Direct removeIf bypasses the state guard. JAR/native unaffected
-                    // since camelContext.getStatus().isStopped() is false there.
+        // Run synchronously if Stopped to avoid BeanRepository race in native mode
+        try {
+            if (camelContext.getStatus().isStopped()) {
+                // Skips JMX logic which is irrelevant and unsafe in native mode
+                if (System.getProperty("org.graalvm.nativeimage.imagecode") == null) {
                     camelContext.getLifecycleStrategies()
-                        .removeIf(s -> s.getClass().getName()
-                            .contains("JmxManagement"));
-
-                    log.info("Starting CamelContext manually...");
-                    camelContext.start();
+                        .removeIf(s -> s.getClass().getName().contains("JmxManagement"));
                 }
-
-                if (camelContext.getRoute("telegram-bot") == null) {
-                    log.info("Registering Telegram route...");
-                    camelContext.addRoutes(this);
-                    camelContext.getRouteController().startRoute("telegram-bot");
-                    log.infof("Telegram route started. Status=%s",
-                        camelContext.getRouteController()
-                            .getRouteStatus("telegram-bot"));
-                } else {
-                    log.info("Telegram route already registered — skipping.");
-                }
-            } catch (Exception e) {
-                log.error("Telegram route registration failed", e);
+                
+                log.info("Starting CamelContext manually...");
+                camelContext.start();
             }
-        });
+
+            if (camelContext.getRoute("telegram-bot") == null) {
+                log.info("Registering Telegram route...");
+                camelContext.addRoutes(this);
+                camelContext.getRouteController().startRoute("telegram-bot");
+                log.infof("Telegram route started. Status=%s",
+                    camelContext.getRouteController().getRouteStatus("telegram-bot"));
+            }
+        } catch (Exception e) {
+            log.error("Telegram route registration failed", e);
+        }
     }
-    
+
     private boolean isPlaceholderToken() {
         return botToken == null || botToken.isBlank()
             || botToken.startsWith("mock")
