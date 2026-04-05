@@ -7,5 +7,6 @@ public enum AuditOutcome {
     APPROVAL_TIMEOUT,
     MAX_ITERATIONS,
     AWAITING_APPROVAL,
+    AWAITING_RETRY,
     SECURITY_EVENT
 }

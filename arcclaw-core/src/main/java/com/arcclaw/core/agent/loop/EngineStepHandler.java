@@ -198,7 +198,6 @@ public class EngineStepHandler {
         }
 
         if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
-            String msg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
             log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, ExceptionUtils.getRootCauseMessage(e));
 
             int retryAfterSeconds = extractRetryAfter(e.getMessage(), 10);
@@ -222,8 +221,9 @@ public class EngineStepHandler {
                 }
             }
 
-            return StepDecision.terminal(AgentResult.failed(
-                    msg, AgentResult.FailureCategory.RATE_LIMIT, List.copyOf(history)));
+            // Return AWAITING_RETRY so state machine pauses cleanly
+            int retryMs = retryAfterSeconds * 1000;
+            return StepDecision.terminal(AgentResult.awaitingRetry(sessionId, retryMs, List.copyOf(history)));
         }
 
         if (isNetworkError(e)) {

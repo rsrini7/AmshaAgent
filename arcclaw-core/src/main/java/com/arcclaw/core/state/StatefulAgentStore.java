@@ -138,6 +138,12 @@ public interface StatefulAgentStore {
     List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff);
 
     /**
+     * Returns all checkpoints with the specified status.
+     * Used by the rate-limit retry scheduler.
+     */
+    List<AgentCheckpoint> findByStatus(CheckpointStatus status);
+
+    /**
      * Atomically marks the session as RESUMING.
      * @return true if this caller is the first to mark it (safe to resume)
      *         false if another thread already marked it (skip — already resuming)

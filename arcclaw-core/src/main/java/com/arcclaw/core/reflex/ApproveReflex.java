@@ -314,6 +314,9 @@ public class ApproveReflex implements AgentReflex {
                 }
                 case AgentResult.Failed f  -> cronRepository.markFailed(cron.id, f.reason());
                 case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.id);
+                case AgentResult.AwaitingRetry _ -> {
+                    // No-op: retry handled by RateLimitRetryScheduler §736
+                }
                 case AgentResult.LoopExceeded _     -> cronRepository.markFailed(cron.id, "Loop exceeded");
             }
 

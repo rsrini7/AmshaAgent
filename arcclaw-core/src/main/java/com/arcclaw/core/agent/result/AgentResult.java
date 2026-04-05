@@ -13,6 +13,7 @@ public sealed interface AgentResult
         permits AgentResult.Finished,
                 AgentResult.StructuredFinished,
                 AgentResult.AwaitingApproval,
+                AgentResult.AwaitingRetry,
                 AgentResult.LoopExceeded,
                 AgentResult.Failed {
 
@@ -65,6 +66,15 @@ public sealed interface AgentResult
     ) implements AgentResult {}
 
     @TemplateData
+    record AwaitingRetry(
+            String sessionId,
+            int retryAfterMs,
+            List<ReasoningStep> steps,
+            int totalInputTokens,
+            int totalOutputTokens
+    ) implements AgentResult {}
+
+    @TemplateData
     record Failed(
             String reason,
             FailureCategory category,
@@ -93,6 +103,10 @@ public sealed interface AgentResult
 
     static AgentResult failed(String reason, FailureCategory category, List<ReasoningStep> steps) {
         return new Failed(reason, category, steps, sumIn(steps), sumOut(steps));
+    }
+
+    static AgentResult awaitingRetry(String sessionId, int retryAfterMs, List<ReasoningStep> steps) {
+        return new AwaitingRetry(sessionId, retryAfterMs, steps, sumIn(steps), sumOut(steps));
     }
 
     private static int sumIn(List<ReasoningStep> steps) {

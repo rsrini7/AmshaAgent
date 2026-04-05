@@ -95,6 +95,7 @@ public class TelemetryAuditService {
             case AgentResult.Finished _ -> AuditOutcome.FINISH;
             case AgentResult.StructuredFinished _ -> AuditOutcome.FINISH;
             case AgentResult.AwaitingApproval _ -> AuditOutcome.AWAITING_APPROVAL;
+            case AgentResult.AwaitingRetry _ -> AuditOutcome.AWAITING_RETRY;
             case AgentResult.LoopExceeded _ -> AuditOutcome.MAX_ITERATIONS;
             case AgentResult.Failed f -> {
                 if (f.category() == AgentResult.FailureCategory.BUDGET_EXCEEDED) yield AuditOutcome.BUDGET_EXCEEDED;
@@ -110,6 +111,7 @@ public class TelemetryAuditService {
             case BUDGET_EXCEEDED -> SecurityEventType.LOOP_BUDGET_EXCEEDED;
             case MAX_ITERATIONS -> SecurityEventType.LOOP_MAX_ITERATIONS;
             case AWAITING_APPROVAL -> SecurityEventType.LOOP_AWAITING_APPROVAL;
+            case AWAITING_RETRY -> SecurityEventType.LOOP_AWAITING_RETRY;
             case SECURITY_EVENT -> SecurityEventType.SECURITY;
             case APPROVAL_TIMEOUT -> SecurityEventType.LOOP_ERROR;
         };

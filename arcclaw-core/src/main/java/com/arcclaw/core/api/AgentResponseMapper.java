@@ -33,6 +33,7 @@ public class AgentResponseMapper {
 
     public record AgentResponse(String answer, int totalInputTokens, int totalOutputTokens) {}
     public record ApprovalRequiredResponse(String toolName, String paramsJson, String sessionId) {}
+    public record RateLimitRetryResponse(long retryAfterMs, String sessionId) {}
     public record ErrorResponse(String reason, String code) {}
 
     public Response mapResult(AgentResult result, boolean isAsync) {
@@ -56,6 +57,10 @@ public class AgentResponseMapper {
             case AgentResult.AwaitingApproval a -> Response.status(202)
                     .entity(new ApprovalRequiredResponse(
                             a.toolName(), a.paramsJson(), a.sessionId()))
+                    .build();
+            case AgentResult.AwaitingRetry r -> Response.status(202)
+                    .entity(new RateLimitRetryResponse(
+                            r.retryAfterMs(), r.sessionId()))
                     .build();
             case AgentResult.LoopExceeded l -> Response.status(408)
                     .entity(new ErrorResponse(

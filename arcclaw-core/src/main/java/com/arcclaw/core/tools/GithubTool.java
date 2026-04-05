@@ -128,8 +128,9 @@ public class GithubTool implements AgentTool {
             return List.of(
                     "gh", "api",
                     "users/" + owner + "/repos",
-                    "--paginate",
-                    "--jq", ".[] | [.name, .html_url, (.description // \"\")] | @tsv"
+                    "--paginate"
+                    // No --jq — returns raw JSON array, more robust against shell quoting issues
+                    // and provides the LLM with all fields (stars, language, etc.) for better reasoning.
             );
         }
 

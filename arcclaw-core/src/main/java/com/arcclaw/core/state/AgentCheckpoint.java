@@ -136,6 +136,10 @@ public class AgentCheckpoint {
     @Column(name = "iterations_used")
     private int iterationsUsed = 0;
 
+    /** Estimated duration (ms) to wait before retrying a rate-limited call. */
+    @Column(name = "retry_after_ms")
+    private Integer retryAfterMs;
+
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -293,6 +297,9 @@ public class AgentCheckpoint {
 
     public int getIterationsUsed() { return iterationsUsed; }
     public void setIterationsUsed(int iterationsUsed) { this.iterationsUsed = iterationsUsed; }
+
+    public Integer getRetryAfterMs() { return retryAfterMs; }
+    public void setRetryAfterMs(Integer retryAfterMs) { this.retryAfterMs = retryAfterMs; }
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
