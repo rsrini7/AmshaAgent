@@ -43,45 +43,51 @@ public class AgentProducer {
     @Location("personas/synthesizer.txt")
     Template synthesizerTemplate;
 
+    @Inject
+    com.arcclaw.core.structured.StructuredOutputEngine structuredOutputEngine;
+
+    @Inject
+    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
     @Produces
     @ApplicationScoped
     @AgentRole("coordinator")
     public Agent coordinator() {
-        return new DefaultAgent(AgentRoleEnum.COORDINATOR, coordinatorTemplate, defaultTimezone);
+        return new DefaultAgent(AgentRoleEnum.COORDINATOR, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("coder")
     public Agent coder() {
-        return new DefaultAgent(AgentRoleEnum.CODER, coderTemplate, defaultTimezone);
+        return new DefaultAgent(AgentRoleEnum.CODER, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("debugger")
     public Agent debugger() {
-        return new DefaultAgent(AgentRoleEnum.DEBUGGER, debuggerTemplate, defaultTimezone);
+        return new DefaultAgent(AgentRoleEnum.DEBUGGER, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("researcher")
     public Agent researcher() {
-        return new DefaultAgent(AgentRoleEnum.RESEARCHER, researcherTemplate, defaultTimezone);
+        return new DefaultAgent(AgentRoleEnum.RESEARCHER, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("architect")
     public Agent architect() {
-        return new DefaultAgent(AgentRoleEnum.ARCHITECT, architectTemplate, defaultTimezone);
+        return new DefaultAgent(AgentRoleEnum.ARCHITECT, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("synthesizer")
     public Agent synthesizer() {
-        return new DefaultAgent(AgentRoleEnum.SYNTHESIZER, synthesizerTemplate, defaultTimezone);
+        return new DefaultAgent(AgentRoleEnum.SYNTHESIZER, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 }
