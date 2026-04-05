@@ -147,6 +147,9 @@ public class PodmanContainerExecutor {
                         "--env", "GOPATH=/tmp/go-path",
                         "--env", "GOMAXPROCS=1",
                         "--env", "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
+                        "--env", "GH_CONFIG_DIR=/tmp/gh-config",     // redirect config to writable tmpfs
+                        "--env", "GH_NO_UPDATE_NOTIFIER=1",           // skip update check
+                        "--env", "GH_PROMPT_DISABLED=1",              // no interactive prompts
                         "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
                         "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));
