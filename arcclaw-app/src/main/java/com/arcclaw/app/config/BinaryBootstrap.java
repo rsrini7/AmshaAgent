@@ -540,6 +540,14 @@ public class BinaryBootstrap {
             if (!canRun("podman", "--version")) {
                 System.err.println("[ArcClaw] ⚠️  Podman not found — sandbox will be OFFLINE.");
                 System.err.println("           Install Podman or set ARCCLAW_SANDBOX_STRATEGY=DIRECT/NONE.");
+            } else {
+                // Check if the image exists
+                String image = System.getProperty("ARCCLAW_SANDBOX_IMAGE", 
+                        System.getenv().getOrDefault("ARCCLAW_SANDBOX_IMAGE", "localhost/arcclaw-tool-runner:latest"));
+                if (!canRun("podman", "image", "exists", image)) {
+                    System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing from local storage.");
+                    System.err.println("           Build it: podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
+                }
             }
         } else if (SandboxStrategy.DIRECT == strategy) {
              // Check common host tools if we're in direct mode

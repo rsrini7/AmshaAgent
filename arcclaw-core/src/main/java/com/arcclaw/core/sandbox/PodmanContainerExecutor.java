@@ -108,6 +108,7 @@ public class PodmanContainerExecutor {
         var resolvedSecrets = secretResolver.resolveSecrets(requiredSecrets);
         
         checkPodmanAvailable();
+        checkImageAvailable();
 
         // Use the unified Tier 1 tmpfs secure transport.
         // The transport strictly zeroes the memory arrays when closed.
@@ -245,6 +246,19 @@ public class PodmanContainerExecutor {
                 span.end();
                 activeContainerNames.remove(containerName); // deregister on normal exit or exception
             }
+        }
+    }
+
+    private void checkImageAvailable() throws SandboxImageMissingException {
+        try {
+            Process p = new ProcessBuilder(podmanPath, "image", "exists", sandboxImage)
+                .start();
+            boolean ok = p.waitFor(3, TimeUnit.SECONDS);
+            if (!ok || p.exitValue() != 0) {
+                throw new SandboxImageMissingException("Sandbox image '" + sandboxImage + "' missing from Podman storage.");
+            }
+        } catch (IOException | InterruptedException e) {
+            throw new SandboxImageMissingException("Failed to check sandbox image: " + e.getMessage());
         }
     }
 
