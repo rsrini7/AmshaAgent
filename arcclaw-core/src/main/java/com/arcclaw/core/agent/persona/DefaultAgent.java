@@ -71,7 +71,7 @@ public class DefaultAgent implements Agent {
         instance.data("TARGET_UTC_HOUR",    null);
         instance.data("TARGET_UTC_MINUTE",  null);
 
-        // Antigravity — pass all dynamic metadata from the pipeline context
+        // pass all dynamic metadata from the pipeline context
         if (context != null && context.data() != null) {
             context.data().forEach(instance::data);
         }

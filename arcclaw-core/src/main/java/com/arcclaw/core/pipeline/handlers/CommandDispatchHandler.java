@@ -133,7 +133,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     context.setData("CURRENT_LOCAL_TIME", 
                             ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
                     
-                    log.infof("[Antigravity] Time resolved: UTC %02d:%02d for input '%s'", 
+                    log.infof("[handle] Time resolved: UTC %02d:%02d for input '%s'", 
                             targetUtc.getHour(), targetUtc.getMinute(), context.getMessage().text());
                 }
 
