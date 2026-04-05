@@ -9,7 +9,6 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -19,6 +18,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -108,13 +108,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         messages.addAll(assembled);
 
         Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
-
-        boolean isCronFired = (sessionId != null && sessionId.toLowerCase().startsWith("cron-"))
-                || AgentSentinels.isCronGoal(goal);
-
+ 
+        // ── CAPABILITY CEILING ──
+        // BACKGROUND autonomy (CRON/Background tasks) physically strips scheduling tools 
+        // from the tool list so the LLM cannot see or call them in its schema.
+        boolean isBackgroundSession = 
+            context.autonomyLevel() == AutonomyLevel.BACKGROUND;
+ 
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .filter(allowedTools::contains)
-                .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
+                .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
                         && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
                 .map(tool -> ToolSpecification.builder()

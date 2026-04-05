@@ -1,13 +1,12 @@
 package com.arcclaw.core.persistence;
 
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Path;
 
 /**
  * Plain JUnit test — no Quarkus container needed.

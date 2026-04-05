@@ -5,6 +5,8 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.structured.StructuredOutputEngine;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -44,10 +46,10 @@ public class AgentProducer {
     Template synthesizerTemplate;
 
     @Inject
-    com.arcclaw.core.structured.StructuredOutputEngine structuredOutputEngine;
+    StructuredOutputEngine structuredOutputEngine;
 
     @Inject
-    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    ObjectMapper objectMapper;
 
     @Produces
     @ApplicationScoped
