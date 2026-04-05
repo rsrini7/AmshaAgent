@@ -42,7 +42,7 @@ class AgentResilienceTest {
 
             ReasoningEngine engine = new ReasoningEngine() {
                 @Override
-                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
                     int call = callCount.incrementAndGet();
                     if (call == 1) {
                         // First call: LLM hallucinates a tool that doesn't exist
@@ -92,7 +92,7 @@ class AgentResilienceTest {
             // Engine that always requests the same tool (never finishes)
             ReasoningEngine engine = new ReasoningEngine() {
                 @Override
-                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
                     return ReasoningStep.pending(
                         "I'll keep trying the github tool.",
                         "github",
@@ -124,7 +124,7 @@ class AgentResilienceTest {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             ReasoningEngine engine = new ReasoningEngine() {
                 @Override
-                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
                     return ReasoningStep.pending(
                         "I'm done.",
                         ReasoningStep.FINISH,
@@ -154,7 +154,7 @@ class AgentResilienceTest {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             ReasoningEngine engine = new ReasoningEngine() {
                 @Override
-                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
                     return null;
                 }
 
@@ -181,7 +181,7 @@ class AgentResilienceTest {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
             ReasoningEngine engine = new ReasoningEngine() {
                 @Override
-                public ReasoningStep nextStep(String sessionId, String role, String goal, List<ReasoningStep> history) {
+                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
                     throw new RuntimeException("LLM API Timeout");
                 }
 

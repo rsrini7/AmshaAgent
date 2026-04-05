@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -96,8 +97,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject AgentOtelContext otelContext;
 
     @Override
-    public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
-        String systemPrompt = promptBuilder.build(agentRole, sessionId, goal);
+    public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
+        String sessionId = context.sessionId();
+        String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
 
@@ -365,7 +367,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
         Span span = otelContext.childSpan(sessionId, "structured_output_generation");
         try {
-            String systemPrompt = promptBuilder.build(agentRole, sessionId, "");
+            String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "");
 
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(SystemMessage.systemMessage(systemPrompt));

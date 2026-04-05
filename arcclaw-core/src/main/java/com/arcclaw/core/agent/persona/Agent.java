@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.persona;
 
 import java.util.List;
 
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -26,8 +27,10 @@ public interface Agent {
      * <p>
      * This prompt is injected into the LLM context at the start of
      * every reasoning loop to enforce persona invariants.
+     *
+     * @param context the execution context containing dynamic metadata (e.g. scheduling)
      */
-    String systemPrompt();
+    String systemPrompt(AgentExecutionContext context);
 
     /**
      * List of tool names this agent is authorized to use.

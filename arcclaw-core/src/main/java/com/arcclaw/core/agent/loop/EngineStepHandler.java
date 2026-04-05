@@ -51,7 +51,7 @@ public class EngineStepHandler {
         try {
             String goal = context.goal();
             String currentGoal = transientError != null ? goal + "\n\n" + transientError : goal;
-            step = engine.nextStep(context.sessionId(), context.agentRole(), currentGoal,
+            step = engine.nextStep(context, context.agentRole(), currentGoal,
                     Collections.unmodifiableList(history));
 
             if (step != null) {

@@ -7,6 +7,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import org.jboss.logging.Logger;
 
@@ -35,14 +36,14 @@ public class AgentPersonaRegistry {
         this.agents = agents;
     }
 
-    public String getPersonaPrompt(AgentRoleEnum role) {
+    public String getPersonaPrompt(AgentExecutionContext context, AgentRoleEnum role) {
         if (agents == null) {
             return "You are ArcClaw, an AI agent. Be helpful and concise.";
         }
 
         for (Agent agent : agents) {
             if (agent.role().equals(role.toScopedName())) {
-                return agent.systemPrompt();
+                return agent.systemPrompt(context);
             }
         }
 
@@ -54,7 +55,7 @@ public class AgentPersonaRegistry {
         // Fallback: coordinator prompt if role not found
         for (Agent agent : agents) {
             if (agent.role().equals(AgentRoleEnum.COORDINATOR.toScopedName())) {
-                return agent.systemPrompt();
+                return agent.systemPrompt(context);
             }
         }
 

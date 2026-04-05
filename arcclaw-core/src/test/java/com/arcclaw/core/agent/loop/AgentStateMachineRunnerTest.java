@@ -144,7 +144,7 @@ class AgentStateMachineRunnerTest {
     private AgentExecutionContext createCtx() {
         return new AgentExecutionContext(
                 "session-1", "user-1", "chat-1", "coordinator",
-                "goal", AutonomyLevel.FULL, 5, null, null);
+                "goal", AutonomyLevel.FULL, 5, null, null, null);
     }
 
 
@@ -152,7 +152,7 @@ class AgentStateMachineRunnerTest {
     void testFinishOnFirstStep() {
         ReasoningStep finishStep = ReasoningStep.pending(
                 "done", ReasoningStep.FINISH, Map.of("answer", "Hello"), 0, 0);
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(finishStep);
 
 
@@ -168,7 +168,7 @@ class AgentStateMachineRunnerTest {
     @Test
     void testLoopExceededAfterMaxIterations() {
         ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 0, 0);
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
@@ -178,7 +178,7 @@ class AgentStateMachineRunnerTest {
 
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
 
@@ -195,7 +195,7 @@ class AgentStateMachineRunnerTest {
                 "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 0, 0);
 
 
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(hallucinatedStep)
                 .thenReturn(finishStep);
         when(toolRegistry.findTool("fake-tool")).thenReturn(Optional.empty());
@@ -214,7 +214,7 @@ class AgentStateMachineRunnerTest {
     @Test
     void testBudgetExceededAborts() throws Exception {
         ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 100, 100);
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep);
         doThrow(new BudgetExceededException("Budget blown"))
                 .when(governanceLayer).recordLlmCall(anyString(), anyInt(), anyInt());
@@ -235,7 +235,7 @@ class AgentStateMachineRunnerTest {
         WorkspaceContext.run("s1", "u1", "c1", AutonomyLevel.SUPERVISED, "coordinator", () -> {
             ReasoningStep toolStep = ReasoningStep.pending(
                     "thought", "protected-tool", Map.of(), 0, 0);
-            when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+            when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                     .thenReturn(toolStep);
             when(toolRegistry.findTool("protected-tool"))
                     .thenReturn(Optional.of(mock(AgentTool.class)));
@@ -248,7 +248,7 @@ class AgentStateMachineRunnerTest {
 
 
             AgentExecutionContext ctx = new AgentExecutionContext(
-                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, null, null);
+                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, null, null, null);
             AgentResult result = runner.run(ctx, engine, List.of());
 
 
@@ -266,7 +266,7 @@ class AgentStateMachineRunnerTest {
                 "thought1", "broken-tool", Map.of("arg", 1), 0, 0);
         ReasoningStep toolStep2 = ReasoningStep.pending(
                 "thought2", "broken-tool", Map.of("arg", 2), 0, 0);
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep1)
                 .thenReturn(toolStep2);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
@@ -293,7 +293,7 @@ class AgentStateMachineRunnerTest {
                 "done", ReasoningStep.FINISH, Map.of("answer", "healed"), 0, 0);
 
 
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenThrow(ex)
                 .thenReturn(finishStep);
 
@@ -311,7 +311,7 @@ class AgentStateMachineRunnerTest {
     void testSchedulingToolFastPathExits() {
         ReasoningStep scheduleStep = ReasoningStep.pending(
                 "planning", "schedule_task", Map.of("task", "clean"), 0, 0);
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(scheduleStep);
         when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
@@ -335,17 +335,14 @@ class AgentStateMachineRunnerTest {
     void testRateLimitReturnsRateLimitCategory() {
         // Use a wait time > 15s to trigger terminal failure instead of auto-retry
         HttpException ex = new HttpException(429, "Rate limit reached, try again in 20s");
-        when(engine.nextStep(anyString(), anyString(), anyString(), anyList()))
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenThrow(ex);
 
 
         AgentResult result = runner.run(createCtx(), engine, List.of());
 
-
-        assertInstanceOf(AgentResult.Failed.class, result);
-        assertEquals(AgentResult.FailureCategory.RATE_LIMIT,
-                ((AgentResult.Failed) result).category());
-        assertTrue(((AgentResult.Failed) result).reason().contains("⏳"));
+        assertInstanceOf(AgentResult.AwaitingRetry.class, result);
+        assertEquals(20000, ((AgentResult.AwaitingRetry) result).retryAfterMs());
     }
 
 

@@ -313,7 +313,8 @@ public class AgentLoop {
                     WorkspaceContext.autonomy(),
                     maxIterations,
                     channelType,
-                    channelPlatformId
+                    channelPlatformId,
+                    context != null ? context.getData() : null
             );
 
             AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);

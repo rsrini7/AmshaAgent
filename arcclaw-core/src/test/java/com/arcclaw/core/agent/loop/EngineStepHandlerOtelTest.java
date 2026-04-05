@@ -39,10 +39,10 @@ public class EngineStepHandlerOtelTest {
     void testOtelCalledExactlyOncePerStep() {
         // Arrange
         ReasoningStep step = ReasoningStep.pending("thought", "FINISH", Map.of(), 10, 20);
-        when(engine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(step);
+        when(engine.nextStep(any(), anyString(), anyString(), any())).thenReturn(step);
 
         // Act
-        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null);
+        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null);
         handler.processEngineStep(context, engine, Collections.emptyList(), null, 0, 1);
 
         // Assert

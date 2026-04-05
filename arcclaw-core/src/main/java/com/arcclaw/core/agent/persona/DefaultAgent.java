@@ -7,6 +7,7 @@ import java.util.Map;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.structured.SynthesisResult;
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -44,13 +45,18 @@ public class DefaultAgent implements Agent {
     }
 
     @Override
-    public String systemPrompt() {
+    public String systemPrompt(AgentExecutionContext context) {
         TemplateInstance instance = promptTemplate.instance();
         instance.data("tools", String.join(", ", roleEnum.definition().toolNames()));
 
         // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
         instance.data("CURRENT_UTC_ISO", Instant.now().toString());
         instance.data("USER_TZ_OFFSET", "UTC+05:30 IST");
+
+        // Antigravity — pass all dynamic metadata from the pipeline context
+        if (context != null && context.data() != null) {
+            context.data().forEach(instance::data);
+        }
 
         return instance.render();
     }

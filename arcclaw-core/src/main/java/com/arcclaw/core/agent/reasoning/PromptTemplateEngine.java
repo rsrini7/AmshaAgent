@@ -9,6 +9,7 @@ import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -68,6 +69,13 @@ public class PromptTemplateEngine {
      * @return the rendered prompt string
      */
     public String buildSystemPrompt(AgentRoleEnum role, String compactionSummary, Instant systemTimeUtc) {
+        return buildSystemPrompt(null, role, compactionSummary, systemTimeUtc);
+    }
+
+    /**
+     * Renders the system prompt section with full context data.
+     */
+    public String buildSystemPrompt(AgentExecutionContext context, AgentRoleEnum role, String compactionSummary, Instant systemTimeUtc) {
         if (role == null) {
             log.warn("buildSystemPrompt called with null role — returning fallback");
             return "PERMITTED TOOLS: None";
@@ -97,13 +105,19 @@ public class PromptTemplateEngine {
         boolean hasSandboxExec = sortedCapabilities.stream()
                 .anyMatch(c -> "sandbox_exec".equals(c.toolName()));
 
-        return templateFor(role)
+
+        var request = templateFor(role)
                 .data("roleDef", role.definition())
                 .data("sortedCapabilities", sortedCapabilities)
                 .data("hasSandboxExec", hasSandboxExec)
                 .data("compactionSummary", compactionSummary)
-                .data("systemTimeUtc", timeString)
-                .render();
+                .data("systemTimeUtc", timeString);
+
+        if (context != null && context.data() != null) {
+            context.data().forEach(request::data);
+        }
+
+        return request.render();
     }
 
     private Template templateFor(AgentRoleEnum role) {
