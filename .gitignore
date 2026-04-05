@@ -58,4 +58,4 @@ node/
 npm/
 *.tsbuildinfo
 arcclaw-app/src/main/resources/META-INF/resources
-
+arcclaw-app/src/main/resources/env-example
