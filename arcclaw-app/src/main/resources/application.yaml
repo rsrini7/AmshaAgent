@@ -699,6 +699,8 @@ mp:
 
 "%prod":
   quarkus:
+    # native:
+    #   enabled: true
     langchain4j:
       ollama:
         chat-model:
@@ -710,8 +712,6 @@ mp:
           log-responses: false
     log:
       level: INFO
-      console:
-        color: false
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
     workspace:
