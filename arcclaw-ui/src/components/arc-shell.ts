@@ -205,6 +205,13 @@ export class ArcShell extends LitElement {
     this._startSse();
   }
 
+  private _handleUnauthorized() {
+    console.warn('[ArcClaw] Stale API key detected (401). Redirecting to onboarding...');
+    this._apiKey = '';
+    localStorage.removeItem('arc-api-key');
+    window.location.hash = '#/onboarding';
+  }
+
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
     this._sessionId = e.detail.sessionId;
 
@@ -297,14 +304,22 @@ export class ArcShell extends LitElement {
     if (!this._client) return;
     try {
       this._agents = await this._client.getAgents();
-    } catch { /* suppress background fetch errors */ }
+    } catch (err: any) {
+      if (err.message?.includes('401')) {
+        this._handleUnauthorized();
+      }
+    }
   }
 
   private async _fetchApprovals() {
     if (!this._client) return;
     try {
       this._pendingApprovals = await this._client.getHitl();
-    } catch { /* suppress background fetch errors */ }
+    } catch (err: any) {
+      if (err.message?.includes('401')) {
+        this._handleUnauthorized();
+      }
+    }
   }
 
   // ─── Polling (fallback only) ─────────────────────────────────────────────

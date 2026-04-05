@@ -337,6 +337,14 @@ public class BinaryBootstrap {
             } else {
                 patchEnvFile(envFile, spec.key, value);
                 System.setProperty(spec.key, value);
+
+                // For Quarkus Config Maps (like arcclaw.api.keys), we also set the dot-notation property
+                // if the key follows the standard ARCCLAW_ prefix pattern.
+                if (spec.key.startsWith("ARCCLAW_")) {
+                    String dotPath = spec.key.toLowerCase().replace("_", ".");
+                    System.setProperty(dotPath, value);
+                }
+                
                 System.err.println("     ✓ Saved");
             }
             System.err.println();
