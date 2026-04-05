@@ -420,7 +420,7 @@ arcclaw:
     enabled: "${ARCCLAW_SANDBOX_ENABLED:true}"
     strategy: "${ARCCLAW_SANDBOX_STRATEGY:PODMAN}"
     podman-path: "${ARCCLAW_SANDBOX_PODMAN_PATH:podman}"
-    container-image: "${ARCCLAW_SANDBOX_CONTAINER_IMAGE:arcclaw-tool-runner:latest}"
+    container-image: "${ARCCLAW_SANDBOX_CONTAINER_IMAGE:localhost/arcclaw-tool-runner:latest}"
     timeout-seconds: "${ARCCLAW_SANDBOX_TIMEOUT_SECONDS:30}"
     network: "${ARCCLAW_SANDBOX_NETWORK:host}"
     secret-transport: "${ARCCLAW_SANDBOX_SECRET_TRANSPORT:tmpfs}"
