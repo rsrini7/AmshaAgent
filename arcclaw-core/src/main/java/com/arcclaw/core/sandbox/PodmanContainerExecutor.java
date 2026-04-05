@@ -65,7 +65,7 @@ public class PodmanContainerExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "sandbox")
     String toolRunnerUser;
 
-    private static final String CONTAINER_PIDS_LIMIT = "64";
+    private static final String CONTAINER_PIDS_LIMIT = "128";
 
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
 
@@ -141,6 +141,7 @@ public class PodmanContainerExecutor {
                         "--user=" + toolRunnerUser + ":" + toolRunnerUser,
                         "--env", "GOCACHE=/tmp/go-cache",
                         "--env", "GOPATH=/tmp/go-path",
+                        "--env", "GOMAXPROCS=1",
                         "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
                         "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));

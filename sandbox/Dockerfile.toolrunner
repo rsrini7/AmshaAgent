@@ -22,7 +22,8 @@ RUN apk add --no-cache openjdk21-jre-headless
 # LLM-generated Go code never uses CGo. GOFLAGS=-mod=mod allows go run without go.sum.
 RUN apk add --no-cache go
 ENV CGO_ENABLED=0 \
-    GOFLAGS="-mod=mod"
+    GOFLAGS="-mod=mod" \
+    GOMAXPROCS=1
 
 # ── Node.js (~80MB) ───────────────────────────────────────────────────────────
 RUN apk add --no-cache nodejs npm
