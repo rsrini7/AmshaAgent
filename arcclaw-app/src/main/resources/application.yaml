@@ -616,7 +616,7 @@ mp:
       enabled: false
     datasource:
       jdbc:
-        url: "jdbc:sqlite::memory:"
+        url: "jdbc:sqlite:target/test-audit.db"
     hibernate-orm:
       schema-management:
         strategy: update
