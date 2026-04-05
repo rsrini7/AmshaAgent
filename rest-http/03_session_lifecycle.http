@@ -307,6 +307,31 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+POST {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is my secret code word?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+
+###
+
 GET {{baseUrl}}/api/v1/sessions/{{isoB.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
