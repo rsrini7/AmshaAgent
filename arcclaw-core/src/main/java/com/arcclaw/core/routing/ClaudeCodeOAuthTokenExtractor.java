@@ -1,4 +1,4 @@
-package com.arcclaw.app.routing;
+package com.arcclaw.core.routing;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

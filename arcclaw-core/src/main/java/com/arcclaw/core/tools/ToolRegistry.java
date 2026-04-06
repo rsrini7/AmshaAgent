@@ -249,6 +249,8 @@ public class ToolRegistry {
                     Files.createDirectories(workspaceRoot);
                 }
 
+                tool.prepareWorkspace(workspaceRoot, sanitizedParams);
+
                 var command = tool.sandboxCommand(sanitizedParams);
 
                 SandboxResult result = isolationExecutor.executeSandboxed(
@@ -282,7 +284,9 @@ public class ToolRegistry {
                             + "The `gh` CLI is not installed. "
                             + "Please run the equivalent `gh` command locally.";
                 } else {
-                    friendly = "Tool '" + toolName + "' failed: " + raw;
+                    friendly = "EXECUTION_FAILED: The action was NOT performed. No output was produced. " +
+                               "Reason: " + raw + " " +
+                               "Do NOT simulate or guess output. Tell the user exactly what failed.";
                 }
                 log.errorf("Tool '%s' execution failed: %s", toolName, raw);
                 log.debugf(e, "Full stacktrace for tool '%s' failure in session %s",

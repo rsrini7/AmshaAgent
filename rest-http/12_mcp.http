@@ -37,9 +37,9 @@
 ### Prerequisites: ArcClaw running in serve mode, arcclaw.mcp.server-enabled=true (default)
 ### ═══════════════════════════════════════════════════════════════
 
-@adminBase = http://localhost:8080/api/v1
-@mcpBase   = http://localhost:8080
-@validKey  = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @adminBase = http://localhost:8080/api/v1
+# @mcpBase   = http://localhost:8080
+# @validKey  = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 ### ════════════════════════════════════════════════════════════════
 ### FLOW A — MCP ADMIN (run as health checks before any protocol tests)

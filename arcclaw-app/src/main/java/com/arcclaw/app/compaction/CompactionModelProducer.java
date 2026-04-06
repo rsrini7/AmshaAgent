@@ -6,7 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
-import com.arcclaw.app.routing.LlmModelFactory;
+import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

@@ -27,8 +27,8 @@
 ###   GithubTool is the only built-in tool with ToolOperation=NETWORK_OUTBOUND.
 ### ═══════════════════════════════════════════════════════════════
 
-@baseUrl  = http://localhost:8080
-@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @baseUrl  = http://localhost:8080
+# @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW A: REST APPROVE
@@ -194,6 +194,12 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+GET {{baseUrl}}/api/v1/sessions/{{denyGoalSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
 DELETE {{baseUrl}}/api/v1/sessions/{{denyGoalSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -244,6 +250,13 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 3
 }
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
 
 ###
 

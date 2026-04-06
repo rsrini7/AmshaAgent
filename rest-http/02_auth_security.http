@@ -24,10 +24,10 @@
 ### Prerequisites: ArcClaw running in serve mode
 ### ═══════════════════════════════════════════════════════════════
 
-@baseUrl    = http://localhost:8080
-@validKey   = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
-@ciKey      = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
-@invalidKey = totally-wrong-key
+# @baseUrl    = http://localhost:8080
+# @validKey   = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @ciKey      = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @invalidKey = totally-wrong-key
 
 # ─────────────────────────────────────────────────────────────────
 # NEGATIVE TESTS — all must return 401

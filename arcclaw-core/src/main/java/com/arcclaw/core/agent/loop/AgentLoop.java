@@ -96,6 +96,18 @@ public class AgentLoop {
     @Inject
     AgentSseService agentSseService;
 
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    /**
+     * Entry point for resuming a rate-limited or approval-paused session.
+     * Used by the RateLimitRetryScheduler. §7.36
+     */
+    @ActivateRequestContext
+    public AgentResult resume(String sessionId, String agentRole, String goal) {
+        return run(sessionId, agentRole, goal, reasoningEngine, DEFAULT_MAX_ITERATIONS);
+    }
+
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
      */
@@ -132,7 +144,14 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
-        return run(sessionId, agentRole, goal, engine, maxIterations, null);
+        
+        // Fix 2 — Ensure storage goals have enough budget (min 3 steps)
+        int budget = maxIterations;
+        if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
+            budget = Math.max(budget, 3);
+        }
+        
+        return run(sessionId, agentRole, goal, engine, budget, null);
     }
 
     @ActivateRequestContext
@@ -313,6 +332,26 @@ public class AgentLoop {
                 log.debugf("Session %s paused, waiting for human approval — tool=%s",
                         sessionId, awaiting.toolName());
                 tryStampChannelInfo(sessionId, canonicalRole, context);
+            } else if (result instanceof AgentResult.AwaitingRetry awaitingRetry) {
+                log.warnf("Session %s paused due to rate limit — retry after %dms",
+                        sessionId, awaitingRetry.retryAfterMs());
+                agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
+                    cp.setStatus(CheckpointStatus.AWAITING_RETRY);
+                    cp.setRetryAfterMs(awaitingRetry.retryAfterMs());
+                    agentStore.save(cp);
+
+                    // GA P 4 — Notify Telegram users about the pause
+                    if (context != null && context.getUser() != null && "TELEGRAM".equalsIgnoreCase(cp.getChannelType())) {
+                        long waitSec = awaitingRetry.retryAfterMs() / 1000;
+                        String notice = "⏳ Rate limit hit — I'll automatically retry in " + waitSec + " seconds.";
+                        channelPluginRegistry.find(context.getUser().channel().id())
+                                .map(ChannelPlugin::sender)
+                                .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
+                    }
+                });
+                agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "AWAITING_RETRY", Instant.now()
+                ));
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
                 if (result instanceof AgentResult.Finished) {
                     agentStore.saveAndFinalize(sessionId, canonicalRole,

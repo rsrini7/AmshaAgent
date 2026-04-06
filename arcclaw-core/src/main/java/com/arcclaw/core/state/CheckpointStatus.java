@@ -8,7 +8,8 @@ package com.arcclaw.core.state;
  * {@link #DENIED}, {@link #COMPROMISED}.
  *
  * <p>Active states:
- * {@link #NOT_STARTED}, {@link #IN_PROGRESS}, {@link #AWAITING_APPROVAL}.
+ * {@link #NOT_STARTED}, {@link #IN_PROGRESS}, {@link #AWAITING_APPROVAL},
+ * {@link #AWAITING_RETRY}.
  */
 public enum CheckpointStatus {
 
@@ -72,6 +73,13 @@ public enum CheckpointStatus {
      * Terminal.
      */
     COMPROMISED,
+
+    /**
+     * Agent loop is paused due to a rate limit hit. 
+     * Transitions to {@link #IN_PROGRESS} after the retry delay has elapsed.
+     */
+    AWAITING_RETRY,
+
     /**
      * Terminal status set by AgentLoop when a fresh turn starts over an existing
      * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from

@@ -143,7 +143,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 if (isProseGenerationFailure(msg)) {
                     String extractedProse = extractProseFromFailedGeneration(msg);
 
-                    // ── Guard: if failed_generation contains code fragments (partial/truncated
+                    // Guard: if failed_generation contains code fragments (partial/truncated
                     // tool-call or raw code without markdown fences), do NOT send it as prose.
                     // Instead, inject an OBSERVE step telling the LLM to shorten and retry
                     // via sandbox_exec so the approval flow is preserved.
@@ -162,8 +162,39 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     }
 
                     if (extractedProse != null && !extractedProse.isBlank()) {
-                        log.infof("[LangChainReasoningEngine] Prose extracted directly from " +
-                                "failed_generation — returning as FINISH (0 extra LLM calls)");
+
+                        // prose contains embedded sandbox_exec JSON — don't FINISH, inject correction
+                        if (containsEmbeddedSandboxToolCall(extractedProse)) {
+                            log.warnf("[LangChainReasoningEngine] Failed generation has prose + embedded " +
+                                    "sandbox_exec call for session %s — injecting direct-tool correction", sessionId);
+                            return ReasoningStep.pending(
+                                    "LLM wrapped sandbox_exec tool call inside prose instead of calling directly",
+                                    "OBSERVE", Map.of(), 0, 0
+                            ).withObservation(
+                                    "CORRECTION: You wrapped a sandbox_exec call inside prose or a markdown block. " +
+                                    "Do NOT write any explanation, code block, or markdown. " +
+                                    "Call sandbox_exec DIRECTLY as your only output RIGHT NOW."
+                            );
+                        }
+
+                        // LLM wrote code explanation (```...```) instead of executing 
+                        // This is the most common failure: goal says "execute" but LLM sends a plan
+                        if (goalRequestsExecution(goal) && proseIsUnexecutedCodePlan(extractedProse)) {
+                            log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
+                                            "returned code plan (has ``` fences) for session %s — injecting correction",
+                                    goal, sessionId);
+                            return ReasoningStep.pending(
+                                    "LLM returned code explanation instead of calling sandbox_exec",
+                                    "OBSERVE", Map.of(), 0, 0
+                            ).withObservation(
+                                    "STOP. The user asked you to EXECUTE the code — not explain it. " +
+                                    "Do NOT output markdown, steps, or code blocks. " +
+                                    "Call sandbox_exec RIGHT NOW with the complete code as your ONLY response."
+                            );
+                        }
+
+                        log.infof("[LangChainReasoningEngine] Coordinator prose-answer pattern detected " +
+                                "(no tools, no code fences) for session %s — finishing", sessionId);
                         return ReasoningStep.pending(
                                 "LLM generated valid prose — extracted from failed_generation",
                                 "FINISH",
@@ -171,6 +202,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                                 0, 0
                         );
                     }
+
                     // Extraction failed — fallback: inject correction context
                     log.warnf("[LangChainReasoningEngine] Prose detected but extraction failed " +
                             "— falling back to correction");
@@ -251,6 +283,46 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
         String result = sb.toString().strip();
         return result.isBlank() ? null : result;
+    }
+
+    /**
+     * Returns true when failed_generation prose contains an embedded sandbox_exec
+     * tool call JSON that the LLM wrapped in markdown instead of calling directly.
+     * Pattern: LLM writes explanation + [{"name":"sandbox_exec","parameters":{...}}]
+     * This must NOT be returned as FINISH — it needs a correction inject to force
+     * the LLM to call the tool directly on the next iteration.
+     */
+    private boolean containsEmbeddedSandboxToolCall(String prose) {
+        if (prose == null) return false;
+        String lower = prose.toLowerCase();
+        // Detect embedded tool call JSON: must have tool name + code/language params
+        return (lower.contains("\"sandbox_exec\"") || lower.contains("sandbox_exec"))
+               && (lower.contains("\"code\"") || lower.contains("\"language\""));
+    }
+
+    /**
+     * Returns true if the original goal requested execution.
+     */
+    private boolean goalRequestsExecution(String goal) {
+        if (goal == null) return false;
+        String lower = goal.toLowerCase();
+        return lower.contains("execute")
+                || lower.contains("must execute")
+                || lower.contains("and execute")
+                || lower.contains("run it")
+                || lower.contains("run the")
+                || lower.contains("share result")
+                || lower.contains("share the result")
+                || lower.contains("share generated")
+                || lower.contains("try same");
+    }
+
+    /**
+     * Returns true if the prose contains markdown code fences.
+     */
+    private boolean proseIsUnexecutedCodePlan(String prose) {
+        if (prose == null) return false;
+        return prose.contains("```");
     }
 
     /**

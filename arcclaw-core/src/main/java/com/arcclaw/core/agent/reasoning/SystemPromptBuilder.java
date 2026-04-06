@@ -206,6 +206,16 @@ public class SystemPromptBuilder {
             When the user asks you to "store", "remember", "save", "ingest", "note down",
             or "call me [name]" — this is ALWAYS a tool call request, NEVER a direct answer.
             You MUST call `ingest_document` with the information to persist.
+
+            LABEL EXTRACTION (KEY=VALUE pairs):
+            - Label is everything BEFORE the first '=' sign. 
+            - Text is everything AFTER the first '=' sign.
+            - The text may itself contain '=' characters (e.g. JWT tokens) — include them fully.
+            Examples:
+              "store FOO=bar"                    -> label="FOO",      text="bar"
+              "store JWT_TOKEN=eyJhbG...Qssw5c" -> label="JWT_TOKEN", text="eyJhbG...Qssw5c"
+              "store API_KEY=abc=def=ghi"        -> label="API_KEY",  text="abc=def=ghi"
+
             DO NOT output "Done" or any confirmation text without first calling `ingest_document`.
             Outputting "Done" without calling the tool is a critical failure — the information
             will be lost and the user will think it was saved when it was not.

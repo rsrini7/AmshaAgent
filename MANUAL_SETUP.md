@@ -936,7 +936,7 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
 | `ARCCLAW_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
-| `ARCCLAW_DEBUG_LLM` | Optional | `false` | Log full LLM request/response. Do NOT enable in prod. |
+| `ARCCLAW_LLM_LOG_HTTP` | Optional | `false` | Log full LLM request/response. Do NOT enable in prod. |
 | `ARCCLAW_SANDBOX_ENABLED` | Optional | `true` | Enable Podman sandbox. |
 | `ARCCLAW_SANDBOX_STRATEGY` | Optional | `PODMAN` | `PODMAN` \| `NONE` |
 

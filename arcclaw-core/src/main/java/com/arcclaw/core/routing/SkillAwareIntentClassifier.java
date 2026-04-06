@@ -1,8 +1,7 @@
-package com.arcclaw.app.routing;
+package com.arcclaw.core.routing;
 
 import java.util.List;
 
-import io.quarkus.arc.Unremovable;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
@@ -12,6 +11,7 @@ import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
+import io.quarkus.arc.Unremovable;
 
 /**
  * An alternative intent classifier that sits in front of the default

@@ -148,6 +148,7 @@ public class ChatCommand implements Runnable {
                             "\n   Params: " + truncatedParams +
                             "\n   Type /approve or /deny";
                 }
+                case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
             };
             System.out.println("\n▶ ArcClaw> " + output);
 

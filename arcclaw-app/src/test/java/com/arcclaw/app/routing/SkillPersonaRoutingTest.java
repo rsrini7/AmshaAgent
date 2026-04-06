@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.audit.TelemetryAuditService;
+import com.arcclaw.core.routing.IntentClassifierService;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;

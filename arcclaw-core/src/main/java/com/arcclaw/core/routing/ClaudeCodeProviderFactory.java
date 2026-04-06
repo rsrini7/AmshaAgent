@@ -1,4 +1,4 @@
-package com.arcclaw.app.routing;
+package com.arcclaw.core.routing;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

@@ -1,5 +1,6 @@
 package com.arcclaw.core.sandbox;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,6 @@ public class ProcessIsolationExecutor {
 
     private static final Logger log = Logger.getLogger(ProcessIsolationExecutor.class);
 
-    public static final String SANDBOX_STRATEGY_PODMAN = "PODMAN";
 
     @Inject
     SandboxCircuitBreaker circuitBreaker;
@@ -54,8 +54,9 @@ public class ProcessIsolationExecutor {
     @Inject
     DirectExecutor directExecutor;
 
-    @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = SANDBOX_STRATEGY_PODMAN)
-    String sandboxStrategy;
+    @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
+    SandboxStrategy sandboxStrategy;
+
 
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
     boolean sandboxEnabled;
@@ -77,7 +78,8 @@ public class ProcessIsolationExecutor {
     /** Startup availability check — degrades gracefully if Podman not installed. */
     @PostConstruct
     void checkPodmanAvailability() {
-        if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
+        if (SandboxStrategy.PODMAN == sandboxStrategy) {
+
             try {
                 var pb = new ProcessBuilder(podmanPath, "--version");
                 pb.redirectErrorStream(true);
@@ -114,11 +116,16 @@ public class ProcessIsolationExecutor {
             return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
         }
 
-        if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
+        if (SandboxStrategy.NONE == sandboxStrategy) {
             return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
         }
 
-        if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
+        if (SandboxStrategy.DIRECT == sandboxStrategy) {
+            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+        }
+
+        if (SandboxStrategy.PODMAN == sandboxStrategy) {
+
             if (circuitBreaker.shouldAttemptPodman()) {
                 CircuitBreakerState stateAtCall = circuitBreaker.getState();
                 try {
@@ -129,17 +136,10 @@ public class ProcessIsolationExecutor {
 
                 } catch (SandboxImageMissingException e) {
                     // FIX: do NOT record a circuit-breaker failure for a missing image.
-                    //
-                    // A missing image is a permanent configuration error — the image will
-                    // not reappear until someone runs `podman build`. Recording it as a
-                    // Podman failure opens the circuit and silently downgrades execution
-                    // to namespace mode, which is less secure and equally broken for tools
-                    // that need the runner image. The correct response is infraFailure so
-                    // the agent surfaces the error to the user immediately.
                     log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, e.getMessage());
                     if (allowInsecureFallback) {
                         log.warnf("[SANDBOX] allow-insecure-fallback enabled — degrading to host execution for session %s", sessionId);
-                        return SandboxResult.success(namespaceExecutor.executeInNamespace(
+                        return SandboxResult.success(directExecutor.executeDirectly(
                                 workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
                     }
                     return SandboxResult.infraFailure(
@@ -147,24 +147,28 @@ public class ProcessIsolationExecutor {
                             "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
                             "-f ./sandbox/Dockerfile.toolrunner .");
 
+                } catch (IOException e) {
+                    // Transient or persistent Podman infra failure
+                    String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    log.warnf("Podman unavailable (%s) — checking fallback for session %s", errMsg, sessionId);
+                    
+                    if (allowInsecureFallback) {
+                        log.warnf("[SANDBOX] allow-insecure-fallback enabled — degrading to host execution for session %s", sessionId);
+                        return SandboxResult.success(directExecutor.executeDirectly(
+                                workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                    }
+                    circuitBreaker.recordFailure(stateAtCall);
+                    return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable — " + errMsg);
+
                 } catch (ToolExecutionException e) {
                     // Tool logic failure (non-zero exit from user code) — not an infra error.
-                    // Re-throw so SandboxExecTool can return it as a normal tool failure.
                     throw e;
 
                 } catch (Exception e) {
-                    // Transient Podman infrastructure failure — record against the circuit.
-                    // FIX: null-guard e.getMessage() — some exception types return null here.
+                    // Other unexpected failures
                     String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                    log.errorf("Podman execution failed (session=%s): %s", sessionId, errMsg);
-                    circuitBreaker.recordFailure(stateAtCall);
-                    if (allowInsecureFallback) {
-                        log.warnf("[SANDBOX] allow-insecure-fallback enabled — degrading to host execution for session %s (Podman error: %s)", sessionId, errMsg);
-                        return SandboxResult.success(namespaceExecutor.executeInNamespace(
-                                workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
-                    }
-                    return SandboxResult.infraFailure(
-                            "SANDBOX_OFFLINE: Podman is unavailable — " + errMsg);
+                    log.errorf("Sandbox execution failed unexpectedly (session=%s): %s", sessionId, errMsg);
+                    return SandboxResult.infraFailure("SANDBOX_OFFLINE: Unexpected error — " + errMsg);
                 }
             }
         }
@@ -180,10 +184,14 @@ public class ProcessIsolationExecutor {
      * Podman mounts workspaceRoot as /workspace itself, so no rewriting needed there.
      */
     private List<String> rewriteContainerPaths(List<String> command, Path workspaceRoot) {
-        String hostPath = workspaceRoot.toAbsolutePath().toString()
+        final String containerRoot = "/workspace";
+        final String hostRoot = workspaceRoot.toAbsolutePath().toString()
                 .replace("\\", "/");   // normalize Windows backslashes → forward slashes
+
         return command.stream()
-                .map(arg -> arg.replace("/workspace", hostPath))
+                .map(arg -> arg.startsWith(containerRoot)
+                        ? hostRoot + arg.substring(containerRoot.length())
+                        : arg)
                 .toList();
     }
 }

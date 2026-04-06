@@ -34,6 +34,9 @@ public class GroqProviderFactory implements AgentChatModelProvider {
                     defaultValue = "PT60S")
     Duration timeout;
 
+    @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
+    boolean logHttp;
+
     @Override
     public String providerName() {
         return "groq";
@@ -48,8 +51,8 @@ public class GroqProviderFactory implements AgentChatModelProvider {
             .maxTokens(maxTokens)
             .timeout(timeout)
             .temperature(0.0)
-            .logRequests(false)
-            .logResponses(false)
+            .logRequests(logHttp)
+            .logResponses(logHttp)
             .build();
     }
 }

@@ -32,8 +32,8 @@
 ### Prerequisites: ArcClaw running in serve mode, ARCCLAW_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
-@baseUrl  = http://localhost:8080
-@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @baseUrl  = http://localhost:8080
+# @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW A: CREATE + RUN + STATUS + DELETE
@@ -304,6 +304,31 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 1
 }
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/run
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "What is my secret code word?",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{isoA.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
 
 ###
 

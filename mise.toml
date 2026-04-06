@@ -157,26 +157,8 @@ if ($IsWindows) {
 }
 """
 
-# [tasks."setup:sync-env-example"]
-# description = "Create symlink: root .env.example → arcclaw-app/src/main/resources/env-example"
-# dir = "{{config_root}}"
-# shell = "pwsh -NonInteractive -Command"
-# run = """
-#   $src = Resolve-Path ".env.example"
-#   $dst = "arcclaw-app/src/main/resources/env-example"
-#   if (Test-Path $dst) { Remove-Item $dst -Force }
-#   try {
-#       New-Item -ItemType SymbolicLink -Path $dst -Target $src | Out-Null
-#       Write-Host "✅ Symlinked: $dst -> $src"
-#   } catch {
-#       # Fallback to copy if symlink creation fails (Windows without Developer Mode)
-#       Copy-Item $src -Destination $dst -Force
-#       Write-Host "⚠️  Symlink failed, copied instead. Enable Developer Mode for true symlink."
-#   }
-# """
-
 [tasks.setup]
-# depends = ["setup:sync-env-example"]
+depends = ["setup:wsl-crlf"]
 alias = "s"
 
 [tasks."setup:env-check"]
@@ -229,7 +211,7 @@ if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
 }
 dos2unix mvnw mise.toml arcclaw-ui/package.json
 chmod +x mvnw
-Get-ChildItem -Path '.mise/tasks' -Recurse -Filter '*.sh' | ForEach-Object {
+Get-ChildItem -Path '.mise/' -Recurse -Include '*.sh','*.ps1' | ForEach-Object {
     dos2unix $_.FullName
     chmod +x $_.FullName
     Write-Host "✅  Fixed: $($_.Name)"
@@ -1090,7 +1072,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
-depends = ["env:recover", "build:full"]
 description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1130,6 +1111,13 @@ Write-Host "▶   Starting JAR in dev profile — mode: $cmd"
 & java @jvmArgs -jar $jar $cmd
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
+
+[tasks."jar:run-dev-dep"]
+depends = ["env:recover", "build:full"]
+description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
+dir = "{{config_root}}"
+# We call mise directly, passing the argument the user provided (or defaulting to 'serve')
+run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
 
 # =============================================================================
 # NATIVE BINARY TASKS

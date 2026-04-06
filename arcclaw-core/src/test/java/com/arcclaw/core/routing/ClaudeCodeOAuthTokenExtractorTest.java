@@ -1,4 +1,4 @@
-package com.arcclaw.app.routing;
+package com.arcclaw.core.routing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

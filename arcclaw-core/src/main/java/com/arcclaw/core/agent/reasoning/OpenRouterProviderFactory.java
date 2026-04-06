@@ -38,6 +38,9 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "arcclaw.openrouter.app-name", defaultValue = "ArcClaw")
     String appName;
 
+    @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
+    boolean logHttp;
+
     @Override
     public String providerName() {
         return "openrouter";
@@ -58,8 +61,8 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                 .timeout(timeout)
                 // Required by OpenRouter — identifies your app, avoids anonymous rate limits
                 .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))
-                .logRequests(false)
-                .logResponses(false)
+                .logRequests(logHttp)
+                .logResponses(logHttp)
                 .build();
     }
 }

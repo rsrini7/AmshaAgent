@@ -140,7 +140,7 @@ public class CheckpointResumeHandler {
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
                         s -> s.sendRaw(user, "❌ Resume failed: " + e.getMessage()),
-                        () -> log.warnf("CheckpointResumeHandler: no sender for type %s — error reply dropped", cType.id())
+                        () -> log.debugf("CheckpointResumeHandler: no sender for type %s — error reply dropped (async flow)", cType.id())
                     );
                 throw new RuntimeException("Failed to resume session", e);
             }
@@ -162,7 +162,7 @@ public class CheckpointResumeHandler {
                                 s.sendRaw(user, output);
                             }
                         },
-                        () -> log.warnf("CheckpointResumeHandler: no sender for type %s — result reply dropped", cType.id())
+                        () -> log.debugf("CheckpointResumeHandler: no sender for type %s — result reply dropped (async flow)", cType.id())
                     );
             } else {
                 log.warnf("resumeAfterBatchDecision: agentLoop.run() returned null for session %s", sessionId);

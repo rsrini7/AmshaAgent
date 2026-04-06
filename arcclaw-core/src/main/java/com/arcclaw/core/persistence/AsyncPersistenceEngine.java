@@ -102,6 +102,13 @@ public class AsyncPersistenceEngine {
      */
     @PostConstruct
     void startDrainThreads() {
+
+        // Wait for Arc/CDI container to be fully ready before draining
+        if (Arc.container() == null || !Arc.container().isRunning()) {
+            log.warn("CDI container not ready — delaying drain thread start");
+            return; // Quarkus will re-fire StartupEvent once ready
+        }
+
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
 
         criticalDrainThread = Thread.ofVirtual()

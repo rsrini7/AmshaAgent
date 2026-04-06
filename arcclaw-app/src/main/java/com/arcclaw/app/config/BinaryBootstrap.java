@@ -12,10 +12,12 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.arcclaw.app.util.CliUtils;
+import com.arcclaw.core.sandbox.SandboxStrategy;
 
 /**
  * Bootstraps the application by resolving the binary directory, loading .env files,
@@ -39,12 +41,22 @@ public class BinaryBootstrap {
         "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI", "ARCCLAW_API_KEYS_ADMIN"
     );
 
+    private static final Set<String> BASE64_KEYS = Set.of(
+        "ARCCLAW_VAULT_PEPPER", "ARCCLAW_AUDIT_HMAC_KEY",
+        "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI", "ARCCLAW_API_KEYS_ADMIN"
+    );
+
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
+        validateAndAutoFixSecurityKeys(binaryDir);
+        validateAndAutoFixLlmConfig(binaryDir);
+        validateSandboxTools();
         interactiveSetupIfNeeded(binaryDir, args);
+
+
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -205,8 +217,31 @@ public class BinaryBootstrap {
                 default  -> "groq";
             };
             System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
+
+            String baseUrl = switch (provider) {
+                case "openrouter" -> "https://openrouter.ai/api/v1";
+                case "openai"     -> "https://api.openai.com/v1";
+                case "ollama"     -> "http://localhost:11434";
+                default           -> "https://api.groq.com/openai/v1";
+            };
+            System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
+
+            String modelName = switch (provider) {
+                case "openrouter" -> "openrouter/free";
+                default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
+            };
+            System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
+
+            String utilityModel = switch (provider) {
+                case "openrouter" -> "openrouter/free";
+                default           -> "llama-3.1-8b-instant";
+            };
+            System.setProperty("ARCCLAW_COMPACTION_MODEL", utilityModel);
+            System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", utilityModel);
             // Will be persisted to .env during the loop below
         }
+
+
 
         List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
         if (missing.isEmpty()) return;
@@ -220,9 +255,15 @@ public class BinaryBootstrap {
             } catch (IOException ignored) {}
         }
 
-        // Always ensure ARCCLAW_LLM_PROVIDER and auto-seed are in .env
+        // Always ensure ARCCLAW_LLM_PROVIDER, ARCCLAW_LLM_BASE_URL, models and auto-seed are in .env
         patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
+        patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", System.getProperty("ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1"));
+        patchEnvFile(envFile, "ARCCLAW_LLM_MODEL_NAME", System.getProperty("ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct"));
+        patchEnvFile(envFile, "ARCCLAW_COMPACTION_MODEL", System.getProperty("ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant"));
+        patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant"));
         patchEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
+
+
         patchEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
 
         // Use tmpdir specifically on macOS to avoid /run/arcclaw read-only warnings
@@ -415,6 +456,119 @@ public class BinaryBootstrap {
     private static String generateRandomValue() {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private static void validateAndAutoFixSecurityKeys(Path binaryDir) {
+        Path envFile = binaryDir.resolve(".env");
+        boolean anyFixed = false;
+        for (String key : BASE64_KEYS) {
+            String value = System.getProperty(key, System.getenv(key));
+            if (value == null || value.isBlank()) continue;
+            boolean valid = false;
+            try {
+                byte[] decoded = Base64.getDecoder().decode(value);
+                valid = decoded.length >= 16;
+            } catch (IllegalArgumentException ignored) {}
+            if (!valid) {
+                try {
+                    String generated = Base64.getEncoder().encodeToString(
+                        SecureRandom.getInstanceStrong().generateSeed(32));
+                    System.err.println("[ArcClaw] ⚠️  " + key + " invalid Base64 — regenerating.");
+                    patchEnvFile(envFile, key, generated);
+                    System.setProperty(key, generated);
+                    anyFixed = true;
+                } catch (Exception e) {
+                    System.err.println("[ArcClaw] ❌ Failed to generate security key for " + key + ": " + e.getMessage());
+                }
+            }
+        }
+        if (anyFixed) loadDotEnv(binaryDir); // reload so Quarkus config picks up fixed values
+    }
+
+    private static void validateAndAutoFixLlmConfig(Path binaryDir) {
+        Path envFile = binaryDir.resolve(".env");
+        String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", System.getenv("ARCCLAW_LLM_PROVIDER"));
+        if (provider == null || provider.isBlank()) provider = "groq";
+
+        String baseUrl = System.getProperty("ARCCLAW_LLM_BASE_URL", System.getenv("ARCCLAW_LLM_BASE_URL"));
+
+        // 1. Resolve missing ARCCLAW_LLM_BASE_URL
+        if (baseUrl == null || baseUrl.isBlank()) {
+            String defaultUrl = switch (provider.toLowerCase()) {
+                case "openrouter" -> "https://openrouter.ai/api/v1";
+                case "openai"     -> "https://api.openai.com/v1";
+                case "ollama"     -> "http://localhost:11434";
+                default           -> null; // Groq is the default in application.yaml
+            };
+
+            if (defaultUrl != null) {
+                System.err.println("[ArcClaw] ℹ️  ARCCLAW_LLM_BASE_URL missing for provider '" + provider + "' — auto-setting to: " + defaultUrl);
+                patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", defaultUrl);
+                System.setProperty("ARCCLAW_LLM_BASE_URL", defaultUrl);
+            }
+        }
+
+        // 2. Cross-validate models for the provider (prevent Groq models on OpenRouter)
+        if ("openrouter".equalsIgnoreCase(provider)) {
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openrouter/free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "openrouter/free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openrouter/free");
+        } else if ("groq".equalsIgnoreCase(provider)) {
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "llama-3.1-8b-instant");
+        }
+    }
+
+    private static void fixIfMatches(Path envFile, String key, String wrongValue, String targetValue) {
+        String current = System.getProperty(key, System.getenv(key));
+        // If current is the known wrong value or is missing/placeholder, set it to the target
+        if (current == null || current.isBlank() || current.equals(wrongValue)) {
+            if (!targetValue.equals(current)) {
+                System.err.println("[ArcClaw] ℹ️  " + key + " is inconsistent with provider — auto-setting to: " + targetValue);
+                patchEnvFile(envFile, key, targetValue);
+            }
+        }
+    }
+
+    private static void validateSandboxTools() {
+        String strategyStr = System.getProperty("ARCCLAW_SANDBOX_STRATEGY", System.getenv("ARCCLAW_SANDBOX_STRATEGY"));
+        SandboxStrategy strategy = SandboxStrategy.fromString(strategyStr);
+
+        if (SandboxStrategy.PODMAN == strategy) {
+            if (!canRun("podman", "--version")) {
+                System.err.println("[ArcClaw] ⚠️  Podman not found — sandbox will be OFFLINE.");
+                System.err.println("           Install Podman or set ARCCLAW_SANDBOX_STRATEGY=DIRECT/NONE.");
+            } else {
+                // Check if the image exists
+                String image = System.getProperty("ARCCLAW_SANDBOX_IMAGE", 
+                        System.getenv().getOrDefault("ARCCLAW_SANDBOX_IMAGE", "localhost/arcclaw-tool-runner:latest"));
+                if (!canRun("podman", "image", "inspect", image, "--format", "{{.Id}}")) {
+                    System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing from local storage.");
+                    System.err.println("           Build it: podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
+                }
+            }
+        } else if (SandboxStrategy.DIRECT == strategy) {
+             // Check common host tools if we're in direct mode
+             String[] tools = {"python", "node", "go", "java"};
+             for (String tool : tools) {
+                if (!canRun(tool, tool.equals("java") || tool.equals("go") ? "version" : "--version")) {
+                    System.err.println("[ArcClaw] ⚠️  " + tool + " not found on host — " + tool + " execution will fail.");
+                }
+             }
+        }
+    }
+
+    private static boolean canRun(String... cmd) {
+        try {
+            Process p = new ProcessBuilder(cmd).start();
+            return p.waitFor(2, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
+
+
+

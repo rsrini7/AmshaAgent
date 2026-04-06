@@ -367,10 +367,12 @@
           - -J-Xmx8g: prevents OOM during GraalVM analysis phase.
         -->
         <quarkus.native.additional-build-args>-H:+ReportExceptionStackTraces,-J-Xmx8g</quarkus.native.additional-build-args>
+        <quarkus.profile>prod</quarkus.profile>
         <quarkus.native.resources.includes>
           native/vec0/*,
           templates/**,
-          prompts/**
+          prompts/**,
+          skills/**
         </quarkus.native.resources.includes>
       </properties>
     </profile>

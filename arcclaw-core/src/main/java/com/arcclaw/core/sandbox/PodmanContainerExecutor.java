@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -26,17 +27,23 @@ public class PodmanContainerExecutor {
 
     private static final Logger log = Logger.getLogger(PodmanContainerExecutor.class);
 
+    private static volatile boolean podmanAvailable = false;
+    private static volatile long lastChecked = 0;
+
     @Inject
     AgentOtelContext otelContext;
 
     @Inject
     SandboxSecretResolver secretResolver;
 
-    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "arcclaw-tool-runner:latest")
-    String containerImage;
+    @ConfigProperty(name = "arcclaw.sandbox.podman-image", defaultValue = "localhost/arcclaw-tool-runner:latest")
+    String sandboxImage;
 
     @ConfigProperty(name = "arcclaw.sandbox.timeout-seconds", defaultValue = "30")
     long timeoutSeconds;
+
+    @ConfigProperty(name = "arcclaw.sandbox.network-timeout-seconds", defaultValue = "60")
+    long networkTimeoutSeconds;
 
     @ConfigProperty(name = "arcclaw.sandbox.memory-limit", defaultValue = "512m")
     String containerMemoryLimit;
@@ -59,10 +66,10 @@ public class PodmanContainerExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.secret-transport", defaultValue = "tmpfs")
     String secretTransportMode;
 
-    @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "65534")
+    @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "sandbox")
     String toolRunnerUser;
 
-    private static final String CONTAINER_PIDS_LIMIT = "64";
+    private static final String CONTAINER_PIDS_LIMIT = "128";
 
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
 
@@ -103,6 +110,9 @@ public class PodmanContainerExecutor {
             Map<String, String> requiredSecrets) throws Exception {
 
         var resolvedSecrets = secretResolver.resolveSecrets(requiredSecrets);
+        
+        checkPodmanAvailable();
+        checkImageAvailable();
 
         // Use the unified Tier 1 tmpfs secure transport.
         // The transport strictly zeroes the memory arrays when closed.
@@ -115,9 +125,10 @@ public class PodmanContainerExecutor {
                     + "-" + Long.toHexString(System.nanoTime());
 
             Span span = otelContext.childSpan(sessionId, "tool.container_exec");
-            span.setAttribute("container.image", containerImage);
+            span.setAttribute("container.image", sandboxImage);
             span.setAttribute("container.name", containerName);
-            span.setAttribute("sandbox.strategy", ProcessIsolationExecutor.SANDBOX_STRATEGY_PODMAN);
+            span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
+
 
             // Track before start — avoids race on early failure.
             activeContainerNames.add(containerName);
@@ -133,6 +144,13 @@ public class PodmanContainerExecutor {
                         "--cap-drop=ALL",
                         "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                         "--user=" + toolRunnerUser + ":" + toolRunnerUser,
+                        "--env", "GOCACHE=/tmp/go-cache",
+                        "--env", "GOPATH=/tmp/go-path",
+                        "--env", "GOMAXPROCS=1",
+                        "--env", "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
+                        "--env", "GH_CONFIG_DIR=/tmp/gh-config",     // redirect config to writable tmpfs
+                        "--env", "GH_NO_UPDATE_NOTIFIER=1",           // skip update check
+                        "--env", "GH_PROMPT_DISABLED=1",              // no interactive prompts
                         "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
                         "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));
@@ -144,10 +162,9 @@ public class PodmanContainerExecutor {
                     podmanCmd.add("--cpus=" + containerCpuLimit);
                 }
 
-                // Inject the transport args (e.g. --env-file /run/arcclaw/secrets/<nonce>.env)
                 podmanCmd.addAll(transportArgs);
 
-                podmanCmd.add(containerImage);
+                podmanCmd.add(sandboxImage);
                 podmanCmd.addAll(command);
 
                 log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
@@ -173,41 +190,49 @@ public class PodmanContainerExecutor {
                 var process = pb.start();
                 transport.deliver(process);
 
-                // FIX: waitFor() BEFORE readAllBytes().
-                //
-                // The original order was: readAllBytes() → waitFor().
-                // readAllBytes() blocks until the process stream is closed (i.e., the process
-                // has already exited), so waitFor() would always return true immediately and
-                // the timeout check `if (!finished)` was unreachable for hanging processes.
-                //
-                // Correct order:
-                //   1. waitFor(timeout) — enforces the deadline.
-                //   2. If timed out → destroyForcibly() → throw.
-                //   3. readAllBytes() — safe after process exits; output is buffered in the pipe
-                //      and available regardless of whether we read before or after exit.
-                boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+                // START reading stdout in background BEFORE waitFor() —
+                // prevents pipe buffer deadlock when output exceeds ~64KB
+                var outputFuture = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return new String(process.getInputStream().readAllBytes());
+                    } catch (IOException e) {
+                        log.warnf("Failed to drain sandbox stdout: %s", e.getMessage());
+                        return "";
+                    }
+                });
+
+                long effectiveTimeout = resolveTimeout(command);
+                boolean finished = process.waitFor(effectiveTimeout, TimeUnit.SECONDS);
 
                 if (!finished) {
                     process.destroyForcibly();
-                    throw new ToolExecutionException("Tool timed out after " + timeoutSeconds + "s");
+                    outputFuture.cancel(true);
+                    throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
                 }
 
-                // Process has exited — drain the buffered output now.
-                var output = new String(process.getInputStream().readAllBytes());
+                // Safe to get now — process has exited and stdout is fully drained
+                String output;
+                try {
+                    output = outputFuture.get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.errorf("Error retrieving sandbox output: %s", e.getMessage());
+                    output = "";
+                }
+
                 int exitCode = process.exitValue();
 
                 if (exitCode != 0) {
                     // Intercept the "Image Not Found" case.
-                    // FIX: use containerImage field instead of hardcoded literal
+                    // FIX: use sandboxImage field instead of hardcoded literal
                     // so the warning stays accurate if the image name is overridden in config.
                     if (output.contains("not known") || output.contains("not found")) {
                         log.warnf("**====================================================================**");
                         log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.",
-                                  containerImage);
+                                  sandboxImage);
                         log.warnf("To use the secure Podman sandbox, please build the runner image:");
                         log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
                         log.warnf("**====================================================================**");
-                        throw new SandboxImageMissingException("Missing sandbox image: " + containerImage);
+                        throw new SandboxImageMissingException("Missing sandbox image: " + sandboxImage);
                     }
 
                     // Handle other infrastructure failures (exit 125)
@@ -216,7 +241,10 @@ public class PodmanContainerExecutor {
                     }
 
                     // Specific exit code for tool logic failure (standard for LLM tools)
-                    throw new ToolExecutionException(output, exitCode);
+                    String cleanOutput = (output == null || output.isBlank())
+                            ? "Container exited with code " + exitCode
+                            : output.trim();
+                    throw new ToolExecutionException(cleanOutput, exitCode);
                 }
 
                 span.setStatus(StatusCode.OK);
@@ -233,6 +261,57 @@ public class PodmanContainerExecutor {
                 span.end();
                 activeContainerNames.remove(containerName); // deregister on normal exit or exception
             }
+        }
+    }
+
+    private long resolveTimeout(List<String> command) {
+        // Detect network calls: gh, curl, wget, python -m pip, etc.
+        if (!command.isEmpty()) {
+            String first = command.get(0).toLowerCase();
+            if (first.equals("gh") || first.equals("curl") || first.equals("wget")) {
+                return networkTimeoutSeconds;
+            }
+        }
+        return timeoutSeconds;
+    }
+
+    private void checkImageAvailable() throws SandboxImageMissingException {
+        try {
+            // Using inspect is more reliable across name forms (bare vs localhost/ prefix).
+            Process p = new ProcessBuilder(podmanPath, "image", "inspect", sandboxImage, "--format", "{{.Id}}")
+                .start();
+            boolean ok = p.waitFor(3, TimeUnit.SECONDS);
+            if (!ok || p.exitValue() != 0) {
+                throw new SandboxImageMissingException("Sandbox image '" + sandboxImage + "' missing from Podman storage.");
+            }
+        } catch (IOException | InterruptedException e) {
+            throw new SandboxImageMissingException("Failed to check sandbox image: " + e.getMessage());
+        }
+    }
+
+    private void checkPodmanAvailable() throws PodmanUnavailableException {
+        long now = System.currentTimeMillis();
+        if (now - lastChecked < 60_000) {
+            if (!podmanAvailable) throw new PodmanUnavailableException("Podman recently checked and unavailable");
+            return;
+        }
+
+        try {
+            Process p = new ProcessBuilder(podmanPath, "info")
+                .redirectErrorStream(true)
+                .start();
+            boolean ok = p.waitFor(3, TimeUnit.SECONDS);
+            if (!ok || p.exitValue() != 0) {
+                podmanAvailable = false;
+                lastChecked = now;
+                throw new PodmanUnavailableException("podman info failed or timed out");
+            }
+            podmanAvailable = true;
+            lastChecked = now;
+        } catch (IOException | InterruptedException e) {
+            podmanAvailable = false;
+            lastChecked = now;
+            throw new PodmanUnavailableException("Podman not reachable: " + e.getMessage());
         }
     }
 }

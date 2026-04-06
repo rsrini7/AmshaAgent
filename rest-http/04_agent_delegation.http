@@ -41,8 +41,8 @@
 ###   GitHub tool tests additionally require GITHUB_TOKEN in vault.
 ### ═══════════════════════════════════════════════════════════════
 
-@baseUrl  = http://localhost:8080
-@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @baseUrl  = http://localhost:8080
+# @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
 # SECTION A — HAPPY PATH: COORDINATOR → EACH SPECIALIST

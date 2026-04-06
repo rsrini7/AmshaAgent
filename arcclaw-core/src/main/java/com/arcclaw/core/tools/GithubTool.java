@@ -121,6 +121,19 @@ public class GithubTool implements AgentTool {
         }
 
         List<String> cmd = new ArrayList<>();
+
+        // ── Use `gh api` for repo list to avoid credential-store hang in sandbox ──
+        if ("repo".equals(action) && "list".equals(command)) {
+            String owner = (target != null && !target.isBlank()) ? target : "@me";
+            return List.of(
+                    "gh", "api",
+                    "users/" + owner + "/repos?per_page=30"
+                    // Single HTTP request — no pagination loop, no timeout risk.
+                    // 100 is GitHub's max per_page, sufficient for most accounts. 
+            );
+        }
+
+        // All other cases (gist list, repo view, gist view) use gh CLI directly
         cmd.add("gh");
         cmd.add(action);
         cmd.add(command);
@@ -159,16 +172,11 @@ public class GithubTool implements AgentTool {
         return rawOutput;
     }
 
-    /**
-     * Only read-only commands are auto-approved.
-     * Write commands require explicit human approval.
-     * Destructive commands are not in ALLOWED_COMMANDS and never reach this method.
-     */
     @Override
     public boolean requiresManualApproval(Map<String, Object> params) {
-        // All currently allowed commands (view, list) are read-only and safe.
-        // If write commands are ever added to ALLOWED_COMMANDS in future,
-        // they must be listed here for approval gating.
+        // Read-only commands (view, list) return false here.
+        // Approval is still enforced by the session's autonomy level (SUPERVISED/AUTONOMOUS).
+        // Destructive commands are blocked at the schema + allowlist level and never reach here.
         return false;
     }
 

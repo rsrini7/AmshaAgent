@@ -67,7 +67,12 @@ public class AgentDispatchHandler implements MessageHandler {
         String sessionId = session.sessionId();
         String role = context.getAgentRole()
                 .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
-        String goal = context.getMessage() != null ? context.getMessage().text() : "";
+
+        // Fix 3 — Prioritize the sanitized goal from reflexes (StoreReflex, PII redact) 
+        // over the raw message text.
+        String goal = (context.getGoal() != null && !context.getGoal().isBlank())
+                ? context.getGoal()
+                : (context.getMessage() != null ? context.getMessage().text() : "");
 
         // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;

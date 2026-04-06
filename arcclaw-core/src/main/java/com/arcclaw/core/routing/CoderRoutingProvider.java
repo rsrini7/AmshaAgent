@@ -12,16 +12,32 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 public class CoderRoutingProvider implements IntentRoutingProvider {
     private static final Pattern CODER_FORCE_PATTERN =
         Pattern.compile(
-            "(?i)^\\s*(write|create|generate|implement|code|build|make)\\s+" +
-            ".*(program|function|method|class|algorithm|code|script|snippet|" +
+            "(?i)^\\s*(write|create|generate|implement|code|build|make|execute|run|share)\\s+" +
+            ".*(program|function|method|class|algorithm|code|script|snippet|result|" +
             "fibonacci|fib|sort|search|binary|linked.?list|tree|graph|" +
             "hello.?world|factorial|prime|palindrome|anagram)",
+            Pattern.CASE_INSENSITIVE
+        );
+    
+    private static final Pattern EXECUTION_PATTERN =
+        Pattern.compile(
+            "(?i)(" +
+            // Original: execute/run/simplify it
+            "^\\s*(run|execute|simply|simplify)\\s+.*(it|the code|result|program)|" +
+            // NEW: "can you execute it", "just run it", "run it now"
+            "^\\s*(can\\s+you\\s+)?(execute|run)\\s+it|" +
+            "^\\s*just\\s+(run|execute)\\s+it|" +
+            // NEW: "try same in java/python/go/node/bash"
+            "try\\s+same\\s+in\\s+(java|python|go|node|bash|javascript|typescript|kotlin|ruby)|" +
+            // NEW: "execute it and share result" (no 'simplify' prefix needed)
+            "^\\s*(execute|run)\\s+it" +
+            ")",
             Pattern.CASE_INSENSITIVE
         );
 
     @Override
     public List<Pattern> fastPathTriggers() {
-        return List.of(CODER_FORCE_PATTERN);
+        return List.of(CODER_FORCE_PATTERN, EXECUTION_PATTERN);
     }
 
     @Override

@@ -227,6 +227,7 @@ public class AgentStateMachineRunner {
             case AgentResult.Finished _ -> "idle";
             case AgentResult.StructuredFinished _ -> "idle";
             case AgentResult.AwaitingApproval _ -> "waiting_approval";
+            case AgentResult.AwaitingRetry _ -> "waiting_retry";
             default -> "error";
         };
         stateChangedEvent.fire(new AgentStateChangedEvent(sessionId, role, status, goal));

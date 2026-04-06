@@ -24,7 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * Covers P75-A (Safe tool pre-execution) and P75-B (Approval delegation).
  */
 @ExtendWith(MockitoExtension.class)
-class P75IntegrationTest {
+class CoreIntegrationTest {
 
     ObjectMapper objectMapper = new ObjectMapper();
 

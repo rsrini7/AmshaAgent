@@ -15,6 +15,9 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "quarkus.langchain4j.ollama.chat-model.model-id", defaultValue = "llama3.2")
     String modelId;
 
+    @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
+    boolean logHttp;
+
     @Override
     public String providerName() {
         return "ollama";
@@ -25,6 +28,8 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
         return OllamaChatModel.builder()
                 .baseUrl(baseUrl)
                 .modelName(modelId)
+                .logRequests(logHttp)
+                .logResponses(logHttp)
                 .build();
     }
 }

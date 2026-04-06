@@ -147,6 +147,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
             managed.setIterationsUsed(checkpoint.getIterationsUsed());
+            managed.setRetryAfterMs(checkpoint.getRetryAfterMs());
             // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
@@ -618,6 +619,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC))
+                .getResultList();
+    }
+
+    @Override
+    @Transactional
+    public List<AgentCheckpoint> findByStatus(CheckpointStatus status) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                AgentCheckpoint.class)
+                .setParameter("status", status)
                 .getResultList();
     }
 

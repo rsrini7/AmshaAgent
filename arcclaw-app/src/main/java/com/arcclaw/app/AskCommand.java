@@ -70,6 +70,7 @@ public class AskCommand implements Runnable {
                         case AgentResult.Failed f -> "Error: " + f.reason();
                         case AgentResult.LoopExceeded l -> "Timed out after " + l.maxIterations() + " steps.";
                         case AgentResult.AwaitingApproval a -> "Agent requires approval to run tool: " + a.toolName();
+                        case AgentResult.AwaitingRetry r -> "Agent rate-limited. Retrying in " + (r.retryAfterMs() / 1000) + "s...";
                     };
                     System.out.println("\n✅ Final Answer:\n" + output);
                 });

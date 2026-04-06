@@ -95,6 +95,7 @@ quarkus:
       - com.arcclaw.core.security
       - com.arcclaw.core.audit
       - com.arcclaw.core.skill
+      - com.arcclaw.core.routing
       - com.arcclaw.app.session
     log:
       sql: false
@@ -420,11 +421,12 @@ arcclaw:
     enabled: "${ARCCLAW_SANDBOX_ENABLED:true}"
     strategy: "${ARCCLAW_SANDBOX_STRATEGY:PODMAN}"
     podman-path: "${ARCCLAW_SANDBOX_PODMAN_PATH:podman}"
-    container-image: "${ARCCLAW_SANDBOX_CONTAINER_IMAGE:localhost/arcclaw-tool-runner:latest}"
+    podman-image: "${ARCCLAW_SANDBOX_PODMAN_IMAGE:localhost/arcclaw-tool-runner:latest}"
     timeout-seconds: "${ARCCLAW_SANDBOX_TIMEOUT_SECONDS:30}"
+    network-timeout-seconds: "${ARCCLAW_SANDBOX_NETWORK_TIMEOUT_SECONDS:60}"
     network: "${ARCCLAW_SANDBOX_NETWORK:host}"
     secret-transport: "${ARCCLAW_SANDBOX_SECRET_TRANSPORT:tmpfs}"
-    tool-runner-user: "${ARCCLAW_SANDBOX_USER:65534}"
+    tool-runner-user: "${ARCCLAW_SANDBOX_USER:sandbox}"
     memory-limit: "${ARCCLAW_SANDBOX_MEMORY_LIMIT:512m}"
     cpu-limit: "${ARCCLAW_SANDBOX_CPU_LIMIT:0.5}"
     tmpfs-path: "${ARCCLAW_SANDBOX_TMPFS_PATH:/run/arcclaw/secrets}"
@@ -432,7 +434,6 @@ arcclaw:
     python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
     go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"
     java-executable: "${ARCCLAW_SANDBOX_JAVA_EXECUTABLE:}"
-    javac-executable: "${ARCCLAW_SANDBOX_JAVAC_EXECUTABLE:}"
     allow-insecure-fallback: "${ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK:false}"
     circuit-breaker:
       failure-threshold: 3   # was 2; gives LLM one retry for param errors
@@ -698,6 +699,8 @@ mp:
 
 "%prod":
   quarkus:
+    # native:
+    #   enabled: true
     langchain4j:
       ollama:
         chat-model:
@@ -709,8 +712,6 @@ mp:
           log-responses: false
     log:
       level: INFO
-      console:
-        color: false
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
     workspace:

@@ -13,7 +13,7 @@ import org.eclipse.microprofile.health.Readiness;
 @ApplicationScoped
 public class PodmanImageHealthCheck implements HealthCheck {
 
-    @ConfigProperty(name = "arcclaw.sandbox.container-image", defaultValue = "arcclaw-tool-runner:latest")
+    @ConfigProperty(name = "arcclaw.sandbox.podman-image", defaultValue = "localhost/arcclaw-tool-runner:latest")
     String containerImage;
 
     @ConfigProperty(name = "arcclaw.sandbox.podman-path", defaultValue = "podman")
@@ -25,7 +25,7 @@ public class PodmanImageHealthCheck implements HealthCheck {
     @Override
     public HealthCheckResponse call() {
         try {
-            ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "exists", containerImage);
+            ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "inspect", containerImage, "--format", "{{.Id}}");
             pb.redirectErrorStream(true);
             Process process = pb.start();
             boolean finished = process.waitFor(5, TimeUnit.SECONDS);

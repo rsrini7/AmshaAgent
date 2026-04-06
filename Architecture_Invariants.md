@@ -1014,3 +1014,15 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
 - [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)
 - [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)
+---
+
+## 20. Routing and Classification Consolidation (Phase 83B)
+
+### 20.1 Implementation Proximity
+- Interface implementations for core SPIs (e.g. IntentClassifier) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in arcclaw-core).
+- **Rationale:** Placing the only implementation of a required core bean in a downstream module (like arcclaw-app) frequently triggers jakarta.enterprise.inject.UnsatisfiedResolutionException during the validation phase of the upstream module's build, especially in native-image compilation.
+- Consolidated IntentClassifierService, SkillAwareIntentClassifier, and their associated LlmModelFactory into arcclaw-core to ensure reliable CDI resolution and build stability.
+
+### 20.2 LLM Provider Dependencies
+- When moving routing logic into arcclaw-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to arcclaw-core.
+- Failure to do so leads to ClassNotFoundException or unresolved imports in the routing factories (e.g. ClaudeCodeProviderFactory).

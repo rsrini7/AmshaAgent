@@ -42,8 +42,8 @@
 ### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
-@baseUrl  = http://localhost:8080
-@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @baseUrl  = http://localhost:8080
+# @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
 # MULTI-TURN CONVERSATION
@@ -86,6 +86,27 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 1
 }
+
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
 
 ###
 
@@ -199,6 +220,27 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator", 
     "maxIterations": 1
 }
+
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
 
 ###
 
@@ -511,6 +553,26 @@ X-ArcClaw-API-Key: {{validKey}}
     "goal": "Search your memory for any previous discussions about Argon2id or AES-GCM-SIV.",
     "agentRole": "researcher",
     "maxIterations": 2
+}
+
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/status/researcher
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
+
+POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+    "goal": "/approve",
+    "agentRole": "researcher",
+    "maxIterations": 1
 }
 
 ###

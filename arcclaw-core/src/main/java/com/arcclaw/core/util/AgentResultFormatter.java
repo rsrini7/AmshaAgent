@@ -47,6 +47,7 @@ public class AgentResultFormatter {
             case AgentResult.AwaitingApproval a -> formatHitlMessage(
                     a.toolName(), a.paramsJson(), null, false);
             case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
+            case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. Automatically retrying in " + (r.retryAfterMs() / 1000) + "s...";
             case AgentResult.Failed f         -> {
                 String msg = AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
                 yield (f.category() == AgentResult.FailureCategory.RATE_LIMIT

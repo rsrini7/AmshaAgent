@@ -110,22 +110,24 @@ public class CommandDispatchHandler implements MessageHandler {
                 yield HandleResult.STOP;
             }
             case ChannelCommand.Unknown u -> {
-                log.debugf("[CommandDispatch] Unrecognized command '%s', passing to pipeline",
-                        context.getMessage().text());
-                
-                if (u.raw().startsWith("/")) {
-                    String sessionId = context.getSessionId().orElse("");
-                    String userId = context.getUser().platformId();
-                    String chatId = context.getChatId();
+                // FIX: Check reflexes for ALL unknown inputs, not just slashes.
+                // This allows 'store FOO=bar' to be pre-parsed by reflexes.
+                String sessionId = context.getSessionId().orElse("");
+                String userId = context.getUser().platformId();
+                String chatId = context.getChatId();
 
-                    // FIX: Wrap the fallback reflex execution in WorkspaceContext
-                    ReflexResult result = null;
-                    try {
-                        result = WorkspaceContext.run(
-                            sessionId, userId, chatId, 
-                            AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
-                            () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
-                        );
+                ReflexResult result = null;
+                try {
+                    result = WorkspaceContext.run(
+                        sessionId, userId, chatId, 
+                        AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
+                        () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
+                    );
+                        
+                        // Fix — Capture sanitized input for the Agent loop even if it's not a direct reply.
+                        if (result != null && result.sanitizedInput() != null) {
+                            context.setGoal(result.sanitizedInput());
+                        }
                     } catch (Exception e) {
                         log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
                         log.debug("Full command dispatch failure stack trace:", e);
@@ -175,7 +177,6 @@ public class CommandDispatchHandler implements MessageHandler {
                                 + "/approve · /deny — HITL approvals"));
                         yield HandleResult.STOP;
                     }
-                }
                 yield HandleResult.CONTINUE;
             }
         };
