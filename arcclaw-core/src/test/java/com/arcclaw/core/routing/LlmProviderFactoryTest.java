@@ -24,7 +24,7 @@ class LlmProviderFactoryTest {
         Exception e = assertThrows(IllegalStateException.class, () -> {
             // Groq provider will throw missing apiKey exception since we passed empty,
             // which means the spi correctly routed it to GroqLlmProviderFactory.
-            factory.createModel("groq", "https://api.groq.com", "", "model", 100, null, null, null);
+            factory.createModel("groq", "https://api.groq.com", "", "model", 100, null, 1, null, null);
         });
         assertTrue(e.getMessage().contains("Groq provider requires an API key"));
     }
@@ -32,7 +32,7 @@ class LlmProviderFactoryTest {
     @Test
     void unknownProviderThrowsIllegalStateWithHelpfulMessage() {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
-            factory.createModel("anthropic", "https://api.anthropic.com", "key", "claude-3", 100, null, null, null);
+            factory.createModel("anthropic", "https://api.anthropic.com", "key", "claude-3", 100, null, 1, null, null);
         });
         
         String message = e.getMessage();

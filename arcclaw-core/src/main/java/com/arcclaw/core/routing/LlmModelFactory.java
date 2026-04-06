@@ -29,6 +29,7 @@ public class LlmModelFactory {
             String modelName,
             Integer maxTokens,
             Duration timeout,
+            Integer maxRetries,
             String ollamaBaseUrl,
             String ollamaModelId) {
 
@@ -51,7 +52,8 @@ public class LlmModelFactory {
             effectiveBaseUrl,
             Optional.ofNullable(apiKey).filter(k -> !k.isBlank()),
             Optional.ofNullable(maxTokens),
-            Optional.ofNullable(timeout)
+            Optional.ofNullable(timeout),
+            Optional.ofNullable(maxRetries)
         );
 
         return factory.create(config);

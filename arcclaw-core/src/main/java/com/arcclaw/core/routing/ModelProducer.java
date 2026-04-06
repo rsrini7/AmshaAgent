@@ -48,6 +48,9 @@ public class ModelProducer {
                     defaultValue = "http://localhost:11434")
     String ollamaBaseUrl;
 
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.max-retries", defaultValue = "3")
+    int maxRetries;
+
     @Inject
     LlmModelFactory modelFactory;
 
@@ -60,6 +63,6 @@ public class ModelProducer {
         return modelFactory.createModel(
             provider, openaiBaseUrl, openaiApiKey,
             intentModelName, 10, Duration.ofSeconds(timeoutSeconds),
-            ollamaBaseUrl, ollamaModelId);
+            maxRetries, ollamaBaseUrl, ollamaModelId);
     }
 }

@@ -300,6 +300,8 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
+    max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
+    timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
@@ -327,6 +329,7 @@ arcclaw:
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
       timeout-seconds: 5
+      max-retries: 3
       sla-warn-ms: 2000
   memory:
     compaction:
@@ -339,6 +342,7 @@ arcclaw:
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
+      max-retries: 3
   chat-memory:
     max-messages: 20
   api:

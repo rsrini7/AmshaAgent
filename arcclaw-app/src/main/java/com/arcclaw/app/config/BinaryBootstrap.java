@@ -232,12 +232,17 @@ public class BinaryBootstrap {
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
 
-            String utilityModel = switch (provider) {
-                case "openrouter" -> "meta-llama/llama-3.3-70b-instruct:free";
+            String compactionModel = switch (provider) {
+                case "openrouter" -> "mistralai/mistral-7b-instruct:free";
                 default           -> "llama-3.1-8b-instant";
             };
-            System.setProperty("ARCCLAW_COMPACTION_MODEL", utilityModel);
-            System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", utilityModel);
+            System.setProperty("ARCCLAW_COMPACTION_MODEL", compactionModel);
+
+            String intentModel = switch (provider) {
+                case "openrouter" -> "mistralai/mistral-7b-instruct:free";
+                default           -> "llama-3.1-8b-instant";
+            };
+            System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", intentModel);
             // Will be persisted to .env during the loop below
         }
 
@@ -564,15 +569,23 @@ public class BinaryBootstrap {
         if ("openrouter".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-3.3-70b-instruct:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "meta-llama/llama-3.3-70b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "meta-llama/llama-3.3-70b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct:free");
             
             // Fix base URLs for utilities
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             
-            // Also fix the generic openrouter/free if it was previously set for utilities
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
+            // Also fix legacy/overloaded free models if they were previously set for utilities
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
+
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
@@ -580,11 +593,16 @@ public class BinaryBootstrap {
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
         }
     }
 

@@ -38,6 +38,9 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.memory.compaction.ollama-model", defaultValue = "llama3.2")
     String ollamaModelId;
 
+    @ConfigProperty(name = "arcclaw.memory.compaction.max-retries", defaultValue = "3")
+    int maxRetries;
+
     @Inject
     LlmModelFactory modelFactory;
 
@@ -49,6 +52,6 @@ public class CompactionModelProducer {
         return modelFactory.createModel(
             provider, compactionBaseUrl, compactionApiKey,
             modelId, compactionMaxTokens, Duration.ofSeconds(10),
-            ollamaBaseUrl, ollamaModelId);
+            maxRetries, ollamaBaseUrl, ollamaModelId);
     }
 }

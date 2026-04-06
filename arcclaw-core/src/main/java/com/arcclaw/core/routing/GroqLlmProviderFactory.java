@@ -29,6 +29,7 @@ public class GroqLlmProviderFactory implements RoutingChatModelProvider {
             .modelName(config.modelName())
             .maxTokens(config.maxTokens().orElse(null))
             .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
+            .maxRetries(config.maxRetries().orElse(3))
             .temperature(0.0)
             .logRequests(false)
             .logResponses(false)

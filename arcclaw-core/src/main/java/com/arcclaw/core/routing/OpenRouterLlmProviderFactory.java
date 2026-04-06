@@ -33,6 +33,7 @@ public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
                 .modelName(config.modelName())
                 .maxTokens(config.maxTokens().orElse(null))
                 .timeout(config.timeout().orElse(null))
+                .maxRetries(config.maxRetries().orElse(3))
                 .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))
                 .temperature(0.0)
                 .logRequests(false)

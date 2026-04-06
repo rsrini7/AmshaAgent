@@ -27,7 +27,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                     defaultValue = "8192")
     int maxTokens;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.timeout",
+    @ConfigProperty(name = "arcclaw.llm.timeout",
                     defaultValue = "PT60S")
     Duration timeout;
 
@@ -40,6 +40,9 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
 
     @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
     boolean logHttp;
+
+    @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
+    int maxRetries;
 
     @Override
     public String providerName() {
@@ -59,6 +62,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                 .modelName(modelName)
                 .maxTokens(maxTokens) 
                 .timeout(timeout)
+                .maxRetries(maxRetries)
                 // Required by OpenRouter — identifies your app, avoids anonymous rate limits
                 .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))
                 .logRequests(logHttp)

@@ -18,7 +18,7 @@ class LlmModelFactoryTest {
     void testCreateGroqModel() {
         ChatModel model = factory.createModel(
                 "groq", "https://api.groq.com/openai/v1", "test-key",
-                "llama3-8b", 100, null, null, null);
+                "llama3-8b", 100, null, 1, null, null);
         assertNotNull(model);
     }
 
@@ -26,14 +26,14 @@ class LlmModelFactoryTest {
     void testCreateOpenAiModel() {
         ChatModel model = factory.createModel(
                 "openai", "https://api.openai.com/v1", "test-key",
-                "gpt-4", 200, null, null, null);
+                "gpt-4", 200, null, 1, null, null);
         assertNotNull(model);
     }
 
     @Test
     void testCreateOllamaModel() {
         ChatModel model = factory.createModel(
-                "ollama", null, null, null, null, null,
+                "ollama", null, null, null, null, null, 1,
                 "http://localhost:11434", "llama3.2");
         assertNotNull(model);
     }
@@ -41,7 +41,7 @@ class LlmModelFactoryTest {
     @Test
     void testUnknownProvider() {
         assertThrows(IllegalStateException.class, () -> {
-            factory.createModel("unknown", null, null, null, null, null, null, null);
+            factory.createModel("unknown", null, null, null, null, null, 1, null, null);
         });
     }
 }

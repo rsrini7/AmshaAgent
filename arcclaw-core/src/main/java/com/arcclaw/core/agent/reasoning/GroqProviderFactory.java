@@ -30,12 +30,15 @@ public class GroqProviderFactory implements AgentChatModelProvider {
                     defaultValue = "8192")
     int maxTokens;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.timeout",
+    @ConfigProperty(name = "arcclaw.llm.timeout",
                     defaultValue = "PT60S")
     Duration timeout;
 
     @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
     boolean logHttp;
+
+    @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
+    int maxRetries;
 
     @Override
     public String providerName() {
@@ -50,6 +53,7 @@ public class GroqProviderFactory implements AgentChatModelProvider {
             .modelName(modelName)
             .maxTokens(maxTokens)
             .timeout(timeout)
+            .maxRetries(maxRetries)
             .temperature(0.0)
             .logRequests(logHttp)
             .logResponses(logHttp)
