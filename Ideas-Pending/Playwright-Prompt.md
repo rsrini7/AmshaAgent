@@ -1,7 +1,7 @@
-# PROMPT — PHASE 83B: arcclaw-tool-playwright — Browser Tool (Tier B)
+# PROMPT — PHASE 90: arcclaw-tool-playwright — Browser Tool (Tier B)
 
 Role: Senior Java Architect & Senior Java Developer
-Task: Phase 83B — Add a Playwright browser tool to ArcClaw as a new Maven module
+Task: Phase 90 — Add a Playwright browser tool to ArcClaw as a new Maven module
 `arcclaw-tool-playwright`. Ported from JavaClaw's `PlaywrightBrowserTool` plugin but
 adapted to ArcClaw's `AgentTool` interface, `ToolCapability` enum, and sandbox model.
 When `arcclaw.tools.playwright.enabled` is false (default), the tool is excluded from
@@ -38,7 +38,7 @@ Refer @arcclaw-app/src/main/java/com/arcclaw/app/security/AuditService.java
 `pom.xml`:
 - Parent: `com.arcclaw:arcclaw-parent`
 - Dependencies: `arcclaw-core`, `arcclaw-app`, Quarkus CDI,
-  `com.microsoft.playwright:playwright:1.49.0` (official Maven artifact).
+  `com.microsoft.playwright:playwright:1.58.0` (official Maven artifact).
 - Include `jandex-maven-plugin` and `beans.xml` with `bean-discovery-mode="annotated"`.
 - The Playwright dependency downloads browser binaries on first use via `Playwright.create()`.
   Document this in a `README.md` in the module root.
@@ -105,7 +105,7 @@ public class PlaywrightBrowserTool implements AgentTool {
         // 7. Audit: SecurityEventType.TOOL_EXECUTED with url as detail (NOT full content).
         // 8. Return ToolResponse.success(result).
         // On any Playwright exception: return ToolResponse.failure(502, message) — never propagate.
-        // Content truncation: if result > 83B92 chars, truncate at last sentence boundary
+        // Content truncation: if result > 9092 chars, truncate at last sentence boundary
         //   and append "\n[content truncated]".
     }
 }
@@ -190,7 +190,7 @@ Also add to `.env.example`:
 
 ***
 
-### Phase 83B Tests
+### Phase 90 Tests
 
 **`PlaywrightBrowserToolTest`** (unit test, mock `PlaywrightPageRunner`):
 - `enabled=false` → `isEnabled()` returns false, no browser launched.
@@ -199,7 +199,7 @@ Also add to `.env.example`:
 - URL with `file://` scheme → rejected with 400.
 - Valid URL, action=extract_text → `PlaywrightPageRunner.run()` called with correct args.
 - `PlaywrightPageRunner.run()` throws → `ToolResponse.failure(502, ...)` returned.
-- Result > 83B92 chars → response is truncated and ends with `[content truncated]`.
+- Result > 9092 chars → response is truncated and ends with `[content truncated]`.
 - Blank userId → 403 failure.
 Mock `PlaywrightPageRunner` with Mockito. Do NOT launch a real browser in unit tests.
 
@@ -212,14 +212,14 @@ Skip if `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED` env var is not set to `true`.
 
 ***
 
-## Phase 83B Delivery Checklist
+## Phase 90 Delivery Checklist
 - [ ] `arcclaw-tool-playwright` module created: `pom.xml`, `beans.xml`, jandex plugin
 - [ ] `ToolCapability.BROWSER_NAVIGATE` added
 - [ ] `PlaywrightBrowserTool` implements `AgentTool` — `isEnabled()` gates all execution
 - [ ] `PlaywrightPageRunner` isolates Playwright API calls — mockable in tests
 - [ ] `requiresSandbox = true` set — Podman isolation honoured when sandbox is active
 - [ ] URL scheme validation: only `http://` and `https://` accepted
-- [ ] Content truncated at 83B92 chars with `[content truncated]` suffix
+- [ ] Content truncated at 9092 chars with `[content truncated]` suffix
 - [ ] `application.yaml` and `.env.example` updated with opt-in config
 - [ ] Unit tests green without launching a real browser: `./mvnw clean test -pl arcclaw-tool-playwright`
 - [ ] Integration test tagged `@Tag("integration")` and skipped in normal CI
@@ -237,7 +237,7 @@ Phase 77: ./mvnw clean test -pl arcclaw-core,arcclaw-app,arcclaw-mcp
 Phase 78: ./mvnw clean test -pl arcclaw-channel-web,arcclaw-app
 Phase 79: cd arcclaw-ui && npm test && npm run build
 Phase 80: ./mvnw clean test -pl arcclaw-onboarding && cd arcclaw-ui && npm test
-Phase 83B: ./mvnw clean test -pl arcclaw-tool-playwright
+Phase 90: ./mvnw clean test -pl arcclaw-tool-playwright
 
 Full suite:  ./mvnw clean test
 Full build:  ./mvnw clean package
@@ -254,7 +254,7 @@ arcclaw-parent
 ├── arcclaw-channel-telegram
 ├── arcclaw-channel-web      ← NEW (Phase 78A)
 ├── arcclaw-onboarding       ← NEW (Phase 80A)
-├── arcclaw-tool-playwright  ← NEW (Phase 83B)
+├── arcclaw-tool-playwright  ← NEW (Phase 90)
 ├── arcclaw-app              (depends on all above; AgentStatusResource, HitlResource, ChatStreamResource)
 └── arcclaw-ui               ← NEW (Phase 79, Vite+Lit, no Java)
 ```
