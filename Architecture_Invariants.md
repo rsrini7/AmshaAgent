@@ -654,7 +654,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 
 7.11 MUST NOT: Re-introduce a single-tool fast-path in `ReasoningStepParser`.
      All LLM tool-call responses are processed as a list (N ≥ 1).
-     The `getFirst()` fallback was removed in Phase 70 and MUST NOT be restored
+     The `getFirst()` fallback was removed and MUST NOT be restored
      as a silent fallback — it hides multi-tool responses from the batch pipeline.
 
 7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
@@ -936,7 +936,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ---
 
-## 16. New Module Creation (Phase 83A+)
+## 16. New Module Creation
 
 ### 16.1 Dependency Cycle Prevention
 - NEW modules MUST NOT depend on `arcclaw-app`. 
@@ -1016,7 +1016,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)
 ---
 
-## 20. Routing and Classification Consolidation (Phase 83B)
+## 20. Routing and Classification Consolidation
 
 ### 20.1 Implementation Proximity
 - Interface implementations for core SPIs (e.g. IntentClassifier) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in arcclaw-core).
