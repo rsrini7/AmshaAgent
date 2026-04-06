@@ -38,12 +38,11 @@ public record AgentRoleEnum(String id) {
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
             7, true, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), Set.of("vishnu")
         ),
-
         "researcher", new RoleDefinition(
             "researcher",
             "Saraswati (Researcher)",
             "Perform information retrieval, web searches, and documentation lookups.",
-            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER), Set.of("saraswati")
+            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.BROWSER_NAVIGATE), Set.of("saraswati")
         ),
         "coder", new RoleDefinition(
             "coder",
@@ -63,7 +62,7 @@ public record AgentRoleEnum(String id) {
             "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
             "simultaneously. Activated when a single task spans multiple specialist domains " +
             "and their outputs need integration or conflict resolution.",
-            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT), Set.of("dattatreya", "datta")
+            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE), Set.of("dattatreya", "datta")
         )
 
     );
