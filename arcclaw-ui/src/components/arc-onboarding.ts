@@ -33,7 +33,7 @@ export class ArcOnboarding extends LitElement {
     ollama: 'llama3.2',
     anthropic: 'claude-haiku-4-5',
     'claude-code': 'claude-sonnet-4-5',
-    openrouter: 'openrouter/free',
+    openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
   };
 
   static styles = css`
@@ -787,7 +787,7 @@ export class ArcOnboarding extends LitElement {
                          this._provider === 'openai' ? 'gpt-4o-mini' :
                          this._provider === 'ollama' ? 'llama3.2' :
                          this._provider === 'anthropic' ? 'claude-haiku-4-5' :
-                         this._provider === 'openrouter' ? 'openrouter/free' :
+                         this._provider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct:free' :
                          'claude-sonnet-4-5'}"
           .value="${this._model}"
           @input="${(e:any) => this._model = e.target.value}"

@@ -433,23 +433,18 @@ Produces:
 dist/
   arcclaw-app-1.0.0-SNAPSHOT-runner      (Linux/macOS)
   arcclaw-app-1.0.0-SNAPSHOT-runner.exe  (Windows)
-  run.sh                                  ← Linux/macOS launcher (first run auto-configures .env)
-  run.ps1                                 ← Windows launcher    (first run auto-configures .env)
-  .env.example
-  lib/
-    vec0.dll / vec0.so / vec0.dylib
 ```
 
 ### Using the launchers
 
-Both `run.sh` and `run.ps1` handle first-run `.env` setup automatically — generating secret keys, prompting for API keys, and configuring Telegram if needed.
+Both `arcclaw.exe` and `arcclaw` handle first-run `.env` setup automatically — generating secret keys, prompting for API keys, and configuring Telegram if needed.
 
 ```bash
 # Linux/macOS
-cd dist && ./run.sh serve
+cd dist && ./arcclaw serve
 
 # Windows
-cd dist; ./run.ps1 serve
+cd dist; ./arcclaw.exe serve
 ```
 
 ### sqlite-vec (vec0) — auto-install
@@ -668,7 +663,7 @@ mise run native:serve    # or: native:chat / native:attach
 
 ### `.env` `source` fails with syntax error near `<`
 
-The `.env` file has placeholder values like `key-<random>`. The `run.sh` launcher uses a safe line-by-line loader that never shell-evaluates values — this error only occurs if you `source .env` manually. Use the launcher instead.
+The `.env` file has placeholder values like `key-<random>`. The `arcclaw` launcher uses a safe line-by-line loader that never shell-evaluates values — this error only occurs if you `source .env` manually. Use the launcher instead.
 
 ***
 
