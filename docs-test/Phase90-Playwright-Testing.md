@@ -157,3 +157,94 @@ ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true ./mvnw test -pl arcclaw-tool-playwright -D
 # Single test method
 ./mvnw test -pl arcclaw-tool-playwright -Dtest=ClassName#methodName
 ```
+
+---
+
+# Testing the **ArcClaw Playwright tool via the ArcClaw Telegram bot** :
+
+## Prerequisites
+
+```bash
+# 1. Browser binary installed
+./mvnw exec:java -e \
+  -Dexec.mainClass=com.microsoft.playwright.CLI \
+  -Dexec.args="install --with-deps chromium"
+
+# 2. Tool enabled in application.yaml or .env
+ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true
+
+# 3. ArcClaw running with Telegram channel active
+./mvnw quarkus:dev
+```
+
+***
+
+## Sending Test Commands via Telegram
+
+Open your ArcClaw bot in Telegram and send natural language — the agent decides to invoke `browser_navigate` automatically:
+
+```
+# Basic page read
+Read the content of https://example.com
+
+# JavaScript-heavy site (reason to use Playwright over plain fetch)
+Summarise the news from https://news.ycombinator.com
+
+# Scoped extraction
+Get only the main article text from https://blog.quarkus.io/quarkus-3-23-released/
+
+# Screenshot
+Take a screenshot of https://example.com
+```
+
+***
+
+## What to Watch on the Server Side
+
+```bash
+# Tail logs while sending Telegram messages
+./mvnw quarkus:dev 2>&1 | grep -E "browser_navigate|TOOL_EXECUTED|PlaywrightPage|502|400"
+```
+
+You should see in order:
+1. `TOOL_EXECUTED` audit log — confirms `AuditService.record()` fired
+2. No `PlaywrightPageRunner` content in logs — confirms page content is never logged
+3. Response sent back to Telegram chat
+
+***
+
+## Confirming the Tool is Registered
+
+Send this to the bot to list all active tools:
+
+```
+What tools do you have available?
+```
+
+`browser_navigate` should appear **only** when `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true`. With it false, the tool is invisible to the agent entirely — confirms `isEnabled()` gates correctly.
+
+***
+
+## Failure Scenarios to Test Deliberately
+
+| Send this | Expected Telegram reply |
+|---|---|
+| `Visit ftp://somehost/file` | Agent gets 400, tells user unsupported scheme |
+| `Open https://httpstat.us/404` | Agent gets 502 wrapping the 404, graceful error message |
+| Disable tool, send any browse request | Agent doesn't even attempt — tool not in registry |
+| `Read https://example.com` with `headless=false` (dev only) | Browser window opens on your desktop |
+
+***
+
+## Dev Tip — Headed Mode for Telegram-Triggered Requests
+
+When a specific Telegram request is misbehaving, temporarily flip headless off in `application.yaml`:
+
+```yaml
+arcclaw:
+  tools:
+    playwright:
+      headless: false   # watch the browser open when bot receives the message
+```
+
+Send the message from Telegram → browser window opens on your machine → you can inspect exactly what the agent sees before the response is sent back.
