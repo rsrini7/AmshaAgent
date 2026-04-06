@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.quarkus.qute.TemplateData;
 
 /**
@@ -47,9 +48,11 @@ public record ReasoningStep(
     public static final String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
 
     /** Convenience: true if this step represents a parallel tool batch. */
+    @JsonIgnore
     public boolean isParallelBatch() {
         return PARALLEL_SENTINEL_DUNDER.equals(this.action);
     }
+
 
     /**
      * Creates a pre-execution parallel batch step.

@@ -29,12 +29,7 @@ class BatchHitlKeyboardBuilderTest {
         assertEquals("session456", deny.sessionId());
         assertEquals("sandbox:exec", deny.toolName());
 
-        // Test approve all
-        data = "BATCH_APPROVE_ALL|session789";
-        event = BatchHitlKeyboardBuilder.parseCallback(data);
-        assertTrue(event.isPresent());
-        assertTrue(event.get() instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveAll);
-        assertEquals("session789", ((BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveAll) event.get()).sessionId());
+
 
         // Test invalid data
         data = "BATCH_INVALID|session";

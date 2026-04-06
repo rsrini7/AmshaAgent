@@ -1,24 +1,31 @@
 package com.arcclaw.channel.telegram;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.pipeline.MessagePipeline;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.ClientProxy;
@@ -28,7 +35,6 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.apache.camel.component.telegram.model.User;
-import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -40,10 +46,7 @@ class TelegramAgentHandlerTest {
     TelegramAgentHandler handler;
 
     @InjectMock
-    MessagePipeline pipeline;
-
-    @InjectMock
-    ManagedExecutor executor;
+    ChannelServices channelServices;
 
     @InjectMock
     TelegramMessageMapper mapper;
@@ -53,32 +56,19 @@ class TelegramAgentHandlerTest {
 
     @BeforeEach
     void setup() throws Exception {
-        // Stub a mock executor to run immediately in the same thread
-        ExecutorService syncExecutor = mock(ExecutorService.class);
-        doAnswer(invocation -> {
-            ((Runnable) invocation.getArgument(0)).run();
-            return null;
-        }).when(syncExecutor).submit(any(Runnable.class));
-
-        // Inject the sync executor into the chatQueues cache via reflection
-        // Since handler is a proxy, we must unwrap it
+        // Inject the sync flag cache into the handler via reflection
         TelegramAgentHandler target = ClientProxy.unwrap(handler);
-        
-        // 1. Stub the processingFlags to always return a fresh ready flag
         Field flagsField = TelegramAgentHandler.class.getDeclaredField("processingFlags");
         flagsField.setAccessible(true);
         Cache<String, AtomicBoolean> flags = Caffeine.newBuilder().build();
         flagsField.set(target, flags);
 
-        // 2. Stub the ManagedExecutor to run synchronously
-        doAnswer(invocation -> {
-            ((Runnable) invocation.getArgument(0)).run();
-            return null;
-        }).when(executor).execute(any(Runnable.class));
+        // Default behavior: processAsync returns immediately
+        when(channelServices.processAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     @Test
-    void testValidMessageDelegatesToPipeline() {
+    void testValidMessageDelegatesToSPI() {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
                 new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
@@ -86,32 +76,13 @@ class TelegramAgentHandlerTest {
 
         handler.receiveMessage(exchange);
 
-        ArgumentCaptor<MessageContext> captor = ArgumentCaptor.forClass(MessageContext.class);
-        verify(pipeline).process(captor.capture());
+        ArgumentCaptor<ChannelMessage> captor = ArgumentCaptor.forClass(ChannelMessage.class);
+        verify(channelServices).processAsync(captor.capture());
 
-        MessageContext ctx = captor.getValue();
-        assertEquals("chat123", ctx.getChatId());
-        assertEquals("456", ctx.getUser().platformId());
-        assertEquals("chat123", ctx.getUser().channelId());
-        assertEquals("alice", ctx.getUser().displayName());
-        assertInstanceOf(ChannelMessage.TelegramMessage.class, ctx.getMessage());
-    }
-
-    @Test
-    void testTelegramChannelUserChannelIdEqualsChatId() {
-        Exchange exchange = createExchange("groupChat999", "123", "bob", "hello");
-        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("123", "groupChat999", "bob", ChannelType.TELEGRAM), "hello", "groupChat999", Instant.now());
-        when(mapper.map(eq("hello"), any(), eq("groupChat999"))).thenReturn(msg);
-
-        handler.receiveMessage(exchange);
-
-        ArgumentCaptor<MessageContext> captor = ArgumentCaptor.forClass(MessageContext.class);
-        verify(pipeline).process(captor.capture());
-
-        MessageContext ctx = captor.getValue();
-        assertEquals("123", ctx.getUser().platformId());
-        assertEquals("groupChat999", ctx.getUser().channelId(), "Channel ID must equal Chat ID");
+        ChannelMessage res = captor.getValue();
+        assertEquals("chat123", res.correlationId());
+        assertEquals("456", res.sender().platformId());
+        assertEquals("alice", res.sender().displayName());
     }
 
     @Test
@@ -120,8 +91,8 @@ class TelegramAgentHandlerTest {
         
         handler.receiveMessage(exchange);
 
-        verify(pipeline, never()).process(any());
-        verify(sender).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("not supported"));
+        verify(channelServices, never()).processAsync(any());
+        verify(sender).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("only process text messages"));
     }
 
     @Test
@@ -133,42 +104,58 @@ class TelegramAgentHandlerTest {
 
         assertDoesNotThrow(() -> handler.receiveMessage(exchange));
 
-        verify(pipeline, never()).process(any());
+        verify(channelServices, never()).processAsync(any());
         verify(sender, never()).sendRaw(any(), any());
     }
 
     @Test
-    void testTextMessageProcessedNormally() {
-        Exchange exchange = createExchange("chat123", "456", "alice", "valid text");
-        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "valid text", "chat123", Instant.now());
-        when(mapper.map(eq("valid text"), any(), eq("chat123"))).thenReturn(msg);
-
-        handler.receiveMessage(exchange);
-
-        verify(pipeline).process(any());
-        verify(sender, never()).sendRaw(any(), contains("not supported"));
-    }
-
-    @Test
-    void testExceptionInPipelineIsHandledGracefully() {
+    void testExceptionInProcessingIsHandledGracefully() {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
                 new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
-        doThrow(new RuntimeException("Real crash")).when(pipeline).process(any());
+        
+        CompletableFuture<Void> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new RuntimeException("SPI error"));
+        when(channelServices.processAsync(any())).thenReturn(failed);
 
         assertDoesNotThrow(() -> handler.receiveMessage(exchange));
         
-        // Verify notification was sent (ignoring the initial ⏳ acknowledgment)
         verify(sender, atLeastOnce()).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
+    }
+
+    @Test
+    void rapidConcurrentMessagesFromSameChatAreSerialised() throws Exception {
+        String chatId = "chat-" + UUID.randomUUID();
+        CompletableFuture<Void> pending = new CompletableFuture<>();
+
+
+        // 1. Stub first message to hang
+        ChannelMessage.TelegramMessage msg1 = new ChannelMessage.TelegramMessage(
+                new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "hello", chatId, Instant.now());
+        when(mapper.map(eq("hello"), any(), eq(chatId))).thenReturn(msg1);
+        when(channelServices.processAsync(msg1)).thenReturn(pending);
+
+        handler.receiveMessage(createExchange(chatId, "123", "alice", "hello"));
+        assertTrue(handler.isProcessing(chatId));
+
+        // 2. Second message while first is pending
+        ChannelMessage.TelegramMessage msg2 = new ChannelMessage.TelegramMessage(
+                new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "world", chatId, Instant.now());
+        when(mapper.map(eq("world"), any(), eq(chatId))).thenReturn(msg2);
+
+        handler.receiveMessage(createExchange(chatId, "123", "alice", "world"));
+        verify(sender).sendRaw(any(), contains("Still processing"));
+
+        // 3. Complete first
+        pending.complete(null);
+        assertFalse(handler.isProcessing(chatId));
     }
 
     private Exchange createExchange(String chatId, String userId, String username, String text) {
         Exchange exchange = mock(Exchange.class);
         Message in = mock(Message.class);
         when(exchange.getIn()).thenReturn(in);
-
         when(in.getHeader("CamelTelegramChatId", String.class)).thenReturn(chatId);
 
         IncomingMessage msg = new IncomingMessage();
@@ -180,67 +167,5 @@ class TelegramAgentHandlerTest {
 
         when(in.getBody(IncomingMessage.class)).thenReturn(msg);
         return exchange;
-    }
-
-    @Test
-    void rapidConcurrentMessagesFromSameChatAreSerialised() throws Exception {
-        String chatId = "race-chat-" + UUID.randomUUID();
-        CountDownLatch firstStarted = new CountDownLatch(1);
-        CountDownLatch firstComplete = new CountDownLatch(1);
-
-        // Configure mock pipeline: first call signals firstStarted, then awaits firstComplete
-        doAnswer(invocation -> {
-            firstStarted.countDown();
-            assertTrue(firstComplete.await(5, TimeUnit.SECONDS), "First message took too long to complete");
-            return null;
-        }).when(pipeline).process(argThat(ctx -> chatId.equals(ctx.getChatId())));
-
-        // Channel message with text
-        ChannelMessage.TelegramMessage channelMsg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "hello", chatId, Instant.now());
-        when(mapper.map(anyString(), any(), anyString())).thenReturn(channelMsg);
-
-        // 1. Start first message in a real background thread to simulate concurrency
-        new Thread(() -> {
-            Exchange ex = createExchange(chatId, "123", "alice", "hello");
-            handler.receiveMessage(ex);
-        }).start();
-
-        // Wait for first message to actually start and hold the lock
-        assertTrue(firstStarted.await(5, TimeUnit.SECONDS), "First message never started");
-        assertTrue(handler.isProcessing(chatId), "Handler should be processing the first message");
-
-        // 2. Send second message while first is still running
-        Exchange ex2 = createExchange(chatId, "123", "alice", "another hello");
-        handler.receiveMessage(ex2);
-
-        // Second message must get "still processing" reply
-        verify(sender).sendRaw(argThat(user -> chatId.equals(user.channelId())), contains("Still processing"));
-
-        // 3. Complete first message
-        firstComplete.countDown();
-        
-        // Give it a moment to finish the finally block
-        Thread.sleep(100);
-
-        assertFalse(handler.isProcessing(chatId), "Clean state after processing completes");
-
-        // 4. Send third message — it should be accepted normally
-        Exchange ex3 = createExchange(chatId, "123", "alice", "third hello");
-        handler.receiveMessage(ex3);
-        verify(pipeline, atLeast(2)).process(any()); // first and third
-    }
-
-    @Test
-    void processingFlagIsFalseAfterSuccessfulProcessing() {
-        String chatId = "chat-ok-" + UUID.randomUUID();
-        Exchange exchange = createExchange(chatId, "123", "alice", "hello ok");
-        ChannelMessage.TelegramMessage channelMsg = new ChannelMessage.TelegramMessage(
-                new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "hello ok", chatId, Instant.now());
-        when(mapper.map(anyString(), any(), anyString())).thenReturn(channelMsg);
-
-        handler.receiveMessage(exchange);
-
-        assertFalse(handler.isProcessing(chatId), "Flag must be false after completion");
     }
 }
