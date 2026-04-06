@@ -30,14 +30,13 @@ public class ReflexRegistry {
         for (AgentReflex reflex : reflexes) {
             if (!reflex.matches(input)) continue;
             try {
-                ReflexResult result = reflex.execute(sessionId, userId, chatId, input, context);
                 auditService.record(
                     sessionId, userId,
                     reflex.getClass().getSimpleName()
                         .replace("_ClientProxy", "").replace("_Subclass", ""),
                     reflex.auditEventType(),
                     reflex.auditDetail(sessionId, input));
-                return result;
+                return reflex.execute(sessionId, userId, chatId, input, context);
             } catch (Exception e) {
                 String truncated = input != null && input.length() > 200
                     ? input.substring(0, 200) + "…" : input;

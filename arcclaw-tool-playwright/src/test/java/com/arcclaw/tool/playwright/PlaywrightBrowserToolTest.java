@@ -1,9 +1,14 @@
 package com.arcclaw.tool.playwright;
 
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.scope.WorkspaceContext;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,15 +16,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolResponse;
 
 @ExtendWith(MockitoExtension.class)
 class PlaywrightBrowserToolTest {
@@ -33,7 +33,6 @@ class PlaywrightBrowserToolTest {
     void setUp() {
         tool = new PlaywrightBrowserTool();
         tool.enabled = true;
-        tool.headless = true;
         tool.timeoutMs = 5000;
         tool.pageRunner = pageRunner;
         tool.auditService = auditService;
@@ -111,39 +110,39 @@ class PlaywrightBrowserToolTest {
         params.put("action", "extract_text");
         params.put("selector", null);
 
-        when(pageRunner.run(anyString(), anyString(), isNull(), anyBoolean(), anyInt())).thenReturn("content");
+        when(pageRunner.run(anyString(), anyString(), isNull(),  anyInt())).thenReturn("content");
 
         ToolResponse res = runWithContext(params);
 
-        verify(pageRunner).run("https://example.com", "extract_text", null, true, 5000);
+        verify(pageRunner).run("https://example.com", "extract_text", null,  5000);
         Assertions.assertTrue(res.success());
     }
 
     @Test void execute_callsRunnerWithSelector() {
         Map<String, Object> params = Map.of("url", "https://example.com", "action", "extract_text", "selector", "h1");
 
-        when(pageRunner.run(anyString(), anyString(), anyString(), anyBoolean(), anyInt())).thenReturn("content");
+        when(pageRunner.run(anyString(), anyString(), anyString(),  anyInt())).thenReturn("content");
 
         runWithContext(params);
 
-        verify(pageRunner).run("https://example.com", "extract_text", "h1", true, 5000);
+        verify(pageRunner).run("https://example.com", "extract_text", "h1", 5000);
     }
 
     @Test void execute_defaultsActionToExtractText_whenAbsent() {
         Map<String, Object> params = Map.of("url", "https://example.com");
 
-        when(pageRunner.run(anyString(), anyString(), isNull(), anyBoolean(), anyInt())).thenReturn("content");
+        when(pageRunner.run(anyString(), anyString(), isNull(),  anyInt())).thenReturn("content");
 
         runWithContext(params);
 
-        verify(pageRunner).run("https://example.com", "extract_text", null, true, 5000);
+        verify(pageRunner).run("https://example.com", "extract_text", null, 5000);
     }
 
     // ── Error handling ────────────────────────────────────────────────────────
     @Test void execute_returns502_whenRunnerThrows() {
         Map<String, Object> params = Map.of("url", "https://example.com");
 
-        when(pageRunner.run(anyString(), anyString(), isNull(), anyBoolean(), anyInt()))
+        when(pageRunner.run(anyString(), anyString(), isNull(),  anyInt()))
             .thenThrow(new RuntimeException("connection refused"));
 
         ToolResponse res = runWithContext(params);
@@ -157,7 +156,7 @@ class PlaywrightBrowserToolTest {
         Map<String, Object> params = Map.of("url", "https://example.com");
 
         String longResult = "a".repeat(10000) + ". end of content.";
-        when(pageRunner.run(anyString(), anyString(), isNull(), anyBoolean(), anyInt())).thenReturn(longResult);
+        when(pageRunner.run(anyString(), anyString(), isNull(),  anyInt())).thenReturn(longResult);
 
         ToolResponse res = runWithContext(params);
 
@@ -168,7 +167,7 @@ class PlaywrightBrowserToolTest {
     @Test void execute_doesNotTruncateResultUnder9092Chars() {
         Map<String, Object> params = Map.of("url", "https://example.com");
 
-        when(pageRunner.run(anyString(), anyString(), isNull(), anyBoolean(), anyInt())).thenReturn("short text");
+        when(pageRunner.run(anyString(), anyString(), isNull(),  anyInt())).thenReturn("short text");
 
         ToolResponse res = runWithContext(params);
 
@@ -179,7 +178,7 @@ class PlaywrightBrowserToolTest {
         Map<String, Object> params = Map.of("url", "https://example.com", "action", "screenshot");
 
         String longResult = "a".repeat(10000);
-        when(pageRunner.run(anyString(), anyString(), isNull(), anyBoolean(), anyInt())).thenReturn(longResult);
+        when(pageRunner.run(anyString(), anyString(), isNull(),  anyInt())).thenReturn(longResult);
 
         ToolResponse res = runWithContext(params);
 

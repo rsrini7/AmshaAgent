@@ -6,8 +6,11 @@ import com.microsoft.playwright.options.ScreenshotScale;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.util.Base64;
 import java.util.regex.Pattern;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class PlaywrightPageRunner {
@@ -25,6 +28,30 @@ public class PlaywrightPageRunner {
     /** Safety timeout for the LOAD fallback to prevent open-ended waits. */
     private static final int LOAD_FALLBACK_TIMEOUT_MS = 5_000;
 
+    @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
+    boolean headless;
+
+    private Playwright playwright;
+    private Browser browser;
+
+    @PostConstruct
+    void init() {
+        long t0 = System.currentTimeMillis();
+        // Since this runs during Quarkus startup, it warms up the browser instantly.
+        playwright = Playwright.create();
+        browser = playwright.chromium().launch(
+            new BrowserType.LaunchOptions().setHeadless(headless)
+        );
+        log.infof("Playwright Chromium cached in %dms (headless=%s)", 
+                System.currentTimeMillis() - t0, headless);
+    }
+
+    @PreDestroy
+    void destroy() {
+        if (browser != null) browser.close();
+        if (playwright != null) playwright.close();
+    }
+
     /**
      * Launches a fresh Chromium browser context, navigates to url, returns result.
      * Each call creates and destroys its own Playwright + Browser instance — no shared state.
@@ -32,36 +59,23 @@ public class PlaywrightPageRunner {
      * @param url       target URL (must match SAFE_URL_PATTERN — caller pre-validates)
      * @param action    "navigate" | "extract_text" | "screenshot"
      * @param selector  optional CSS selector to scope extraction (null = full body)
-     * @param headless  run headless (true in production)
      * @param timeoutMs navigation timeout in milliseconds
      * @return result string: visible text, raw HTML, or base64 PNG
      * @throws PlaywrightException      on navigation or execution failure
      * @throws IllegalArgumentException on unsafe URL
      */
-    public String run(String url, String action, String selector,
-                      boolean headless, int timeoutMs) {
+    public String run(String url, String action, String selector, int timeoutMs) {
 
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
             throw new IllegalArgumentException("Unsafe URL rejected: " + url);
         }
 
         long t0 = System.currentTimeMillis();
-        log.infof("Playwright launching browser (headless=%s, timeout=%dms) for: %s",
-                headless, timeoutMs, url);
+        log.infof("Playwright reusing cached browser for: %s", url);
 
-        try (Playwright playwright = Playwright.create()) {
-
-            long tBrowserStart = System.currentTimeMillis();
-            Browser browser = playwright.chromium().launch(
-                new BrowserType.LaunchOptions().setHeadless(headless)
-                // NOTE: setDevtools() was removed in Playwright 1.58.
-                // For debug mode use: .setArgs(List.of("--auto-open-devtools-for-tabs"))
-            );
-            log.debugf("Chromium launched in %dms", System.currentTimeMillis() - tBrowserStart);
-
-            try (BrowserContext context = browser.newContext()) {
-                Page page = context.newPage();
-                page.setDefaultNavigationTimeout(timeoutMs);
+        try (BrowserContext context = browser.newContext()) {
+            Page page = context.newPage();
+            page.setDefaultNavigationTimeout(timeoutMs);
 
                 // Navigate and verify HTTP status — silent 4xx/5xx returns error HTML without this
                 long tNav = System.currentTimeMillis();
@@ -96,16 +110,15 @@ public class PlaywrightPageRunner {
                     }
                 }
 
-                String result = switch (action) {
-                    case "screenshot" -> captureScreenshot(page);
-                    case "navigate"   -> normalizeWhitespace(page.content());
-                    default           -> extractText(page, selector); // extract_text + fallback
-                };
+            String result = switch (action) {
+                case "screenshot" -> captureScreenshot(page);
+                case "navigate"   -> normalizeWhitespace(page.content());
+                default           -> extractText(page, selector); // extract_text + fallback
+            };
 
-                log.infof("Playwright completed action=%s for %s in %dms (result=%d chars)",
-                        action, url, System.currentTimeMillis() - t0, result.length());
-                return result;
-            }
+            log.infof("Playwright completed action=%s for %s in %dms (result=%d chars)",
+                    action, url, System.currentTimeMillis() - t0, result.length());
+            return result;
         }
     }
 

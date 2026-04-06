@@ -234,6 +234,7 @@ public class ToolRegistry {
 
         // Sandbox path 
         if (tool.requiresSandbox()) {
+            recordToolAudit(toolName);
             var requiredSecrets = extractRequiredSecrets(tool);
 
             // FIX: Use toSafeDirName() to strip colons from the session ID.
@@ -264,7 +265,6 @@ public class ToolRegistry {
                 String postProcessedOutput = tool.postProcessOutput(
                     result.output(), sanitizedParams);
 
-                recordToolAudit(toolName, true);
                 return ToolResponse.success(postProcessedOutput);
 
             } catch (IllegalArgumentException e) {
@@ -291,15 +291,14 @@ public class ToolRegistry {
                 log.errorf("Tool '%s' execution failed: %s", toolName, raw);
                 log.debugf(e, "Full stacktrace for tool '%s' failure in session %s",
                            toolName, WorkspaceContext.requireSessionId());
-                recordToolAudit(toolName, false);
                 return ToolResponse.failure(1, friendly);
             }
         }
 
         // Direct (non-sandbox) path
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
+        recordToolAudit(toolName);
         ToolResponse response = tool.execute(sanitizedParams);
-        recordToolAudit(toolName, response.success());
         return response;
     }
 
@@ -341,12 +340,12 @@ public class ToolRegistry {
      * and WorkspaceScopeHolder use ScopedValues which are correctly propagated
      * across Quarkus virtual threads.
      */
-    private void recordToolAudit(String toolName, boolean success) {
+    private void recordToolAudit(String toolName) {
         auditService.record(
                 WorkspaceContext.requireSessionId(), resolveUserId(),
                 WorkspaceContext.agentRole(),
                 SecurityEventType.TOOL_INVOKED,
-                "tool=" + toolName + " success=" + success);
+                "tool=" + toolName);
     }
 
     /**

@@ -1,12 +1,12 @@
 package com.arcclaw.tool.playwright;
 
-import com.arcclaw.core.agent.role.ToolCapability;   // ← core.agent.role
-import com.arcclaw.core.audit.AuditService;           // ← core.audit
-import com.arcclaw.core.audit.SecurityEventType;      // ← core.audit
-import com.arcclaw.core.security.ToolOperation;       // ← core.security
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.scope.WorkspaceContext;      // ← static utility (ScopedValue-backed), not a CDI bean
+import com.arcclaw.core.scope.WorkspaceContext;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -25,9 +25,6 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean enabled;
-
-    @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
-    boolean headless;
 
     @ConfigProperty(name = "arcclaw.tools.playwright.timeout-ms", defaultValue = "30000")
     int timeoutMs;
@@ -123,7 +120,7 @@ public class PlaywrightBrowserTool implements AgentTool {
         String selector = (String) params.get("selector");
 
         try {
-            String result = pageRunner.run(url.trim(), action, selector, headless, timeoutMs);
+            String result = pageRunner.run(url.trim(), action, selector, timeoutMs);
 
             // Truncate text results at sentence boundary; screenshots pre-capped in runner
             if (!"screenshot".equals(action) && result.length() > MAX_CONTENT_CHARS) {
