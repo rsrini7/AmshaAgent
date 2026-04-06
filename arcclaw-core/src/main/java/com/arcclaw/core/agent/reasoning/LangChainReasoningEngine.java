@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -18,6 +18,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -96,23 +97,38 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject AgentOtelContext otelContext;
 
     @Override
-    public ReasoningStep nextStep(String sessionId, String agentRole, String goal, List<ReasoningStep> history) {
-        String systemPrompt = promptBuilder.build(agentRole, sessionId, goal);
+    public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
+        String sessionId = context.sessionId();
+        String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(systemPrompt));
+ 
+        // ── Fix 1: Inject explicit constraint for background sessions ──
+        if (context.autonomyLevel() == com.arcclaw.core.security.AutonomyLevel.BACKGROUND) {
+            messages.add(SystemMessage.systemMessage(
+                "CAPABILITY CONSTRAINT: You do NOT have access to `schedule_task` or " +
+                "`manage_schedule` in this context. Do not attempt to call them. " +
+                "Use only the tools explicitly listed in your tool schema."
+            ));
+        }
+ 
         messages.addAll(assembled);
 
         Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
-
-        boolean isCronFired = (sessionId != null && sessionId.toLowerCase().startsWith("cron-"))
-                || AgentSentinels.isCronGoal(goal);
-
+ 
+        // ── CAPABILITY CEILING ──
+        // BACKGROUND autonomy (CRON/Background tasks) physically strips scheduling tools 
+        // from the tool list so the LLM cannot see or call them in its schema.
+        boolean isBackgroundSession = 
+            context.autonomyLevel() == AutonomyLevel.BACKGROUND
+            || (context.sessionId() != null && context.sessionId().startsWith("cron-"));
+ 
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .filter(allowedTools::contains)
-                .filter(name -> !isCronFired || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
+                .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
                         && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
                 .map(tool -> ToolSpecification.builder()
@@ -365,7 +381,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
         Span span = otelContext.childSpan(sessionId, "structured_output_generation");
         try {
-            String systemPrompt = promptBuilder.build(agentRole, sessionId, "");
+            String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "");
 
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(SystemMessage.systemMessage(systemPrompt));

@@ -13,12 +13,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -78,14 +80,18 @@ class LangChainReasoningEnginePersonaTest {
         field.set(target, value);
     }
 
+    private AgentExecutionContext createCtx(String sessionId) {
+        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+    }
+
     @Test
     void testDebuggerRoleDoesNotSayCoordinator() {
         // Arrange
         String persona = "You are Shiva, the Debugger and Code Analyst.";
-        when(mockPromptBuilder.build(anyString(), anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString())).thenReturn(persona);
 
         // Act
-        engine.nextStep("sess-1", "debugger", "fix this bug", Collections.emptyList());
+        engine.nextStep(createCtx("sess-1"), "debugger", "fix this bug", Collections.emptyList());
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
@@ -105,10 +111,10 @@ class LangChainReasoningEnginePersonaTest {
     void testCoordinatorRoleContainsTrimurtiContext() {
         // Arrange
         String persona = "You are Vishnu, the Coordinator. THE TRIMURTI";
-        when(mockPromptBuilder.build(anyString(), anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString())).thenReturn(persona);
 
         // Act
-        engine.nextStep("sess-2", "coordinator", "plan tasks", Collections.emptyList());
+        engine.nextStep(createCtx("sess-2"), "coordinator", "plan tasks", Collections.emptyList());
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);

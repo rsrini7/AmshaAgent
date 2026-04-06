@@ -50,7 +50,7 @@ class ScheduleTaskToolTest {
     }
 
     // Add a helper to your test class
-    private <T> T executeInScope(Callable<T> task) throws Exception {
+    private <T> T executeInScope(String suggestedCron, Callable<T> task) throws Exception {
         return WorkspaceContext.run(
                 "test-session-id",
                 "test-user",
@@ -58,15 +58,14 @@ class ScheduleTaskToolTest {
                 AutonomyLevel.SUPERVISED,
                 "coordinator",
                 ChannelType.TELEGRAM,
-                task);
+                () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron).call(task::call));
     }
 
     @Test
     void testValidCronSchedulesSuccessfully() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope(() -> tool.execute(Map.of(
-                "cronExpression", "0 9 * * 1",
+        ToolResponse result = executeInScope("0 9 * * 1", () -> tool.execute(Map.of(
                 "goal", "Send weekly status report to the team via Telegram"
         )));
 
@@ -86,14 +85,15 @@ class ScheduleTaskToolTest {
     void testInvalidCronExpressionReturnsFailure() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope(() -> tool.execute(Map.of(
-                "cronExpression", "invalid-cron",
+        // Note: With the new architecture, the tool doesn't see 'invalid-cron' 
+        // from the params. It uses whatever is in suggestedCron.
+        ToolResponse result = executeInScope(null, () -> tool.execute(Map.of(
                 "goal", "Send status report"
         )));
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
-        assertTrue(result.output().contains("Invalid cron expression"));
+        assertTrue(result.output().contains("Schedule context missing"));
 
         verify(cronRepository, never()).persist(any());
     }
@@ -102,8 +102,7 @@ class ScheduleTaskToolTest {
     void testNakedPronounGoalRejected() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope(() -> tool.execute(Map.of(
-                "cronExpression", "0 9 * * 1",
+        ToolResponse result = executeInScope("0 9 * * 1", () -> tool.execute(Map.of(
                 "goal", "Deploy it to production"
         )));
 
@@ -125,10 +124,9 @@ class ScheduleTaskToolTest {
                 AutonomyLevel.SUPERVISED,
                 "coordinator",
                 ChannelType.TELEGRAM,
-                () -> tool.execute(Map.of(
-                        "cronExpression", "0 9 * * 1",
+                () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, "0 9 * * 1").call(() -> tool.execute(Map.of(
                         "goal", "Send report"
-                )));
+                ))));
 
         assertFalse(result.success());
         assertEquals(403, result.exitCode());
@@ -147,8 +145,7 @@ class ScheduleTaskToolTest {
     void testRunOnceTruePassedThrough() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        executeInScope(() -> tool.execute(Map.of(
-                "cronExpression", "30 14 15 3 *",
+        executeInScope("30 14 15 3 *", () -> tool.execute(Map.of(
                 "goal", "Send one-time reminder to check deployment status",
                 "runOnce", true
         )));

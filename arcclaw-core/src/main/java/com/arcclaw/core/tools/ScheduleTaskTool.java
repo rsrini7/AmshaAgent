@@ -78,39 +78,20 @@ public class ScheduleTaskTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Schedule a future autonomous task using a cron expression. " +
-               "The task will execute at the specified time(s) without user interaction. " +
+        return "Schedule a future autonomous task. " +
+               "The task will execute at the time pre-determined from the user's message context (e.g. 'in 5 minutes'). " +
                "Parameters: " +
 
-               "1. 'cronExpression' - Standard UNIX 5-field cron (minute hour dom month dow). " +
-                       "For runOnce=true, ALWAYS use ONLY minute and hour — wildcards for dom/month/dow: " +
-                       "\"minute hour * * *\". " +
-                       "Example one-time: \"say hi in 1 min\" at 12:15 UTC → " +
-                       "cronExpression=\"16 12 * * *\", runOnce=true. " +
-                       "Example recurring: \"0 9 * * 1-5\" = every weekday at 9 AM. " +
-                       "NEVER pin dom or month for one-time tasks — the server strips them anyway. " +
-
-               "2. 'goal' - Fully self-contained instructions. Must describe ONLY the final action. " +
+               "1. 'goal' - Fully self-contained instructions. Must describe ONLY the final action. " +
                        "Do NOT include time references or re-scheduling instructions in the goal. " +
                        "NEVER use pronouns — replace 'it/this/that' with the explicit noun. " +
 
-               "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
+               "2. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
                        "Leave unset or pass 'UTC' if unsure — do NOT pass an empty string. " +
 
-               "4. 'runOnce' - JSON boolean literal true or false (NOT a string). " +
+               "3. 'runOnce' - JSON boolean literal true or false (NOT a string). " +
                        "true for one-time tasks, false for recurring. " +
 
-               "CRON ARITHMETIC: " +
-               "Your system prompt contains the CURRENT SYSTEM TIME labelled as " +
-               "\"CURRENT SYSTEM TIME (UTC)\" with explicit UTC hour and minute values. " +
-               "You MUST read those values before computing any relative cron expression. " +
-               "NEVER guess or assume the current time. " +
-               "To compute minute for 'in N minutes': " +
-               "target_minute = (current_minute + N) mod 60. " +
-               "Increment hour by 1 if target_minute < current_minute (minute wrapped past 59). " +
-               "Show your arithmetic step-by-step before generating the cronExpression. " +
-               "English words (one=1, two=2, five=5, ten=10) equal their digits. " +
-               "NEVER use '* * * * *' — this fires every minute forever. " +
                "Returns the scheduled task ID immediately. Does NOT execute the goal now.";
     }
 
@@ -127,12 +108,6 @@ public class ScheduleTaskTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-                .addProperty("cronExpression", JsonStringSchema.builder()
-                        .description("Standard 5-field UNIX cron (minute hour dom month dow). " +
-                                "For runOnce=true ALWAYS use wildcards for dom/month/dow: " +
-                                "\"minute hour * * *\". " +
-                                "Example: \"16 12 * * *\" for one-shot at 12:16 UTC.")
-                        .build())
                 .addProperty("goal", JsonStringSchema.builder()
                         .description("Fully self-contained action for the future agent. " +
                                 "No pronouns, no time references, no re-scheduling instructions.")
@@ -142,17 +117,11 @@ public class ScheduleTaskTool implements AgentTool {
                                 "Example: 'Asia/Kolkata', 'America/New_York'. " +
                                 "Omit or use 'UTC' if unknown — do NOT pass an empty string.")
                         .build())
-                // FIX §2: JsonBooleanSchema instead of JsonStringSchema.
-                // The old schema described runOnce as a string ("true"/"false") which caused
-                // LLMs to consistently emit the quoted form "runOnce": "true".
-                // JsonBooleanSchema makes the JSON Schema type=boolean, so compliant LLMs
-                // emit the JSON literal: "runOnce": true  (no quotes).
-                // execute() still handles both Boolean and String via the switch for safety.
                 .addProperty("runOnce", JsonBooleanSchema.builder()
                         .description("true for a one-time task, false for recurring. " +
                                 "Must be JSON boolean literal true or false, NOT a string.")
                         .build())
-                .required("cronExpression", "goal")
+                .required("goal")
                 .build();
     }
 
@@ -171,7 +140,7 @@ public class ScheduleTaskTool implements AgentTool {
             chatId = userId; // REST/CLI fallback
         }
 
-        String cronExpression = (String) params.get("cronExpression");
+        String cronExpression = WorkspaceContext.suggestedCron();
         String goal           = (String) params.get("goal");
 
         // FIX §1: parseTimezone() — normalize blank/null/invalid to UTC.
@@ -191,7 +160,8 @@ public class ScheduleTaskTool implements AgentTool {
         };
 
         if (cronExpression == null || cronExpression.isBlank()) {
-            return ToolResponse.failure(400, "cronExpression is required.");
+            return ToolResponse.failure(400, "Schedule context missing. " +
+                    "To schedule a task, please include a time hint in your request (e.g., 'remind me in 5 min').");
         }
         if (goal == null || goal.isBlank()) {
             return ToolResponse.failure(400, "goal is required.");

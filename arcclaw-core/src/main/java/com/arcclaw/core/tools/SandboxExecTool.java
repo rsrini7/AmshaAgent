@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,6 +16,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
@@ -218,7 +220,7 @@ public class SandboxExecTool implements AgentTool {
                 "-source", "21",
                 "-target", "21",
                 "-d", outputDir.toString(),
-                javaFile.toString()
+                javaFile.toAbsolutePath().toString()
         );
         pb.redirectErrorStream(true); // merge stderr → stdout for full compiler output
         pb.directory(outputDir.toFile());
@@ -262,7 +264,8 @@ public class SandboxExecTool implements AgentTool {
         try {
             String code = (String) params.get("code");
             String lang = (String) params.get("language");
-            if (code == null || lang == null) return ToolResponse.failure(1, "code and language required");
+            if (lang == null) return ToolResponse.failure(1, "Parameter 'language' is required.");
+            if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
             lang = lang.toLowerCase();
 
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
@@ -286,6 +289,11 @@ public class SandboxExecTool implements AgentTool {
                 case "go"   -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
                 default     -> executeInterpreted(sessionId, workspaceRoot, lang, code, params, requiredSecrets);
             };
+        } catch (BudgetExceededException e) {
+            throw e;
+        } catch (TimeoutException e) {
+            log.errorf("[SandboxExecTool] Execution timed out: %s", e.getMessage());
+            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         } catch (Exception e) {
             String msg = e.getMessage();
             return ToolResponse.failure(1, msg != null && !msg.isBlank()
@@ -319,8 +327,11 @@ public class SandboxExecTool implements AgentTool {
         SandboxResult result = isolationExecutor.executeSandboxed(sessionId, workspaceRoot, runCmd, secrets);
         if (result == null || result.isInfraFailure()) {
             String reason = result != null ? result.reason() : "Sandbox executor returned null";
-            log.errorf("[SandboxExecTool] Infra failure (java-fallback) session=%s: %s", sessionId, reason);
+            log.errorf("[SandboxExecTool] Infra failure (java-fallback) sessionId=%s: %s", sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+        }
+        if (!result.success()) {
+            return ToolResponse.failure(1, result.reason());
         }
         return ToolResponse.success(truncate(result.output()));
     }
@@ -341,6 +352,9 @@ public class SandboxExecTool implements AgentTool {
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s", lang, sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
+        if (!result.success()) {
+            return ToolResponse.failure(1, result.reason());
+        }
         return ToolResponse.success(truncate(result.output()));
     }
 
@@ -357,6 +371,9 @@ public class SandboxExecTool implements AgentTool {
                 String reason = result != null ? result.reason() : "Sandbox executor returned null";
                 log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s", sessionId, reason);
                 return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            }
+            if (!result.success()) {
+                return ToolResponse.failure(1, result.reason());
             }
             return ToolResponse.success(truncate(result.output()));
         } catch (IOException e) {
@@ -381,8 +398,8 @@ public class SandboxExecTool implements AgentTool {
             case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
             case "bash"              -> List.of("bash", "-c", code);
             case "node"              -> List.of("node", "-e", code);
-            default -> throw new IllegalStateException(
-                    "buildCommand() called for file-based lang: " + lang);
+            default -> throw new IllegalArgumentException(
+                    "Unsupported language '" + lang + "'. Only Java, Python, Go, Node, and Bash are supported.");
         };
     }
 

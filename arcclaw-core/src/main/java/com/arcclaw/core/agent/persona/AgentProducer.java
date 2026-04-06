@@ -5,8 +5,11 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.structured.StructuredOutputEngine;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Producer for Agent persona beans.
@@ -15,6 +18,8 @@ import io.quarkus.qute.Template;
  */
 @ApplicationScoped
 public class AgentProducer {
+    @ConfigProperty(name = "arcclaw.agent.default-timezone", defaultValue = "Asia/Kolkata")
+    String defaultTimezone;
 
     @Inject
     @Location("personas/coordinator.txt")
@@ -40,45 +45,51 @@ public class AgentProducer {
     @Location("personas/synthesizer.txt")
     Template synthesizerTemplate;
 
+    @Inject
+    StructuredOutputEngine structuredOutputEngine;
+
+    @Inject
+    ObjectMapper objectMapper;
+
     @Produces
     @ApplicationScoped
     @AgentRole("coordinator")
     public Agent coordinator() {
-        return new DefaultAgent(AgentRoleEnum.COORDINATOR, coordinatorTemplate);
+        return new DefaultAgent(AgentRoleEnum.COORDINATOR, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("coder")
     public Agent coder() {
-        return new DefaultAgent(AgentRoleEnum.CODER, coderTemplate);
+        return new DefaultAgent(AgentRoleEnum.CODER, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("debugger")
     public Agent debugger() {
-        return new DefaultAgent(AgentRoleEnum.DEBUGGER, debuggerTemplate);
+        return new DefaultAgent(AgentRoleEnum.DEBUGGER, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("researcher")
     public Agent researcher() {
-        return new DefaultAgent(AgentRoleEnum.RESEARCHER, researcherTemplate);
+        return new DefaultAgent(AgentRoleEnum.RESEARCHER, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("architect")
     public Agent architect() {
-        return new DefaultAgent(AgentRoleEnum.ARCHITECT, architectTemplate);
+        return new DefaultAgent(AgentRoleEnum.ARCHITECT, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole("synthesizer")
     public Agent synthesizer() {
-        return new DefaultAgent(AgentRoleEnum.SYNTHESIZER, synthesizerTemplate);
+        return new DefaultAgent(AgentRoleEnum.SYNTHESIZER, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 }

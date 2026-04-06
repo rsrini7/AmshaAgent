@@ -1,12 +1,15 @@
 package com.arcclaw.core.agent.persona;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-
-import jakarta.inject.Inject;
+import java.util.function.Supplier;
 
 import com.arcclaw.channel.api.structured.SynthesisResult;
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -25,17 +28,22 @@ public class DefaultAgent implements Agent {
     private static final Logger log = Logger.getLogger(DefaultAgent.class);
 
     private final AgentRoleEnum roleEnum;
-    private final Template promptTemplate;
+    private final Supplier<Template> templateSupplier;
+    private final String defaultTimezone;
+    private final StructuredOutputEngine structuredOutputEngine;
+    private final ObjectMapper objectMapper;
 
-    @Inject
-    StructuredOutputEngine structuredOutputEngine;
-
-    @Inject
-    ObjectMapper objectMapper;
-
-    public DefaultAgent(AgentRoleEnum roleEnum, Template promptTemplate) {
+    public DefaultAgent(
+            AgentRoleEnum roleEnum,
+            Supplier<Template> templateSupplier,
+            String defaultTimezone,
+            StructuredOutputEngine structuredOutputEngine,
+            ObjectMapper objectMapper) {
         this.roleEnum = roleEnum;
-        this.promptTemplate = promptTemplate;
+        this.templateSupplier = templateSupplier;
+        this.defaultTimezone = defaultTimezone;
+        this.structuredOutputEngine = structuredOutputEngine;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -44,13 +52,29 @@ public class DefaultAgent implements Agent {
     }
 
     @Override
-    public String systemPrompt() {
-        TemplateInstance instance = promptTemplate.instance();
+    public String systemPrompt(AgentExecutionContext context) {
+        TemplateInstance instance = templateSupplier.get().instance();
         instance.data("tools", String.join(", ", roleEnum.definition().toolNames()));
 
         // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
         instance.data("CURRENT_UTC_ISO", Instant.now().toString());
-        instance.data("USER_TZ_OFFSET", "UTC+05:30 IST");
+
+        ZoneId zoneId = ZoneId.of(defaultTimezone);
+        ZonedDateTime localNow = ZonedDateTime.now(zoneId);
+        
+        instance.data("USER_TZ_OFFSET", zoneId.getRules().getOffset(Instant.now()).toString() + " " + zoneId.getId());
+        instance.data("CURRENT_LOCAL_TIME", localNow.format(DateTimeFormatter.ofPattern("HH:mm z")));
+
+        // Seed scheduling keys as null — Qute {#if} treats null as false
+        // CommandDispatchHandler overwrites these if real values are passed in context.data()
+        instance.data("SUGGESTED_CRON",     null);
+        instance.data("TARGET_UTC_HOUR",    null);
+        instance.data("TARGET_UTC_MINUTE",  null);
+
+        // pass all dynamic metadata from the pipeline context
+        if (context != null && context.data() != null) {
+            context.data().forEach(instance::data);
+        }
 
         return instance.render();
     }

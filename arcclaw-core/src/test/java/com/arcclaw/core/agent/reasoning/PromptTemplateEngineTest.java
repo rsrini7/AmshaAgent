@@ -2,10 +2,16 @@ package com.arcclaw.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.qute.Engine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +24,8 @@ class PromptTemplateEngineTest {
     @BeforeEach
     void setup() {
         engine = new PromptTemplateEngine();
+        engine.toolRegistry = mock(ToolRegistry.class);
+        when(engine.toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
         // Standalone Qute engine with defaults (which includes Map and Reflection resolvers)
         quteEngine = Engine.builder()
             .addDefaults()

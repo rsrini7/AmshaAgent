@@ -120,4 +120,20 @@ public class AuditServiceIntegrationTest {
             });
         });
     }
+
+    @Test
+    public void testDirectAuditRecord() {
+        WorkspaceScopeHolder.run(sessionId, () -> {
+            WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
+            auditService.record(sessionId, "test", "coordinator", SecurityEventType.LOOP_FINISH, "direct test");
+
+            // Wait for async persistence
+            auditService.waitForIdle();
+            em.clear();
+
+            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            assertEquals(1, events.size(), "Direct audit record failed to persist");
+            });
+        });
+    }
 }

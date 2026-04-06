@@ -1,5 +1,7 @@
 package com.arcclaw.core.pipeline;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelMessage;
@@ -60,5 +62,10 @@ public final class MessageContext {
     private SessionContext sessionContext;
     public Optional<SessionContext> getSessionContext() { return Optional.ofNullable(sessionContext); }
     public void setSessionContext(SessionContext sessionContext) { this.sessionContext = sessionContext; }
+
+    private final Map<String, Object> data = new HashMap<>();
+    public Map<String, Object> getData() { return data; }
+    public Object getData(String key) { return data.get(key); }
+    public void setData(String key, Object value) { this.data.put(key, value); }
 }
 

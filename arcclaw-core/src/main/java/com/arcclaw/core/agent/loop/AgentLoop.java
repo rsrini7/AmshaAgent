@@ -144,32 +144,25 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
-        
         // Fix 2 — Ensure storage goals have enough budget (min 3 steps)
         int budget = maxIterations;
         if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
             budget = Math.max(budget, 3);
         }
-        
-        return run(sessionId, agentRole, goal, engine, budget, null);
+        return run(sessionId, agentRole, goal, null, engine, budget, null);
     }
 
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations, MessageContext context) {
+        return run(sessionId, agentRole, goal, null, engine, maxIterations, context);
+    }
+
+    @ActivateRequestContext
+    public AgentResult run(String sessionId, String agentRole, String goal, String systemNote,
+            ReasoningEngine engine, int maxIterations, MessageContext context) {
 
         // --- Resolve agentRole at the API boundary ---
-        //
-        // For skill roles (e.g. "skill:code-reviewer"):
-        //   - AgentRoleEnum.fromString() returns RESEARCHER (no IAE) — correct tool set.
-        //   - BUT we MUST NOT call resolvedRole.toScopedName() ("researcher") as the
-        //     canonicalRole — that would strip the "skill:" prefix and prevent
-        //     SystemPromptBuilder from injecting the skill's custom system prompt.
-        //   - Solution: preserve the original agentRole string as canonicalRole.
-        //
-        // For standard roles (e.g. "coordinator", "researcher"):
-        //   - Behaves exactly as before: resolve enum, use toScopedName().
-        //
         final String canonicalRole;
         try {
             AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
@@ -189,10 +182,10 @@ public class AgentLoop {
                 .increment();
 
             return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                               goal, engine, maxIterations, context);
+                               goal, systemNote, engine, maxIterations, context);
         }
 
-        return runWithRole(sessionId, canonicalRole, goal, engine, maxIterations, context);
+        return runWithRole(sessionId, canonicalRole, goal, systemNote, engine, maxIterations, context);
     }
 
     /**
@@ -201,7 +194,7 @@ public class AgentLoop {
      * Package-private (not private) so @ActivateRequestContext can be proxied by Quarkus ARC.
      */
     @ActivateRequestContext
-    AgentResult runWithRole(String sessionId, String canonicalRole, String goal,
+    AgentResult runWithRole(String sessionId, String canonicalRole, String goal, String systemNote,
             ReasoningEngine engine, int maxIterations, MessageContext context) {
 
         // --- CONTEXT SETUP ---
@@ -313,7 +306,9 @@ public class AgentLoop {
                     WorkspaceContext.autonomy(),
                     maxIterations,
                     channelType,
-                    channelPlatformId
+                    channelPlatformId,
+                    systemNote,
+                    context != null ? context.getData() : null
             );
 
             AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);

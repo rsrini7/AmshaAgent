@@ -291,11 +291,17 @@ public class ApproveReflex implements AgentReflex {
             context.setResumeSignal(true);
             context.setGoal(resumeGoal);
 
+            int cronBudget = pendingCheckpoint.getMaxIterations() != null
+                    ? Math.max(3, pendingCheckpoint.getMaxIterations())
+                    : 3;
+
             AgentResult result = WorkspaceContext.run(
                     cronSessionId, cron.userId, cron.chatId,
                     AutonomyLevel.BACKGROUND, cronRole,
                     () -> agentLoop.run(
-                        cronSessionId, cronRole, resumeGoal, reasoningEngine, 5, context));
+                        cronSessionId, cronRole, resumeGoal,
+                        pendingCheckpoint.getSystemNote(),
+                        reasoningEngine, cronBudget, context));
 
             switch (result) {
                 case AgentResult.Finished _ -> {

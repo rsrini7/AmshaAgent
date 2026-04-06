@@ -233,6 +233,10 @@ smallrye:
         level: ERROR
       "com.arcclaw":
         level: DEBUG
+      "com.arcclaw.core.agent.loop.AgentStateMachineRunner":
+        level: WARN       # ← suppress goal logging noise (isInfoEnabled guard handles the rest)
+      "com.arcclaw.core.sandbox.PodmanContainerExecutor":
+        level: WARN       # ← suppress container start/stop/exec noise
       "io.quarkus":
         level: INFO
       "org.apache.camel.component.telegram":
@@ -294,6 +298,8 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
+  agent:
+    default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
     min-score: 0.25f
     context-chunks: 5
@@ -614,7 +620,7 @@ mp:
       enabled: false
     datasource:
       jdbc:
-        url: "jdbc:sqlite::memory:"
+        url: "jdbc:sqlite:target/test-audit.db"
     hibernate-orm:
       schema-management:
         strategy: update
@@ -641,6 +647,8 @@ mp:
 
   arcclaw:
     data-dir: "target/data"
+    agent:
+      default-timezone: "UTC"
     rag:
       vec-extension-path: "target/lib/vec0"
     skills:

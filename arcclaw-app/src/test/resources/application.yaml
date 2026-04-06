@@ -25,6 +25,15 @@ arcclaw:
     max-lookback-window: PT999H
       
 quarkus:
+  arc:
+    # Exclude channel impl beans from CDI during tests — their dependencies
+    # (ChannelServices, ApprovalGateway) live in arcclaw-core which is a Quarkus
+    # extension, and extension runtime beans aren't auto-discovered by Arc.
+    # These channel modules have their own test suites.
+    exclude-types:
+      - com.arcclaw.channel.telegram.TelegramAgentHandler
+      - com.arcclaw.channel.telegram.TelegramCallbackHandler
+      - com.arcclaw.channel.web.WebChatEndpoint
   mcp:
     server:
       stdio:
@@ -40,9 +49,6 @@ quarkus:
     arcclaw-channel-api:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-api
-    arcclaw-channel-telegram:
-      group-id: com.arcclaw
-      artifact-id: arcclaw-channel-telegram
   http:
     host: "localhost"
     port: 8081

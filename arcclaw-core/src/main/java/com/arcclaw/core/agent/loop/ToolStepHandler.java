@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
@@ -290,8 +291,13 @@ public class ToolStepHandler {
             List<ReasoningStep> history, ReasoningStep step,
             String toolName, Map<String, Object> params) {
         try {
-            return new InvokeResult.Responded(
-                invoker.invoke(toolName, params, context.sessionId()));
+            String suggestedCron = (context != null && context.data() != null)
+                ? (String) context.data().get("SUGGESTED_CRON")
+                : null;
+
+            return ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron)
+                .call(() -> new InvokeResult.Responded(
+                    invoker.invoke(toolName, params, context.sessionId())));
         } catch (RequiresApprovalException e) {
             return new InvokeResult.ShortCircuit(StepDecision.terminal(
                     checkpointManager.persist(context,

@@ -26,25 +26,37 @@ STRICT RULES:
 ## Timezone and Scheduling Rules (CRITICAL)
 
 The current UTC time is: {CURRENT_UTC_ISO}
-The user's timezone offset is: {USER_TZ_OFFSET} (default: UTC+05:30 IST)
+The user's local time is: {CURRENT_LOCAL_TIME} (Offset: {USER_TZ_OFFSET})
+
+{#if SUGGESTED_CRON}
+### PRE-COMPUTED SCHEDULE (USE THIS)
+The system has pre-calculated the correct UTC schedule for this request:
+- Suggested Cron: `{SUGGESTED_CRON}` (UTC)
+- Target UTC Time: {TARGET_UTC_HOUR}:{TARGET_UTC_MINUTE}
+
+**INSTRUCTION:** Use the `SUGGESTED_CRON` above for the `schedule_task` tool. 
+Do NOT perform your own timezone arithmetic if this block is present.
+Your ONLY job: confirm the schedule with the user in their local time ({CURRENT_LOCAL_TIME} timezone) and execute `schedule_task`.
+{/if}
 
 ALWAYS follow these rules when scheduling:
 
 1. Treat {CURRENT_UTC_ISO} as your ONLY ground-truth for "now".
-2. When the user says "in X minutes" or "after X minutes":
+2. If `SUGGESTED_CRON` is present (see above), prioritize it over manual calculation.
+3. When the user says "in X minutes" or "after X minutes":
    - Convert X minutes into a future UTC timestamp by adding it to {CURRENT_UTC_ISO}.
    - Use that future UTC time to derive the cron expression.
-3. When the user gives a local time like "at 5pm IST" or mentions a timezone:
+4. When the user gives a local time like "at 5pm IST" or mentions a timezone:
    - Interpret their time in the timezone given (or {USER_TZ_OFFSET} if none is given).
    - Convert that local time into an absolute UTC timestamp.
    - Derive the cron expression from that UTC timestamp.
-4. Encode cron expressions in UTC as:
+5. Encode cron expressions in UTC as:
    - "<MINUTE> <HOUR> * * *" (e.g., "15 14 * * *" for 14:15 UTC)
    - NEVER include the timezone name in the cron expression itself.
-5. ALWAYS set runOnce: true for one-shot relative schedules.
-6. NEVER guess the current time or the offset.
+6. ALWAYS set runOnce: true for one-shot relative schedules.
+7. NEVER guess the current time or the offset.
    - If you cannot compute the exact UTC time, ask the user to clarify
      instead of guessing or inventing a schedule.
-7. NEVER produce a fire time that is already in the past relative to {CURRENT_UTC_ISO}.
+8. NEVER produce a fire time that is already in the past relative to {CURRENT_UTC_ISO}.
 
 AVAILABLE TOOLS: {tools}

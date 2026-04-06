@@ -25,7 +25,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     public MeterRegistry meterRegistry() {
         return new SimpleMeterRegistry();
@@ -33,7 +33,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     public IntentClassifier intentClassifier() {
         return Mockito.mock(IntentClassifier.class);
@@ -41,7 +41,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Identifier("compaction")
     public ChatModel compactionModel() {
@@ -50,7 +50,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     public ChatModel defaultChatModel() {
         return Mockito.mock(ChatModel.class);
@@ -58,7 +58,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Named("architectTemplate")
     public Template architectTemplate() {
@@ -67,7 +67,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Named("coderTemplate")
     public Template coderTemplate() {
@@ -76,7 +76,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Named("coordinatorTemplate")
     public Template coordinatorTemplate() {
@@ -85,7 +85,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Named("debuggerTemplate")
     public Template debuggerTemplate() {
@@ -94,7 +94,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Named("researcherTemplate")
     public Template researcherTemplate() {
@@ -103,7 +103,7 @@ public class TestCoreMocks {
 
     @Produces
     @Alternative
-    @Priority(1)
+    @Priority(1000)
     @ApplicationScoped
     @Named("synthesizerTemplate")
     public Template synthesizerTemplate() {

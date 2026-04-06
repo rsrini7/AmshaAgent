@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -37,29 +38,30 @@ public class SystemPromptBuilder {
     private final PromptTemplateEngine promptTemplateEngine;
     private final CompactionSummaryCache summaryCache;
     private final SkillRegistry skillRegistry;
+    private final ToolRegistry toolRegistry;
 
     protected SystemPromptBuilder() {
         this.agentPersonaRegistry = null;
         this.promptTemplateEngine = null;
         this.summaryCache = null;
         this.skillRegistry = null;
+        this.toolRegistry = null;
     }
 
     @Inject
     Instance<ContextEnricher> contextEnrichers;
 
-    @Inject 
-    ToolRegistry toolRegistry;
-
     @Inject
     public SystemPromptBuilder(AgentPersonaRegistry agentPersonaRegistry,
                                PromptTemplateEngine promptTemplateEngine,
                                CompactionSummaryCache summaryCache,
-                               SkillRegistry skillRegistry) {
+                               SkillRegistry skillRegistry,
+                               ToolRegistry toolRegistry) {
         this.agentPersonaRegistry = agentPersonaRegistry;
         this.promptTemplateEngine = promptTemplateEngine;
         this.summaryCache = summaryCache;
         this.skillRegistry = skillRegistry;
+        this.toolRegistry = toolRegistry;
     }
 
     // ── EXECUTION BOUNDARY is intentionally absent here — it is injected
@@ -228,7 +230,7 @@ public class SystemPromptBuilder {
             Placeholder text is not a valid response and will cause system errors.
             """;
 
-    public String build(String agentRole, String sessionId, String goal) {
+    public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
         // --- Skill persona resolution ---
         // When SkillAwareIntentClassifier routes to "skill:code-reviewer", we replace
         // the persona section with the skill's own system prompt. The base AgentRoleEnum
@@ -245,14 +247,14 @@ public class SystemPromptBuilder {
                     .orElseGet(() -> {
                         log.warnf("[SystemPromptBuilder] Skill '%s' not found in registry " +
                                   "— falling back to coordinator persona", skillName);
-                        return agentPersonaRegistry.getPersonaPrompt(AgentRoleEnum.COORDINATOR);
+                        return agentPersonaRegistry.getPersonaPrompt(context, AgentRoleEnum.COORDINATOR);
                     });
 
             log.debugf("[SystemPromptBuilder] Building prompt for skill '%s' (base role: %s)",
                        skillName, roleEnum.toScopedName());
         } else {
             roleEnum = AgentRoleEnum.fromString(agentRole);
-            personaPrompt = agentPersonaRegistry.getPersonaPrompt(roleEnum);
+            personaPrompt = agentPersonaRegistry.getPersonaPrompt(context, roleEnum);
         }
 
         // 1. ArcClaw prefix + persona prompt
@@ -306,7 +308,7 @@ public class SystemPromptBuilder {
         //    so the tool list reflects what the skill's capabilities actually permit.
         String strictBinding = "**STRICT TOOL BINDING CONTRACT**\n"
                 + "ACTIVE PERSONA: " + agentRole + "\n"
-                + promptTemplateEngine.buildSystemPrompt(roleEnum, compactionSummary, Instant.now())
+                + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
                 + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
                 + "When in doubt, output text only.\n\n"
@@ -316,7 +318,7 @@ public class SystemPromptBuilder {
                 // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
                 // a prior coordinator turn and trying to call it in a role that does not have it.
                 // This block is a hard LLM-level instruction to prevent that contamination.
-                + buildToolContaminationGuard(roleEnum);
+                + buildToolContaminationGuard(context, roleEnum);
 
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
         String finalPrompt = baseSystemPrompt + strictBinding;
@@ -375,10 +377,13 @@ public class SystemPromptBuilder {
      * error that occurs when the LLM reads the conversation history and tries to reuse
      * a tool that was available to a different persona in a prior message.
      */
-    private String buildToolContaminationGuard(AgentRoleEnum roleEnum) {
+    private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        boolean isBackground = context != null && context.autonomyLevel() == com.arcclaw.core.security.AutonomyLevel.BACKGROUND;
         String toolList = roleEnum.definition().toolNames()
                 .stream()
                 .filter(name -> toolRegistry.findTool(name).isPresent())
+                .filter(name -> !isBackground || 
+                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
 

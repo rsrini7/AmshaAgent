@@ -53,7 +53,7 @@ class AgentLoopTest {
                 historyAssembler = mock(ChatHistoryAssembler.class);
                 stepParser = mock(ReasoningStepParser.class);
 
-                when(promptBuilder.build(any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
+                when(promptBuilder.build(any(), any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
 
                 engine = new LangChainReasoningEngine();
 
@@ -127,7 +127,7 @@ class AgentLoopTest {
                                 .awaitingApproval("mytool", "{}", "s1", Collections.emptyList());
                 when(stateMachineRunner.run(any(), any(), any())).thenReturn(approval);
 
-                AgentResult result = loop.runWithRole("s1", "coord", "goal", engine, 5,
+                AgentResult result = loop.runWithRole("s1", "coord", "goal", null, engine, 5,
                                 ctx);
 
                 assertTrue(result instanceof AgentResult.AwaitingApproval);

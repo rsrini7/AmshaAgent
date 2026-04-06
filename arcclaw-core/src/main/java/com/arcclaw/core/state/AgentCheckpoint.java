@@ -140,6 +140,10 @@ public class AgentCheckpoint {
     @Column(name = "retry_after_ms")
     private Integer retryAfterMs;
 
+    /** System constraints to be injected into the prompt (separate from original_goal). */
+    @Column(name = "system_note", columnDefinition = "TEXT")
+    private String systemNote;
+
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -300,6 +304,9 @@ public class AgentCheckpoint {
 
     public Integer getRetryAfterMs() { return retryAfterMs; }
     public void setRetryAfterMs(Integer retryAfterMs) { this.retryAfterMs = retryAfterMs; }
+
+    public String getSystemNote() { return systemNote; }
+    public void setSystemNote(String systemNote) { this.systemNote = systemNote; }
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;

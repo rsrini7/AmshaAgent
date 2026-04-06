@@ -13,6 +13,10 @@ arcclaw:
     max-lookback-window: PT999H
 
 quarkus:
+  arc:
+    exclude-types:
+      - com.arcclaw.channel.telegram.*
+      - com.arcclaw.channel.web.*
   application:
     name: arcclaw
     version: "1.0.0"

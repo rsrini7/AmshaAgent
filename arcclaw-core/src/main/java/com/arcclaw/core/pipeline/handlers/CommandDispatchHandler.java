@@ -1,5 +1,10 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -14,12 +19,17 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.CronTimeResolver;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class CommandDispatchHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(CommandDispatchHandler.class);
+
+    @ConfigProperty(name = "arcclaw.agent.default-timezone", defaultValue = "Asia/Kolkata")
+    String defaultTimezone;
 
     @Inject
     ReflexRegistry reflexRegistry;
@@ -110,6 +120,23 @@ public class CommandDispatchHandler implements MessageHandler {
                 yield HandleResult.STOP;
             }
             case ChannelCommand.Unknown u -> {
+                // Pre-compute scheduling metadata for antigravity (Java-side arithmetic)
+                ZonedDateTime nowUtc = ZonedDateTime.now(ZoneOffset.UTC);
+                ZoneId userZone = ZoneId.of(defaultTimezone);
+                ZonedDateTime targetUtc = CronTimeResolver.resolveTargetTime(context.getMessage().text(), nowUtc, userZone);
+                
+                if (targetUtc != null) {
+                    context.setData("SUGGESTED_CRON", String.format("%d %d * * *", 
+                            targetUtc.getMinute(), targetUtc.getHour()));
+                    context.setData("TARGET_UTC_MINUTE", targetUtc.getMinute());
+                    context.setData("TARGET_UTC_HOUR", targetUtc.getHour());
+                    context.setData("CURRENT_LOCAL_TIME", 
+                            ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
+                    
+                    log.infof("[handle] Time resolved: UTC %02d:%02d for input '%s'", 
+                            targetUtc.getHour(), targetUtc.getMinute(), context.getMessage().text());
+                }
+
                 // FIX: Check reflexes for ALL unknown inputs, not just slashes.
                 // This allows 'store FOO=bar' to be pre-parsed by reflexes.
                 String sessionId = context.getSessionId().orElse("");
