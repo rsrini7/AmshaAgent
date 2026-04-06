@@ -129,7 +129,8 @@ public class ChatHistoryAssembler {
 
                     // N ToolExecutionResultMessages — one per callId in order
                     for (ParallelToolCall call : calls) {
-                        String safeObs = call.observation() != null ? call.observation() : "";
+                        String rawObs = call.observation();
+                        String safeObs = (rawObs == null || rawObs.isBlank()) ? "(no output)" : rawObs;
                         if (safeObs.length() > 4000) safeObs = safeObs.substring(0, 4000) + "...";
                         messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(
                             call.callId(), call.toolName(), safeObs));
@@ -172,8 +173,9 @@ public class ChatHistoryAssembler {
                 messages.add(AiMessage.aiMessage(step.thought() != null ? step.thought() : "",
                         Collections.singletonList(request)));
 
-                if (step.observation() != null) {
-                    String safeObs = step.observation();
+                String rawObs = step.observation();
+                if (rawObs != null) {
+                    String safeObs = rawObs.isBlank() ? "(no output)" : rawObs;
                     if (safeObs.length() > 4000) {
                         safeObs = safeObs.substring(0, 4000) + "... [TRUNCATED FOR LENGTH]";
                     }

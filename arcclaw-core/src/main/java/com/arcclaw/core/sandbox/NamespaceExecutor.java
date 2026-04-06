@@ -50,6 +50,6 @@ public class NamespaceExecutor {
         if (process.exitValue() != 0) {
             throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
         }
-        return output;
+        return output.isBlank() ? "(no execution output)" : output;
     }
 }
