@@ -55,8 +55,6 @@ public class BinaryBootstrap {
         validateAndAutoFixLlmConfig(binaryDir);
         validateSandboxTools();
         interactiveSetupIfNeeded(binaryDir, args);
-
-
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -227,13 +225,13 @@ public class BinaryBootstrap {
             System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
 
             String modelName = switch (provider) {
-                case "openrouter" -> "google/gemma-3-27b-it:free";
+                case "openrouter" -> "openai/gpt-oss-20b:free";
                 default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
 
             String compactionModel = switch (provider) {
-                case "openrouter" -> "openai/gpt-oss-20b:free";
+                case "openrouter" -> "google/gemma-3-27b-it:free";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_COMPACTION_MODEL", compactionModel);
@@ -245,8 +243,6 @@ public class BinaryBootstrap {
             System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", intentModel);
             // Will be persisted to .env during the loop below
         }
-
-
 
         List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
         if (missing.isEmpty()) return;
@@ -270,7 +266,6 @@ public class BinaryBootstrap {
         
         // Ensure Jina key is at least present as a placeholder so users see it
         initEnvFile(envFile, "ARCCLAW_EMBED_API_KEY", "jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-
 
         initEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
 
@@ -409,26 +404,14 @@ public class BinaryBootstrap {
         System.err.println();
     }
 
-    /**
-     * Initializes a key only if it's missing or currently holds a placeholder value.
-     * Use this for setting defaults during first-run without overriding user changes.
-     */
     private static void initEnvFile(Path envFile, String key, String value) {
         patchEnvFile(envFile, key, value, PatchMode.INIT);
     }
 
-    /**
-     * Replaces the value of an existing KEY=... line if the value is different,
-     * or appends it if missing. Preservation of original behavior ("upsert if different").
-     */
     private static void patchEnvFile(Path envFile, String key, String value) {
         patchEnvFile(envFile, key, value, PatchMode.UPDATE);
     }
 
-    /**
-     * Always overwrites the existing KEY=... line with the new value.
-     * Use this for mandatory migrations (e.g., forcing Jina in native builds).
-     */
     private static void forcePatchEnvFile(Path envFile, String key, String value) {
         patchEnvFile(envFile, key, value, PatchMode.FORCE);
     }
@@ -443,7 +426,6 @@ public class BinaryBootstrap {
             }
             String content = Files.readString(envFile);
             
-            // Check if key exists (even if it's commented out)
             Pattern pattern = Pattern.compile("(?m)^" + Pattern.quote(key) + "=.*$");
             Matcher matcher = pattern.matcher(content);
             
@@ -463,13 +445,11 @@ public class BinaryBootstrap {
                 };
 
                 if (needsPatch) {
-                    // Detect and warn about duplicate keys while we're here
                     int count = 0;
                     matcher.reset();
                     while (matcher.find()) count++;
                     if (count > 1) {
                         System.err.println("[ArcClaw] ⚠️  Warning: Duplicate key '" + key + "' found in .env. Cleaning up...");
-                        // Dedup by replacing all occurrences with the new value
                         content = pattern.matcher(content).replaceAll(Matcher.quoteReplacement(newLine));
                     } else {
                         content = pattern.matcher(content).replaceFirst(Matcher.quoteReplacement(newLine));
@@ -477,7 +457,6 @@ public class BinaryBootstrap {
                     Files.writeString(envFile, content);
                 }
             } else {
-                // Key not present in file at all — append it
                 String separator = content.endsWith(System.lineSeparator()) ? "" : System.lineSeparator();
                 Files.writeString(envFile,
                     separator + key + "=" + value + System.lineSeparator(),
@@ -505,8 +484,6 @@ public class BinaryBootstrap {
             } catch (IOException e) {
                 System.err.println("[ArcClaw] ⚠️  Warning: Failed to extract .env.example: " + e.getMessage());
             }
-        } else {
-            System.err.println("[ArcClaw] No .env found. Use the existing .env.example:  cp .env.example .env");
         }
     }
  
@@ -540,7 +517,7 @@ public class BinaryBootstrap {
                 }
             }
         }
-        if (anyFixed) loadDotEnv(binaryDir); // reload so Quarkus config picks up fixed values
+        if (anyFixed) loadDotEnv(binaryDir);
     }
 
     private static void validateAndAutoFixLlmConfig(Path binaryDir) {
@@ -550,13 +527,12 @@ public class BinaryBootstrap {
 
         String baseUrl = System.getProperty("ARCCLAW_LLM_BASE_URL", System.getenv("ARCCLAW_LLM_BASE_URL"));
 
-        // 1. Resolve missing ARCCLAW_LLM_BASE_URL
         if (baseUrl == null || baseUrl.isBlank()) {
             String defaultUrl = switch (provider.toLowerCase()) {
                 case "openrouter" -> "https://openrouter.ai/api/v1";
                 case "openai"     -> "https://api.openai.com/v1";
                 case "ollama"     -> "http://localhost:11434";
-                default           -> null; // Groq is the default in application.yaml
+                default           -> null;
             };
 
             if (defaultUrl != null) {
@@ -566,51 +542,38 @@ public class BinaryBootstrap {
             }
         }
 
-        // 2. Cross-validate models for the provider (prevent Groq models on OpenRouter)
         if ("openrouter".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
+            // Main Model: safe pick with tool support
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
             
-            // Fix base URLs for utilities
+            // Compaction: lightweight gemma-3
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "google/gemma-3-27b-it:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "google/gemma-3-27b-it:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "google/gemma-3-27b-it:free");
+
+            // Intent Classifier: tool support
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
+            
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
-            
-            // Also fix legacy/overloaded free models if they were previously set for utilities
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "openai/gpt-oss-20b:free");
-
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "openai/gpt-oss-20b:free");
-            
-            // Legacy → new default (users upgrading from older installs)
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
-            
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
@@ -620,7 +583,6 @@ public class BinaryBootstrap {
 
     private static void fixIfMatches(Path envFile, String key, String wrongValue, String targetValue) {
         String current = System.getProperty(key, System.getenv(key));
-        // If current is the known wrong value or is missing/placeholder, set it to the target
         if (current == null || current.isBlank() || current.equals(wrongValue)) {
             if (!targetValue.equals(current)) {
                 System.err.println("[ArcClaw] ℹ️  " + key + " is inconsistent with provider — auto-setting to: " + targetValue);
@@ -637,24 +599,13 @@ public class BinaryBootstrap {
         if (SandboxStrategy.PODMAN == strategy) {
             if (!canRun("podman", "--version")) {
                 System.err.println("[ArcClaw] ⚠️  Podman not found — sandbox will be OFFLINE.");
-                System.err.println("           Install Podman or set ARCCLAW_SANDBOX_STRATEGY=DIRECT/NONE.");
             } else {
-                // Check if the image exists
                 String image = System.getProperty("ARCCLAW_SANDBOX_IMAGE", 
                         System.getenv().getOrDefault("ARCCLAW_SANDBOX_IMAGE", "localhost/arcclaw-tool-runner:latest"));
                 if (!canRun("podman", "image", "inspect", image, "--format", "{{.Id}}")) {
-                    System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing from local storage.");
-                    System.err.println("           Build it: podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
+                    System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing.");
                 }
             }
-        } else if (SandboxStrategy.DIRECT == strategy) {
-             // Check common host tools if we're in direct mode
-             String[] tools = {"python", "node", "go", "java"};
-             for (String tool : tools) {
-                if (!canRun(tool, tool.equals("java") || tool.equals("go") ? "version" : "--version")) {
-                    System.err.println("[ArcClaw] ⚠️  " + tool + " not found on host — " + tool + " execution will fail.");
-                }
-             }
         }
     }
 

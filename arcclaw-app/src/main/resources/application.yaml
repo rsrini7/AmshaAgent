@@ -302,7 +302,7 @@ arcclaw:
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
     timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
-    fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL:}
+    fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL:google/gemma-3-27b-it:free}
     fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL:}
     fallback-api-key: ${ARCCLAW_LLM_FALLBACK_API_KEY:}
     fallback-ollama-base-url: ${ARCCLAW_LLM_FALLBACK_OLLAMA_BASE_URL:http://localhost:11434}
