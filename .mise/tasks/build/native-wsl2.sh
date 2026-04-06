@@ -46,7 +46,7 @@ rsync -a --delete \
 echo "🔨 Compiling native Linux binary..."
 cd "$BUILD_DIR"
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests -Dquarkus.native.container-build=false -Dquarkus.native.native-image-xmx=8g
+./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests -Dquarkus.native.container-build=false -Dquarkus.native.native-image-xmx=12g
 
 # 4. Copy ALL compiled artifacts directly back to Windows target/ AND dist/
 echo "🚚 Bringing build artifacts back to Windows..."

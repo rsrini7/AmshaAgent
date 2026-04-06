@@ -434,7 +434,7 @@ if ($strategy -eq 'container') {
     Write-Host 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
     try {
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $containerFlag
+        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests -Dquarkus.native.native-image-xmx=12g $containerFlag
         if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
