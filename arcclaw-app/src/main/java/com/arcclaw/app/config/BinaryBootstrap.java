@@ -227,19 +227,19 @@ public class BinaryBootstrap {
             System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
 
             String modelName = switch (provider) {
-                case "openrouter" -> "meta-llama/llama-3.3-70b-instruct:free";
+                case "openrouter" -> "google/gemma-3-27b-it:free";
                 default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
 
             String compactionModel = switch (provider) {
-                case "openrouter" -> "mistralai/mistral-7b-instruct:free";
+                case "openrouter" -> "openai/gpt-oss-20b:free";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_COMPACTION_MODEL", compactionModel);
 
             String intentModel = switch (provider) {
-                case "openrouter" -> "mistralai/mistral-7b-instruct:free";
+                case "openrouter" -> "openai/gpt-oss-20b:free";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", intentModel);
@@ -568,39 +568,39 @@ public class BinaryBootstrap {
 
         // 2. Cross-validate models for the provider (prevent Groq models on OpenRouter)
         if ("openrouter".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-3.3-70b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "google/gemma-3-27b-it:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "google/gemma-3-27b-it:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
             
             // Fix base URLs for utilities
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             
             // Also fix legacy/overloaded free models if they were previously set for utilities
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "openai/gpt-oss-20b:free");
 
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "mistralai/mistral-7b-instruct:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "mistralai/mistral-7b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "openai/gpt-oss-20b:free");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");

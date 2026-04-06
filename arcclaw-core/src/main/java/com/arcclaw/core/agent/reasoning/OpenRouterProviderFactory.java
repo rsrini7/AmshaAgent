@@ -20,7 +20,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
     String apiKey;
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.model-name",
-                    defaultValue = "meta-llama/llama-3.3-70b-instruct:free")
+                    defaultValue = "google/gemma-3-27b-it:free")
     String modelName;
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
