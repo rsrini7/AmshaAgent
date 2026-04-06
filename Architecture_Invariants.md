@@ -578,6 +578,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
 - GraalVM attempts to store these objects in the "image heap" at build time, leading to `UnsupportedFeatureException` (An object of type ... was found in the image heap).
 - Use `@ApplicationScoped` instance fields or `@PostConstruct` lazy initialization to ensure these objects are created at run-time.
+- **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary.
 
 
 ---
@@ -997,6 +998,12 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `success()` (instead of `isSuccess()`)
   - `exitCode()` (instead of `status()`)
   - `output()` (instead of `content()`)
+
+### 16.11 Bootstrap and Setup Integration
+- New modules with required or optional user settings (API keys, toggles, binary paths) MUST be integrated into the interactive setup wizard.
+- Update `com.arcclaw.app.util.CliUtils.getMissingVarSpecs()` in `arcclaw-app` to include the `VarSpec` for these variables.
+- If the module requires complex post-boot setup (e.g., downloading browser binaries, extracting native libs), implement an idempotent `*Installer` utility in `arcclaw-app` and call it during the `BinaryBootstrap` sequence.
+- **Dependency Constraint:** Per §16.1, the new module MUST NOT depend on `arcclaw-app`. The integration code (prompts and installer calls) resides in `arcclaw-app`, which is the correct layer for wiring and orchestration.
 
 
 ## 17. General Java Guards
