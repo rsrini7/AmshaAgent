@@ -29,10 +29,10 @@ public class LlmModelFactory {
             String modelName,
             Integer maxTokens,
             Duration timeout,
+            Integer maxRetries,
             String ollamaBaseUrl,
             String ollamaModelId) {
 
-        // ← THIS IS THE OMITTED LOGIC — Ollama overrides both base-url and model name
         String effectiveBaseUrl = "ollama".equalsIgnoreCase(provider) ? ollamaBaseUrl : baseUrl;
         String effectiveModel   = "ollama".equalsIgnoreCase(provider) ? ollamaModelId : modelName;
 
@@ -40,10 +40,8 @@ public class LlmModelFactory {
             .filter(f -> f.providerId().equalsIgnoreCase(provider))
             .findFirst()
             .orElseThrow(() -> new IllegalStateException(
-                "No RoutingChatModelProvider registered for provider='" + provider +
-                "'. Registered: " + factories.stream()
-                    .map(RoutingChatModelProvider::providerId)
-                    .collect(Collectors.joining(", "))));
+                "No RoutingChatModelProvider registered for provider='" + provider + "'. Registered: " + 
+                factories.stream().map(RoutingChatModelProvider::providerId).collect(Collectors.joining(", "))));
 
         LlmModelConfig config = new LlmModelConfig(
             provider.toLowerCase(),
@@ -51,9 +49,18 @@ public class LlmModelFactory {
             effectiveBaseUrl,
             Optional.ofNullable(apiKey).filter(k -> !k.isBlank()),
             Optional.ofNullable(maxTokens),
-            Optional.ofNullable(timeout)
+            Optional.ofNullable(timeout),
+            Optional.ofNullable(maxRetries)
         );
 
         return factory.create(config);
+    }
+
+    public static String inferProviderFromUrl(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) return "openrouter";
+        if (baseUrl.contains("openai.com"))   return "openai";
+        if (baseUrl.contains("groq.com"))     return "groq";
+        if (baseUrl.contains("localhost:11434")) return "ollama";
+        return "openrouter"; // default: OpenAI-compatible
     }
 }

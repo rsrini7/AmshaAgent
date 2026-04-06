@@ -18,6 +18,7 @@ public class OpenAiLlmProviderFactory implements RoutingChatModelProvider {
             .modelName(config.modelName())
             .maxTokens(config.maxTokens().orElse(null))
             .timeout(config.timeout().orElse(null))
+            .maxRetries(config.maxRetries().orElse(3))
             .temperature(0.0)
             .logRequests(false)
             .logResponses(false)

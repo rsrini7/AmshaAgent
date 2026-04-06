@@ -1,6 +1,7 @@
 package com.arcclaw.core.sandbox;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,15 +42,19 @@ public class NamespaceExecutor {
         }
         pb.redirectErrorStream(true);
         var process = pb.start();
-        var output = new String(process.getInputStream().readAllBytes());
+        
+        // Drain stdout BEFORE waitFor() to capture buffered output correctly
+        var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        
         boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
             throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");
         }
+        String result = output.trim();
         if (process.exitValue() != 0) {
-            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + output);
+            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + result);
         }
-        return output;
+        return result.isBlank() ? "(no execution output)" : result;
     }
 }

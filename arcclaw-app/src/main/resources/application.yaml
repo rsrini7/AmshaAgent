@@ -300,6 +300,13 @@ arcclaw:
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
+    max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
+    timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
+    fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL:}
+    fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL:}
+    fallback-api-key: ${ARCCLAW_LLM_FALLBACK_API_KEY:}
+    fallback-ollama-base-url: ${ARCCLAW_LLM_FALLBACK_OLLAMA_BASE_URL:http://localhost:11434}
+    fallback-ollama-model: ${ARCCLAW_LLM_FALLBACK_OLLAMA_MODEL:llama3.2}
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
@@ -323,10 +330,13 @@ arcclaw:
       enabled: true
   routing:
     intent-classifier:
+      base-url: ${ARCCLAW_INTENT_CLASSIFIER_BASE_URL:https://api.groq.com/openai/v1}
+      api-key: ${ARCCLAW_INTENT_CLASSIFIER_API_KEY:not-configured}
       # Specific model alias for free tier ensures structured mode support (§OpenRouter-Fix)
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
       timeout-seconds: 5
+      max-retries: ${ARCCLAW_INTENT_CLASSIFIER_MAX_RETRIES:3}
       sla-warn-ms: 2000
   memory:
     compaction:
@@ -339,6 +349,7 @@ arcclaw:
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
+      max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
   chat-memory:
     max-messages: 20
   api:
@@ -419,8 +430,8 @@ arcclaw:
     # NOT subject to this floor.
     min-tokens-per-call: 10
     token-limit: 100000
-    budget-usd: "${ARCCLAW_SESSION_BUDGET_USD:10.00}"
-    action-on-exceed: READONLY
+    budget-usd: "${ARCCLAW_BUDGET_LIMIT:999.00}"
+    action-on-exceed: "${ARCCLAW_BUDGET_ACTION:READONLY}"
     price-per-1k-input: 0.003
     price-per-1k-output: 0.015
     approval-timeout-minutes: 60 # must be >> gc-interval converted to minutes

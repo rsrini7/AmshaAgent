@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.time.Duration;
+
 import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.ChatModel;
@@ -18,6 +20,12 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
     boolean logHttp;
 
+    @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
+    int maxRetries;
+
+    @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
+    Duration timeout;
+
     @Override
     public String providerName() {
         return "openai";
@@ -28,6 +36,8 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
+                .timeout(timeout)
+                .maxRetries(maxRetries)
                 .logRequests(logHttp)
                 .logResponses(logHttp)
                 .build();

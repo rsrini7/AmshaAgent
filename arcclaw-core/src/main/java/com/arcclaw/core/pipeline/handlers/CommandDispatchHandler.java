@@ -130,6 +130,9 @@ public class CommandDispatchHandler implements MessageHandler {
                             targetUtc.getMinute(), targetUtc.getHour()));
                     context.setData("TARGET_UTC_MINUTE", targetUtc.getMinute());
                     context.setData("TARGET_UTC_HOUR", targetUtc.getHour());
+                    context.setData("SUGGESTED_NEXT_FIRE_TIME", 
+                            targetUtc.toInstant().toString());
+                    
                     context.setData("CURRENT_LOCAL_TIME", 
                             ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
                     

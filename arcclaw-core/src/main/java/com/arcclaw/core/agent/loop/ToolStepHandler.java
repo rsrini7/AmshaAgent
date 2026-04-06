@@ -294,8 +294,12 @@ public class ToolStepHandler {
             String suggestedCron = (context != null && context.data() != null)
                 ? (String) context.data().get("SUGGESTED_CRON")
                 : null;
+            String suggestedNextFireTime = (context != null && context.data() != null)
+                ? (String) context.data().get("SUGGESTED_NEXT_FIRE_TIME")
+                : null;
 
             return ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron)
+                .where(WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME, suggestedNextFireTime)
                 .call(() -> new InvokeResult.Responded(
                     invoker.invoke(toolName, params, context.sessionId())));
         } catch (RequiresApprovalException e) {

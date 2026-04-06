@@ -107,7 +107,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         messages.add(SystemMessage.systemMessage(systemPrompt));
  
         // ── Fix 1: Inject explicit constraint for background sessions ──
-        if (context.autonomyLevel() == com.arcclaw.core.security.AutonomyLevel.BACKGROUND) {
+        if (context.autonomyLevel() == AutonomyLevel.BACKGROUND) {
             messages.add(SystemMessage.systemMessage(
                 "CAPABILITY CONSTRAINT: You do NOT have access to `schedule_task` or " +
                 "`manage_schedule` in this context. Do not attempt to call them. " +

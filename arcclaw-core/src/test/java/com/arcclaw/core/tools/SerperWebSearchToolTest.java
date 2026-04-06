@@ -154,6 +154,6 @@ class SerperWebSearchToolTest {
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
             AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
         
-        assertTrue(resp.output().contains("No results"));
+        assertTrue(resp.output().contains("No relevant web or news results"));
     }
 }

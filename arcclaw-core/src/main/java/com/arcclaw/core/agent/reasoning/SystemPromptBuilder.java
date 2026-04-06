@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
 import org.jboss.logging.Logger;
@@ -378,7 +379,7 @@ public class SystemPromptBuilder {
      * a tool that was available to a different persona in a prior message.
      */
     private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
-        boolean isBackground = context != null && context.autonomyLevel() == com.arcclaw.core.security.AutonomyLevel.BACKGROUND;
+        boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
         String toolList = roleEnum.definition().toolNames()
                 .stream()
                 .filter(name -> toolRegistry.findTool(name).isPresent())

@@ -28,9 +28,9 @@ public class CoderRoutingProvider implements IntentRoutingProvider {
             "^\\s*(can\\s+you\\s+)?(execute|run)\\s+it|" +
             "^\\s*just\\s+(run|execute)\\s+it|" +
             // NEW: "try same in java/python/go/node/bash"
-            "try\\s+same\\s+in\\s+(java|python|go|node|bash|javascript|typescript|kotlin|ruby)|" +
-            // NEW: "execute it and share result" (no 'simplify' prefix needed)
-            "^\\s*(execute|run)\\s+it" +
+            "(?i)try\\s+same\\s+in\\s+(java|python|go|node|bash|javascript|typescript|kotlin|ruby)|" +
+            // NEW: Recurrent keywords for direct routing
+            "(?i)^\\s*(try\\s+again|redo|same\\s+(thing|program|code)|once\\s+more)" +
             ")",
             Pattern.CASE_INSENSITIVE
         );

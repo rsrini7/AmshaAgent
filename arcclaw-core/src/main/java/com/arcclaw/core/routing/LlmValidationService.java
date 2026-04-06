@@ -50,6 +50,7 @@ public class LlmValidationService implements LlmValidationGateway {
                 model,
                 10,
                 Duration.ofSeconds(15),
+                1, // maxRetries
                 "ollama".equalsIgnoreCase(provider) ? effectiveBaseUrl : null,
                 "ollama".equalsIgnoreCase(provider) ? model : null
             );

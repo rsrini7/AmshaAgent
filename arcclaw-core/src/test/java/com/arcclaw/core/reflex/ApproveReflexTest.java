@@ -26,9 +26,11 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -66,13 +68,13 @@ class ApproveReflexTest {
     AgentCronRepository cronRepository;
 
     @InjectMock
-    com.arcclaw.core.agent.reasoning.ReasoningEngine reasoningEngine;
+    ReasoningEngine reasoningEngine;
 
     @InjectMock
     CheckpointResumeHandler checkpointResumeHandler;
 
     @InjectMock
-    com.arcclaw.core.lifecycle.WorkspaceManager workspaceManager;
+    WorkspaceManager workspaceManager;
 
     @SuppressWarnings("unchecked")
     Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);

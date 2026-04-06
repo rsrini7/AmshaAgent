@@ -20,6 +20,7 @@ public final class WorkspaceContext {
     public static final ScopedValue<String> AGENT_ROLE = ScopedValue.newInstance();
     public static final ScopedValue<String> CHANNEL_TYPE = ScopedValue.newInstance();
     public static final ScopedValue<String> SUGGESTED_CRON = ScopedValue.newInstance();
+    public static final ScopedValue<String> SUGGESTED_NEXT_FIRE_TIME = ScopedValue.newInstance();
 
 
     private WorkspaceContext() {
@@ -151,5 +152,9 @@ public final class WorkspaceContext {
 
     public static String suggestedCron() {
         return SUGGESTED_CRON.isBound() ? SUGGESTED_CRON.get() : null;
+    }
+
+    public static String suggestedNextFireTime() {
+        return SUGGESTED_NEXT_FIRE_TIME.isBound() ? SUGGESTED_NEXT_FIRE_TIME.get() : null;
     }
 }

@@ -14,7 +14,8 @@ public record LlmModelConfig(
         String baseUrl,
         Optional<String> apiKey,
         Optional<Integer> maxTokens,
-        Optional<Duration> timeout
+        Optional<Duration> timeout,
+        Optional<Integer> maxRetries
 ) {
     public LlmModelConfig {
         Objects.requireNonNull(provider,   "provider");

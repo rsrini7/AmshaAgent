@@ -84,18 +84,19 @@ public class CronJobRunner {
 
             ChannelType type = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
 
+            String role = resolveRole(job);
             AgentResult result = WorkspaceContext.run(
                 cronSessionId, 
                 job.userId, 
                 job.chatId, 
-                AutonomyLevel.BACKGROUND, 
-                AgentRoleEnum.COORDINATOR.toScopedName(), 
+                AutonomyLevel.SUPERVISED,
+                role, 
                 type,
                 () -> {
                     MessageContext context = createCronContext(job, cronSessionId, executionId, job.goal, type);
                     return agentLoop.run(
                         cronSessionId,
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        role,
                         job.goal,
                         systemNote,
                         engine,
@@ -110,6 +111,30 @@ public class CronJobRunner {
         } catch (Throwable t) {
             resultHandler.handleFailure(job, cronSessionId, executionId, t);
         }
+    }
+
+    private String resolveRole(AgentCronEntity job) {
+        if (job.executionRole != null && !job.executionRole.isBlank()) {
+            return job.executionRole;
+        }
+        
+        // Legacy fallback heuristic
+        String goalLower = job.goal.toLowerCase();
+        
+        // Priority 1 — Coordinator (Meta-scheduling / goal orchestration)
+        if (goalLower.contains("coordinator task") || goalLower.contains("meta-schedule") || goalLower.contains("schedule next")) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+        
+        // Priority 2 — Specific agent hints
+        if (goalLower.contains("researcher task") || goalLower.contains("fetch") || goalLower.contains("search") || goalLower.contains("discovery")) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        } else if (goalLower.contains("coder task") || goalLower.contains("write code") || goalLower.contains("fix bug") || goalLower.contains("refactor")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        
+        // Default to researcher for cron tasks as most involve retrieval/monitoring
+        return AgentRoleEnum.RESEARCHER.toScopedName();
     }
 
     private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal, ChannelType channelType) {
