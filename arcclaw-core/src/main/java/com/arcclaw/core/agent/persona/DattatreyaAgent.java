@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.persona;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -10,6 +11,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.structured.StructuredOutputEngine;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
@@ -87,6 +89,9 @@ public class DattatreyaAgent implements Agent {
         return List.copyOf(AgentRoleEnum.SYNTHESIZER.definition().toolNames());
     }
 
+    @Inject
+    ObjectMapper objectMapper;
+
     /**
      * Synthesizes multi-agent findings into a final resolution using structured output.
      */
@@ -98,6 +103,22 @@ public class DattatreyaAgent implements Agent {
                 result.contributions() != null ? result.contributions().size() : 0,
                 (result.conflictSummary() != null && !result.conflictSummary().isEmpty()) ? "YES" : "NONE");
 
-        return AgentResult.finished(result.finalResolution(), List.copyOf(history));
+        try {
+            String json = objectMapper.writeValueAsString(result);
+            // Add a synthetic reasoning step to the history so it is persisted
+            // in the AgentCheckpoint's history (stateJson).
+            history.add(new ReasoningStep(
+                "I have synthesized the specialist findings into a final resolution.",
+                ReasoningStep.FINISH,
+                Map.of("answer", result.finalResolution(), "structured", json),
+                "Structured synthesis complete.",
+                0, 0 // Tokens already accounted for in invoke()? 
+            ));
+        } catch (Exception e) {
+            log.warnf("Failed to serialize synthesis result for session %s: %s",
+                sessionId, e.getMessage());
+        }
+
+        return AgentResult.structuredFinished(result.finalResolution(), result, List.copyOf(history));
     }
 }

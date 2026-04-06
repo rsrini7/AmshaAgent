@@ -24,13 +24,13 @@ class BatchHitlKeyboardBuilder {
     static InlineKeyboardMarkup buildKeyboard(String sessionId, List<String> toolNames) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        // Format sessionId
-        String safeSessionId = sessionId.replace(":", "_");
+        // Format sessionId to prevent collision with pipe separator (§7.25)
+        String safeSessionId = sessionId.replace("|", "_").replace(":", "_");
 
         for (String toolName : toolNames) {
-            String safeToolName = toolName.replace(":", "_");
-            String approveCb = truncateCb("BATCH_APPROVE:" + safeSessionId + ":" + safeToolName);
-            String denyCb = truncateCb("BATCH_DENY:" + safeSessionId + ":" + safeToolName);
+            String safeToolName = toolName.replace("|", "_").replace(":", "_");
+            String approveCb = truncateCb("BATCH_APPROVE|" + safeSessionId + "|" + safeToolName);
+            String denyCb = truncateCb("BATCH_DENY|" + safeSessionId + "|" + safeToolName);
             
             List<InlineKeyboardButton> row = new ArrayList<>();
             
@@ -52,12 +52,12 @@ class BatchHitlKeyboardBuilder {
         
         InlineKeyboardButton approveAllBtn = new InlineKeyboardButton();
         approveAllBtn.setText("✅ Approve All");
-        approveAllBtn.setCallbackData(truncateCb("BATCH_APPROVE_ALL:" + safeSessionId));
+        approveAllBtn.setCallbackData(truncateCb("BATCH_APPROVE_ALL|" + safeSessionId));
         finalRow.add(approveAllBtn);
 
         InlineKeyboardButton denyAllBtn = new InlineKeyboardButton();
         denyAllBtn.setText("🚫 Deny All");
-        denyAllBtn.setCallbackData(truncateCb("BATCH_DENY_ALL:" + safeSessionId));
+        denyAllBtn.setCallbackData(truncateCb("BATCH_DENY_ALL|" + safeSessionId));
         finalRow.add(denyAllBtn);
 
         rows.add(finalRow);
@@ -84,7 +84,8 @@ class BatchHitlKeyboardBuilder {
             return Optional.empty();
         }
 
-        String[] parts = callbackData.split(":");
+        // Switch to pipe separator to support namespaced tools (§7.25)
+        String[] parts = callbackData.split("\\|");
         if (parts.length < 2) return Optional.empty();
 
         String action = parts[0];

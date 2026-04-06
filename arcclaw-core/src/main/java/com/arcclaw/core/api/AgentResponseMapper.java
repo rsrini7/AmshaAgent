@@ -45,6 +45,14 @@ public class AgentResponseMapper {
                         ? Response.accepted(entity).build()
                         : Response.ok(entity).build();
             }
+            case AgentResult.StructuredFinished sf -> {
+                String answer = sanitizeAnswer(sf.answer());
+                AgentResponse entity = new AgentResponse(
+                        answer, sf.totalInputTokens(), sf.totalOutputTokens());
+                yield isAsync
+                        ? Response.accepted(entity).build()
+                        : Response.ok(entity).build();
+            }
             case AgentResult.AwaitingApproval a -> Response.status(202)
                     .entity(new ApprovalRequiredResponse(
                             a.toolName(), a.paramsJson(), a.sessionId()))

@@ -19,6 +19,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -53,6 +54,9 @@ class ReflexRegistryTest {
     @InjectMock
     AuditHashUtil hashUtil;
     
+    @InjectMock
+    CheckpointApprovalService checkpointApprovalService;
+
     @BeforeEach
     void setupMocks() {
         doReturn("mock-sha256").when(hashUtil).sha256hex(anyString());
@@ -182,7 +186,7 @@ class ReflexRegistryTest {
 
     @Test
     void testDenyReflexWithNoPendingApproval() {
-        when(statefulAgentStore.load(anyString(), anyString()))
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
                 .thenReturn(Optional.empty());
 
         ReflexResult result = reflexRegistry.processIfReflex(
@@ -198,18 +202,15 @@ class ReflexRegistryTest {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setSessionId("session-deny");
         cp.setAgentRole("coordinator");
-        when(statefulAgentStore.load("session-deny", "coordinator"))
+        when(statefulAgentStore.findLatestAwaitingApproval("session-deny"))
                 .thenReturn(Optional.of(cp));
 
         reflexRegistry.processIfReflex("session-deny", "user-1","chat-1", "/deny", createContext("/deny"));
 
-        verify(statefulAgentStore).save(argThat(saved ->
-                saved.getStatus() == CheckpointStatus.FAILED &&
-                "Human denied the tool execution.".equals(saved.getFailReason())
-        ));
+        verify(checkpointApprovalService).denyAll(eq("session-deny"), eq("CLI deny"));
     }
 
-    // ── Fail-safe ───────────────────────────────────────────────────────────
+    // ── Fail-safe
 
     @Test
     void testReflexExceptionReturnsErrorStringSafely() {

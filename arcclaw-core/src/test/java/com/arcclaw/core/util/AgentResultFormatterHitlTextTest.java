@@ -12,7 +12,7 @@ class AgentResultFormatterHitlTextTest {
 
     @Test
     void formatHitlMessage_containsNoMarkdownV2Markers() {
-        String toolName = "parallel:github,weather";
+        String toolName = "parallel|github,weather";
         String params = "{\"q\":\"London\"}";
         
         // AwaitingApproval(toolName, paramsJson, sessionId, steps)

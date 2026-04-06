@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -23,6 +22,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
@@ -51,6 +51,9 @@ class DenyReflexTest {
 
     @InjectMock
     AgentLoop agentLoop;
+
+    @InjectMock
+    CheckpointApprovalService checkpointApprovalService;
 
     @InjectMock
     AgentCronRepository cronRepository;
@@ -119,7 +122,7 @@ class DenyReflexTest {
         cron.goal = "Backup databases";
         cron.status = CronStatus.AWAITING_APPROVAL;
 
-        when(statefulAgentStore.load(anyString(), anyString())).thenReturn(Optional.empty());
+        when(statefulAgentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
 
         MessageContext ctx = createContext("/deny");
@@ -137,9 +140,9 @@ class DenyReflexTest {
         String sessionId = "session-1";
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setAgentRole("architect");
 
-        // Architect role was not in the hardcoded list before
-        when(statefulAgentStore.load(eq(sessionId), eq("architect")))
+        when(statefulAgentStore.findLatestAwaitingApproval(eq(sessionId)))
                 .thenReturn(Optional.of(cp));
 
         MessageContext ctx = createContext("/deny");
@@ -147,10 +150,7 @@ class DenyReflexTest {
         String resultText = result.commandResponse().get();
 
         assertTrue(resultText.contains("Execution denied"));
-        verify(statefulAgentStore).save(argThat(checkpoint -> 
-            checkpoint.getStatus() == CheckpointStatus.FAILED &&
-            AgentSentinels.DENY_SENTINEL.equals(checkpoint.getFailReason())
-        ));
+        verify(checkpointApprovalService).denyAll(eq(sessionId), eq("CLI deny"));
     }
 
     @Test

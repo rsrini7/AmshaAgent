@@ -131,7 +131,7 @@ public class AgentDispatchHandler implements MessageHandler {
             .map(ChannelPlugin::sender)
             .ifPresentOrElse(
                 s -> {
-                    if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX)) {
+                    if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
                         // Pass down as a structured reply so plugins (e.g. Telegram) can build keyboards
                         s.send(context.getUser(), List.of(
                             new ReplyNode.Text(output),

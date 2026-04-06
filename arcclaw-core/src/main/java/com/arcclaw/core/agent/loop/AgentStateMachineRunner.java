@@ -204,6 +204,7 @@ public class AgentStateMachineRunner {
     private void fireTerminalEvent(String sessionId, String role, String goal, AgentResult result) {
         String status = switch (result) {
             case AgentResult.Finished _ -> "idle";
+            case AgentResult.StructuredFinished _ -> "idle";
             case AgentResult.AwaitingApproval _ -> "waiting_approval";
             default -> "error";
         };

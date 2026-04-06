@@ -10,11 +10,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.reflex.ApproveReflex;
-import com.arcclaw.core.reflex.DenyReflex;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -59,11 +55,10 @@ public class HitlService {
         );
     }
 
-    @Inject ApproveReflex approveReflex;
-    @Inject DenyReflex denyReflex;
+    @Inject CheckpointApprovalService checkpointApprovalService;
 
     @Transactional
-    public void resolve(String taskId, boolean approved, String reason) {
+    public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, id);
         if (cp == null) {
@@ -73,30 +68,18 @@ public class HitlService {
             throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
 
-        ChannelType chType =
-            ChannelType.fromString(cp.getChannelType())
-                .orElse(ChannelType.WEBSOCKET); // ← prefer WEBSOCKET over TELEGRAM
-
-        // Guard: rest:api and similar synthetic platformIds have no real channel sender.
-        // Use the sessionId as platformId so at least WorkspaceContext resolves correctly.
-        String platformId = cp.getChannelPlatformId();
-        if (platformId == null || platformId.startsWith("rest:") || platformId.isBlank()) {
-            platformId = cp.getSessionId();
-            chType = ChannelType.WEBSOCKET;
-        }
-
-        ChannelUser user = new ChannelUser(
-            platformId, platformId, "Operator", chType);
-
-        MessageContext context =
-            new MessageContext(platformId, user, null);
-        context.setSessionId(cp.getSessionId());
-
         if (approved) {
-            approveReflex.execute(cp.getSessionId(), platformId, platformId, "/approve", context);
+            if (toolName != null && !toolName.isBlank()) {
+                checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
+            } else {
+                checkpointApprovalService.approveAll(cp.getSessionId(), reason);
+            }
         } else {
-            String input = "/deny" + (reason != null && !reason.isBlank() ? " " + reason : "");
-            denyReflex.execute(cp.getSessionId(), platformId, platformId, input, context);
+            if (toolName != null && !toolName.isBlank()) {
+                checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
+            } else {
+                checkpointApprovalService.denyAll(cp.getSessionId(), reason);
+            }
         }
     }
 

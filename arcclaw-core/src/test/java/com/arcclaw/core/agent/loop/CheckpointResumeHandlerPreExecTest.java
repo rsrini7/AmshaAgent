@@ -42,7 +42,7 @@ class CheckpointResumeHandlerPreExecTest {
 
     @BeforeEach
     void setup() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, null);
     }
 
     @Test
@@ -57,7 +57,7 @@ class CheckpointResumeHandlerPreExecTest {
         cp.setSessionId(sessionId);
         cp.setAgentRole(agentRole);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName("parallel:safe,unsafe");
+        cp.setPendingToolName("parallel|safe,unsafe");
         
         var calls = List.of(
             new ParallelToolCall("c1", "safe", Map.of(), null, true),

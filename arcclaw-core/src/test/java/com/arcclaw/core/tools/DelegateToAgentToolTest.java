@@ -147,6 +147,23 @@ class DelegateToAgentToolTest {
     }
 
     @Test
+    void execute_capabilityEscalationRejected() throws Exception {
+        // "architect" delegates to "researcher"
+        // researcher has WEB_SEARCH_BRAVE etc. which architect lacks.
+        Map<String, Object> params = Map.of(
+            "agent", "researcher",
+            "goal", "search the web"
+        );
+
+        ToolResponse response = WorkspaceContext.runWithFullAutonomy(SESSION_ID, USER_ID, CHAT_ID, "architect", () -> tool.execute(params));
+
+        assertFalse(response.success(), "Delegation should have been rejected for capability escalation");
+        assertEquals(403, response.exitCode());
+        assertTrue(response.output().contains("target role has capabilities"));
+        assertTrue(response.output().contains("not permitted for delegating role [architect]"));
+    }
+
+    @Test
     void execute_missingParameters() throws Exception {
         ToolResponse response1 = WorkspaceContext.runWithFullAutonomy(SESSION_ID, USER_ID, CHAT_ID, "coordinator", () -> tool.execute(Map.of("goal", "do it")));
         assertFalse(response1.success());

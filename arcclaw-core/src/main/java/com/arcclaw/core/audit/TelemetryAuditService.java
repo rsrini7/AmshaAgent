@@ -93,6 +93,7 @@ public class TelemetryAuditService {
     private AuditOutcome resolveOutcome(AgentResult result) {
         return switch(result) {
             case AgentResult.Finished _ -> AuditOutcome.FINISH;
+            case AgentResult.StructuredFinished _ -> AuditOutcome.FINISH;
             case AgentResult.AwaitingApproval _ -> AuditOutcome.AWAITING_APPROVAL;
             case AgentResult.LoopExceeded _ -> AuditOutcome.MAX_ITERATIONS;
             case AgentResult.Failed f -> {

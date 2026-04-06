@@ -1,7 +1,10 @@
 package com.arcclaw.core.tools;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -82,6 +85,36 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
+
+        // 2a. Governance Guard: Capability Escalation Check (§4.10)
+        // Coordinator is the root orchestrator — it can delegate to ANY
+        // registered role. Capability escalation guard only applies when
+        // non-coordinator roles attempt delegation (prevents lateral
+        // privilege escalation between specialists).
+        String currentRoleName = WorkspaceContext.agentRole();
+        AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
+
+        if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
+            Set<ToolCapability> currentCaps = currentRole.definition().capabilities();
+            Set<ToolCapability> targetCaps = targetRole.definition().capabilities();
+
+            Set<ToolCapability> unauthorizedCaps = new HashSet<>(targetCaps);
+            unauthorizedCaps.removeAll(currentCaps);
+
+            if (!unauthorizedCaps.isEmpty()) {
+                String unauthorizedList = unauthorizedCaps.stream()
+                    .map(Enum::name)
+                    .sorted()
+                    .collect(Collectors.joining(", "));
+                
+                return ToolResponse.failure(403,
+                    String.format("Delegation to %s rejected: target role has capabilities [%s] " +
+                                  "not permitted for delegating role [%s]. " +
+                                  "Use a role with sufficient capabilities or request coordinator to delegate.",
+                                  targetRole.toScopedName(), unauthorizedList, currentRoleName)
+                );
+            }
+        }
         
         // AgentExecutionContext constructor throws on maxIterations <= 0
         int maxIterations = Math.max(1, targetRole.definition().maxIterations());

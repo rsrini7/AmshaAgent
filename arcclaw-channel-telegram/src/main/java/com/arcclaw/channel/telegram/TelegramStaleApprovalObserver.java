@@ -26,8 +26,8 @@ public class TelegramStaleApprovalObserver {
         }
 
         String toolDisplay = event.pendingToolName() != null
-            && event.pendingToolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX)
-            ? "batch: " + event.pendingToolName().substring(ReasoningStep.PARALLEL_SENTINEL_COLON_PREFIX.length())
+            && event.pendingToolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)
+            ? "batch: " + event.pendingToolName().substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
             : event.pendingToolName();
 
         String msg = String.format(

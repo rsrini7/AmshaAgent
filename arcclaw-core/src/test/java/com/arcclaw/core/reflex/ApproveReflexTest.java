@@ -22,6 +22,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
@@ -49,6 +50,9 @@ class ApproveReflexTest {
 
     @InjectMock
     AgentLoop agentLoop;
+
+    @InjectMock
+    CheckpointApprovalService checkpointApprovalService;
 
     @InjectMock
     AgentCronRepository cronRepository;
@@ -143,15 +147,11 @@ class ApproveReflexTest {
         when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
                 .thenReturn(Optional.of(cp));
         
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
-                .thenReturn(AgentResult.finished("Session Result", List.of()));
-
         MessageContext ctx = createContext("/approve");
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
 
-        assertEquals("Session Result", result.commandResponse().get());
-        assertTrue(ctx.isResumeSignal(), "Resume signal should be set on successful flow");
-        verify(agentLoop).run(eq("session-1"), eq(AgentRoleEnum.COORDINATOR.toScopedName()), anyString(), any(), anyInt(), eq(ctx));
+        assertEquals("✅ Approval processed.", result.commandResponse().get());
+        verify(checkpointApprovalService).approveAll(eq("session-1"), anyString());
     }
 
     @Test
@@ -167,8 +167,22 @@ class ApproveReflexTest {
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
         when(statefulAgentStore.markBatchResuming(anyString())).thenReturn(false);
 
-        MessageContext ctx = createContext("/approve");
-        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
+        // test for cron approval
+        MessageContext ctx = createContext("/approve cron-123");
+        
+        // Mock a cron pending
+        AgentCronEntity cron = new AgentCronEntity();
+        cron.id = "cron-123";
+        cron.userId = userId;
+        cron.status = CronStatus.AWAITING_APPROVAL;
+        when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
+        
+        AgentCheckpoint cp2 = new AgentCheckpoint();
+        cp2.setSessionId("cron-session-1");
+        cp2.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        when(statefulAgentStore.findLatestAwaitingApprovalForCron("cron-123")).thenReturn(Optional.of(cp2));
+        
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve cron-123", ctx);
 
         assertEquals("⏳ Already processing your approval. Please wait.", result.commandResponse().get());
         // Verify signal is NOT set because the loop was never entered
