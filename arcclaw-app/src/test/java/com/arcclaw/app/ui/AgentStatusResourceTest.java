@@ -6,8 +6,12 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import jakarta.inject.Inject;
+
+import com.arcclaw.app.security.ApiKeyRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
@@ -15,6 +19,14 @@ class AgentStatusResourceTest {
 
     @InjectMock
     AgentStateStore stateStore;
+
+    @Inject
+    ApiKeyRegistry apiKeyRegistry;
+
+    @BeforeEach
+    void setup() {
+        apiKeyRegistry.register("test-key", "key-internal-changeme");
+    }
 
     @Test
     void testListAgents() {

@@ -8,11 +8,18 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.app.security.ApiKeyValidator;
 import com.arcclaw.app.ui.dto.AgentStatusDto;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.security.AutonomyLevel;
+import io.smallrye.mutiny.Multi;
+import org.jboss.resteasy.reactive.RestStreamElementType;
 
 /**
  * Provides a read-only view of current agent states for the Lit UI.
@@ -25,6 +32,24 @@ public class AgentStatusResource {
     @Inject AgentStateStore stateStore;
 
     @Inject SessionHeartbeatTracker sessionHeartbeatTracker;
+    @Inject AgentSseService agentSseService;
+    @Inject ApiKeyValidator apiKeyValidator;
+
+    @GET
+    @Path("/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
+    public Multi<AgentSseService.SseEvent> agentEvents(@QueryParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
+        if (!apiKeyValidator.isValid(apiKey)) {
+            return Multi.createFrom().failure(
+            new WebApplicationException(Response.Status.UNAUTHORIZED));
+         }
+        if (sessionId == null || sessionId.isBlank()) {
+            return Multi.createFrom().failure(
+                new WebApplicationException(Response.Status.BAD_REQUEST));
+        }
+        return agentSseService.subscribe(sessionId);
+    }
  
     @GET
     public List<AgentStatusDto> listAgents() {

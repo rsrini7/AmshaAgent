@@ -20,6 +20,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.transaction.Transactional.TxType;
 
 @ApplicationScoped
 public class ApprovalStateMachine implements ApprovalGateway {
@@ -32,8 +33,10 @@ public class ApprovalStateMachine implements ApprovalGateway {
     @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
     long hitlTimeoutHours;
 
+    // ✅ FIX: Split the write and the resume — write inside NOT_SUPPORTED,
+    // resume after the write is committed
     @Override
-    @Transactional
+    @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional
     public ApprovalResult decide(String sessionId, String toolName,
                                  ApprovalDecision decision, String reason) {
         

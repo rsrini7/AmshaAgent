@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -38,6 +39,8 @@ import org.jboss.logging.Logger;
 public class McpClientService {
 
     private static final Logger log = Logger.getLogger(McpClientService.class);
+
+    private final ConcurrentHashMap<String, ReentrantLock> stdioLocks = new ConcurrentHashMap<>();
 
     @Inject DynamicToolCapabilityRegistry registry;
     @Inject ObjectMapper objectMapper;
@@ -260,27 +263,33 @@ public class McpClientService {
     }
 
     private JsonNode sendRequestStdio(String serverName, String method, ObjectNode params) throws Exception {
-        int id = requestIdGen.getAndIncrement();
-        ObjectNode request = objectMapper.createObjectNode();
-        request.put("jsonrpc", "2.0");
-        request.put("id", id);
-        request.put("method", method);
-        request.set("params", params);
+        ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+        lock.lock();
+        try{
+            int id = requestIdGen.getAndIncrement();
+            ObjectNode request = objectMapper.createObjectNode();
+            request.put("jsonrpc", "2.0");
+            request.put("id", id);
+            request.put("method", method);
+            request.set("params", params);
 
-        OutputStream out = processWriters.get(serverName);
-        if (out == null) throw new IOException("No writer for MCP server: " + serverName);
-        NdjsonWriter.writeLine(out, objectMapper.writeValueAsString(request));
+            OutputStream out = processWriters.get(serverName);
+            if (out == null) throw new IOException("No writer for MCP server: " + serverName);
+            NdjsonWriter.writeLine(out, objectMapper.writeValueAsString(request));
 
-        BufferedReader reader = processReaders.get(serverName);
-        if (reader == null) throw new IOException("No reader for MCP server: " + serverName);
-        String line = reader.readLine();
-        if (line == null) throw new IOException("MCP server closed connection unexpectedly");
-        
-        JsonNode response = objectMapper.readTree(line);
-        if (response.has("error")) {
-            throw new RuntimeException("MCP server error: " + response.get("error").toString());
+            BufferedReader reader = processReaders.get(serverName);
+            if (reader == null) throw new IOException("No reader for MCP server: " + serverName);
+            String line = reader.readLine();
+            if (line == null) throw new IOException("MCP server closed connection unexpectedly");
+            
+            JsonNode response = objectMapper.readTree(line);
+            if (response.has("error")) {
+                throw new RuntimeException("MCP server error: " + response.get("error").toString());
+            }
+            return response.get("result");
+        } finally {
+           lock.unlock();
         }
-        return response.get("result");
     }
 
     private void sendNotificationStdio(String serverName, String method, ObjectNode params) throws Exception {

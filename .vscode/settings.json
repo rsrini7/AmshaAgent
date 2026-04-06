@@ -1,4 +1,7 @@
 {
     "java.compile.nullAnalysis.mode": "disabled",
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "microprofile.tools.validation.unassigned.excluded": [
+        "arcclaw.api.keys"
+    ]
 }

@@ -38,13 +38,10 @@ export class ArcClient {
   }
 
   async rejectHitl(taskId: string, reason: string): Promise<ApprovalResultDto> {
-    const customHeaders = this.headers();
-    (customHeaders as Record<string, string>)['Content-Type'] = 'text/plain';
-
     const r = await fetch(`${this.baseUrl}/hitl/${taskId}/reject`, {
-      method: 'POST',
-      headers: customHeaders,
-      body: reason || 'Rejected by user',
+        method: 'POST',
+        headers: this.headers(),  // application/json
+        body: JSON.stringify({ reason: reason || 'Rejected by user' }),
     });
     if (!r.ok) throw new Error(`POST /hitl/${taskId}/reject failed: ${r.status}`);
     return r.json();
@@ -76,7 +73,10 @@ export class ArcClient {
         headers: body ? { 'Content-Type': 'application/json' } : {},
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!res.ok) throw new Error(`step${step} failed: ${res.status}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Step ${step} failed: ${res.status}`);
+      }
       return res.json();
     }
 
@@ -92,5 +92,51 @@ export async function getOnboardingComplete(baseUrl: string): Promise<import('./
     credentials: 'include'
   });
   if (!res.ok) throw new Error(`complete failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getSettings(apiKey: string) {
+  const res = await fetch('/settings', {
+    headers: { 'X-ARCCLAW-API-KEY': apiKey }
+  });
+  if (!res.ok) throw new Error(`settings ${res.status}`);
+  return res.json();
+}
+
+export async function patchProvider(apiKey: string, body: object) {
+  const res = await fetch('/settings/provider', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-ARCCLAW-API-KEY': apiKey
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `PATCH failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function patchPrompt(apiKey: string, prompt: string) {
+  const res = await fetch('/settings/prompt', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-ARCCLAW-API-KEY': apiKey
+    },
+    body: JSON.stringify({ systemPrompt: prompt })
+  });
+  if (!res.ok) throw new Error(`prompt update failed`);
+  return res.json();
+}
+
+export async function resetOnboarding(apiKey: string) {
+  const res = await fetch('/settings/reset', {
+    method: 'POST',
+    headers: { 'X-ARCCLAW-API-KEY': apiKey }
+  });
+  if (!res.ok) throw new Error(`reset failed`);
   return res.json();
 }

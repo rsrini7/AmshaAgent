@@ -30,20 +30,23 @@ public final class AgentErrorMessageUtil {
 
         String stripped = raw.replace("ReasoningEngine error: ", "")
                              .replace("java.lang.RuntimeException: ", "")
+                             .replace("dev.langchain4j.exception.HttpException: ", "")
                              .replace("TOOL_EXECUTION_FAILED: ", "")
                              .trim();
-
-        int msgStart = stripped.indexOf("\"message\":\"");
-        int typeStart = stripped.indexOf("\",\"type\"");
 
         String apiMessage = stripped;
         boolean isJson = false;
 
-        if (msgStart != -1 && typeStart != -1 && typeStart > msgStart) {
-            apiMessage = stripped.substring(msgStart + 11, typeStart)
-                                 .replace("\\\"", "\"")
-                                 .replace("\\n", "\n");
+        Matcher messageMatcher = Pattern.compile("\"message\"\\s*:\\s*\"(.*?)(?<!\\\\)\"").matcher(stripped);
+        if (messageMatcher.find()) {
+            apiMessage = messageMatcher.group(1)
+                                  .replace("\\\"", "\"")
+                                  .replace("\\n", "\n");
             isJson = true;
+        }
+
+        if (apiMessage.contains("model_not_found") || apiMessage.contains("does not exist")) {
+            return "⚠️ **Model Not Found**: The AI model `" + extractModelName(apiMessage) + "` is either not available or you don't have access to it. Please check your configuration.";
         }
 
         if (apiMessage.contains("tokens per day") || apiMessage.contains("TPD")) {
@@ -144,5 +147,13 @@ public final class AgentErrorMessageUtil {
 
         String result = sb.toString();
         return result.isEmpty() ? "a few moments" : result;
+    }
+
+    private static String extractModelName(String message) {
+        if (message == null) return "unknown";
+        // Matches: model `name`, model "name", or model name (until space)
+        Matcher m = Pattern.compile("model [`'\"]?([^ `'\"]+)[`'\"]?").matcher(message);
+        if (m.find()) return m.group(1);
+        return "unknown";
     }
 }

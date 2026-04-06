@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -9,16 +10,19 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
@@ -78,6 +82,9 @@ public class AgentLoop {
     CheckpointResumeHandler checkpointResumeHandler;
 
     @Inject
+    ChannelPluginRegistry channelPluginRegistry;
+
+    @Inject
     AuditHashUtil hashUtil;
 
     @Inject
@@ -85,6 +92,9 @@ public class AgentLoop {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    AgentSseService agentSseService;
 
     /**
      * Execute the reasoning loop with default iteration limit (no lifecycle context).
@@ -196,32 +206,84 @@ public class AgentLoop {
             // and observers always received "unknown".
             MDC.put(MdcKeys.USER_ID, capturedUserId);
 
-            // --- CHECKPOINT RESUME ---
+            // CHECKPOINT RESUME
             var existingCheckpoint = agentStore.load(sessionId, canonicalRole);
             if (existingCheckpoint.isPresent()) {
                 var checkpoint = existingCheckpoint.get();
                 CheckpointStatus status = checkpoint.getStatus();
 
-                if (status == CheckpointStatus.IN_PROGRESS
-                        || status == CheckpointStatus.AWAITING_APPROVAL) {
+                if (status == CheckpointStatus.IN_PROGRESS) {
+                    // ── Normal mid-run resume: restore history and continue ──────────────
                     List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-                    if (loadedSteps != null) {
-                        resumedHistory.addAll(loadedSteps);
+                    if (loadedSteps != null) resumedHistory.addAll(loadedSteps);
+                    log.infof("Resumed %d steps from IN_PROGRESS checkpoint for session=%s",
+                            resumedHistory.size(), sessionId);
+
+                } else if (status == CheckpointStatus.AWAITING_APPROVAL) {
+                    // ── HITL pause detected — behaviour depends on whether this is a
+                    //    resume signal (approve/deny) or a brand-new user message ─────────
+                    boolean isResume = context != null && context.isResumeSignal();
+
+                    if (isResume) {
+                        // Legitimate resume: restore history so CheckpointResumeHandler
+                        // can re-execute the approved/denied tool.
+                        List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+                        if (loadedSteps != null) resumedHistory.addAll(loadedSteps);
+                        log.infof("Resumed %d steps from AWAITING_APPROVAL checkpoint for session=%s (resume signal)",
+                                resumedHistory.size(), sessionId);
+
+                    } else {
+                        // ── FIX: new message arrived while a stale approval is pending.
+                        //    This happens after a JVM restart (SessionReaper leaves the
+                        //    checkpoint alive for SSE replay) or when the user simply
+                        //    sends a new goal without approving the previous tool.
+                        //
+                        //    Correct behaviour:
+                        //      1. Archive the stale checkpoint so it can never shadow a
+                        //         future AWAITING_APPROVAL row (same session/role key).
+                        //      2. Clear pendingTool fields so no ghost tool lingers.
+                        //      3. Do NOT restore history — start this goal completely fresh.
+                        //      4. Notify the user so they know what was discarded.
+                        // ─────────────────────────────────────────────────────────────────
+                        String staleTool = checkpoint.getPendingToolName();
+                        log.warnf("STALE-APPROVAL session=%s role=%s had pending tool '%s' "
+                                + "but received a new message (not a resume signal). "
+                                + "Archiving stale checkpoint and starting fresh.",
+                                sessionId, canonicalRole, staleTool);
+
+                        checkpoint.setStatus(CheckpointStatus.ARCHIVED);
+                        checkpoint.setFailReason(
+                                "Discarded: new user message received before approval was given.");
+                        checkpoint.setPendingToolName(null);
+                        checkpoint.setPendingToolParametersJson(null);
+                        agentStore.save(checkpoint);
+
+                        // Notify the user via their channel so they are not confused
+                        // about the abandoned approval request.
+                        if (context != null && context.getUser() != null) {
+                            notifyStaleApprovalDiscarded(sessionId, canonicalRole,
+                                    staleTool, context);
+                        }
+
+                        auditService.record(sessionId, capturedUserId, canonicalRole,
+                                SecurityEventType.CHECKPOINT_FAILED,
+                                "Stale AWAITING_APPROVAL discarded — new message received. tool=" + staleTool);
+
+                        // resumedHistory stays empty → stateMachineRunner starts fresh ✅
                     }
-                    log.infof("Resumed %d steps from active checkpoint (status=%s)",
-                              resumedHistory.size(), status);
+
                 } else {
-                    // FIX: Archive the terminal checkpoint so findBySessionAndRole() (ORDER BY id DESC)
-                    // and findLatestAwaitingApproval() never return this stale row in future calls.
-                    // Without this, a COMPLETED row for (sessionId, researcher) at checkpoint_id=5
-                    // stays in the DB and shadows a newer AWAITING_APPROVAL row at checkpoint_id=6,
-                    // causing "/approve → No pending tool executions require approval".
-                    log.debugf("Ignoring terminal checkpoint (status=%s). Archiving and starting fresh turn.",
+                    // ── Terminal status (COMPLETED, FAILED, ARCHIVED, COMPROMISED):
+                    //    archive so it never shadows a new AWAITING_APPROVAL row.
+                    log.debugf("Ignoring terminal checkpoint (status=%s). Archiving and starting fresh.",
                             status);
                     checkpoint.setStatus(CheckpointStatus.ARCHIVED);
                     agentStore.save(checkpoint);
                 }
             }
+
+            String channelType = context != null && context.getUser() != null ? context.getUser().channel().name() : null;
+            String channelPlatformId = context != null && context.getUser() != null ? context.getUser().platformId() : null;
 
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
@@ -230,7 +292,9 @@ public class AgentLoop {
                     canonicalRole,
                     goal,
                     WorkspaceContext.autonomy(),
-                    maxIterations
+                    maxIterations,
+                    channelType,
+                    channelPlatformId
             );
 
             AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);
@@ -245,7 +309,6 @@ public class AgentLoop {
                                 agentExecutionContext, engine, resumedHistory));
             }
 
-            // --- CHECKPOINT FINAL STATE ---
             if (result instanceof AgentResult.AwaitingApproval awaiting) {
                 log.debugf("Session %s paused, waiting for human approval — tool=%s",
                         sessionId, awaiting.toolName());
@@ -254,13 +317,22 @@ public class AgentLoop {
                 if (result instanceof AgentResult.Finished) {
                     agentStore.saveAndFinalize(sessionId, canonicalRole,
                         result.steps(), CheckpointStatus.COMPLETED);
+                    agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "COMPLETED", Instant.now()
+                    ));
                 } else if (result instanceof AgentResult.Failed f) {
                     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(), f.reason());
+                    agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "FAILED", Instant.now()
+                    ));
                 } else if (result instanceof AgentResult.LoopExceeded l) {
                     var cp = agentStore.save(sessionId, canonicalRole, result.steps());
                     agentStore.markFailed(cp.getId(),
                         "Max iterations (" + l.maxIterations() + ") exceeded");
+                    agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, "FAILED", Instant.now()
+                    ));
                 }
             }
 
@@ -319,6 +391,35 @@ public class AgentLoop {
             MDC.remove(MdcKeys.AGENT_ROLE);
             MDC.remove(MdcKeys.USER_ID); // FIX: was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
+        }
+    }
+
+    /**
+     * Sends a one-line channel notification when a stale AWAITING_APPROVAL
+     * checkpoint is discarded because the user sent a new message instead of
+     * approving or denying.
+     *
+     * <p>Best-effort — never throws. A failure here must not affect the
+     * main agent execution path.
+     */
+    private void notifyStaleApprovalDiscarded(String sessionId,
+                                            String canonicalRole,
+                                            String staleTool,
+                                            MessageContext context) {
+        if (context == null || context.getUser() == null) return;
+        try {
+            String toolLabel = staleTool != null ? "`" + staleTool + "`" : "a pending tool";
+            String notice = "⚠️ A previous approval request for " + toolLabel
+                    + " was discarded because you sent a new message. "
+                    + "Starting fresh with your new goal.";
+
+            channelPluginRegistry
+                    .find(context.getUser().channel().id())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
+        } catch (Exception e) {
+            log.warnf("notifyStaleApprovalDiscarded: could not notify user for session=%s — %s",
+                    sessionId, e.getMessage());
         }
     }
 

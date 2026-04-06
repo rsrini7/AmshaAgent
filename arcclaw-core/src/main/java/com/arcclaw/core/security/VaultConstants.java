@@ -44,4 +44,9 @@ public final class VaultConstants {
      * Key for LLM Provider (openai, groq, etc.).
      */
     public static final String LLM_PROVIDER_KEY = "llm.provider.key";
+
+    /**
+     * Key for LLM Model.
+     */
+    public static final String LLM_MODEL_KEY = "llm.model";
 }

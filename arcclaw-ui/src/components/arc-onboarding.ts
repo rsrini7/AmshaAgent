@@ -28,11 +28,12 @@ export class ArcOnboarding extends LitElement {
   @state() private _validationOk = false;
 
   private readonly DEFAULT_MODELS: Record<string, string> = {
-    groq: 'llama-3.1-8b-instant',
+    groq: 'meta-llama/llama-4-scout-17b-16e-instruct',
     openai: 'gpt-4o-mini',
     ollama: 'llama3.2',
     anthropic: 'claude-haiku-4-5',
     'claude-code': 'claude-sonnet-4-5',
+    openrouter: 'openrouter/free',
   };
 
   static styles = css`
@@ -246,10 +247,13 @@ export class ArcOnboarding extends LitElement {
     margin-top: 1px;
   }
 
-  /* ── Input fields ─────────────────────────────────────── */
   .field-input, .field-textarea, .field-select {
     width: 100%;
-    padding: var(--space-3) var(--space-4);
+    box-sizing: border-box;
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
     background: var(--bg-elevated);
     border: 1.5px solid var(--border);
     border-radius: var(--radius-md);
@@ -260,6 +264,46 @@ export class ArcOnboarding extends LitElement {
                 background var(--transition);
     outline: none;
     -webkit-appearance: none;
+  }
+
+  .api-key-field {
+    position: relative;
+    width: 100%;
+  }
+
+  .field-input.has-trailing-action {
+    padding-right: 5.5rem !important;
+  }
+
+  .field-action-btn {
+    position: absolute;
+    top: 50%;
+    right: 0.875rem;
+    transform: translateY(-50%);
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+    color: var(--text-muted);
+    z-index: 2;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color var(--transition), background var(--transition), box-shadow var(--transition);
+  }
+
+  .field-action-btn:hover {
+    color: var(--text-primary);
+    background: var(--accent-subtle);
+  }
+
+  .field-action-btn svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    pointer-events: none;
   }
 
   .field-input:focus, .field-textarea:focus, .field-select:focus {
@@ -708,6 +752,7 @@ export class ArcOnboarding extends LitElement {
       { id:'ollama',      name:'Ollama',       tag:'Local / private', icon:'🦙', color:'#666' },
       { id:'anthropic',   name:'Anthropic',    tag:'Claude series',   icon:'A',  color:'#cc785c' },
       { id:'claude-code', name:'Claude Code',  tag:'CLI tool',        icon:'C',  color:'#8b5cf6' },
+      { id:'openrouter',  name:'OpenRouter',   tag:'Unified API',     icon:'R',  color:'#6561f5' },
     ];
     return html`
       <span class="field-label">Provider</span>
@@ -738,10 +783,11 @@ export class ArcOnboarding extends LitElement {
         <input
           class="field-input"
           type="text"
-          placeholder="${this._provider === 'groq' ? 'llama-3.1-8b-instant' :
+          placeholder="${this._provider === 'groq' ? 'meta-llama/llama-4-scout-17b-16e-instruct' :
                          this._provider === 'openai' ? 'gpt-4o-mini' :
                          this._provider === 'ollama' ? 'llama3.2' :
                          this._provider === 'anthropic' ? 'claude-haiku-4-5' :
+                         this._provider === 'openrouter' ? 'openrouter/free' :
                          'claude-sonnet-4-5'}"
           .value="${this._model}"
           @input="${(e:any) => this._model = e.target.value}"
@@ -775,10 +821,10 @@ export class ArcOnboarding extends LitElement {
           ${this._provider} API Key
         </label>
 
-        <div style="position:relative">
+        <div class="api-key-field">
           <input
             id="api-key-input"
-            class="field-input"
+            class="field-input has-trailing-action"
             type="password"
             autocomplete="off"
             spellcheck="false"
@@ -787,23 +833,19 @@ export class ArcOnboarding extends LitElement {
             @input="${(e: any) => this._apiKey = e.target.value}"
             @keydown="${(e: KeyboardEvent) =>
               e.key === 'Enter' && this._validateKey()}"
-            style="padding-right: var(--space-12);
-                   font-family: 'Courier New', monospace;
-                   letter-spacing: 0.04em"
+            style="font-family: 'Courier New', monospace;
+                   letter-spacing: 0.04em;
+                   padding-right: 5.5rem !important;
+                   box-sizing: border-box !important;"
           />
-          <!-- show/hide toggle -->
           <button
             type="button"
+            class="field-action-btn"
             @click="${(e: Event) => {
               const inp = (e.currentTarget as HTMLElement)
                 .previousElementSibling as HTMLInputElement;
               inp.type = inp.type === 'password' ? 'text' : 'password';
             }}"
-            style="position:absolute; right:12px; top:50%;
-                   transform:translateY(-50%);
-                   background:none; border:none; cursor:pointer;
-                   color:var(--text-muted); padding:4px;
-                   transition:color var(--transition)"
             aria-label="Toggle key visibility"
           >
             <svg width="16" height="16" viewBox="0 0 24 24"

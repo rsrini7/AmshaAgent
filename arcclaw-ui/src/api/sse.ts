@@ -12,7 +12,7 @@ export class SseManager {
 
   async connect(): Promise<void> {
     try {
-      const response = await fetch(`${this.url}?key=${encodeURIComponent(this.apiKey)}`, {
+      const response = await fetch(`${this.url}?apiKey=${encodeURIComponent(this.apiKey)}`, {
         headers: {
           'Accept': 'text/event-stream'
         },

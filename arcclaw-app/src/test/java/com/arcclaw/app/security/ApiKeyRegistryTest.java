@@ -29,7 +29,8 @@ class ApiKeyRegistryTest {
             return Map.of(
                 "arcclaw.api.keys.user-a", "aaaa-bbbb-cccc-dddd",
                 "arcclaw.api.keys.user-b", "eeee-ffff-gggg-hhhh",
-                "arcclaw.audit.hmac-key",  "test-hmac-key-for-registry-tests"
+                "arcclaw.audit.hmac-key",  "test-hmac-key-for-registry-tests",
+                "arcclaw.api.rate-limit.requests-per-minute", "20"
             );
         }
     }

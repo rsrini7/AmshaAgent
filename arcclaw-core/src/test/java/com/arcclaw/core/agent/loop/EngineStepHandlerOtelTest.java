@@ -42,7 +42,7 @@ public class EngineStepHandlerOtelTest {
         when(engine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(step);
 
         // Act
-        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, 5);
+        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null);
         handler.processEngineStep(context, engine, Collections.emptyList(), null, 0, 1);
 
         // Assert

@@ -48,10 +48,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // Header first; fall back to query param for SSE/EventSource (browsers cannot set headers)
+        // Header first; fall back to query param for SSE/EventSource
+        // (browsers cannot set custom headers on EventSource).
+        // Accepts both "apiKey" (current frontend) and legacy "key" param.
         String apiKey = requestContext.getHeaderString(HttpConstants.X_ARCCLAW_API_KEY);
         if (apiKey == null || apiKey.isBlank()) {
-            apiKey = uriInfo.getQueryParameters().getFirst("key");
+            apiKey = uriInfo.getQueryParameters().getFirst("apiKey");
         }
 
         String safeKey = apiKey != null
@@ -101,14 +103,19 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     );
 
     private void logAudit(String key, String endpoint, String method, String status, String ip, long durationMs) {
-        String msg = String.format("[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d", key, endpoint, method, status, ip, durationMs);
-        boolean isSilentPoll = "ACCEPTED".equals(status) 
-                                && SILENT_POLL_PATHS.stream().anyMatch(endpoint::startsWith);
+        String msg = String.format(
+            "[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d",
+            key, endpoint, method, status, ip, durationMs);
+
+        boolean isSilentPoll = "ACCEPTED".equals(status)
+            && SILENT_POLL_PATHS.stream().anyMatch(endpoint::startsWith);
 
         if (isSilentPoll) {
             log.trace(msg);
+        } else if ("ACCEPTED".equals(status)) {
+            log.debug(msg);   // FIX: accepted non-poll requests logged at debug, not warn
         } else {
-            log.warn(msg);
+            log.warn(msg);    // rejections and rate-limits remain warn
         }
     }
 }

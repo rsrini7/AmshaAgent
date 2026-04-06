@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Mac;
@@ -18,13 +19,15 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
+import io.quarkus.runtime.Startup;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+@Startup
 @ApplicationScoped
 public class ApiKeyRegistry {
 
     @ConfigProperty(name = "arcclaw.api.keys")
-    Map<String, String> apiKeys;
+    Optional<Map<String, String>> apiKeys;
 
     @ConfigProperty(name = "arcclaw.audit.hmac-key")
     String hmacSecret;
@@ -42,10 +45,18 @@ public class ApiKeyRegistry {
     @PostConstruct
     void initHmacs() {
         Map<String, String> reverse = new LinkedHashMap<>();
-        for (Map.Entry<String, String> entry : apiKeys.entrySet()) {
-            reverse.put(toHex(hmac(entry.getValue())), entry.getKey());
+        if (apiKeys.isPresent()) {
+            for (Map.Entry<String, String> entry : apiKeys.get().entrySet()) {
+                reverse.put(toHex(hmac(entry.getValue())), entry.getKey());
+            }
         }
         this.hmacToKeyName  = Collections.unmodifiableMap(reverse);
+    }
+
+    public void register(String keyName, String rawKey) {
+        Map<String, String> mutable = new LinkedHashMap<>(this.hmacToKeyName);
+        mutable.put(toHex(hmac(rawKey)), keyName);
+        this.hmacToKeyName = Collections.unmodifiableMap(mutable);
     }
 
     private static String toHex(byte[] bytes) {

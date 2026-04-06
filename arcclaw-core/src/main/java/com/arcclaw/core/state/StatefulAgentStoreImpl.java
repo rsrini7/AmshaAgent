@@ -191,6 +191,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
+        em.clear();
         return findBySessionAndRole(sessionId, agentRole);
     }
 
@@ -209,6 +210,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -485,6 +487,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      * archived by AgentLoop never interfere with the live checkpoint.
      */
     private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -535,6 +538,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public boolean updateBatchToolDecision(String sessionId, String agentRole,
                                            String toolName, String decision) {
         return withRetry(
@@ -572,8 +576,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW) 
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
+        em.clear();
         Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return false;
 

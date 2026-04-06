@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.is;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
@@ -23,8 +24,12 @@ class SkillApiTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
+    @Inject
+    ApiKeyRegistry apiKeyRegistry;
+
     @BeforeEach
     void setup() {
+        apiKeyRegistry.register("test-key", "key-internal-changeme");
         // Run in a programmatic transaction to ensure it's committed before REST calls
         repository.deleteAll();
         // Defensive refresh to start with empty registry

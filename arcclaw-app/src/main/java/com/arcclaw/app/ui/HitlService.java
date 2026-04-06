@@ -2,6 +2,7 @@ package com.arcclaw.app.ui;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -13,8 +14,11 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.transaction.Transactional.TxType;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
@@ -24,6 +28,7 @@ public class HitlService {
 
     @Inject EntityManager em;
     @Inject ObjectMapper objectMapper;
+    @Inject CheckpointApprovalService checkpointApprovalService;
 
     @Transactional
     public Map<String, PendingApproval> getPendingApprovals() {
@@ -55,9 +60,7 @@ public class HitlService {
         );
     }
 
-    @Inject CheckpointApprovalService checkpointApprovalService;
-
-    @Transactional
+    @Transactional(TxType.NOT_SUPPORTED)   // ← was @Transactional
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, id);
@@ -68,18 +71,32 @@ public class HitlService {
             throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
 
+        AgentCheckpoint resolvedCp;
         if (approved) {
-            if (toolName != null && !toolName.isBlank()) {
-                checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
-            } else {
-                checkpointApprovalService.approveAll(cp.getSessionId(), reason);
+            if (toolName != null && !toolName.isBlank())
+                resolvedCp = checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
+            else {
+                List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+                if (pending.size() == 1)
+                    resolvedCp = checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
+                else
+                    resolvedCp = checkpointApprovalService.approveAll(cp.getSessionId(), reason);
             }
         } else {
-            if (toolName != null && !toolName.isBlank()) {
-                checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
-            } else {
-                checkpointApprovalService.denyAll(cp.getSessionId(), reason);
+            if (toolName != null && !toolName.isBlank())
+                resolvedCp = checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
+            else {
+                List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+                if (pending.size() == 1)
+                    resolvedCp = checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
+                else
+                    resolvedCp = checkpointApprovalService.denyAll(cp.getSessionId(), reason);
             }
+        }
+
+        // mirrors DenyReflex/ApproveReflex — triggers AgentLoop resume/denial path
+        if (resolvedCp != null) {
+            checkpointApprovalService.triggerResume(resolvedCp);
         }
     }
 

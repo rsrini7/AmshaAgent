@@ -88,6 +88,12 @@ These are NOT interchangeable.
 - The captured context MUST be restored on the background thread using the comprehensive `WorkspaceContext.run(...)` overload before invoking the background task.
 - Failure to propagate the complete context results in loss of identity, breaking role-based access control, tool governance, and audit logging for background tasks (e.g., cron jobs, background MCP execution).
 
+> **`AsyncPersistenceEngine` exception:** The drain threads of `AsyncPersistenceEngine`
+> are exempt from the 6-context `WorkspaceContext.run(...)` requirement because they
+> process events from many sessions simultaneously. They bind only `WorkspaceScopeHolder`
+> per event (session scope), not the full workspace context. This is intentional and is
+> the only legitimate multi-session background binding pattern. See §5.17.
+
 ---
 
 ## 3. Runtime execution invariants
@@ -107,6 +113,20 @@ These are NOT interchangeable.
 ### 3.4 Approval handling
 - Approval-required executions MUST persist checkpoint state before exiting the loop.
 - Resume/deny behavior must use the checkpoint lifecycle, not ad hoc retry logic.
+- The double-resume guard (`StatefulAgentStore.markBatchResuming()`) MUST remain in
+  place. It prevents two concurrent approval signals (e.g., Telegram callback + REST)
+  from both triggering `AgentLoop.run()` simultaneously for the same session.
+  `clearBatchResuming()` MUST be called in the `finally` block of the resume path and
+  by `WorkspaceManager.terminateSession()`.
+- MUST NOT call `resumeCheckpoint()` / `AgentLoop.run(isResumeSignal=true)` for 
+  denial decisions. Denial is a termination, not a resume. A dedicated 
+  `rejectAndTerminate()` path MUST mark the checkpoint FAILED, notify the user 
+  via channel, and call `WorkspaceManager.terminateSession()` without entering 
+  the agent loop.
+- `HitlService.resolve()` MUST call `resumeCheckpoint()` (for approvals) or 
+  `rejectAndTerminate()` (for denials) after the decision update. The decision 
+  methods (`approveTool`, `denyAll`) update DB state only — they do NOT trigger 
+  resume themselves.
 
 ### 3.5 Structured retry budget behavior
 - Soft budget warnings may be logged and tolerated for retry behavior.
@@ -186,6 +206,12 @@ parameter schema, not the output schema, and produces silent wrong behavior in n
 
 `DelegateToAgentTool` MUST validate that the target role's capabilities are a subset of the delegating role's capabilities before constructing the sub-agent loop. Delegation that would grant the sub-agent capabilities the parent role does not have MUST be rejected with a descriptive tool observation. Transitive capability escalation via delegation chains is FORBIDDEN.
 
+- The scheduling tools (`schedule-cron`, `delete-cron`, `list-crons`) are EXEMPT from
+  HITL approval checks regardless of the delegating role's autonomy level, because
+  scheduling is metadata-only and does not execute arbitrary tool actions.
+  This exemption is encoded in `ToolInvocationGuard` and MUST NOT be removed when
+  adding new scheduling-adjacent tools without explicit review.
+
 ## 4.11 Intent Routing Negation Safety
 
 Fast-path routing patterns in IntentRoutingProvider implementations
@@ -195,8 +221,6 @@ If a pattern is broad enough to match negations, implement
 IntentRoutingProvider.shouldSkip(String userMessage) with a
 static final Pattern negation guard. Never compile patterns
 inline — use static final Pattern per §9.1.
-
-
 
 ---
 
@@ -217,7 +241,8 @@ inline — use static final Pattern per §9.1.
 
 ### 5.4 ORM 7 transaction behavior
 - Be careful with `QuarkusTransaction.requiringNew().run(...)` lambda boundaries.
-- Prefer dedicated `@Transactional(REQUIRES_NEW)` methods when proxy binding matters.
+- Prefer dedicated `@Transactional(REQUIRES_NEW)` methods **at the outermost write boundary** when proxy binding matters.
+- **MUST NOT** nest a `@Transactional(REQUIRES_NEW)` method inside a call stack that already holds an active `@Transactional(REQUIRED)` or `@Transactional` transaction when using SQLite — see §5.8. The `REQUIRES_NEW` must be the outermost transaction boundary for each write unit, not a nested child inside a longer-lived `REQUIRED` context.
 - Do not assume `em.merge()` is the right fix for already-managed entities.
 
 ### 5.5 Read visibility in tests
@@ -233,6 +258,293 @@ inline — use static final Pattern per §9.1.
 `EncryptedSecret.ormVersion` is Hibernate-managed. Application code MUST NOT read or set it.
 `EncryptedSecret.encryptionKeyVersion` is application-managed. Application code sets ONLY this field.
 Mixing these two fields corrupts encryption version tracking and is undetectable at runtime.
+
+---
+
+## 5.8 SQLite Single-Writer Constraint (CRITICAL — ROOT CAUSE OF P84 BUSY CASCADE)
+
+SQLite WAL mode allows any number of concurrent readers but **only one writer at a time**.
+This is a database engine constraint, not a configuration choice.
+
+**The forbidden nesting pattern:**
+```
+@Transactional(REQUIRED)               ← acquires Connection-1, starts XA BEGIN IMMEDIATE
+  └─ calls agentStore.updateXxx()
+       └─ withRetry(...)
+            └─ self.doUpdateXxx()
+                 └─ @Transactional(REQUIRES_NEW)  ← acquires Connection-2, tries COMMIT
+                      └─ SQLITE_BUSY — Connection-1 holds the reserved write lock
+```
+
+`REQUIRES_NEW` suspends the outer `REQUIRED` transaction but **keeps its Agroal connection
+open with a reserved SQLite write lock**. The inner `REQUIRES_NEW` borrows a second
+connection and attempts `COMMIT`. SQLite cannot grant the exclusive write lock required
+for `COMMIT` while Connection-1 holds the reserved lock → `SQLITE_BUSY`.
+
+**The correct pattern:**
+```
+@Transactional(NOT_SUPPORTED)          ← no transaction, no reserved lock
+  └─ calls agentStore.updateXxx()
+       └─ withRetry(...)
+            └─ self.doUpdateXxx()
+                 └─ @Transactional(REQUIRES_NEW)  ← gets its own clean connection, COMMIT succeeds
+```
+
+MUST NOT: Annotate any method `@Transactional(REQUIRED)` (or bare `@Transactional`)
+if that method directly or transitively calls any `@Transactional(REQUIRES_NEW)` method.
+
+MUST NOT: Accept "it worked in JVM mode" as proof of safety. Agroal pool timing
+differs under load and between JVM and native image startup sequences.
+
+---
+
+## 5.9 Transaction-Free Zone: Long-Running Operations
+
+Any operation that performs slow I/O (LLM network calls, external REST, arbitrary sleep,
+full agent loops) MUST NOT run inside an active JTA transaction.
+
+The following are **transaction-free zones** — no `@Transactional` annotation may exist
+on them OR on any caller up the CDI call stack:
+
+| Class / Method | Reason |
+|---|---|
+| `AgentLoop.run()` and all descendants | LLM call takes 5–60s; pins a connection |
+| `CheckpointResumeHandler.resumeAfterBatchDecision()` | Calls `AgentLoop.run()` |
+| `ReasoningEngine.nextStep()` | External LLM HTTP call |
+| `ToolRegistry.invokeTool()` and `AgentTool.execute()` | May call external APIs |
+| `ApprovalStateMachine.decide()` | Calls both REQUIRES_NEW writes AND AgentLoop resume |
+| `CheckpointApprovalService.approveTool/denyTool/approveAll/denyAll` | Calls REQUIRES_NEW writes then resume |
+
+Holding a JTA transaction open across a 30-second LLM call pins one Agroal connection
+for the entire duration. Every concurrent write — audit drain, approval, cron scheduler —
+is blocked until that connection is released.
+
+---
+
+## 5.10 `CheckpointApprovalService` Transaction Contract (IMMUTABLE)
+
+`CheckpointApprovalService` sits at the boundary between the HITL approval path
+(synchronous reflex) and the agent loop resumption (long-running, transaction-free).
+
+| Method | Required Annotation | Reason |
+|---|---|---|
+| `approveTool()` | `@Transactional(NOT_SUPPORTED)` | Calls `updateBatchToolDecision` (REQUIRES_NEW) |
+| `denyTool()` | `@Transactional(NOT_SUPPORTED)` | Same |
+| `approveAll()` | `@Transactional(NOT_SUPPORTED)` | Same |
+| `denyAll()` | `@Transactional(NOT_SUPPORTED)` | Same |
+| `triggerResume()` | None / not annotated | In the transaction-free zone (§5.9) |
+| `persistBatchWithPreExecuted()` | Via `agentStore.save()` (REQUIRES_NEW) | Inherits REQUIRES_NEW from store |
+| `HitlService.resolve()` | `@Transactional(NOT_SUPPORTED)` | App-layer entry point for UI approval;
+|                         |                                 | delegates directly to approveTool() which
+|                         |                                 | is already NOT_SUPPORTED. An outer REQUIRED
+|                         |                                 | tx here re-introduces the REQUIRED→REQUIRES_NEW
+|                         |                                 | deadlock via the app→core call path. |
+
+MUST NOT change any of these to `@Transactional` or `@Transactional(REQUIRED)`.
+Doing so re-introduces the SQLITE_BUSY failure pattern described in §5.8.
+This contract is non-negotiable and must be re-verified after every major refactor.
+
+---
+
+## 5.11 `ApprovalStateMachine.decide()` Transaction Contract
+
+`ApprovalStateMachine.decide()` (the `ApprovalGateway` SPI implementation) MUST be
+annotated `@Transactional(NOT_SUPPORTED)` or carry no transaction annotation.
+
+It calls:
+1. `agentStore.updateBatchToolDecision()` — `REQUIRES_NEW`
+2. `agentStore.isAllBatchToolsDecided()` — `REQUIRES_NEW` read
+3. `resumeHandler.resumeAfterBatchDecision()` — transaction-free zone
+
+An outer `@Transactional` wrapping the entire `decide()` call simultaneously violates
+the REQUIRES_NEW nesting rule (§5.8) and the transaction-free zone rule (§5.9).
+
+---
+
+## 5.12 `AgentCronScheduler` Isolation Contract
+
+`AgentCronScheduler.pollAndDispatch()` MUST be annotated `@Transactional(NOT_SUPPORTED)`.
+
+Each sub-operation (`reclaimStaleCrons`, `claimForFire`, `setDeliveryId`) is a dedicated
+`@Transactional(REQUIRES_NEW)` method in its repository. The scheduler frame MUST NOT
+open an outer transaction that outlives these individual write units.
+
+Additionally, `reclaimStaleCrons()` MUST be wrapped in an isolated `try/catch` that
+allows the poll cycle to continue even when one reclaim attempt fails:
+
+```java
+// CORRECT in AgentCronScheduler.pollAndDispatch()
+try {
+    cronRepository.reclaimStaleCrons();
+} catch (Exception e) {
+    log.warnf("Zombie-cron reclaim failed (skipping cycle): %s", e.getMessage());
+    return; // skip this poll cycle cleanly
+}
+```
+
+Without this isolation, a `SQLITE_BUSY` or Narayana XA state corruption from a
+concurrent approval write (§5.8) cascades into the cron poll cycle and can abort
+the entire scheduler thread's JTA context, causing subsequent unrelated writes
+to fail with "cannot commit - no transaction is active."
+
+---
+
+## 5.13 Agroal Pool Configuration Invariants
+
+The following Agroal settings MUST be present in `application.properties`
+for all non-test profiles:
+
+```properties
+quarkus.datasource.jdbc.background-validation=true
+quarkus.datasource.jdbc.background-validation-interval=PT30S
+quarkus.datasource.jdbc.validation-query-sql=SELECT 1
+quarkus.datasource.jdbc.max-size=3
+```
+
+**Why background-validation is mandatory:**
+When a `REQUIRES_NEW` transaction fails with `SQLITE_BUSY`, Narayana attempts XA
+rollback. SQLite may report "cannot rollback - no transaction is active" (the connection
+already auto-aborted after `busy_timeout`). Narayana marks the XA branch as failed.
+Without `background-validation`, Agroal returns this broken connection to the pool.
+The next caller — completely unrelated to the approval that failed — receives the broken
+connection and gets "cannot commit - no transaction is active" even though its own code
+is correct. This is the cron cascade failure mode observed in P84.
+
+**Why max-size must be ≥ 3:**
+- Slot 1: `AsyncPersistenceEngine` critical drain thread (long-held, `REQUIRES_NEW`)
+- Slot 2: `AsyncPersistenceEngine` telemetry drain thread
+- Slot 3: Foreground approval writes / cron `REQUIRES_NEW` operations
+
+A pool of 2 starves foreground approval writes whenever both drain threads are active.
+
+---
+
+## 5.14 `SqliteRetryTemplate` Nesting Contract
+
+`SqliteRetryTemplate.execute()` is designed for one specific pattern:
+a single `@Transactional(REQUIRES_NEW)` CDI proxy self-call, retried N times with
+exponential backoff on `SQLITE_BUSY` errors.
+
+MUST NOT call `SqliteRetryTemplate.execute()` from inside an active JTA transaction
+(`REQUIRED` or `MANDATORY`). The retry loop assumes each attempt gets a fresh,
+uncontested write lock — an outer transaction's reserved lock ensures every attempt
+will fail with `SQLITE_BUSY`, consuming all retries uselessly.
+
+MUST NOT use `SqliteRetryTemplate` for:
+- Non-database operations
+- Read-only queries
+- Any operation that is not a `@Transactional(REQUIRES_NEW)` CDI proxy call
+
+The template inspects `SqliteErrorStrings.isBusy(e)` across the full `getCause()` chain
+because Hibernate wraps `SQLiteException` several layers deep. Do not simplify this check
+to a single `e.getMessage()` string comparison.
+
+---
+
+## 5.15 Narayana XA Failure Cascade Prevention
+
+When a `REQUIRES_NEW` transaction fails with `SQLITE_BUSY`:
+
+1. SQLite auto-aborts the failing connection after `busy_timeout` ms.
+2. Narayana attempts XA rollback on the failed branch — SQLite reports
+   "cannot rollback - no transaction is active" (already aborted).
+3. Narayana marks the XA branch as rolled back but the connection state is
+   inconsistent.
+4. **Without `background-validation`:** Agroal returns this broken connection to the
+   pool. The next caller gets "cannot commit - no transaction is active" for its
+   own innocent transaction.
+5. **Cascade effect:** If the cron scheduler poll cycle's `reclaimStaleCrons()` owns
+   the broken connection, the entire scheduler Narayana TX context is poisoned, and
+   every `cronRepository` write in that cycle fails — even `claimForFire()` for
+   completely unrelated jobs.
+
+**Three prevention layers — ALL must be in place simultaneously:**
+
+| Layer | Rule | Prevents |
+|---|---|---|
+| §5.8 | No REQUIRED → REQUIRES_NEW nesting | Eliminates BUSY at source |
+| §5.13 | `background-validation=true` | Catches broken connections before reuse |
+| §5.12 | `reclaimStaleCrons` isolation try/catch | Prevents cron cascade from approval failures |
+
+If all three layers are in place, a single BUSY event is isolated to the failing
+operation and cannot cascade to unrelated callers or threads.
+
+---
+
+## 5.16 `WorkspaceManager` GC Method Transaction Annotations
+
+`WorkspaceManager.gcSweep()` MUST be `@Transactional(NOT_SUPPORTED)`.
+`WorkspaceManager.findAwaitingApprovalIds()` MUST be `@Transactional(NOT_SUPPORTED)`.
+`WorkspaceManager.sweepTimedOutApprovals()` MUST be `@Transactional(NOT_SUPPORTED)`.
+
+These are scheduled GC methods that delegate to individual `REQUIRES_NEW` write units.
+Wrapping them in `REQUIRED` would create a long-lived connection that holds a write lock
+for the entire GC sweep duration (potentially scanning many sessions).
+
+`WorkspaceManager.markApprovalTimedOut()` MAY be `@Transactional(REQUIRED)` only if it
+does NOT call any `REQUIRES_NEW` repository method. If per-tool decision writes are added
+to this path in future, it must be demoted to `NOT_SUPPORTED`.
+
+---
+
+## 5.17 `AsyncPersistenceEngine` Context Binding Rule
+
+`AsyncPersistenceEngine` runs two virtual drain threads (`arcclaw-audit-critical-drain`,
+`arcclaw-audit-telemetry-drain`). These are NOT CDI-managed threads.
+
+**MUST:**
+- Bind `WorkspaceScopeHolder.run(event.getSessionId(), ...)` **per event** inside the
+  drain loop, never once per drain thread.
+- Use `QuarkusTransaction.requiringNew().run(...)` directly in `persistSynchronously()`
+  because the drain thread is outside the CDI proxy chain.
+
+**MUST NOT:**
+- Bind `WorkspaceContext.run(...)` (the 6-value full context) in the drain loop. Drain
+  threads process events from many different sessions. Binding one session's full context
+  for the thread's lifetime breaks isolation between sessions.
+- Call `WorkspaceScopeHolder.run(...)` once at drain thread startup and assume it covers
+  all events. Each event owns its own scope binding.
+
+`persistSynchronously()` is `@Transactional(REQUIRES_NEW)` via CDI self-inject (`self`),
+satisfying the proxy binding requirement for Narayana to manage the XA branch correctly.
+
+---
+
+## 5.18 `doMarkCheckpointsFailedRequiresNew` Terminal Status Exclusion
+
+`WorkspaceManager.doMarkCheckpointsFailedRequiresNew()` MUST exclude ALL terminal statuses
+from the `FAILED` overwrite query. The exclusion set is:
+`FAILED`, `COMPLETED`, `ARCHIVED`, `COMPROMISED`.
+
+**Why this matters (P84 race condition):**
+`AgentCronScheduler` calls `WorkspaceManager.terminateSession()` immediately after
+`CronResultHandler.markCompleted()`. If the `COMPLETED` finalization `REQUIRES_NEW`
+transaction has not fully flushed to disk before the `terminateSession` query runs
+(possible under concurrent load with Agroal pool pressure), the checkpoint may still
+appear as `IN_PROGRESS` in the EntityManager's first-level cache. Without the exclusion,
+it gets incorrectly overwritten to `FAILED`, corrupting the audit trail and
+triggering spurious failure notifications.
+
+MUST NOT add new terminal statuses to `CheckpointStatus` without updating this query.
+
+---
+
+## 5.19 Checkpoint Query Ordering — ORDER BY id DESC
+
+Any JPQL or native query that retrieves "the most recent" checkpoint for a session
+MUST include `ORDER BY c.id DESC LIMIT 1`.
+
+**Why:** SQLite does not guarantee insertion order without an explicit ORDER BY. Without
+`ORDER BY c.id DESC`, a `LIMIT 1` may return the oldest COMPLETED row, shadowing a
+newer AWAITING_APPROVAL checkpoint. This produces the silent failure:
+"No pending tool executions require approval" when there is one.
+
+This applies to:
+- `findBySessionAndRole(sessionId, agentRole)` — internal to `StatefulAgentStore`
+- `findLatestAwaitingApproval(sessionId)` — exposed on `StatefulAgentStore` interface
+- `findLatestAwaitingApprovalForCron(cronId)` — cron approval lookup
+
+MUST NOT use `getFirstResult()` or `stream().findFirst()` without an explicit ORDER BY.
 
 ---
 
@@ -280,6 +592,186 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 ### 7.4 Channel daemons
 - Channel daemons must be safe when unconfigured.
 - `isConfigured()` exists to prevent startup crashes due to absent optional channel config.
+
+## §7. Parallel Tool Execution
+
+7.1 MUST: A parallel LLM turn (N tool calls in one ChatResponse) MUST
+    be represented as a single ReasoningStep in agent history using
+    action = ReasoningStep.PARALLEL_SENTINEL ("__parallel__").
+    The full batch payload is stored in actionInput under key "batch".
+
+7.2 MUST NOT: Expand parallel tool calls into N separate ReasoningStep
+    entries in history before execution. History entries MUST map
+    1:1 with LLM turns to preserve chat protocol correctness.
+
+7.3 MUST: ChatHistoryAssembler MUST reconstruct a parallel turn as:
+    ONE AiMessage(thought, [req1, req2, ..., reqN]) followed by
+    N ToolExecutionResultMessages in callId order.
+
+7.4 MUST: If ANY tool in a parallel batch requires HITL, ALL tools in the batch pause atomically.
+    Per-tool approval IS supported via `approve <toolName>` / `deny <toolName>` reflex commands
+    and Telegram inline keyboard buttons (one row per pending tool). Pre-executable tools
+    (those safe to run under `FULL` autonomy before the pause) are executed immediately
+    before the checkpoint is persisted and are excluded from the approval keyboard.
+    The approval keyboard only renders tools whose decision is still `PENDING`.
+
+7.5 MUST NOT: Execute parallel tools on the calling thread.
+    Use ManagedExecutor (already injected via WorkspaceExecutors)
+    for all parallel tool invocations.
+
+7.6 MUST: All parallel tool spans MUST be siblings under the same
+    parent iteration span. Use startToolSpan() per tool call.
+
+7.7 MUST: Deduplication guard (ToolInvocationGuard) MUST check ALL
+    tools in a batch before ANY tool executes. If any call is a
+    duplicate, the entire batch is evaluated before execution begins.
+
+7.8 MUST: ParallelToolCall.callId MUST follow the pattern "call_N"
+    where N is the 0-based index in the LLM's tool call list.
+    Do NOT use UUID for callIds — LangChain4j requires stable,
+    predictable callId matching between AiMessage and
+    ToolExecutionResultMessage.
+
+7.9 MUST NOT: Modify `ReasoningStep` record shape without a corresponding migration
+    in `StatefulAgentStore` (both `doSaveSteps` and `doSaveAndFinalize`) and in
+    `ChatHistoryAssembler`. The parallel batch is encoded in `actionInput["batch"]`
+    as a JSON array. Introducing a native parallel column requires schema migration
+    and full test coverage of the serialization round-trip.
+
+7.10 SHOULD: Test parallel tool execution with Claude 3.5 Sonnet and
+     GPT-4o before enabling in production, as parallel tool call
+     behavior differs between providers. Groq (llama-3.x) rarely
+     issues parallel tool calls — most parallel call traffic will
+     come from Anthropic and OpenAI providers.
+
+7.11 MUST NOT: Re-introduce a single-tool fast-path in `ReasoningStepParser`.
+     All LLM tool-call responses are processed as a list (N ≥ 1).
+     The `getFirst()` fallback was removed in Phase 70 and MUST NOT be restored
+     as a silent fallback — it hides multi-tool responses from the batch pipeline.
+
+7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
+     to virtual threads. Capture io.opentelemetry.context.Context.current()
+     on the calling thread BEFORE submitting to the executor. Restore it
+     inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
+     propagates WorkspaceScoped session context (ScopedValue) only — it
+     does NOT propagate OTel ThreadLocal spans.
+     (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
+
+7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
+     during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
+     from in-memory history on each LLM call — SQLite does not need to
+     be current mid-run. AgentLoop persists history to SQLite via
+     agentStore.save() at session end (Finished/Failed/LoopExceeded) or
+     HITL pause (AwaitingApproval checkpoint). ChatMemoryWriter manages
+     user goal/AI answer messages in ChatMemoryStore only — it MUST NOT
+     be used for ReasoningStep history persistence.
+
+7.15 MUST NOT: A deduplicated tool in a parallel batch MUST NOT cause
+     its peers to be skipped. The dedup tool receives its cached
+     observation as its result. All other tools in the batch proceed
+     to execution normally.
+
+7.16 SHOULD: Each parallel tool execution MUST time out after
+     arcclaw.parallel.tool-timeout-seconds (default: 60). A timed-out
+     tool returns withResult("Tool timed out after Xs", false) and
+     does not block the rest of the batch.
+
+7.17 MUST: Metrics counters arcclaw.agent.tool.calls MUST reflect
+     individual tool names in a parallel batch — not the __parallel__
+     sentinel. The MetricsAgentObserver already receives individual
+     onStepComplete() calls from ParallelToolStepExecutor (one per
+     tool) — verify the sentinel step itself does NOT trigger an
+     additional __parallel__ counter increment.
+
+7.18 INVARIANT: ReasoningStep history list is mutated EXACTLY ONCE
+     per parallel batch execution — inside buildCompletedBatchDecision().
+     Do NOT add intermediate steps for dedup results or partial
+     executions. The single batch step encodes ALL N results.
+
+7.19 INVARIANT: ParallelToolCall.callId() MUST be non-null at the point
+     the merge loop executes. ReasoningStepParser MUST generate a
+     UUID fallback when ToolExecutionRequest.id() is null (Ollama). 
+     Never use .equals() on a potentially-null callId — use Objects.equals().
+
+7.20 INVARIANT: A parallel batch HITL pause stores per-tool decision
+     state in AgentCheckpoint.batchToolDecisions (TEXT, JSON) as:
+       { "toolName": "PENDING" | "APPROVED" | "DENIED" }
+     toolName is the key (not callId) because tool names appear in
+     user-facing commands: `approve github`, `deny manage_schedule`.
+
+7.21 MUST: `approve` / `deny` with no argument MUST behave identically
+     to P70/P71: approve or deny ALL pending tools atomically.
+     Per-tool commands only activate when a tool name argument is given
+     AND the current checkpoint has a batchToolDecisions field.
+
+7.22 INVARIANT: A partially-decided parallel batch (some tools APPROVED,
+     some PENDING) MUST NOT resume. Resume fires only when ALL tools in
+     the batch have a non-PENDING decision. Pending tools not explicitly
+     decided when `approve` is typed are auto-approved.
+
+7.23 MUST: All N tools MUST appear in the completedBatchStep passed to
+     the LLM. Denied tools carry observation:
+     "User denied this tool execution." with success=false.
+     The LLM sees the full picture and decides next steps.
+
+7.24 MUST: When a parallel batch HITL pause is sent over Telegram,
+     the message MUST include an inline keyboard with one row per tool:
+       [✅ github]  [🚫 github]
+       [✅ manage_schedule]  [🚫 manage_schedule]
+       [✅ Approve All]  [🚫 Deny All]
+     Text-based commands remain supported for non-Telegram channels.
+
+7.25 MUST: Inline keyboard callback data MUST follow the format:
+       BATCH_APPROVE|<sessionId>|<toolName>
+       BATCH_DENY|<sessionId>|<toolName>
+     The sessionId in the callback ensures the correct session is
+     targeted even if the user has multiple active sessions.
+     Use pipe separator (`|`) to prevent collision with namespaced tools (e.g. `github:read`).
+
+
+7.26 MUST: AWAITING_APPROVAL checkpoints older than
+     arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
+     by the WorkspaceManager GC scheduler. The user MUST receive a
+     Telegram notification that their approval window expired.
+
+7.27 MUST: After each per-tool decision (not all decided yet),
+     the original HITL keyboard message MUST be edited in-place
+     to show only the remaining PENDING tools. Decided tools
+     (APPROVED/DENIED) MUST be removed from the keyboard rows.
+     The "Approve All / Deny All" row is always retained until
+     all tools are decided.
+
+7.28 MUST: All text sent via sendWithKeyboard() MUST be escaped
+     for MarkdownV2 before ParseMode="MarkdownV2" is applied.
+     The escaping MUST use TelegramMarkdownV2Renderer.esc()
+     which already handles all 18 Telegram special characters.
+     AgentResultFormatter.formatHitlMessage() MUST produce
+     plain text output (no MarkdownV2 markup). Escaping is
+     applied at the call site in send(), not inside sendWithKeyboard(),
+     to prevent double-escaping of already-rendered MarkdownV2 text.
+
+7.29 INVARIANT: A parallel batch checkpoint MUST transition to
+     a RESUMING pseudo-status (stored as a transient flag, NOT
+     a new DB column) atomically before resumeParallelBatch()
+     is called. If the flag is already set, the second caller
+     MUST return a no-op response. This prevents double-resume
+     when two callback_query updates arrive concurrently.
+     The flag lives in a ConcurrentHashMap in StatefulAgentStore
+     and is cleared when the session terminates.
+
+§7.30 INVARIANT: Within a parallel batch, tools whose autonomy level permits execution WITHOUT human approval (autonomy >= FULL) MUST be pre-executed before the HITL pause. Their results MUST be stored in AgentCheckpoint.preExecutedResults (TEXT, JSON) as toolName → ToolResponse. On resume, CheckpointResumeHandler MUST use pre-stored results instead of re-executing those tools.
+
+§7.31 INVARIANT: A tool is considered "pre-executable" if and only if: (a) the current session's autonomy level is FULL_AUTONOMY, OR (b) the tool name appears in arcclaw.hitl.pre-executable-tools config list. Safe tools are never automatically inferred — they must be explicitly configured. This prevents accidental side effects from misclassification.
+
+§7.32 MUST: The HITL pause message shown to the user MUST list ONLY the tools that still require approval. Pre-executed tools MUST NOT appear in the keyboard or the approval text. The Approve All / Deny All buttons operate only on the PENDING tools.
+
+§7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in arcclaw.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity — /approve <sessionId> <toolName> is also valid.
+
+§7.34 MUST: Web UI tool approval MUST be per-tool granular. The REST HITL endpoint MUST accept toolName as a parameter (in the JSON request body via CheckpointApprovalRequest). Passing no toolName is valid only for bulk Approve All / Deny All operations.
+
+§7.35 TelegramCallbackHandler MUST reject any callback whose sessionId maps to a checkpoint older than arcclaw.hitl.timeout-hours before routing to any reflex. This guard is independent of and complementary to the WorkspaceManager GC auto-deny scheduler (§7.26).
+
+§7.36 MUST: The `ApprovalStateMachine` in `arcclaw-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
 
 ---
 
@@ -436,183 +928,6 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ---
 
-## §7. Parallel Tool Execution
-
-7.1 MUST: A parallel LLM turn (N tool calls in one ChatResponse) MUST
-    be represented as a single ReasoningStep in agent history using
-    action = ReasoningStep.PARALLEL_SENTINEL ("__parallel__").
-    The full batch payload is stored in actionInput under key "batch".
-
-7.2 MUST NOT: Expand parallel tool calls into N separate ReasoningStep
-    entries in history before execution. History entries MUST map
-    1:1 with LLM turns to preserve chat protocol correctness.
-
-7.3 MUST: ChatHistoryAssembler MUST reconstruct a parallel turn as:
-    ONE AiMessage(thought, [req1, req2, ..., reqN]) followed by
-    N ToolExecutionResultMessages in callId order.
-
-7.4 MUST: If ANY tool in a parallel batch requires HITL, ALL tools in
-    the batch pause atomically. Partial per-tool approval is forbidden
-    until Phase 71 defines the partial approval protocol.
-
-7.5 MUST NOT: Execute parallel tools on the calling thread.
-    Use ManagedExecutor (already injected via WorkspaceExecutors)
-    for all parallel tool invocations.
-
-7.6 MUST: All parallel tool spans MUST be siblings under the same
-    parent iteration span. Use startToolSpan() per tool call.
-
-7.7 MUST: Deduplication guard (ToolInvocationGuard) MUST check ALL
-    tools in a batch before ANY tool executes. If any call is a
-    duplicate, the entire batch is evaluated before execution begins.
-
-7.8 MUST: ParallelToolCall.callId MUST follow the pattern "call_N"
-    where N is the 0-based index in the LLM's tool call list.
-    Do NOT use UUID for callIds — LangChain4j requires stable,
-    predictable callId matching between AiMessage and
-    ToolExecutionResultMessage.
-
-7.9 MUST NOT: Modify ReasoningStep record shape in Phase 70.
-    The parallel batch is encoded in actionInput["batch"] as JSON.
-    Schema migration for a native parallel column is Phase 71+.
-
-7.10 SHOULD: Test parallel tool execution with Claude 3.5 Sonnet and
-     GPT-4o before enabling in production, as parallel tool call
-     behavior differs between providers. Groq (llama-3.x) rarely
-     issues parallel tool calls — most parallel call traffic will
-     come from Anthropic and OpenAI providers.
-
-7.11 LEGACY: Single getFirst() path in ReasoningStepParser is removed
-     in Phase 70. Do NOT add it back as a fallback without updating
-     this invariant first.
-
-7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
-     to virtual threads. Capture io.opentelemetry.context.Context.current()
-     on the calling thread BEFORE submitting to the executor. Restore it
-     inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
-     propagates WorkspaceScoped session context (ScopedValue) only — it
-     does NOT propagate OTel ThreadLocal spans.
-     (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
-
-7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
-     during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
-     from in-memory history on each LLM call — SQLite does not need to
-     be current mid-run. AgentLoop persists history to SQLite via
-     agentStore.save() at session end (Finished/Failed/LoopExceeded) or
-     HITL pause (AwaitingApproval checkpoint). ChatMemoryWriter manages
-     user goal/AI answer messages in ChatMemoryStore only — it MUST NOT
-     be used for ReasoningStep history persistence.
-
-7.15 MUST NOT: A deduplicated tool in a parallel batch MUST NOT cause
-     its peers to be skipped. The dedup tool receives its cached
-     observation as its result. All other tools in the batch proceed
-     to execution normally.
-
-7.16 SHOULD: Each parallel tool execution MUST time out after
-     arcclaw.parallel.tool-timeout-seconds (default: 60). A timed-out
-     tool returns withResult("Tool timed out after Xs", false) and
-     does not block the rest of the batch.
-
-7.17 MUST: Metrics counters arcclaw.agent.tool.calls MUST reflect
-     individual tool names in a parallel batch — not the __parallel__
-     sentinel. The MetricsAgentObserver already receives individual
-     onStepComplete() calls from ParallelToolStepExecutor (one per
-     tool) — verify the sentinel step itself does NOT trigger an
-     additional __parallel__ counter increment.
-
-7.18 INVARIANT: ReasoningStep history list is mutated EXACTLY ONCE
-     per parallel batch execution — inside buildCompletedBatchDecision().
-     Do NOT add intermediate steps for dedup results or partial
-     executions. The single batch step encodes ALL N results.
-
-7.19 INVARIANT: ParallelToolCall.callId() MUST be non-null at the point
-     the merge loop executes. ReasoningStepParser MUST generate a
-     UUID fallback when ToolExecutionRequest.id() is null (Ollama). 
-     Never use .equals() on a potentially-null callId — use Objects.equals().
-
-7.20 INVARIANT: A parallel batch HITL pause stores per-tool decision
-     state in AgentCheckpoint.batchToolDecisions (TEXT, JSON) as:
-       { "toolName": "PENDING" | "APPROVED" | "DENIED" }
-     toolName is the key (not callId) because tool names appear in
-     user-facing commands: `approve github`, `deny manage_schedule`.
-
-7.21 MUST: `approve` / `deny` with no argument MUST behave identically
-     to P70/P71: approve or deny ALL pending tools atomically.
-     Per-tool commands only activate when a tool name argument is given
-     AND the current checkpoint has a batchToolDecisions field.
-
-7.22 INVARIANT: A partially-decided parallel batch (some tools APPROVED,
-     some PENDING) MUST NOT resume. Resume fires only when ALL tools in
-     the batch have a non-PENDING decision. Pending tools not explicitly
-     decided when `approve` is typed are auto-approved.
-
-7.23 MUST: All N tools MUST appear in the completedBatchStep passed to
-     the LLM. Denied tools carry observation:
-     "User denied this tool execution." with success=false.
-     The LLM sees the full picture and decides next steps.
-
-7.24 MUST: When a parallel batch HITL pause is sent over Telegram,
-     the message MUST include an inline keyboard with one row per tool:
-       [✅ github]  [🚫 github]
-       [✅ manage_schedule]  [🚫 manage_schedule]
-       [✅ Approve All]  [🚫 Deny All]
-     Text-based commands remain supported for non-Telegram channels.
-
-7.25 MUST: Inline keyboard callback data MUST follow the format:
-       BATCH_APPROVE|<sessionId>|<toolName>
-       BATCH_DENY|<sessionId>|<toolName>
-     The sessionId in the callback ensures the correct session is
-     targeted even if the user has multiple active sessions.
-     Use pipe separator (`|`) to prevent collision with namespaced tools (e.g. `github:read`).
-
-
-7.26 MUST: AWAITING_APPROVAL checkpoints older than
-     arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
-     by the WorkspaceManager GC scheduler. The user MUST receive a
-     Telegram notification that their approval window expired.
-
-7.27 MUST: After each per-tool decision (not all decided yet),
-     the original HITL keyboard message MUST be edited in-place
-     to show only the remaining PENDING tools. Decided tools
-     (APPROVED/DENIED) MUST be removed from the keyboard rows.
-     The "Approve All / Deny All" row is always retained until
-     all tools are decided.
-
-7.28 MUST: All text sent via sendWithKeyboard() MUST be escaped
-     for MarkdownV2 before ParseMode="MarkdownV2" is applied.
-     The escaping MUST use TelegramMarkdownV2Renderer.esc()
-     which already handles all 18 Telegram special characters.
-     AgentResultFormatter.formatHitlMessage() MUST produce
-     plain text output (no MarkdownV2 markup). Escaping is
-     applied at the call site in send(), not inside sendWithKeyboard(),
-     to prevent double-escaping of already-rendered MarkdownV2 text.
-
-7.29 INVARIANT: A parallel batch checkpoint MUST transition to
-     a RESUMING pseudo-status (stored as a transient flag, NOT
-     a new DB column) atomically before resumeParallelBatch()
-     is called. If the flag is already set, the second caller
-     MUST return a no-op response. This prevents double-resume
-     when two callback_query updates arrive concurrently.
-     The flag lives in a ConcurrentHashMap in StatefulAgentStore
-     and is cleared when the session terminates.
-
-§7.30 INVARIANT: Within a parallel batch, tools whose autonomy level permits execution WITHOUT human approval (autonomy >= FULL) MUST be pre-executed before the HITL pause. Their results MUST be stored in AgentCheckpoint.preExecutedResults (TEXT, JSON) as toolName → ToolResponse. On resume, CheckpointResumeHandler MUST use pre-stored results instead of re-executing those tools.
-
-§7.31 INVARIANT: A tool is considered "pre-executable" if and only if: (a) the current session's autonomy level is FULL_AUTONOMY, OR (b) the tool name appears in arcclaw.hitl.pre-executable-tools config list. Safe tools are never automatically inferred — they must be explicitly configured. This prevents accidental side effects from misclassification.
-
-§7.32 MUST: The HITL pause message shown to the user MUST list ONLY the tools that still require approval. Pre-executed tools MUST NOT appear in the keyboard or the approval text. The Approve All / Deny All buttons operate only on the PENDING tools.
-
-§7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in arcclaw.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity — /approve <sessionId> <toolName> is also valid.
-
-§7.34 MUST: Web UI tool approval MUST be per-tool granular. The REST HITL endpoint MUST accept toolName as a parameter (in the JSON request body via CheckpointApprovalRequest). Passing no toolName is valid only for bulk Approve All / Deny All operations.
-
-§7.35 TelegramCallbackHandler MUST reject any callback whose sessionId maps to a checkpoint older than arcclaw.hitl.timeout-hours before routing to any reflex. This guard is independent of and complementary to the WorkspaceManager GC auto-deny scheduler (§7.26).
-
-§7.36 MUST: The `ApprovalStateMachine` in `arcclaw-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
-
-
----
-
 ## 16. New Module Creation (Phase 83A+)
 
 ### 16.1 Dependency Cycle Prevention
@@ -674,3 +989,20 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 | Cross-key access | any session endpoint | `401` + `code=SESSION_ACCESS_DENIED` |
 | Terminate session (owner)   | `DELETE /api/v1/sessions/{id}` | `204` |
 | Terminate session (foreign) | `DELETE /api/v1/sessions/{id}` | `401` + `code=SESSION_ACCESS_DENIED` |
+
+---
+
+## 19. Validation Checklist (P84+)
+
+Run this checklist mentally before every major refactor touching persistence, approval, scheduling, or the agent loop:
+
+- [ ] Does any new `@Transactional` method call another `@Transactional(REQUIRES_NEW)` method? (§5.8)
+- [ ] Does any new method run an LLM call or external HTTP request inside a `@Transactional`? (§5.9)
+- [ ] Is `CheckpointApprovalService` still annotated `NOT_SUPPORTED` on all 4 mutating methods? (§5.10)
+- [ ] Is `ApprovalStateMachine.decide()` still NOT_SUPPORTED? (§5.11)
+- [ ] Is `AgentCronScheduler.pollAndDispatch()` still NOT_SUPPORTED with `reclaimStaleCrons` isolated? (§5.12)
+- [ ] Does Agroal config still have `background-validation=true` and `max-size≥3`? (§5.13)
+- [ ] Is `SqliteRetryTemplate` only called from a NOT_SUPPORTED or un-annotated outer frame? (§5.14)
+- [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
+- [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)
+- [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)

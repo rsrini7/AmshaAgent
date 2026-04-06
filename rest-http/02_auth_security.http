@@ -6,7 +6,7 @@
 ###
 ### Default keys from .env.example / DevSecretSeeder (dev mode):
 ###   internal key : key-internal-changeme    (name: "internal")
-###   CI key       : key-ci-changeme          (name: "ci-pipeline")
+###   CI key       : key-ci-changeme          (name: "ci")
 ###
 ### In production, override via:
 ###   ARCCLAW_API_KEYS_INTERNAL=<your-key>

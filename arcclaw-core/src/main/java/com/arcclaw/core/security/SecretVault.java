@@ -47,4 +47,9 @@ public interface SecretVault {
      * Stores a system-level key.
      */
     void storeSystemKey(String keyName, byte[] secret);
+
+    /**
+     * Removes a system-level key.
+     */
+    void removeSystemKey(String keyName);
 }

@@ -12,13 +12,19 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.app.security.ApiKeyValidator;
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import io.smallrye.mutiny.Multi;
+import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped
 @Path("hitl")
@@ -27,6 +33,24 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 public class HitlResource {
 
     @Inject HitlService hitlService;
+    @Inject AgentSseService agentSseService;
+    @Inject ApiKeyValidator apiKeyValidator;
+
+    @GET
+    @Path("/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
+    public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
+        if (!apiKeyValidator.isValid(apiKey)) {
+            return Multi.createFrom().failure(
+            new WebApplicationException(Response.Status.UNAUTHORIZED));
+         }
+        if (sessionId == null || sessionId.isBlank()) {
+            return Multi.createFrom().failure(
+                new WebApplicationException(Response.Status.BAD_REQUEST));
+        }
+        return agentSseService.subscribe(sessionId);
+    }
 
     @GET
     public List<PendingApprovalDto> listPending() {
