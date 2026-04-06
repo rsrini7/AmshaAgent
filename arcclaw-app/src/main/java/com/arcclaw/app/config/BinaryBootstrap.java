@@ -676,9 +676,6 @@ public class BinaryBootstrap {
     }
 
     private static void promptPlaywrightInstallationIfNeeded(Path binaryDir) {
-        Console console = System.console();
-        if (console == null) return; // Non-interactive
-
         String enabled = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
         if (!"true".equalsIgnoreCase(enabled)) return;
 
@@ -686,13 +683,39 @@ public class BinaryBootstrap {
         Path browsersPath = (pathStr != null) ? Path.of(pathStr) : binaryDir.resolve(".playwright-browsers");
 
         if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+            Console console = System.console();
             System.err.println();
             System.err.println("  ┌─ Playwright Chromium Installation");
             System.err.println("  │  Playwright is enabled but the Chromium browser is missing from:");
-            System.err.println("  │  " + browsersPath);
+            System.err.println("  │  " + browsersPath.toAbsolutePath());
             System.err.println("  │");
-            String installResponse = console.readLine("  └─ Download and install Chromium now? [Y/n]: ");
-            if (installResponse == null || installResponse.trim().isEmpty() || installResponse.trim().toLowerCase().startsWith("y")) {
+
+            String installResponse = null;
+            if (console != null) {
+                installResponse = console.readLine("  └─ Download and install Chromium now? [Y/n]: ");
+            } else {
+                // Fallback for environments like 'mise' where console might be null but stdin is available
+                System.err.print("  └─ Download and install Chromium now? [Y/n]: ");
+                System.err.flush();
+                try {
+                    // We use a simple read from System.in. 
+                    // To avoid hanging in CI, we only do this if we are not clearly in a CI environment.
+                    if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
+                        StringBuilder sb = new StringBuilder();
+                        int c;
+                        while ((c = System.in.read()) != '\n' && c != -1) {
+                            if (c != '\r') sb.append((char)c);
+                        }
+                        installResponse = sb.toString().trim();
+                    } else {
+                        System.err.println(" (Non-interactive/CI detected — skipping installation)");
+                    }
+                } catch (IOException e) {
+                    System.err.println(" (Failed to read from stdin)");
+                }
+            }
+
+            if (installResponse != null && (installResponse.isEmpty() || installResponse.toLowerCase().startsWith("y"))) {
                 PlaywrightBrowserInstaller.installChromium(browsersPath);
                 System.err.println();
             }

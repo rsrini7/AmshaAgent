@@ -46,14 +46,20 @@ public class PlaywrightPageRunner {
             log.info("Playwright is disabled — skipping browser warmup.");
             return;
         }
-        long t0 = System.currentTimeMillis();
-        // Since this runs during Quarkus startup, it warms up the browser instantly.
-        playwright = Playwright.create();
-        browser = playwright.chromium().launch(
-            new BrowserType.LaunchOptions().setHeadless(headless)
-        );
-        log.infof("Playwright Chromium cached in %dms (headless=%s)", 
-                System.currentTimeMillis() - t0, headless);
+
+        try {
+            long t0 = System.currentTimeMillis();
+            // Since this runs during Quarkus startup, it warms up the browser instantly.
+            playwright = Playwright.create();
+            browser = playwright.chromium().launch(
+                new BrowserType.LaunchOptions().setHeadless(headless)
+            );
+            log.infof("Playwright Chromium cached in %dms (headless=%s)", 
+                    System.currentTimeMillis() - t0, headless);
+        } catch (Exception e) {
+            log.warnf("Playwright failed to initialize: %s. Tool will be unavailable.", e.getMessage());
+            destroy(); // Clean up if playwright was created but launch failed
+        }
     }
 
     @PreDestroy
@@ -85,6 +91,10 @@ public class PlaywrightPageRunner {
      * @throws IllegalArgumentException on unsafe URL
      */
     public synchronized String run(String url, String action, String selector, int timeoutMs) {
+        if (!enabled || browser == null) {
+            throw new PlaywrightException("Playwright is not correctly initialized. " +
+                "Check if Chromium browser binary is installed properly.");
+        }
 
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
             throw new IllegalArgumentException("Unsafe URL rejected: " + url);
