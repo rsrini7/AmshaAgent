@@ -3,14 +3,17 @@ package com.arcclaw.core.channel;
 import java.util.concurrent.CompletableFuture;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.pipeline.SessionIdResolver;
+import com.arcclaw.core.security.SessionOwnerResolver;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
@@ -22,6 +25,8 @@ public class ChannelServicesImpl implements ChannelServices {
     @Inject MessagePipeline messagePipeline;
     @Inject WorkspaceManager workspaceManager;
     @Inject SessionIdResolver sessionIdResolver;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
+    @Inject Instance<SessionOwnerResolver> ownerResolver;
     @Inject ManagedExecutor executor;
 
     @Override
@@ -42,5 +47,20 @@ public class ChannelServicesImpl implements ChannelServices {
     @Override
     public void terminateSession(String sessionId) {
         workspaceManager.terminateSession(sessionId);
+    }
+
+    @Override
+    public void recordHeartbeat(String sessionId) {
+        heartbeatTracker.recordHeartbeat(sessionId);
+    }
+
+    @Override
+    public void bindSessionOwner(String sessionId, String ownerKeyName) {
+        heartbeatTracker.tryBindOwner(sessionId, ownerKeyName);
+    }
+
+    @Override
+    public boolean isValidIdentity(String credential) {
+        return ownerResolver.isResolvable() && ownerResolver.get().isValid(credential);
     }
 }

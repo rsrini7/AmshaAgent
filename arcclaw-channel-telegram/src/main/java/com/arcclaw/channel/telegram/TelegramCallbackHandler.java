@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -25,7 +26,9 @@ import org.jboss.logging.Logger;
 public class TelegramCallbackHandler {
 
     private static final Logger log = Logger.getLogger(TelegramCallbackHandler.class);
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     @Inject
     TelegramChannelSender sender;
@@ -108,10 +111,11 @@ public class TelegramCallbackHandler {
     private void answerCallback(String callbackQueryId) {
         log.debugf("Answering callback %s", callbackQueryId);
         String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
-        HTTP_CLIENT.sendAsync(
+        httpClient.sendAsync(
             HttpRequest.newBuilder()
                 .uri(URI.create(
                     "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                .timeout(Duration.ofSeconds(5))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build(),

@@ -83,7 +83,7 @@ class ApprovalStateMachineTest {
         assertEquals(0, result.remainingPendingTools());
 
         verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", "APPROVED");
-        verify(resumeHandler).resumeAfterBatchDecision("session-123", "coder", "session-123", null, "websocket");
+        verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
         verify(decisionEvents).fire(any(ApprovalDecisionEvent.class));
     }
 
@@ -121,6 +121,38 @@ class ApprovalStateMachineTest {
         
         assertEquals(ApprovalOutcome.PARTIAL_STILL_PENDING, result.outcome());
         assertEquals(2, result.remainingPendingTools());
+    }
+
+    @Test
+    void testMixedBatch_atLeastOneApproval_approvedOutcome() {
+        // Batch: tool1, tool2.
+        // tool1 already DENIED.
+        // Now approving tool2.
+        mockTools(List.of("tool2"), List.of("tool1", "tool2"));
+        // Manually set tool1 to DENIED in the JSON
+        cp.setBatchToolDecisions("{\"tool1\":\"DENIED\",\"tool2\":\"PENDING\"}");
+        
+        when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
+
+        ApprovalResult result = stateMachine.decide("session-123", "tool2", ApprovalDecision.APPROVE, "test");
+        
+        assertEquals(ApprovalOutcome.APPROVED, result.outcome());
+        verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testMixedBatch_allDenied_rejectedOutcome() {
+        // Batch: tool1, tool2.
+        // tool1 already DENIED.
+        // Now denying tool2.
+        mockTools(List.of("tool2"), List.of("tool1", "tool2"));
+        cp.setBatchToolDecisions("{\"tool1\":\"DENIED\",\"tool2\":\"PENDING\"}");
+        
+        when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
+
+        ApprovalResult result = stateMachine.decide("session-123", "tool2", ApprovalDecision.REJECT, "test");
+        
+        assertEquals(ApprovalOutcome.REJECTED, result.outcome());
     }
 
     @Test

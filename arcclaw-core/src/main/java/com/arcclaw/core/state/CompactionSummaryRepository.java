@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -21,6 +22,9 @@ public class CompactionSummaryRepository {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    Instance<CompactionSummaryRepository> self;
 
     @Transactional
     public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {
@@ -45,15 +49,26 @@ public class CompactionSummaryRepository {
         }
         em.flush(); // Ensure main is written before FTS sync
 
-        // Manual FTS Sync: DELETE then INSERT (standalone pattern)
-        em.createNativeQuery("DELETE FROM fts.compaction_summary_fts WHERE sessionId = ?1")
-                .setParameter(1, sessionId)
-                .executeUpdate();
+        // Manual FTS Sync (isolated tx to prevent indexing failure from rolling back main write)
+        self.get().syncFtsBestEffort(sessionId, summaryText);
+    }
 
-        em.createNativeQuery("INSERT INTO fts.compaction_summary_fts(sessionId, summary) VALUES (?1, ?2)")
-                .setParameter(1, sessionId)
-                .setParameter(2, summaryText)
-                .executeUpdate();
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    public void syncFtsBestEffort(String sessionId, String summaryText) {
+        try {
+            // Manual FTS Sync: DELETE then INSERT (standalone pattern)
+            em.createNativeQuery("DELETE FROM fts.compaction_summary_fts WHERE sessionId = ?1")
+                    .setParameter(1, sessionId)
+                    .executeUpdate();
+
+            em.createNativeQuery("INSERT INTO fts.compaction_summary_fts(sessionId, summary) VALUES (?1, ?2)")
+                    .setParameter(1, sessionId)
+                    .setParameter(2, summaryText)
+                    .executeUpdate();
+        } catch (Exception e) {
+            log.errorf("FTS index failed for sessionId=%s — non-fatal for main write: %s", 
+                    sessionId, e.getMessage());
+        }
     }
 
     @Transactional
@@ -74,6 +89,13 @@ public class CompactionSummaryRepository {
     /**
      * Full-text search across compaction summaries for a specific user.
      * Uses SQLite FTS5 MATCH with BM25 ranking.
+     *
+     * <p><strong>D2.3/F26 Multi-Tenant Tradeoff:</strong>
+     * Currently, the MATCH runs globally on `fts_v.summary`, meaning BM25 IDF scores
+     * are polluted by term frequencies across ALL users' data. Filtering by `cs.user_id = ?2`
+     * happens AFTER scoring. Before scaling to multi-tenant/SaaS workloads, this must be
+     * redesigned (e.g., using a per-tenant FTS shadow table or injecting tenant_id into
+     * an unindexed FTS column so MATCH can filter at the index level).
      *
      * @param userId tenant isolation key (from ScopedValue, never LLM params)
      * @param query  search keywords

@@ -2,6 +2,8 @@ package com.arcclaw.core.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -88,10 +90,18 @@ public class SessionReaper {
 
     private void doRecoverZombies() {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
+        // D1.2: Added 15-minute grace period based on updatedAt to protect
+        // active checkpoints running on other nodes during rolling/canary deployments.
+        // FIX: Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
+        // Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly.
+        LocalDateTime cutoff = LocalDateTime.ofInstant(
+                Instant.now().minus(Duration.ofMinutes(15)),
+                ZoneOffset.UTC);
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
+                .setParameter("cutoff", cutoff)
                 .getResultList();
 
         if (!inProgressZombies.isEmpty()) {
@@ -159,6 +169,10 @@ public class SessionReaper {
         heartbeatTracker.forEachExpired(cutoff, sessionId -> {
             if (awaitingApprovalIds.contains(sessionId)) {
                 log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
+                return;
+            }
+            if (agentStore.isBatchResuming(sessionId)) {
+                log.infof("GC sweep: skipping session=%s (RESUMING)", sessionId);
                 return;
             }
             log.warnf("GC sweep: session=%s expired", sessionId);

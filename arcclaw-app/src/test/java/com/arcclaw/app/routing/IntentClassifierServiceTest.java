@@ -179,7 +179,8 @@ public class IntentClassifierServiceTest {
     void testClassifierIsCalledSynchronously() {
         when(classifierModel.chat(anyString())).thenReturn("saraswati");
         
-        String role = service.classify("research project");
+        // Use a generic input that does NOT match any fast-path trigger
+        String role = service.classify("how can you help me today");
         
         Mockito.verify(classifierModel, Mockito.times(1)).chat(anyString());
         Assertions.assertEquals("researcher", role);
@@ -197,7 +198,8 @@ public class IntentClassifierServiceTest {
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         when(classifierModel.chat(promptCaptor.capture())).thenReturn("coordinator");
 
-        service.classify("tell me about the repo");
+        // Use a generic input that does NOT match any fast-path trigger
+        service.classify("how are you doing today");
 
         String prompt = promptCaptor.getValue();
         // Check for directives from our providers

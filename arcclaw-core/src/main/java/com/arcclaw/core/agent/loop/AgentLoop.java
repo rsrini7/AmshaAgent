@@ -443,15 +443,23 @@ public class AgentLoop {
         if (!ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) return Optional.empty();
         if (observation == null || observation.isBlank()) return Optional.empty();
 
-        // FIX: also guard against tool failure messages that don't start with ⏳/⚠️.
-        // e.g. "Parameter 'agent' is required." — success=false but no sentinel prefix.
-        // Without this guard, tool errors are sent to Telegram as finished answers.
-        if (observation.startsWith("⏳")
-                || observation.startsWith("⚠️")
-                || observation.startsWith("Tool execution failed")
-                || observation.startsWith("Parameter ")        // ← tool param validation errors
-                || observation.startsWith("❌")) {             // ← explicit failure prefix
-            return Optional.empty();
+        // B1 (F9): Use structural success flag if available.
+        // If the tool failed, we must not fast-path the "answer" as it's likely an error message.
+        if (last.success() != null) {
+            if (!last.success()) {
+                log.warnf("[AgentLoop] Delegate tool for session %s marked as failed — skipping fast-path.", sessionId);
+                return Optional.empty();
+            }
+        } else {
+            // Legacy/fallback: if success is null (older history), use previous string guards.
+            // B1 (F9) also notes we should avoid coupling logic to English strings.
+            if (observation.startsWith("⏳")
+                    || observation.startsWith("⚠️")
+                    || observation.startsWith("Tool execution failed")
+                    || observation.startsWith("Parameter ")
+                    || observation.startsWith("❌")) {
+                return Optional.empty();
+            }
         }
 
         log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +

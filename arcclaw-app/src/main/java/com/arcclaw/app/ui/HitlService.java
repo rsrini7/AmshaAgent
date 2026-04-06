@@ -2,6 +2,7 @@ package com.arcclaw.app.ui;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -10,15 +11,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.transaction.Transactional.TxType;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
@@ -30,12 +31,50 @@ public class HitlService {
     @Inject ObjectMapper objectMapper;
     @Inject CheckpointApprovalService checkpointApprovalService;
 
+    @Inject SessionHeartbeatTracker heartbeatTracker;
+
+    private static final int MAX_LIMIT = 50;
+
+    /**
+     * Returns pending approvals scoped to the given userId.
+     * <p>
+     * F27/§85-A: The old unfiltered query exposed all users' pending approvals.
+     * Now uses {@link SessionHeartbeatTracker#getSessionIdsByOwner(String)} to
+     * restrict results to sessions owned by the requesting user only.
+     *
+     * @param userId  trusted user identity (from API key, never from LLM)
+     * @param limit   max results to return (capped at {@value #MAX_LIMIT})
+     */
     @Transactional
-    public Map<String, PendingApproval> getPendingApprovals() {
+    public Map<String, PendingApproval> getPendingApprovals(String userId, int limit) {
+        if (userId == null || userId.isBlank()) {
+            return Map.of();
+        }
+        int effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+
+        // §85-B: Include both owned sessions AND unowned sessions (Telegram, CLI).
+        // Telegram/CLI sessions never go through AgentSessionService.createSession()
+        // or the WebSocket lazy-bind path, so they have ownerKeyName = null.
+        // An authenticated UI user should see approvals from all their owned sessions
+        // plus any unowned (global) sessions.
+        List<String> ownedSessionIds = heartbeatTracker.getSessionIdsByOwner(userId);
+        List<String> unownedSessionIds = heartbeatTracker.getUnownedSessionIds();
+
+        List<String> visibleSessionIds = new ArrayList<>(ownedSessionIds);
+        visibleSessionIds.addAll(unownedSessionIds);
+
+        if (visibleSessionIds.isEmpty()) {
+            return Map.of();
+        }
+
         return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status " +
+                "AND c.sessionId IN (:sessionIds) " +
+                "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("sessionIds", visibleSessionIds)
+                .setMaxResults(effectiveLimit)
                 .getResultList()
                 .stream()
                 .map(this::mapToPending)

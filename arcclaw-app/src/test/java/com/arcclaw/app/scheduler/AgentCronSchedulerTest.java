@@ -14,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
 
 import jakarta.inject.Inject;
 
@@ -23,6 +24,7 @@ import com.arcclaw.core.state.CronStatus;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.eclipse.microprofile.context.ManagedExecutor;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -116,6 +118,29 @@ class AgentCronSchedulerTest {
         verify(cronRepository).reclaimStaleCrons(ArgumentMatchers.argThat(t ->
                 t.isAfter(Instant.now().minus(6, ChronoUnit.MINUTES)) &&
                 t.isBefore(Instant.now().minus(4, ChronoUnit.MINUTES))));
+    }
+ 
+    @Test
+    void testSemaphoreReleasedOnRejection() {
+        AgentCronEntity job = createDueJob(true);
+        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
+        when(cronRepository.claimForFire(job.id)).thenReturn(true);
+ 
+        // Mock executor to throw RejectedExecutionException
+        doAnswer(invocation -> {
+            throw new RejectedExecutionException("Mock rejection");
+        }).when(vThreadsMock).execute(any(Runnable.class));
+ 
+        int initialPermits = scheduler.getAvailablePermits();
+ 
+        scheduler.pollAndDispatch();
+ 
+        // Verify permits are same as before (acquired and then released in catch)
+        Assertions.assertEquals(initialPermits, scheduler.getAvailablePermits(),
+                "Semaphore permits should be recovered after RejectedExecutionException");
+ 
+        // Verify DB claim was released
+        verify(cronRepository).releaseClaimToActive(job.id);
     }
 
     @Test

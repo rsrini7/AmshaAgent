@@ -47,6 +47,7 @@ public class McpClientService {
 
     @Inject ManagedExecutor executor;
 
+    private final ConcurrentHashMap<String, StdioConfig> stdioConfigs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> sessionIds = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Process> processes = new ConcurrentHashMap<>();
@@ -55,6 +56,8 @@ public class McpClientService {
     
     private final AtomicInteger requestIdGen = new AtomicInteger(1);
     private HttpClient httpClient;
+
+    private record StdioConfig(String command, List<String> args, Map<String, String> env) {}
 
     @PostConstruct
     void init() {
@@ -109,6 +112,7 @@ public class McpClientService {
      * Starts a sub-process and performs the MCP handshake over its stdin/stdout.
      */
     public void connectStdio(String serverName, String command, List<String> args, Map<String, String> env) {
+        stdioConfigs.put(serverName, new StdioConfig(command, args, env));
         try {
             ProcessBuilder pb = new ProcessBuilder();
             List<String> fullCmd = new ArrayList<>();
@@ -155,9 +159,23 @@ public class McpClientService {
         return initParams;
     }
 
-    @Timeout(5000)
-    @Retry(maxRetries = 2, delay = 200)
+    @Timeout(10000)
+    @Retry(maxRetries = 2, delay = 1000, retryOn = {IOException.class})
     public String invoke(String serverName, String toolName, String paramsJson) {
+        // N3: Guard reconnection logic with per-server lock to prevent race where 
+        // parallel calls strike a dead server and all try to connectStdio simultaneously.
+        ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
+                log.infof("reconnecting dead MCP server: %s", serverName);
+                StdioConfig cfg = stdioConfigs.get(serverName);
+                connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+            }
+        } finally {
+            lock.unlock();
+        }
+
         if (processes.containsKey(serverName)) {
             return invokeStdio(serverName, toolName, paramsJson);
         }
@@ -275,20 +293,47 @@ public class McpClientService {
 
             OutputStream out = processWriters.get(serverName);
             if (out == null) throw new IOException("No writer for MCP server: " + serverName);
-            NdjsonWriter.writeLine(out, objectMapper.writeValueAsString(request));
-
-            BufferedReader reader = processReaders.get(serverName);
-            if (reader == null) throw new IOException("No reader for MCP server: " + serverName);
-            String line = reader.readLine();
-            if (line == null) throw new IOException("MCP server closed connection unexpectedly");
             
-            JsonNode response = objectMapper.readTree(line);
-            if (response.has("error")) {
-                throw new RuntimeException("MCP server error: " + response.get("error").toString());
+            try {
+                NdjsonWriter.writeLine(out, objectMapper.writeValueAsString(request));
+
+                BufferedReader reader = processReaders.get(serverName);
+                if (reader == null) throw new IOException("No reader for MCP server: " + serverName);
+                String line = reader.readLine();
+                if (line == null) throw new IOException("MCP server closed connection unexpectedly");
+                
+                JsonNode response = objectMapper.readTree(line);
+                if (response.has("error")) {
+                    throw new RuntimeException("MCP server error: " + response.get("error").toString());
+                }
+                return response.get("result");
+            } catch (IOException e) {
+                // F19 Dead Process Guard: cleanup on any transport failure
+                // next retry loop will call connectStdio via invoke() fallback
+                log.warnf("MCP STDIO transport error for %s: %s — tearing down process state", serverName, e.getMessage());
+                cleanupStdio(serverName);
+                throw e;
             }
-            return response.get("result");
         } finally {
            lock.unlock();
+        }
+    }
+
+    private void cleanupStdio(String serverName) {
+        try {
+            OutputStream out = processWriters.remove(serverName);
+            if (out != null) out.close();
+        } catch (IOException ignored) {}
+        
+        try {
+            BufferedReader reader = processReaders.remove(serverName);
+            if (reader != null) reader.close();
+        } catch (IOException ignored) {}
+        
+        Process p = processes.remove(serverName);
+        if (p != null) {
+            p.destroyForcibly();
+            try { p.waitFor(1, TimeUnit.SECONDS); } catch (InterruptedException _) { Thread.currentThread().interrupt(); }
         }
     }
 

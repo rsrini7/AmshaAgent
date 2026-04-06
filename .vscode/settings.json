@@ -3,5 +3,6 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "microprofile.tools.validation.unassigned.excluded": [
         "arcclaw.api.keys"
-    ]
+    ],
+    "java.jdt.ls.vmargs": "-XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx2G -Xms100m"
 }

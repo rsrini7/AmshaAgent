@@ -224,6 +224,14 @@ public class ToolRegistry {
 
         log.infof("Invoking tool '%s' (operation=%s, level=%s)", toolName, requiredOp, level);
 
+        // NULL PARAM STRIP
+        // Some LLMs send optional fields as explicit null (e.g. "ref": null)
+        // instead of omitting them. This can break downstream validators or 
+        // cause 400 errors from strict APIs. Strip them here for all tools.
+        Map<String, Object> sanitizedParams = params.entrySet().stream()
+                .filter(e -> e.getValue() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
         // Sandbox path 
         if (tool.requiresSandbox()) {
             var requiredSecrets = extractRequiredSecrets(tool);
@@ -240,16 +248,6 @@ public class ToolRegistry {
                 if (!Files.exists(workspaceRoot)) {
                     Files.createDirectories(workspaceRoot);
                 }
-
-                // NULL PARAM STRIP 
-                // Some LLMs send optional fields as explicit null (e.g. "ref": null)
-                // instead of omitting them. Groq's strict schema validator rejects
-                // null for declared string fields with a 400 tool_use_failed error.
-                // Strip all null-valued entries here before they reach sandboxCommand()
-                // or the external API validator.
-                Map<String, Object> sanitizedParams = params.entrySet().stream()
-                        .filter(e -> e.getValue() != null)
-                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
                 var command = tool.sandboxCommand(sanitizedParams);
 
@@ -296,7 +294,7 @@ public class ToolRegistry {
 
         // Direct (non-sandbox) path
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
-        ToolResponse response = tool.execute(params);
+        ToolResponse response = tool.execute(sanitizedParams);
         recordToolAudit(toolName, response.success());
         return response;
     }

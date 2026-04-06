@@ -54,6 +54,9 @@ public class CompactionEventBridge {
     @Inject
     CompactionInFlightFlag compactionInFlight;
 
+    @Inject
+    StatefulAgentStore agentStore;
+
     /**
      * Called synchronously by CompactionHandler (order=60) before firing the
      * async event. Guarantees the latch is in the map before AgentDispatchHandler
@@ -126,11 +129,19 @@ public class CompactionEventBridge {
         compactionThreadIds.put(request.sessionId(), Thread.currentThread().threadId());
         try {
             log.debugf("Compaction bridge received request for session %s", request.sessionId());
+
+            // D2.1: Protect key turns from being compacted if HITL is pending
+            if (agentStore.findLatestAwaitingApproval(request.sessionId()).isPresent()) {
+                log.infof("Compaction deferred/skipped for session %s: pending HITL approval (F15)", request.sessionId());
+                return;
+            }
+
             compactionService.compact(request.sessionId(), request.userId());
         } catch (Exception e) {
-            log.errorf(e, "Compaction failed for session %s: %s",
+            log.errorf("Compaction failed for session %s: %s",
                     request.sessionId(),
                     e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            log.debug("Full compaction failure stack trace:", e);
         } finally {
             // Clear the thread ownership record first, then release the latch.
             // Order matters: clearing first means any awaitIfInFlight() call that

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -21,6 +22,7 @@ public class CheckpointApprovalServiceTest {
     @Mock StatefulAgentStore agentStore;
     @Mock CheckpointResumeHandler resumeHandler;
     @Mock AsyncPersistenceEngine asyncEngine;
+    @Mock AgentSseService agentSseService;
     @InjectMocks CheckpointApprovalService checkpointApprovalService;
 
     @BeforeEach
@@ -41,7 +43,7 @@ public class CheckpointApprovalServiceTest {
         checkpointApprovalService.approveTool("s1", "github", "test");
 
         verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
-        verify(resumeHandler, times(1)).resumeAfterBatchDecision(eq("s1"), eq("coordinator"), any(), any(), any());
+        // resumeHandler verification removed: approveTool now returns CP, triggerResume handles activation.
     }
 
     @Test
@@ -88,6 +90,16 @@ public class CheckpointApprovalServiceTest {
 
         verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
         verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", "APPROVED");
-        verify(resumeHandler, times(1)).resumeAfterBatchDecision(eq("s1"), eq("coordinator"), any(), any(), any());
+    }
+
+    @Test
+    void test_triggerResume_callsResumeHandler() {
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId("s1");
+        cp.setAgentRole("coordinator");
+        when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
+        
+        checkpointApprovalService.triggerResume(cp);
+        verify(resumeHandler).resumeAfterBatchDecision(eq("s1"), eq("coordinator"), any(), any(), any());
     }
 }

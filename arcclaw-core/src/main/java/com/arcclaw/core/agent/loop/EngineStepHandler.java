@@ -43,7 +43,7 @@ public class EngineStepHandler {
     @Inject ObjectMapper objectMapper;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
-        Pattern.compile("^[A-Za-z].*\\s.*[.!?]\\s*$", Pattern.DOTALL);
+        Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);
 
     StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
             List<ReasoningStep> history, String transientError,
@@ -298,12 +298,12 @@ public class EngineStepHandler {
         if (text == null || text.length() < 20) return false;
         String trimmed = text.strip();
         char first = trimmed.charAt(0);
-        if (first == '{' || first == '[' || first == '<') return false;
+        if (first == '{' || first == '<') return false; // allowed '[' for markdown
         String lower = trimmed.toLowerCase(Locale.ROOT);
         if (lower.contains("error") || lower.contains("exception") ||
             lower.contains("invalid") || lower.contains("failed") ||
             lower.contains("limit") || lower.contains("permission") ||
-            lower.contains("unauthorized") || lower.contains("code\":")) return false;
+            lower.contains("unauthorized") || lower.contains("\"code\":")) return false;
         String[] tokens = trimmed.split("\\s+");
         return tokens.length >= 5 && NATURAL_LANGUAGE_GATE.matcher(trimmed).matches();
     }

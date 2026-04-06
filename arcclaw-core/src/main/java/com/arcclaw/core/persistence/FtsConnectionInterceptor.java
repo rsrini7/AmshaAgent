@@ -1,5 +1,8 @@
 package com.arcclaw.core.persistence;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -68,8 +71,17 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             }
 
             if (!attached) {
-                String ftsPath = dataDir + "/arcclaw-fts.db";
-                if (ftsPath.contains(":memory:")) ftsPath = ":memory:";
+                String ftsPath;
+                if (dataDir.contains(":memory:")) {
+                    ftsPath = ":memory:";
+                } else {
+                    try {
+                        Files.createDirectories(Path.of(dataDir));
+                    } catch (IOException e) {
+                        log.warn("Failed to create data directory for FTS: " + dataDir, e);
+                    }
+                    ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString();
+                }
                 try (Statement stmt = connection.createStatement()) {
                     stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                 }

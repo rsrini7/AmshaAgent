@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -22,6 +23,7 @@ import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.jboss.resteasy.reactive.RestStreamElementType;
@@ -35,6 +37,7 @@ public class HitlResource {
     @Inject HitlService hitlService;
     @Inject AgentSseService agentSseService;
     @Inject ApiKeyValidator apiKeyValidator;
+    @Inject SessionHeartbeatTracker heartbeatTracker;
 
     @GET
     @Path("/events")
@@ -49,12 +52,43 @@ public class HitlResource {
             return Multi.createFrom().failure(
                 new WebApplicationException(Response.Status.BAD_REQUEST));
         }
+
+        // §85-B: Lazy ownership binding for SSE subscription.
+        // The browser WebSocket API cannot send custom headers, so ownership
+        // is NOT established at WebSocket open time. Instead, the first SSE
+        // request that carries a valid apiKey lazily binds the owner.
+        // If the session already has a different owner, reject.
+        String userId = apiKeyValidator.resolveUserId(apiKey);
+        if (userId == null) {
+            return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
+        }
+        
+        if (!heartbeatTracker.tryBindOwner(sessionId, userId)) {
+            // Either session reaped, or owned by someone else.
+            return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
+        }
+
         return agentSseService.subscribe(sessionId);
     }
 
     @GET
-    public List<PendingApprovalDto> listPending() {
-        return hitlService.getPendingApprovals().values().stream()
+    public Response listPending(@HeaderParam("X-ARCCLAW-API-KEY") String apiKey,
+                                @QueryParam("apiKey") String apiKeyParam) {
+        // Header first, fall back to query param (same pattern as ApiKeyAuthFilter)
+        String key = (apiKey != null && !apiKey.isBlank()) ? apiKey : apiKeyParam;
+        if (!apiKeyValidator.isValid(key)) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Missing or invalid API key"))
+                    .build();
+        }
+        String userId = apiKeyValidator.resolveUserId(key);
+        if (userId == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Cannot resolve user identity"))
+                    .build();
+        }
+
+        List<PendingApprovalDto> result = hitlService.getPendingApprovals(userId, 50).values().stream()
             .map(pending -> new PendingApprovalDto(
                 pending.taskId(),
                 pending.toolName(),
@@ -63,6 +97,7 @@ public class HitlResource {
                 pending.agentRole()
             ))
             .collect(Collectors.toList());
+        return Response.ok(result).build();
     }
 
     @POST

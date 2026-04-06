@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -53,11 +55,20 @@ public class SqliteWalConfigurer {
             if (":memory:".equals(dataDir)) {
                 ftsPath = ":memory:";
             } else {
-                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString();
+                try {
+                    Files.createDirectories(Path.of(dataDir));
+                } catch (IOException e) {
+                    log.error("Failed to create data directory: " + dataDir, e);
+                }
+                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
             }
             try {
                 stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                 log.info("FTS database attached: " + ftsPath);
+                
+                // Initialize FTS table in the attached database if missing
+                stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts USING fts5(sessionId, summary)");
+                log.info("FTS compaction summary table initialized in 'fts' schema.");
             } catch (SQLException e) {
                 if (e.getMessage().contains("already in use")) {
                     log.debug("FTS database already attached");

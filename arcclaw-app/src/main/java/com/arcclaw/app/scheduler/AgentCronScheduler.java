@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 
 import jakarta.annotation.PostConstruct;
@@ -13,6 +14,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -26,8 +28,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
-
-import jakarta.transaction.Transactional.TxType;
 
 /**
  * Polls {@code agentcron} table and dispatches due cron jobs to the {@link CronJobRunner}.
@@ -143,15 +143,23 @@ public class AgentCronScheduler {
             }
 
             // Dispatch to managed virtual thread
-            vThreads.execute(() -> {
-                MDC.put(MdcKeys.USER_ID, job.userId);
-                try {
-                    jobRunner.execute(job);
-                } finally {
-                    concurrencyLimiter.release();
-                    MdcCleaner.clearAll();
-                }
-            });
+            try {
+                vThreads.execute(() -> {
+                    MDC.put(MdcKeys.USER_ID, job.userId);
+                    try {
+                        jobRunner.execute(job);
+                    } finally {
+                        concurrencyLimiter.release();
+                        MdcCleaner.clearAll();
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                log.errorf("Failed to dispatch cron job %s: %s",
+                        job.id, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                concurrencyLimiter.release();
+                // Release claim so it can be picked up later
+                cronRepository.releaseClaimToActive(job.id);
+            }
         }
     }
 }

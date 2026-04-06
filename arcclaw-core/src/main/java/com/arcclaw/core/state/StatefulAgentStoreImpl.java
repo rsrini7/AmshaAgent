@@ -1,5 +1,6 @@
 package com.arcclaw.core.state;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -49,11 +50,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {};
 
     /**
-     * In-memory set of sessionIds currently in the process of resuming
-     * a parallel batch. Prevents double-resume from concurrent callbacks.
+     * In-memory map of sessionIds to the start time of a resume operation.
+     * Prevents double-resume from concurrent callbacks.
      * §7.29 — NOT persisted; cleared on session termination.
+     * F7: Stores Instant to allow TTL-based cleanup of orphaned markers.
      */
-    private final ConcurrentHashMap<String, Boolean>
+    private final ConcurrentHashMap<String, Instant>
         resumingBatches = new ConcurrentHashMap<>();
 
     @Inject ObjectMapper objectMapper;
@@ -83,8 +85,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
-            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s",
-                       sessionId, agentRole, autonomy);
+            checkpoint.setIterationsUsed(steps.size());
+            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s, used=%d",
+                       sessionId, agentRole, autonomy, steps.size());
         } else {
             checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId(sessionId);
@@ -92,6 +95,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStateJson(json);
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
+            checkpoint.setIterationsUsed(steps.size());
             em.persist(checkpoint);
 
             String userId = (String) MDC.get(MdcKeys.USER_ID);
@@ -142,6 +146,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             }
 
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
+            managed.setIterationsUsed(checkpoint.getIterationsUsed());
             // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
@@ -278,6 +283,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
         String sessionPrefix = "cron-" + cronId + "-";
 
@@ -285,7 +291,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId LIKE :sessionPrefix " +
                 "  AND c.status = :status " +
-                "ORDER BY c.updatedAt DESC",
+                "ORDER BY c.id DESC",
                 AgentCheckpoint.class);
         q.setParameter("sessionPrefix", sessionPrefix + "%");
         q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
@@ -520,7 +526,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
         TypedQuery<AutonomyLevel> q = em.createQuery(
                 "SELECT c.autonomyLevel FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid ORDER BY c.updatedAt DESC",
+                "WHERE c.sessionId = :sid ORDER BY c.id DESC",
                 AutonomyLevel.class);
         q.setParameter("sid", sessionId);
         q.setMaxResults(1);
@@ -576,8 +582,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional(Transactional.TxType.REQUIRES_NEW) 
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
+        return withRetry(() -> self.doIsAllBatchToolsDecided(sessionId, agentRole), "isAllBatchDecided");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doIsAllBatchToolsDecided(String sessionId, String agentRole) {
         em.clear();
         Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return false;
@@ -611,11 +621,36 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .getResultList();
     }
 
+    /**
+     * Attempts to acquire the local JVM resume lock for a session.
+     * <p>
+     * <strong>D1.1/F7 Tradeoff Documented:</strong> This is a JVM-local
+     * ConcurrentHashMap. It protects against concurrent duplicate resumes hitting
+     * the SAME pod (e.g., impatient user clicking 'Approve' twice). It DOES NOT
+     * protect against cross-pod races during rolling restarts or if a load balancer
+     * sprays two approvals to different pods. Moving to a persistent lock (e.g. 
+     * Redis or row-level SQLite lock) is required for full distributed exactly-once
+     * resuming, if ever strictly required by an orchestrator setup.
+     */
     @Override
     public boolean markBatchResuming(String sessionId) {
-        // putIfAbsent returns null if the key was NOT present → this
-        // caller is first → safe to proceed.
-        return resumingBatches.putIfAbsent(sessionId, Boolean.TRUE) == null;
+        // F7: Use Instant.now() instead of Boolean.TRUE for TTL tracking.
+        return resumingBatches.putIfAbsent(sessionId, Instant.now()) == null;
+    }
+
+    @Override
+    public boolean isBatchResuming(String sessionId) {
+        Instant start = resumingBatches.get(sessionId);
+        if (start == null) return false;
+
+        // F7: TTL Guard. If the entry is older than 30 minutes, assume the 
+        // thread died or finally block failed to run (e.g. OOM/SIGKILL previously).
+        if (Duration.between(start, Instant.now()).toMinutes() > 30) {
+            log.warnf("Found orphaned resume marker for session %s (started %s) — ignoring.", sessionId, start);
+            resumingBatches.remove(sessionId);
+            return false;
+        }
+        return true;
     }
 
     @Override

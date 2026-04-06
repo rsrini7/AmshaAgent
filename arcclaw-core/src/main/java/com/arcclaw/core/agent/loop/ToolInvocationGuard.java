@@ -98,12 +98,15 @@ public class ToolInvocationGuard {
             }
         }
 
-        // 1.5 DYNAMIC TOOL FALLBACK
+        // 1.5 TOOL EXISTENCE CHECK (Internal and Dynamic)
         boolean isInternalTool = toolRegistry.findTool(toolName).isPresent();
-        if (!isInternalTool
+        boolean isDynamicAllowed = !isInternalTool
                 && dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
-                && dynamicToolLookup.get().isDynamicToolAllowed(toolName)) {
-            return new GuardDecision.Allow(); // permitted via dynamic MCP registry (external only)
+                && dynamicToolLookup.get().isDynamicToolAllowed(toolName);
+
+        if (!isInternalTool && !isDynamicAllowed) {
+            log.warnf("[GUARD] Unknown tool call attempt: %s in session %s", toolName, sessionId);
+            return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
         }
 
         // 3. HITL PRE-APPROVAL CHECK

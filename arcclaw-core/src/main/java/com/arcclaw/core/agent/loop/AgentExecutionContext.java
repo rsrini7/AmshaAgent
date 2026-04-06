@@ -4,6 +4,7 @@ import java.util.Objects;
 
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.state.CheckpointStatus;
 
 /**
  * Immutable context for an agent loop execution.
@@ -15,27 +16,63 @@ import com.arcclaw.core.security.AutonomyLevel;
  * the agent pauses for human approval, replacing the post-persist load/save
  * cycle that previously lived in AgentLoop.tryStampChannelInfo().
  */
-public record AgentExecutionContext(
-        String sessionId,
-        String userId,
-        String chatId,
-        String agentRole,
-        String goal,
-        AutonomyLevel autonomyLevel,
-        int maxIterations,
-        String channelType,        // NEW — nullable, from MessageContext
-        String channelPlatformId   // NEW — nullable, from MessageContext
-) {
-    public AgentExecutionContext {
-        Objects.requireNonNull(sessionId,     "sessionId must not be null");
-        Objects.requireNonNull(agentRole,     "agentRole must not be null");
-        Objects.requireNonNull(goal,          "goal must not be null");
-        Objects.requireNonNull(autonomyLevel, "autonomyLevel must not be null");
+public final class AgentExecutionContext {
+    private final String sessionId;
+    private final String userId;
+    private final String chatId;
+    private final String agentRole;
+    private final String goal;
+    private final AutonomyLevel autonomyLevel;
+    private final int maxIterations;
+    private final String channelType;
+    private final String channelPlatformId;
+
+    // Hot-path cache (§7.22 / F22)
+    private CheckpointStatus lastCheckpointStatus;
+    private boolean statusDirty = true;
+
+    public AgentExecutionContext(
+            String sessionId,
+            String userId,
+            String chatId,
+            String agentRole,
+            String goal,
+            AutonomyLevel autonomyLevel,
+            int maxIterations,
+            String channelType,
+            String channelPlatformId
+    ) {
+        this.sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
+        this.userId = userId;
+        this.chatId = chatId;
+        this.agentRole = Objects.requireNonNull(agentRole, "agentRole must not be null");
+        this.goal = Objects.requireNonNull(goal, "goal must not be null");
+        this.autonomyLevel = Objects.requireNonNull(autonomyLevel, "autonomyLevel must not be null");
         if (maxIterations <= 0)
-            throw new IllegalArgumentException(
-                "maxIterations must be > 0, got: " + maxIterations);
-        // channelType and channelPlatformId are intentionally nullable
+            throw new IllegalArgumentException("maxIterations must be > 0, got: " + maxIterations);
+        this.maxIterations = maxIterations;
+        this.channelType = channelType;
+        this.channelPlatformId = channelPlatformId;
     }
+
+    public String sessionId() { return sessionId; }
+    public String userId() { return userId; }
+    public String chatId() { return chatId; }
+    public String agentRole() { return agentRole; }
+    public String goal() { return goal; }
+    public AutonomyLevel autonomyLevel() { return autonomyLevel; }
+    public int maxIterations() { return maxIterations; }
+    public String channelType() { return channelType; }
+    public String channelPlatformId() { return channelPlatformId; }
+
+    public CheckpointStatus lastCheckpointStatus() { return lastCheckpointStatus; }
+    public void setLastCheckpointStatus(CheckpointStatus status) {
+        this.lastCheckpointStatus = status;
+        this.statusDirty = false;
+    }
+
+    public boolean isStatusDirty() { return statusDirty; }
+    public void markStatusDirty() { this.statusDirty = true; }
 
     /** Convenience: true when full channel stamping info is available. */
     public boolean hasChannelInfo() {
@@ -59,7 +96,7 @@ public record AgentExecutionContext(
                 req.goal(),
                 autonomyLevel,
                 max,
-                null,  // no channel info for direct REST/API calls
+                null,
                 null
         );
     }

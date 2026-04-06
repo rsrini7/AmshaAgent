@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -70,7 +72,13 @@ class WorkspaceManagerTest {
         // Arrange: create an IN_PROGRESS checkpoint (simulates a crash)
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
             var steps = List.of(ReasoningStep.pending("thinking", "action", Map.of()));
-            agentStore.save("zombie-session-1", "coordinator", steps);
+            var cp = agentStore.save("zombie-session-1", "coordinator", steps);
+            QuarkusTransaction.requiringNew().run(() -> {
+                em.createQuery("UPDATE AgentCheckpoint c SET c.updatedAt = :backdate WHERE c.id = :id")
+                  .setParameter("backdate", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(20))
+                  .setParameter("id", cp.getId())
+                  .executeUpdate();
+            });
         });
 
         // Verify it's IN_PROGRESS
@@ -186,41 +194,38 @@ class WorkspaceManagerTest {
     }
     /**
      * Test 5: Zombie Recovery for AWAITING_APPROVAL.
+     * AWAITING_APPROVAL checkpoints MUST survive JVM restarts (new invariant).
      */
     @Test
-    void testZombieRecoveryMarksAwaitingApprovalAsFailed() {
+    void testZombieRecoverySurvivesAwaitingApproval() {
         String sessionId = "zombie-approval-1";
         String agentRole = "coordinator";
         WorkspaceScopeHolder.run(sessionId, () -> {
             var steps = List.of(ReasoningStep.pending("thought", "action", Map.of()));
             var _ = agentStore.save(sessionId, agentRole, steps);
 
-            // Wait for background audit write from save() to finish
-            auditService.waitForIdle();
-
             // Load via store — CDI proxy ensures em binds correctly in REQUIRES_NEW context
             AgentCheckpoint detachedCp = QuarkusTransaction.requiringNew()
                 .call(() -> agentStore.load(sessionId, agentRole).orElseThrow());
 
-            // Mutate off-transaction
+            // Mutate off-transaction to simulate pre-restart state
             detachedCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            detachedCp.setPendingToolName("github");
 
-            // Persist via store — uses load-then-copy pattern internally
+            // Persist via store
             agentStore.save(detachedCp);
+            auditService.waitForIdle();
         });
-
-        // Wait for background audit write from merge() to finish
-        auditService.waitForIdle();
 
         // Act
         sessionReaper.onStartup(null);
 
-        // Assert
+        // Assert: SHOULD SURVIVE
         WorkspaceScopeHolder.run(sessionId, () -> {
             var loaded = QuarkusTransaction.requiringNew().call(() -> agentStore.load(sessionId, "coordinator"));
             assertTrue(loaded.isPresent());
-            assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
-            assertTrue(loaded.get().getFailReason().contains("approval was pending at shutdown"));
+            assertEquals(CheckpointStatus.AWAITING_APPROVAL, loaded.get().getStatus(), 
+                "AWAITING_APPROVAL should survive zombie recovery (new invariant)");
         });
     }
 }

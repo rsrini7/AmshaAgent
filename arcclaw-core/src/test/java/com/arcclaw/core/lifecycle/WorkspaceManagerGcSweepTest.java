@@ -64,6 +64,26 @@ class WorkspaceManagerGcSweepTest {
         assertEquals(1, heartbeatTracker.activeSessionCount());
         verify(workspaceManager, never()).terminateSession(anyString());
     }
+ 
+    @Test
+    void testGcSweep_resumingSession_isNotTerminated() {
+        String sessionId = "session-resuming";
+        
+        heartbeatTracker.injectHeartbeat(sessionId, Instant.now().minus(60, MINUTES));
+ 
+        // Stub EntityManager
+        stubEntityManager(sessionId, false, List.of());
+        
+        // Mock session as resuming
+        when(agentStoreMock.isBatchResuming(sessionId)).thenReturn(true);
+ 
+        // Act
+        sessionReaper.gcSweep();
+ 
+        // Assert: session still exists (not terminated)
+        assertEquals(1, heartbeatTracker.activeSessionCount(), "Resuming session should be preserved");
+        verify(workspaceManager, never()).terminateSession(anyString());
+    }
 
     @Test
     void testGcSweep_expiredNonAwaitingSession_isTerminated() {

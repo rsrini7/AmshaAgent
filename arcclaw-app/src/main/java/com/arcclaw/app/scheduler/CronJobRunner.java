@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -39,6 +40,9 @@ public class CronJobRunner {
     @Inject
     AgentCronRepository cronRepository;
 
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
     int cronMaxIterations;
 
@@ -52,6 +56,13 @@ public class CronJobRunner {
         cronRepository.setDeliveryId(job.id, executionId);
 
         String cronSessionId = "cron-" + job.id + "-" + executionId;
+
+        // Register session in heartbeat tracker so it is visible in the UI Approvals tab.
+        // Background/cron sessions are intentionally left UNOWNED so they appear via
+        // getUnownedSessionIds() for all authenticated UI users. Binding to job.userId
+        // (Telegram user ID e.g. 945307929) would make them invisible because the UI
+        // authenticates with an API key whose identity doesn't match the Telegram ID.
+        heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
         
         try {
             String effectiveGoal = job.goal + 
@@ -59,7 +70,19 @@ public class CronJobRunner {
                 "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
                 "For message delivery or greeting goals, use the FINISH action immediately with the message text as your answer. " +
                 "The framework delivers your output — you do NOT need to call any tool to 'send' it. " +
-                "NEVER output empty text. NEVER call schedule_task.]";
+                "NEVER output empty text. NEVER call schedule_task.]" +
+                "\n\n## GitHub Tool Result Handling (CRON MODE)" +
+                "\nWhen you call the github tool and receive a repository description:" +
+                "\n- The tool may return rich text (Markdown or HTML) including headings, bold text, links, and badges." +
+                "\n- DO NOT try to treat this description as JSON or as a function schema. It is plain text content." +
+                "\n- If the tool call succeeds but the provider reports tool_use_failed with a failed_generation field that already contains the repository description:" +
+                "\n  - Extract the human-readable description text from failed_generation." +
+                "\n  - Summarize it into 1–3 concise bullet points for the user." +
+                "\n  - Then FINISH with that summary as your answer." +
+                "\n- Only treat a tool call as a hard failure if there is no description text and the error is a network/auth problem." +
+                "\n- NEVER retry the same GitHub call more than once in CRON mode if description text is already present.";
+
+            ChannelType type = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
 
             AgentResult result = WorkspaceContext.run(
                 cronSessionId, 
@@ -67,8 +90,9 @@ public class CronJobRunner {
                 job.chatId, 
                 AutonomyLevel.BACKGROUND, 
                 AgentRoleEnum.COORDINATOR.toScopedName(), 
+                type,
                 () -> {
-                    MessageContext context = createCronContext(job, cronSessionId, executionId, effectiveGoal);
+                    MessageContext context = createCronContext(job, cronSessionId, executionId, effectiveGoal, type);
                     return agentLoop.run(
                         cronSessionId,
                         AgentRoleEnum.COORDINATOR.toScopedName(),
@@ -87,8 +111,8 @@ public class CronJobRunner {
         }
     }
 
-    private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal) {
-        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", ChannelType.REST_API); // Cron uses REST-like fallback for identity
+    private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal, ChannelType channelType) {
+        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", channelType);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, Instant.now());
         return new MessageContext(job.chatId, user, msg);
     }

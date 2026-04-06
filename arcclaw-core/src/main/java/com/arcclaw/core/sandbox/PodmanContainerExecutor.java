@@ -53,6 +53,12 @@ public class PodmanContainerExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.tmpfs-path", defaultValue = "/run/arcclaw/secrets")
     String tmpfsPath;
 
+    @ConfigProperty(name = "arcclaw.sandbox.network", defaultValue = "none")
+    String containerNetwork;
+
+    @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "65534")
+    String toolRunnerUser;
+
     private static final String CONTAINER_PIDS_LIMIT = "64";
 
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
@@ -117,18 +123,23 @@ public class PodmanContainerExecutor {
                         podmanPath, "run", "--rm",
                         "--name", containerName,
                         "--pull", "never",
-                        "--network=bridge",
+                        "--network=" + containerNetwork,
                         "--read-only",
                         "--tmpfs", "/tmp:rw,nosuid,size=128m",
                         "--security-opt=no-new-privileges",
                         "--cap-drop=ALL",
                         "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
-                        "--user=65534:65534",
-                        "--memory=" + containerMemoryLimit,   // OOM kill before host impact
-                        "--cpus=" + containerCpuLimit,        // prevent CPU saturation
+                        "--user=" + toolRunnerUser + ":" + toolRunnerUser,
                         "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
                         "--ulimit=nofile=256:256"              // limit open file descriptors
                 ));
+
+                if (containerMemoryLimit != null && !containerMemoryLimit.isBlank()) {
+                    podmanCmd.add("--memory=" + containerMemoryLimit);
+                }
+                if (containerCpuLimit != null && !containerCpuLimit.isBlank()) {
+                    podmanCmd.add("--cpus=" + containerCpuLimit);
+                }
 
                 // Inject the transport args (e.g. --env-file /run/arcclaw/secrets/<nonce>.env)
                 podmanCmd.addAll(transportArgs);

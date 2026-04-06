@@ -24,4 +24,22 @@ public interface ChannelServices {
      * and any associated workspace resources should be released.
      */
     void terminateSession(String sessionId);
+
+    /**
+     * Proactively records a heartbeat for the session, initializing its 
+     * in-memory presence and autonomy level.
+     */
+    void recordHeartbeat(String sessionId);
+
+    /**
+     * Binds a human-friendly owner (userId / key label) to the given session.
+     * Required for proper tenant isolation of REST/HITL endpoints accessed
+     * by channel-created sessions (e.g. WebSocket).
+     */
+     void bindSessionOwner(String sessionId, String ownerKeyName);
+ 
+    /**
+     * Checks whether a raw identity credential (e.g. API key) is valid.
+     */
+    boolean isValidIdentity(String credential);
 }

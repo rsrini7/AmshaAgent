@@ -44,7 +44,8 @@ public class SandboxExecTool implements AgentTool {
     // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
     private static final String SANDBOX_OFFLINE_MSG =
         "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed."+
-        "The code was NOT run. Inform the user gracefully that the execution environment is currently offline.";
+        "The code was NOT run. Inform the user gracefully that the execution environment is currently offline."+
+        "or set .env file ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback";
 
     private static final Set<String> ALLOWED_LANGUAGES =
             Set.of("python", "python3", "bash", "node", "java", "go");
@@ -63,6 +64,15 @@ public class SandboxExecTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
     Optional<String> configuredPythonExe;
+
+    @ConfigProperty(name = "arcclaw.sandbox.go-executable")
+    Optional<String> configuredGoExe;
+
+    @ConfigProperty(name = "arcclaw.sandbox.java-executable")
+    Optional<String> configuredJavaExe;
+
+    @ConfigProperty(name = "arcclaw.sandbox.javac-executable")
+    Optional<String> configuredJavacExe;
 
     @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
     @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
@@ -166,9 +176,10 @@ public class SandboxExecTool implements AgentTool {
 
         SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, commandList, secrets);
-        if (result.isInfraFailure()) {
+        if (result == null || result.isInfraFailure()) {
+            String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s",
-                    lang, sessionId, result.reason());
+                    lang, sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
         return ToolResponse.success(truncate(result.output()));
@@ -188,33 +199,21 @@ public class SandboxExecTool implements AgentTool {
         Path javaFile = workspaceRoot.resolve(className + ".java");
         Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
-        // Use CONTAINER_WORKSPACE path for javac argument
-        List<String> compileCmd = List.of("javac",
-                CONTAINER_WORKSPACE + "/" + className + ".java");
-        try {
-            SandboxResult compileResult = isolationExecutor.executeSandboxed(
-                    sessionId, workspaceRoot, compileCmd, secrets);
-            if (compileResult.isInfraFailure()) {
-                log.errorf("[SandboxExecTool] Infra failure (java/compile) session=%s: %s",
-                        sessionId, compileResult.reason());
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
-            }
-        } catch (ToolExecutionException e) {
-            return ToolResponse.failure(e.exitCode(),
-                    nonBlank("Java compilation failed:\n" + e.getMessage()));
-        }
-
-        // Use CONTAINER_WORKSPACE for -cp classpath argument
+        // JDK 11+ / JEP 330: Run single-file source code directly.
+        // This avoids creating .class files and bypasses traditional compilation disk-write errors.
         String javaExe = resolveJavaExecutable();
-        List<String> runCmd = List.of(javaExe, "-cp", CONTAINER_WORKSPACE, className);
-        SandboxResult runResult = isolationExecutor.executeSandboxed(
+        List<String> runCmd = List.of(javaExe,
+                CONTAINER_WORKSPACE + "/" + className + ".java");
+
+        SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        if (runResult.isInfraFailure()) {
-            log.errorf("[SandboxExecTool] Infra failure (java/run) session=%s: %s",
-                    sessionId, runResult.reason());
+        if (result == null || result.isInfraFailure()) {
+            String reason = result != null ? result.reason() : "Sandbox executor returned null";
+            log.errorf("[SandboxExecTool] Infra failure (java) session=%s: %s",
+                    sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
-        return ToolResponse.success(truncate(runResult.output()));
+        return ToolResponse.success(truncate(result.output()));
     }
 
     // Go: write main.go → go run
@@ -228,12 +227,14 @@ public class SandboxExecTool implements AgentTool {
 
         // Use CONTAINER_WORKSPACE path — workspaceRoot is the HOST path,
         // which does not exist inside the Podman container.
-        List<String> runCmd = List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
+        String goExe = resolveGoExecutable();
+        List<String> runCmd = List.of(goExe, "run", CONTAINER_WORKSPACE + "/main.go");
         SandboxResult result = isolationExecutor.executeSandboxed(
                 sessionId, workspaceRoot, runCmd, secrets);
-        if (result.isInfraFailure()) {
+        if (result == null || result.isInfraFailure()) {
+            String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s",
-                    sessionId, result.reason());
+                    sessionId, reason);
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         }
         return ToolResponse.success(truncate(result.output()));
@@ -252,26 +253,66 @@ public class SandboxExecTool implements AgentTool {
     }
 
     String resolvePythonExecutable() {
-        return configuredPythonExe
-                .filter(exe -> !exe.isBlank())
-                .orElse(IS_WINDOWS ? "python" : "python3");
+        return resolveExecutable(IS_WINDOWS ? "python" : "python3", configuredPythonExe);
     }
 
-    /**
-     * Resolves java executable. On Windows, uses the running JVM's java.exe
-     * to guarantee we use the same JDK that is running ArcClaw, bypassing
-     * any PATH ambiguity (e.g., a different JRE on PATH).
-     * Package-private for unit tests.
-     */
     String resolveJavaExecutable() {
-        if (IS_WINDOWS) {
+        // Special case: On Windows, use the running JVM's java.exe if available
+        if (IS_WINDOWS && configuredJavaExe.isEmpty()) {
             String javaHome = System.getProperty("java.home");
             if (javaHome != null) {
                 Path javaExe = Path.of(javaHome, "bin", "java.exe");
                 if (Files.exists(javaExe)) return javaExe.toString();
             }
         }
-        return "java";
+        return resolveExecutable("java", configuredJavaExe);
+    }
+
+    String resolveJavacExecutable() {
+        return resolveExecutable("javac", configuredJavacExe);
+    }
+
+    String resolveGoExecutable() {
+        return resolveExecutable("go", configuredGoExe);
+    }
+
+    /**
+     * Generic OS-aware executable resolver.
+     * 1. Returns configured value if non-blank.
+     * 2. Checks common host directories based on OS.
+     * 3. Falls back to original command name (relying on system PATH).
+     */
+    private String resolveExecutable(String command, Optional<String> config) {
+        if (config.isPresent() && !config.get().isBlank()) {
+            return config.get();
+        }
+
+        List<String> candidates;
+        if (IS_WINDOWS) {
+            String suffix = command.endsWith(".exe") ? "" : ".exe";
+            candidates = List.of(
+                "C:\\Program Files\\Go\\bin\\" + command + suffix,
+                "C:\\Program Files (x86)\\Go\\bin\\" + command + suffix
+            );
+        } else {
+            // Linux + macOS common search paths
+            candidates = List.of(
+                "/opt/homebrew/bin/" + command,
+                "/usr/local/bin/" + command,
+                "/usr/bin/" + command,
+                "/bin/" + command,
+                "/snap/bin/" + command,
+                "/usr/local/go/bin/" + command
+            );
+        }
+
+        for (String path : candidates) {
+            if (Files.exists(Path.of(path))) {
+                return path;
+            }
+        }
+
+        return command;
     }
 
     /**

@@ -21,23 +21,41 @@ class SessionHeartbeatTrackerTest {
     }
 
     @Test
-    void testBindOwnerAndGetOwner() {
+    void testTryBindOwnerAndGetOwner() {
         heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
 
-        heartbeatTracker.bindOwner("sess1", "key-123");
+        boolean success = heartbeatTracker.tryBindOwner("sess1", "key-123");
+        assertTrue(success);
 
         Optional<String> owner = heartbeatTracker.getOwner("sess1");
         assertTrue(owner.isPresent());
         assertEquals("key-123", owner.get());
 
         // Test non-existent session
+        assertFalse(heartbeatTracker.tryBindOwner("sess2", "key-123"));
         assertTrue(heartbeatTracker.getOwner("sess2").isEmpty());
+    }
+
+    @Test
+    void testTryBindOwnerPreventHijack() {
+        heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
+        
+        // First bind succeeds
+        assertTrue(heartbeatTracker.tryBindOwner("sess1", "userA"));
+        
+        // Second bind with DIFFERENT user fails (prevents hijack)
+        assertFalse(heartbeatTracker.tryBindOwner("sess1", "userB"));
+        
+        // Second bind with SAME user succeeds (idempotent)
+        assertTrue(heartbeatTracker.tryBindOwner("sess1", "userA"));
+        
+        assertEquals("userA", heartbeatTracker.getOwner("sess1").get());
     }
 
     @Test
     void testRecordHeartbeatPreservesOwner() {
         heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
-        heartbeatTracker.bindOwner("sess1", "key-123");
+        heartbeatTracker.tryBindOwner("sess1", "key-123");
 
         // Record heartbeat again, this should preserve owner
         heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
@@ -50,7 +68,7 @@ class SessionHeartbeatTrackerTest {
     @Test
     void testInjectHeartbeatPreservesOwner() {
         heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
-        heartbeatTracker.bindOwner("sess1", "key-123");
+        heartbeatTracker.tryBindOwner("sess1", "key-123");
 
         heartbeatTracker.injectHeartbeat("sess1", Instant.now());
 
@@ -60,8 +78,8 @@ class SessionHeartbeatTrackerTest {
     }
 
     @Test
-    void testBindOwnerSilentNoOpIfSessionDoesNotExist() {
-        heartbeatTracker.bindOwner("sess1", "key-123");
+    void testBindOwnerNoOpIfSessionDoesNotExist() {
+        assertFalse(heartbeatTracker.tryBindOwner("sess1", "key-123"));
         assertFalse(heartbeatTracker.exists("sess1"));
         assertTrue(heartbeatTracker.getOwner("sess1").isEmpty());
     }

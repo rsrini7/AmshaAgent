@@ -247,6 +247,14 @@ run = ["java -version", "mise ls java"]
 # BUILD TASKS
 # =============================================================================
 
+[tasks."build:ui-copy"]
+description = "Build UI and copy to Quarkus resources"
+run = """
+cd arcclaw-ui && npm run build
+mkdir -p ../arcclaw-app/src/main/resources/META-INF/resources
+cp -r dist/* ../arcclaw-app/src/main/resources/META-INF/resources/
+"""
+
 [tasks.build-app]
 depends = ["dev:kill"]
 description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"

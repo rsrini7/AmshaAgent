@@ -1,5 +1,6 @@
 package com.arcclaw.core.config;
 
+import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper;
@@ -47,6 +48,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SystemMetadataRegistry.SystemInfo.class,
         AuditVerifier.VerificationResult.class,
         ReasoningStep.class,
+        ParallelToolCall.class,
         AgentResult.class,
         RunAgentRequest.class,
         CreateSessionResponse.class,

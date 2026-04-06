@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -75,7 +76,7 @@ public class DenyPipelineTest {
         // Setup mock response
         when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), eq(context)))
                 .thenReturn(new ReflexResult(
-                        Optional.of("🚫 Execution denied."),
+                        Optional.of(""),
                         "/deny"
                 ));
 
@@ -91,8 +92,8 @@ public class DenyPipelineTest {
                 eq(context)
         );
         
-        // Verify sender was called with the response
-        verify(sender).sendRaw(eq(user), contains("denied"));
+        // Verify sender was NOT called because response was blank
+        verifyNoInteractions(sender);
     }
 
     @Test

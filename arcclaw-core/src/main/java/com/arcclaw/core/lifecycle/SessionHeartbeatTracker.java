@@ -1,6 +1,7 @@
 package com.arcclaw.core.lifecycle;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -116,14 +117,27 @@ public class SessionHeartbeatTracker {
     }
 
     /**
-     * Bind an API key identity as owner of the given session.
-     * Uses computeIfPresent: if the session was already reaped, this silently no-ops.
+     * Atomically bind an API key identity as owner of the session, if not already owned.
+     * 
+     * @return true if the session is now owned by this user (or already was).
+     *         false if the session is owned by someone else or doesn't exist.
      */
-    public void bindOwner(String sessionId, String ownerKeyName) {
-        sessionData.computeIfPresent(sessionId, (k, existing) ->
-            new SessionMetadata(existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName, 
-            existing.totalInputTokens(), existing.totalOutputTokens() ));
-        log.debugf("Owner bound for session=%s owner=%s", sessionId, ownerKeyName);
+    public boolean tryBindOwner(String sessionId, String ownerKeyName) {
+        if (ownerKeyName == null) return false;
+        
+        SessionMetadata result = sessionData.computeIfPresent(sessionId, (k, existing) -> {
+            if (existing.ownerKeyName() == null || existing.ownerKeyName().equals(ownerKeyName)) {
+                // Not owned yet, or already owned by this user → bind/keep.
+                return new SessionMetadata(
+                    existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName, 
+                    existing.totalInputTokens(), existing.totalOutputTokens());
+            }
+            // Owned by someone else → no change.
+            return existing;
+        });
+
+        if (result == null) return false; // Session reaped/doesn't exist
+        return ownerKeyName.equals(result.ownerKeyName());
     }
 
     public void recordTokens(String sessionId, long inputTokens, long outputTokens) {
@@ -151,6 +165,44 @@ public class SessionHeartbeatTracker {
     public Optional<String> getOwner(String sessionId) {
         SessionMetadata data = sessionData.get(sessionId);
         return (data != null) ? Optional.ofNullable(data.ownerKeyName()) : Optional.empty();
+    }
+
+    /**
+     * Returns all session IDs owned by the given key name (userId).
+     * Used for tenant-scoped queries (e.g. F27 HitlService isolation).
+     */
+    public List<String> getSessionIdsByOwner(String ownerKeyName) {
+        if (ownerKeyName == null) return List.of();
+        return sessionData.entrySet().stream()
+                .filter(e -> ownerKeyName.equals(e.getValue().ownerKeyName()))
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    /**
+     * Returns all session IDs that have NO owner bound.
+     * These are typically Telegram/CLI sessions that never went through
+     * AgentSessionService.createSession() or the WebSocket lazy-bind path.
+     */
+    public List<String> getUnownedSessionIds() {
+        return sessionData.entrySet().stream()
+                .filter(e -> e.getValue().ownerKeyName() == null)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    /**
+     * Returns all active sessions owned by the given key name (userId).
+     * Used for tenant-scoped session listing (e.g. AgentResource.listSessions()).
+     */
+    public Map<String, Instant> activeSessionsByOwner(String ownerKeyName) {
+        if (ownerKeyName == null) return Map.of();
+        return sessionData.entrySet().stream()
+                .filter(e -> ownerKeyName.equals(e.getValue().ownerKeyName()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().lastHeartbeat()
+                ));
     }
 
     /**

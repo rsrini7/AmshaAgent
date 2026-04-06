@@ -51,12 +51,12 @@ class ToolInvocationGuardDynamicTest {
         when(mockInstance.isUnsatisfied()).thenReturn(true);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
-        // Should fall through to normal logic (returns Allow because no HITL/DEDUP applies)
+        // Root Cause 1: When dynamic lookup is unsatisfied, isDynamicAllowed=false -> Blocked
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 "s1", "coordinator", "github", Map.of("op", "search"),
                 Collections.emptyList(), "just a question", List.of());
 
-        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
     }
 
     @Test
@@ -74,19 +74,18 @@ class ToolInvocationGuardDynamicTest {
     }
 
     @Test
-    void testBlockUnregisteredDynamicTool() {
+    void testBlockDynamicToolWhenDynamicAllowlistRejects() {
         when(mockInstance.isUnsatisfied()).thenReturn(false);
         when(mockInstance.get()).thenReturn(mockLookup);
-        when(mockLookup.isDynamicToolAllowed("github")).thenReturn(false);
+        when(mockLookup.isDynamicToolAllowed("some_tool")).thenReturn(false);
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
-        // Should fall through and reach HITL or Allow. 
-        // In this unit test setup, it should return Allow.
+        // Root Cause 1: Rejected dynamic tool -> Blocked
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                 "s1", "coordinator", "some_tool", Map.of(),
                 Collections.emptyList(), "just a question", List.of());
 
-        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
     }
 }
 

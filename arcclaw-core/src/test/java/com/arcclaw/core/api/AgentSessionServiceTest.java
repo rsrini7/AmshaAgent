@@ -15,10 +15,12 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
+import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -74,6 +76,9 @@ class AgentSessionServiceTest {
     CheckpointResumeHandler checkpointResumeHandler;
 
     @Mock
+    CheckpointApprovalService checkpointApprovalService;
+
+    @Mock
     ExecutorService vThreads;
 
     @Mock
@@ -91,17 +96,23 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, auditService, vThreads);
+                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, checkpointApprovalService, auditService, vThreads, 5);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
 
         // Default behavior: just execute the lambda
+        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
+        
+        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(1)).run();
+                    return null;
+                });
+        
         mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
-        
-        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), any(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
-                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
 
         // Ensure session exists by default so we don't return 404 in validateSession.
         // Marked lenient to avoid UnnecessaryStubbingException in tests that don't call validateSession.
@@ -129,7 +140,7 @@ class AgentSessionServiceTest {
         try {
             String sessionId = service.createSession(AutonomyLevel.FULL);
             assertNotNull(sessionId);
-            verify(heartbeatTracker).bindOwner(sessionId, "key-owner-123");
+            verify(heartbeatTracker).tryBindOwner(sessionId, "key-owner-123");
         } finally {
             MDC.remove(MdcKeys.USER_ID);
         }
@@ -140,7 +151,7 @@ class AgentSessionServiceTest {
         MDC.remove(MdcKeys.USER_ID);
         String sessionId = service.createSession(AutonomyLevel.SUPERVISED);
         assertNotNull(sessionId);
-        verify(heartbeatTracker, Mockito.never()).bindOwner(anyString(), anyString());
+        verify(heartbeatTracker, Mockito.never()).tryBindOwner(anyString(), anyString());
     }
 
     @Test
@@ -186,15 +197,17 @@ class AgentSessionServiceTest {
     }
 
     @Test
-    void testDeny_success_returns200WithDeniedStatus() {
+    void testDeny_success_routesThroughApprovalService() {
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setId(123L);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
         
         Response response = service.deny("sess1", "coordinator");
         assertEquals(200, response.getStatus());
-        verify(agentStore).markFailed(123L, "Human denied via REST");
+        verify(checkpointApprovalService).denyAll("sess1", "Human denied via REST");
+        verify(checkpointApprovalService).triggerResume(cp);
     }
 
     @Test
@@ -210,6 +223,45 @@ class AgentSessionServiceTest {
         when(heartbeatTracker.exists(anyString())).thenReturn(false);
         Response response = service.getStatus("sess1", "coordinator");
         assertEquals(404, response.getStatus());
+    }
+
+    @Test
+    void testRunAsync_denyGoal_routesThroughApprovalService() throws Exception {
+        RunAgentRequest request = new RunAgentRequest("deny", "coordinator", 5);
+        AgentCheckpoint cp = new AgentCheckpoint();
+        when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
+        
+        // Mocking VThreads execution to be synchronous for testing
+        Mockito.doAnswer(inv -> {
+            ((Runnable) inv.getArgument(0)).run();
+            return null;
+        }).when(vThreads).execute(any(Runnable.class));
+
+        AsyncResponse asyncResponse = mock(AsyncResponse.class);
+        service.runAsync("sess1", request, asyncResponse);
+        
+        verify(checkpointApprovalService).denyAll("sess1", "Human denied via REST");
+        verify(checkpointApprovalService).triggerResume(cp);
+        verify(asyncResponse).resume(any(Response.class));
+    }
+
+    @Test
+    void testRunAsync_approveGoal_routesThroughApprovalService() throws Exception {
+        RunAgentRequest request = new RunAgentRequest("approve", "coordinator", 5);
+        AgentCheckpoint cp = new AgentCheckpoint();
+        when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
+        
+        Mockito.doAnswer(inv -> {
+            ((Runnable) inv.getArgument(0)).run();
+            return null;
+        }).when(vThreads).execute(any(Runnable.class));
+
+        AsyncResponse asyncResponse = mock(AsyncResponse.class);
+        service.runAsync("sess1", request, asyncResponse);
+        
+        verify(checkpointApprovalService).approveAll("sess1", "Human approved via REST");
+        verify(checkpointApprovalService).triggerResume(cp);
+        verify(asyncResponse).resume(any(Response.class));
     }
 
     @Test

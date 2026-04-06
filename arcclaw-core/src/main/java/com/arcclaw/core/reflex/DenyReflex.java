@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
@@ -66,6 +67,7 @@ public class DenyReflex implements AgentReflex {
     }
 
     @Override
+    @ActivateRequestContext
     public ReflexResult execute(String sessionId, String userId, String chatId,
                                 String input, MessageContext context) {
         ChannelCommand.Deny deny = (ChannelCommand.Deny) ChannelCommand.parse(input);
