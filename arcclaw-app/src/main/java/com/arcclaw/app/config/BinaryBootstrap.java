@@ -26,6 +26,7 @@ import com.arcclaw.core.sandbox.SandboxStrategy;
 public class BinaryBootstrap {
 
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
+    private static final java.util.Scanner SHARED_INPUT_SCANNER = new java.util.Scanner(System.in);
 
     // Keys whose input should be hidden
     private static final Set<String> SENSITIVE_KEYS = Set.of(
@@ -689,6 +690,7 @@ public class BinaryBootstrap {
             }
         } else if (response != null && response.trim().toLowerCase().startsWith("y")) {
             // Enabling for the first time
+            System.err.println("  │  Configuring .env features...");
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
@@ -716,17 +718,15 @@ public class BinaryBootstrap {
         System.err.flush();
         try {
             if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
-                StringBuilder sb = new StringBuilder();
-                int c;
-                while ((c = System.in.read()) != '\n' && c != -1) {
-                    if (c != '\r') sb.append((char)c);
+                if (SHARED_INPUT_SCANNER.hasNextLine()) {
+                    return SHARED_INPUT_SCANNER.nextLine().trim();
                 }
-                return sb.toString().trim();
+                return "";
             } else {
                 System.err.println(" (Non-interactive/CI detected)");
                 return null;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             return null;
         }
     }
