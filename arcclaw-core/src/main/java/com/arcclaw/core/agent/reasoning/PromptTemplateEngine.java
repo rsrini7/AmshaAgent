@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
@@ -85,7 +86,7 @@ public class PromptTemplateEngine {
         // (RoleDefinition.capabilities() returns an immutable Set — order is undefined).
         // HARD FILTER: only include tools that are actually enabled in the registry.
         // This prevents hallucinations where the LLM tries to call a tool that lacks API keys.
-        boolean isBackground = context != null && context.autonomyLevel() == com.arcclaw.core.security.AutonomyLevel.BACKGROUND;
+        boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
         List<ToolCapability> sortedCapabilities = role.definition().capabilities()
                 .stream()
                 .filter(cap -> toolRegistry.findTool(cap.toolName()).isPresent())

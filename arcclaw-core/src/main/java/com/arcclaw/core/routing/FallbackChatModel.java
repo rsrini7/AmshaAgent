@@ -1,11 +1,11 @@
 package com.arcclaw.core.routing;
 
 import java.util.Objects;
-import org.jboss.logging.Logger;
 
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import org.jboss.logging.Logger;
 
 /**
  * A {@link ChatModel} wrapper that catches 429 Rate Limit errors from a primary model
