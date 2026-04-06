@@ -53,6 +53,7 @@ public class BinaryBootstrap {
         loadDotEnv(binaryDir);
         validateAndAutoFixSecurityKeys(binaryDir);
         validateAndAutoFixLlmConfig(binaryDir);
+        validateAndAutoFixEmbeddingConfig(binaryDir);
         validateSandboxTools();
         interactiveSetupIfNeeded(binaryDir, args);
         
@@ -275,9 +276,10 @@ public class BinaryBootstrap {
 
         // Always ensure appropriate embedding provider for production (native)
         // Migration: force 'jina' if user was on 'ollama' because native image doesn't support the ollama client
-        forcePatchEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
-        forcePatchEnvFile(envFile, "ARCCLAW_EMBED_DIMENSIONS", "768");
-        forcePatchEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", "https://api.jina.ai/v1/");
+        // This is now also handled in validateAndAutoFixEmbeddingConfig on every startup.
+        initEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
+        initEnvFile(envFile, "ARCCLAW_EMBED_DIMENSIONS", "768");
+        initEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", "https://api.jina.ai/v1/");
 
         System.err.println();
         System.err.println("╔══════════════════════════════════════════════════════════╗");
@@ -579,6 +581,27 @@ public class BinaryBootstrap {
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
+        }
+    }
+
+    private static void validateAndAutoFixEmbeddingConfig(Path binaryDir) {
+        Path envFile = binaryDir.resolve(".env");
+        String provider = System.getProperty("ARCCLAW_EMBED_PROVIDER", System.getenv("ARCCLAW_EMBED_PROVIDER"));
+        String baseUrl = System.getProperty("ARCCLAW_EMBED_BASE_URL", System.getenv("ARCCLAW_EMBED_BASE_URL"));
+
+        // Force Jina if provider/URL mismatch detected (e.g. Ollama provider with Jina URL)
+        if (baseUrl != null && baseUrl.contains("jina.ai") && !"jina".equalsIgnoreCase(provider)) {
+            System.err.println("[ArcClaw] ℹ️  Embedding provider mismatch (Jina URL with " + provider + " provider) — auto-fixing to 'jina'.");
+            forcePatchEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
+            System.setProperty("ARCCLAW_EMBED_PROVIDER", "jina");
+        }
+
+        // Force Ollama defaults if provider is ollama but URL is wrong
+        if ("ollama".equalsIgnoreCase(provider) && (baseUrl == null || baseUrl.contains("jina.ai"))) {
+            String defaultOllamaUrl = "http://localhost:11434";
+            System.err.println("[ArcClaw] ℹ️  Ollama embedding URL missing or invalid — auto-setting to: " + defaultOllamaUrl);
+            patchEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", defaultOllamaUrl);
+            System.setProperty("ARCCLAW_EMBED_BASE_URL", defaultOllamaUrl);
         }
     }
 
