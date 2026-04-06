@@ -12,6 +12,9 @@ import java.util.Map;
 
 import jakarta.enterprise.event.Event;
 
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +22,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 
 @ExtendWith(MockitoExtension.class)
 class CheckListToolTest {

@@ -1,0 +1,50 @@
+# =============================================================================
+# arcclaw-channel-web — Test Configuration
+# =============================================================================
+quarkus:
+  application:
+    name: arcclaw-web-test
+  
+  otel:
+    sdk:
+      disabled: true
+
+  datasource:
+    db-kind: sqlite
+    jdbc:
+      url: "jdbc:sqlite:./target/web-test.db"
+
+  hibernate-orm:
+    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    schema-management:
+      strategy: drop-and-create
+    packages:
+      - com.arcclaw.core.state
+      - com.arcclaw.core.security
+      - com.arcclaw.core.audit
+      - com.arcclaw.core.skill
+      - com.arcclaw.app.session
+
+  scheduler:
+    enabled: false
+
+  langchain4j:
+    timeout: 30s
+    chat-model:
+      provider: openai
+    openai:
+      api-key: "dummy"
+      timeout: 30s
+
+# Mock/Dummy config for core handlers that are bean-scanned
+arcclaw:
+  llm:
+    provider: mock
+  channel:
+    telegram:
+      bot-token: "mock"
+  data-dir: "target/data"
+  vault:
+    pepper: "mock-pepper"
+  cron:
+    max-lookback-window: PT1M

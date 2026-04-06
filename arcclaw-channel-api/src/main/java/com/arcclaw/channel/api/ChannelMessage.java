@@ -12,7 +12,8 @@ public sealed interface ChannelMessage
         permits ChannelMessage.TelegramMessage,
                 ChannelMessage.DiscordMessage,
                 ChannelMessage.RestApiMessage,
-                ChannelMessage.CliMessage {
+                ChannelMessage.CliMessage,
+                ChannelMessage.WebSocketMessage {
 
     /** The user who sent this message. */
     ChannelUser sender();
@@ -108,5 +109,23 @@ public sealed interface ChannelMessage
     ) implements ChannelMessage {
         @Override public String correlationId() { return sessionId; }
         @Override public ChannelType channelType() { return ChannelType.CLI; }
+    }
+
+    /**
+     * A message received from a WebSocket channel.
+     *
+     * @param sender     the WebSocket user
+     * @param text       the message text
+     * @param sessionId  the WebSocket session ID (used as correlationId)
+     * @param receivedAt ingestion timestamp
+     */
+    record WebSocketMessage(
+            ChannelUser sender,
+            String text,
+            String sessionId,
+            Instant receivedAt
+    ) implements ChannelMessage {
+        @Override public String correlationId() { return sessionId; }
+        @Override public ChannelType channelType() { return ChannelType.WEBSOCKET; }
     }
 }

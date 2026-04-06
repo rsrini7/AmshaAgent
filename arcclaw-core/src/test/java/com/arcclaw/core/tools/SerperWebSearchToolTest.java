@@ -10,6 +10,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,11 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class SerperWebSearchToolTest {

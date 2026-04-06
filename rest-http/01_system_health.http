@@ -88,10 +88,32 @@ GET {{baseUrl}}/q/metrics
 
 ###
 
+### [HEALTH-4.0] Tools endpoint
 GET {{baseUrl}}/api/v1/tools
 Accept: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
+### [HEALTH-4.1] Agent status endpoint (empty on cold start)
+GET {{baseUrl}}/api/v1/agents
+X-ArcClaw-API-Key: {{validKey}}
+
+
+### [HEALTH-4.2] HITL pending approvals (empty on cold start)
+GET {{baseUrl}}/api/v1/hitl
+X-ArcClaw-API-Key: {{validKey}}
+
+### [HEALTH-4.3] Agent status endpoint (non-empty when agent is running)
+# While an agent is running (between SSE `active` and `idle` events)
+GET {{baseUrl}}/api/v1/agents
+X-ArcClaw-API-Key: {{validKey}}
+
+### Step 1 — List pending approvals
+# @name hitlPending
+GET {{baseUrl}}/api/v1/hitl
+X-ArcClaw-API-Key: {{validKey}}
+Accept: application/json
+
+# use Websocket to test real approval and deny flow.
 
 ###
 

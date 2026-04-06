@@ -1,5 +1,7 @@
 package com.arcclaw.mcp.tool;
 
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -106,14 +108,14 @@ public class McpSelfRegisterTool implements AgentTool {
                 
                 String argsStr = (String) params.get("args");
                 List<String> argsList = (argsStr != null && !argsStr.isBlank()) 
-                    ? java.util.Arrays.stream(argsStr.split(","))
+                    ? Arrays.stream(argsStr.split(","))
                         .map(String::trim)
                         .filter(s -> !s.isEmpty())
                         .toList() 
                     : List.of();
                 
                 String envStr = (String) params.get("env");
-                Map<String, String> envMap = new java.util.HashMap<>();
+                Map<String, String> envMap = new HashMap<>();
                 if (envStr != null && !envStr.isBlank()) {
                     for (String line : envStr.split("\n")) {
                         int eqIdx = line.indexOf('=');

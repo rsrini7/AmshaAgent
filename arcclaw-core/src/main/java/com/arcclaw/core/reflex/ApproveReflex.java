@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
@@ -31,10 +33,7 @@ import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 // NOTE: AgentRoleEnum import intentionally removed — all three enum loops replaced
 // by statefulAgentStore.findLatestAwaitingApproval() to fix stale-row ambiguity.

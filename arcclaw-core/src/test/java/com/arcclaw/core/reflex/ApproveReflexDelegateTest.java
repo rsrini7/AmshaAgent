@@ -12,13 +12,6 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
-import org.jboss.logging.Logger;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -26,6 +19,12 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.StatefulAgentStore;
+import org.jboss.logging.Logger;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ApproveReflexDelegateTest {

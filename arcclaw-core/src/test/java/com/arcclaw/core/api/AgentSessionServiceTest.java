@@ -33,13 +33,16 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -114,7 +117,7 @@ class AgentSessionServiceTest {
 
     @Test
     void testCreateSession_recordsHeartbeatAndReturnsId() {
-        org.jboss.logging.MDC.remove(com.arcclaw.core.util.MdcKeys.USER_ID);
+        MDC.remove(MdcKeys.USER_ID);
         String sessionId = service.createSession(AutonomyLevel.FULL);
         assertNotNull(sessionId);
         verify(heartbeatTracker).recordHeartbeat(sessionId, AutonomyLevel.FULL);
@@ -122,22 +125,22 @@ class AgentSessionServiceTest {
 
     @Test
     void testCreateSession_withMdcUserId_bindsOwner() {
-        org.jboss.logging.MDC.put(com.arcclaw.core.util.MdcKeys.USER_ID, "key-owner-123");
+        MDC.put(MdcKeys.USER_ID, "key-owner-123");
         try {
             String sessionId = service.createSession(AutonomyLevel.FULL);
             assertNotNull(sessionId);
             verify(heartbeatTracker).bindOwner(sessionId, "key-owner-123");
         } finally {
-            org.jboss.logging.MDC.remove(com.arcclaw.core.util.MdcKeys.USER_ID);
+            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
     @Test
     void testCreateSession_withoutMdcUserId_doesNotBindOwner() {
-        org.jboss.logging.MDC.remove(com.arcclaw.core.util.MdcKeys.USER_ID);
+        MDC.remove(MdcKeys.USER_ID);
         String sessionId = service.createSession(AutonomyLevel.SUPERVISED);
         assertNotNull(sessionId);
-        verify(heartbeatTracker, org.mockito.Mockito.never()).bindOwner(anyString(), anyString());
+        verify(heartbeatTracker, Mockito.never()).bindOwner(anyString(), anyString());
     }
 
     @Test

@@ -1,0 +1,15 @@
+meta {
+  name: GET HITL Pending
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/hitl
+  body: none
+  auth: none
+}
+
+headers {
+  X-ArcClaw-API-Key: {{validKey}}
+}

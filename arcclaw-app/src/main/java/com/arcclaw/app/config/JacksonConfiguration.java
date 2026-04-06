@@ -1,10 +1,11 @@
 package com.arcclaw.app.config;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.Produces;
+
 import com.fasterxml.jackson.core.json.JsonWriteFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.jackson.ObjectMapperCustomizer;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.ws.rs.Produces;
 
 @ApplicationScoped
 public class JacksonConfiguration {

@@ -18,11 +18,14 @@ import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
 public class IntentClassifierService implements IntentClassifier {
+
+    private static final Logger log = Logger.getLogger(IntentClassifierService.class);
 
     @Inject
     @Identifier("intent-classifier")
@@ -37,7 +40,8 @@ public class IntentClassifierService implements IntentClassifier {
     @Inject
     AgentRoleRegistry agentRoleRegistry;
 
-    private static final Logger Log = Logger.getLogger(IntentClassifierService.class);
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.sla-warn-ms", defaultValue = "2000")
+    long slaWarnMs;
 
     static final String DELIM_OPEN  = "<<<USER_INPUT_START>>>";
     static final String DELIM_CLOSE = "<<<USER_INPUT_END>>>";
@@ -94,6 +98,7 @@ public class IntentClassifierService implements IntentClassifier {
         this.dynamicClassifierPrompt = sb.toString();
     }
 
+    @Override
     public String classify(String userMessage) {
         // Fast-path routing via SPI triggers
         for (IntentRoutingProvider provider : sortedProviders) {
@@ -101,7 +106,7 @@ public class IntentClassifierService implements IntentClassifier {
                 if (p.matcher(userMessage).find()) {
                     String role = provider.fastPathRole()
                             .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
-                    Log.debugf("CLASSIFIER fast-path: match in %s -> %s", 
+                    log.debugf("CLASSIFIER fast-path: match in %s -> %s", 
                               provider.getClass().getSimpleName(), role);
                     return role;
                 }
@@ -119,17 +124,22 @@ public class IntentClassifierService implements IntentClassifier {
         try {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
-            Log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", e.getMessage());
-            Log.debugf(e, "Full stacktrace for intent classifier failure");
+            log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", e.getMessage());
+            log.debugf(e, "Full stacktrace for intent classifier failure");
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
-        if (elapsedMs > 3_000L) {
-            Log.warnf("IntentClassifier SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
+        if (elapsedMs > slaWarnMs) {
+            log.warnf("IntentClassifier SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
+        }
+
+        if (raw == null || raw.isBlank()) {
+            log.warnf("IntentClassifier SLA exceeded or null response — raw was null"); 
+            return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
         String result = sanitize(raw.trim().toLowerCase());
-        Log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
+        log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
         return destructiveFilter.filter(result, userMessage);
     }
 

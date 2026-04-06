@@ -43,9 +43,8 @@ public class DenyPipelineTest {
 
     @InjectMock
     AuditService auditService;
-
-    @InjectMock
-    ChannelAllowlist allowlist;
+ 
+    private ChannelAllowlist allowlist = mock(ChannelAllowlist.class);
 
     @InjectMock
     ChannelPluginRegistry channelPluginRegistry;
@@ -64,6 +63,7 @@ public class DenyPipelineTest {
         
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
+        when(plugin.allowlist()).thenReturn(allowlist);
         when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
 
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/deny", "session-456", Instant.now());

@@ -1,0 +1,16 @@
+meta {
+  name: GET Chat Stream (SSE)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/chat/stream
+  body: none
+  auth: none
+}
+
+headers {
+  X-ArcClaw-API-Key: {{validKey}}
+  Accept: text/event-stream
+}
