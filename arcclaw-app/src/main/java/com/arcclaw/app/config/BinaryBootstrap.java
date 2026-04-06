@@ -55,6 +55,7 @@ public class BinaryBootstrap {
         validateAndAutoFixLlmConfig(binaryDir);
         validateAndAutoFixEmbeddingConfig(binaryDir);
         validateSandboxTools();
+        validatePlaywright(binaryDir);
         interactiveSetupIfNeeded(binaryDir, args);
         
         // 1. Resolve and Provision Data Directory
@@ -343,6 +344,39 @@ public class BinaryBootstrap {
                 System.err.println();
             }
 
+            if (spec.key.equals("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED")) {
+                System.err.println("  ┌─ Playwright Browser Integration");
+                System.err.println("  │  Enable real headless browser (Chromium) for complex web crawling/scraping?");
+                System.err.println("  │  Required for JavaScript-heavy sites that simple fetchers cannot read.");
+                System.err.println("  │");
+                String response = console.readLine("  └─ Enable Playwright? [y/N]: ");
+                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                    patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+                    System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+                    System.err.println();
+                    continue;
+                }
+                patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+                System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+                
+                // Set default storage path to keep the directory clean
+                initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
+                initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+                
+                // Prompt for installation immediately
+                Path browsersPath = binaryDir.resolve(".playwright-browsers");
+                if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                    System.err.println("  │");
+                    System.err.println("  │  Chromium browser binary is not installed.");
+                    String installResponse = console.readLine("  └─ Download Chromium now? [Y/n]: ");
+                    if (installResponse == null || installResponse.trim().isEmpty() || installResponse.trim().toLowerCase().startsWith("y")) {
+                        PlaywrightBrowserInstaller.installChromium(browsersPath);
+                    }
+                }
+                System.err.println();
+                continue;
+            }
+
             if (spec.key.equals("ARCCLAW_BRAVE_API_KEY")) {
                 System.err.println("  ┌─ Brave Search Integration");
                 System.err.println("  │  Enable Brave Search for Researcher agent?");
@@ -629,6 +663,18 @@ public class BinaryBootstrap {
                 if (!canRun("podman", "image", "inspect", image, "--format", "{{.Id}}")) {
                     System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing.");
                 }
+            }
+        }
+    }
+
+    private static void validatePlaywright(Path binaryDir) {
+        String enabled = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
+        if ("true".equalsIgnoreCase(enabled)) {
+            String pathStr = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+            Path browsersPath = (pathStr != null) ? Path.of(pathStr) : binaryDir.resolve(".playwright-browsers");
+            if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                System.err.println("[ArcClaw] ⚠️  Warning: Playwright is ENABLED but Chromium browser binary is MISSING.");
+                System.err.println("[ArcClaw]     Path expected: " + browsersPath);
             }
         }
     }
