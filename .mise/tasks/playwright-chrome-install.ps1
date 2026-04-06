@@ -15,9 +15,7 @@ $browsersPath = if ($env:PLAYWRIGHT_BROWSERS_PATH) {
 }
 
 # Guard — skip if chromium directory already exists
-$chromiumExists = Test-Path "$browsersPath/chromium-*" -PathType Container
-
-if ($chromiumExists) {
+if (Test-Path "$browsersPath/chromium-*" -PathType Container) {
     Write-Host "✓ Playwright Chromium already installed at $browsersPath" -ForegroundColor Green
     exit 0
 }
