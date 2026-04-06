@@ -227,13 +227,13 @@ public class BinaryBootstrap {
             System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
 
             String modelName = switch (provider) {
-                case "openrouter" -> "openrouter/free";
+                case "openrouter" -> "meta-llama/llama-3.3-70b-instruct:free";
                 default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
 
             String utilityModel = switch (provider) {
-                case "openrouter" -> "openrouter/free";
+                case "openrouter" -> "meta-llama/llama-3.3-70b-instruct:free";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_COMPACTION_MODEL", utilityModel);
@@ -261,14 +261,23 @@ public class BinaryBootstrap {
         patchEnvFile(envFile, "ARCCLAW_LLM_MODEL_NAME", System.getProperty("ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct"));
         patchEnvFile(envFile, "ARCCLAW_COMPACTION_MODEL", System.getProperty("ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant"));
         patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant"));
-        patchEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
+        initEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
+        
+        // Ensure Jina key is at least present as a placeholder so users see it
+        initEnvFile(envFile, "ARCCLAW_EMBED_API_KEY", "jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
 
 
-        patchEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
+        initEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
 
         // Use tmpdir specifically on macOS to avoid /run/arcclaw read-only warnings
         String defaultTransport = System.getProperty("os.name", "").toLowerCase().contains("mac") ? "tmpdir" : "tmpfs";
-        patchEnvFile(envFile, "ARCCLAW_SANDBOX_SECRET_TRANSPORT", defaultTransport);
+        initEnvFile(envFile, "ARCCLAW_SANDBOX_SECRET_TRANSPORT", defaultTransport);
+
+        // Always ensure appropriate embedding provider for production (native)
+        // Migration: force 'jina' if user was on 'ollama' because native image doesn't support the ollama client
+        forcePatchEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
+        forcePatchEnvFile(envFile, "ARCCLAW_EMBED_DIMENSIONS", "768");
+        forcePatchEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", "https://api.jina.ai/v1/");
 
         System.err.println();
         System.err.println("╔══════════════════════════════════════════════════════════╗");
@@ -396,10 +405,32 @@ public class BinaryBootstrap {
     }
 
     /**
-     * Replaces the value of an existing KEY=... line in-place, or appends
-     * KEY=value at the end if the key is not found.
+     * Initializes a key only if it's missing or currently holds a placeholder value.
+     * Use this for setting defaults during first-run without overriding user changes.
+     */
+    private static void initEnvFile(Path envFile, String key, String value) {
+        patchEnvFile(envFile, key, value, PatchMode.INIT);
+    }
+
+    /**
+     * Replaces the value of an existing KEY=... line if the value is different,
+     * or appends it if missing. Preservation of original behavior ("upsert if different").
      */
     private static void patchEnvFile(Path envFile, String key, String value) {
+        patchEnvFile(envFile, key, value, PatchMode.UPDATE);
+    }
+
+    /**
+     * Always overwrites the existing KEY=... line with the new value.
+     * Use this for mandatory migrations (e.g., forcing Jina in native builds).
+     */
+    private static void forcePatchEnvFile(Path envFile, String key, String value) {
+        patchEnvFile(envFile, key, value, PatchMode.FORCE);
+    }
+
+    private enum PatchMode { INIT, UPDATE, FORCE }
+
+    private static void patchEnvFile(Path envFile, String key, String value, PatchMode mode) {
         try {
             if (!Files.exists(envFile)) {
                 Files.writeString(envFile, key + "=" + value + System.lineSeparator());
@@ -407,17 +438,37 @@ public class BinaryBootstrap {
             }
             String content = Files.readString(envFile);
             
-            // Check if key exists (even if it's commented out or has a different value)
+            // Check if key exists (even if it's commented out)
             Pattern pattern = Pattern.compile("(?m)^" + Pattern.quote(key) + "=.*$");
             Matcher matcher = pattern.matcher(content);
             
             if (matcher.find()) {
-                // Key exists - update it if the value is different
                 String currentLine = matcher.group();
                 String newLine = key + "=" + value;
-                if (!currentLine.equals(newLine)) {
-                    String patched = matcher.replaceAll(Matcher.quoteReplacement(newLine));
-                    Files.writeString(envFile, patched);
+                
+                boolean needsPatch = switch (mode) {
+                    case FORCE  -> true;
+                    case UPDATE -> !currentLine.equals(newLine);
+                    case INIT   -> {
+                        String currentValue = currentLine.substring(key.length() + 1).trim();
+                        yield currentValue.isEmpty() || currentValue.contains("xxxx") || 
+                              currentValue.contains("<") || currentValue.contains("changeme");
+                    }
+                };
+
+                if (needsPatch) {
+                    // Detect and warn about duplicate keys while we're here
+                    int count = 0;
+                    matcher.reset();
+                    while (matcher.find()) count++;
+                    if (count > 1) {
+                        System.err.println("[ArcClaw] ⚠️  Warning: Duplicate key '" + key + "' found in .env. Cleaning up...");
+                        // Dedup by replacing all occurrences with the new value
+                        content = pattern.matcher(content).replaceAll(Matcher.quoteReplacement(newLine));
+                    } else {
+                        content = pattern.matcher(content).replaceFirst(Matcher.quoteReplacement(newLine));
+                    }
+                    Files.writeString(envFile, content);
                 }
             } else {
                 // Key not present in file at all — append it
@@ -511,13 +562,29 @@ public class BinaryBootstrap {
 
         // 2. Cross-validate models for the provider (prevent Groq models on OpenRouter)
         if ("openrouter".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openrouter/free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "openrouter/free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openrouter/free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-3.3-70b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "meta-llama/llama-3.3-70b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "meta-llama/llama-3.3-70b-instruct:free");
+            
+            // Fix base URLs for utilities
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            
+            // Also fix the generic openrouter/free if it was previously set for utilities
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "meta-llama/llama-3.3-70b-instruct:free");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
+            
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
+            
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
         }
     }
 
@@ -528,6 +595,7 @@ public class BinaryBootstrap {
             if (!targetValue.equals(current)) {
                 System.err.println("[ArcClaw] ℹ️  " + key + " is inconsistent with provider — auto-setting to: " + targetValue);
                 patchEnvFile(envFile, key, targetValue);
+                System.setProperty(key, targetValue);
             }
         }
     }

@@ -74,7 +74,7 @@ public class OnboardingResource {
         "ollama",      "llama3.2",
         "anthropic",   "claude-haiku-4-5",
         "claude-code", "claude-sonnet-4-5",
-        "openrouter",  "openrouter/free"
+        "openrouter",  "meta-llama/llama-3.3-70b-instruct:free"
     );
 
     @GET @Path("/status")

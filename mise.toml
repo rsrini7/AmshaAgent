@@ -86,6 +86,7 @@ if ($IsWindows) {
 
     $activateLine   = '(&mise activate pwsh) | Out-String | Invoke-Expression'
     $completionLine = 'try { mise completion powershell | Out-String | Invoke-Expression } catch {}'
+    $encodingLine   = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8'
 
     $content = if (Test-Path $profilePath) { [System.IO.File]::ReadAllText($profilePath) } else { '' }
 
@@ -94,6 +95,13 @@ if ($IsWindows) {
     } else {
         Add-Content $profilePath "`n$commentActivate`n$activateLine"
         Write-Host "OK  mise activate written."
+    }
+
+    if ($content -match 'OutputEncoding') {
+        Write-Host "i   Console UTF-8 encoding already present -- skipping."
+    } else {
+        Add-Content $profilePath "`n# Force UTF-8 for Windows Terminal / PowerShell (§Cosmetic-Fix)`n$encodingLine"
+        Write-Host "OK  Console UTF-8 encoding written."
     }
 
     $content = if (Test-Path $profilePath) { [System.IO.File]::ReadAllText($profilePath) } else { '' }

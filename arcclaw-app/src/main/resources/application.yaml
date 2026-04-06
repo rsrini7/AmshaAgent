@@ -212,6 +212,8 @@ smallrye:
   # NATIVE IMAGE
   # ---------------------------------------------------------------------------
   native:
+    # Set encoding to UTF-8 for Windows console support (§Cosmetic-Fix)
+    additional-build-args: "-Dfile.encoding=UTF-8,-Dstdout.encoding=UTF-8"
     # native-image-xmx: 4g # require 8GB machine with podman
     resources:
       includes:
@@ -221,7 +223,7 @@ smallrye:
         - "skills/**.md"
         - "env-example"
         - "native/vec0/**"
-        # - "*.yaml" 
+        # - "*.yaml"
 
   # ---------------------------------------------------------------------------
   # LOGGING
@@ -321,6 +323,7 @@ arcclaw:
       enabled: true
   routing:
     intent-classifier:
+      # Specific model alias for free tier ensures structured mode support (§OpenRouter-Fix)
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
       timeout-seconds: 5
@@ -594,6 +597,8 @@ mp:
         sql: false
 
   arcclaw:
+    rag:
+      embed-provider: ollama
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
@@ -722,6 +727,9 @@ mp:
       level: INFO
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
+    rag:
+      # Switch embedding provider to Jina for native binary build (§Graal-Ollama-Fix)
+      embed-provider: jina 
     workspace:
       root-dir: "${ARCCLAW_DATA_DIR:./data}/workspaces"
     sandbox:

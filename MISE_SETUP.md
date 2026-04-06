@@ -168,7 +168,8 @@ Writes two lines to your shell profile (each with independent idempotency — sa
 ```
 # Windows ($PROFILE):
 (&mise activate pwsh) | Out-String | Invoke-Expression
-mise completion powershell | Out-String | Invoke-Expression
+try { mise completion powershell | Out-String | Invoke-Expression } catch {}
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8    # Force UTF-8 symbols
 
 # bash (~/.bashrc):
 eval "$(~/.local/bin/mise activate bash)"

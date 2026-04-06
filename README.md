@@ -618,9 +618,25 @@ The `%cli` profile is forced by `arcclaw-cli.ps1` and silences all Quarkus banne
 
 See [`MISE_SETUP.md`](./MISE_SETUP.md) for the recommended cross-platform task runner setup.
 
+### Windows Console Support (UTF-8)
+
+ArcClaw's symbols (`→`, `⏳`, `⚠️`) require UTF-8 encoding. Even with a Nerd Font (like *FiraMono Nerd Font*), Windows shells often default to CP1252.
+
+**Persistent Fix (PowerShell):**
+Add this to your `$PROFILE` (managed automatically if you use `mise run setup:profile`):
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```
+
+**Ad-hoc session fix (CMD/PowerShell):**
+Run this command once in your terminal session before launching the binary:
+```powershell
+chcp 65001
+```
+
 ---
 
-## 📨 Message Pipeline
+## 🌊 Message Pipeline
 
 Every incoming message (from REST, Telegram, or CLI) travels through an ordered pipeline of handlers. Priority numbers determine execution order.
 
