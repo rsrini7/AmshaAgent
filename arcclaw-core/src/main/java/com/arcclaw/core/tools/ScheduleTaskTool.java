@@ -121,6 +121,13 @@ public class ScheduleTaskTool implements AgentTool {
                         .description("true for a one-time task, false for recurring. " +
                                 "Must be JSON boolean literal true or false, NOT a string.")
                         .build())
+                .addProperty("executionRole", JsonStringSchema.builder()
+                        .description("The agent role that will EXECUTE this task when it fires. " +
+                                "Use 'researcher' for web search, GitHub, or data fetching tasks. " +
+                                "Use 'coder' for code generation or file manipulation tasks. " +
+                                "Use 'coordinator' only if the task itself needs to schedule further tasks. " +
+                                "Default: 'researcher'.")
+                        .build())
                 .required("goal")
                 .build();
     }
@@ -158,6 +165,11 @@ public class ScheduleTaskTool implements AgentTool {
             case null      -> false;
             default        -> false;
         };
+
+        String executionRole = (String) params.get("executionRole");
+        if (executionRole == null || executionRole.isBlank()) {
+            executionRole = AgentRoleEnum.RESEARCHER.toScopedName();
+        }
 
         if (cronExpression == null || cronExpression.isBlank()) {
             return ToolResponse.failure(400, "Schedule context missing. " +
@@ -219,6 +231,7 @@ public class ScheduleTaskTool implements AgentTool {
         entity.cronExpression = cronExpression;
         entity.timezone       = zone.getId(); // persist the resolved zone, not the raw input
         entity.runOnce        = runOnce;
+        entity.executionRole  = executionRole;
         entity.goal           = AgentSentinels.CRON_PREFIX + goal;
         entity.nextFireTime   = nextFireTime;
         entity.status         = CronStatus.ACTIVE;
@@ -226,12 +239,12 @@ public class ScheduleTaskTool implements AgentTool {
 
         cronRepository.persist(entity);
 
-        // Step 6 — Audit
+        // Step 6 — Audit (The actor role is COORDINATOR, the creator of the task).
         auditService.record(sessionId, userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.CRONCREATED,
                 "cronId=" + entity.id + " expression=" + cronExpression
-                + " tz=" + entity.timezone + " runOnce=" + runOnce);
+                + " tz=" + entity.timezone + " runOnce=" + runOnce + " role=" + executionRole);
 
         return ToolResponse.success("Task scheduled successfully. " +
                 "ID: " + entity.id + " | Next fire: " +

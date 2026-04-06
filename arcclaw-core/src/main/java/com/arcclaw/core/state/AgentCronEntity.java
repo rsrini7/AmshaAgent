@@ -59,6 +59,9 @@ public class AgentCronEntity {
     @Convert(converter = CronStatusConverter.class)
     public CronStatus status = CronStatus.ACTIVE;
 
+    @Column(nullable = true)
+    public String executionRole;
+
     public String errorReason;
 
     /**
