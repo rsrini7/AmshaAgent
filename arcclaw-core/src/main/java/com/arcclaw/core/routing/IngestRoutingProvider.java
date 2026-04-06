@@ -10,6 +10,12 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 @ApplicationScoped
 public class IngestRoutingProvider implements IntentRoutingProvider {
+    // NEGATION SAFETY: This pattern is intentionally specific to
+    // time-delay signals (after X min, in X hours, remind me, etc.)
+    // and does NOT match negations like "do not schedule" or
+    // "cancel my reminder". If the pattern is ever broadened,
+    // add a shouldSkip() guard via IntentRoutingProvider.shouldSkip()
+    // default method to handle negations. See Phase 80-B B4 analysis.
     private static final Pattern COORDINATOR_FORCE_PATTERN =
                         Pattern.compile(
                             "(?i)^\\s*(ingest|store this|add to (knowledge|rag|memory|kb)|" +

@@ -146,10 +146,8 @@ public class SessionReaper {
         }
     }
 
-    // ──────────────────────────────────────────────────────────────
     // GC SWEEP — terminates expired sessions
-    // ──────────────────────────────────────────────────────────────
-
+    
     /**
      * Scheduled GC sweep — terminates sessions whose heartbeat exceeds the TTL.
      * Skips sessions that are AWAITING_APPROVAL (handled by sweepTimedOutApprovals).
@@ -190,10 +188,8 @@ public class SessionReaper {
                 .collect(Collectors.toSet());
     }
 
-    // ──────────────────────────────────────────────────────────────
     // APPROVAL TIMEOUT SWEEP — terminates stale AWAITING_APPROVAL sessions
-    // ──────────────────────────────────────────────────────────────
-
+    
     /**
      * Terminate sessions that have been AWAITING_APPROVAL for too long.
      * Marks checkpoint FAILED and notifies user via their channel.
@@ -236,7 +232,7 @@ public class SessionReaper {
         staleApprovalEvent.fireAsync(new StaleApprovalExpired(
                 cp.getSessionId(),
                 cp.getAgentRole(),
-                cp.getSessionId(), // derive userId from session if available
+                null, // userId not stored in AgentCheckpoint — derive from session if needed by observers
                 cp.getChannelType(),
                 cp.getChannelPlatformId(),
                 cp.getPendingToolName()

@@ -1,7 +1,6 @@
 package com.arcclaw.app.security;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -38,15 +37,23 @@ public class ApiKeyRegistry {
                                                         .expireAfterAccess(1, TimeUnit.HOURS)
                                                         .build();
 
-    private Map<String, byte[]> storedKeyHmacs;
+    private Map<String, String> hmacToKeyName;
 
     @PostConstruct
     void initHmacs() {
-        Map<String, byte[]> computed = new LinkedHashMap<>();
+        Map<String, String> reverse = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : apiKeys.entrySet()) {
-            computed.put(entry.getKey(), hmac(entry.getValue()));
+            reverse.put(toHex(hmac(entry.getValue())), entry.getKey());
         }
-        this.storedKeyHmacs = Collections.unmodifiableMap(computed);
+        this.hmacToKeyName  = Collections.unmodifiableMap(reverse);
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     private byte[] hmac(String value) {
@@ -62,26 +69,12 @@ public class ApiKeyRegistry {
 
     public boolean isValidKey(String key) {
         if (key == null) return false;
-        byte[] incomingHmac = hmac(key);
-        boolean found = false;
-        for (byte[] storedHmac : storedKeyHmacs.values()) {
-            if (MessageDigest.isEqual(storedHmac, incomingHmac)) {
-                found = true;
-            }
-        }
-        return found;
+        return hmacToKeyName.containsKey(toHex(hmac(key)));
     }
 
     public String getKeyName(String key) {
         if (key == null) return null;
-        byte[] incomingHmac = hmac(key);
-        String result = null;
-        for (Map.Entry<String, byte[]> entry : storedKeyHmacs.entrySet()) {
-            if (MessageDigest.isEqual(entry.getValue(), incomingHmac)) {
-                result = entry.getKey();
-            }
-        }
-        return result;
+        return hmacToKeyName.get(toHex(hmac(key)));
     }
 
     public boolean isAllowed(String key) {

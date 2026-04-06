@@ -158,4 +158,18 @@ public interface StatefulAgentStore {
      * exist for the same (sessionId, agentRole) pair.
      */
     Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId);
+
+    /**
+     * Returns {@code true} if the latest AWAITING_APPROVAL checkpoint for this
+     * session has been waiting longer than {@code timeoutHours}, or if no such
+     * checkpoint exists (treat as expired — nothing to approve).
+     * <p>
+     * Used by {@code TelegramCallbackHandler} as a fast pre-reflex guard to
+     * reject stale callback button presses without routing to any reflex. §7.35
+     *
+     * @param sessionId    the workspace session to check
+     * @param timeoutHours the HITL approval window in hours
+     * @return true if expired or missing; false if still within the window
+     */
+    boolean isCheckpointExpired(String sessionId, long timeoutHours);
 }

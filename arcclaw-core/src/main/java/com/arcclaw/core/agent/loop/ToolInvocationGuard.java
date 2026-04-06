@@ -109,7 +109,7 @@ public class ToolInvocationGuard {
         // 3. HITL PRE-APPROVAL CHECK
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                | ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
+                || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
         boolean toolRequiresApproval = toolRegistry.findTool(toolName)
                 .map(tool -> tool.requiresManualApproval(params))

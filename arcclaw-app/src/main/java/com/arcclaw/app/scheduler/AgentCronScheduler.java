@@ -17,6 +17,7 @@ import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
@@ -137,7 +138,7 @@ public class AgentCronScheduler {
                     jobRunner.execute(job);
                 } finally {
                     concurrencyLimiter.release();
-                    MDC.remove(MdcKeys.USER_ID);
+                    MdcCleaner.clearAll();
                 }
             });
         }
