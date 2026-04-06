@@ -13,11 +13,16 @@ When `arcclaw.tools.playwright.enabled` is false (default), the tool is excluded
 
 ## Architecture Context and Other References
 
-Refer @Architecture_Invariants.md
+Refer @Architecture_Invariants.md — **§16.1 critically applies**: new tool modules MUST NOT
+depend on `arcclaw-app`. Depend only on `arcclaw-core`.
+Refer @Architecture_Invariants.md (§9 Sandbox rules — requiresSandbox usage)
 Refer @arcclaw-core/src/main/java/com/arcclaw/core/tools/AgentTool.java
-Refer @arcclaw-core/src/main/java/com/arcclaw/core/tools/ToolCapability.java
-Refer @arcclaw-core/src/main/java/com/arcclaw/core/tools/SerperWebSearchTool.java (isEnabled pattern and parametersSchema builder pattern)
-Refer @arcclaw-app/src/main/java/com/arcclaw/app/security/AuditService.java
+Refer @arcclaw-core/src/main/java/com/arcclaw/core/agent/role/ToolCapability.java
+Refer @arcclaw-core/src/main/java/com/arcclaw/core/security/ToolOperation.java
+Refer @arcclaw-core/src/main/java/com/arcclaw/core/audit/AuditService.java
+Refer @arcclaw-core/src/main/java/com/arcclaw/core/audit/SecurityEventType.java
+Refer @arcclaw-core/src/main/java/com/arcclaw/core/tools/BraveWebSearchTool.java
+  (isEnabled pattern, parametersSchema builder pattern, AuditService usage)
 
 ---
 
@@ -29,14 +34,11 @@ Refer @arcclaw-app/src/main/java/com/arcclaw/app/security/AuditService.java
 2. No changes to `arcclaw-core` beyond adding `BROWSER_NAVIGATE` to `ToolCapability`.
 3. All existing tests must remain green.
 4. Playwright processes MUST NOT start if `isEnabled()` returns false.
-5. Test commands: `./mvnw clean test -pl arcclaw-tool-playwright`
+5. Test command: `./mvnw clean test -pl arcclaw-tool-playwright`
 
 ---
 
 ## Module Setup
-
-Follow New Module Creation challanges - Refer @Architecture_Invariants.md
-Also do refer other modules before generating.. below is high level only.
 
 **New module:** `arcclaw-tool-playwright`
 
@@ -52,7 +54,7 @@ Also do refer other modules before generating.. below is high level only.
   <parent>
     <groupId>com.arcclaw</groupId>
     <artifactId>arcclaw-parent</artifactId>
-    <version>${revision}</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -60,13 +62,10 @@ Also do refer other modules before generating.. below is high level only.
   <name>ArcClaw :: Tool :: Playwright</name>
 
   <dependencies>
+    <!-- Core only — §16.1: tool modules MUST NOT depend on arcclaw-app -->
     <dependency>
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.arcclaw</groupId>
-      <artifactId>arcclaw-app</artifactId>
     </dependency>
     <!-- Quarkus CDI -->
     <dependency>
@@ -123,7 +122,7 @@ Also do refer other modules before generating.. below is high level only.
 
 **Root `pom.xml`:** Add `arcclaw-tool-playwright` to `<modules>`.
 
-**`arcclaw-app/pom.xml`:** Add:
+**`arcclaw-app/pom.xml`:** Add as a runtime dependency (app depends on tool, not the reverse):
 
 ```xml
 <dependency>
@@ -138,7 +137,7 @@ Also do refer other modules before generating.. below is high level only.
 
 ## ToolCapability.java Modification
 
-In `arcclaw-core`, add **one line** to the `ToolCapability` enum:
+In `arcclaw-core`, at `com.arcclaw.core.agent.role.ToolCapability`, add **one line**:
 
 ```java
 BROWSER_NAVIGATE("browser_navigate")
@@ -152,15 +151,18 @@ No other changes to `arcclaw-core`.
 
 **File:** `com.arcclaw.tool.playwright.PlaywrightBrowserTool`
 
+Correct imports — all from `arcclaw-core`:
+
 ```java
 package com.arcclaw.tool.playwright;
 
-import com.arcclaw.app.security.AuditService;
-import com.arcclaw.app.security.SecurityEventType;
+import com.arcclaw.core.agent.role.ToolCapability;   // ← core.agent.role
+import com.arcclaw.core.audit.AuditService;           // ← core.audit
+import com.arcclaw.core.audit.SecurityEventType;      // ← core.audit
+import com.arcclaw.core.security.ToolOperation;       // ← core.security
 import com.arcclaw.core.tools.AgentTool;
-import com.arcclaw.core.tools.ToolCapability;
-import com.arcclaw.core.tools.ToolOperation;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.scope.WorkspaceContext;      // ← static utility (ScopedValue-backed), not a CDI bean
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -169,7 +171,11 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+```
 
+Full implementation:
+
+```java
 @ApplicationScoped
 public class PlaywrightBrowserTool implements AgentTool {
 
@@ -192,6 +198,9 @@ public class PlaywrightBrowserTool implements AgentTool {
     @Inject
     AuditService auditService;
 
+    // NOTE: WorkspaceContext is a pure static utility (ScopedValue-backed), NOT a CDI bean.
+    // Use WorkspaceContext.userId(), WorkspaceContext.requireSessionId(), etc. — all static calls.
+
     @Override
     public String name() {
         return ToolCapability.BROWSER_NAVIGATE.toolName();
@@ -205,12 +214,11 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @Override
     public ToolOperation requiredOperation() {
-        return ToolOperation.NETWORK;
+        return ToolOperation.NETWORK_OUTBOUND;  // ← NETWORK_OUTBOUND, not NETWORK
     }
 
     @Override
     public boolean requiresManualApproval(Map<String, Object> params) {
-        // Browser navigation is network-only; no shell execution approval required
         return false;
     }
 
@@ -229,6 +237,7 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @Override
     public JsonObjectSchema parametersSchema() {
+        // Mirror BraveWebSearchTool's builder pattern exactly
         return JsonObjectSchema.builder()
             .addStringProperty("url",
                 "The full URL to navigate to. Must begin with http:// or https://.")
@@ -252,10 +261,10 @@ public class PlaywrightBrowserTool implements AgentTool {
                 "Set arcclaw.tools.playwright.enabled=true to activate.");
         }
 
-        // Guard 2: userId
-        String userId = (String) params.get("userId");
+        // Guard 2: userId from WorkspaceContext (static, never from params — see BraveWebSearchTool)
+        String userId = WorkspaceContext.userId();
         if (userId == null || userId.isBlank()) {
-            return ToolResponse.failure(403, "userId is required.");
+            return ToolResponse.failure(403, "No active user session.");
         }
 
         // Guard 3: url present
@@ -271,31 +280,32 @@ public class PlaywrightBrowserTool implements AgentTool {
         }
 
         String action   = params.getOrDefault("action", "extract_text").toString();
-        String selector = (String) params.get("selector");   // nullable
+        String selector = (String) params.get("selector");
 
         try {
             String result = pageRunner.run(url.trim(), action, selector, headless, timeoutMs);
 
-            // Truncate text results at sentence boundary; screenshots are pre-capped in runner
+            // Truncate text results at sentence boundary; screenshots pre-capped in runner
             if (!"screenshot".equals(action) && result.length() > MAX_CONTENT_CHARS) {
                 result = truncateAtSentence(result, MAX_CONTENT_CHARS) + "\n[content truncated]";
             }
 
-            // Audit with URL only — never log page content
-            auditService.record(SecurityEventType.TOOL_EXECUTED, userId, url);
+            // Audit with URL only — NEVER log page content.
+            // AuditService.record() 5-arg signature: (sessionId, userId, agentRole, type, detail)
+            String sessionId = WorkspaceContext.requireSessionId();
+            auditService.record(sessionId, userId, WorkspaceContext.agentRole(),
+                SecurityEventType.TOOL_EXECUTED, "Browser navigate: " + url);
 
             return ToolResponse.success(result);
 
         } catch (Exception e) {
-            // Never propagate Playwright exceptions; wrap as 502
-            return ToolResponse.failure(502,
-                "Browser navigation failed: " + e.getMessage());
+            return ToolResponse.failure(502, "Browser navigation failed: " + e.getMessage());
         }
     }
 
     /**
-     * Truncates text at the last sentence-ending punctuation (. ! ?) at or before maxLen.
-     * Falls back to a hard cut at maxLen if no sentence boundary is found.
+     * Truncates at the last sentence-ending punctuation at or before maxLen.
+     * Falls back to a hard cut if no sentence boundary is found in the second half.
      */
     private String truncateAtSentence(String text, int maxLen) {
         String sub = text.substring(0, maxLen);
@@ -314,8 +324,9 @@ public class PlaywrightBrowserTool implements AgentTool {
 
 **File:** `com.arcclaw.tool.playwright.PlaywrightPageRunner`
 
-This class isolates all Playwright API calls so `PlaywrightBrowserTool` is unit-testable
-by mocking this bean. It must never log page content.
+Isolates all Playwright API calls. No ArcClaw imports — pure Playwright + JDK.
+`PlaywrightBrowserTool` is unit-testable by mocking this bean.
+**MUST NOT log page content at any log level.**
 
 ```java
 package com.arcclaw.tool.playwright;
@@ -334,20 +345,20 @@ public class PlaywrightPageRunner {
     private static final Pattern SAFE_URL_PATTERN =
         Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
 
-    // 1 MB hard cap for screenshot bytes before Base64 encoding
-    private static final int MAX_SCREENSHOT_BYTES = 1_048_576;
+    private static final int MAX_SCREENSHOT_BYTES = 1_048_576; // 1 MB
 
     /**
      * Launches a fresh Chromium browser context, navigates to url, returns result.
      * Each call creates and destroys its own Playwright + Browser instance — no shared state.
      *
-     * @param url       target URL (must match SAFE_URL_PATTERN)
+     * @param url       target URL (must match SAFE_URL_PATTERN — caller pre-validates)
      * @param action    "navigate" | "extract_text" | "screenshot"
      * @param selector  optional CSS selector to scope extraction (null = full body)
      * @param headless  run headless (true in production)
      * @param timeoutMs navigation timeout in milliseconds
      * @return result string: visible text, raw HTML, or base64 PNG
-     * @throws PlaywrightException on navigation or execution failure
+     * @throws PlaywrightException      on navigation or execution failure
+     * @throws IllegalArgumentException on unsafe URL
      */
     public String run(String url, String action, String selector,
                       boolean headless, int timeoutMs) {
@@ -356,21 +367,19 @@ public class PlaywrightPageRunner {
             throw new IllegalArgumentException("Unsafe URL rejected: " + url);
         }
 
-        // Each invocation owns a fresh Playwright instance — no session bleed between users
         try (Playwright playwright = Playwright.create()) {
 
             Browser browser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions().setHeadless(headless)
-                // NOTE: devtools option was removed in Playwright 1.58.
-                // To open DevTools in debug mode use:
-                //   .setArgs(List.of("--auto-open-devtools-for-tabs"))
+                // NOTE: setDevtools() was removed in Playwright 1.58.
+                // For debug mode use: .setArgs(List.of("--auto-open-devtools-for-tabs"))
             );
 
             try (BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
                 page.setDefaultNavigationTimeout(timeoutMs);
 
-                // Navigate and check HTTP status — silent 4xx/5xx would return error HTML
+                // Navigate and verify HTTP status — silent 4xx/5xx returns error HTML without this
                 Response response = page.navigate(url);
                 if (response != null && !response.ok()) {
                     throw new PlaywrightException(
@@ -384,14 +393,14 @@ public class PlaywrightPageRunner {
                         new Page.WaitForLoadStateOptions().setTimeout(timeoutMs));
                 } catch (TimeoutError e) {
                     // Site has persistent network activity (analytics, WebSocket, etc.)
-                    // Degrade gracefully — page content is still usable
+                    // Degrade gracefully — page content is still usable at LOAD state
                     page.waitForLoadState(LoadState.LOAD);
                 }
 
                 return switch (action) {
                     case "screenshot" -> captureScreenshot(page);
                     case "navigate"   -> normalizeWhitespace(page.content());
-                    default           -> extractText(page, selector); // "extract_text" + fallback
+                    default           -> extractText(page, selector); // extract_text + fallback
                 };
             }
         }
@@ -399,25 +408,23 @@ public class PlaywrightPageRunner {
 
     private String extractText(Page page, String selector) {
         String scope = (selector != null && !selector.isBlank()) ? selector : "body";
-        String text  = page.locator(scope).innerText();
-        return normalizeWhitespace(text);
+        return normalizeWhitespace(page.locator(scope).innerText());
     }
 
     private String captureScreenshot(Page page) {
         byte[] png = page.screenshot(
             new Page.ScreenshotOptions().setFullPage(false));
 
-        // If over 1 MB, re-shoot at CSS scale (reduces size on hi-DPI displays)
+        // Re-shoot at CSS scale if over 1 MB (reduces size on hi-DPI displays)
         if (png.length > MAX_SCREENSHOT_BYTES) {
             png = page.screenshot(new Page.ScreenshotOptions()
                 .setFullPage(false)
                 .setScale(ScreenshotScale.CSS));
         }
-
         return Base64.getEncoder().encodeToString(png);
     }
 
-    /** Collapses 3+ consecutive newlines to 2; trims leading/trailing whitespace. */
+    /** Collapses 3+ consecutive newlines to 2; trims whitespace. Never log result. */
     private String normalizeWhitespace(String text) {
         return text == null ? "" : text.replaceAll("\\n{3,}", "\n\n").trim();
     }
@@ -434,8 +441,8 @@ Add to `arcclaw-app/src/main/resources/application.yaml`:
 arcclaw:
   tools:
     playwright:
-      enabled: false        # Set true to enable browser_navigate tool (requires binary install)
-      headless: true        # Set false for visible browser window (debug only)
+      enabled: false        # Set true to enable browser_navigate tool
+      headless: true        # Set false for visible browser (debug only)
       timeout-ms: 30000     # Navigation timeout in milliseconds
 ```
 
@@ -444,7 +451,7 @@ Add to `.env.example`:
 ```
 # ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true
 # Enables browser_navigate tool. Playwright downloads Chrome for Testing binaries
-# on first run (~200 MB). Install browsers manually with:
+# on first run (~200 MB). Install only Chromium with:
 #   ./mvnw exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI \
 #     -Dexec.args="install chromium"
 ```
@@ -466,7 +473,7 @@ allowing agents to read JavaScript-rendered pages that are inaccessible to plain
 Playwright downloads browser binaries automatically on first use via `Playwright.create()`.
 
 Since Playwright **1.57**, the default Chromium channel is **Chrome for Testing**
-(not open-source Chromium). This is ~200 MB on first run.
+(not open-source Chromium). First run downloads ~200 MB.
 
 To pre-install only Chromium (recommended for CI/server environments):
 
@@ -486,7 +493,7 @@ To install all browsers (Chromium, Firefox, WebKit):
 
 ## Enabling the Tool
 
-The tool is **disabled by default**. Set in `application.yaml` or via environment variable:
+Disabled by default. Enable in `application.yaml`:
 
 ```yaml
 arcclaw:
@@ -495,7 +502,7 @@ arcclaw:
       enabled: true
 ```
 
-or:
+Or via environment variable:
 
 ```bash
 export ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true
@@ -506,7 +513,7 @@ export ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true
 | Property | Default | Description |
 |---|---|---|
 | `arcclaw.tools.playwright.enabled` | `false` | Enable/disable the tool |
-| `arcclaw.tools.playwright.headless` | `true` | Headless mode (set false for debug) |
+| `arcclaw.tools.playwright.headless` | `true` | Headless mode (false for debug) |
 | `arcclaw.tools.playwright.timeout-ms` | `30000` | Navigation timeout in ms |
 
 ## Running Tests
@@ -517,10 +524,11 @@ Unit tests (no browser required):
 ./mvnw clean test -pl arcclaw-tool-playwright
 ```
 
-Integration tests (requires real browser + `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true`):
+Integration tests (requires real browser):
 
 ```bash
-./mvnw test -pl arcclaw-tool-playwright -Dgroups=integration
+ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true \
+  ./mvnw test -pl arcclaw-tool-playwright -Dgroups=integration
 ```
 ```
 
@@ -532,9 +540,11 @@ Integration tests (requires real browser + `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=tru
 
 **File:** `src/test/java/com/arcclaw/tool/playwright/PlaywrightBrowserToolTest.java`
 
-Mock `PlaywrightPageRunner` with Mockito. Do NOT start a real browser in unit tests.
-
-Cover all of the following cases:
+Mock `PlaywrightPageRunner` and `AuditService` with Mockito.
+`WorkspaceContext` is a static utility (ScopedValue-backed) — bind via
+`WorkspaceContext.run(sessionId, userId, chatId, autonomy, role, task)`
+in test setup. Do NOT mock it — it has no instance to mock.
+Do NOT start a real browser in unit tests.
 
 ```java
 @ExtendWith(MockitoExtension.class)
@@ -548,21 +558,25 @@ class PlaywrightBrowserToolTest {
     @BeforeEach
     void setUp() {
         tool = new PlaywrightBrowserTool();
-        // inject mocks + set config fields via reflection or constructor injection
-        // enabled = true for positive-path tests; headless = true; timeoutMs = 5000
+        // inject mocks + set config fields via reflection (enabled=true, headless=true, timeoutMs=5000)
+        // for negative-path disabled tests, set enabled=false on a separate instance
+        // WorkspaceContext binding: wrap execute() calls in
+        //   WorkspaceContext.run("sess-1", "test-user-123", "chat-1", AutonomyLevel.FULL, "researcher", () -> { ... });
     }
 
-    // ── Disabled state ─────────────────────────────────────────────────────────
-    @Test void isEnabled_returnsFalse_whenConfigFalse() { /* set enabled=false; assert false */ }
-    @Test void execute_returns503_whenToolDisabled()    { /* enabled=false; execute → 503 */ }
+    // ── Disabled state ────────────────────────────────────────────────────────
+    @Test void isEnabled_returnsFalse_whenConfigFalse()  { /* set enabled=false; assertFalse */ }
+    @Test void execute_returns503_whenToolDisabled()     { /* enabled=false; execute → 503 */ }
 
-    // ── Input validation ───────────────────────────────────────────────────────
-    @Test void execute_returns400_whenUrlBlank()        { /* url="" → 400 */ }
-    @Test void execute_returns400_whenUrlNull()         { /* url=null → 400 */ }
-    @Test void execute_returns400_whenJavascriptScheme(){ /* url="javascript:alert(1)" → 400 */ }
-    @Test void execute_returns400_whenFileScheme()      { /* url="file:///etc/passwd" → 400 */ }
-    @Test void execute_returns400_whenFtpScheme()       { /* url="ftp://host/file" → 400 */ }
-    @Test void execute_returns403_whenUserIdBlank()     { /* userId="" → 403 */ }
+    // ── Input validation ──────────────────────────────────────────────────────
+    @Test void execute_returns400_whenUrlBlank()         { /* url="" → 400 */ }
+    @Test void execute_returns400_whenUrlNull()          { /* url=null → 400 */ }
+    @Test void execute_returns400_whenJavascriptScheme() { /* url="javascript:alert(1)" → 400 */ }
+    @Test void execute_returns400_whenFileScheme()       { /* url="file:///etc/passwd" → 400 */ }
+    @Test void execute_returns400_whenFtpScheme()        { /* url="ftp://host/file" → 400 */ }
+    @Test void execute_returns403_whenUserIdBlank() {
+        // Run execute() inside WorkspaceContext.run(..., userId="", ...) → 403
+    }
 
     // ── Happy path ────────────────────────────────────────────────────────────
     @Test void execute_callsRunnerWithCorrectArgs_extractText() {
@@ -583,11 +597,11 @@ class PlaywrightBrowserToolTest {
     @Test void execute_returns502_whenRunnerThrows() {
         // pageRunner.run(...) throws RuntimeException("connection refused")
         // assert ToolResponse.failure(502, ...)
-        // verify no exception propagates
+        // verify no exception propagates out of execute()
     }
 
     // ── Truncation ────────────────────────────────────────────────────────────
-    @Test void execute_truncatesResultOver9092Chars() {
+    @Test void execute_truncatesTextResultOver9092Chars() {
         // pageRunner returns string of 10000 chars ending with "end of content."
         // assert response.content().endsWith("[content truncated]")
         // assert response.content().length() <= 9092 + "[content truncated]".length()
@@ -596,8 +610,6 @@ class PlaywrightBrowserToolTest {
         // pageRunner returns "short text"
         // assert response.content() equals "short text" exactly
     }
-
-    // ── Screenshot ────────────────────────────────────────────────────────────
     @Test void execute_doesNotTruncate_screenshotResult() {
         // action="screenshot"; runner returns base64 string > 9092 chars
         // screenshot results must NOT be truncated (already capped in runner)
@@ -614,31 +626,33 @@ class PlaywrightBrowserToolTest {
 @Tag("integration")
 class PlaywrightPageRunnerIntegrationTest {
 
-    PlaywrightPageRunner runner = new PlaywrightPageRunner();
+    static PlaywrightPageRunner runner;
 
     @BeforeAll
-    static void checkEnv(TestInfo info) {
-        String enabled = System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED");
-        assumeTrue("true".equalsIgnoreCase(enabled),
-            "Skipping integration tests: ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED is not set to true");
+    static void checkEnvAndInit() {
+        assumeTrue(
+            "true".equalsIgnoreCase(System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED")),
+            "Skipping: ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED is not set to true"
+        );
+        runner = new PlaywrightPageRunner();
     }
 
     @Test
-    void navigate_extractText_returnsPageContent() {
+    void extractText_returnsPageContent() {
         String result = runner.run("https://example.com", "extract_text", null, true, 30000);
         assertThat(result).containsIgnoringCase("Example Domain");
     }
 
     @Test
-    void navigate_selectorH1_returnsHeading() {
+    void extractText_withSelectorH1_returnsHeading() {
         String result = runner.run("https://example.com", "extract_text", "h1", true, 30000);
         assertThat(result).containsIgnoringCase("Example Domain");
     }
 
     @Test
-    void navigate_screenshot_returnsBase64Png() {
+    void screenshot_returnsBase64Png() {
         String result = runner.run("https://example.com", "screenshot", null, true, 30000);
-        // Base64 PNG starts with iVBORw (PNG magic bytes encoded)
+        // Base64 PNG magic bytes: iVBORw
         assertThat(result).startsWith("iVBORw");
     }
 
@@ -653,25 +667,44 @@ class PlaywrightPageRunnerIntegrationTest {
 ```
 
 Run integration tests with:
+
 ```bash
-ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true ./mvnw test -pl arcclaw-tool-playwright -Dgroups=integration
+ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true \
+  ./mvnw test -pl arcclaw-tool-playwright -Dgroups=integration
 ```
 
 ---
 
-## Playwright 1.58 — Known API Constraints
+## Playwright 1.58 API Constraints
 
-The following Playwright features are **removed or unavailable** in 1.58. Do not use them:
+Do not use the following — removed or unavailable in 1.58:
 
-| Removed | Replacement |
+| Removed in 1.58 | Use instead |
 |---|---|
-| `BrowserType.LaunchOptions.setDevtools()` | `setArgs(List.of("--auto-open-devtools-for-tabs"))` |
-| `_react` / `_vue` selector engines | Standard CSS / `getByRole()` locators |
+| `BrowserType.LaunchOptions.setDevtools()` | `.setArgs(List.of("--auto-open-devtools-for-tabs"))` |
+| `_react` / `_vue` selector engines | Standard CSS or `getByRole()` locators |
 | `:light` selector suffix | Standard CSS selectors |
-| `page.accessibility()` (removed in 1.57) | External Axe library if needed |
+| `page.accessibility()` (removed in 1.57) | External Axe library if required |
 
-Since **1.57**, headless Chromium uses **Chrome for Testing** binaries (not open-source
-Chromium). Document this in README. No code change required.
+Since **1.57**: headless Chromium uses **Chrome for Testing**, not open-source Chromium.
+Document in README. No code change required.
+
+---
+
+## Discrepancies Corrected (vs Previous Draft)
+
+Eight issues corrected from codebase analysis:
+
+| # | Issue | Old | Corrected |
+|---|---|---|---|
+| 1 | `arcclaw-app` dep violates §16.1 | `arcclaw-app` in pom | Removed — `arcclaw-core` only |
+| 2 | `AuditService` package | `app.security` | `core.audit` |
+| 3 | `SecurityEventType` package | `app.security` | `core.audit` |
+| 4 | `ToolCapability` package | `core.tools` | `core.agent.role` |
+| 5 | `ToolOperation` package | `core.tools` | `core.security` |
+| 6 | `ToolOperation` value | `NETWORK` | `NETWORK_OUTBOUND` |
+| 7 | `AuditService.record()` signature | 3-arg, userId from params | 5-arg, userId from `WorkspaceContext` |
+| 8 | Parent POM version | `${revision}` | `1.0.0-SNAPSHOT` |
 
 ---
 
@@ -679,57 +712,65 @@ Chromium). Document this in README. No code change required.
 
 ```
 Module
-- [ ] arcclaw-tool-playwright module created: pom.xml, beans.xml, jandex plugin
+- [ ] arcclaw-tool-playwright/pom.xml — arcclaw-core only (NO arcclaw-app, §16.1)
+- [ ] arcclaw-tool-playwright/pom.xml — version 1.0.0-SNAPSHOT
+- [ ] src/main/resources/META-INF/beans.xml — bean-discovery-mode="annotated"
+- [ ] jandex-maven-plugin configured
+- [ ] arcclaw-tool-playwright added to root pom.xml <modules>
+- [ ] arcclaw-app/pom.xml depends on arcclaw-tool-playwright (not the reverse)
 - [ ] Package root: com.arcclaw.tool.playwright
 
-Core change
-- [ ] ToolCapability.BROWSER_NAVIGATE added (one line, arcclaw-core only)
+Core change (arcclaw-core only)
+- [ ] ToolCapability.BROWSER_NAVIGATE added in com.arcclaw.core.agent.role.ToolCapability
 
 PlaywrightBrowserTool
+- [ ] Imports: ToolCapability from core.agent.role, ToolOperation from core.security,
+      AuditService + SecurityEventType from core.audit
 - [ ] implements AgentTool — isEnabled() gates all execution
-- [ ] requiresSandbox = true — Podman isolation honoured when available
-- [ ] requiresManualApproval returns false
-- [ ] URL scheme validation: only http:// and https:// accepted
-- [ ] 403 on blank/missing userId
-- [ ] 400 on blank/missing URL
-- [ ] 400 on non-http(s) schemes (file://, javascript:, ftp://, etc.)
+- [ ] requiresSandbox() = true
+- [ ] requiredOperation() = ToolOperation.NETWORK_OUTBOUND
+- [ ] requiresManualApproval() = false
+- [ ] parametersSchema() uses JsonObjectSchema.builder() (mirror BraveWebSearchTool)
+- [ ] userId from WorkspaceContext.userId() (static) — never from params map
 - [ ] 503 when tool disabled
+- [ ] 403 when userId blank
+- [ ] 400 on blank/null URL
+- [ ] 400 on non-http(s) schemes (javascript:, file://, ftp://, etc.)
 - [ ] 502 on any Playwright exception (never propagates)
 - [ ] Text results truncated at sentence boundary at 9092 chars + "[content truncated]"
-- [ ] Screenshot results NOT truncated (capped in runner at 1 MB)
-- [ ] Audit: SecurityEventType.TOOL_EXECUTED with url (NOT page content)
-- [ ] parametersSchema uses JsonObjectSchema.builder() (same pattern as BraveWebSearchTool)
+- [ ] Screenshot results NOT truncated in execute() (capped in runner)
+- [ ] auditService.record(sessionId, userId, agentRole, TOOL_EXECUTED, "Browser navigate: " + url)
 
 PlaywrightPageRunner
+- [ ] No ArcClaw imports — pure Playwright + JDK
 - [ ] Each call: fresh Playwright + Browser + BrowserContext — no shared state
-- [ ] page.navigate() response checked — non-2xx throws PlaywrightException → 502
+- [ ] page.navigate() response checked — non-2xx throws PlaywrightException
 - [ ] NETWORKIDLE with timeout; degrades gracefully to LOAD on TimeoutError
 - [ ] "extract_text": page.locator(selector ?? "body").innerText()
 - [ ] "navigate": page.content() (full raw HTML)
-- [ ] "screenshot": page.screenshot(), re-shot at ScreenshotScale.CSS if > 1 MB
-- [ ] Whitespace normalised: 3+ consecutive newlines collapsed to 2
-- [ ] MUST NOT log page content at any log level
-- [ ] setDevtools NOT used (removed in 1.58)
+- [ ] "screenshot": page.screenshot(); re-shoot at ScreenshotScale.CSS if > 1 MB
+- [ ] normalizeWhitespace: 3+ newlines → 2
+- [ ] setDevtools() NOT used (removed in 1.58)
+- [ ] MUST NOT log page content at any level
 
-Config
-- [ ] application.yaml updated: enabled/headless/timeout-ms under arcclaw.tools.playwright
-- [ ] .env.example updated with ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED comment
-- [ ] README.md in module root: binary download note, Chrome for Testing note (since 1.57),
-      install command (chromium only), config table, test commands
+Config and docs
+- [ ] application.yaml: enabled/headless/timeout-ms under arcclaw.tools.playwright
+- [ ] .env.example: ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED comment + install command
+- [ ] README.md: binary download note, Chrome for Testing note, install command,
+      config table, test commands
 
 Tests
-- [ ] Unit tests green without launching a real browser: ./mvnw clean test -pl arcclaw-tool-playwright
-- [ ] All 11 unit test cases covered (disabled, validation, happy path, errors, truncation)
-- [ ] Integration test tagged @Tag("integration") — skipped in normal CI
-- [ ] Integration test uses assumeTrue on ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED env var
-- [ ] All existing project tests still pass: ./mvnw clean test
+- [ ] Unit tests green without browser: ./mvnw clean test -pl arcclaw-tool-playwright
+- [ ] All unit test cases covered (disabled, validation×5, happy path×3, error, truncation×3)
+- [ ] WorkspaceContext mocked in unit tests (userId from context, not params)
+- [ ] Integration tests tagged @Tag("integration") — skipped in normal CI
+- [ ] Integration test uses @BeforeAll assumeTrue on ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED
+- [ ] All existing tests still pass: ./mvnw clean test
 ```
 
 ---
 
 ## Global Delivery Checklist (All Phases)
-
-Run in this order. Each phase's tests must be green before starting the next.
 
 ```
 Phase 77: ./mvnw clean test -pl arcclaw-core,arcclaw-app,arcclaw-mcp
@@ -753,7 +794,7 @@ arcclaw-parent
 ├── arcclaw-channel-telegram
 ├── arcclaw-channel-web      ← NEW (Phase 78A)
 ├── arcclaw-onboarding       ← NEW (Phase 80A)
-├── arcclaw-tool-playwright  ← NEW (Phase 90)
+├── arcclaw-tool-playwright  ← NEW (Phase 90)  depends on: arcclaw-core only
 ├── arcclaw-app              (depends on all above)
 └── arcclaw-ui               ← NEW (Phase 79, Vite+Lit, no Java)
 ```
