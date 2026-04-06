@@ -14,6 +14,7 @@ To pre-install only Chromium (recommended for CI/server environments):
 
 ```bash
 ./mvnw exec:java -e \
+  -pl arcclaw-tool-playwright \
   -Dexec.mainClass=com.microsoft.playwright.CLI \
   -Dexec.args="install chromium"
 ```
@@ -22,6 +23,7 @@ To install all browsers (Chromium, Firefox, WebKit):
 
 ```bash
 ./mvnw exec:java -e \
+  -pl arcclaw-tool-playwright \
   -Dexec.mainClass=com.microsoft.playwright.CLI \
   -Dexec.args="install"
 ```

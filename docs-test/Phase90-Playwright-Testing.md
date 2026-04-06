@@ -143,7 +143,7 @@ DEBUG=pw:api
 
 ```bash
 # One-time binary setup
-./mvnw exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"
+./mvnw exec:java -pl arcclaw-tool-playwright -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"
 
 # Unit tests (CI — no browser)
 ./mvnw clean test -pl arcclaw-tool-playwright
@@ -167,6 +167,7 @@ ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true ./mvnw test -pl arcclaw-tool-playwright -D
 ```bash
 # 1. Browser binary installed
 ./mvnw exec:java -e \
+  -pl arcclaw-tool-playwright \
   -Dexec.mainClass=com.microsoft.playwright.CLI \
   -Dexec.args="install --with-deps chromium"
 
@@ -191,7 +192,7 @@ Read the content of https://example.com
 Summarise the news from https://news.ycombinator.com
 
 # Scoped extraction
-Get only the main article text from https://blog.quarkus.io/quarkus-3-23-released/
+Get only the main article text from https://quarkus.io/blog/quarkus-3-33-released/
 
 # Screenshot
 Take a screenshot of https://example.com
