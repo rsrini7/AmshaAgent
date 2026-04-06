@@ -75,6 +75,13 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Playwright Browser Tool -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-tool-playwright</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <!-- Explicitly add quarkus-rest for HTTP endpoints -->
     <dependency>
       <groupId>io.quarkus</groupId>

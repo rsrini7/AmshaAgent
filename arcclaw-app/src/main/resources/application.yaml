@@ -35,6 +35,9 @@ quarkus:
     arcclaw-rag:
       group-id: com.arcclaw
       artifact-id: arcclaw-rag
+    arcclaw-tool-playwright:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-tool-playwright
 
   devservices:
     enabled: false
@@ -364,6 +367,10 @@ arcclaw:
       api-key: "${ARCCLAW_BRAVE_API_KEY:none}"
     serper:
       api-key: "${ARCCLAW_SERPER_API_KEY:none}"
+    playwright:
+      enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
+      headless: true
+      timeout-ms: 30000
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names

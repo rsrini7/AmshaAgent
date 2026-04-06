@@ -979,6 +979,26 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `quarkiverse.mcp.server.stdio.enabled: false`
   - `quarkus.shutdown.timeout: 5S`
 
+### 16.7 App Indexing contract
+- For any new module providing CDI beans consumed by the main application, the module MUST be added to the `quarkus.index-dependency` section of `arcclaw-app/src/main/resources/application.yaml`.
+- Failure to do so may trigger `jakarta.enterprise.inject.UnsatisfiedResolutionException` for core beans (e.g. `DevSecretSeeder`) during the application's build validation phase, as the container boundary for bean discovery becomes inconsistent.
+
+### 16.8 Assertion and Assumption Standards
+- New modules MUST use `org.junit.jupiter.api.Assertions` and `org.junit.jupiter.api.Assumptions` for all tests.
+- **AssertJ is NOT used** in this project. Do not import or use `assertThat`.
+- This ensures consistency and reduces classpath bloat in the final native binary.
+
+### 16.9 beans.xml Schema Mapping
+- New modules MUST use the Jakarta EE 10 (version 4.0) schema for `src/main/resources/META-INF/beans.xml` to ensure consistency with `arcclaw-core`.
+- Example header: `<beans xmlns="https://jakarta.ee/xml/ns/jakartaee" version="4.0" bean-discovery-mode="annotated">`
+
+### 16.10 ToolResponse API
+- `ToolResponse` is a Java **Record**. Use canonical accessors:
+  - `success()` (instead of `isSuccess()`)
+  - `exitCode()` (instead of `status()`)
+  - `output()` (instead of `content()`)
+
+
 ## 17. General Java Guards
 
 - Null-check `e.getMessage()` before use — several JVM exception types return `null`.
