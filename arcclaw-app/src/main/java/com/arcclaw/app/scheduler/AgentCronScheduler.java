@@ -116,7 +116,11 @@ public class AgentCronScheduler {
                 log.warnf("Cron job [%s] missed fire time %s — outside %s lookback window. Marking SKIPPED and rescheduling.",
                     job.id, job.nextFireTime, maxLookbackWindow);
                 job.status = CronStatus.SKIPPED;
-                job.nextFireTime = CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                if (job.cronExpression != null && !job.cronExpression.isBlank()) {
+                    job.nextFireTime = CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                } else {
+                    job.nextFireTime = null; // One-shot trigger with no repeat
+                }
                 skippedJobs.add(job);
                 iter.remove();
             }

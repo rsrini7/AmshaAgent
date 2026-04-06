@@ -89,7 +89,7 @@ public class CronJobRunner {
                 cronSessionId, 
                 job.userId, 
                 job.chatId, 
-                AutonomyLevel.BACKGROUND, 
+                AutonomyLevel.SUPERVISED,
                 role, 
                 type,
                 () -> {

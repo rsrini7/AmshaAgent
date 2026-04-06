@@ -147,7 +147,6 @@ public class ScheduleTaskTool implements AgentTool {
             chatId = userId; // REST/CLI fallback
         }
 
-        String cronExpression = WorkspaceContext.suggestedCron();
         String goal           = (String) params.get("goal");
 
         // FIX §1: parseTimezone() — normalize blank/null/invalid to UTC.
@@ -171,9 +170,18 @@ public class ScheduleTaskTool implements AgentTool {
             executionRole = AgentRoleEnum.RESEARCHER.toScopedName();
         }
 
+        // Step 1 — Validate cronExpression or absolute time trigger
+        String cronExpression = (String) params.get("cronExpression");
         if (cronExpression == null || cronExpression.isBlank()) {
+            cronExpression = WorkspaceContext.suggestedCron();
+        }
+
+        String suggestedNextFireTime = WorkspaceContext.suggestedNextFireTime();
+        if ((cronExpression == null || cronExpression.isBlank()) 
+                && !(runOnce && suggestedNextFireTime != null)) {
             return ToolResponse.failure(400, "Schedule context missing. " +
-                    "To schedule a task, please include a time hint in your request (e.g., 'remind me in 5 min').");
+                    "Example: instead of 'deploy it', write 'deploy commit abc123 " +
+                    "to production via gh workflow run deploy.yml'.");
         }
         if (goal == null || goal.isBlank()) {
             return ToolResponse.failure(400, "goal is required.");
@@ -195,7 +203,7 @@ public class ScheduleTaskTool implements AgentTool {
         // LLM sometimes generates "54 15 3 3 *" for one-shot tasks.
         // runOnce=true already guarantees single-fire — dom/month are always redundant
         // and dangerous (task silently never fires if the cron tick crosses midnight).
-        if (runOnce) {
+        if (runOnce && cronExpression != null) {
             String[] fields = cronExpression.trim().split("\\s+");
             if (fields.length == 5) {
                 cronExpression = fields[0] + " " + fields[1] + " * * *";
@@ -204,21 +212,20 @@ public class ScheduleTaskTool implements AgentTool {
 
         // Step 4 — Validate and compute nextFireTime via cron-utils
         Instant nextFireTime;
-        try {
-            CronParser parser = new CronParser(
-                    CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX));
-            Cron cron = parser.parse(cronExpression);
-            cron.validate();
-            ExecutionTime executionTime = ExecutionTime.forCron(cron);
-            ZonedDateTime now = ZonedDateTime.now(zone);
-            nextFireTime = executionTime.nextExecution(now)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Cron expression will never fire"))
-                    .toInstant();
-        } catch (RuntimeException e) {
-            return ToolResponse.failure(400,
-                    "Invalid cron expression '" + cronExpression + "': " + e.getMessage() +
-                    ". Use 5-field UNIX format: minute hour dom month dow");
+        if (runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank()) {
+            try {
+                nextFireTime = Instant.parse(suggestedNextFireTime);
+                Logger.getLogger(ScheduleTaskTool.class).infof("[ScheduleTaskTool] Using absolute one-shot trigger: %s", nextFireTime);
+            } catch (Exception e) {
+                Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Failed to parse suggestedNextFireTime '%s' — falling back to cron", suggestedNextFireTime);
+                nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
+            }
+        } else {
+            nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
+        }
+
+        if (nextFireTime == null) {
+            return ToolResponse.failure(400, "Could not determine next fire time for '" + cronExpression + "'. Use 5-field UNIX format.");
         }
 
         // Step 5 — Build and persist entity
@@ -282,6 +289,24 @@ public class ScheduleTaskTool implements AgentTool {
             Logger.getLogger(ScheduleTaskTool.class)
                 .warnf("[ScheduleTaskTool] Unrecognized timezone '%s' — defaulting to UTC", raw);
             return ZoneOffset.UTC;
+        }
+    }
+
+    private Instant computeNextFromCron(String cronExpression, ZoneId zone) {
+        try {
+            CronParser parser = new CronParser(
+                    CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX));
+            Cron cron = parser.parse(cronExpression);
+            cron.validate();
+            ExecutionTime executionTime = ExecutionTime.forCron(cron);
+            ZonedDateTime now = ZonedDateTime.now(zone);
+            return executionTime.nextExecution(now)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Cron expression will never fire"))
+                    .toInstant();
+        } catch (RuntimeException e) {
+            Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Invalid cron '%s': %s", cronExpression, e.getMessage());
+            return null;
         }
     }
 }
