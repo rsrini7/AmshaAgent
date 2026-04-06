@@ -567,6 +567,7 @@ public class BinaryBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
