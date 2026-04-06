@@ -31,6 +31,9 @@ public class PlaywrightPageRunner {
     /** Safety timeout for the LOAD fallback to prevent open-ended waits. */
     private static final int LOAD_FALLBACK_TIMEOUT_MS = 5_000;
 
+    @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
+    boolean enabled;
+
     @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
     boolean headless;
 
@@ -39,6 +42,10 @@ public class PlaywrightPageRunner {
 
     @PostConstruct
     void init() {
+        if (!enabled) {
+            log.info("Playwright is disabled — skipping browser warmup.");
+            return;
+        }
         long t0 = System.currentTimeMillis();
         // Since this runs during Quarkus startup, it warms up the browser instantly.
         playwright = Playwright.create();
@@ -57,6 +64,7 @@ public class PlaywrightPageRunner {
 
     @Scheduled(every = "6h")
     void refreshBrowser() {
+        if (!enabled || playwright == null) return;
         log.info("Playwright browser refresh");
         if (browser != null) browser.close();
         browser = playwright.chromium().launch(

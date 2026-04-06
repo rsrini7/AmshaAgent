@@ -57,6 +57,7 @@ public class BinaryBootstrap {
         validateSandboxTools();
         validatePlaywright(binaryDir);
         interactiveSetupIfNeeded(binaryDir, args);
+        promptPlaywrightInstallationIfNeeded(binaryDir);
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -363,16 +364,7 @@ public class BinaryBootstrap {
                 initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
                 initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
                 
-                // Prompt for installation immediately
-                Path browsersPath = binaryDir.resolve(".playwright-browsers");
-                if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
-                    System.err.println("  │");
-                    System.err.println("  │  Chromium browser binary is not installed.");
-                    String installResponse = console.readLine("  └─ Download Chromium now? [Y/n]: ");
-                    if (installResponse == null || installResponse.trim().isEmpty() || installResponse.trim().toLowerCase().startsWith("y")) {
-                        PlaywrightBrowserInstaller.installChromium(browsersPath);
-                    }
-                }
+                // Prompt for installation is now handled in promptPlaywrightInstallationIfNeeded
                 System.err.println();
                 continue;
             }
@@ -670,11 +662,39 @@ public class BinaryBootstrap {
     private static void validatePlaywright(Path binaryDir) {
         String enabled = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
         if ("true".equalsIgnoreCase(enabled)) {
+            // Always set SKIP_BROWSER_DOWNLOAD if enabled, ensuring the running app
+            // doesn't try to trigger a background download if the binary is missing.
+            System.setProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+
             String pathStr = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
             Path browsersPath = (pathStr != null) ? Path.of(pathStr) : binaryDir.resolve(".playwright-browsers");
             if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
                 System.err.println("[ArcClaw] ⚠️  Warning: Playwright is ENABLED but Chromium browser binary is MISSING.");
                 System.err.println("[ArcClaw]     Path expected: " + browsersPath);
+            }
+        }
+    }
+
+    private static void promptPlaywrightInstallationIfNeeded(Path binaryDir) {
+        Console console = System.console();
+        if (console == null) return; // Non-interactive
+
+        String enabled = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
+        if (!"true".equalsIgnoreCase(enabled)) return;
+
+        String pathStr = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+        Path browsersPath = (pathStr != null) ? Path.of(pathStr) : binaryDir.resolve(".playwright-browsers");
+
+        if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+            System.err.println();
+            System.err.println("  ┌─ Playwright Chromium Installation");
+            System.err.println("  │  Playwright is enabled but the Chromium browser is missing from:");
+            System.err.println("  │  " + browsersPath);
+            System.err.println("  │");
+            String installResponse = console.readLine("  └─ Download and install Chromium now? [Y/n]: ");
+            if (installResponse == null || installResponse.trim().isEmpty() || installResponse.trim().toLowerCase().startsWith("y")) {
+                PlaywrightBrowserInstaller.installChromium(browsersPath);
+                System.err.println();
             }
         }
     }
