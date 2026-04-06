@@ -615,8 +615,6 @@ mp:
         sql: false
 
   arcclaw:
-    rag:
-      embed-provider: ollama
     pii:
       mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
     sandbox:
