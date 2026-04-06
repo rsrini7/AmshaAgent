@@ -1,10 +1,14 @@
 package com.arcclaw.tool.playwright;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+
+import com.microsoft.playwright.PlaywrightException;
 
 @Tag("integration")
 class PlaywrightPageRunnerIntegrationTest {
@@ -39,5 +43,11 @@ class PlaywrightPageRunnerIntegrationTest {
         // Base64 PNG magic bytes: iVBORw
         Assertions.assertNotNull(result);
         Assertions.assertTrue(result.startsWith("iVBORw"));
+    }
+
+    @Test
+    void navigate_http404_throwsPlaywrightException() {
+        assertThrows(PlaywrightException.class, () ->
+            runner.run("https://httpstat.us/404", "extract_text", null, true, 30000));
     }
 }
