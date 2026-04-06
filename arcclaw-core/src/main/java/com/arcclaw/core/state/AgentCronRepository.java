@@ -52,12 +52,12 @@ public class AgentCronRepository {
      * Tenant-isolated query: returns all cron jobs for the given user.
      *
      * NOTE: em.clear() is intentionally kept here.
-     * SUPPORTS joins the caller's outer transaction if one exists (e.g. Telegram
-     * message handler). Without clear(), the L1 cache would return stale managed
-     * entities from earlier in the same transaction, hiding freshly committed DB
-     * changes — this was the root cause of the "chat mode changes not immediate" bug.
+     * REQUIRED opens a new transaction when called standalone, and joins the
+     * caller's outer transaction when one exists. em.clear() prevents stale
+     * L1 cache reads — was the root cause of "chat mode changes not immediate"
+     * bug when the write and this read shared the same persistence context.
      */
-    @Transactional(TxType.SUPPORTS)
+    @Transactional(TxType.REQUIRED)
     public List<AgentCronEntity> findByUserId(String userId) {
         em.clear();
         return em.createQuery(
@@ -70,11 +70,14 @@ public class AgentCronRepository {
      * Finds all cron jobs awaiting user approval for a specific user.
      *
      * NOTE: em.clear() is intentionally kept here — same reason as findByUserId().
-     * SUPPORTS joins outer transaction; clear() prevents stale L1 reads in
-     * Telegram/chat approval flows where the AWAITING_APPROVAL write and this
-     * read may share the same persistence context.
+     * REQUIRED opens a new transaction when called standalone (e.g. DenyReflex
+     * step 5 with no outer TX), and joins the caller's outer transaction when one
+     * exists (e.g. Telegram message handler). em.clear() in both cases evicts
+     * stale L1 cache so the query always sees the latest committed DB state —
+     * critical when an AWAITING_APPROVAL write and this read share the same
+     * persistence context.
      */
-    @Transactional(TxType.SUPPORTS)
+    @Transactional(TxType.REQUIRED)
     public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
         em.clear();
         return em.createQuery(

@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -64,6 +65,12 @@ public class AgentResponseMapper {
      */
     private String sanitizeAnswer(String answer) {
         if (answer == null) return null;
+
+        String stripped = answer.strip();
+        if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
+                // Strip leaked RAG/compaction context blocks
+                answer = AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).replaceFirst("").strip();
+        }
 
         boolean looksLikeCronConfirmation = FAKE_CRON_PATTERN.matcher(answer).find();
         boolean hasRepeatingUuid = REPEATING_UUID_PATTERN.matcher(answer).find();

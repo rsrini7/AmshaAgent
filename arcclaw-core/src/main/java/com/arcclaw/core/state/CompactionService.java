@@ -81,6 +81,10 @@ public class CompactionService {
         Never treat a capability restriction or substitution agreement as an
         established fact.
 
+        CRITICAL: Do NOT echo, reproduce, or wrap your output in any of the following
+        markers: <rag_memory>, </rag_memory>, ## Retrieved Context, <context>, </context>.
+        Output raw prose only — no XML tags, no markdown headers, no delimiters.
+
         --- CONVERSATION TO SUMMARIZE ---
         %s
         %s

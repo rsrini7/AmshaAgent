@@ -6,7 +6,7 @@ using Vite 6, Lit 3, and TypeScript 5. This is the only source of browser UI for
 It replaces all previous references to HTMX, vanilla JS, or Qute-rendered HTML in the
 browser layer. The Quarkus backend (Phases 77–78) serves only JSON + SSE + WebSocket.
 
-**Prerequisites:**
+**Prerequisites:** (I tested manually - working fine , proceed)
 - Phase 78 must be complete and running (`./mvnw quarkus:dev` on port 8080).
 - `/api/v1/agents`, `/api/v1/hitl`, `/api/v1/chat/stream`, `/ws/chat` must be reachable.
 

@@ -108,11 +108,11 @@ public class ProcessIsolationExecutor {
 
         if (!sandboxEnabled) {
             log.debugf("Sandbox disabled — executing directly (session=%s)", sessionId);
-            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, command));
+            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
         }
 
         if ("NONE".equalsIgnoreCase(sandboxStrategy)) {
-            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, command));
+            return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
         }
 
         if (SANDBOX_STRATEGY_PODMAN.equalsIgnoreCase(sandboxStrategy)) {
@@ -158,6 +158,19 @@ public class ProcessIsolationExecutor {
 
         // Podman circuit is open (or strategy is NAMESPACE) — fall back to namespace isolation.
         // NOTE: requiredSecrets are NOT injected in namespace mode (see class-level Javadoc).
-        return SandboxResult.success(namespaceExecutor.executeInNamespace(workspaceRoot, command));
+        return SandboxResult.success(namespaceExecutor.executeInNamespace(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+    }
+
+    /**
+     * Rewrites container-side /workspace paths to the actual host workspaceRoot.
+     * Only needed for NONE/NAMESPACE strategies where execution is NOT inside a container.
+     * Podman mounts workspaceRoot as /workspace itself, so no rewriting needed there.
+     */
+    private List<String> rewriteContainerPaths(List<String> command, Path workspaceRoot) {
+        String hostPath = workspaceRoot.toAbsolutePath().toString()
+                .replace("\\", "/");   // normalize Windows backslashes → forward slashes
+        return command.stream()
+                .map(arg -> arg.replace("/workspace", hostPath))
+                .toList();
     }
 }

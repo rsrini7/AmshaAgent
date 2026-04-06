@@ -19,10 +19,10 @@ You are given:
 * A SINGLE large .txt file containing ALL Java source code (NO tests, NO markdown, NO configs)
 * System is already:
 
-  * 887 tests passing (tests not provided)
-  * 99% accuracy across REST, Telegram, Chat
+  * 967+ tests passing (tests not provided)
+  * 95%+ accuracy across REST, Telegram, Chat, Web
   * Verified across Windows, Linux (WSL2), Mac
-* Several fixes already done up to Phase 66+
+* Several enhancements and fixes already done up to Phase P79
 
 Assume:
 
@@ -192,4 +192,43 @@ Each issue must include:
 
 * What still remains weak
 * What is missing vs elite systems
+
+# 4. Future Phases
+
+- **Phase 80** - Current Review fixes without breaking existing functionality
+- **Phase 81** — New phase: `arcclaw-onboarding` backend now returns JSON (no Qute), paired with `arc-onboarding.ts` Lit component. Credentials still go through `SecretVault`, `@SessionScoped` step-guard still enforced
+- **Phase 82** — New phase: Playwright browser tool, opt-in via config, `requiresSandbox=true`, URL scheme validation, content truncation
+
+# 5. Prompt Template for Phase 80
+
+# PROMPT — PHASE <number>-A: ...... (Tier A)
+
+Role: Senior Java Architect, Bug Fixer & Senior Java Developer  
+Task: Phase <number>-A — Fix X confirmed correctness defects in live production code.  
+All bugs below exist today. No architectural changes. Surgical fixes only.
+
+---
+
+## Architecture Context and Other References
+Refer @Architecture_Invariants.md
+
+---
+
+## IMPLEMENTATION REQUIREMENTS
+
+### Common Requirements
+
+1. Every fix must be accompanied by a test that proves the bug existed and now does not.
+2. No new dependencies. No structural package changes.
+3. All existing 967+ tests must remain green after every component.
+4. Use `static final Pattern` for any new regex — never compiled inline.
+5. All fixes must be safe under JDK 25 (no preview features).
+6. Test commands always use `clean` to prevent stale class false-negatives.
+
+---
+
+### Component A1 — ...
+
+so on..
+
 

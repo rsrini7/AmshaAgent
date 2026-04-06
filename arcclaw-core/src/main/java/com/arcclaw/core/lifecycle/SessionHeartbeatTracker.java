@@ -20,7 +20,13 @@ public class SessionHeartbeatTracker {
 
     private static final Logger log = Logger.getLogger(SessionHeartbeatTracker.class);
 
-    public record SessionMetadata(Instant lastHeartbeat, AutonomyLevel autonomyLevel, String ownerKeyName) {}
+    public record SessionMetadata(
+        Instant lastHeartbeat,
+        AutonomyLevel autonomyLevel,
+        String ownerKeyName,
+        long totalInputTokens,
+        long totalOutputTokens
+    ) {}
 
     /** Active session metadata: sessionId → last heartbeat + autonomyLevel. */
     private final ConcurrentHashMap<String, SessionMetadata> sessionData = new ConcurrentHashMap<>();
@@ -41,7 +47,9 @@ public class SessionHeartbeatTracker {
         // Preserve existing owner — heartbeat ticks must NOT erase ownership
         SessionMetadata existing = sessionData.get(sessionId);
         String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
-        sessionData.put(sessionId, new SessionMetadata(Instant.now(), level, existingOwner));
+        long existingIn  = (existing != null) ? existing.totalInputTokens()  : 0L;
+        long existingOut = (existing != null) ? existing.totalOutputTokens() : 0L;
+        sessionData.put(sessionId, new SessionMetadata(Instant.now(), level, existingOwner, existingIn, existingOut));
         log.debugf("Heartbeat recorded for session=%s autonomy=%s", sessionId, level);
     }
 
@@ -101,7 +109,9 @@ public class SessionHeartbeatTracker {
     public void injectHeartbeat(String sessionId, Instant timestamp) {
         SessionMetadata existing = sessionData.get(sessionId);
         String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
-        sessionData.put(sessionId, new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED, existingOwner));
+        long existingIn  = (existing != null) ? existing.totalInputTokens()  : 0L;
+        long existingOut = (existing != null) ? existing.totalOutputTokens() : 0L;
+        sessionData.put(sessionId, new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED, existingOwner, existingIn, existingOut));
         log.debugf("Heartbeat injected for session=%s timestamp=%s", sessionId, timestamp);
     }
 
@@ -111,8 +121,28 @@ public class SessionHeartbeatTracker {
      */
     public void bindOwner(String sessionId, String ownerKeyName) {
         sessionData.computeIfPresent(sessionId, (k, existing) ->
-            new SessionMetadata(existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName));
+            new SessionMetadata(existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName, 
+            existing.totalInputTokens(), existing.totalOutputTokens() ));
         log.debugf("Owner bound for session=%s owner=%s", sessionId, ownerKeyName);
+    }
+
+    public void recordTokens(String sessionId, long inputTokens, long outputTokens) {
+        sessionData.computeIfPresent(sessionId, (k, existing) ->
+            new SessionMetadata(
+                existing.lastHeartbeat(),
+                existing.autonomyLevel(),
+                existing.ownerKeyName(),
+                inputTokens,
+                outputTokens
+            )
+        );
+    }
+
+    public long[] getTokens(String sessionId) {
+        SessionMetadata data = sessionData.get(sessionId);
+        return data != null
+            ? new long[]{data.totalInputTokens(), data.totalOutputTokens()}
+            : new long[]{0L, 0L};
     }
 
     /**

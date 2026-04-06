@@ -24,6 +24,7 @@ import io.quarkus.websockets.next.OnOpen;
 import io.quarkus.websockets.next.OnTextMessage;
 import io.quarkus.websockets.next.WebSocket;
 import io.quarkus.websockets.next.WebSocketConnection;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
@@ -43,9 +44,32 @@ public class WebChatEndpoint {
     @Inject WorkspaceManager workspaceManager;
     @Inject ManagedExecutor executor;
     @Inject SessionIdResolver sessionIdResolver;
+    @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
+    boolean requireAuth;
+
+    @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
+    String internalKey;
+
+    @ConfigProperty(name = "arcclaw.api.keys.ci-pipeline", defaultValue = "key-ci-changeme")
+    String ciKey;
 
     @OnOpen
     public void onOpen(WebSocketConnection conn) {
+        if (requireAuth) {
+            String apiKey = conn.handshakeRequest().header("X-ArcClaw-API-Key");
+            // Some websockets pass auth via subprotocol if browser doesn't support custom headers
+            if (apiKey == null || apiKey.isBlank()) {
+                apiKey = conn.handshakeRequest().header("Sec-WebSocket-Protocol");
+            }
+            if (!internalKey.equals(apiKey) && !ciKey.equals(apiKey)) {
+                log.warnf("WebSocket rejected: invalid API key from connId=%s", conn.id());
+                // We must send error then close
+                conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid API key\"}");
+                conn.close();
+                return;
+            }
+        }
+
         // platformId is the stable per-connection identity (channelId + userId)
         String platformId = UUID.randomUUID().toString();
         connectionToSession.put(conn.id(), platformId);

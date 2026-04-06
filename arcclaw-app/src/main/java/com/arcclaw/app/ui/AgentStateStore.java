@@ -23,7 +23,8 @@ public class AgentStateStore {
         currentStates.put(key, new AgentState(
             event.agentName(),
             event.newStatus(),
-            event.currentTask()
+            event.currentTask(),
+            event.sessionId()
         ));
     }
 
@@ -31,5 +32,5 @@ public class AgentStateStore {
         return currentStates.values();
     }
 
-    public record AgentState(String name, String status, String currentTask) {}
+    public record AgentState(String name, String status, String currentTask, String sessionId) {}
 }

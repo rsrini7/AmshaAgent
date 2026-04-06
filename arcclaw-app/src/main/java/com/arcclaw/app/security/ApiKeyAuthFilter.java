@@ -1,6 +1,7 @@
 package com.arcclaw.app.security;
 
 import java.time.Clock;
+import java.util.Set;
 
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -43,12 +44,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         long startTime = System.currentTimeMillis();
         String path = uriInfo.getPath();
 
-        // /info endpoint is intentionally public — no auth required
         if (path.startsWith("/info") || path.startsWith("/api/v1/info")) {
             return;
         }
 
+        // Header first; fall back to query param for SSE/EventSource (browsers cannot set headers)
         String apiKey = requestContext.getHeaderString(HttpConstants.X_ARCCLAW_API_KEY);
+        if (apiKey == null || apiKey.isBlank()) {
+            apiKey = uriInfo.getQueryParameters().getFirst("key");
+        }
+
         String safeKey = apiKey != null
             ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****"
             : "null";
@@ -83,19 +88,25 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // Push user identifier to MDC for Audit logs to pick up
         String userId = apiKeyRegistry.getKeyName(apiKey);
         if (userId != null) {
             MDC.put(MdcKeys.USER_ID, userId);
         }
-        
+
         logAudit(safeKey, path, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
     }
 
+    private static final Set<String> SILENT_POLL_PATHS = Set.of(
+        "/hitl", "/agents", "/skills", "/tools"
+    );
+
     private void logAudit(String key, String endpoint, String method, String status, String ip, long durationMs) {
         String msg = String.format("[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d", key, endpoint, method, status, ip, durationMs);
-        if ("ACCEPTED".equals(status)) {
-            log.info(msg);
+        boolean isSilentPoll = "ACCEPTED".equals(status) 
+                                && SILENT_POLL_PATHS.stream().anyMatch(endpoint::startsWith);
+
+        if (isSilentPoll) {
+            log.trace(msg);
         } else {
             log.warn(msg);
         }

@@ -19,7 +19,7 @@ class AgentStatusResourceTest {
     @Test
     void testListAgents() {
         when(stateStore.getAll()).thenReturn(List.of(
-            new AgentStateStore.AgentState("coordinator", "idle", "none")
+            new AgentStateStore.AgentState("coordinator", "idle", "none","sessionid")
         ));
 
         given()

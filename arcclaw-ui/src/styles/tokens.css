@@ -1,0 +1,57 @@
+:host {
+  /* Core Tokens */
+  --bg-base: #0a0b0f;
+  --bg-surface: #111318;
+  --bg-elevated: #1a1d26;
+  --accent: #6c63ff;
+  --accent-glow: rgba(108,99,255,0.18);
+  --accent-secondary: #00d4aa;
+  --border: rgba(255,255,255,0.07);
+  --text-primary: #e8eaf0;
+  --text-muted: #6b7280;
+  --radius: 12px;
+  
+  /* Mapping to existing variables for compatibility during transition */
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: #818cf8;
+  --color-success: var(--accent-secondary);
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: var(--accent);
+
+  /* Chat Specific */
+  --color-user-bubble: var(--accent);
+  --color-assistant-bubble: var(--bg-elevated);
+  
+  /* Typography */
+  --font-family: 'Inter', system-ui, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition: 150ms ease;
+}

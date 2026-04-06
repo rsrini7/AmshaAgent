@@ -22,7 +22,7 @@ public class ToolRegistryResource {
     @GET
     public Response listTools() {
         return Response.ok(
-            toolRegistry.listTools()
+            toolRegistry.listToolDescriptors()
         ).build();
     }
 }

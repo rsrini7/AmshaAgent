@@ -129,13 +129,14 @@ public class DenyReflex implements AgentReflex {
                 }
 
                 // 5. No session checkpoint — guide user to pending cron tasks
-                List<AgentCronEntity> pending = cronRepository.findAwaitingApprovalByUserId(userId);
+                List<AgentCronEntity> pending =
+                    cronRepository.findAwaitingApprovalByUserId(userId);
                 if (pending.size() == 1) {
                     AgentCronEntity cron = pending.getFirst();
                     return "⚠️ No active denial in this chat session.\n\n" +
-                           "A background task is waiting:\n" +
-                           "• " + cron.goal + "\n\n" +
-                           "Use: `/deny " + cron.id + "` to cancel it.";
+                        "A background task is waiting:\n" +
+                        "• " + cron.goal + "\n\n" +
+                        "Use: `/deny " + cron.id + "` to cancel it.";
                 } else if (pending.size() > 1) {
                     String list = pending.stream()
                             .map(c -> "• `/deny " + c.id + "` — " + c.goal)
