@@ -184,6 +184,13 @@
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-channel-web</artifactId>
     </dependency>
+
+    <!-- Onboarding wizard REST API -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-onboarding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.camel.quarkus</groupId>
       <artifactId>camel-quarkus-core</artifactId>

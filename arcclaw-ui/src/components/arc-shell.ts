@@ -13,13 +13,13 @@ import './arc-skills-panel';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
-  @state() private _apiKey = '';
+  @state() private _apiKey = localStorage.getItem('arc-api-key') || '';
   @state() private _sessionId = '';
 
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = window.location.hash || '#/onboarding';
+  @state() private _route = window.location.hash || (localStorage.getItem('arc-api-key') ? '#/chat' : '#/onboarding');
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
@@ -49,6 +49,17 @@ export class ArcShell extends LitElement {
         window.location.hash = '#/onboarding';
       }
     });
+
+    const storedKey = localStorage.getItem('arc-api-key');
+    if (storedKey) {
+      this._client = new ArcClient('/api/v1', storedKey);
+      this.updateComplete.then(() => {
+        this._fetchAgents();
+        this._fetchApprovals();
+        this._startSse();
+        this._startPolling();
+      });
+    }
   }
 
   disconnectedCallback() {
@@ -57,8 +68,11 @@ export class ArcShell extends LitElement {
     this._sseManager?.disconnect();
   }
 
-  private _onApiKeySet(e: CustomEvent<{ apiKey: string }>) {
-    this._apiKey = e.detail.apiKey;
+  private _onApiKeySet(e: CustomEvent<{ key: string }>) {
+    const key = e.detail.key;
+    
+    this._apiKey = key;
+    localStorage.setItem('arc-api-key', key);
     this._client = new ArcClient('/api/v1', this._apiKey);
     window.location.hash = '#/chat';
     

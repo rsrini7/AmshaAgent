@@ -23,8 +23,8 @@ This directory contains 15 `.http` files covering every REST API surface of ArcC
 
 ```env
 ARCCLAW_LLM_API_KEY=gsk_...
-ARCCLAW_API_KEY_INTERNAL=key-internal-changeme
-ARCCLAW_API_KEY_CI=key-ci-changeme
+ARCCLAW_API_KEYS_INTERNAL=key-internal-changeme
+ARCCLAW_API_KEYS_CI=key-ci-changeme
 ARCCLAW_VAULT_PEPPER=<32+ char string>
 ARCCLAW_AUDIT_HMAC_KEY=<32+ char string>
 ARCCLAW_SQLITE_VEC_PATH=../lib/vec0         # dev mode

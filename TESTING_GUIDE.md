@@ -98,7 +98,7 @@ When the `%test` profile is active:
 - Context compaction is disabled (`arcclaw.skills.hot-reload: false`)
 - Vault uses a fixed test pepper (`test-pepper-do-not-use-in-production`)
 - Sandbox strategy is `NONE` (direct execution, no Podman)
-- `ARCCLAW_API_KEY_INTERNAL=test-key-internal` (set in `application.yaml %test` block)
+- `ARCCLAW_API_KEYS_INTERNAL=test-key-internal` (set in `application.yaml %test` block)
 - `DevSecretSeederStartup` bean is absent — it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
 ### 1.6 Target: 535+ green, 0 failures
@@ -115,8 +115,8 @@ For REST client testing (manual), start the app in dev or serve mode with a `.en
 
 ```env
 ARCCLAW_LLM_API_KEY=gsk_your_groq_key
-ARCCLAW_API_KEY_INTERNAL=key-internal-changeme
-ARCCLAW_API_KEY_CI=key-ci-changeme
+ARCCLAW_API_KEYS_INTERNAL=key-internal-changeme
+ARCCLAW_API_KEYS_CI=key-ci-changeme
 ARCCLAW_VAULT_PEPPER=test-pepper-32-chars-min-xxxxxxxxxx
 ARCCLAW_AUDIT_HMAC_KEY=test-hmac-key-32-chars-min-xxxxxxx
 ARCCLAW_DATA_DIR=./data
@@ -2014,7 +2014,7 @@ openssl rand -base64 32 | tr '+/' '-_' | awk '{print "key-" $0}'
 "key-" + [System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).Replace('+','-').Replace('/','_')
 ```
 
-Set the output as `ARCCLAW_API_KEY_INTERNAL=<value>` in `.env`.
+Set the output as `ARCCLAW_API_KEYS_INTERNAL=<value>` in `.env`.
 
 For `ARCCLAW_VAULT_PEPPER` and `ARCCLAW_AUDIT_HMAC_KEY`, use stable 32+ character values that **never change after first deployment**:
 

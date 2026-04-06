@@ -276,7 +276,7 @@ This section becomes the system prompt injected into the agent for matching mess
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/skills \
-  -H "X-ArcClaw-API-Key: $ARCCLAW_API_KEY_INTERNAL" \
+  -H "X-ArcClaw-API-Key: $ARCCLAW_API_KEYS_INTERNAL" \
   -H "Content-Type: text/plain" \
   --data-binary @my-skill.md
 ```

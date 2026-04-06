@@ -60,20 +60,20 @@ public class CliUtils {
             "WARNING: Never change this after first boot - it signs your audit trail."
         ),
         new VarSpec(
-            "ARCCLAW_API_KEY_INTERNAL",
+            "ARCCLAW_API_KEYS_INTERNAL",
             "Bearer token for ArcClaw's REST API (used in Authorization: Bearer <token> header).",
             "Generate a strong random key with:",
             "  Linux/macOS:  openssl rand -base64 32",
             "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
-            "Then add:  ARCCLAW_API_KEY_INTERNAL=<generated value>"
+            "Then add:  ARCCLAW_API_KEYS_INTERNAL=<generated value>"
         ),
         new VarSpec(
-            "ARCCLAW_API_KEY_CI",
+            "ARCCLAW_API_KEYS_CI",
             "CI/CD API key for pipeline smoke tests (read-only).",
             "Generate a strong random key with:",
             "  Linux/macOS:  openssl rand -base64 32",
             "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
-            "Then add:  ARCCLAW_API_KEY_CI=<generated value>"
+            "Then add:  ARCCLAW_API_KEYS_CI=<generated value>"
         ),
         new VarSpec(
             "ARCCLAW_EMBED_API_KEY",

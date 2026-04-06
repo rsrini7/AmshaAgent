@@ -8,6 +8,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/onboarding': {
+        target: 'http://localhost:8080/api/v1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/onboarding/, ''),
+      },
       '/ws': {
         target: 'ws://localhost:8080',
         ws: true,

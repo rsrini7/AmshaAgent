@@ -1153,8 +1153,8 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama) |
 | `ARCCLAW_VAULT_PEPPER` | ✅ | — | Server-side pepper for Argon2id KDF (≥32 random chars). If lost, all vault secrets are unrecoverable. Never change after first boot. |
 | `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | — | HMAC key for the audit log integrity chain (≥32 random chars). Never change after first boot. |
-| `ARCCLAW_API_KEY_INTERNAL` | ✅ | — | Primary REST API key (`X-ArcClaw-API-Key` header) |
-| `ARCCLAW_API_KEY_CI` | no | — | Optional secondary REST API key for CI pipelines |
+| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | — | Primary REST API key (`X-ArcClaw-API-Key` header) |
+| `ARCCLAW_API_KEYS_CI` | no | — | Optional secondary REST API key for CI pipelines |
 | `ARCCLAW_EMBED_API_KEY` | ✅ | — | API key for the embedding provider (default: Jina AI, starts with `jina_`) |
 | `ARCCLAW_DATA_DIR` | no | `./data` | Directory where ArcClaw stores SQLite databases and state files |
 | `ARCCLAW_TELEGRAM_ENABLED` | no | `false` | Set `true` to activate the Telegram channel daemon |

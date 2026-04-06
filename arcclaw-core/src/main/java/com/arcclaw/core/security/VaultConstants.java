@@ -29,4 +29,19 @@ public final class VaultConstants {
      * System-level key for Serper web search API key.
      */
     public static final String SERPER_API_KEY = "serper-api-key";
+
+    /**
+     * System-level key for System Prompt.
+     */
+    public static final String SYSTEM_PROMPT_KEY = "system.prompt";
+
+    /**
+     * Key for LLM API Key.
+     */
+    public static final String LLM_API_KEY = "llm.api.key";
+
+    /**
+     * Key for LLM Provider (openai, groq, etc.).
+     */
+    public static final String LLM_PROVIDER_KEY = "llm.provider.key";
 }

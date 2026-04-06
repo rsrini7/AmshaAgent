@@ -180,7 +180,7 @@ if ($provider -eq 'openrouter' -and [string]::IsNullOrEmpty($vars['OPENROUTER_AP
 if ($provider -eq 'openai'     -and [string]::IsNullOrEmpty($vars['OPENAI_API_KEY']))     { $issues += "OPENAI_API_KEY is required for provider: $provider" }
 if ($vars['ARCCLAW_VAULT_PEPPER']     -like '*changeme*') { $issues += 'ARCCLAW_VAULT_PEPPER is still a placeholder' }
 if ($vars['ARCCLAW_AUDIT_HMAC_KEY']   -like '*changeme*') { $issues += 'ARCCLAW_AUDIT_HMAC_KEY is still a placeholder' }
-if ($vars['ARCCLAW_API_KEY_INTERNAL'] -like '*changeme*') { $issues += 'ARCCLAW_API_KEY_INTERNAL is still a placeholder' }
+if ($vars['ARCCLAW_API_KEYS_INTERNAL'] -like '*changeme*') { $issues += 'ARCCLAW_API_KEYS_INTERNAL is still a placeholder' }
 if ($issues.Count -gt 0) {
     Write-Host '⚠️   Issues found in .env:'
     $issues | ForEach-Object { Write-Host "    - $_" }

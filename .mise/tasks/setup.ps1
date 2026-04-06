@@ -37,8 +37,8 @@ if (-not (Test-Path $envPath)) {
     # Append-style would leave duplicate keys if .env.example had changeme values.
     Set-EnvLine $envPath 'ARCCLAW_VAULT_PEPPER'     (New-RandomBase64)
     Set-EnvLine $envPath 'ARCCLAW_AUDIT_HMAC_KEY'   (New-RandomBase64)
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_INTERNAL' (New-RandomBase64)
-    Set-EnvLine $envPath 'ARCCLAW_API_KEY_CI'       (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_INTERNAL' (New-RandomBase64)
+    Set-EnvLine $envPath 'ARCCLAW_API_KEYS_CI'       (New-RandomBase64)
     Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEYS`n"
 
     # ── FIX Bug 4: call shared wizard via $PSScriptRoot, not a bare relative path
