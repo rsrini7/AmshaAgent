@@ -12,6 +12,7 @@ import java.util.Base64;
 import java.util.regex.Pattern;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import io.quarkus.runtime.Startup;
+import io.quarkus.scheduler.Scheduled;
 
 @Startup
 @ApplicationScoped
@@ -54,6 +55,15 @@ public class PlaywrightPageRunner {
         if (playwright != null) playwright.close();
     }
 
+    @Scheduled(every = "6h")
+    void refreshBrowser() {
+        log.info("Playwright browser refresh");
+        if (browser != null) browser.close();
+        browser = playwright.chromium().launch(
+            new BrowserType.LaunchOptions().setHeadless(headless)
+        );
+    }
+
     /**
      * Launches a fresh Chromium browser context, navigates to url, returns result.
      * Each call creates and destroys its own Playwright + Browser instance — no shared state.
@@ -79,38 +89,38 @@ public class PlaywrightPageRunner {
             Page page = context.newPage();
             page.setDefaultNavigationTimeout(timeoutMs);
 
-                // Navigate and verify HTTP status — silent 4xx/5xx returns error HTML without this
-                long tNav = System.currentTimeMillis();
-                Response response = page.navigate(url);
-                log.debugf("Navigation completed in %dms (status=%s)",
-                        System.currentTimeMillis() - tNav,
-                        response != null ? String.valueOf(response.status()) : "null");
+            // Navigate and verify HTTP status — silent 4xx/5xx returns error HTML without this
+            long tNav = System.currentTimeMillis();
+            Response response = page.navigate(url);
+            log.debugf("Navigation completed in %dms (status=%s)",
+                    System.currentTimeMillis() - tNav,
+                    response != null ? String.valueOf(response.status()) : "null");
 
-                if (response != null && !response.ok()) {
-                    throw new PlaywrightException(
-                        "Navigation returned HTTP " + response.status() +
-                        " " + response.statusText() + " for: " + url);
-                }
+            if (response != null && !response.ok()) {
+                throw new PlaywrightException(
+                    "Navigation returned HTTP " + response.status() +
+                    " " + response.statusText() + " for: " + url);
+            }
 
-                // Wait for network idle with SHORT timeout — content is already usable at LOAD.
-                // Sites with persistent polling (analytics, WebSockets) will always time out here;
-                // that's fine — we degrade gracefully.
+            // Wait for network idle with SHORT timeout — content is already usable at LOAD.
+            // Sites with persistent polling (analytics, WebSockets) will always time out here;
+            // that's fine — we degrade gracefully.
+            try {
+                page.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(NETWORK_IDLE_TIMEOUT_MS));
+                log.debugf("NETWORKIDLE reached for: %s", url);
+            } catch (TimeoutError e) {
+                log.debugf("NETWORKIDLE timeout (%dms) for %s — falling back to LOAD state",
+                        NETWORK_IDLE_TIMEOUT_MS, url);
+                // Safety timeout on fallback — LOAD should already be achieved (navigate waits for it),
+                // but we add a bounded wait to prevent any open-ended blocking.
                 try {
-                    page.waitForLoadState(LoadState.NETWORKIDLE,
-                        new Page.WaitForLoadStateOptions().setTimeout(NETWORK_IDLE_TIMEOUT_MS));
-                    log.debugf("NETWORKIDLE reached for: %s", url);
-                } catch (TimeoutError e) {
-                    log.debugf("NETWORKIDLE timeout (%dms) for %s — falling back to LOAD state",
-                            NETWORK_IDLE_TIMEOUT_MS, url);
-                    // Safety timeout on fallback — LOAD should already be achieved (navigate waits for it),
-                    // but we add a bounded wait to prevent any open-ended blocking.
-                    try {
-                        page.waitForLoadState(LoadState.LOAD,
-                            new Page.WaitForLoadStateOptions().setTimeout(LOAD_FALLBACK_TIMEOUT_MS));
-                    } catch (TimeoutError loadTimeout) {
-                        log.warnf("LOAD fallback also timed out for %s — proceeding with partial content", url);
-                    }
+                    page.waitForLoadState(LoadState.LOAD,
+                        new Page.WaitForLoadStateOptions().setTimeout(LOAD_FALLBACK_TIMEOUT_MS));
+                } catch (TimeoutError loadTimeout) {
+                    log.warnf("LOAD fallback also timed out for %s — proceeding with partial content", url);
                 }
+            }
 
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
