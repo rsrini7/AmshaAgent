@@ -48,8 +48,9 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @Override
     public boolean requiresSandbox() {
-        // Run inside Podman when sandbox is active; degrades to host execution when unavailable
-        return true;
+        // Podman not available in dev — runs on host directly.
+        // Flip to true and implement sandboxCommand() when Podman is set up.
+        return false;
     }
 
     @Override
