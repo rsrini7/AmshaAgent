@@ -24,13 +24,13 @@ public class ModelProducer {
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.base-url",
                 defaultValue = "https://api.groq.com/openai/v1")
-    String openaiBaseUrl;
+    String intentBaseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key",
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.api-key",
                     defaultValue = "not-configured")
-    String openaiApiKey;
+    String intentApiKey;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.model",
                     defaultValue = "llama-3.1-8b-instant")
@@ -61,7 +61,7 @@ public class ModelProducer {
         log.infof("ModelProducer intent-classifier provider=%s model=%s",
                   provider, intentModelName);
         return modelFactory.createModel(
-            provider, openaiBaseUrl, openaiApiKey,
+            provider, intentBaseUrl, intentApiKey,
             intentModelName, 10, Duration.ofSeconds(timeoutSeconds),
             maxRetries, ollamaBaseUrl, ollamaModelId);
     }
