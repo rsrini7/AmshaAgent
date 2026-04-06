@@ -78,6 +78,24 @@ public class ToolStepHandler {
 
         String toolName = step.action();
 
+        // Rescue: LLM hallucinated a tool named "finish" with a valid answer payload.
+        // Rewrite as a proper FINISH step. AgentStateMachineRunner post-validateTool
+        // FINISH re-check will route it to handleFinishAction.
+        if (ReasoningStep.FINISH.equalsIgnoreCase(toolName)
+                && step.actionInput() != null
+                && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            log.infof("[ToolStepHandler] Rescued hallucinated 'finish' tool → converting to FINISH for session %s",
+                    context.sessionId());
+            ReasoningStep rescued = ReasoningStep.pending(
+                step.thought(),
+                ReasoningStep.FINISH,
+                Map.copyOf(step.actionInput()),
+                step.inputTokens(),
+                step.outputTokens()
+            );
+            return StepDecision.proceed(rescued);
+        }
+
         // ── TOOL-GUARD: coordinator calling github directly
         // FIX §1: Silently rewrite github → delegate_to_agent instead of
         // returning retryEngine(hint). Hint-based redirect requires LLM compliance —
@@ -113,14 +131,10 @@ public class ToolStepHandler {
                     toolName,
                     step.actionInput() != null ? step.actionInput() : Map.of());
 
-                ReasoningStep delegateStep = new ReasoningStep(
+                ReasoningStep delegateStep = ReasoningStep.pending(
                     step.thought(),
                     ToolCapability.DELEGATE_TO_AGENT.toolName(),
-                    // FIX §2: key is "agent", NOT "role" — DelegateToAgentTool.execute()
-                    // calls params.get("agent"). Using "role" caused
-                    // "Parameter 'agent' is required." on every resume.
                     Map.of("agent", "researcher", "goal", delegateGoal),
-                    null,
                     0, 0
                 );
                 return StepDecision.proceedWithFailures(delegateStep, consecutiveFailures);

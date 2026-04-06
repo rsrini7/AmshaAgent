@@ -12,6 +12,7 @@ public enum SecurityEventType {
 
     // Tool layer
     TOOL_INVOKED,          // every ToolRegistry.invokeTool() call
+    TOOL_EXECUTED,         // recorded at the end of tool execution
     TOOL_BLOCKED,          // SecurityException from autonomy check
 
     // Approval flow
@@ -54,7 +55,10 @@ public enum SecurityEventType {
     SKILL_REFRESHED,    // Manual refresh via GET /api/v1/skills/refresh
     MCP_TOOL_INVOKED,   // External call to an internal tool via MCP server
     STRUCTURED_OUTPUT_RETRY, // Single-retry path for schema-correction
-    DELEGATE_APPROVAL;  // Admin approved on behalf of another user. §7.33
+    DELEGATE_APPROVAL,  // Admin approved on behalf of another user. §7.33
+
+    // Session isolation (Per-key isolation)
+    UNAUTHORIZED_ACCESS; // Cross-key session access attempt blocked
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -63,9 +67,10 @@ public enum SecurityEventType {
      */
     public boolean isMandatory() {
         return switch (this) {
-            case VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
+            case VAULT_ACCESS, TOOL_INVOKED, TOOL_EXECUTED, BUDGET_EXCEEDED,
                  PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
-                 CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED, DELEGATE_APPROVAL -> true;
+                 CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED, DELEGATE_APPROVAL,
+                 UNAUTHORIZED_ACCESS -> true;
             default -> false;
         };
     }

@@ -15,9 +15,9 @@ class AgentResultFormatterHitlTextTest {
         String toolName = "parallel:github,weather";
         String params = "{\"q\":\"London\"}";
         
-        // AwaitingApproval(toolName, paramsJson, sessionId, steps, inputTokens, outputTokens)
-        AgentResult.AwaitingApproval awaiting = new AgentResult.AwaitingApproval(
-            toolName, params, "sess-123", List.of(), 0, 0);
+        // AwaitingApproval(toolName, paramsJson, sessionId, steps)
+        AgentResult awaiting = AgentResult.awaitingApproval(
+            toolName, params, "sess-123", List.of());
         String output = AgentResultFormatter.format(awaiting);
         
         // No bold markers
@@ -36,8 +36,8 @@ class AgentResultFormatterHitlTextTest {
 
     @Test
     void formatHitlMessage_singleTool_isPlainText() {
-        AgentResult.AwaitingApproval awaiting = new AgentResult.AwaitingApproval(
-            "github", "{\"cmd\":\"ls\"}", "sess-456", List.of(), 0, 0);
+        AgentResult awaiting = AgentResult.awaitingApproval(
+            "github", "{\"cmd\":\"ls\"}", "sess-456", List.of());
         String output = AgentResultFormatter.format(awaiting);
         
         assertFalse(output.contains("`/approve`"), "Single tool HITL should not have backticks");

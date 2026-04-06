@@ -23,6 +23,7 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
@@ -75,6 +76,9 @@ class AgentSessionServiceTest {
     @Mock
     Logger log;
 
+    @Mock
+    AuditService auditService;
+
     AgentSessionService service;
 
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
@@ -84,7 +88,7 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, vThreads);
+                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, auditService, vThreads);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
@@ -110,9 +114,30 @@ class AgentSessionServiceTest {
 
     @Test
     void testCreateSession_recordsHeartbeatAndReturnsId() {
+        org.jboss.logging.MDC.remove(com.arcclaw.core.util.MdcKeys.USER_ID);
         String sessionId = service.createSession(AutonomyLevel.FULL);
         assertNotNull(sessionId);
         verify(heartbeatTracker).recordHeartbeat(sessionId, AutonomyLevel.FULL);
+    }
+
+    @Test
+    void testCreateSession_withMdcUserId_bindsOwner() {
+        org.jboss.logging.MDC.put(com.arcclaw.core.util.MdcKeys.USER_ID, "key-owner-123");
+        try {
+            String sessionId = service.createSession(AutonomyLevel.FULL);
+            assertNotNull(sessionId);
+            verify(heartbeatTracker).bindOwner(sessionId, "key-owner-123");
+        } finally {
+            org.jboss.logging.MDC.remove(com.arcclaw.core.util.MdcKeys.USER_ID);
+        }
+    }
+
+    @Test
+    void testCreateSession_withoutMdcUserId_doesNotBindOwner() {
+        org.jboss.logging.MDC.remove(com.arcclaw.core.util.MdcKeys.USER_ID);
+        String sessionId = service.createSession(AutonomyLevel.SUPERVISED);
+        assertNotNull(sessionId);
+        verify(heartbeatTracker, org.mockito.Mockito.never()).bindOwner(anyString(), anyString());
     }
 
     @Test

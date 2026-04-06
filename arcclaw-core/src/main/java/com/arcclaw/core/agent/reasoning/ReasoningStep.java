@@ -34,6 +34,8 @@ public record ReasoningStep(
     /** Action value indicating a system-level observation (e.g. error) needs LLM correction. */
     public static final String OBSERVE = "OBSERVE";
 
+    public static final String ACTION_INPUT_ANSWER_KEY = "answer";
+
     /**
      * Sentinel action for a parallel LLM turn (N tool calls in one response).
      * actionInput.get("batch") contains the JSON-serialized List<ParallelToolCall>
@@ -91,5 +93,11 @@ public record ReasoningStep(
     public ReasoningStep withObservation(String observation) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
                 this.outputTokens);
+    }
+
+    /** Mapping factory: constructs a ReasoningStep from all its constituent fields. */
+    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
+            int inputTk, int outputTk) {
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk);
     }
 }

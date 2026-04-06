@@ -42,7 +42,7 @@ public record AgentRoleEnum(String id) {
             "researcher",
             "Saraswati (Researcher)",
             "Perform information retrieval, web searches, and documentation lookups.",
-            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH), Set.of("saraswati")
+            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER), Set.of("saraswati")
         ),
         "coder", new RoleDefinition(
             "coder",

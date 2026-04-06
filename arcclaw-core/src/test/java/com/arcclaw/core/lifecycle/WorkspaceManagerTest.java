@@ -69,7 +69,7 @@ class WorkspaceManagerTest {
     void testZombieRecoveryMarksInProgressAsFailed() {
         // Arrange: create an IN_PROGRESS checkpoint (simulates a crash)
         WorkspaceScopeHolder.run("zombie-session-1", () -> {
-            var steps = List.of(new ReasoningStep("thinking", "action", Map.of(), null, 0, 0));
+            var steps = List.of(ReasoningStep.pending("thinking", "action", Map.of()));
             agentStore.save("zombie-session-1", "coordinator", steps);
         });
 
@@ -105,7 +105,7 @@ class WorkspaceManagerTest {
 
         // Arrange: create a checkpoint for this session
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var steps = List.of(new ReasoningStep("step1", "action1", Map.of(), null, 0, 0));
+            var steps = List.of(ReasoningStep.pending("step1", "action1", Map.of()));
             agentStore.save(sessionId, "debugger", steps);
         });
 
@@ -139,9 +139,9 @@ class WorkspaceManagerTest {
         // Arrange: create checkpoints for multiple agent roles
         WorkspaceScopeHolder.run(sessionId, () -> {
             agentStore.save(sessionId, "coordinator",
-                    List.of(new ReasoningStep("t1", "a1", Map.of(), null, 0, 0)));
+                    List.of(ReasoningStep.pending("t1", "a1", Map.of())));
             agentStore.save(sessionId, "debugger",
-                    List.of(new ReasoningStep("t2", "a2", Map.of(), null, 0, 0)));
+                    List.of(ReasoningStep.pending("t2", "a2", Map.of())));
         });
 
         // Act
@@ -168,7 +168,7 @@ class WorkspaceManagerTest {
         // Arrange: create and mark COMPLETED
         WorkspaceScopeHolder.run(sessionId, () -> {
             var cp = agentStore.save(sessionId, "researcher",
-                    List.of(new ReasoningStep("done", "FINISH", Map.of("answer", "42"), "Task completed.", 0, 0)));
+                    List.of(ReasoningStep.of("done", "FINISH", Map.of("answer", "42"), "Task completed.", 0, 0)));
             agentStore.markCompleted(cp.getId());
         });
 
@@ -192,7 +192,7 @@ class WorkspaceManagerTest {
         String sessionId = "zombie-approval-1";
         String agentRole = "coordinator";
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var steps = List.of(new ReasoningStep("thought", "action", Map.of(), null, 0, 0));
+            var steps = List.of(ReasoningStep.pending("thought", "action", Map.of()));
             var _ = agentStore.save(sessionId, agentRole, steps);
 
             // Wait for background audit write from save() to finish

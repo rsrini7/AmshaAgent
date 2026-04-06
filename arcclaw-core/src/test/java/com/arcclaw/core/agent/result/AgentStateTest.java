@@ -14,7 +14,7 @@ class AgentStateTest {
 
     @Test
     void testAwaitingApprovalToResult() {
-        ReasoningStep step = new ReasoningStep("thought", "tool", null, "obs", 0, 0);
+        ReasoningStep step = ReasoningStep.pending("thought", "tool", null, 0, 0).withObservation("obs");
         AgentState.AwaitingApproval state = new AgentState.AwaitingApproval("myTool", "{\"p\":1}", List.of(step));
         
         AgentResult result = state.toResult("session-123");

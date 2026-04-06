@@ -373,7 +373,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     private ReasoningStep mapToReasoningStep(ReasoningStepEntity entity) {
-        return new ReasoningStep(
+        return ReasoningStep.of(
                 deserialize(entity.getThoughtJson(), String.class),
                 entity.getAction(),
                 deserialize(entity.getActionInputJson(),

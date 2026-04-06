@@ -13,12 +13,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -80,8 +82,9 @@ public class ChatCommandApprovalTest {
 
         // Mock AgentLoop to return AwaitingApproval
         String longParams = "{\"key\": \"" + "a".repeat(250) + "\"}";
-        AgentResult.AwaitingApproval awaiting = new AgentResult.AwaitingApproval(
-                "test-tool", longParams, "session-123", List.of(), 10, 10
+        AgentResult awaiting = AgentResult.awaitingApproval(
+                "test-tool", longParams, "session-123",
+                List.of(ReasoningStep.of("thought", "action", Map.of(), null, 10, 10))
         );
         when(agentLoop.run(any(), any(), eq("run sensitive tool"), any(), anyInt(), any()))
                 .thenReturn(awaiting);

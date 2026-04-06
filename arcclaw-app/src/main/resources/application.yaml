@@ -113,6 +113,9 @@ quarkus:
         temperature: 0.1
         log-requests: false
         log-responses: false
+        enabled: true
+    anthropic:
+      chat-model:
         enabled: false
 
   # ---------------------------------------------------------------------------
@@ -261,6 +264,7 @@ arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
+    log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
   rag:
     min-score: 0.25f
     context-chunks: 5
@@ -301,6 +305,12 @@ arcclaw:
       ci-pipeline: "${ARCCLAW_API_KEY_CI:key-ci-changeme}"
     rate-limit:
       requests-per-minute: 20
+  
+  tools:
+    brave:
+      api-key: "${ARCCLAW_BRAVE_API_KEY:none}"
+    serper:
+      api-key: "${ARCCLAW_SERPER_API_KEY:none}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names

@@ -76,7 +76,9 @@ public class ToolRegistry {
     void buildSecretsCache() {
         Map<String, Map<String, String>> cache = new HashMap<>();
         for (AgentTool tool : discoveredTools) {
-            cache.put(tool.name(), extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+            if (tool.isEnabled()) {
+                cache.put(tool.name(), extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+            }
         }
         this.secretsCache = Collections.unmodifiableMap(cache);
     }
@@ -108,8 +110,16 @@ public class ToolRegistry {
     // Tool listing / lookup 
     public List<String> listTools() {
         return StreamSupport.stream(discoveredTools.spliterator(), false)
+                .filter(AgentTool::isEnabled)
                 .map(AgentTool::name)
                 .toList();
+    }
+
+    /**
+     * Returns a comma-separated list of enabled tool names.
+     */
+    public String registeredToolNames() {
+        return listTools().stream().collect(Collectors.joining(", "));
     }
 
     /**
@@ -120,6 +130,7 @@ public class ToolRegistry {
      */
     public Optional<AgentTool> findTool(String toolName) {
         return StreamSupport.stream(discoveredTools.spliterator(), false)
+                .filter(AgentTool::isEnabled)
                 .filter(tool -> tool.name().equals(toolName))
                 .findFirst();
     }

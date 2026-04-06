@@ -206,7 +206,7 @@ class CheckpointResumeHandlerTest {
         WorkspaceScopeHolder.run("test-session", () -> {
             // Act
             Map<String, Object> params = Map.of("parameters", "{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}");
-            ReasoningStep step = new ReasoningStep("thought", "github", params, "obs", 0, 0);
+            ReasoningStep step = ReasoningStep.of("thought", "github", params, "obs", 0, 0);
 
             // Mock response to just return something
             when(model.chat(any(ChatRequest.class))).thenReturn(

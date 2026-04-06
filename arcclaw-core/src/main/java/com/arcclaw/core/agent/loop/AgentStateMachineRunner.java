@@ -123,8 +123,8 @@ public class AgentStateMachineRunner {
                     }
 
                     String candidateAnswer = step.thought();
-                    if (step.actionInput() != null && step.actionInput().containsKey("answer")) {
-                        candidateAnswer = String.valueOf(step.actionInput().get("answer"));
+                    if (step.actionInput() != null && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+                        candidateAnswer = String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
                     }
 
                     if (isRawToolCallLeak(candidateAnswer)) {
@@ -165,6 +165,11 @@ public class AgentStateMachineRunner {
                 }
                 step = validationDecision.step();
 
+                // Re-dispatch if validateTool rewrote a hallucinated tool → FINISH
+                if (ReasoningStep.FINISH.equals(step.action())) {
+                    return handleFinishAction(context.sessionId(), context.agentRole(), history, step, iteration);
+                }
+
                 // skillSnapshot fetched lazily — only when a real tool invocation is about to happen.
                 // FINISH, CONTINUE, and schema-retry paths never pay this cost.
                 List<CompiledSkillEntry> skillSnapshot = skillRegistry.currentSnapshot();
@@ -198,8 +203,8 @@ public class AgentStateMachineRunner {
             List<ReasoningStep> history, ReasoningStep step, int iteration) {
         log.infof("Agent reached FINISH at iteration %d", iteration);
         String answer = step.thought();
-        if (step.actionInput() != null && step.actionInput().containsKey("answer")) {
-            answer = String.valueOf(step.actionInput().get("answer"));
+        if (step.actionInput() != null && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            answer = String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
 
         if (answer != null) {

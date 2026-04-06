@@ -112,4 +112,12 @@ public interface AgentTool {
     default boolean requiresManualApproval(Map<String, Object> params) {
         return false;
     }
+
+    /**
+     * Whether this tool is currently enabled.
+     * Defaults to true. If false, the tool is filtered out during registry registration.
+     */
+    default boolean isEnabled() {
+        return true;
+    }
 }

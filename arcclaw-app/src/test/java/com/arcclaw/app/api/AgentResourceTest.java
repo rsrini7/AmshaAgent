@@ -49,12 +49,12 @@ class AgentResourceTest {
                 // Ensure sessions exist by default so we don't hit 404 in validateSession
                 Mockito.when(heartbeatTracker.exists(anyString())).thenReturn(true);
 
-                ReasoningStep finishStep = new ReasoningStep("Calculated final answer", ReasoningStep.FINISH,
-                                Map.of("response", "42"), null, 0, 0);
+                ReasoningStep finishStep = ReasoningStep.pending("Calculated final answer", ReasoningStep.FINISH,
+                                Map.of("response", "42"), 0, 0);
                 Mockito.when(reasoningEngine.nextStep(anyString(), anyString(), anyString(), any())).thenReturn(finishStep);
 
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.Finished("42", List.of(), 10, 5));
+                                .thenReturn(AgentResult.finished("42", List.of()));
 
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
                 Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
@@ -68,7 +68,7 @@ class AgentResourceTest {
                 
                 Mockito.when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(checkpoint));
                 Mockito.when(agentStore.loadSteps(any())).thenReturn(List.of(
-                    new ReasoningStep("Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), null, 0, 0)
+                    ReasoningStep.pending("Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), 0, 0)
                 ));
                 
                 // Explicitly mock session-not-found for 404 compliance tests
@@ -179,9 +179,9 @@ class AgentResourceTest {
         @Test
         void testComplianceViolationReturns451() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.Failed(
+                                .thenReturn(AgentResult.failed(
                                                 "Blocked by policy", AgentResult.FailureCategory.COMPLIANCE_VIOLATION,
-                                                List.of(), 0, 0));
+                                                List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -196,9 +196,9 @@ class AgentResourceTest {
         @Test
         void testBudgetExceededReturns429() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.Failed(
+                                .thenReturn(AgentResult.failed(
                                                 "Token limit", AgentResult.FailureCategory.BUDGET_EXCEEDED,
-                                                List.of(), 0, 0));
+                                                List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -213,9 +213,9 @@ class AgentResourceTest {
         @Test
         void testUserDeniedReturns422() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.Failed(
+                                .thenReturn(AgentResult.failed(
                                                 "User said no", AgentResult.FailureCategory.USER_DENIED,
-                                                List.of(), 0, 0));
+                                                List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -230,9 +230,9 @@ class AgentResourceTest {
         @Test
         void testSchemaErrorReturns422() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.Failed(
+                                .thenReturn(AgentResult.failed(
                                                 "Bad tool params", AgentResult.FailureCategory.SCHEMA_ERROR,
-                                                List.of(), 0, 0));
+                                                List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -247,9 +247,9 @@ class AgentResourceTest {
         @Test
         void testSystemErrorReturns500() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.Failed(
+                                .thenReturn(AgentResult.failed(
                                                 "Internal crash", AgentResult.FailureCategory.SYSTEM_ERROR,
-                                                List.of(), 0, 0));
+                                                List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -264,7 +264,7 @@ class AgentResourceTest {
         @Test
         void testLoopExceededReturns408() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.LoopExceeded(5, List.of(), 0, 0));
+                                .thenReturn(AgentResult.loopExceeded(5, List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -279,8 +279,8 @@ class AgentResourceTest {
         @Test
         void testApprovalRequiredReturns202WithShape() {
                 Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                                .thenReturn(new AgentResult.AwaitingApproval(
-                                                "gh-tool", "{}", "sess-123", List.of(), 0, 0));
+                                .thenReturn(AgentResult.awaitingApproval(
+                                                "gh-tool", "{}", "sess-123", List.of()));
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")

@@ -11,8 +11,8 @@ class AgentResultTest {
 
     @Test
     void testFinishedFactoryCalculatesTokens() {
-        ReasoningStep s1 = new ReasoningStep("thought", "tool", null, "obs", 10, 5);
-        ReasoningStep s2 = new ReasoningStep("done", "finish", null, null, 20, 15);
+        ReasoningStep s1 = ReasoningStep.of("thought", "tool", null, "obs", 10, 5);
+        ReasoningStep s2 = ReasoningStep.of("done", "finish", null, null, 20, 15);
         
         AgentResult result = AgentResult.finished("ok", List.of(s1, s2));
         
@@ -25,7 +25,7 @@ class AgentResultTest {
 
     @Test
     void testFailedFactoryCalculatesTokens() {
-        ReasoningStep s1 = new ReasoningStep("thought", "tool", null, "obs", 100, 50);
+        ReasoningStep s1 = ReasoningStep.of("thought", "tool", null, "obs", 100, 50);
         
         AgentResult result = AgentResult.failed("boom", AgentResult.FailureCategory.SYSTEM_ERROR, List.of(s1));
         
