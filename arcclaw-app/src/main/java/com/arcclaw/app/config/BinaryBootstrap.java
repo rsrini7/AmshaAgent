@@ -579,7 +579,6 @@ public class BinaryBootstrap {
             
             // Also fix legacy/overloaded free models if they were previously set for utilities
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "openai/gpt-oss-20b:free");
 
@@ -587,12 +586,18 @@ public class BinaryBootstrap {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "openai/gpt-oss-20b:free");
+            
+            // Legacy → new default (users upgrading from older installs)
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
@@ -601,6 +606,12 @@ public class BinaryBootstrap {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-8b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.1-70b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
+            
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "meta-llama/llama-3.3-70b-instruct:free", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
@@ -656,6 +667,3 @@ public class BinaryBootstrap {
         }
     }
 }
-
-
-
