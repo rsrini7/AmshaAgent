@@ -66,7 +66,7 @@ public class PlaywrightPageRunner {
      * @throws PlaywrightException      on navigation or execution failure
      * @throws IllegalArgumentException on unsafe URL
      */
-    public String run(String url, String action, String selector, int timeoutMs) {
+    public synchronized String run(String url, String action, String selector, int timeoutMs) {
 
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
             throw new IllegalArgumentException("Unsafe URL rejected: " + url);
