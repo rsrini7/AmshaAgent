@@ -57,7 +57,7 @@ public class BinaryBootstrap {
         validateSandboxTools();
         validatePlaywright(binaryDir);
         interactiveSetupIfNeeded(binaryDir, args);
-        promptPlaywrightInstallationIfNeeded(binaryDir);
+        promptPlaywrightSetupIfNeeded(binaryDir);
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -346,26 +346,7 @@ public class BinaryBootstrap {
             }
 
             if (spec.key.equals("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED")) {
-                System.err.println("  ┌─ Playwright Browser Integration");
-                System.err.println("  │  Enable real headless browser (Chromium) for complex web crawling/scraping?");
-                System.err.println("  │  Required for JavaScript-heavy sites that simple fetchers cannot read.");
-                System.err.println("  │");
-                String response = console.readLine("  └─ Enable Playwright? [y/N]: ");
-                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
-                    patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
-                    System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
-                    System.err.println();
-                    continue;
-                }
-                patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
-                System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
-                
-                // Set default storage path to keep the directory clean
-                initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
-                initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
-                
-                // Prompt for installation is now handled in promptPlaywrightInstallationIfNeeded
-                System.err.println();
+                // Handled in dedicated Playwright block below the loop
                 continue;
             }
 
@@ -675,50 +656,78 @@ public class BinaryBootstrap {
         }
     }
 
-    private static void promptPlaywrightInstallationIfNeeded(Path binaryDir) {
-        String enabled = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
-        if (!"true".equalsIgnoreCase(enabled)) return;
+    private static void promptPlaywrightSetupIfNeeded(Path binaryDir) {
+        // Skip in non-interactive / CI environments
+        if (System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null) return;
 
-        String pathStr = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
-        Path browsersPath = (pathStr != null) ? Path.of(pathStr) : binaryDir.resolve(".playwright-browsers");
+        Path envFile = binaryDir.resolve(".env");
+        Path browsersPath = binaryDir.resolve(".playwright-browsers");
+        String playwrightProp = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED",
+                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
+        boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
 
-        if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
-            Console console = System.console();
-            System.err.println();
-            System.err.println("  ┌─ Playwright Chromium Installation");
-            System.err.println("  │  Playwright is enabled but the Chromium browser is missing from:");
-            System.err.println("  │  " + browsersPath.toAbsolutePath());
-            System.err.println("  │");
+        // Show prompt when: (a) not yet configured at all, or (b) enabled but browser missing
+        boolean needsPrompt = (playwrightProp == null || playwrightProp.isBlank())
+                || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
 
-            String installResponse = null;
-            if (console != null) {
-                installResponse = console.readLine("  └─ Download and install Chromium now? [Y/n]: ");
-            } else {
-                // Fallback for environments like 'mise' where console might be null but stdin is available
-                System.err.print("  └─ Download and install Chromium now? [Y/n]: ");
-                System.err.flush();
-                try {
-                    // We use a simple read from System.in. 
-                    // To avoid hanging in CI, we only do this if we are not clearly in a CI environment.
-                    if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
-                        StringBuilder sb = new StringBuilder();
-                        int c;
-                        while ((c = System.in.read()) != '\n' && c != -1) {
-                            if (c != '\r') sb.append((char)c);
-                        }
-                        installResponse = sb.toString().trim();
-                    } else {
-                        System.err.println(" (Non-interactive/CI detected — skipping installation)");
-                    }
-                } catch (IOException e) {
-                    System.err.println(" (Failed to read from stdin)");
+        if (!needsPrompt) return;
+
+        System.err.println();
+        System.err.println("  ┌─ Playwright Browser Integration");
+        System.err.println("  │  Enable real headless browser (Chromium) for complex web crawling/scraping?");
+        System.err.println("  │  Required for JavaScript-heavy sites that simple fetchers cannot read.");
+        System.err.println("  │");
+
+        String response = readLineWithFallback(System.console(), playwrightEnabled
+                ? "  └─ Download and install Chromium now? [Y/n]: "
+                : "  └─ Enable Playwright? [y/N]: ");
+
+        if (playwrightEnabled) {
+            // Already enabled, just asking about browser installation
+            if (response == null || response.isEmpty() || response.toLowerCase().startsWith("y")) {
+                PlaywrightBrowserInstaller.installChromium(browsersPath);
+            }
+        } else if (response != null && response.trim().toLowerCase().startsWith("y")) {
+            // Enabling for the first time
+            patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+            System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+            initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
+            initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+
+            if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                System.err.println("  │");
+                System.err.println("  │  Chromium browser binary is not installed.");
+                String ins = readLineWithFallback(System.console(), "  └─ Download and install Chromium now? [Y/n]: ");
+                if (ins == null || ins.trim().isEmpty() || ins.trim().toLowerCase().startsWith("y")) {
+                    PlaywrightBrowserInstaller.installChromium(browsersPath);
                 }
             }
+        } else {
+            patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+            System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+        }
+        System.err.println();
+    }
 
-            if (installResponse != null && (installResponse.isEmpty() || installResponse.toLowerCase().startsWith("y"))) {
-                PlaywrightBrowserInstaller.installChromium(browsersPath);
-                System.err.println();
+    private static String readLineWithFallback(Console console, String prompt) {
+        if (console != null) return console.readLine(prompt);
+        
+        System.err.print(prompt);
+        System.err.flush();
+        try {
+            if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
+                StringBuilder sb = new StringBuilder();
+                int c;
+                while ((c = System.in.read()) != '\n' && c != -1) {
+                    if (c != '\r') sb.append((char)c);
+                }
+                return sb.toString().trim();
+            } else {
+                System.err.println(" (Non-interactive/CI detected)");
+                return null;
             }
+        } catch (IOException e) {
+            return null;
         }
     }
 
