@@ -453,7 +453,7 @@ cd dist; ./run.ps1 serve
 
 ### sqlite-vec (vec0) — auto-install
 
-ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_SQLITE_VEC_PATH`).
+ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_RAG_VEC_PATH`).
 
 Manual download is **no longer required**, but you can override the auto-installed binary by placing your own build in `lib/`.
 

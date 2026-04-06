@@ -2,6 +2,7 @@ package com.arcclaw.app.routing;
 
 import java.util.List;
 
+import io.quarkus.arc.Unremovable;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
@@ -24,6 +25,7 @@ import com.arcclaw.core.skill.SkillRegistry;
 @ApplicationScoped
 @Alternative
 @Priority(1)
+@Unremovable
 public class SkillAwareIntentClassifier implements IntentClassifier {
 
     @Inject

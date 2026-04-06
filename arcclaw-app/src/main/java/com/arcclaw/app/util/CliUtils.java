@@ -138,6 +138,67 @@ public class CliUtils {
     // -------------------------------------------------------------------------
 
     /**
+     * Returns missing required VarSpecs for the given mode.
+     * Called by BinaryBootstrap for interactive first-run setup.
+     */
+    public static List<VarSpec> getMissingVarSpecs(String[] args) {
+        List<VarSpec> missing = new ArrayList<>();
+
+        for (VarSpec spec : CORE_VARS) {
+            if (!isSet(spec.key)) missing.add(spec);
+        }
+
+        String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
+                .orElseGet(() -> System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"))
+                .toLowerCase();
+        
+        VarSpec providerKeySpec = switch (llmProvider) {
+            case "openrouter" -> OPENROUTER_KEY_SPEC;
+            case "openai"     -> OPENAI_KEY_SPEC;
+            case "ollama"     -> null;
+            default           -> GROQ_KEY_SPEC;
+        };
+        if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
+
+        for (VarSpec spec : TELEGRAM_VARS) {
+            if (!isSet(spec.key)) missing.add(spec);
+        }
+
+        if (!isSet("GITHUB_TOKEN")) {
+            missing.add(new VarSpec(
+                "GITHUB_TOKEN",
+                "Optional GitHub Personal Access Token (classic or fine-grained).",
+                "Recommended for searching and managing code in GitHub repositories.",
+                "1. Go to https://github.com/settings/tokens",
+                "2. Create a token with 'repo' and 'workflow' scopes (or relevant fine-grained scopes)",
+                "3. Add:  GITHUB_TOKEN=ghp_your_key_here"
+            ));
+        }
+
+        if (!isSet("ARCCLAW_SERPER_API_KEY")) {
+            missing.add(new VarSpec(
+                "ARCCLAW_SERPER_API_KEY",
+                "Optional Serper.dev API key for Google Search integration.",
+                "1. Sign up at https://serper.dev — 2,500 free searches",
+                "2. Copy your API key",
+                "3. Add:  ARCCLAW_SERPER_API_KEY=your_key_here"
+            ));
+        }
+
+        if (!isSet("ARCCLAW_BRAVE_API_KEY")) {
+            missing.add(new VarSpec(
+                "ARCCLAW_BRAVE_API_KEY",
+                "Optional Brave Search API key.",
+                "1. Sign up at https://api.search.brave.com",
+                "2. Create an API key",
+                "3. Add:  ARCCLAW_BRAVE_API_KEY=your_key_here"
+            ));
+        }
+
+        return missing;
+    }
+
+    /**
      * Validates required environment variables before Quarkus boots.
      *
      * <p>Peeks at {@code args[0]} to determine which vars are required.
@@ -150,10 +211,9 @@ public class CliUtils {
     public static void validateRequiredEnvVars(String[] args) {
         String mode = args.length > 0 ? args[0].toLowerCase() : "";
 
-        // No validation needed for help/version flags or bare invocation
+        // No validation needed for help/version flags
         if (mode.equals("--help") || mode.equals("-h")
-                || mode.equals("--version") || mode.equals("-v")
-                || mode.isEmpty()) {
+                || mode.equals("--version") || mode.equals("-v")) {
             return;
         }
 
@@ -223,8 +283,8 @@ public class CliUtils {
         System.err.println();
         System.err.println("  " + "-".repeat(75));
         System.err.println("  After setting all values, re-run your command.");
-        System.err.println("    ./run.sh " + mode + "    (Linux/macOS/WSL2)");
-        System.err.println("    ./run.ps1 " + mode + "   (Windows)");
+        System.err.println("    ./arcclaw " + mode + "    (Linux/macOS/WSL2)");
+        System.err.println("    .\\arcclaw.exe " + mode + "   (Windows)");
         System.err.println();
         System.exit(1);
     }
@@ -246,7 +306,8 @@ public class CliUtils {
      * </ol>
      */
     private static void warnTelegramIfPartial() {
-        boolean enabled    = "true".equalsIgnoreCase(System.getenv("ARCCLAW_TELEGRAM_ENABLED"));
+        String val = System.getProperty("ARCCLAW_TELEGRAM_ENABLED", System.getenv("ARCCLAW_TELEGRAM_ENABLED"));
+        boolean enabled    = "true".equalsIgnoreCase(val);
         boolean hasToken   = isSet("TELEGRAM_BOT_TOKEN");
         boolean hasUserIds = isSet("ARCCLAW_TELEGRAM_ALLOWED_USER_IDS");
         boolean hasUsers   = isSet("ARCCLAW_TELEGRAM_ALLOWED_USERS");
@@ -255,7 +316,7 @@ public class CliUtils {
         if (!enabled && !hasToken && !hasUserIds && !hasUsers) {
             System.err.println();
             System.err.println("  INFO: Telegram channel is not configured (optional).");
-            System.err.println("        To enable: set these in your .env and run ./run.sh attach:");
+            System.err.println("        To enable: set these in your .env and run ./arcclaw attach (or arcclaw.exe attach):");
             System.err.println("          ARCCLAW_TELEGRAM_ENABLED=true");
             System.err.println("          TELEGRAM_BOT_TOKEN=<token from @BotFather>");
             System.err.println("          ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>");
@@ -276,7 +337,7 @@ public class CliUtils {
                 System.err.println("  WARN: ARCCLAW_TELEGRAM_ENABLED=true but Telegram vars are missing:");
                 missingKeys.forEach(k -> System.err.println("        - " + k));
                 System.err.println("        Telegram will fail at runtime. Add the missing vars to .env");
-                System.err.println("        or run in attach mode:  ./run.sh attach");
+                System.err.println("        or run in attach mode:  ./arcclaw attach");
                 System.err.println();
             }
             return;
@@ -288,7 +349,7 @@ public class CliUtils {
             System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but ARCCLAW_TELEGRAM_ENABLED is not 'true'.");
             System.err.println("        Telegram will NOT start in serve mode.");
             System.err.println("        To enable: add  ARCCLAW_TELEGRAM_ENABLED=true  to your .env");
-            System.err.println("        To run as Telegram daemon: ./run.sh attach");
+            System.err.println("        To run as Telegram daemon: ./arcclaw attach");
             System.err.println();
         }
 
@@ -316,12 +377,13 @@ public class CliUtils {
      * </ul>
      */
     private static boolean isSet(String key) {
-        String val = System.getenv(key);
+        String val = System.getProperty(key, System.getenv(key));
         if (val == null || val.isBlank()) return false;
         if (val.contains("changeme"))      return false;
         if (val.contains("<"))             return false;
         if (val.contains("your_") && val.contains("_here")) return false;
         // Catch repeated-x placeholders like jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        if (val.equalsIgnoreCase("none"))   return false;
         if (val.matches(".*x{8,}.*"))      return false;
         return true;
     }
@@ -330,12 +392,12 @@ public class CliUtils {
     // VarSpec — unchanged, kept as class (not record) to match original
     // -------------------------------------------------------------------------
 
-    private static class VarSpec {
-        final String key;
-        final String description;
-        final String[] howToGet;
+    public static class VarSpec {
+        public final String key;
+        public final String description;
+        public final String[] howToGet;
 
-        VarSpec(String key, String description, String... howToGet) {
+        public VarSpec(String key, String description, String... howToGet) {
             this.key = key;
             this.description = description;
             this.howToGet = howToGet;

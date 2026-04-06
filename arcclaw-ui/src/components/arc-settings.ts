@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { getSettings, patchProvider, patchPrompt, resetOnboarding } from '../api/client';
+import { ArcClient } from '../api/client';
 
 const PROVIDERS = [
   { id:'groq',        name:'Groq',        tag:'Fast inference',  icon:'G',  color:'#f55036' },
@@ -24,6 +24,7 @@ export class ArcSettings extends LitElement {
   @state() private _appVersion = '';
   @state() private _hasApiKey = false;
   
+  private _client!: ArcClient;
   @state() private _loading = false;
   @state() private _error = '';
   @state() private _success = '';
@@ -100,22 +101,19 @@ export class ArcSettings extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
+    this._client = new ArcClient('/api/v1', this.apiKey);
     await this._loadSettings();
   }
 
   private async _loadSettings() {
     try {
       this._loading = true;
-      const data = await getSettings(this.apiKey);
+      const data = await this._client.getSettings();
       this._provider = data.provider;
       this._model = data.model;
       this._hasApiKey = data.hasApiKey;
       this._systemPrompt = data.systemPrompt;
       this._appVersion = data.appVersion;
-      
-      // Also fetch full prompt
-      const promptData = await fetch('/settings/prompt', { headers: { 'X-ARCCLAW-API-KEY': this.apiKey } }).then(r => r.json());
-      this._systemPrompt = promptData.systemPrompt;
     } catch (e: any) {
       this._error = e.message;
     } finally {
@@ -126,7 +124,7 @@ export class ArcSettings extends LitElement {
   private async _saveProvider() {
     try {
       this._loading = true; this._error = ''; this._success = '';
-      await patchProvider(this.apiKey, { provider: this._provider, model: this._model, apiKey: this._inputApiKey });
+      await this._client.patchProvider({ provider: this._provider, model: this._model, apiKey: this._inputApiKey });
       this._success = 'Provider updated successfully.';
       this._inputApiKey = '';
       await this._loadSettings();
@@ -140,7 +138,7 @@ export class ArcSettings extends LitElement {
   private async _savePrompt() {
     try {
       this._loading = true; this._error = ''; this._success = '';
-      await patchPrompt(this.apiKey, this._systemPrompt);
+      await this._client.patchPrompt(this._systemPrompt);
       this._success = 'Prompt updated successfully.';
     } catch (e: any) {
       this._error = e.message;
@@ -153,7 +151,7 @@ export class ArcSettings extends LitElement {
     if (!confirm('Are you sure you want to reset onboarding?')) return;
     try {
       this._loading = true; this._error = ''; this._success = '';
-      await resetOnboarding(this.apiKey);
+      await this._client.resetOnboarding();
       localStorage.removeItem('arc-api-key');
       window.location.hash = '#/onboarding';
       window.location.reload();

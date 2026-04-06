@@ -1,3 +1,5 @@
+# DEPRECATED: replaced by BinaryBootstrap.java
+# Original content remains for fallback/reference.
 # run.ps1 - ArcClaw launcher with first-run auto-setup
 # Usage: ./run.ps1 serve | chat | attach | ask "your goal"
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8

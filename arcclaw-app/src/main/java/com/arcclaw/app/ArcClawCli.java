@@ -1,13 +1,10 @@
 package com.arcclaw.app;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import jakarta.inject.Inject;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
-import com.arcclaw.app.config.Vec0NativeLibraryInstaller;
+import com.arcclaw.app.config.BinaryBootstrap;
 import com.arcclaw.app.util.CliUtils;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -52,63 +49,42 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     public static void main(String... args) {
 
-        // 1. Validate required env vars early — before Quarkus boots.
-        //    Shows a clear setup guide if anything is missing, then exits.
-        //    Does NOT load .env — Quarkus handles config loading itself.
+        // 1. Resolve binary location, load .env, and provision data/lib dirs.
+        //    Must run first so that validation and Quarkus pick up correct paths.
+        BinaryBootstrap.bootstrap(args);
+
+        // 2. Validate required env vars early — before Quarkus boots.
         CliUtils.validateRequiredEnvVars(args);
 
-        // 2. Provision data directory before Hibernate starts.
-        //
-        //    IMPORTANT: resolve to absolute path here so that the
-        //    ${ARCCLAW_DATA_DIR:./data} expressions in application.yaml
-        //    (datasource URL, arcclaw.data-dir, workspace root-dir, etc.)
-        //    all expand to the same location regardless of the JVM launch
-        //    directory (IDE, quarkus:dev, JAR from any working directory).
-        //    Without this, "./data" resolves relative to the launch dir and
-        //    produces stray data/ folders inside arcclaw-app/ or quarkus-app/.
-        try {
-            String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR",
-                    System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data"));
-
-            Path dirPath = Path.of(rawDataDir).toAbsolutePath().normalize();
-            Files.createDirectories(dirPath);
-            Files.createDirectories(dirPath.resolve("workspaces"));
-
-            // Pin the resolved absolute path back so Quarkus config picks it up.
-            System.setProperty("ARCCLAW_DATA_DIR", dirPath.toString());
-
-        } catch (Exception e) {
-            System.err.println("[ArcClaw] ❌ FATAL: Failed to create data directory.");
-            System.err.println("[ArcClaw]    Path: " + System.getProperty("ARCCLAW_DATA_DIR",
-                    System.getenv().getOrDefault("ARCCLAW_DATA_DIR", "./data")));
-            System.err.println("[ArcClaw]    Cause: " + e.getMessage());
-            System.err.println("[ArcClaw]    Fix: ensure the directory is writable or set ARCCLAW_DATA_DIR.");
-            System.exit(1);
-        }
-
-        // 3. Provision vec0 native library before Hibernate starts.
-        //    Must fire earlier than CDI StartupEvent to ensure Agroal connection
-        //    pooling doesn't fail on first boot when Interceptors try to load it.
-        try {
-            String vecPath = System.getProperty("ARCCLAW_SQLITE_VEC_PATH",
-                    System.getenv().getOrDefault("ARCCLAW_SQLITE_VEC_PATH", "./lib/vec0"));
-
-            Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
-            if (vecPath.endsWith("vec0")) { // it's a directory link-base
-                 // The performInstallation method expects the base without extension
-                 Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
-            }
-
-            // Pin the absolute path so Quarkus config picks it up uniformly.
-            System.setProperty("ARCCLAW_SQLITE_VEC_PATH", absVecPath.toString());
-
-        } catch (Exception e) {
-            System.err.println("[ArcClaw] ⚠️  WARNING: Failed to auto-install sqlite-vec.");
-            System.err.println("[ArcClaw]    RAG will degrade to FTS5. Cause: " + e.getMessage());
+        // 3. If no command provided, show USAGE and exit (fast-path, no Quarkus boot needed)
+        if (args.length == 0) {
+            printUsageGuide();
+            return;
         }
 
         // 4. Boot Quarkus — config system, CDI, and all extensions start here.
         Quarkus.run(ArcClawCli.class, args);
+    }
+
+    private static void printUsageGuide() {
+        // ASCII Banner (from arcclaw-banner.txt)
+        System.out.println("    ___                ________  ");
+        System.out.println("   /   |  __________  / ____/ /___ __      __");
+        System.out.println("  / /| | / ___/ ___/ / /   / / __ `/ | /| / /");
+        System.out.println(" / ___ |/ /  / /__  / /___/ / /_/ /| |/ |/ / ");
+        System.out.println("/_/  |_/_/   \\___/  \\____/_/\\__,_/ |__/|__/  ");
+        System.out.println();
+        System.out.println("  ArcClaw Agent Kernel :: Zero-Setup Distribution");
+        System.out.println();
+        System.out.println("  USAGE");
+        System.out.println("    ./arcclaw serve                   Start HTTP + MCP server on :8080");
+        System.out.println("    ./arcclaw chat                    Start interactive REPL");
+        System.out.println("    ./arcclaw ask 'your goal here'    Run one-shot task and exit");
+        System.out.println("    ./arcclaw attach                  Start Telegram daemon");
+        System.out.println();
+        System.out.println("  OPTIONS (append to any command)");
+        System.out.println("    --role coordinator|researcher|architect|synthesizer|debugger");
+        System.out.println();
     }
 
     // QuarkusApplication — runs AFTER CDI container is ready
@@ -123,6 +99,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
     @Override
     public void run() {
+        // Fallback for help/usage handled by Picocli when no subcommand matches
         new CommandLine(this, factory).usage(System.out);
     }
 }

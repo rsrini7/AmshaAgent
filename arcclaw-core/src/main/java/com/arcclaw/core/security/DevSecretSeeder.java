@@ -49,7 +49,7 @@ public class DevSecretSeeder {
     @ConfigProperty(name = "arcclaw.auto-seed-secrets", defaultValue = "false")
     boolean autoSeedEnabled;
 
-    @ConfigProperty(name = "quarkus.profile")
+    @ConfigProperty(name = "quarkus.profile", defaultValue = "dev")
     String profile;
 
     /**
@@ -66,6 +66,10 @@ public class DevSecretSeeder {
         // 2. Prod/cli with auto-seed enabled — read stable key from .env
         if (autoSeedEnabled && !"dev".equals(profile) && !"test".equals(profile)) {
             seedAuditHmacKeyFromEnv();
+        }
+
+        if (autoSeedEnabled) {
+            seedDevSecrets();
         }
 
         if (!autoSeedEnabled) {
@@ -148,6 +152,8 @@ public class DevSecretSeeder {
             return;
         }
         seedFromHostEnvAsSystemKey("GITHUB_TOKEN");
+        seedFromHostEnvAsSystemKey("ARCCLAW_SERPER_API_KEY");
+        seedFromHostEnvAsSystemKey("ARCCLAW_BRAVE_API_KEY");
     }
 
     private void seedFromHostEnvAsSystemKey(String vaultKeyName) {

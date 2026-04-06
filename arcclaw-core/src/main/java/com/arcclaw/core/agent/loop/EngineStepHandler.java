@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -200,7 +199,7 @@ public class EngineStepHandler {
 
         if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
             String msg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
-            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, rootCauseChain(e));
+            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, ExceptionUtils.getRootCauseMessage(e));
 
             int retryAfterSeconds = extractRetryAfter(e.getMessage(), 10);
             if (retryAfterSeconds <= 15) { // only auto-retry for short waits
@@ -228,15 +227,13 @@ public class EngineStepHandler {
         }
 
         if (isNetworkError(e)) {
-            log.errorf("ReasoningEngine network failure at iteration %d: %s", iteration, e.getMessage());
-            log.debugf(e, "Full stacktrace for network failure in session %s", sessionId);
+            log.errorf("ReasoningEngine network failure at iteration %d: %s", iteration, ExceptionUtils.getRootCauseMessage(e));
             return StepDecision.terminal(AgentResult.failed(
                     "⚠️ Unable to reach the AI service. Please check your internet connection and try again.",
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
 
-        log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, e.getMessage());
-        log.debugf("ReasoningEngine failure cause chain for session %s: %s", sessionId, rootCauseChain(e));
+        log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, ExceptionUtils.getRootCauseMessage(e));
         String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
         return StepDecision.terminal(AgentResult.failed(
                 sanitizedMsg,
@@ -250,23 +247,7 @@ public class EngineStepHandler {
         return defaultSeconds;
     }
 
-    /**
-     * Returns a compact single-line cause chain instead of a full stack trace.
-     * e.g. "RuntimeException: I'm busy → HttpException: rate_limit_exceeded"
-     * Replaces verbose log.debugf(..., e) calls that bloat logs during throttling.
-     */
-    private static String rootCauseChain(Throwable t) {
-        return ExceptionUtils.getThrowableList(t)
-                .stream()
-                .map(cause -> cause.getClass().getSimpleName() + ": " +
-                            truncate(cause.getMessage(), 120))
-                .collect(Collectors.joining(" → "));
-    }
 
-    private static String truncate(String s, int max) {
-        if (s == null) return "null";
-        return s.length() <= max ? s : s.substring(0, max) + "…";
-    }
 
     private static final Pattern UNAVAILABLE_TOOL_PATTERN = Pattern.compile("attempted to call tool '([^']+)'");
 

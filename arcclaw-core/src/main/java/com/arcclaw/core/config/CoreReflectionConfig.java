@@ -5,6 +5,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.AuditEventResponse;
+import com.arcclaw.core.api.dto.CreateSessionRequest;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
@@ -28,6 +29,7 @@ import com.arcclaw.core.tools.ManageScheduleTool;
 import com.arcclaw.core.tools.MemorySearchTool;
 import com.arcclaw.core.tools.SandboxExecTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -50,10 +52,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         ReasoningStep.class,
         ParallelToolCall.class,
         AgentResult.class,
+        CreateSessionRequest.class,
         RunAgentRequest.class,
         CreateSessionResponse.class,
         SessionStatusResponse.class,
         AuditEventResponse.class,
+        ToolRegistry.ToolDescriptor.class,
         AuditEvent.class,
         AuditOutcome.class,
         SecurityEventType.class,
@@ -81,5 +85,5 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         "com.github.benmanes.caffeine.cache.SSMSA"
     }
 )
-public class ReflectionConfig {
+public class CoreReflectionConfig {
 }

@@ -53,38 +53,79 @@ export class ArcClient {
     return r.json();
   }
 
-    async getSkills(): Promise<SkillDto[]> {
-        const r = await fetch(this.baseUrl + '/skills', { headers: this.headers() });
-        if (!r.ok) throw new Error(`GET skills failed ${r.status}`);
-        return r.json();
-    }
+  async getSkills(): Promise<SkillDto[]> {
+    const r = await fetch(this.baseUrl + '/skills', { headers: this.headers() });
+    if (!r.ok) throw new Error(`GET skills failed ${r.status}`);
+    return r.json();
+  }
 
-    // Onboarding — uses the instance baseUrl
-    async onboardingStatus(): Promise<import('./types').OnboardingStatusDto> {
-      const res = await fetch(`${this.baseUrl}/onboarding/status`, { credentials: 'include' });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      return res.json();
-    }
+  // Onboarding
+  async onboardingStatus(): Promise<import('./types').OnboardingStatusDto> {
+    const res = await fetch(`${this.baseUrl}/onboarding/status`, { credentials: 'include' });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    return res.json();
+  }
 
-    async onboardingStep(step: number, body?: object): Promise<any> {
-      const res = await fetch(`${this.baseUrl}/onboarding/step/${step}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: body ? { 'Content-Type': 'application/json' } : {},
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Step ${step} failed: ${res.status}`);
-      }
-      return res.json();
+  async onboardingStep(step: number, body?: object): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/onboarding/step/${step}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Step ${step} failed: ${res.status}`);
     }
+    return res.json();
+  }
 
-    async onboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
-      const res = await fetch(`${this.baseUrl}/onboarding/complete`, { credentials: 'include' });
-      if (!res.ok) throw new Error(`complete failed: ${res.status}`);
-      return res.json();
+  async onboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
+    const res = await fetch(`${this.baseUrl}/onboarding/complete`, { credentials: 'include' });
+    if (!res.ok) throw new Error(`complete failed: ${res.status}`);
+    return res.json();
+  }
+
+  // Settings
+  async getSettings(): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/settings`, {
+      headers: this.headers()
+    });
+    if (!res.ok) throw new Error(`settings ${res.status}`);
+    return res.json();
+  }
+
+  async patchProvider(body: object): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/settings/provider`, {
+      method: 'PATCH',
+      headers: this.headers(),
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `PATCH failed: ${res.status}`);
     }
+    return res.json();
+  }
+
+  async patchPrompt(prompt: string): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/settings/prompt`, {
+      method: 'PATCH',
+      headers: this.headers(),
+      body: JSON.stringify({ systemPrompt: prompt })
+    });
+    if (!res.ok) throw new Error(`prompt update failed`);
+    return res.json();
+  }
+
+  async resetOnboarding(): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/settings/reset`, {
+      method: 'POST',
+      headers: this.headers()
+    });
+    if (!res.ok) throw new Error(`reset failed`);
+    return res.json();
+  }
 }
 
 export async function getOnboardingComplete(baseUrl: string): Promise<import('./types').OnboardingCompleteDto> {
@@ -92,51 +133,5 @@ export async function getOnboardingComplete(baseUrl: string): Promise<import('./
     credentials: 'include'
   });
   if (!res.ok) throw new Error(`complete failed: ${res.status}`);
-  return res.json();
-}
-
-export async function getSettings(apiKey: string) {
-  const res = await fetch('/settings', {
-    headers: { 'X-ARCCLAW-API-KEY': apiKey }
-  });
-  if (!res.ok) throw new Error(`settings ${res.status}`);
-  return res.json();
-}
-
-export async function patchProvider(apiKey: string, body: object) {
-  const res = await fetch('/settings/provider', {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-ARCCLAW-API-KEY': apiKey
-    },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `PATCH failed: ${res.status}`);
-  }
-  return res.json();
-}
-
-export async function patchPrompt(apiKey: string, prompt: string) {
-  const res = await fetch('/settings/prompt', {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-ARCCLAW-API-KEY': apiKey
-    },
-    body: JSON.stringify({ systemPrompt: prompt })
-  });
-  if (!res.ok) throw new Error(`prompt update failed`);
-  return res.json();
-}
-
-export async function resetOnboarding(apiKey: string) {
-  const res = await fetch('/settings/reset', {
-    method: 'POST',
-    headers: { 'X-ARCCLAW-API-KEY': apiKey }
-  });
-  if (!res.ok) throw new Error(`reset failed`);
   return res.json();
 }

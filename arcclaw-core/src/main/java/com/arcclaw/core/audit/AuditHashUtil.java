@@ -111,7 +111,8 @@ public class AuditHashUtil {
         } catch (IllegalStateException | SecurityException e) {
             throw new IllegalStateException(
                 "Audit HMAC key unavailable. Chain integrity cannot be guaranteed. " +
-                "Ensure DevSecretSeeder has seeded '" + VaultConstants.AUDIT_HMAC_KEY_NAME + "' before first audit write.", e);
+                "This usually means ARCCLAW_VAULT_PEPPER has changed or the database is incompatible. " +
+                "Ensure your pepper is correct, or delete 'arcclaw.db' to start fresh.", e);
         } catch (Exception e) {
             // Check if it's a shutdown race
             if (Arc.container() == null) {

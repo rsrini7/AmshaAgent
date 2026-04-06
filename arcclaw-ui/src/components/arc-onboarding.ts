@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { ArcClient, getOnboardingComplete } from '../api/client';
+import { ArcClient } from '../api/client';
 import { McpServerRequest } from '../api/types';
 
 @customElement('arc-onboarding')
@@ -598,7 +598,7 @@ export class ArcOnboarding extends LitElement {
 
   private async _finish() {
     try {
-      const result = await getOnboardingComplete(this._client.baseUrl);
+      const result = await this._client.onboardingComplete();
       this.dispatchEvent(new CustomEvent('api-key-set', {
         bubbles: true, composed: true,
         detail: { key: result.serviceKey }

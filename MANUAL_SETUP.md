@@ -350,7 +350,7 @@ podman images | grep arcclaw-tool-runner
 
 ### 6.3 sqlite-vec Extension (RAG Vector Search)
 
-ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_SQLITE_VEC_PATH`).
+ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_RAG_VEC_PATH`).
 
 You can manually override this by placing your own build in `lib/`:
 
@@ -361,7 +361,7 @@ You can manually override this by placing your own build in `lib/`:
 | Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
 
 SQLite appends the platform suffix automatically — always pass the path **without** extension:
-`ARCCLAW_SQLITE_VEC_PATH=./lib/vec0`
+`ARCCLAW_RAG_VEC_PATH=./lib/vec0`
 
 If the extension is missing from resources and the filesystem, ArcClaw degrades gracefully to FTS5-only search.
 
@@ -695,7 +695,7 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-export ARCCLAW_SQLITE_VEC_PATH=./lib/vec0
+export ARCCLAW_RAG_VEC_PATH=./lib/vec0
 export ARCCLAW_DATA_DIR=./data
 
 ./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
@@ -705,7 +705,7 @@ export ARCCLAW_DATA_DIR=./data
 #### macOS
 
 ```bash
-export ARCCLAW_SQLITE_VEC_PATH=./lib/vec0
+export ARCCLAW_RAG_VEC_PATH=./lib/vec0
 export ARCCLAW_DATA_DIR=./data
 
 ./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
@@ -714,7 +714,7 @@ export ARCCLAW_DATA_DIR=./data
 #### Windows PowerShell
 
 ```powershell
-$env:ARCCLAW_SQLITE_VEC_PATH = './lib/vec0'
+$env:ARCCLAW_RAG_VEC_PATH = './lib/vec0'
 $env:ARCCLAW_DATA_DIR = './data'
 
 .\arcclaw-app\target\arcclaw-app-1.0.0-SNAPSHOT-runner.exe serve
@@ -934,7 +934,7 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | attach only | — | Comma-separated numeric IDs. |
 | `ARCCLAW_TELEGRAM_ALLOWED_USERS` | attach only | — | Comma-separated usernames (no @). |
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
-| `ARCCLAW_SQLITE_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
+| `ARCCLAW_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
 | `ARCCLAW_DEBUG_LLM` | Optional | `false` | Log full LLM request/response. Do NOT enable in prod. |
 | `ARCCLAW_SANDBOX_ENABLED` | Optional | `true` | Enable Podman sandbox. |

@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.tools.ToolRegistry;
 import org.jboss.logging.Logger;
 
 /**
@@ -46,6 +47,9 @@ public class SystemPromptBuilder {
 
     @Inject
     Instance<ContextEnricher> contextEnrichers;
+
+    @Inject 
+    ToolRegistry toolRegistry;
 
     @Inject
     public SystemPromptBuilder(AgentPersonaRegistry agentPersonaRegistry,
@@ -364,6 +368,7 @@ public class SystemPromptBuilder {
     private String buildToolContaminationGuard(AgentRoleEnum roleEnum) {
         String toolList = roleEnum.definition().toolNames()
                 .stream()
+                .filter(name -> toolRegistry.findTool(name).isPresent())
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
 

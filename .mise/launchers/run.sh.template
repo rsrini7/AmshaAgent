@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# DEPRECATED: replaced by BinaryBootstrap.java
+# Original content remains for fallback/reference.
 # run.sh - ArcClaw launcher with first-run auto-setup
 # Usage: ./run.sh serve | chat | attach | ask "your goal"
 set -euo pipefail

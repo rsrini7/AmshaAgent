@@ -287,31 +287,9 @@ public class SandboxExecTool implements AgentTool {
             return config.get();
         }
 
-        List<String> candidates;
-        if (IS_WINDOWS) {
-            String suffix = command.endsWith(".exe") ? "" : ".exe";
-            candidates = List.of(
-                "C:\\Program Files\\Go\\bin\\" + command + suffix,
-                "C:\\Program Files (x86)\\Go\\bin\\" + command + suffix
-            );
-        } else {
-            // Linux + macOS common search paths
-            candidates = List.of(
-                "/opt/homebrew/bin/" + command,
-                "/usr/local/bin/" + command,
-                "/usr/bin/" + command,
-                "/bin/" + command,
-                "/snap/bin/" + command,
-                "/usr/local/go/bin/" + command
-            );
-        }
-
-        for (String path : candidates) {
-            if (Files.exists(Path.of(path))) {
-                return path;
-            }
-        }
-
+        // We return the bare command and let the environment's $PATH handle it.
+        // If we are running in a Podman container, absolute host paths (like /opt/homebrew/bin)
+        // are invalid. If we are running locally, the system PATH will handle it.
         return command;
     }
 
