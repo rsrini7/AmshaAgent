@@ -11,7 +11,9 @@ import jakarta.annotation.PreDestroy;
 import java.util.Base64;
 import java.util.regex.Pattern;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import io.quarkus.runtime.Startup;
 
+@Startup
 @ApplicationScoped
 public class PlaywrightPageRunner {
 
