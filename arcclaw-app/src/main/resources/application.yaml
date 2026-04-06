@@ -403,7 +403,7 @@ arcclaw:
       require-auth: "${ARCCLAW_WEB_REQUIRE_AUTH:false}"
 
   pii:
-    mode: REDACT_AND_FORWARD   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
+    mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
 
   vault:
     pepper: "${ARCCLAW_VAULT_PEPPER:dev-pepper-not-for-production-0000000000000000000000000000}"
@@ -616,7 +616,7 @@ mp:
 
   arcclaw:
     pii:
-      mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
+      mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Dev — same as prod, see redacted output
     sandbox:
       strategy: NONE        # no Podman in local dev
     governance:
@@ -691,7 +691,7 @@ mp:
         bot-token: "mock-bot-token"
         allowed-users: ""
     pii:
-      mode: REDACT_AND_FORWARD   # Tests use default
+      mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Tests use default
     sandbox:
       strategy: NONE
     vault:
