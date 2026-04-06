@@ -66,8 +66,8 @@ class ParallelToolStepExecutorPreExecTest {
             sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5);
             
         var calls = List.of(
-            new ParallelToolCall("c1", "safe_read", Map.of(), null, true),
-            new ParallelToolCall("c2", "unsafe_write", Map.of(), null, true)
+            new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true),
+            new ParallelToolCall("c2", "unsafe_write", Map.of(), "{}", null, true)
         );
         
         ReasoningStep batchStep = ReasoningStep.parallelBatch(

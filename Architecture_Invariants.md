@@ -482,17 +482,13 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
      in Phase 70. Do NOT add it back as a fallback without updating
      this invariant first.
 
-7.12 MUST: The ExecutorService created for a parallel batch MUST be
-     closed after all futures complete. Use try-with-resources or
-     an explicit close() in a finally block. Leaking virtual thread
-     executors causes GC pressure and metric drift over long sessions.
-
 7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
      to virtual threads. Capture io.opentelemetry.context.Context.current()
      on the calling thread BEFORE submitting to the executor. Restore it
      inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
      propagates WorkspaceScoped session context (ScopedValue) only — it
      does NOT propagate OTel ThreadLocal spans.
+     (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
 
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
