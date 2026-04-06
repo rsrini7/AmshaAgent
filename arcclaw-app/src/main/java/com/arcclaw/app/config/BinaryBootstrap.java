@@ -457,7 +457,8 @@ public class BinaryBootstrap {
                     case INIT   -> {
                         String currentValue = currentLine.substring(key.length() + 1).trim();
                         yield currentValue.isEmpty() || currentValue.contains("xxxx") || 
-                              currentValue.contains("<") || currentValue.contains("changeme");
+                              currentValue.contains("<") || currentValue.contains("changeme") ||
+                              currentValue.contains("_your_") || currentValue.contains("ABCdef");
                     }
                 };
 
