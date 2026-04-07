@@ -62,7 +62,12 @@ public class PlaywrightPageRunner {
             log.infof("Playwright Chromium cached in %dms (headless=%s)", 
                     System.currentTimeMillis() - t0, headless);
         } catch (Exception e) {
-            log.warnf("Playwright failed to initialize: %s. Tool will be unavailable.", e.getMessage());
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            if (msg.contains("Executable doesn't exist")) {
+                log.warn("Playwright Chromium binary not found. Run 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args=\"install\"' to fix.");
+            } else {
+                log.warnf("Playwright failed to initialize: %s. Tool will be unavailable.", msg);
+            }
             destroy(); // Clean up if playwright was created but launch failed
         }
     }
