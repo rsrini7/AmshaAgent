@@ -100,6 +100,16 @@ public class PlaywrightBrowserInstaller {
         if (exitCode != 0) {
             throw new RuntimeException("Maven installer returned exit code " + exitCode);
         }
+
+        System.err.println();
+        System.err.println("  ✓ Playwright Chromium installed successfully.");
+
+        // In promptPlaywrightSetupIfNeeded(), after installChromium() call:
+        System.err.println();
+        System.err.println("  ─────────────────────────────────────────────────────");
+        System.err.println("  ✓ Browser ready — starting ArcClaw...");
+        System.err.println("  ─────────────────────────────────────────────────────");
+        System.err.println();
     }
 
     private static void runClassInstaller(Path browsersPath) throws Exception {
