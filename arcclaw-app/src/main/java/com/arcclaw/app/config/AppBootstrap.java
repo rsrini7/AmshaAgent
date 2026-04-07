@@ -340,11 +340,6 @@ public class AppBootstrap {
                     System.err.println();
                 }
 
-                if (spec.key.equals("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED")) {
-                    // Handled in dedicated Playwright block below the loop
-                    continue;
-                }
-
                 if (spec.key.equals("ARCCLAW_BRAVE_API_KEY")) {
                     System.err.println("  ┌─ Brave Search Integration");
                     System.err.println("  │  Enable Brave Search for Researcher agent?");

@@ -1128,7 +1128,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 [tasks."jar:run-dev-dep"]
 depends = ["env:recover", "build:full"]
 description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
+shell = "pwsh -NonInteractive -Command"
 dir = "{{config_root}}"
+quiet = true
 # We call mise directly, passing the argument the user provided (or defaulting to 'serve')
 run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
 

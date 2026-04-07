@@ -183,15 +183,6 @@ public class CliUtils {
             ));
         }
 
-        if (!isSet("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED")) {
-            missing.add(new VarSpec(
-                "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED",
-                "Enable real headless browser (Chromium) for complex web crawling/scraping.",
-                "Required for JavaScript-heavy sites that simple fetchers cannot read.",
-                "Add:  ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true or false"
-            ));
-        }
-
         if (!isSet("ARCCLAW_SERPER_API_KEY") && !isExplicitOptOut("ARCCLAW_SERPER_API_KEY")) {
             missing.add(new VarSpec(
                 "ARCCLAW_SERPER_API_KEY",
