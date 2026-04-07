@@ -214,9 +214,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      * causing "/approve → No pending tool executions require approval" silently.
      */
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
-        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -233,9 +232,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<String> findLatestRole(String sessionId) {
-        em.clear();
         return em.createQuery(
                 "SELECT c.agentRole FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -724,6 +722,20 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 .setParameter("compromised", CheckpointStatus.COMPROMISED)
                 .setParameter("denied",      CheckpointStatus.DENIED)
                 .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
+                .setMaxResults(1)
+                .getResultList()
+                .isEmpty();
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean hasPendingApproval(String sessionId) {
+        return !em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.status = :status",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
                 .getResultList()
                 .isEmpty();

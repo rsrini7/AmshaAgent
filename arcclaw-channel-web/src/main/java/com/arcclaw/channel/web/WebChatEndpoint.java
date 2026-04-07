@@ -18,6 +18,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -43,6 +44,7 @@ public class WebChatEndpoint {
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject ChannelServices channelServices;
+    @Inject StatefulAgentStore statefulAgentStore;
 
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
@@ -174,6 +176,14 @@ public class WebChatEndpoint {
         // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
         if (arcclawSessionId != null && terminatingSessions.add(arcclawSessionId)) {
             try {
+                // HITL sessions must survive WebSocket disconnects — user may reconnect
+                // from another tab or device to approve/deny.
+                if (statefulAgentStore.hasPendingApproval(arcclawSessionId)) {
+                    log.infof("WebSocket %s: connId=%s arcclawSession=%s — skipping termination (AWAITING_APPROVAL pending)",
+                        reason, connId, arcclawSessionId);
+                    return; // SessionReaper handles cleanup after HITL timeout
+                }
+
                 // Notify UI that this is an intentional server-side termination
                 conn.sendText("{\"type\":\"session_terminated\"}").subscribe().with(v -> {}, err -> {});
                 

@@ -217,8 +217,10 @@ export class ArcChatInterface extends LitElement {
           id: crypto.randomUUID(),
           role: m.role,
           text: m.text,
-          timestamp: Date.now(), // history doesn't have timestamps? we'll just use current for now
-          historic: true
+          timestamp: Date.now(),
+          historic: true,
+          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸ Approval needed'),
+          actionId: m.actionId || null
         }));
       await this.updateComplete;
       this._scrollToBottom();

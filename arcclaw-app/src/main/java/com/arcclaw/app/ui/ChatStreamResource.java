@@ -1,7 +1,9 @@
 package com.arcclaw.app.ui;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -20,6 +22,7 @@ import com.arcclaw.app.ui.dto.AgentEvent;
 import com.arcclaw.app.ui.dto.ChatMessageDto;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.state.PersistentChatMemoryStore;
+import com.arcclaw.core.state.StatefulAgentStore;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import io.smallrye.mutiny.Multi;
@@ -36,6 +39,9 @@ public class ChatStreamResource {
     @Inject
     PersistentChatMemoryStore chatMemoryStore;
     
+    @Inject
+    StatefulAgentStore statefulAgentStore;
+
     @Inject
     ApiKeyValidator apiKeyValidator;
 
@@ -74,10 +80,32 @@ public class ChatStreamResource {
         if (!apiKeyValidator.isValid(apiKey)) {
             throw new WebApplicationException(Response.Status.UNAUTHORIZED);
         }
-        return chatMemoryStore.getMessages(sessionId)
+
+        final Long actionIdForPause = statefulAgentStore.findLatestAwaitingApproval(sessionId)
+                .map(cp -> cp.getId())
+                .orElse(null);
+
+        List<ChatMessageDto> dtos = chatMemoryStore.getMessages(sessionId)
                 .stream()
                 .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
                 .map(ChatMessageDto::from)
-                .toList();
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        // Only attach actionId to the LAST matching message (§ Option A refined)
+        if (actionIdForPause != null) {
+            int lastIdx = -1;
+            for (int i = dtos.size() - 1; i >= 0; i--) {
+                ChatMessageDto d = dtos.get(i);
+                if ("assistant".equals(d.role()) && d.text().contains("⏸ Approval needed")) {
+                    lastIdx = i;
+                    break;
+                }
+            }
+            if (lastIdx >= 0) {
+                ChatMessageDto d = dtos.get(lastIdx);
+                dtos.set(lastIdx, new ChatMessageDto(d.role(), d.text(), actionIdForPause));
+            }
+        }
+        return dtos;
     }
 }

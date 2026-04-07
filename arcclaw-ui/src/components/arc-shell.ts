@@ -364,45 +364,48 @@ export class ArcShell extends LitElement {
 
   // ─── Routing ─────────────────────────────────────────────────────────────
 
-  private _renderRoute() {
-    if (!this._apiKey && this._route !== '#/onboarding') {
-      window.setTimeout(() => (window.location.hash = '#/onboarding'), 0);
-      return nothing;
+  private _renderViews() {
+    if (!this._apiKey) {
+      if (this._route !== '#/onboarding') {
+        window.setTimeout(() => (window.location.hash = '#/onboarding'), 0);
+      }
+      return html`<arc-onboarding class="content-area"></arc-onboarding>`;
     }
 
-    switch (this._route) {
-      case '#/chat':
-        return html`<arc-chat-interface
-          class="content-area"
-          .apiKey="${this._apiKey}"
-          .sessionId="${this._sessionId}"
-          .platformId="${this._platformId}"
-        ></arc-chat-interface>`;
-      case '#/agents':
-        return html`<arc-agent-status
-          class="content-area"
-          .agents="${this._agents}"
-        ></arc-agent-status>`;
-      case '#/hitl':
-        return html`<arc-hitl-panel
-          class="content-area"
-          .apiKey="${this._apiKey}"
-          .approvals="${this._pendingApprovals}"
-        ></arc-hitl-panel>`;
-      case '#/skills':
-        return html`<arc-skills-panel
-          class="content-area"
-          .apiKey="${this._apiKey}"
-        ></arc-skills-panel>`;
-      case '#/settings':
-        return html`<arc-settings
-          class="content-area"
-          .apiKey="${this._apiKey}"
-        ></arc-settings>`;
-      case '#/onboarding':
-      default:
-        return html`<arc-onboarding class="content-area"></arc-onboarding>`;
-    }
+    return html`
+      <arc-chat-interface
+        class="content-area"
+        style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+        .sessionId="${this._sessionId}"
+        .platformId="${this._platformId}"
+      ></arc-chat-interface>
+
+      <arc-agent-status
+        class="content-area"
+        style="display: ${this._route === '#/agents' ? 'flex' : 'none'}"
+        .agents="${this._agents}"
+      ></arc-agent-status>
+
+      <arc-hitl-panel
+        class="content-area"
+        style="display: ${this._route === '#/hitl' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+        .approvals="${this._pendingApprovals}"
+      ></arc-hitl-panel>
+
+      <arc-skills-panel
+        class="content-area"
+        style="display: ${this._route === '#/skills' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+      ></arc-skills-panel>
+
+      <arc-settings
+        class="content-area"
+        style="display: ${this._route === '#/settings' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+      ></arc-settings>
+    `;
   }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -449,7 +452,7 @@ export class ArcShell extends LitElement {
                 </header>
               `
             : nothing}
-          ${this._renderRoute()}
+          ${this._renderViews()}
         </main>
       </div>
     `;
