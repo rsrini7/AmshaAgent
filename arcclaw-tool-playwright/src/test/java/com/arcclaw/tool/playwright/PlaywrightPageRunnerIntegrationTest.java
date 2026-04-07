@@ -16,12 +16,20 @@ class PlaywrightPageRunnerIntegrationTest {
 
     @BeforeAll
     static void checkEnvAndInit() {
-        String enabled = System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED");
+        String enabledEnv = System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED");
         Assumptions.assumeTrue(
-            "true".equalsIgnoreCase(enabled),
+            "true".equalsIgnoreCase(enabledEnv),
             "Skipping: ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED is not set to true"
         );
+        
         runner = new PlaywrightPageRunner();
+        runner.enabled = true; // Manually enable since we're bypassing CDI
+        runner.init();
+        
+        Assumptions.assumeTrue(
+            runner.isInitialized(),
+            "Skipping: Playwright runner failed to initialize (check Chromium binaries)"
+        );
     }
 
     @Test

@@ -41,6 +41,10 @@ public class PlaywrightPageRunner {
     private Playwright playwright;
     private Browser browser;
 
+    public boolean isInitialized() {
+        return browser != null;
+    }
+
     @PostConstruct
     void init() {
         if (!enabled) {
