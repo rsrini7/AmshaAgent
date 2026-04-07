@@ -1,18 +1,19 @@
 package com.arcclaw.tool.playwright;
 
-import com.microsoft.playwright.*;
-import com.microsoft.playwright.options.LoadState;
-import com.microsoft.playwright.options.ScreenshotScale;
-import jakarta.enterprise.context.ApplicationScoped;
-import org.jboss.logging.Logger;
+import java.util.Base64;
+import java.util.regex.Pattern;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.util.Base64;
-import java.util.regex.Pattern;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.enterprise.context.ApplicationScoped;
+
+import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.LoadState;
+import com.microsoft.playwright.options.ScreenshotScale;
 import io.quarkus.runtime.Startup;
 import io.quarkus.scheduler.Scheduled;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @Startup
 @ApplicationScoped

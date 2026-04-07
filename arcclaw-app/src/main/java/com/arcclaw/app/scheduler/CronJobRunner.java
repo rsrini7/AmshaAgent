@@ -114,22 +114,27 @@ public class CronJobRunner {
     }
 
     private String resolveRole(AgentCronEntity job) {
+        String normalized = job.goal.replaceFirst("^CRON\\s+", "").toLowerCase();
+        
+        // Output-only goals: unconditionally override to coordinator
+        if (normalized.startsWith("output") || normalized.startsWith("say ")
+                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
         if (job.executionRole != null && !job.executionRole.isBlank()) {
             return job.executionRole;
         }
-        
-        // Legacy fallback heuristic
-        String goalLower = job.goal.toLowerCase();
-        
+
         // Priority 1 — Coordinator (Meta-scheduling / goal orchestration)
-        if (goalLower.contains("coordinator task") || goalLower.contains("meta-schedule") || goalLower.contains("schedule next")) {
+        if (normalized.contains("coordinator task") || normalized.contains("meta-schedule") || normalized.contains("schedule next")) {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         
         // Priority 2 — Specific agent hints
-        if (goalLower.contains("researcher task") || goalLower.contains("fetch") || goalLower.contains("search") || goalLower.contains("discovery")) {
+        if (normalized.contains("researcher task") || normalized.contains("fetch") || normalized.contains("search") || normalized.contains("discovery")) {
             return AgentRoleEnum.RESEARCHER.toScopedName();
-        } else if (goalLower.contains("coder task") || goalLower.contains("write code") || goalLower.contains("fix bug") || goalLower.contains("refactor")) {
+        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("fix bug") || normalized.contains("refactor")) {
             return AgentRoleEnum.CODER.toScopedName();
         }
         

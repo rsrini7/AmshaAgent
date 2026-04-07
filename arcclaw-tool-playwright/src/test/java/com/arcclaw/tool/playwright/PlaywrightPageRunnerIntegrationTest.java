@@ -2,13 +2,12 @@ package com.arcclaw.tool.playwright;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.microsoft.playwright.PlaywrightException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
-import com.microsoft.playwright.PlaywrightException;
 
 @Tag("integration")
 class PlaywrightPageRunnerIntegrationTest {

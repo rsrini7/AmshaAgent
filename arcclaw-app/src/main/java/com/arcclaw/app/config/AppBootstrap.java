@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -706,7 +707,7 @@ public class AppBootstrap {
         System.err.flush();
         try {
             if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
-                BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(System.in));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
                 String line = reader.readLine();
                 return (line != null) ? line.trim() : null;
             } else {

@@ -88,11 +88,13 @@ public class AgentCronEntity {
                 ? "N/A"
                 : InstantToTextConverter.format(nextFireTime);
 
+        String displayGoal = goal != null ? goal.replaceFirst("^CRON\\s+", "") : "N/A";
+
         return String.format(
                 "ID: %s | Cron: %s | TZ: %s | RunOnce: %s | " +
                 "Goal: %s | Next fire: %s | Status: %s",
                 id, cronExpression, timezone, runOnce,
-                goal, nextFire, status
+                displayGoal, nextFire, status
         );
     }
 

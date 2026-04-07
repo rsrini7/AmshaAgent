@@ -1,20 +1,21 @@
 package com.arcclaw.tool.playwright;
 
-import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.tools.AgentTool;
-import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.scope.WorkspaceContext;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolResponse;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class PlaywrightBrowserTool implements AgentTool {
