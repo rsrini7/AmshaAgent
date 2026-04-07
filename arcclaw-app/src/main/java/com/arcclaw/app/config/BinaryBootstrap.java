@@ -49,6 +49,7 @@ public class BinaryBootstrap {
 
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
+        drainInputBuffer();
         extractEnvExampleIfNeeded(binaryDir);
         
         reexecWithLdPreloadIfNeeded(args);
@@ -727,6 +728,15 @@ public class BinaryBootstrap {
         }
         // Fallback for non-TTY environments (like mise run)
         return readLineWithFallback(null, prompt);
+    }
+
+    private static void drainInputBuffer() {
+        if (System.console() != null) return; // Console doesn't need draining usually
+        try {
+            while (System.in.available() > 0) {
+                System.in.read();
+            }
+        } catch (Exception ignored) {}
     }
 
     private static boolean canRun(String... cmd) {
