@@ -262,6 +262,8 @@ export class ArcChatInterface extends LitElement {
       this._wsStatus = 'closed';
     } else if (frame.type === 'message' && frame.role === 'assistant') {
       this._isTyping = false;
+      this._awaitingApproval = false;
+      this._showDenyReason = false;
       const isApproval = frame.text.includes('⏸ Approval needed');
       this._messages = [...this._messages, {
         id: crypto.randomUUID(), role: 'assistant', text: frame.text, timestamp: Date.now(), isApprovalPrompt: isApproval

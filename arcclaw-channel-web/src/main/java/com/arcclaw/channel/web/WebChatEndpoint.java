@@ -91,11 +91,13 @@ public class WebChatEndpoint {
         }
 
         connectionToSession.put(conn.id(), platformId);
-        sessionStore.register(platformId, conn);
 
         String arcclawSessionId = channelServices.resolveOrCreateSession(
             ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
+
+        // Track connection and mapping in the globally accessible store (§85-C)
+        sessionStore.register(platformId, arcclawSessionId, conn);
 
         // §85-B: Proactively initialize session presence in the heartbeat tracker.
         // The browser WebSocket API cannot send custom headers, so ownership

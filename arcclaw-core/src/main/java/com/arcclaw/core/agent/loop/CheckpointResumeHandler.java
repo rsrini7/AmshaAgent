@@ -159,6 +159,9 @@ public class CheckpointResumeHandler {
                                     new ReplyNode.Text(output),
                                     new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
                                 ));
+                            } else if (ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
+                                // Prefer session-based broadcast for stable multi-tab sync on Web
+                                s.sendBySession(sessionId, output);
                             } else {
                                 s.sendRaw(user, output);
                             }
