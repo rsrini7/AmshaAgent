@@ -711,7 +711,8 @@ public class AppBootstrap {
                 // which defeats the buffer drain attempts.
                 BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(System.in));
                 String line = reader.readLine();
-                return line != null ? line.trim() : "";
+                // CHANGE: Return null instead of "" on EOF
+                return line != null ? line.trim() : null; 
             } else {
                 System.err.println(" (Non-interactive/CI detected)");
                 return null;
