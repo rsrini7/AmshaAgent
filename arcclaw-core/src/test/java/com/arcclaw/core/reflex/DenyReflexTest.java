@@ -132,7 +132,7 @@ class DenyReflexTest {
         
         String resultText = result.commandResponse().get();
 
-        assertTrue(resultText.contains("denied and cancelled"));
+        assertEquals("Denial Ack", resultText);
         assertTrue(ctx.isResumeSignal());
         verify(cronRepository).markFailed(eq(cronId), anyString());
         verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
@@ -153,9 +153,11 @@ class DenyReflexTest {
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny", ctx);
         String resultText = result.commandResponse().get();
 
-        assertTrue(resultText.contains("No active denial in this chat session"));
-        assertTrue(resultText.contains("Backup databases"));
-        assertTrue(resultText.contains("/deny cron-456"));
+        String expected = "⚠️ No active denial in this chat session.\n\n" +
+                        "A background task is waiting:\n" +
+                        "• Backup databases\n\n" +
+                        "Use: `/deny cron-456` to cancel it.";
+        assertEquals(expected, resultText);
     }
 
     @Test

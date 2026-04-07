@@ -68,6 +68,8 @@ public class ApproveReflexDelegationTest {
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
         MessageContext context = mock(MessageContext.class);
+        com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("u1", "u1", "u1", com.arcclaw.channel.api.ChannelType.TELEGRAM);
+        when(context.getUser()).thenReturn(user);
 
         ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve", context);
 
@@ -86,6 +88,8 @@ public class ApproveReflexDelegationTest {
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
         MessageContext context = mock(MessageContext.class);
+        com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("u1", "u1", "u1", com.arcclaw.channel.api.ChannelType.TELEGRAM);
+        when(context.getUser()).thenReturn(user);
 
         ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve github", context);
 
