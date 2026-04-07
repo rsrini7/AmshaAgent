@@ -113,13 +113,15 @@ public class PlaywrightBrowserInstaller {
     }
 
     private static void runClassInstaller(Path browsersPath) throws Exception {
-        // Fallback for binary distributions where mvnw is missing
-        String javaHome = System.getProperty("java.home");
-        String javaBin = javaHome + "/bin/java";
         String classpath = System.getProperty("java.class.path");
+        if (classpath == null || classpath.isBlank()) {
+            throw new RuntimeException("Java classpath is unavailable. Install Chromium from a source checkout with ./mvnw "
+                    + "exec:java -pl arcclaw-tool-playwright -Dexec.mainClass=com.microsoft.playwright.CLI "
+                    + "-Dexec.args=\"install --with-deps chromium\"");
+        }
 
         List<String> command = new ArrayList<>();
-        command.add(javaBin);
+        command.add(resolveJavaExecutable());
         command.add("-cp");
         command.add(classpath);
         command.add("-DPLAYWRIGHT_BROWSERS_PATH=" + browsersPath.toString());
@@ -139,5 +141,30 @@ public class PlaywrightBrowserInstaller {
         } else {
             throw new RuntimeException("CLI returned exit code " + exitCode);
         }
+    }
+
+    private static String resolveJavaExecutable() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        String javaName = os.contains("win") ? "java.exe" : "java";
+
+        String javaHome = System.getProperty("java.home");
+        if (javaHome != null && !javaHome.isBlank()) {
+            Path javaFromHome = Path.of(javaHome, "bin", javaName);
+            if (Files.exists(javaFromHome)) return javaFromHome.toString();
+        }
+
+        String currentCommand = ProcessHandle.current().info().command().orElse("");
+        if (!currentCommand.isBlank()) {
+            Path commandPath = Path.of(currentCommand);
+            Path fileName = commandPath.getFileName();
+            if (fileName != null) {
+                String runningName = fileName.toString().toLowerCase();
+                if ("java".equals(runningName) || "java.exe".equals(runningName)) {
+                    return commandPath.toString();
+                }
+            }
+        }
+
+        return javaName;
     }
 }
