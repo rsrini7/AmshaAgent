@@ -634,7 +634,6 @@ public class AppBootstrap {
      * the console==null or missing.isEmpty() early returns.
      */
     private static void promptPlaywrightSetupIfNeeded(Path binaryDir) {
-        // Skip in CI
         if (System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null) return;
 
         Path envFile = binaryDir.resolve(".env");
@@ -643,10 +642,9 @@ public class AppBootstrap {
                 System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
         boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
 
-        // Prompt if: (a) not configured, or (b) enabled but browser missing
         boolean needsPrompt = (playwrightProp == null || playwrightProp.isBlank())
-        || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
-
+                || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
+        
         if (!needsPrompt) return;
 
         System.err.println();
@@ -660,30 +658,31 @@ public class AppBootstrap {
                 : "  └─ Enable Playwright? [y/N]: ");
 
         if (response == null || response.trim().isEmpty()) {
-            System.err.println();
-            System.err.println("  ⚠  Non-interactive stdin detected (running via mise/task runner?).");
-            System.err.println("     To enable Playwright, set in your .env:");
-            System.err.println("       ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
-            System.err.println("     Then re-run to trigger browser download, or run directly:");
-            System.err.println("       java -jar arcclaw.jar serve");
+            if (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                System.err.println("  │  (Non-interactive: auto-installing Chromium — already enabled in .env)");
+                System.err.println("  │");
+                PlaywrightBrowserInstaller.installChromium(browsersPath);
+            } else {
+                System.err.println();
+                System.err.println("  ⚠  Non-interactive stdin detected (running via mise/task runner?).");
+                System.err.println("     To enable Playwright, set in your .env:");
+                System.err.println("       ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
+                System.err.println("     Then re-run — Chromium will auto-install on next start.");
+            }
             return;
         }
 
         String tr = response.trim().toLowerCase();
-        System.err.println("  DEBUG: playwright response=[" + tr + "]"); // Internal diagnostic
 
         if (playwrightEnabled) {
-            // Already enabled, just asking about browser installation
             if (tr.isEmpty() || tr.startsWith("y")) {
                 PlaywrightBrowserInstaller.installChromium(browsersPath);
             }
         } else if (tr.startsWith("y")) {
-            // Enabling for the first time
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
             initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
-
             if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
                 System.err.println("  │");
                 System.err.println("  │  Chromium browser binary is not installed.");
