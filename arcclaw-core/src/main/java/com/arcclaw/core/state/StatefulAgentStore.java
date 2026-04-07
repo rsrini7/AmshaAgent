@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.
@@ -13,7 +14,7 @@ import com.arcclaw.core.security.AutonomyLevel;
  * Implementations handle Jackson serialization of {@code List<ReasoningStep>}
  * to/from the {@link AgentCheckpoint#stateJson} field.
  */
-public interface StatefulAgentStore {
+public interface StatefulAgentStore extends PendingApprovalChecker {
 
     /**
      * Save or update a checkpoint with the current reasoning steps.
