@@ -229,6 +229,16 @@ public class SystemPromptBuilder {
             bracketed template variable in your responses. If you do not know a value,
             say so explicitly in plain text (e.g. "I don't have the task ID available").
             Placeholder text is not a valid response and will cause system errors.
+            
+            BROWSER EXTRACTION RETRY RULE:
+            If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
+            than 50 characters, the CSS selector likely failed to capture the main content.
+            In this case, do NOT give up or finish with an "unable to fetch" message.
+            Instead, attempt a second call with a broader selector (e.g. "h3", "article", or "body").
+            Only conclude the content is unavailable after multiple failed attempts with
+            different selectors.
+            NEVER suggest external scripts, Python code, or manual steps as a substitute
+            for using your browser tools to find the information.
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {

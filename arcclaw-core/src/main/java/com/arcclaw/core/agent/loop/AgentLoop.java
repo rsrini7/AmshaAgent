@@ -496,6 +496,20 @@ public class AgentLoop {
             }
         }
 
+        // F3: FAILURE PHASE QUALITY GATE
+        // If the sub-agent result contains phrases indicating failure or inability to perform,
+        // do NOT fast-path it. Let the coordinator see the failure and decide on a fallback
+        // (e.g. retry with different params, try a different tool).
+        // F3 UPDATE: Only check the first 150 characters to reduce false positives on valid answers.
+        String lowerObs = observation.toLowerCase();
+        String opening = lowerObs.length() > 150 ? lowerObs.substring(0, 150) : lowerObs;
+        if (opening.contains("i was unable") || opening.contains("unable to fetch") 
+                || opening.contains("could not find") || opening.contains("i cannot") 
+                || opening.contains("could not retrieve")) {
+            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases in opening — skipping fast-path to allow coordinator fallback", sessionId);
+            return Optional.empty();
+        }
+
         log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +
                 "for session %s — skipping coordinator wrap-up LLM call", sessionId);
         return Optional.of(AgentResult.finished(observation, List.copyOf(resumedHistory)));
