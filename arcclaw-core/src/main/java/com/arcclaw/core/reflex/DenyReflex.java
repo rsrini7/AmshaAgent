@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
@@ -49,7 +50,7 @@ public class DenyReflex implements AgentReflex {
     @Inject CheckpointResumeHandler checkpointResumeHandler;
     @Inject DelegateApprovalGuard delegateGuard;
     @Inject CheckpointApprovalService checkpointApprovalService;
-    @Inject com.arcclaw.core.agent.loop.CliResultBridge cliResultBridge;
+    @Inject CliResultBridge cliResultBridge;
 
     @Override
     public boolean matches(String input) {

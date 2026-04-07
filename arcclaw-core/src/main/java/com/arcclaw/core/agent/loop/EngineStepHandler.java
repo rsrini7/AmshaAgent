@@ -5,8 +5,11 @@ import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -16,6 +19,7 @@ import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
@@ -43,6 +47,12 @@ public class EngineStepHandler {
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);
+
+    private static final Set<String> AGENT_IDENTIFIERS = AgentRoleEnum.values().stream()
+            .flatMap(r -> Stream.concat(
+                    Stream.of(r.id()), 
+                    r.definition().aliases().stream()))
+            .collect(Collectors.toUnmodifiableSet());
 
     StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
             List<ReasoningStep> history, String transientError,
@@ -131,6 +141,20 @@ public class EngineStepHandler {
             // Retrying will never help — terminal immediately with a clear message.
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = extractUnavailableToolName(rawError);
+                
+                // Bug fix: LLM hallucinated agent name as tool — inject correction and retry
+                if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase())) {
+                    log.warnf("[STATE-MACHINE] session %s: LLM called agent '%s' as tool — retrying with correction",
+                            sessionId, unavailableTool);
+                    String correction = String.format(
+                        "System: You called '%s' as if it were a tool, but that is an agent name. " +
+                        "STRICT RULE: Only use 'delegate_to_agent' for delegation. " +
+                        "Example: delegate_to_agent(agent=\"%s\", goal=\"...\"). " +
+                        "Retry now with the correct tool call.",
+                        unavailableTool, unavailableTool);
+                    return StepDecision.retryEngine(correction, llmSchemaErrorCount);
+                }
+
                 if ("FINISH".equals(unavailableTool)) {
                     String failedGen = extractFailedGeneration(rawError);
                     String answer = extractFinishAnswer(failedGen);

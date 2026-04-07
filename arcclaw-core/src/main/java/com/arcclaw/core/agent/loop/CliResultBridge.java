@@ -1,12 +1,14 @@
 package com.arcclaw.core.agent.loop;
- 
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+
 import jakarta.enterprise.context.ApplicationScoped;
+
 import com.arcclaw.core.agent.result.AgentResult;
 import org.jboss.logging.Logger;
- 
+
 /**
  * Shared bridge to pass agent results from an asynchronous resume (e.g. REST)
  * back to a blocking CLI session.

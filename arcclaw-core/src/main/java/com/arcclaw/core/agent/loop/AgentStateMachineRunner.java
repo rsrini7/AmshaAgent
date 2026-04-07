@@ -117,14 +117,14 @@ public class AgentStateMachineRunner {
                         "treating as loop exceeded to preserve LOOP_MAX_ITERATIONS audit semantics.",
                         iteration, context.maxIterations(), context.sessionId()
                     );
-                    return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+                    AgentResult res = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+                    maybeSignalBridge(context, res);
+                    return res;
                 }
 
                 if (engineDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), engineDecision.result());
-                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-                        cliResultBridge.complete(context.sessionId(), engineDecision.result());
-                    }
+                    maybeSignalBridge(context, engineDecision.result());
                     return engineDecision.result();
                 }
                 if (engineDecision.type() == DecisionType.CONTINUE) {
@@ -175,9 +175,7 @@ public class AgentStateMachineRunner {
 
                     AgentResult result = handleFinishAction(context.sessionId(), context.agentRole(),
                             history, step, iteration);
-                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-                        cliResultBridge.complete(context.sessionId(), result);
-                    }
+                    maybeSignalBridge(context, result);
                     return result;
                 }
 
@@ -185,9 +183,7 @@ public class AgentStateMachineRunner {
                         context, history, step, consecutiveFailures);
                 if (validationDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), validationDecision.result());
-                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-                        cliResultBridge.complete(context.sessionId(), validationDecision.result());
-                    }
+                    maybeSignalBridge(context, validationDecision.result());
                     return validationDecision.result();
                 }
                 if (validationDecision.type() == DecisionType.CONTINUE) {
@@ -199,9 +195,7 @@ public class AgentStateMachineRunner {
                 // Re-dispatch if validateTool rewrote a hallucinated tool → FINISH
                 if (ReasoningStep.FINISH.equals(step.action())) {
                     AgentResult result =  handleFinishAction(context.sessionId(), context.agentRole(), history, step, iteration);
-                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-                        cliResultBridge.complete(context.sessionId(), result);
-                    }
+                    maybeSignalBridge(context, result);
                     return result;
                 }
 
@@ -229,9 +223,7 @@ public class AgentStateMachineRunner {
                 }
                 if (invocationDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), invocationDecision.result());
-                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-                        cliResultBridge.complete(context.sessionId(), invocationDecision.result());
-                    }
+                    maybeSignalBridge(context, invocationDecision.result());
                     return invocationDecision.result();
                 }
                 consecutiveFailures = invocationDecision.consecutiveFailures();
@@ -250,10 +242,14 @@ public class AgentStateMachineRunner {
                 context.maxIterations(), context.sessionId());
         AgentResult loopRes = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
         fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), loopRes);
-        if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-            cliResultBridge.complete(context.sessionId(), loopRes);
-        }
+        maybeSignalBridge(context, loopRes);
         return loopRes;
+    }
+
+    private void maybeSignalBridge(AgentExecutionContext context, AgentResult result) {
+        if (context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return;
+        if (result instanceof AgentResult.AwaitingApproval) return;
+        cliResultBridge.complete(context.sessionId(), result);
     }
 
     private void fireTerminalEvent(String sessionId, String role, String goal, AgentResult result) {
