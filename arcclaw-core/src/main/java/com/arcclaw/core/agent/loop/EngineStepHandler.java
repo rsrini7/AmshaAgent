@@ -131,6 +131,15 @@ public class EngineStepHandler {
             // Retrying will never help — terminal immediately with a clear message.
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = extractUnavailableToolName(rawError);
+                if ("FINISH".equals(unavailableTool)) {
+                    String failedGen = extractFailedGeneration(rawError);
+                    String answer = extractFinishAnswer(failedGen);
+                    if (answer != null && !answer.isBlank()) {
+                        log.infof("[STATE-MACHINE] session %s: recovered FINISH answer despite schema error", sessionId);
+                        return StepDecision.terminal(AgentResult.finished(answer, List.copyOf(history)));
+                    }
+                }
+                
                 String msg = unavailableTool != null
                     ? String.format(
                         "I tried to use `%s`, but that tool is not available in this role. "
@@ -270,8 +279,10 @@ public class EngineStepHandler {
             if (start < 0) return null;
             JsonNode root =
                 objectMapper.readTree(rawError.substring(start));
-            JsonNode node =
-                root.path("failed_generation");
+            JsonNode node = root.path("failed_generation");
+            if (node.isMissingNode()) {
+                node = root.path("failedgeneration"); // fallback for some providers
+            }
             if (node.isMissingNode() || !node.isTextual()) return null;
             String result = node.asText().strip();
             return result.isBlank() ? null : result;
@@ -279,6 +290,24 @@ public class EngineStepHandler {
             log.debugf("extractFailedGeneration parse failed: %s", e.getMessage());
             return null;
         }
+    }
+
+    private String extractFinishAnswer(String failedGeneration) {
+        if (failedGeneration == null || failedGeneration.isBlank()) return null;
+        try {
+            JsonNode root = objectMapper.readTree(failedGeneration);
+            JsonNode answerNode = root.path("answer");
+            if (answerNode.isMissingNode()) {
+                // Check inside "parameters" (standard tool call schema)
+                answerNode = root.path("parameters").path("answer");
+            }
+            if (answerNode.isTextual()) {
+                return answerNode.asText().strip();
+            }
+        } catch (Exception e) {
+            log.debugf("extractFinishAnswer parse failed: %s", e.getMessage());
+        }
+        return null;
     }
 
     private boolean looksLikeNaturalLanguage(String text) {

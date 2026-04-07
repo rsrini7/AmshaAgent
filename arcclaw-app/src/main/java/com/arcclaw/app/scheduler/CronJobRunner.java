@@ -65,6 +65,29 @@ public class CronJobRunner {
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
         
         try {
+            String stripped = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "").trim() : "";
+            String normalized = stripped.toLowerCase();
+            
+            if (normalized.startsWith("output the following message:") || normalized.startsWith("say ") 
+                    || normalized.startsWith("tell ") || normalized.startsWith("send message:") || normalized.startsWith("send text:")) {
+                String text = stripped;
+                if (normalized.startsWith("output the following message:")) {
+                    text = stripped.substring("output the following message:".length()).trim();
+                } else if (normalized.startsWith("say ")) {
+                    text = stripped.substring("say ".length()).trim();
+                } else if (normalized.startsWith("tell ")) {
+                    text = stripped.substring("tell ".length()).trim();
+                } else if (normalized.startsWith("send message:")) {
+                    text = stripped.substring("send message:".length()).trim();
+                } else if (normalized.startsWith("send text:")) {
+                    text = stripped.substring("send text:".length()).trim();
+                }
+                
+                AgentResult result = AgentResult.finished(text, java.util.Collections.emptyList());
+                resultHandler.handleSuccess(job, cronSessionId, executionId, result);
+                return;
+            }
+
             String systemNote = 
                 "[SYSTEM CONSTRAINT: CRON EXECUTION MODE. " +
                 "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
