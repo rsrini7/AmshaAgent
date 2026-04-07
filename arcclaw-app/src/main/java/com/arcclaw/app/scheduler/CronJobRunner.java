@@ -1,6 +1,7 @@
 package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -83,7 +84,7 @@ public class CronJobRunner {
                     text = stripped.substring("send text:".length()).trim();
                 }
                 
-                AgentResult result = AgentResult.finished(text, java.util.Collections.emptyList());
+                AgentResult result = AgentResult.finished(text, Collections.emptyList());
                 resultHandler.handleSuccess(job, cronSessionId, executionId, result);
                 return;
             }
