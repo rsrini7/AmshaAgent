@@ -172,7 +172,7 @@ public class CliUtils {
             if (!isSet(spec.key)) missing.add(spec);
         }
 
-        if (!isSet("GITHUB_TOKEN")) {
+        if (!isSet("GITHUB_TOKEN") && !isExplicitOptOut("GITHUB_TOKEN")) {
             missing.add(new VarSpec(
                 "GITHUB_TOKEN",
                 "Optional GitHub Personal Access Token (classic or fine-grained).",
@@ -192,7 +192,7 @@ public class CliUtils {
             ));
         }
 
-        if (!isSet("ARCCLAW_SERPER_API_KEY")) {
+        if (!isSet("ARCCLAW_SERPER_API_KEY") && !isExplicitOptOut("ARCCLAW_SERPER_API_KEY")) {
             missing.add(new VarSpec(
                 "ARCCLAW_SERPER_API_KEY",
                 "Optional Serper.dev API key for Google Search integration.",
@@ -202,7 +202,7 @@ public class CliUtils {
             ));
         }
 
-        if (!isSet("ARCCLAW_BRAVE_API_KEY")) {
+        if (!isSet("ARCCLAW_BRAVE_API_KEY") && !isExplicitOptOut("ARCCLAW_BRAVE_API_KEY")) {
             missing.add(new VarSpec(
                 "ARCCLAW_BRAVE_API_KEY",
                 "Optional Brave Search API key.",
@@ -213,6 +213,13 @@ public class CliUtils {
         }
 
         return missing;
+    }
+
+    private static boolean isExplicitOptOut(String key) {
+        String val = System.getProperty(key, System.getenv(key));
+        return val != null && (val.equalsIgnoreCase("none") 
+            || val.equalsIgnoreCase("false") 
+            || val.equalsIgnoreCase("skip"));
     }
 
     /**

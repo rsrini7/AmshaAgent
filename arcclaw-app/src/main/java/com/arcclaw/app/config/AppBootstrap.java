@@ -442,7 +442,7 @@ public class AppBootstrap {
                         String currentValue = currentLine.substring(key.length() + 1).trim();
                         yield currentValue.isEmpty() || currentValue.contains("xxxx") || 
                               currentValue.contains("<") || currentValue.contains("changeme") ||
-                              currentValue.contains("_your_") || currentValue.contains("ABCdef");
+                              currentValue.contains("ABCdef");
                     }
                 };
 
@@ -650,7 +650,7 @@ public class AppBootstrap {
 
         // Prompt if: (a) not configured, or (b) enabled but browser missing
         boolean needsPrompt = (playwrightProp == null || playwrightProp.isBlank())
-                || (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
+        || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
 
         if (!needsPrompt) return;
 
@@ -664,9 +664,13 @@ public class AppBootstrap {
                 ? "  └─ Download and install Chromium now? [Y/n]: "
                 : "  └─ Enable Playwright? [y/N]: ");
 
-        if (response == null) {
-            // Could not read — skip silently
-            System.err.println("     [skipped — non-interactive]");
+        if (response == null || response.trim().isEmpty()) {
+            System.err.println();
+            System.err.println("  ⚠  Non-interactive stdin detected (running via mise/task runner?).");
+            System.err.println("     To enable Playwright, set in your .env:");
+            System.err.println("       ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
+            System.err.println("     Then re-run to trigger browser download, or run directly:");
+            System.err.println("       java -jar arcclaw.jar serve");
             return;
         }
 
@@ -701,18 +705,16 @@ public class AppBootstrap {
     }
 
     private static String readLineWithFallback(Console console, String prompt) {
-        if (console != null) return console.readLine(prompt);
-        
+        if (console != null) {
+            return console.readLine(prompt); // null = EOF, callers handle it
+        }
         System.err.print(prompt);
         System.err.flush();
         try {
             if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
-                // Use BufferedReader instead of Scanner to avoid aggressive pre-buffering
-                // which defeats the buffer drain attempts.
                 BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(System.in));
                 String line = reader.readLine();
-                // CHANGE: Return null instead of "" on EOF
-                return line != null ? line.trim() : null; 
+                return (line != null) ? line.trim() : null;
             } else {
                 System.err.println(" (Non-interactive/CI detected)");
                 return null;
