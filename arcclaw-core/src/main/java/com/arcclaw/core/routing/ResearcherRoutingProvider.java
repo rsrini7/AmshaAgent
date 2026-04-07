@@ -40,7 +40,6 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
         ")"
     );
 
-    private static final Pattern GITHUB_REF_PATTERN = Pattern.compile("\\b[\\w.-]+/[\\w.-]+\\b");
 
     @Override
     public List<Pattern> fastPathTriggers() {
@@ -70,7 +69,7 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
         // Generic "search for X" with no URL is coordinator-level task.
         // Researcher only fast-paths for browsing URLs or GitHub refs.
         boolean hasUrl = userMessage.contains("http://") || userMessage.contains("https://");
-        boolean hasGithubRef = userMessage.toLowerCase().contains("github") || GITHUB_REF_PATTERN.matcher(userMessage).find();
+        boolean hasGithubRef = userMessage.toLowerCase().contains("github");
         return !hasUrl && !hasGithubRef;
     }
 

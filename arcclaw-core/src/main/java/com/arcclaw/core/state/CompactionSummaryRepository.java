@@ -28,8 +28,10 @@ public class CompactionSummaryRepository {
 
     @Transactional
     public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {
-        em.clear(); // A16 — Force read through L1 cache to avoid stale values during CLI polling
         CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
+        if (entity != null) {
+            em.refresh(entity); // A16 — Force read through L1 cache to avoid stale values during CLI polling
+        }
         return Optional.ofNullable(entity);
     }
 
