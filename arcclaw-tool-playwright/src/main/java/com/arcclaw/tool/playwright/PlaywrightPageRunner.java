@@ -77,13 +77,8 @@ public class PlaywrightPageRunner {
 
     @PreDestroy
     void destroy() {
-        Browser browserRef = browser;
-        Playwright playwrightRef = playwright;
         browser = null;
         playwright = null;
-        if (Thread.currentThread().getName().contains("ShutdownHook")) return;
-        closeBrowserQuietly(browserRef, "shutdown");
-        closePlaywrightQuietly(playwrightRef, "shutdown");
     }
 
     @Scheduled(every = "6h")
@@ -105,19 +100,6 @@ public class PlaywrightPageRunner {
                 log.debugf("Playwright browser close skipped benign error during %s: %s", phase, safeMessage(e));
             } else {
                 log.warnf("Playwright browser close failed during %s: %s", phase, safeMessage(e));
-            }
-        }
-    }
-
-    private void closePlaywrightQuietly(Playwright playwrightRef, String phase) {
-        if (playwrightRef == null) return;
-        try {
-            playwrightRef.close();
-        } catch (Exception e) {
-            if (isBenignCloseError(e)) {
-                log.debugf("Playwright runtime close skipped benign error during %s: %s", phase, safeMessage(e));
-            } else {
-                log.warnf("Playwright runtime close failed during %s: %s", phase, safeMessage(e));
             }
         }
     }
