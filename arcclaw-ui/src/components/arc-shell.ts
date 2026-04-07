@@ -101,6 +101,16 @@ export class ArcShell extends LitElement {
       this._route = window.location.hash || '#/onboarding';
       if (!this._apiKey && this._route !== '#/onboarding') {
         window.location.hash = '#/onboarding';
+        return;
+      }
+
+      // Proactively refresh when navigating if not connected
+      if (this._apiKey) {
+        if (this._sseStatus !== 'connected') {
+          this._sseManager?.connect();
+        }
+        this._fetchAgents();
+        this._fetchApprovals();
       }
     });
 
@@ -356,7 +366,12 @@ export class ArcShell extends LitElement {
         // heartbeat — no action needed
       },
       (status) => {
+        const wasDown = this._sseStatus !== 'connected';
         this._sseStatus = status;
+        if (wasDown && status === 'connected') {
+          this._fetchAgents();
+          this._fetchApprovals();
+        }
       }
     );
     this._sseManager.connect();
