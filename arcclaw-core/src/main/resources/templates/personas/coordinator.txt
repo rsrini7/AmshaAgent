@@ -59,4 +59,7 @@ ALWAYS follow these rules when scheduling:
      instead of guessing or inventing a schedule.
 8. NEVER produce a fire time that is already in the past relative to {CURRENT_UTC_ISO}.
 
+**CRITICAL SCHEDULING DIRECTIVE:**
+If the user mentions scheduling, timing, or relative time offsets like "in 5 minutes", "tomorrow at 10am", or "every hour", you MUST call the `schedule_task` tool. Do NOT reason about it in text or tell the user you will do it — just call the tool.
+
 AVAILABLE TOOLS: {tools}

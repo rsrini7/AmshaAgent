@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
@@ -17,6 +18,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
@@ -72,6 +74,7 @@ public class ScheduleTaskTool implements AgentTool {
 
     @Inject AgentCronRepository cronRepository;
     @Inject AuditService auditService;
+    @Inject Event<CronTaskScheduled> cronScheduledEvent;
 
     @Override
     public String name() { return NAME; }
@@ -252,6 +255,8 @@ public class ScheduleTaskTool implements AgentTool {
                 SecurityEventType.CRONCREATED,
                 "cronId=" + entity.id + " expression=" + cronExpression
                 + " tz=" + entity.timezone + " runOnce=" + runOnce + " role=" + executionRole);
+
+        cronScheduledEvent.fire(new CronTaskScheduled(entity.id));
 
         return ToolResponse.success("Task scheduled successfully. " +
                 "ID: " + entity.id + " | Next fire: " +

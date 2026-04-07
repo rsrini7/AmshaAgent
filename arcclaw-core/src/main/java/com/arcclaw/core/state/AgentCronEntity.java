@@ -88,7 +88,22 @@ public class AgentCronEntity {
                 ? "N/A"
                 : InstantToTextConverter.format(nextFireTime);
 
-        String displayGoal = goal != null ? goal.replaceFirst("^CRON\\s+", "") : "N/A";
+        String displayGoal = "N/A";
+        if (goal != null) {
+            displayGoal = goal.replaceFirst("^CRON\\s+", "").trim();
+            String lower = displayGoal.toLowerCase();
+            if (lower.startsWith("output the following message:")) {
+                displayGoal = displayGoal.substring("output the following message:".length()).trim();
+            } else if (lower.startsWith("say ")) {
+                displayGoal = displayGoal.substring("say ".length()).trim();
+            } else if (lower.startsWith("tell ")) {
+                displayGoal = displayGoal.substring("tell ".length()).trim();
+            } else if (lower.startsWith("send message:")) {
+                displayGoal = displayGoal.substring("send message:".length()).trim();
+            } else if (lower.startsWith("send text:")) {
+                displayGoal = displayGoal.substring("send text:".length()).trim();
+            }
+        }
 
         return String.format(
                 "ID: %s | Cron: %s | TZ: %s | RunOnce: %s | " +

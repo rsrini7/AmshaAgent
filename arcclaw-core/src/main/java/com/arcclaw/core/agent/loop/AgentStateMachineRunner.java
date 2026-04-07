@@ -28,6 +28,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -267,6 +268,7 @@ public class AgentStateMachineRunner {
         }
 
         answer = sanitizeErrorForUser(answer, sessionId);
+        answer = AgentErrorMessageUtil.sanitizeLlmErrorPhrases(answer);
 
         if (answer != null && isGeneratedCodeBlock(answer, agentRole)) {
             if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
