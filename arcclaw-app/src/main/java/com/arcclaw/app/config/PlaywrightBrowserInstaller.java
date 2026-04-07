@@ -147,20 +147,86 @@ public class PlaywrightBrowserInstaller {
     }
 
     private static void runBinaryInstaller(Path browsersPath) throws Exception {
+        StringBuilder attempts = new StringBuilder();
         try {
             runClassInstaller(browsersPath);
             return;
-        } catch (RuntimeException classpathMissing) {
-            if (!isClasspathUnavailable(classpathMissing)) {
-                throw classpathMissing;
-            }
+        } catch (Exception e) {
+            attempts.append("classpath installer: ").append(safeMessage(e));
         }
-        runInProcessInstaller(browsersPath);
+
+        try {
+            runSystemPlaywrightInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("system playwright CLI: ").append(safeMessage(e));
+        }
+
+        try {
+            runNpxPlaywrightInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("npx playwright CLI: ").append(safeMessage(e));
+        }
+
+        try {
+            runInProcessInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("in-process installer: ").append(safeMessage(e));
+        }
+
+        throw new RuntimeException(
+                "Could not install Chromium in binary mode. Tried: " + attempts
+                + ". Install from source checkout with ./mvnw exec:java -pl arcclaw-tool-playwright "
+                + "-Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args=\"install --with-deps chromium\"");
     }
 
-    private static boolean isClasspathUnavailable(RuntimeException e) {
-        String message = e.getMessage();
-        return message != null && message.contains("java.class.path is unavailable");
+    private static void runSystemPlaywrightInstaller(Path browsersPath) throws Exception {
+        List<String> command = new ArrayList<>();
+        if (isWindows()) {
+            command.add("cmd.exe");
+            command.add("/c");
+            command.add("playwright");
+        } else {
+            command.add("playwright");
+        }
+        command.add("install");
+        command.add("chromium");
+        runExternalInstaller(command, browsersPath, "system playwright CLI");
+    }
+
+    private static void runNpxPlaywrightInstaller(Path browsersPath) throws Exception {
+        List<String> command = new ArrayList<>();
+        if (isWindows()) {
+            command.add("cmd.exe");
+            command.add("/c");
+            command.add("npx");
+        } else {
+            command.add("npx");
+        }
+        command.add("--yes");
+        command.add("playwright");
+        command.add("install");
+        command.add("chromium");
+        runExternalInstaller(command, browsersPath, "npx playwright CLI");
+    }
+
+    private static void runExternalInstaller(List<String> command, Path browsersPath, String label) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.environment().put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
+        pb.environment().put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
+        pb.inheritIO();
+        Process p = pb.start();
+        int exitCode = p.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException(label + " returned exit code " + exitCode);
+        }
+        System.err.println();
+        System.err.println("  ✓ Playwright Chromium installed successfully.");
     }
 
     private static void runInProcessInstaller(Path browsersPath) {
@@ -175,6 +241,15 @@ public class PlaywrightBrowserInstaller {
             System.err.println();
             System.err.println("  ✓ Playwright Chromium installed successfully.");
         }
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    private static String safeMessage(Throwable t) {
+        String msg = t.getMessage();
+        return (msg == null || msg.isBlank()) ? t.getClass().getSimpleName() : msg;
     }
 
     private static String resolveJavaExecutable() {

@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.time.Duration;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -37,14 +38,14 @@ public class ChatModelProducer {
     @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
     Duration timeout;
 
-    @ConfigProperty(name = "arcclaw.llm.fallback-model", defaultValue = "")
-    String fallbackModel;
+    @ConfigProperty(name = "arcclaw.llm.fallback-model")
+    Optional<String> fallbackModel;
 
-    @ConfigProperty(name = "arcclaw.llm.fallback-base-url", defaultValue = "")
-    String fallbackBaseUrl;
+    @ConfigProperty(name = "arcclaw.llm.fallback-base-url")
+    Optional<String> fallbackBaseUrl;
 
-    @ConfigProperty(name = "arcclaw.llm.fallback-api-key", defaultValue = "")
-    String fallbackApiKey;
+    @ConfigProperty(name = "arcclaw.llm.fallback-api-key")
+    Optional<String> fallbackApiKey;
 
     @ConfigProperty(name = "arcclaw.llm.fallback-ollama-base-url",
                     defaultValue = "http://localhost:11434")
@@ -75,18 +76,21 @@ public class ChatModelProducer {
         log.infof("ChatModelProducer: using provider=%s", provider);
         ChatModel primary = providerFactory.create();
 
-        if (fallbackModel != null && !fallbackModel.isBlank()) {
-            log.infof("ChatModelProducer: fallback configured model=%s", fallbackModel);
-            String fbProvider = LlmModelFactory.inferProviderFromUrl(fallbackBaseUrl);
+        String configuredFallbackModel = fallbackModel.orElse("").trim();
+        if (!configuredFallbackModel.isBlank()) {
+            String configuredFallbackBaseUrl = fallbackBaseUrl.orElse("");
+            String configuredFallbackApiKey = fallbackApiKey.orElse("");
+            log.infof("ChatModelProducer: fallback configured model=%s", configuredFallbackModel);
+            String fbProvider = LlmModelFactory.inferProviderFromUrl(configuredFallbackBaseUrl);
             
             ChatModel fallback = modelFactory.createModel(
-                fbProvider, fallbackBaseUrl, fallbackApiKey,
-                fallbackModel, 8192, timeout, maxRetries,
+                fbProvider, configuredFallbackBaseUrl, configuredFallbackApiKey,
+                configuredFallbackModel, 8192, timeout, maxRetries,
                 ollamaBaseUrl, ollamaModelId);
                 
-            return new FallbackChatModel(primary, fallback, modelName, fallbackModel);
+            return new FallbackChatModel(primary, fallback, modelName, configuredFallbackModel);
         }
 
         return primary;
     }
-}
+}
