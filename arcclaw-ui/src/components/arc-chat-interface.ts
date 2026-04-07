@@ -28,6 +28,8 @@ export class ArcChatInterface extends LitElement {
   @state() private _isTyping = false;
 
   private _ws: WsManager | null = null;
+  private _connecting = false;
+  private _intentionalClose = false;
 
   static styles = css`
     :host { 
@@ -196,8 +198,10 @@ export class ArcChatInterface extends LitElement {
     textarea.deny-reason { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; color: white; }
   `;
 
-  updated() {
-    if (this.apiKey && this.platformId && !this._ws) {
+  updated(changedProperties: Map<string, unknown>) {
+    const relevant = changedProperties.has('apiKey') || changedProperties.has('platformId');
+    if (relevant && this.apiKey && this.platformId && !this._ws && !this._connecting && !this._intentionalClose) {
+      this._connecting = true;
       this._loadHistory().then(() => this._connect());
     }
   }
@@ -235,8 +239,12 @@ export class ArcChatInterface extends LitElement {
     this._ws = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),
-      (status) => this._wsStatus = status
+      (status) => {
+        this._wsStatus = status;
+        // Don't null _ws here — updated() handles connection life via apiKey/platformId
+      }
     );
+    this._connecting = false;
     this._ws.connect();
   }
 
@@ -246,6 +254,10 @@ export class ArcChatInterface extends LitElement {
         detail: { sessionId: frame.sessionId, platformId: frame.platformId },
         bubbles: true, composed: true
       }));
+    } else if (frame.type === 'session_terminated') {
+      this._intentionalClose = true;
+      this._ws?.disconnect();
+      this._wsStatus = 'closed';
     } else if (frame.type === 'message' && frame.role === 'assistant') {
       this._isTyping = false;
       const isApproval = frame.text.includes('⏸ Approval needed');
@@ -314,7 +326,12 @@ export class ArcChatInterface extends LitElement {
            <span class="status-badge status-${this._wsStatus}">${this._wsStatus}</span>
         </div>
         ${this._wsStatus === 'error' || this._wsStatus === 'closed' ? html`
-          <button class="btn-approve" style="width: auto; padding: 0 16px; font-size: 11px;" @click="${() => { this._ws = null; this.requestUpdate(); }}">Reconnect</button>
+          <button class="btn-approve" style="width: auto; padding: 0 16px; font-size: 11px;" @click="${() => { 
+            this._ws = null; 
+            this._intentionalClose = false; 
+            this._connecting = true;
+            this._loadHistory().then(() => this._connect());
+          }}">Reconnect</button>
         ` : nothing}
       </div>
 

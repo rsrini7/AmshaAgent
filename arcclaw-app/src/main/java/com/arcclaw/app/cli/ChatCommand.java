@@ -9,8 +9,13 @@ import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.Reception;
 import jakarta.inject.Inject;
+
+import io.quarkus.runtime.ShutdownEvent;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -48,6 +53,8 @@ public class ChatCommand implements Runnable {
     @Inject StatefulAgentStore statefulAgentStore;
     @Inject CliResultBridge cliResultBridge;
 
+    private volatile String currentCliSessionId;
+
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
 
@@ -58,6 +65,7 @@ public class ChatCommand implements Runnable {
     @ActivateRequestContext
     public void run() {
         String sessionId = "cli-" + UUID.randomUUID();
+        this.currentCliSessionId = sessionId;
 
         System.out.println("✦ ArcClaw Interactive Terminal");
         System.out.println("   Session : " + sessionId);
@@ -73,10 +81,33 @@ public class ChatCommand implements Runnable {
             log.errorf(e, "Fatal error in chat session %s", sessionId);
             System.err.println("❌ Fatal: " + e.getMessage());
         } finally {
-            workspaceManager.terminateSession(sessionId);
+            if (this.currentCliSessionId != null) {
+                this.currentCliSessionId = null;
+                workspaceManager.terminateSession(sessionId);
+            }
         }
 
         System.out.println("\n[Terminated]");
+    }
+
+    /**
+     * Prioritized shutdown observer to ensure session cleanup happens BEFORE
+     * the Hibernate entity manager and connection pools are closed by Quarkus.
+     */
+    @ActivateRequestContext
+    void onShutdown(@Observes(notifyObserver = Reception.IF_EXISTS) @Priority(Integer.MIN_VALUE) ShutdownEvent event) {
+        String sessionId = this.currentCliSessionId;
+        if (sessionId == null) return;
+        this.currentCliSessionId = null; // Prevent run() from calling it again
+
+        try {
+            log.debugf("CLI ShutdownEvent triggered for session %s (absolute priority cleanup)", sessionId);
+            workspaceManager.terminateSession(sessionId);
+        } catch (Exception e) {
+            // WorkspaceManager.markCheckpointsFailed now also guards with a catch(IllegalStateException)
+            // just in case this still runs late, but @Priority(Integer.MIN_VALUE) should prevent that.
+            log.warnf("Session cleanup on shutdown incomplete for %s: %s", sessionId, e.getMessage());
+        }
     }
 
     private void runChatLoop(String sessionId) {

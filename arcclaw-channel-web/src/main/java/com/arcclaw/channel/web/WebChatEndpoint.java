@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.io.StringReader;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,6 +37,9 @@ public class WebChatEndpoint {
 
     // conn.id() → ArcClaw sessionId (resolved by SessionRegistry, used for REST/HITL calls)
     private final Map<String, String> connectionToArcclawSession = new ConcurrentHashMap<>();
+    
+    // Sessions currently undergoing termination
+    private final Set<String> terminatingSessions = ConcurrentHashMap.newKeySet();
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject ChannelServices channelServices;
@@ -168,9 +172,19 @@ public class WebChatEndpoint {
         }
         
         // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
-        if (arcclawSessionId != null) {
-            channelServices.terminateSession(arcclawSessionId);
-            log.infof("WebSocket %s: connId=%s arcclawSession=%s terminated",
+        if (arcclawSessionId != null && terminatingSessions.add(arcclawSessionId)) {
+            try {
+                // Notify UI that this is an intentional server-side termination
+                conn.sendText("{\"type\":\"session_terminated\"}").subscribe().with(v -> {}, err -> {});
+                
+                channelServices.terminateSession(arcclawSessionId);
+                log.infof("WebSocket %s: connId=%s arcclawSession=%s terminated",
+                    reason, connId, arcclawSessionId);
+            } finally {
+                terminatingSessions.remove(arcclawSessionId);
+            }
+        } else if (arcclawSessionId != null) {
+            log.debugf("WebSocket %s: connId=%s arcclawSession=%s — termination already in progress",
                 reason, connId, arcclawSessionId);
         } else {
             log.debugf("WebSocket %s: connId=%s (platformId=%s) — no ArcClaw session found for termination",

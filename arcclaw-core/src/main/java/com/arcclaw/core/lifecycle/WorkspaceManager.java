@@ -196,6 +196,10 @@ public class WorkspaceManager {
             retryTemplate.executeVoid("markFailed-" + sessionId, 5, 50, () -> {
                 self.doMarkCheckpointsFailedRequiresNew(sessionId);
             });
+        } catch (IllegalStateException e) {
+            // EntityManager already closed — JVM is shutting down, checkpoint
+            // status update is best-effort only. Process is dying anyway.
+            log.debugf("markCheckpointsFailed skipped for session=%s — EntityManager closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
             log.errorf("Failed to mark checkpoints FAILED after retries for session=%s: %s",
                        sessionId, e.getMessage());
