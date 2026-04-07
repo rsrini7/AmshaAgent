@@ -82,6 +82,18 @@ public class CliUtils {
             "2. Copy your API key — it starts with 'jina_'",
             "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"
         ),
+        new VarSpec(
+            "ARCCLAW_INTENT_CLASSIFIER_API_KEY",
+            "API key for the intent classifier LLM.",
+            "If empty, ArcClaw can use your main LLM API key.",
+            "Add:  ARCCLAW_INTENT_CLASSIFIER_API_KEY=gsk_..."
+        ),
+        new VarSpec(
+            "ARCCLAW_COMPACTION_API_KEY",
+            "API key for the context compaction LLM.",
+            "If empty, ArcClaw can use your main LLM API key.",
+            "Add:  ARCCLAW_COMPACTION_API_KEY=gsk_..."
+        ),
     };
 
     private static final VarSpec GROQ_KEY_SPEC = new VarSpec(
