@@ -94,6 +94,8 @@ public class AgentCronEntity {
             String lower = displayGoal.toLowerCase();
             if (lower.startsWith("output the following message:")) {
                 displayGoal = displayGoal.substring("output the following message:".length()).trim();
+            } else if (lower.startsWith("output the message:")) {
+                displayGoal = displayGoal.substring("output the message:".length()).trim();
             } else if (lower.startsWith("say ")) {
                 displayGoal = displayGoal.substring("say ".length()).trim();
             } else if (lower.startsWith("tell ")) {

@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
  */
 public class CronTimeResolver {
 
-    // Handles: "in 5 min", "in a min", "in an hour" (future), "after 10 minutes", "in one minute"
-    private static final Pattern IN_MINUTES_PATTERN =
-            Pattern.compile("(?:in|after)\\s+(?:exactly\\s+)?(a|an|one|\\d+)\\s*min(?:utes?)?",
+    // Handles: "in 5 min", "in a min", "in an hour", "after 10 minutes", "in one hour"
+    private static final Pattern IN_RELATIVE_TIME_PATTERN =
+            Pattern.compile("(?:in|after)\\s+(?:exactly\\s+)?(a|an|one|\\d+)\\s*(min(?:utes?)?|hours?)",
                     Pattern.CASE_INSENSITIVE);
 
     private static final Pattern AT_TIME_PATTERN =
@@ -42,13 +42,19 @@ public class CronTimeResolver {
             return null; // caller must handle null → do not schedule
         }
 
-        var m1 = IN_MINUTES_PATTERN.matcher(msg);
+        var m1 = IN_RELATIVE_TIME_PATTERN.matcher(msg);
         if (m1.find()) {
             String q = m1.group(1);
-            long minutes = (q.equalsIgnoreCase("a") || q.equalsIgnoreCase("an") || q.equalsIgnoreCase("one"))
+            String unit = m1.group(2).toLowerCase();
+            long amount = (q.equalsIgnoreCase("a") || q.equalsIgnoreCase("an") || q.equalsIgnoreCase("one"))
                     ? 1L
                     : Long.parseLong(q);
-            return nowUtc.plusMinutes(minutes);
+            
+            if (unit.startsWith("hour")) {
+                return nowUtc.plusHours(amount);
+            } else {
+                return nowUtc.plusMinutes(amount);
+            }
         }
 
         var m2 = AT_TIME_PATTERN.matcher(msg);
