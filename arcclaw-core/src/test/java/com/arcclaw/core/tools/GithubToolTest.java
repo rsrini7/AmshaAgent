@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 class GithubToolTest {
@@ -57,16 +56,15 @@ class GithubToolTest {
     }
 
     @Test
-    void testGistListDropsTarget() {
+    void testGistListPreservesTarget() {
         Map<String, Object> params = Map.of(
             "action", "gist",
             "command", "list",
             "target", "rsrini7"
         );
         var cmd = tool.sandboxCommand(params);
-        assertTrue(cmd.contains("gist"));
-        assertTrue(cmd.contains("list"));
-        Assertions.assertFalse(cmd.contains("rsrini7"), "gist list should NOT contain username");
+        assertTrue(cmd.contains("api"));
+        assertTrue(cmd.stream().anyMatch(s -> s.contains("rsrini7")), "gist list SHOULD contain username when targeting another user");
     }
 
     @Test

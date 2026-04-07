@@ -9,10 +9,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import io.quarkus.runtime.Startup;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
 /**
