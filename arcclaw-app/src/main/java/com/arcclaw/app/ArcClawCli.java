@@ -4,7 +4,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
-import com.arcclaw.app.config.BinaryBootstrap;
+import com.arcclaw.app.config.AppBootstrap;
 import com.arcclaw.app.util.CliUtils;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -51,7 +51,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
         // 1. Resolve binary location, load .env, and provision data/lib dirs.
         //    Must run first so that validation and Quarkus pick up correct paths.
-        BinaryBootstrap.bootstrap(args);
+        AppBootstrap.bootstrap(args);
 
         // 2. Validate required env vars early — before Quarkus boots.
         CliUtils.validateRequiredEnvVars(args);

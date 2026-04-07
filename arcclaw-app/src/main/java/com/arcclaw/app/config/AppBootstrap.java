@@ -23,7 +23,7 @@ import com.arcclaw.core.sandbox.SandboxStrategy;
  * Bootstraps the application by resolving the binary directory, loading .env files,
  * extracting default config, and setting up environment variables before Quarkus starts.
  */
-public class BinaryBootstrap {
+public class AppBootstrap {
 
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
@@ -247,7 +247,7 @@ public class BinaryBootstrap {
 
         // Seed .env from example if missing so we have a place to patch
         if (!Files.exists(envFile)) {
-            try (InputStream in = BinaryBootstrap.class.getResourceAsStream("/env-example")) {
+            try (InputStream in = AppBootstrap.class.getResourceAsStream("/env-example")) {
                 if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException ignored) {}
         }
@@ -475,7 +475,7 @@ public class BinaryBootstrap {
 
         Path exampleFile = dir.resolve(".env.example");
         if (!Files.exists(exampleFile)) {
-            try (InputStream in = BinaryBootstrap.class.getResourceAsStream("/env-example")) {
+            try (InputStream in = AppBootstrap.class.getResourceAsStream("/env-example")) {
                 if (in == null) {
                     System.err.println("[ArcClaw] ⚠️  Warning: env-example not found in classpath.");
                     return;
