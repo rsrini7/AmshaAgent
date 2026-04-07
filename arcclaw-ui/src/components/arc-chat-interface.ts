@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { WsManager } from '../api/websocket';
 import { marked } from 'marked';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 interface ChatMessage {
   id: string;
@@ -16,6 +17,7 @@ interface ChatMessage {
 export class ArcChatInterface extends LitElement {
   @property({ type: String }) apiKey = '';
   @property({ type: String }) sessionId = '';
+  @property({ type: String }) platformId = '';
 
   @state() private _messages: ChatMessage[] = [];
   @state() private _input = '';
@@ -41,18 +43,16 @@ export class ArcChatInterface extends LitElement {
     }
     .header-title {
       font-size: 15px; font-weight: 600; color: var(--text-primary);
-    }
-    .cluster-status {
       display: flex; align-items: center; gap: 8px;
-      font-size: 12px; color: var(--text-muted);
     }
     .status-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 4px 10px; border-radius: 99px;
-      background: rgba(0, 212, 170, 0.1);
-      color: var(--accent-secondary);
-      font-weight: 600; font-size: 11px;
+       font-size: 10px; padding: 2px 8px; border-radius: 4px;
+       text-transform: uppercase;
     }
+    .status-open { background: rgba(0,212,170,0.1); color: var(--accent-secondary); }
+    .status-connecting { background: rgba(245,158,11,0.1); color: #f59e0b; }
+    .status-error { background: rgba(239,68,68,0.1); color: #ef4444; }
+    .status-closed { background: rgba(255,255,255,0.05); color: var(--text-muted); }
     .pulse-dot {
       width: 6px; height: 6px; border-radius: 50%;
       background: var(--accent-secondary);
@@ -196,9 +196,8 @@ export class ArcChatInterface extends LitElement {
     textarea.deny-reason { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; color: white; }
   `;
 
-  updated(changedProperties: Map<string, unknown>) {
-    const relevant = changedProperties.has('apiKey') || changedProperties.has('sessionId');
-    if (relevant && this.apiKey && this.sessionId && !this._ws) {
+  updated() {
+    if (this.apiKey && this.platformId && !this._ws) {
       this._loadHistory().then(() => this._connect());
     }
   }
@@ -232,7 +231,7 @@ export class ArcChatInterface extends LitElement {
   private _connect() {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
-    const wsUrl = `${proto}://${host}/ws/chat?apiKey=${encodeURIComponent(this.apiKey)}&sessionId=${encodeURIComponent(this.sessionId)}`;
+    const wsUrl = `${proto}://${host}/ws/chat?apiKey=${encodeURIComponent(this.apiKey)}&sessionId=${encodeURIComponent(this.platformId)}`;
     this._ws = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),
@@ -299,9 +298,7 @@ export class ArcChatInterface extends LitElement {
   
   private _renderMarkdown(text: string) {
     try {
-      const template = document.createElement('div');
-      template.innerHTML = marked.parse(text, { async: false }) as string;
-      return template;
+      return unsafeHTML(marked.parse(text, { async: false }));
     } catch { return text; }
   }
 
@@ -311,6 +308,16 @@ export class ArcChatInterface extends LitElement {
 
   render() {
     return html`
+      <div class="chat-header">
+        <div class="header-title">
+           Chat Session
+           <span class="status-badge status-${this._wsStatus}">${this._wsStatus}</span>
+        </div>
+        ${this._wsStatus === 'error' || this._wsStatus === 'closed' ? html`
+          <button class="btn-approve" style="width: auto; padding: 0 16px; font-size: 11px;" @click="${() => { this._ws = null; this.requestUpdate(); }}">Reconnect</button>
+        ` : nothing}
+      </div>
+
       <div class="messages">
         ${this._messages.map(m => m.role === 'system' ? html`
           <div class="msg-group msg-group-system">

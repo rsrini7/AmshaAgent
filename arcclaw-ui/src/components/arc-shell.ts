@@ -15,7 +15,8 @@ import './arc-settings';
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
   @state() private _apiKey = localStorage.getItem('arc-api-key') || '';
-  @state() private _sessionId = '';
+  @state() private _sessionId = sessionStorage.getItem('arcclaw-chat-session') || '';
+  @state() private _platformId = ''; // Stable ID for WebSocket
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
@@ -118,7 +119,8 @@ export class ArcShell extends LitElement {
     if (storedKey) {
       this._apiKey = storedKey;
       this._client = new ArcClient('/api/v1', storedKey);
-      this._sessionId = this._resolveSessionId();
+      this._platformId = this._resolvePlatformId();
+      // _sessionId is already loaded from sessionStorage in @state()
       this.updateComplete.then(() => {
         this._fetchAgents();
         this._fetchApprovals();
@@ -127,11 +129,11 @@ export class ArcShell extends LitElement {
     }
   }
 
-  private _resolveSessionId() {
-    let id = sessionStorage.getItem('arcclaw-chat-session');
+  private _resolvePlatformId() {
+    let id = sessionStorage.getItem('arcclaw-platform-id');
     if (!id) {
       id = crypto.randomUUID();
-      sessionStorage.setItem('arcclaw-chat-session', id);
+      sessionStorage.setItem('arcclaw-platform-id', id);
     }
     return id;
   }
@@ -417,6 +419,7 @@ export class ArcShell extends LitElement {
           class="content-area"
           .apiKey="${this._apiKey}"
           .sessionId="${this._sessionId}"
+          .platformId="${this._platformId}"
         ></arc-chat-interface>`;
       case '#/agents':
         return html`<arc-agent-status
