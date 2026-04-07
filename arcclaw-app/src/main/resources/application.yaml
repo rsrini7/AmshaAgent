@@ -452,11 +452,9 @@ arcclaw:
     timeout-seconds: "${ARCCLAW_SANDBOX_TIMEOUT_SECONDS:30}"
     network-timeout-seconds: "${ARCCLAW_SANDBOX_NETWORK_TIMEOUT_SECONDS:60}"
     network: "${ARCCLAW_SANDBOX_NETWORK:host}"
-    secret-transport: "${ARCCLAW_SANDBOX_SECRET_TRANSPORT:tmpfs}"
     tool-runner-user: "${ARCCLAW_SANDBOX_USER:sandbox}"
     memory-limit: "${ARCCLAW_SANDBOX_MEMORY_LIMIT:512m}"
     cpu-limit: "${ARCCLAW_SANDBOX_CPU_LIMIT:0.5}"
-    tmpfs-path: "${ARCCLAW_SANDBOX_TMPFS_PATH:/run/arcclaw/secrets}"
     # Executable overrides (auto-discovered on host PATH if omitted)
     python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
     go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"

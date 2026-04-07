@@ -23,7 +23,7 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
     private static final Pattern RESEARCHER_PATTERN = Pattern.compile(
         "(?i)(" +
         // Action verbs for research/fetch
-        "^\\s*(fetch|describe|lookup|look\\s+up|research|find\\s+info|get\\s+info|" +
+        "^\\s*(fetch|describe|lookup|look\\s+up|research|search|find\\s+info|get\\s+info|" +
         "get\\s+details|show\\s+info|what\\s+is|tell\\s+me\\s+about|" +
         "summarize|summary\\s+of|overview\\s+of)" +
         "|" +
