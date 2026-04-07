@@ -100,6 +100,7 @@ public class ChatCommand implements Runnable {
 
         try {
             log.debugf("CLI ShutdownEvent triggered for session %s (absolute priority cleanup)", sessionId);
+            cliResultBridge.cancel(sessionId);
             workspaceManager.terminateSession(sessionId);
         } catch (Exception e) {
             // WorkspaceManager.markCheckpointsFailed now also guards with a catch(IllegalStateException)

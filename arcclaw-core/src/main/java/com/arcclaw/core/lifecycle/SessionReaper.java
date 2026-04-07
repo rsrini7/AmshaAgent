@@ -19,6 +19,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
@@ -61,7 +62,8 @@ public class SessionReaper {
     @Inject SessionAuditSequencer auditSequencer;
     @Inject SqliteRetryTemplate retryTemplate;
     @Inject CompactionInFlightFlag compactionInFlight;
-    @Inject AgentSseService agentSseService;   // ← NEW
+    @Inject AgentSseService agentSseService;
+    @Inject CliResultBridge cliResultBridge;
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
@@ -179,6 +181,7 @@ public class SessionReaper {
                 return;
             }
             log.warnf("GC sweep: session=%s expired", sessionId);
+            cliResultBridge.cancel(sessionId); 
             compactionInFlight.remove(sessionId);
             workspaceManager.terminateSession(sessionId);
             heartbeatTracker.removeHeartbeat(sessionId);

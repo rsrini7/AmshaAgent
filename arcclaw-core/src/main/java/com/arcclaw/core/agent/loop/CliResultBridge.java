@@ -12,15 +12,15 @@ import com.arcclaw.core.agent.result.AgentResult;
 import org.jboss.logging.Logger;
 
 /**
- * Shared bridge to pass agent results from an asynchronous resume (e.g. REST or Telegram approval)
- * back to a blocking CLI session.
+ * Shared bridge to pass agent results from an asynchronous resume (e.g. REST or
+ * Telegram approval) back to a blocking CLI session.
  *
- * <p>Race condition handled: if the REST approval completes the task before the CLI thread
- * calls register() or waitForResult(), the result is buffered and delivered immediately
- * when the CLI thread eventually arrives.
+ * <p>Race condition handled: if the REST approval completes the task before the CLI
+ * thread calls register() or waitForResult(), the result is buffered and delivered
+ * immediately when the CLI thread eventually arrives.
  *
- * <p>Calling convention: always use waitForResult() — it internally delegates to register()
- * as the single source of truth for waiter/buffer resolution.
+ * <p>Calling convention: always use waitForResult() — it internally delegates to
+ * register() as the single source of truth for waiter/buffer resolution.
  */
 @ApplicationScoped
 public class CliResultBridge {
@@ -38,9 +38,9 @@ public class CliResultBridge {
     private final ConcurrentHashMap<String, AgentResult> bufferedResults =
             new ConcurrentHashMap<>();
 
-    /** Track sessions that have already been signaled to prevent result corruption from double complete() */
-    private final Set<String> signaled = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
+    /** Prevents result corruption from duplicate complete() calls. */
+    private final Set<String> signaled =
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     // -------------------------------------------------------------------------
     // Public API
@@ -49,8 +49,8 @@ public class CliResultBridge {
     /**
      * Registers interest in a session result.
      *
-     * <p>If the result already arrived (buffered), returns an immediately completed future.
-     * If no result yet, parks a CompletableFuture for complete() to resolve later.
+     * <p>If the result already arrived (buffered), returns an immediately completed
+     * future. If no result yet, parks a CompletableFuture for complete() to resolve.
      *
      * <p>This is the single source of truth — waitForResult() delegates here.
      */
@@ -63,7 +63,6 @@ public class CliResultBridge {
             return CompletableFuture.completedFuture(buffered);
         }
 
-        // computeIfAbsent is safe here — no side-effecting lambdas, pure construction
         return waiters.computeIfAbsent(sessionId, k -> new CompletableFuture<>());
     }
 
@@ -71,7 +70,8 @@ public class CliResultBridge {
      * Signals result completion.
      *
      * <p>If a CLI waiter is active, it receives the result immediately.
-     * Otherwise, the result is buffered for a late-arriving register() or waitForResult() call.
+     * Otherwise, the result is buffered for a late-arriving register() or
+     * waitForResult() call.
      */
     public void complete(String sessionId, AgentResult result) {
         if (!signaled.add(sessionId)) {
@@ -107,7 +107,6 @@ public class CliResultBridge {
             log.debugf("CliResultBridge: timeout or interruption waiting for session %s", sessionId);
             return null;
         } finally {
-            // Always clean up the waiter slot, even if already removed by complete()
             waiters.remove(sessionId);
         }
     }
@@ -115,13 +114,8 @@ public class CliResultBridge {
     /**
      * Cancels and cleans up any state for an abandoned or expired session.
      *
-     * <p>Called by SessionReaper during GC sweep to prevent memory leaks
-     * from sessions that were approved remotely but never picked up by a CLI thread.
-     *
-     * <pre>
-     *   // In SessionReaper GC sweep:
-     *   cliResultBridge.cancel(expiredSessionId);
-     * </pre>
+     * <p>Called by SessionReaper during GC sweep to prevent memory leaks,
+     * and by ChatCommand.onShutdown to unblock any virtual thread waiting on HITL.
      */
     public void cancel(String sessionId) {
         signaled.remove(sessionId);
